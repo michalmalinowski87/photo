@@ -1,0 +1,12 @@
+node_modules
+.yarn/*
+.pnp.*
+dist
+.DS_Store
+.env
+.env.*
+cdk.out
+.next
+coverage
+tmp
+
