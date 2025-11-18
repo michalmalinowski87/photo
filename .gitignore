@@ -9,4 +9,5 @@ cdk.out
 .next
 coverage
 tmp
+package-lock.json
 

@@ -1,0 +1,10 @@
+{
+  "extends": "@photohub/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["bin", "lib", "src"],
+  "exclude": ["cdk.out"]
+}
+

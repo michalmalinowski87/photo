@@ -1,0 +1,27 @@
+name: ci
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+      - name: Install
+        run: yarn install --frozen-lockfile || yarn install
+      - name: Root scripts
+        run: |
+          yarn run lint
+          yarn run test
+      - name: Synthetic smoke (dry)
+        run: |
+          echo "Skipping live smoke; requires API_URL at runtime"
+      - name: List workspaces
+        run: yarn workspaces info
+

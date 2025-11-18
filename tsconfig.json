@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "@photohub/logger": ["packages/logger/src"],
+      "@photohub/config": ["packages/config/src"],
+      "@photohub/backend-lib/*": ["backend/lib/src/*"]
+    }
+  },
+  "references": [
+    { "path": "packages/tsconfig" },
+    { "path": "packages/config" },
+    { "path": "packages/logger" },
+    { "path": "backend/lib" }
+  ]
+}
+
