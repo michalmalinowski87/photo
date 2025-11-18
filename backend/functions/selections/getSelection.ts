@@ -40,20 +40,28 @@ export const handler = lambdaLogger(async (event: any) => {
 	const hasDeliveredOrder = orders.some((o: any) => o.deliveryStatus === 'DELIVERED');
 	const clientSelectingOrder = orders.find((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
 	const clientApprovedOrder = orders.find((o: any) => o.deliveryStatus === 'CLIENT_APPROVED');
+	const preparingDeliveryOrder = orders.find((o: any) => o.deliveryStatus === 'PREPARING_DELIVERY');
 	const changesRequestedOrder = orders.find((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
-	const activeOrder = clientSelectingOrder || clientApprovedOrder || changesRequestedOrder;
+	const activeOrder = clientSelectingOrder || clientApprovedOrder || preparingDeliveryOrder || changesRequestedOrder;
 	
 	// Can select photos only if: no order exists OR order status is CLIENT_SELECTING
+	// PREPARING_DELIVERY locks selection (photographer already did the work)
 	const canSelect = !activeOrder || !!clientSelectingOrder;
+	
+	// Order is "approved" if CLIENT_APPROVED or PREPARING_DELIVERY (photographer has done work)
+	const isApproved = activeOrder && (activeOrder.deliveryStatus === 'CLIENT_APPROVED' || activeOrder.deliveryStatus === 'PREPARING_DELIVERY');
 	
 	// Pull selection from order if it exists, otherwise use defaults
 	const selection = activeOrder ? {
 		selectedKeys: activeOrder.selectedKeys || [],
-		approved: activeOrder.deliveryStatus === 'CLIENT_APPROVED',
+		approved: isApproved,
 		selectedCount: activeOrder.selectedCount || 0,
 		overageCount: activeOrder.overageCount || 0,
 		overageCents: activeOrder.overageCents || 0
 	} : { selectedKeys: [], approved: false, selectedCount: 0, overageCount: 0, overageCents: 0 };
+	
+	// Can request changes if order is CLIENT_APPROVED or PREPARING_DELIVERY (photographer has done work)
+	const canRequestChanges = !!(clientApprovedOrder || preparingDeliveryOrder);
 	
 	// Include gallery-level status and pricing info
 	return { 
@@ -62,7 +70,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			...selection,
 			canSelect, // Simplified: true if no order or order is CLIENT_SELECTING
 			changeRequestPending: !!changesRequestedOrder, // True if waiting for photographer approval
-			hasClientApprovedOrder: !!clientApprovedOrder, // True if order is approved (can request changes)
+			hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
 			hasDeliveredOrder, // For showing processed photos view
 			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packageName: '' }
 		})

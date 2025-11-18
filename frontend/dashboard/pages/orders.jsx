@@ -445,8 +445,8 @@ export default function Orders() {
 											Approve Change Request
 										</button>
 									)}
-									{/* Upload Final Photos - available for CLIENT_APPROVED orders */}
-									{o.deliveryStatus === 'CLIENT_APPROVED' && (
+									{/* Upload Final Photos - available for CLIENT_APPROVED or PREPARING_DELIVERY orders */}
+									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && (
 										<div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 											<input
 												type="file"
@@ -468,9 +468,9 @@ export default function Orders() {
 											</button>
 										</div>
 									)}
-									{/* Send Final Link - available for CLIENT_APPROVED orders with PAID payment */}
+									{/* Send Final Link - available for CLIENT_APPROVED or PREPARING_DELIVERY orders with PAID payment */}
 									{/* This action sends the final link email AND marks the order as DELIVERED */}
-									{o.deliveryStatus === 'CLIENT_APPROVED' && o.paymentStatus === 'PAID' && (
+									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && o.paymentStatus === 'PAID' && (
 										<button 
 											onClick={() => sendFinalLink(o.orderId)}
 											style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
@@ -479,9 +479,9 @@ export default function Orders() {
 											Send Final Link
 										</button>
 									)}
-									{/* Mark Delivered - available for CLIENT_APPROVED orders with PAID payment */}
+									{/* Mark Delivered - available for CLIENT_APPROVED or PREPARING_DELIVERY orders with PAID payment */}
 									{/* This is a separate action if photographer wants to mark delivered without sending email */}
-									{o.deliveryStatus === 'CLIENT_APPROVED' && o.paymentStatus === 'PAID' && (
+									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && o.paymentStatus === 'PAID' && (
 										<button 
 											onClick={() => processedComplete(o.orderId)}
 											style={{ padding: '4px 8px', fontSize: '12px', background: '#ff9900', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}

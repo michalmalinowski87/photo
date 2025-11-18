@@ -1,3 +1,14 @@
+/**
+ * Fetch with Cognito token automatically added to Authorization header
+ */
+export async function apiFetchWithAuth(url, options = {}, token) {
+	const headers = {
+		...options.headers,
+		'Authorization': `Bearer ${token}`
+	};
+	return apiFetch(url, { ...options, headers });
+}
+
 export async function apiFetch(url, options = {}) {
 	try {
 		const response = await fetch(url, options);

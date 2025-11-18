@@ -390,6 +390,22 @@ export default function Galleries() {
 										>
 											Open Client View
 										</button>
+										{/* View as Owner */}
+										<button 
+											onClick={() => router.push(`/galleries/${g.galleryId}/view`)} 
+											style={{ 
+												marginRight: 4, 
+												padding: '4px 8px', 
+												fontSize: '12px',
+												background: '#007bff',
+												color: 'white',
+												border: 'none',
+												borderRadius: '4px',
+												cursor: 'pointer'
+											}}
+										>
+											View as Owner
+										</button>
 										{/* Delete */}
 										<button 
 											onClick={() => handleAction('delete', g.galleryId)} 

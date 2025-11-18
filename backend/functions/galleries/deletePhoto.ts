@@ -2,8 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { getUserIdFromEvent } from '../../lib/src/auth';
-import { getJWTFromEvent } from '../../lib/src/jwt';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -49,23 +48,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Verify access: Only photographer (owner) can delete photos
-	// Check both Cognito token (dashboard access) and gallery JWT (client view access)
-	const requester = getUserIdFromEvent(event);
-	const jwtPayload = getJWTFromEvent(event);
-	
-	let hasAccess = false;
-	
-	// Option 1: Cognito token matches ownerId (photographer accessing via dashboard)
-	if (requester && gallery.ownerId === requester) {
-		hasAccess = true;
-	}
-	// Option 2: Gallery JWT is valid AND owner set themselves as client (ownerEmail matches clientEmail)
-	else if (jwtPayload && jwtPayload.galleryId === galleryId && gallery.clientEmail && gallery.ownerEmail && gallery.clientEmail === gallery.ownerEmail) {
-		// Photographer accessing via client view (they set themselves as client)
-		hasAccess = true;
-	}
-	
-	if (!hasAccess) {
+	const access = verifyGalleryAccess(event, galleryId, gallery);
+	if (!access.isOwner) {
 		return {
 			statusCode: 403,
 			headers: { 'content-type': 'application/json' },

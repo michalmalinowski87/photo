@@ -298,7 +298,9 @@ Photographers review orders, process photos, and deliver final products to clien
      - Calls `POST /galleries/{id}/orders/{orderId}/final/upload`
      - System uploads to `galleries/{galleryId}/final/{orderId}/{filename}`
      - Photos stored in original, unprocessed format
-   - Order remains `CLIENT_APPROVED` status
+     - **First photo upload**: Order status automatically changes from `CLIENT_APPROVED` to `PREPARING_DELIVERY`
+     - Subsequent uploads: Order remains `PREPARING_DELIVERY` status
+   - Client can view photos in `PREPARING_DELIVERY` status (before final delivery)
 
 4. **Mark Payment Status**
    - Update payment status as needed:
@@ -324,19 +326,26 @@ Photographers review orders, process photos, and deliver final products to clien
 
 6. **Client Downloads Final Photos**
    - Client accesses gallery (using same login)
-   - Switches to "Processed" view tab
-   - Views delivered orders:
+   - Switches to "Processed Photos" view tab
+   - Views delivered orders (includes `PREPARING_DELIVERY` and `DELIVERED` orders):
      - Calls `GET /galleries/{id}/orders/delivered`
-     - Sees list of delivered orders
+     - Sees list of orders (including those being prepared)
    - Selects specific order to view:
      - Calls `GET /galleries/{id}/orders/{orderId}/final/images`
-     - Views final processed photos
+     - Views final processed photos (available in both `PREPARING_DELIVERY` and `DELIVERED` status)
    - Downloads final ZIP:
      - Click "Download Final ZIP" button
      - Calls `POST /galleries/{id}/orders/{orderId}/final/zip`
-     - System generates presigned download URL
+     - System generates ZIP file on-the-fly (base64 encoded)
      - ZIP contains final processed photos
-     - Download expires after configured time
+     - Download starts immediately
+   
+   **Owner View**: Photographers can also view processed photos:
+   - Navigate to gallery → "View as Owner" button
+   - Switches to owner gallery view (read-only mode)
+   - Can view processed photos same as clients
+   - Can view original photos and delete them
+   - Uses Cognito authentication (no client password needed)
 
 ### Key Endpoints
 - `GET /galleries/{id}/orders` - List all orders for gallery (photographer)
@@ -349,10 +358,19 @@ Photographers review orders, process photos, and deliver final products to clien
 
 ### Order Status Flow
 ```
-CLIENT_SELECTING → CLIENT_APPROVED → CHANGES_REQUESTED → CLIENT_SELECTING (if approved)
-                                                      ↓
-                                              CLIENT_APPROVED → DELIVERED
+CLIENT_SELECTING → CLIENT_APPROVED → PREPARING_DELIVERY → DELIVERED
+                    ↓                      ↑
+              CHANGES_REQUESTED → CLIENT_SELECTING (if approved)
+                    ↓
+              CLIENT_APPROVED → PREPARING_DELIVERY → DELIVERED
 ```
+
+**Status Descriptions**:
+- **CLIENT_SELECTING**: Client is actively selecting photos
+- **CLIENT_APPROVED**: Client approved selection, order created, ZIP generated
+- **CHANGES_REQUESTED**: Client requested changes, photographer can approve to restore to CLIENT_SELECTING
+- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes.
+- **DELIVERED**: Order delivered, final link sent, originals cleaned up
 
 ---
 
@@ -368,7 +386,7 @@ After receiving delivered order, clients can purchase additional photos from the
    - Sees "Purchase More" option available
    - System detects:
      - Has `DELIVERED` order
-     - No active `CLIENT_APPROVED` or `CHANGES_REQUESTED` orders
+     - No active `CLIENT_APPROVED`, `PREPARING_DELIVERY`, or `CHANGES_REQUESTED` orders
 
 2. **Select Additional Photos**
    - Client browses gallery in "Purchase" view
@@ -501,7 +519,8 @@ Orders progress through the following statuses:
 - **CLIENT_SELECTING**: Client is actively selecting photos. Order may exist but not finalized.
 - **CLIENT_APPROVED**: Client approved selection. Order created with selected photos. ZIP generated. Ready for photographer processing.
 - **CHANGES_REQUESTED**: Client requested changes to approved selection. Photographer can approve to restore to CLIENT_SELECTING.
-- **DELIVERED**: Order delivered to client. Final photos sent. Originals/previews/thumbs cleaned up. Final ZIPs remain available.
+- **PREPARING_DELIVERY**: Photographer has started uploading final processed photos. **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. Client can view photos but order not yet marked as delivered.
+- **DELIVERED**: Order delivered to client. Final link sent. Originals/previews/thumbs cleaned up. Final ZIPs remain available.
 
 ---
 

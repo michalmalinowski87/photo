@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getJWTFromEvent } from '../../lib/src/jwt';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -18,25 +19,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryId = event?.pathParameters?.id;
 	if (!galleryId) return { statusCode: 400, body: 'missing id' };
 
-	// Verify JWT token for client access
-	const jwtPayload = getJWTFromEvent(event);
-	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
-		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
-	}
-
 	// Verify gallery exists
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
 	const gallery = g.Item as any;
 	if (!gallery) return { statusCode: 404, body: 'gallery not found' };
 
-	// Query for DELIVERED orders
+	// Verify access - supports both owner (Cognito) and client (JWT) tokens
+	const access = verifyGalleryAccess(event, galleryId, gallery);
+	if (!access.isOwner && !access.isClient) {
+		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
+	}
+
+	// Query for DELIVERED or PREPARING_DELIVERY orders
 	const ordersQuery = await ddb.send(new QueryCommand({
 		TableName: ordersTable,
 		KeyConditionExpression: 'galleryId = :g',
-		FilterExpression: 'deliveryStatus = :ds',
+		FilterExpression: 'deliveryStatus IN (:ds1, :ds2)',
 		ExpressionAttributeValues: {
 			':g': galleryId,
-			':ds': 'DELIVERED'
+			':ds1': 'DELIVERED',
+			':ds2': 'PREPARING_DELIVERY'
 		}
 	}));
 

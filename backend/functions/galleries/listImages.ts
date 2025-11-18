@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { getJWTFromEvent } from '../../lib/src/jwt';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -37,17 +37,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Verify JWT token
-	const jwtPayload = getJWTFromEvent(event);
-	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
-		logger.warn('Invalid or missing JWT token', { galleryId });
-		return {
-			statusCode: 401,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
-		};
-	}
-
 	// Verify gallery exists
 	let gallery;
 	try {
@@ -77,6 +66,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Failed to fetch gallery', message: err.message })
+		};
+	}
+
+	// Verify access - supports both owner (Cognito) and client (JWT) tokens
+	const access = verifyGalleryAccess(event, galleryId, gallery);
+	if (!access.isOwner && !access.isClient) {
+		logger.warn('Invalid or missing authentication', { galleryId });
+		return {
+			statusCode: 401,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
 		};
 	}
 

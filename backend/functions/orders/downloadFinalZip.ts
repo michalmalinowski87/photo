@@ -4,7 +4,7 @@ import archiver from 'archiver';
 import { Readable } from 'stream';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { getJWTFromEvent } from '../../lib/src/jwt';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -33,16 +33,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Verify JWT token for client access
-	const jwtPayload = getJWTFromEvent(event);
-	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
-		return {
-			statusCode: 401,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
-		};
-	}
-
 	try {
 		// Verify gallery exists
 		const galleryGet = await ddb.send(new GetCommand({
@@ -58,7 +48,17 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		// Verify order exists and is DELIVERED
+		// Verify access - supports both owner (Cognito) and client (JWT) tokens
+		const access = verifyGalleryAccess(event, galleryId, gallery);
+		if (!access.isOwner && !access.isClient) {
+			return {
+				statusCode: 401,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
+			};
+		}
+
+		// Verify order exists and is DELIVERED or PREPARING_DELIVERY
 		const orderGet = await ddb.send(new GetCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId }
@@ -71,11 +71,11 @@ export const handler = lambdaLogger(async (event: any) => {
 				body: JSON.stringify({ error: 'Order not found' })
 			};
 		}
-		if (order.deliveryStatus !== 'DELIVERED') {
+		if (order.deliveryStatus !== 'DELIVERED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
 			return {
 				statusCode: 400,
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Order is not delivered' })
+				body: JSON.stringify({ error: 'Order is not delivered or preparing delivery' })
 			};
 		}
 

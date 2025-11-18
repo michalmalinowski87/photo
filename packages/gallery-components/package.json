@@ -1,0 +1,17 @@
+{
+  "name": "@photohub/gallery-components",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "build": "echo 'No build needed for JSX components'"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+

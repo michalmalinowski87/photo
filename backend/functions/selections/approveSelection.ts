@@ -48,22 +48,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const orders = ordersQuery.Items || [];
 
-	// Check if there's already an order with CLIENT_APPROVED status
-	const hasClientApproved = orders.some((o: any) => o.deliveryStatus === 'CLIENT_APPROVED');
-	if (hasClientApproved) {
-		return { statusCode: 403, body: 'selection already approved - order with CLIENT_APPROVED status exists' };
+	// Check if there's already an order with CLIENT_APPROVED or PREPARING_DELIVERY status
+	// (PREPARING_DELIVERY means photographer already did the work, so lock selection)
+	const hasActiveOrder = orders.some((o: any) => 
+		o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY'
+	);
+	if (hasActiveOrder) {
+		return { statusCode: 403, body: 'selection already approved - order with CLIENT_APPROVED or PREPARING_DELIVERY status exists' };
 	}
 
 	// Compute overage from selected keys
 	const selectedCount = selectedKeys.length;
 	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number } | undefined;
 	
-	// Check if this is "purchase more" scenario (there's a DELIVERED order but no CLIENT_APPROVED or CHANGES_REQUESTED order)
+	// Check if this is "purchase more" scenario (there's a DELIVERED order but no active order)
 	const hasDeliveredOrder = orders.some((o: any) => o.deliveryStatus === 'DELIVERED');
-	const hasActiveOrder = orders.some((o: any) => 
-		o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'CHANGES_REQUESTED'
+	const hasBlockingOrder = orders.some((o: any) => 
+		o.deliveryStatus === 'CLIENT_APPROVED' || 
+		o.deliveryStatus === 'PREPARING_DELIVERY' || 
+		o.deliveryStatus === 'CHANGES_REQUESTED'
 	);
-	const isPurchaseMore = hasDeliveredOrder && !hasActiveOrder;
+	const isPurchaseMore = hasDeliveredOrder && !hasBlockingOrder;
 	
 	// For purchase more, each photo costs extra (no included count)
 	// For first-time selection, use package pricing with included count

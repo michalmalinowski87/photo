@@ -43,11 +43,12 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 #### Orders
 - `orders/list.ts` - List orders for a gallery
 - `orders/get.ts` - Get order details
-- `orders/listDelivered.ts` - List delivered orders for client
-- `orders/listFinalImages.ts` - List final images for a specific order
-- `orders/uploadFinal.ts` - Upload final processed photos for an order
+- `orders/listDelivered.ts` - List delivered orders (supports both owner and client access)
+- `orders/listFinalImages.ts` - List final images for a specific order (supports both owner and client access)
+- `orders/uploadFinal.ts` - Upload final processed photos for an order (owner-only)
+  - Automatically sets order status to `PREPARING_DELIVERY` when first photo uploaded
 - `orders/downloadZip.ts` - Get presigned download URL for order ZIP
-- `orders/downloadFinalZip.ts` - Download final ZIP for an order
+- `orders/downloadFinalZip.ts` - Download final ZIP for an order (supports both owner and client access)
 - `orders/regenerateZip.ts` - Regenerate ZIP for an order
 - `orders/sendFinalLink.ts` - Send final delivery link to client
 - `orders/approveChangeRequest.ts` - Approve client change requests (restores order to CLIENT_SELECTING)
@@ -80,13 +81,31 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - Cognito Hosted UI authentication
 - Gallery management interface
 - Order management
-- Wallet management (planned)
+- Wallet management
+- **Owner Gallery View**: View galleries as clients see them (read-only mode with delete capability)
+  - Uses shared gallery components
+  - Authenticated via Cognito JWT
+  - Can view processed photos and original photos
+  - Can manually delete photos
 
 #### Client Gallery (`frontend/gallery`)
 - Next.js public-facing gallery
 - Password-protected access
 - Photo selection interface
 - Order approval flow
+- Processed photos viewing and download
+
+#### Shared Components (`packages/gallery-components`)
+- Reusable React components for gallery views:
+  - `GalleryThumbnails` - Image grid with selection/delete capabilities
+  - `SelectionActions` - Status, pricing, and action buttons
+  - `ProcessedPhotosView` - Self-contained processed photos viewer
+  - `PurchaseView` - Purchase/selection view combining thumbnails and actions
+  - `ImageModal` - Full-screen image viewer with navigation
+- Used by both dashboard (owner view) and client gallery
+- Composable architecture with HOCs for authentication:
+  - `withClientAuth` - Client JWT authentication
+  - `withOwnerAuth` - Cognito authentication
 
 ## Data Flow
 
@@ -116,9 +135,14 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 
 ## Security
 
-- **Authentication**: Cognito JWT for photographer endpoints
-- **Authorization**: Owner-only access enforced via `requireOwnerOr403`
-- **Client Access**: Password-based (PBKDF2 with salt/iterations)
+- **Authentication**: 
+  - Cognito JWT for photographer endpoints (via API Gateway authorizer or Authorization header)
+  - Client JWT tokens for client gallery access (password-based, PBKDF2 with salt/iterations)
+- **Authorization**: 
+  - Unified `verifyGalleryAccess` helper supports both authentication types
+  - Owner-only access enforced via `requireOwnerOr403` for write operations
+  - Returns access type (`isOwner`, `isClient`) for conditional logic
+- **Client Access**: Password-based authentication scoped to specific gallery
 - **S3**: Private bucket with CloudFront OAI for previews
 - **CORS**: Configurable origins via CDK context/environment
 

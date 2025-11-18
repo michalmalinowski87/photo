@@ -24,7 +24,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	
 	// Check if pricing package can be updated
 	// Allow update if:
-	// 1. Selection is not approved (no CLIENT_APPROVED order), OR
+	// 1. Selection is not approved (no CLIENT_APPROVED or PREPARING_DELIVERY order), OR
 	// 2. Change request is pending (photographer can adjust pricing when approving change request)
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	let hasApprovedOrder = false;
@@ -37,7 +37,10 @@ export const handler = lambdaLogger(async (event: any) => {
 			ExpressionAttributeValues: { ':g': id }
 		}));
 		const orders = ordersQuery.Items || [];
-		hasApprovedOrder = orders.some((o: any) => o.deliveryStatus === 'CLIENT_APPROVED');
+		// PREPARING_DELIVERY also locks pricing (photographer has done work)
+		hasApprovedOrder = orders.some((o: any) => 
+			o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY'
+		);
 		changeRequestPending = orders.some((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
 	}
 	

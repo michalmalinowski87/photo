@@ -1,8 +1,8 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
@@ -70,12 +70,33 @@ export const handler = lambdaLogger(async (event: any) => {
 			body: JSON.stringify({ error: 'Order not found' })
 		};
 	}
-	if (order.deliveryStatus !== 'CLIENT_APPROVED') {
+	if (order.deliveryStatus !== 'CLIENT_APPROVED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: `Order must have deliveryStatus CLIENT_APPROVED, got ${order.deliveryStatus}` })
+			body: JSON.stringify({ error: `Order must have deliveryStatus CLIENT_APPROVED or PREPARING_DELIVERY, got ${order.deliveryStatus}` })
 		};
+	}
+
+	// Check if this is the first final photo being uploaded
+	const prefix = `galleries/${galleryId}/final/${orderId}/`;
+	const existingFiles = await s3.send(new ListObjectsV2Command({
+		Bucket: bucket,
+		Prefix: prefix,
+		MaxKeys: 1
+	}));
+	const isFirstPhoto = !existingFiles.Contents || existingFiles.Contents.length === 0;
+
+	// If this is the first photo and status is CLIENT_APPROVED, update to PREPARING_DELIVERY
+	if (isFirstPhoto && order.deliveryStatus === 'CLIENT_APPROVED') {
+		await ddb.send(new UpdateCommand({
+			TableName: ordersTable,
+			Key: { galleryId, orderId },
+			UpdateExpression: 'SET deliveryStatus = :ds',
+			ExpressionAttributeValues: {
+				':ds': 'PREPARING_DELIVERY'
+			}
+		}));
 	}
 
 	// Key format: galleries/{galleryId}/final/{orderId}/{filename}

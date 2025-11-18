@@ -10,11 +10,12 @@ PhotoHub is a SaaS for photographers to create secure private galleries with cli
 ## Repository Layout
 - `infra/` – CDK app (stacks, resources, routing)
 - `backend/functions/` – Lambda handlers (payments, galleries, uploads, downloads, etc.)
-- `backend/lib/` – Shared backend utilities
+- `backend/lib/` – Shared backend utilities (auth, JWT, DynamoDB, email)
 - `frontend/dashboard/` – Photographer admin dashboard (Next.js)
 - `frontend/gallery/` – Client gallery (Next.js)
 - `packages/config/` – Shared types/config
 - `packages/logger/` – Shared logger + lambda wrapper
+- `packages/gallery-components/` – Shared React components for gallery views
 - `scripts/smoke.mjs` – Simple synthetic health check
 
 ## Prerequisites
@@ -164,19 +165,26 @@ yarn dev
 - Add real logic incrementally (payments, wallet, gallery CRUD, presign, zip, selections).
 
 ### Access Control Model (important)
-- Photographers (Cognito-authenticated) may access only their own galleries:
-  - Protected endpoints (e.g., `GET/DELETE /galleries/{id}`, `POST /uploads/presign`) verify `ownerId === sub` and return 403 if not.
-  - `ownerId` is set on gallery creation from JWT `sub`.
-- Clients (password link) may access only the specific gallery they were invited to:
-  - Public gallery routes will validate the supplied gallery password (or owner preview token) scoped to that galleryId only.
+- **Photographers (Cognito-authenticated)**: May access only their own galleries:
+  - Protected endpoints verify `ownerId === sub` and return 403 if not.
+  - `ownerId` is set on gallery creation from Cognito JWT `sub`.
+  - Can view galleries in "owner mode" (read-only, can delete photos).
+- **Clients (password-based JWT)**: May access only the specific gallery they were invited to:
+  - Client JWT tokens are scoped to a specific `galleryId` and `clientId`.
+  - Can select photos, approve selections, and download final photos.
+  - Token stored in localStorage for session persistence.
 
-Enforcement implemented now:
-- `GET /galleries/{id}`: 403 if requester isn’t owner.
-- `DELETE /galleries/{id}`: fetch, enforce owner match, then delete.
-- `POST /uploads/presign`: fetch gallery, enforce owner match before issuing URL.
+**Unified Authentication**: The `verifyGalleryAccess` helper supports both authentication methods:
+- Checks Cognito tokens (from API Gateway authorizer or Authorization header)
+- Checks client JWT tokens (from Authorization header)
+- Returns access type (`isOwner`, `isClient`) for conditional logic
 
-Planned next:
-- Client password set/verify APIs and enforcement on public gallery endpoints.
+**Enforcement implemented**:
+- `GET /galleries/{id}/images`: Supports both Cognito (owner) and client JWT tokens
+- `GET /galleries/{id}/orders/delivered`: Supports both authentication types
+- `GET /galleries/{id}/orders/{orderId}/final/images`: Supports both authentication types
+- `POST /galleries/{id}/orders/{orderId}/final/zip`: Supports both authentication types
+- `DELETE /galleries/{id}/photos/{filename}`: Owner-only (Cognito required)
 
 ## CI
 GitHub Actions workflow `.github/workflows/ci.yml` installs deps, runs basic scripts, and lists workspaces. Extend with tests and CDK diff/deploy as needed.
@@ -184,6 +192,15 @@ GitHub Actions workflow `.github/workflows/ci.yml` installs deps, runs basic scr
 ## Troubleshooting
 - Missing alpha package versions: CDK HTTP API L2 is in alpha; use a version range (already configured).
 - Next.js “React in scope”: pages import React or use `.jsx` to avoid TS type dependency issues before installing types.
+
+## Documentation
+
+- [Architecture Overview](docs/arch.md) - System architecture and components
+- [User Flows](docs/user-flows.md) - Detailed user workflows and order lifecycle
+- [Frontend Architecture](docs/frontend-architecture.md) - Frontend component structure and patterns
+- [Cognito Domain Setup](docs/cognito-domain.md) - Cognito Hosted UI configuration
+- [Stripe Setup](docs/stripe-setup.md) - Payment integration setup
+- [Stripe Local Testing](docs/stripe-local-testing.md) - Testing payments locally
 
 ## Testing
 

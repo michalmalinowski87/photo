@@ -41,8 +41,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!order) return { statusCode: 404, body: 'order not found' };
 	
 	// Verify order has correct status (galleryId check is redundant - queried by galleryId+orderId)
-	if (order.deliveryStatus !== 'CLIENT_APPROVED') {
-		return { statusCode: 400, body: `order must have deliveryStatus CLIENT_APPROVED, got ${order.deliveryStatus}` };
+	// Can send final link from CLIENT_APPROVED or PREPARING_DELIVERY (photographer has uploaded photos)
+	if (order.deliveryStatus !== 'CLIENT_APPROVED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
+		return { statusCode: 400, body: `order must have deliveryStatus CLIENT_APPROVED or PREPARING_DELIVERY, got ${order.deliveryStatus}` };
 	}
 
 

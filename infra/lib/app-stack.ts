@@ -242,7 +242,7 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
-		wallet.grantReadData(walletBalanceFn);
+		wallet.grantReadWriteData(walletBalanceFn); // Needs write to create wallet if missing
 		walletLedger.grantReadData(walletTransactionsFn);
 		httpApi.addRoutes({
 			path: '/wallet/balance',
@@ -726,8 +726,8 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleries.grantReadData(ordersUploadFinalFn);
-		orders.grantReadData(ordersUploadFinalFn);
-		galleriesBucket.grantWrite(ordersUploadFinalFn);
+		orders.grantReadWriteData(ordersUploadFinalFn); // Needs write to update order status to PREPARING_DELIVERY
+		galleriesBucket.grantReadWrite(ordersUploadFinalFn); // Needs ListBucket to check if first photo, and Write to upload
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/upload',
 			methods: [HttpMethod.POST],

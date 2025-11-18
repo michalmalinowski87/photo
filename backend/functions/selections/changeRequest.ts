@@ -40,13 +40,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const orders = ordersQuery.Items || [];
 	const clientApprovedOrder = orders.find((o: any) => o.deliveryStatus === 'CLIENT_APPROVED');
+	const preparingDeliveryOrder = orders.find((o: any) => o.deliveryStatus === 'PREPARING_DELIVERY');
 	const changesRequestedOrder = orders.find((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
 	
 	// Check if there's already a CHANGES_REQUESTED order
 	if (changesRequestedOrder) {
 		return { statusCode: 400, body: 'change request already pending' };
 	}
-	if (!clientApprovedOrder) {
+	
+	// Can request changes for CLIENT_APPROVED or PREPARING_DELIVERY orders
+	// (photographer has done work, but client can still request changes)
+	const activeOrder = clientApprovedOrder || preparingDeliveryOrder;
+	if (!activeOrder) {
 		return { statusCode: 400, body: 'no active order to request changes for' };
 	}
 
@@ -55,7 +60,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Change order status to CHANGES_REQUESTED to preserve order state
 	await ddb.send(new UpdateCommand({
 		TableName: ordersTable,
-		Key: { galleryId, orderId: clientApprovedOrder.orderId },
+		Key: { galleryId, orderId: activeOrder.orderId },
 		UpdateExpression: 'SET deliveryStatus = :ds, updatedAt = :u',
 		ExpressionAttributeValues: { 
 			':ds': 'CHANGES_REQUESTED',
@@ -118,7 +123,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	return { statusCode: 200, body: JSON.stringify({ galleryId, orderId: clientApprovedOrder.orderId }) };
+	return { statusCode: 200, body: JSON.stringify({ galleryId, orderId: activeOrder.orderId }) };
 });
 
 
