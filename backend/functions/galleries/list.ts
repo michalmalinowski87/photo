@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -58,8 +59,9 @@ export const handler = lambdaLogger(async (event: any) => {
 			updatedAt: g.updatedAt
 		}));
 
-		// Optionally enrich with order summaries (can be done in parallel)
+		// Optionally enrich with order summaries and addon status (can be done in parallel)
 		const enrichedGalleries = await Promise.all(galleries.map(async (g: any) => {
+			let orderData = { changeRequestPending: false, orderCount: 0, totalRevenueCents: 0, latestOrder: null };
 			if (ordersTable && g.galleryId) {
 				try {
 					const ordersQuery = await ddb.send(new QueryCommand({
@@ -70,9 +72,8 @@ export const handler = lambdaLogger(async (event: any) => {
 					const orders = ordersQuery.Items || [];
 					// Derive changeRequestPending from CHANGES_REQUESTED order status (not from gallery flag)
 					const changeRequestPending = orders.some((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
-					return {
-						...g,
-						changeRequestPending, // Derived from order status, not gallery flag
+					orderData = {
+						changeRequestPending,
 						orderCount: orders.length,
 						totalRevenueCents: orders.reduce((sum: number, o: any) => sum + (o.totalCents || 0), 0),
 						latestOrder: orders.length > 0 ? orders.sort((a: any, b: any) => 
@@ -81,10 +82,22 @@ export const handler = lambdaLogger(async (event: any) => {
 					};
 				} catch (err) {
 					// If orders query fails, continue without order data
-					return { ...g, changeRequestPending: false, orderCount: 0, totalRevenueCents: 0 };
 				}
 			}
-			return { ...g, changeRequestPending: false, orderCount: 0, totalRevenueCents: 0 };
+
+			// Check for backup storage addon
+			let hasBackupStorage = false;
+			try {
+				hasBackupStorage = await hasAddon(g.galleryId, ADDON_TYPES.BACKUP_STORAGE);
+			} catch (err) {
+				// If addon check fails, continue without addon data
+			}
+
+			return {
+				...g,
+				...orderData,
+				hasBackupStorage
+			};
 		}));
 
 	return {

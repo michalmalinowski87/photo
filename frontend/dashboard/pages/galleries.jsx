@@ -18,7 +18,9 @@ export default function Galleries() {
 	const [pkgIncluded, setPkgIncluded] = useState(1);
 	const [pkgExtra, setPkgExtra] = useState(500);
 	const [selectionEnabled, setSelectionEnabled] = useState(true);
+	const [hasBackupAddon, setHasBackupAddon] = useState(false);
 	const [galleriesList, setGalleriesList] = useState([]);
+	const [purchasingAddon, setPurchasingAddon] = useState({});
 	const [loading, setLoading] = useState(false);
 	const [uploadProgress, setUploadProgress] = useState({});
 
@@ -72,10 +74,30 @@ export default function Galleries() {
 	}
 
 
+	async function purchaseAddon(galleryId) {
+		setMsg('');
+		setPurchasingAddon({ [galleryId]: true });
+		try {
+			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/purchase-addon`, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${idToken}` }
+			});
+			setMsg(`Backup storage addon purchased successfully for gallery. Price: ${(data.backupStorageCents / 100).toFixed(2)} PLN. ZIPs generated for ${data.generatedZipsCount || 0} order(s).`);
+			await loadGalleries(); // Reload to get updated addon status
+		} catch (error) {
+			setMsg(formatApiError(error));
+		} finally {
+			setPurchasingAddon({});
+		}
+	}
+
 	async function handleAction(action, galleryId) {
 		setMsg('');
 		try {
 			switch (action) {
+				case 'purchase-addon':
+					await purchaseAddon(galleryId);
+					break;
 				case 'send-to-client':
 					try {
 						await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
@@ -142,7 +164,8 @@ export default function Galleries() {
 					packageName: pkgName,
 					includedCount: Number(pkgIncluded),
 					extraPriceCents: Number(pkgExtra)
-				}
+				},
+				hasBackupStorage: hasBackupAddon
 			};
 			
 			// Add galleryName if provided
@@ -270,6 +293,7 @@ export default function Galleries() {
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Pricing</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Orders</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Revenue</th>
+								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Addons</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Created</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Actions</th>
 							</tr>
@@ -352,6 +376,29 @@ export default function Galleries() {
 										</a>
 									</td>
 									<td style={{ padding: 8, border: '1px solid #ddd' }}>{(g.totalRevenueCents || 0) / 100} PLN</td>
+									<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
+										{g.hasBackupStorage ? (
+											<span style={{ color: '#28a745', fontWeight: 'bold' }}>✓ Backup Storage</span>
+										) : (
+											<button 
+												onClick={() => handleAction('purchase-addon', g.galleryId)} 
+												disabled={purchasingAddon[g.galleryId]}
+												style={{ 
+													padding: '4px 8px', 
+													fontSize: '11px', 
+													background: '#ff9800', 
+													color: 'white', 
+													border: 'none', 
+													borderRadius: 4, 
+													cursor: purchasingAddon[g.galleryId] ? 'not-allowed' : 'pointer',
+													opacity: purchasingAddon[g.galleryId] ? 0.6 : 1
+												}}
+												title="Purchase backup storage addon for this gallery"
+											>
+												{purchasingAddon[g.galleryId] ? 'Purchasing...' : 'Buy Backup'}
+											</button>
+										)}
+									</td>
 									<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
 										{new Date(g.createdAt).toLocaleDateString()}
 									</td>
@@ -547,6 +594,22 @@ export default function Galleries() {
 							</div>
 						</>
 					)}
+					<div style={{ marginTop: 12, marginBottom: 12 }}>
+						<label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+							<input 
+								type="checkbox" 
+								checked={hasBackupAddon} 
+								onChange={(e) => setHasBackupAddon(e.target.checked)} 
+								style={{ marginRight: 8 }}
+							/>
+							<span>Purchase Backup Storage Addon</span>
+						</label>
+						<div style={{ fontSize: '12px', color: '#666', marginLeft: 24, marginTop: 4 }}>
+							{hasBackupAddon 
+								? 'Backup storage addon will be purchased for this gallery. ZIPs will be generated automatically for all orders and kept available for download even after delivery. Price: 30% of order total.'
+								: 'Original photos ZIPs will be available for one-time download only. After delivery, originals will be removed unless backup addon is purchased.'}
+						</div>
+					</div>
 				</div>
 				<button onClick={createGallery}>Create Gallery</button>
 			</div>

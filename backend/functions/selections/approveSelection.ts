@@ -7,6 +7,7 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getJWTFromEvent } from '../../lib/src/jwt';
 import { createSelectionApprovedEmail } from '../../lib/src/email';
+import { createBackupStorageAddon, hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -39,6 +40,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const selectedKeys: string[] = Array.isArray(body?.selectedKeys) ? body.selectedKeys : [];
 	if (selectedKeys.length === 0) return { statusCode: 400, body: 'selectedKeys required' };
+	const hasBackupStorage = body?.hasBackupStorage === true;
 
 	// Query all orders once - reuse for all checks
 	const ordersQuery = await ddb.send(new QueryCommand({
@@ -76,7 +78,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const extraPrice = Math.max(0, pkg?.extraPriceCents ?? 0);
 	const overageCount = Math.max(0, selectedCount - included);
 	const overageCents = overageCount * extraPrice;
-	const totalCents = overageCents;
+	
+	// Calculate backup storage addon price (percentage of base order total)
+	// Default multiplier is 0.3 (30%), but can be configured in addon object
+	const baseTotalCents = overageCents;
+	const BACKUP_STORAGE_MULTIPLIER = 0.3; // Default 30%, will be configurable through UI in future
+	const backupStorageCents = hasBackupStorage ? Math.round(baseTotalCents * BACKUP_STORAGE_MULTIPLIER) : 0;
+	const totalCents = baseTotalCents + backupStorageCents;
 
 	const now = new Date().toISOString();
 	// Check for existing orders: CHANGES_REQUESTED (restore) or CLIENT_SELECTING (update), otherwise create new
@@ -94,7 +102,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId },
-			UpdateExpression: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u REMOVE canceledAt',
+			UpdateExpression: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u REMOVE canceledAt, zipKey',
 			ExpressionAttributeValues: {
 				':ds': 'CLIENT_APPROVED',
 				':sk': selectedKeys,
@@ -139,8 +147,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}));
 	
-	// Generate ZIP (best effort) via lambda invoke
-	if (zipFnName) {
+	// Create backup storage addon if purchased (gallery-level)
+	if (hasBackupStorage) {
+		try {
+			await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
+			logger.info('Backup storage addon created for gallery', { galleryId, backupStorageCents, multiplier: BACKUP_STORAGE_MULTIPLIER });
+		} catch (err: any) {
+			logger.error('Failed to create backup storage addon', {
+				error: err.message,
+				galleryId
+			});
+			// Continue with order creation even if addon creation fails
+		}
+	}
+	
+	// Check if gallery has backup storage addon (gallery-level)
+	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+	
+	// Generate ZIP only if gallery has backup addon (best effort) via lambda invoke
+	// If no addon, ZIP will be generated manually by photographer when needed
+	if (galleryHasBackup && zipFnName) {
 		try {
 			const payload = Buffer.from(JSON.stringify({ galleryId, keys: selectedKeys, orderId }));
 			const invokeResponse = await lambda.send(new InvokeCommand({ 
@@ -272,6 +298,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			selectedCount,
 			overageCount,
 			overageCents,
+			totalCents,
+			hasBackupStorage,
+			backupStorageCents,
 			status: 'APPROVED'
 		})
 	};

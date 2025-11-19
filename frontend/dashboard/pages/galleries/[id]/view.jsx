@@ -18,6 +18,13 @@ function OwnerGalleryView({ token, ownerId, galleryId, mode }) {
 	const [hasDeliveredOrders, setHasDeliveredOrders] = useState(false);
 	const [selectedKeys, setSelectedKeys] = useState(new Set()); // Client's selected photos
 
+	// Default to processed view if processed items exist after load
+	useEffect(() => {
+		if (hasDeliveredOrders && viewMode === 'purchase' && !loading) {
+			setViewMode('processed');
+		}
+	}, [hasDeliveredOrders, loading]);
+
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
 	}, []);

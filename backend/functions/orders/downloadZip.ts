@@ -1,11 +1,12 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -262,26 +263,74 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	try {
-		// Generate presigned URL for ZIP download (24 hour expiry)
-		const downloadUrl = await getSignedUrl(
-			s3,
-			new GetObjectCommand({
-				Bucket: bucket,
-				Key: order.zipKey
-			}),
-			{ expiresIn: 86400 }
-		);
+		// Check if gallery has backup addon (gallery-level)
+		const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+		
+		// Get ZIP file from S3
+		const getObjectResponse = await s3.send(new GetObjectCommand({
+			Bucket: bucket,
+			Key: order.zipKey
+		}));
 
+		if (!getObjectResponse.Body) {
+			return {
+				statusCode: 404,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'ZIP file not found' })
+			};
+		}
+
+		// Read the ZIP file into a buffer
+		const chunks: Buffer[] = [];
+		const stream = getObjectResponse.Body as any;
+		for await (const chunk of stream) {
+			chunks.push(Buffer.from(chunk));
+		}
+		const zipBuffer = Buffer.concat(chunks);
+
+		// If gallery does NOT have backup addon, delete ZIP after serving (one-time use)
+		if (!galleryHasBackup && order.zipKey) {
+			try {
+				await s3.send(new DeleteObjectCommand({
+					Bucket: bucket,
+					Key: order.zipKey
+				}));
+				
+				// Remove zipKey from order record
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'REMOVE zipKey'
+				}));
+				
+				console.log('ZIP deleted after one-time download (no backup addon)', {
+					galleryId,
+					orderId,
+					zipKey: order.zipKey
+				});
+			} catch (deleteErr: any) {
+				// Log error but don't fail the download
+				console.error('Failed to delete ZIP after download', {
+					error: deleteErr.message,
+					galleryId,
+					orderId,
+					zipKey: order.zipKey
+				});
+			}
+		}
+
+		// Return ZIP file directly through API as binary response
+		// API Gateway will handle base64 encoding automatically when isBase64Encoded is true
 		return {
 			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				orderId,
-				galleryId,
-				zipKey: order.zipKey,
-				downloadUrl,
-				expiresAt: new Date(Date.now() + 86400 * 1000).toISOString()
-			})
+			headers: { 
+				'content-type': 'application/zip',
+				'Content-Disposition': `attachment; filename="${orderId}.zip"`,
+				'Content-Length': zipBuffer.length.toString(),
+				'x-one-time-use': (!galleryHasBackup).toString()
+			},
+			body: zipBuffer.toString('base64'),
+			isBase64Encoded: true
 		};
 	} catch (error: any) {
 		console.error('Failed to generate download URL:', error);

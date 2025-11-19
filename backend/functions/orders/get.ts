@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -23,7 +24,18 @@ export const handler = lambdaLogger(async (event: any) => {
 	const o = await ddb.send(new GetCommand({ TableName: ordersTable, Key: { galleryId, orderId } }));
 	if (!o.Item) return { statusCode: 404, body: 'order not found' };
 
-	return { statusCode: 200, body: JSON.stringify(o.Item) };
+	const order = o.Item as any;
+	
+	// Check if gallery has backup storage addon (gallery-level)
+	const hasBackupStorage = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+	
+	// Include addon info in response
+	const orderWithAddon = {
+		...order,
+		hasBackupStorage
+	};
+
+	return { statusCode: 200, body: JSON.stringify(orderWithAddon) };
 });
 
 

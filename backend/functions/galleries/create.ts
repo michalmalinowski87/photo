@@ -323,6 +323,28 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Item: item
 	}));
 
+	// Create backup storage addon if requested during gallery creation
+	if (body?.hasBackupStorage) {
+		const addonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
+		if (addonsTable) {
+			try {
+				const { createBackupStorageAddon } = require('../../lib/src/addons');
+				// Calculate addon price based on estimated order value (30% of base pricing)
+				const estimatedOrderValue = pricingPackage.extraPriceCents * 10; // Estimate 10 extra photos
+				const BACKUP_STORAGE_MULTIPLIER = 0.3;
+				const backupStorageCents = Math.round(estimatedOrderValue * BACKUP_STORAGE_MULTIPLIER);
+				await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
+				logger.info('Backup storage addon created during gallery creation', { galleryId, backupStorageCents });
+			} catch (err: any) {
+				logger.error('Failed to create backup storage addon during gallery creation', {
+					error: err.message,
+					galleryId
+				});
+				// Continue - addon can be purchased later
+			}
+		}
+	}
+
 	// If selection is disabled and gallery is paid, create an order immediately with APPROVED status
 	if (paid && !body.selectionEnabled) {
 		if (ordersTable) {

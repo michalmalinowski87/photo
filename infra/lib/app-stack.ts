@@ -77,12 +77,19 @@ export class AppStack extends Stack {
 			billingMode: BillingMode.PAY_PER_REQUEST,
 			removalPolicy: RemovalPolicy.RETAIN
 		});
-		const orders = new Table(this, 'OrdersTable', {
-			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
-			sortKey: { name: 'orderId', type: AttributeType.STRING },
-			billingMode: BillingMode.PAY_PER_REQUEST,
-			removalPolicy: RemovalPolicy.RETAIN
-		});
+	const orders = new Table(this, 'OrdersTable', {
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'orderId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+
+	const galleryAddons = new Table(this, 'GalleryAddonsTable', {
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'addonId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
 
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
@@ -159,7 +166,8 @@ export class AppStack extends Stack {
 			PAYMENTS_TABLE: payments.tableName,
 			WALLETS_TABLE: wallet.tableName,
 			WALLET_LEDGER_TABLE: walletLedger.tableName,
-			ORDERS_TABLE: orders.tableName
+			ORDERS_TABLE: orders.tableName,
+			GALLERY_ADDONS_TABLE: galleryAddons.tableName
 		};
 
 		const healthFn = new NodejsFunction(this, 'HealthFunction', {
@@ -458,6 +466,7 @@ export class AppStack extends Stack {
 		});
 		galleries.grantReadWriteData(approveSelectionFn);
 		orders.grantReadWriteData(approveSelectionFn);
+		galleryAddons.grantReadWriteData(approveSelectionFn);
 		zipFn.grantInvoke(approveSelectionFn);
 		// Allow SES for notifications
 		approveSelectionFn.addToRolePolicy(new PolicyStatement({
@@ -547,6 +556,18 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
+		const ordersGenerateZipFn = new NodejsFunction(this, 'OrdersGenerateZipFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/generateZip.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const ordersPurchaseAddonFn = new NodejsFunction(this, 'OrdersPurchaseAddonFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/purchaseAddon.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
 		const ordersMarkPaidFn = new NodejsFunction(this, 'OrdersMarkPaidFn', {
 			entry: path.join(__dirname, '../../../backend/functions/orders/markPaid.ts'),
 			handler: 'handler',
@@ -579,15 +600,28 @@ export class AppStack extends Stack {
 		orders.grantReadWriteData(ordersMarkRefundedFn);
 		orders.grantReadWriteData(ordersMarkDepositPaidFn);
 		orders.grantReadWriteData(ordersDownloadZipFn);
+		orders.grantReadWriteData(ordersGenerateZipFn);
+		orders.grantReadWriteData(ordersPurchaseAddonFn);
 		galleries.grantReadData(ordersListFn);
 		galleries.grantReadData(ordersGetFn);
+		galleryAddons.grantReadData(ordersGetFn);
 		galleries.grantReadData(ordersDownloadZipFn);
+		galleries.grantReadData(ordersPurchaseAddonFn);
 		galleries.grantReadData(ordersMarkPaidFn);
 		galleries.grantReadData(ordersMarkCanceledFn);
 		galleries.grantReadData(ordersMarkRefundedFn);
 		galleries.grantReadData(ordersMarkDepositPaidFn);
+		galleries.grantReadData(ordersGenerateZipFn);
 		galleriesBucket.grantRead(ordersDownloadZipFn);
+		galleriesBucket.grantReadWrite(ordersDownloadZipFn);
+		galleriesBucket.grantRead(ordersGenerateZipFn);
+		galleriesBucket.grantReadWrite(ordersPurchaseAddonFn);
 		zipFn.grantInvoke(ordersDownloadZipFn);
+		zipFn.grantInvoke(ordersGenerateZipFn);
+		zipFn.grantInvoke(ordersPurchaseAddonFn);
+		galleryAddons.grantReadWriteData(ordersDownloadZipFn);
+		galleryAddons.grantReadWriteData(ordersGenerateZipFn);
+		galleryAddons.grantReadWriteData(ordersPurchaseAddonFn);
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders',
 			methods: [HttpMethod.GET],
@@ -604,6 +638,18 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/orders/{orderId}/zip',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('OrdersDownloadZipIntegration', ordersDownloadZipFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/generate-zip',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('OrdersGenerateZipIntegration', ordersGenerateZipFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/purchase-addon',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('OrdersPurchaseAddonIntegration', ordersPurchaseAddonFn),
 			authorizer
 		});
 		httpApi.addRoutes({

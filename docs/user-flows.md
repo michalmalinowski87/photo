@@ -227,7 +227,16 @@ Clients access password-protected galleries, browse photos, select favorites, an
      - Status: `CLIENT_APPROVED`
      - Payment status: `UNPAID`
      - Stores selected keys, counts, pricing
-   - Generates ZIP file:
+   - **Backup Storage Addon (Optional)**:
+     - Client can optionally purchase backup storage addon
+     - Adds 30% to the order total price
+     - Ensures original photos ZIP is always downloadable as long as gallery is active
+     - ZIP remains available even after delivery
+   - **ZIP Generation**:
+     - **If backup addon is purchased**: ZIP is generated automatically on approval
+     - **If backup addon is NOT purchased**: ZIP is NOT generated automatically
+     - Photographer must manually generate ZIP when needed (only when order status is CLIENT_APPROVED)
+   - Generates ZIP file (if addon purchased):
      - Lambda function creates ZIP of selected originals
      - Stores in `galleries/{galleryId}/zips/{orderId}.zip`
      - Updates order with ZIP key
@@ -280,7 +289,23 @@ Photographers review orders, process photos, and deliver final products to clien
      - Payment status: `UNPAID`
      - Selected photo count
      - Overage count and pricing
-     - ZIP download available
+     - Backup storage addon status
+     - ZIP download available (if generated)
+   - **Purchase Backup Storage Addon (if not purchased)**:
+     - "Purchase Backup Addon (Gallery)" button appears when:
+       - Backup storage addon is NOT purchased for the gallery
+       - Shown once per gallery (not per order)
+     - Clicking purchases addon for the entire gallery
+     - Applies to all orders in the gallery (current and future)
+     - Automatically generates ZIPs for all existing orders that don't have ZIPs
+     - ZIPs become permanently available for download for all orders
+   - **Generate ZIP (if no backup addon)**:
+     - "Generate ZIP" button appears only when:
+       - Backup storage addon is NOT purchased
+       - Order status is `CLIENT_APPROVED`
+       - ZIP has not been generated yet
+     - Clicking generates ZIP for one-time download
+     - ZIP will be deleted after first download (if no addon)
 
 2. **Approve Change Request (If Applicable)**
    - If order status is `CHANGES_REQUESTED`:
@@ -292,6 +317,13 @@ Photographers review orders, process photos, and deliver final products to clien
 
 3. **Process Photos**
    - Photographer processes selected photos in editing software
+   - **Warning Before Upload (if no backup addon)**:
+     - If backup storage addon is NOT purchased for the gallery, system shows warning with option to purchase:
+       - "Once you upload final photos, the status will change to PREPARING_DELIVERY and you will no longer be able to generate the originals ZIP. Original photos will be permanently removed after delivery."
+       - System offers to purchase backup storage addon for the gallery
+       - If photographer chooses to purchase: Addon is purchased for gallery, ZIPs are generated automatically for all orders
+       - If photographer declines: Final confirmation required before proceeding
+     - Photographer can purchase addon for gallery at any time before delivery
    - Upload final processed photos:
      - Click "Upload Final Photos" button
      - Select processed image files
@@ -300,6 +332,7 @@ Photographers review orders, process photos, and deliver final products to clien
      - Photos stored in original, unprocessed format
      - **First photo upload**: Order status automatically changes from `CLIENT_APPROVED` to `PREPARING_DELIVERY`
      - Subsequent uploads: Order remains `PREPARING_DELIVERY` status
+     - **Note**: Once status changes to `PREPARING_DELIVERY`, ZIP generation is no longer available (if no addon)
    - Client can view photos in `PREPARING_DELIVERY` status (before final delivery)
 
 4. **Mark Payment Status**
@@ -321,7 +354,10 @@ Photographers review orders, process photos, and deliver final products to clien
          - Deletes originals for selected photos
          - Deletes previews for selected photos
          - Deletes thumbnails for selected photos
-         - Keeps final photos and ZIPs
+         - Keeps final photos
+         - **ZIP handling**:
+           - If backup addon purchased: ZIP remains available for download
+           - If no backup addon: ZIP should have been deleted after one-time download (or never generated)
    - Client receives email notification
 
 6. **Client Downloads Final Photos**
@@ -349,7 +385,11 @@ Photographers review orders, process photos, and deliver final products to clien
 
 ### Key Endpoints
 - `GET /galleries/{id}/orders` - List all orders for gallery (photographer)
+- `GET /galleries/{id}/orders/{orderId}` - Get order details (includes backup addon status)
 - `POST /galleries/{id}/orders/{orderId}/change-request/approve` - Approve change request
+- `POST /galleries/{id}/purchase-addon` - Purchase backup storage addon for gallery (photographer-only, applies to all orders)
+- `POST /galleries/{id}/orders/{orderId}/generate-zip` - Manually generate ZIP (only for non-addon orders with CLIENT_APPROVED status)
+- `GET /galleries/{id}/orders/{orderId}/zip` - Get presigned download URL for order ZIP (deletes ZIP after download if no addon)
 - `POST /galleries/{id}/orders/{orderId}/final/upload` - Upload final processed photos
 - `POST /galleries/{id}/orders/{orderId}/final/send` - Send final link and mark delivered
 - `GET /galleries/{id}/orders/delivered` - List delivered orders (client)
@@ -367,10 +407,10 @@ CLIENT_SELECTING → CLIENT_APPROVED → PREPARING_DELIVERY → DELIVERED
 
 **Status Descriptions**:
 - **CLIENT_SELECTING**: Client is actively selecting photos
-- **CLIENT_APPROVED**: Client approved selection, order created, ZIP generated
+- **CLIENT_APPROVED**: Client approved selection, order created. ZIP generated automatically if backup addon purchased, otherwise must be generated manually by photographer.
 - **CHANGES_REQUESTED**: Client requested changes, photographer can approve to restore to CLIENT_SELECTING
-- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes.
-- **DELIVERED**: Order delivered, final link sent, originals cleaned up
+- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. **ZIP generation no longer available** (if no backup addon).
+- **DELIVERED**: Order delivered, final link sent, originals cleaned up. ZIP remains available if backup addon purchased, otherwise deleted after one-time download.
 
 ---
 
@@ -391,10 +431,15 @@ After receiving delivered order, clients can purchase additional photos from the
 2. **Select Additional Photos**
    - Client browses gallery in "Purchase" view
    - Selects additional photos
+   - **Backup Storage Addon (Optional)**:
+     - Client can optionally purchase backup storage addon
+     - Adds 30% to the order total price
+     - Ensures original photos ZIP is always downloadable
    - Pricing calculation:
      - All selected photos charged at extra price
      - No included count (first-time selection benefit doesn't apply)
-     - Total = selected count × extra price per photo
+     - Base total = selected count × extra price per photo
+     - If backup addon purchased: Total = base total + (base total × 0.3)
 
 3. **Approve New Selection**
    - Client clicks "Approve Selection"

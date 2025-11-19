@@ -19,6 +19,13 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 	const [viewMode, setViewMode] = useState('purchase'); // 'purchase' or 'processed'
 	const [finalImages, setFinalImages] = useState([]); // For modal display
 
+	// Default to processed view if processed items exist after login
+	useEffect(() => {
+		if (galleryInfo?.hasDeliveredOrder && viewMode === 'purchase' && !loading) {
+			setViewMode('processed');
+		}
+	}, [galleryInfo?.hasDeliveredOrder, loading]);
+
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
 		setCloudfrontDomain(process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || '');
@@ -311,7 +318,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 						{loading ? 'Refreshing...' : 'Refresh'}
 					</button>
 					{/* View Mode Toggle - Only show if there's a DELIVERED order AND there are photos to select from */}
-					{galleryInfo?.hasDeliveredOrder && !shouldShowOnlyProcessed && (
+					{galleryInfo?.hasDeliveredOrder && images.length > 0 && (
 						<div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 4, borderRadius: 8 }}>
 							<button
 								onClick={() => setViewMode('processed')}

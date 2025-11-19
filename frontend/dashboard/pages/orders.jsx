@@ -14,6 +14,7 @@ export default function Orders() {
 	const [generatingZip, setGeneratingZip] = useState({});
 	const [uploadingFinal, setUploadingFinal] = useState({});
 	const [finalFiles, setFinalFiles] = useState({});
+	const [hasBackupAddon, setHasBackupAddon] = useState(false);
 
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
@@ -65,6 +66,19 @@ export default function Orders() {
 			
 			if (Array.isArray(ordersData)) {
 				setOrders(ordersData);
+				// Check backup addon status for gallery (check first order to get gallery addon status)
+				if (ordersData.length > 0 && ordersData[0].orderId) {
+					try {
+						const orderDetail = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${ordersData[0].orderId}`, {
+							headers: { Authorization: `Bearer ${idToken}` }
+						});
+						setHasBackupAddon(orderDetail.data?.hasBackupStorage === true);
+					} catch (err) {
+						setHasBackupAddon(false);
+					}
+				} else {
+					setHasBackupAddon(false);
+				}
 				if (ordersData.length === 0) {
 					setMessage('No orders found for this gallery');
 				} else {
@@ -102,15 +116,34 @@ export default function Orders() {
 		setMessage('');
 		setGeneratingZip({ [orderId]: true });
 		try {
-			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/regenerate-zip`, {
+			const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/generate-zip`, {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			if (data.zipKey) {
-				setMessage(`ZIP generated successfully for order ${orderId}`);
+			
+			if (response.headers.get('content-type')?.includes('application/zip')) {
+				// Binary ZIP response - trigger download
+				const blob = await response.blob();
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `${orderId}.zip`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				setMessage(`ZIP generated and downloaded for order ${orderId}. You can download it once.`);
 				await loadOrders(); // Reload to get the updated zipKey
 			} else {
-				setMessage('ZIP generation completed but no zipKey returned');
+				// JSON response (fallback)
+				const data = await response.json();
+				if (data.zipKey) {
+					// Try to download via download endpoint
+					await downloadZip(orderId);
+					setMessage(`ZIP generated successfully for order ${orderId}.`);
+				} else {
+					setMessage('ZIP generation completed but no zipKey returned');
+				}
 			}
 		} catch (error) {
 			setMessage(formatApiError(error));
@@ -119,20 +152,55 @@ export default function Orders() {
 		}
 	}
 
+	// Helper function to check if order has backup storage addon
+	// For now, we'll check if order has hasBackupStorage field or check via API
+	async function checkHasBackupAddon(orderId) {
+		try {
+			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}`, {
+				headers: { Authorization: `Bearer ${idToken}` }
+			});
+			// Check if order has addon info - we'll add this to order data later
+			// For now, assume no addon if not explicitly set
+			return data.hasBackupStorage === true;
+		} catch (error) {
+			// If we can't check, assume no addon to be safe
+			return false;
+		}
+	}
+
 	async function downloadZip(orderId) {
 		setMessage('');
 		setDownloadingZip({ [orderId]: true });
 		try {
-			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`, {
+			const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`, {
 				method: 'GET',
-			headers: { Authorization: `Bearer ${idToken}` }
-		});
-			if (data.downloadUrl) {
-				// Open download URL in new window/tab
-				window.open(data.downloadUrl, '_blank');
-				setMessage(`Download started for order ${orderId}`);
+				headers: { Authorization: `Bearer ${idToken}` }
+			});
+			
+			if (response.headers.get('content-type')?.includes('application/zip')) {
+				// Binary ZIP response - trigger download
+				const blob = await response.blob();
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `${orderId}.zip`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				
+				// Check if it's one-time use from response headers or try to get from JSON
+				const oneTimeUse = response.headers.get('x-one-time-use') === 'true';
+				setMessage(`Download started for order ${orderId}${oneTimeUse ? ' (one-time use)' : ''}`);
+				await loadOrders(); // Reload to refresh order state
 			} else {
-				setMessage('No download URL returned');
+				// JSON response (fallback or error)
+				const data = await response.json();
+				if (data.error) {
+					setMessage(`Error: ${data.error}`);
+				} else {
+					setMessage('No ZIP file available');
+				}
 			}
 		} catch (error) {
 			setMessage(formatApiError(error));
@@ -252,6 +320,15 @@ export default function Orders() {
 			setMessage('Please select files to upload');
 			return;
 		}
+		
+		// Check if gallery has backup addon and show warning if not
+		if (!hasBackupAddon) {
+			const warning = 'Warning: Once you upload final photos, the status will change to PREPARING_DELIVERY and you will no longer be able to generate the originals ZIP. Original photos will be permanently removed after delivery.\n\nYou can purchase the backup storage addon from the gallery list page.';
+			if (!window.confirm(warning + '\n\nDo you want to continue with upload?')) {
+				return;
+			}
+		}
+		
 		setUploadingFinal({ ...uploadingFinal, [orderId]: true });
 		setMessage('');
 		try {
@@ -356,48 +433,66 @@ export default function Orders() {
 								<td>{o.overageCents ? `${(o.overageCents / 100).toFixed(2)} PLN` : '0 PLN'}</td>
 								<td>{o.zipKey || '-'}</td>
 								<td>
-									{/* Download ZIP - available for orders that are not CANCELLED or DELIVERED */}
-									{o.deliveryStatus !== 'CANCELLED' && o.deliveryStatus !== 'DELIVERED' && (
-										<>
-											{o.zipKey ? (
-												<button 
-													onClick={() => downloadZip(o.orderId)} 
-													disabled={downloadingZip[o.orderId]}
-													style={{ 
-														marginRight: 8, 
-														padding: '4px 8px', 
-														fontSize: '12px', 
-														background: '#28a745', 
-														color: 'white', 
-														border: 'none', 
-														borderRadius: 4, 
-														cursor: 'pointer'
-													}}
-													title="Download ZIP file"
-												>
-													{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
-												</button>
-											) : (
-												<button 
-													onClick={() => generateZip(o.orderId)} 
-													disabled={generatingZip[o.orderId]}
-													style={{ 
-														marginRight: 8, 
-														padding: '4px 8px', 
-														fontSize: '12px', 
-														background: '#17a2b8', 
-														color: 'white', 
-														border: 'none', 
-														borderRadius: 4, 
-														cursor: generatingZip[o.orderId] ? 'not-allowed' : 'pointer',
-														opacity: generatingZip[o.orderId] ? 0.6 : 1
-													}}
-													title="Generate ZIP file for this order"
-												>
-													{generatingZip[o.orderId] ? 'Generating...' : 'Generate ZIP'}
-												</button>
-											)}
-										</>
+									{/* Generate ZIP button - only show when no backup addon and CLIENT_APPROVED status */}
+									{!hasBackupAddon && o.deliveryStatus === 'CLIENT_APPROVED' && !o.zipKey && (
+										<button 
+											onClick={() => generateZip(o.orderId)} 
+											disabled={generatingZip[o.orderId]}
+											style={{ 
+												marginRight: 8, 
+												padding: '4px 8px', 
+												fontSize: '12px', 
+												background: '#17a2b8', 
+												color: 'white', 
+												border: 'none', 
+												borderRadius: 4, 
+												cursor: generatingZip[o.orderId] ? 'not-allowed' : 'pointer',
+												opacity: generatingZip[o.orderId] ? 0.6 : 1
+											}}
+											title="Generate ZIP file for this order (one-time download available)"
+										>
+											{generatingZip[o.orderId] ? 'Generating...' : 'Generate ZIP'}
+										</button>
+									)}
+									{/* Download ZIP - available when ZIP exists and order is not CANCELLED or DELIVERED */}
+									{o.zipKey && o.deliveryStatus !== 'CANCELLED' && o.deliveryStatus !== 'DELIVERED' && (
+										<button 
+											onClick={() => downloadZip(o.orderId)} 
+											disabled={downloadingZip[o.orderId]}
+											style={{ 
+												marginRight: 8, 
+												padding: '4px 8px', 
+												fontSize: '12px', 
+												background: '#28a745', 
+												color: 'white', 
+												border: 'none', 
+												borderRadius: 4, 
+												cursor: 'pointer'
+											}}
+											title={hasBackupAddon ? "Download ZIP file (available for all statuses)" : "Download ZIP file (one-time use)"}
+										>
+											{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
+										</button>
+									)}
+									{/* Download ZIP for DELIVERED orders with backup addon */}
+									{o.zipKey && o.deliveryStatus === 'DELIVERED' && hasBackupAddon && (
+										<button 
+											onClick={() => downloadZip(o.orderId)} 
+											disabled={downloadingZip[o.orderId]}
+											style={{ 
+												marginRight: 8, 
+												padding: '4px 8px', 
+												fontSize: '12px', 
+												background: '#28a745', 
+												color: 'white', 
+												border: 'none', 
+												borderRadius: 4, 
+												cursor: 'pointer'
+											}}
+											title="Download ZIP file (backup storage addon purchased)"
+										>
+											{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
+										</button>
 									)}
 									{/* Mark as Paid - available for UNPAID orders */}
 									{o.paymentStatus === 'UNPAID' && (
