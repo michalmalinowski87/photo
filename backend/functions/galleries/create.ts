@@ -242,17 +242,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 			// Build line items: gallery plan + addon (if requested)
 			const lineItems: any[] = [
-				{
-					price_data: {
-						currency: 'pln',
-						product_data: {
-							name: `Gallery: ${galleryId}`,
-							description: `PhotoHub gallery creation - ${plan} plan`
+					{
+						price_data: {
+							currency: 'pln',
+							product_data: {
+								name: `Gallery: ${galleryId}`,
+								description: `PhotoHub gallery creation - ${plan} plan`
+							},
+							unit_amount: priceCents
 						},
-						unit_amount: priceCents
-					},
-					quantity: 1
-				}
+						quantity: 1
+					}
 			];
 			
 			if (hasBackupStorage && addonPriceCents > 0) {

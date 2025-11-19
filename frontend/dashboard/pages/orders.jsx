@@ -119,7 +119,7 @@ export default function Orders() {
 			
 			const generateData = await generateResponse.json();
 			if (!generateData.zipKey) {
-				setMessage('ZIP generation completed but no zipKey returned');
+					setMessage('ZIP generation completed but no zipKey returned');
 				return;
 			}
 			

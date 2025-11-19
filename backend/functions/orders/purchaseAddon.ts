@@ -261,56 +261,56 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// If payment succeeded (wallet debit), create addon and generate ZIPs immediately
 	if (paid) {
-		try {
-			await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
+	try {
+		await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
 			logger.info('Backup storage addon purchased for gallery (wallet)', { 
 				galleryId, 
 				backupStorageCents, 
 				multiplier: BACKUP_STORAGE_MULTIPLIER 
 			});
-		} catch (err: any) {
-			logger.error('Failed to create backup storage addon', {
-				error: err.message,
-				galleryId
-			});
-			return {
-				statusCode: 500,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Failed to create addon', message: err.message })
-			};
-		}
+	} catch (err: any) {
+		logger.error('Failed to create backup storage addon', {
+			error: err.message,
+			galleryId
+		});
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Failed to create addon', message: err.message })
+		};
+	}
 
 		// Trigger ZIP generation Lambda asynchronously (fire and forget)
 		if (generateZipsFnName) {
-			try {
+				try {
 				const payload = Buffer.from(JSON.stringify({ galleryId }));
 				await lambda.send(new InvokeCommand({ 
 					FunctionName: generateZipsFnName, 
-					Payload: payload, 
+						Payload: payload, 
 					InvocationType: 'Event' // Asynchronous invocation
 				}));
 				logger.info('Triggered ZIP generation Lambda for addon purchase', { 
-					galleryId, 
+								galleryId,
 					generateZipsFnName 
 				});
 			} catch (invokeErr: any) {
 				logger.error('Failed to invoke ZIP generation Lambda', {
 					error: invokeErr.message,
-					galleryId,
+									galleryId,
 					generateZipsFnName
 				});
 				// Don't fail - addon is created, ZIPs can be generated later manually
 			}
 		} else {
 			logger.warn('GENERATE_ZIPS_FOR_ADDON_FN_NAME not configured, ZIPs will not be generated automatically', { galleryId });
-		}
+	}
 
-		return {
-			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				galleryId,
-				backupStorageCents,
+	return {
+		statusCode: 200,
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			galleryId,
+			backupStorageCents,
 				message: 'Backup storage addon purchased successfully for gallery. ZIPs will be generated automatically.'
 			})
 		};
@@ -333,8 +333,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				error: 'Insufficient wallet balance and Stripe not configured. Please top up your wallet or configure Stripe.' 
-			})
-		};
+		})
+	};
 	}
 });
 
