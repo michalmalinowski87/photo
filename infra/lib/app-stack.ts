@@ -42,12 +42,6 @@ export class AppStack extends Stack {
 			exposedHeaders: ['ETag']
 		});
 
-		const users = new Table(this, 'UsersTable', {
-			partitionKey: { name: 'userId', type: AttributeType.STRING },
-			billingMode: BillingMode.PAY_PER_REQUEST,
-			removalPolicy: RemovalPolicy.RETAIN
-		});
-
 		const galleries = new Table(this, 'GalleriesTable', {
 			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
@@ -164,7 +158,6 @@ export class AppStack extends Stack {
 			PUBLIC_API_URL: process.env.PUBLIC_API_URL || '',
 			PUBLIC_GALLERY_URL: process.env.PUBLIC_GALLERY_URL || '',
 			PUBLIC_DASHBOARD_URL: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000',
-			USERS_TABLE: users.tableName,
 			GALLERIES_TABLE: galleries.tableName,
 			PAYMENTS_TABLE: payments.tableName,
 			WALLETS_TABLE: wallet.tableName,
@@ -337,6 +330,7 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(galleriesCreateFn);
 		wallet.grantReadWriteData(galleriesCreateFn);
 		walletLedger.grantReadWriteData(galleriesCreateFn);
+		galleryAddons.grantReadWriteData(galleriesCreateFn); // Needed to create backup storage addon during gallery creation
 		galleries.grantReadData(galleriesGetFn);
 		galleries.grantReadData(galleriesListFn);
 		galleryAddons.grantReadData(galleriesListFn); // Needed to check hasBackupStorage

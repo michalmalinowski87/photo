@@ -174,11 +174,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const orders = ordersQuery.Items || [];
 	
-	// Calculate addon price based on average order value or use a base calculation
+	// Calculate addon price based on photographer's plan price (30% of plan price)
+	// This makes more sense than basing it on client pricing (extra photos)
 	const BACKUP_STORAGE_MULTIPLIER = 0.3; // Default 30%, will be configurable through UI in future
-	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number } | undefined;
-	const estimatedOrderValue = pkg?.extraPriceCents ? (pkg.extraPriceCents * 10) : 10000; // Default to 100 PLN if no package
-	const backupStorageCents = Math.round(estimatedOrderValue * BACKUP_STORAGE_MULTIPLIER);
+	const planPriceCents = gallery.priceCents || 700; // Default to Basic plan price (7 PLN) if not set
+	const backupStorageCents = Math.round(planPriceCents * BACKUP_STORAGE_MULTIPLIER);
 
 	// Try wallet debit first if enabled
 	let paid = false;

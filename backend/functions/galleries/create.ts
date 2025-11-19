@@ -181,13 +181,40 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const expiresAtDate = new Date(createdAtDate.getTime() + expiryDays * 24 * 60 * 60 * 1000);
 	const expiresAt = expiresAtDate.toISOString();
 
+	// Calculate addon price if requested
+	let addonPriceCents = 0;
+	const hasBackupStorage = body?.hasBackupStorage === true;
+	if (hasBackupStorage) {
+		// Calculate addon price based on photographer's plan price (30% of plan price)
+		// This makes more sense than basing it on client pricing (extra photos)
+		const BACKUP_STORAGE_MULTIPLIER = 0.3;
+		addonPriceCents = Math.round(priceCents * BACKUP_STORAGE_MULTIPLIER);
+		logger.info('Backup storage addon requested', { 
+			galleryId, 
+			addonPriceCents, 
+			planPriceCents: priceCents,
+			multiplier: BACKUP_STORAGE_MULTIPLIER
+		});
+	}
+
+	// Total price includes gallery plan + addon (if requested)
+	const totalPriceCents = priceCents + addonPriceCents;
+
 	// Try wallet debit first if enabled
 	let paid = false;
 	let checkoutUrl: string | undefined;
 
 	if (useWallet && walletsTable && ledgerTable) {
-		paid = await debitWallet(ownerId, priceCents, walletsTable, ledgerTable);
-		logger.info('Wallet debit attempt', { ownerId, priceCents, paid, hasWalletsTable: !!walletsTable, hasLedgerTable: !!ledgerTable });
+		paid = await debitWallet(ownerId, totalPriceCents, walletsTable, ledgerTable);
+		logger.info('Wallet debit attempt', { 
+			ownerId, 
+			galleryPriceCents: priceCents,
+			addonPriceCents,
+			totalPriceCents,
+			paid, 
+			hasWalletsTable: !!walletsTable, 
+			hasLedgerTable: !!ledgerTable 
+		});
 	}
 
 	// If wallet debit failed and Stripe is configured, offer one-off payment
@@ -213,28 +240,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				apiUrlConfigured: !!apiUrl
 			});
 
+			// Build line items: gallery plan + addon (if requested)
+			const lineItems: any[] = [
+				{
+					price_data: {
+						currency: 'pln',
+						product_data: {
+							name: `Gallery: ${galleryId}`,
+							description: `PhotoHub gallery creation - ${plan} plan`
+						},
+						unit_amount: priceCents
+					},
+					quantity: 1
+				}
+			];
+			
+			if (hasBackupStorage && addonPriceCents > 0) {
+				lineItems.push({
+					price_data: {
+						currency: 'pln',
+						product_data: {
+							name: 'Backup Storage Addon',
+							description: `Backup storage addon for gallery ${galleryId}`
+						},
+						unit_amount: addonPriceCents
+					},
+					quantity: 1
+				});
+			}
+
 			const session = await stripe.checkout.sessions.create({
 				payment_method_types: ['card'],
 				mode: 'payment',
-				line_items: [
-					{
-						price_data: {
-							currency: 'pln',
-							product_data: {
-								name: `Gallery: ${galleryId}`,
-								description: `PhotoHub gallery creation - ${plan} plan`
-							},
-							unit_amount: priceCents
-						},
-						quantity: 1
-					}
-				],
+				line_items: lineItems,
 				success_url: successUrl,
 				cancel_url: cancelUrl,
 				metadata: {
 					userId: ownerId,
 					type: 'gallery_payment',
 					galleryId,
+					hasBackupStorage: hasBackupStorage ? 'true' : 'false',
+					addonPriceCents: addonPriceCents.toString(),
 					redirectUrl: redirectUrl // Store redirect URL in metadata
 				}
 			});
@@ -323,18 +369,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Item: item
 	}));
 
-	// Create backup storage addon if requested during gallery creation
-	if (body?.hasBackupStorage) {
+	// Create backup storage addon if requested and payment succeeded
+	if (hasBackupStorage && paid && addonPriceCents > 0) {
 		const addonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
 		if (addonsTable) {
 			try {
 				const { createBackupStorageAddon } = require('../../lib/src/addons');
-				// Calculate addon price based on estimated order value (30% of base pricing)
-				const estimatedOrderValue = pricingPackage.extraPriceCents * 10; // Estimate 10 extra photos
 				const BACKUP_STORAGE_MULTIPLIER = 0.3;
-				const backupStorageCents = Math.round(estimatedOrderValue * BACKUP_STORAGE_MULTIPLIER);
-				await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
-				logger.info('Backup storage addon created during gallery creation', { galleryId, backupStorageCents });
+				await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
+				logger.info('Backup storage addon created during gallery creation (wallet payment)', { 
+					galleryId, 
+					addonPriceCents,
+					multiplier: BACKUP_STORAGE_MULTIPLIER
+				});
 			} catch (err: any) {
 				logger.error('Failed to create backup storage addon during gallery creation', {
 					error: err.message,

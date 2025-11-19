@@ -256,6 +256,59 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							amountCents
 						});
 						
+						// Create backup storage addon if requested during gallery creation (Stripe payment)
+						const hasBackupStorage = session.metadata?.hasBackupStorage === 'true';
+						const addonPriceCents = session.metadata?.addonPriceCents ? parseInt(session.metadata.addonPriceCents, 10) : 0;
+						if (hasBackupStorage && addonPriceCents > 0) {
+							try {
+								const { hasAddon } = require('../../lib/src/addons');
+								const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+								
+								if (!addonExists) {
+									const BACKUP_STORAGE_MULTIPLIER = 0.3;
+									await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
+									logger.info('Backup storage addon created during gallery creation (Stripe payment)', { 
+										galleryId, 
+										addonPriceCents,
+										multiplier: BACKUP_STORAGE_MULTIPLIER,
+										paymentId
+									});
+									
+									// Trigger ZIP generation Lambda asynchronously if addon was created
+									const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
+									if (generateZipsFnName) {
+										try {
+											const payload = Buffer.from(JSON.stringify({ galleryId }));
+											await lambda.send(new InvokeCommand({ 
+												FunctionName: generateZipsFnName, 
+												Payload: payload, 
+												InvocationType: 'Event' // Asynchronous invocation
+											}));
+											logger.info('Triggered ZIP generation Lambda for addon purchase (gallery creation)', { 
+												galleryId, 
+												generateZipsFnName 
+											});
+										} catch (invokeErr: any) {
+											logger.error('Failed to invoke ZIP generation Lambda', {
+												error: invokeErr.message,
+												galleryId,
+												generateZipsFnName
+											});
+										}
+									}
+								} else {
+									logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
+								}
+							} catch (addonErr: any) {
+								logger.error('Failed to create backup storage addon via webhook (gallery creation)', {
+									error: addonErr.message,
+									galleryId,
+									paymentId
+								});
+								// Continue - addon can be purchased later
+							}
+						}
+						
 						// If selection is disabled, create an order immediately with APPROVED status
 						if (!gallery.selectionEnabled && ordersTable) {
 							try {
