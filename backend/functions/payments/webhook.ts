@@ -1,10 +1,14 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+import { createBackupStorageAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const lambda = new LambdaClient({});
 
 async function creditWallet(userId: string, amountCents: number, txnId: string, walletsTable: string, ledgerTable: string) {
 	const now = new Date().toISOString();
@@ -55,6 +59,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const paymentsTable = envProc?.env?.PAYMENTS_TABLE as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
 
 	if (!stripeSecretKey || !walletsTable || !ledgerTable) {
 		return {
@@ -117,6 +122,83 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Credit wallet
 				const newBalance = await creditWallet(userId, amountCents, paymentId, walletsTable, ledgerTable);
 				logger.info('Wallet credited', { userId, amountCents, newBalance, paymentId });
+			} else if (type === 'addon_payment' && userId && galleryId) {
+				// Addon payment - create backup storage addon and trigger ZIP generation Lambda
+				const BACKUP_STORAGE_MULTIPLIER = 0.3; // Should match the multiplier used in purchaseAddon
+				const backupStorageCents = amountCents;
+				const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
+				
+				logger.info('Processing addon_payment', { 
+					galleryId, 
+					userId, 
+					backupStorageCents,
+					hasGenerateZipsFnName: !!generateZipsFnName,
+					generateZipsFnName
+				});
+				
+				try {
+					// Check if addon already exists (idempotency check)
+					const { hasAddon } = require('../../lib/src/addons');
+					const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+					
+					if (!addonExists) {
+						// Create addon
+						await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
+						logger.info('Backup storage addon created via webhook', { 
+							galleryId, 
+							backupStorageCents, 
+							multiplier: BACKUP_STORAGE_MULTIPLIER,
+							paymentId
+						});
+						
+						// Trigger ZIP generation Lambda asynchronously (fire and forget)
+						if (generateZipsFnName) {
+							try {
+								const payload = Buffer.from(JSON.stringify({ galleryId }));
+								logger.info('Invoking ZIP generation Lambda', { 
+									galleryId, 
+									generateZipsFnName,
+									payload: payload.toString()
+								});
+								await lambda.send(new InvokeCommand({ 
+									FunctionName: generateZipsFnName, 
+									Payload: payload, 
+									InvocationType: 'Event' // Asynchronous invocation
+								}));
+								logger.info('Successfully triggered ZIP generation Lambda for addon purchase', { 
+									galleryId, 
+									generateZipsFnName 
+								});
+							} catch (invokeErr: any) {
+								logger.error('Failed to invoke ZIP generation Lambda', {
+									error: {
+										name: invokeErr.name,
+										message: invokeErr.message,
+										code: invokeErr.code,
+										stack: invokeErr.stack
+									},
+									galleryId,
+									generateZipsFnName
+								});
+								// Don't fail the webhook - addon is created, ZIPs can be generated later manually
+							}
+						} else {
+							logger.warn('GENERATE_ZIPS_FOR_ADDON_FN_NAME not configured, ZIPs will not be generated automatically', { 
+								galleryId,
+								envKeys: Object.keys(envProc?.env || {})
+							});
+						}
+					} else {
+						logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
+					}
+				} catch (addonErr: any) {
+					logger.error('Failed to create backup storage addon via webhook', {
+						error: addonErr.message,
+						galleryId,
+						paymentId
+					});
+					// Continue to record payment even if addon creation fails
+				}
 			} else if (type === 'gallery_payment' && userId && galleryId) {
 				// Gallery payment (from create or pay button) - mark gallery as paid
 				if (!galleriesTable) {

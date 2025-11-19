@@ -1,20 +1,118 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Stripe = require('stripe');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { hasAddon, createBackupStorageAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
 
+async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, logger: any): Promise<boolean> {
+	const now = new Date().toISOString();
+	
+	try {
+		// Get current balance
+		const walletGet = await ddb.send(new GetCommand({
+			TableName: walletsTable,
+			Key: { userId }
+		}));
+		
+		// If wallet doesn't exist, create it with balance 0 first
+		if (!walletGet.Item) {
+			logger.info('Wallet does not exist, creating with zero balance', { userId });
+			await ddb.send(new PutCommand({
+				TableName: walletsTable,
+				Item: {
+					userId,
+					balanceCents: 0,
+					currency: 'PLN',
+					createdAt: now,
+					updatedAt: now
+				}
+			}));
+			logger.info('Wallet created with zero balance', { userId });
+			return false; // Insufficient balance (0)
+		}
+		
+		const currentBalance = walletGet.Item.balanceCents || 0;
+		logger.info('Wallet balance check', { userId, currentBalance, amountCents, sufficient: currentBalance >= amountCents });
+		
+		if (currentBalance < amountCents) {
+			return false; // Insufficient balance
+		}
+
+		const newBalance = currentBalance - amountCents;
+		const txnId = `debit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+		// Atomic update with condition
+		try {
+			await ddb.send(new UpdateCommand({
+				TableName: walletsTable,
+				Key: { userId },
+				UpdateExpression: 'SET balanceCents = :b, updatedAt = :u',
+				ConditionExpression: 'attribute_exists(userId) AND balanceCents >= :amount',
+				ExpressionAttributeValues: {
+					':b': newBalance,
+					':amount': amountCents,
+					':u': now
+				}
+			}));
+
+			// Create ledger entry
+			await ddb.send(new PutCommand({
+				TableName: ledgerTable,
+				Item: {
+					userId,
+					txnId,
+					type: 'DEBIT',
+					amountCents: -amountCents,
+					refId: txnId,
+					createdAt: now
+				}
+			}));
+
+			logger.info('Wallet debit successful', { userId, amountCents, oldBalance: currentBalance, newBalance, txnId });
+			return true;
+		} catch (err: any) {
+			if (err.name === 'ConditionalCheckFailedException') {
+				logger.warn('Wallet debit failed - conditional check failed (balance changed or insufficient)', { 
+					userId, 
+					amountCents,
+					error: err.message 
+				});
+				return false; // Balance changed, insufficient
+			}
+			logger.error('Wallet debit failed with error', { userId, amountCents, error: err.message });
+			throw err;
+		}
+	} catch (error: any) {
+		logger.error('Wallet debit failed', { 
+			userId, 
+			amountCents,
+			error: {
+				name: error.name,
+				message: error.message,
+				stack: error.stack
+			}
+		});
+		return false;
+	}
+}
+
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
+	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
+	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
+	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
+	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+	const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
 	
 	if (!galleriesTable || !ordersTable) {
 		return {
@@ -69,9 +167,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Get all orders for the gallery to calculate total addon price
-	// We'll use the average order value or a base price
-	// For simplicity, we'll use a fixed price based on gallery pricing package
-	// Or calculate based on all orders' total
 	const ordersQuery = await ddb.send(new QueryCommand({
 		TableName: ordersTable,
 		KeyConditionExpression: 'galleryId = :g',
@@ -80,112 +175,166 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const orders = ordersQuery.Items || [];
 	
 	// Calculate addon price based on average order value or use a base calculation
-	// For now, we'll use the gallery's pricing package to estimate
-	// The multiplier will be stored in the addon object and can be configured through UI in the future
 	const BACKUP_STORAGE_MULTIPLIER = 0.3; // Default 30%, will be configurable through UI in future
 	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number } | undefined;
 	const estimatedOrderValue = pkg?.extraPriceCents ? (pkg.extraPriceCents * 10) : 10000; // Default to 100 PLN if no package
 	const backupStorageCents = Math.round(estimatedOrderValue * BACKUP_STORAGE_MULTIPLIER);
 
-	// Create addon record (gallery-level)
-	try {
-		await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
-		logger.info('Backup storage addon purchased for gallery', { galleryId, backupStorageCents, multiplier: BACKUP_STORAGE_MULTIPLIER });
-	} catch (err: any) {
-		logger.error('Failed to create backup storage addon', {
-			error: err.message,
-			galleryId
+	// Try wallet debit first if enabled
+	let paid = false;
+	let checkoutUrl: string | undefined;
+
+	if (walletsTable && ledgerTable) {
+		paid = await debitWallet(requester, backupStorageCents, walletsTable, ledgerTable, logger);
+		logger.info('Wallet debit attempt for addon purchase', { 
+			userId: requester, 
+			amountCents: backupStorageCents, 
+			paid, 
+			hasWalletsTable: !!walletsTable, 
+			hasLedgerTable: !!ledgerTable 
 		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to create addon', message: err.message })
-		};
+	} else {
+		logger.warn('Wallet tables not configured, skipping wallet debit', {
+			hasWalletsTable: !!walletsTable,
+			hasLedgerTable: !!ledgerTable
+		});
 	}
 
-	// Generate ZIPs for all orders in the gallery that don't have ZIPs yet
-	const generatedZips: string[] = [];
-	if (zipFnName) {
-		for (const order of orders) {
-			if (!order.zipKey && order.selectedKeys && Array.isArray(order.selectedKeys) && order.selectedKeys.length > 0) {
-				try {
-					const orderId = order.orderId;
-					const payload = Buffer.from(JSON.stringify({ 
-						galleryId, 
-						keys: order.selectedKeys, 
-						orderId 
-					}));
-					const invokeResponse = await lambda.send(new InvokeCommand({ 
-						FunctionName: zipFnName, 
-						Payload: payload, 
-						InvocationType: 'RequestResponse'
-					}));
-					
-					if (invokeResponse.Payload) {
-						const payloadString = Buffer.from(invokeResponse.Payload).toString();
-						let zipResult: any;
-						try {
-							zipResult = JSON.parse(payloadString);
-						} catch (parseErr: any) {
-							logger.warn('Failed to parse ZIP generation response', {
-								error: parseErr.message,
-								galleryId,
-								orderId
-							});
-							continue;
-						}
+	// If wallet debit failed and Stripe is configured, create checkout session
+	if (!paid && stripeSecretKey) {
+		try {
+			const stripe = new Stripe(stripeSecretKey);
+			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+			const redirectUrl = `${dashboardUrl}/galleries?addon=success&gallery=${galleryId}`;
+			
+			const successUrl = apiUrl 
+				? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
+				: 'https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}';
+			const cancelUrl = apiUrl
+				? `${apiUrl}/payments/cancel`
+				: 'https://your-frontend/payments/cancel';
 
-						// Handle Lambda response format
-						if (zipResult.statusCode && zipResult.body) {
-							try {
-								const bodyParsed = typeof zipResult.body === 'string' ? JSON.parse(zipResult.body) : zipResult.body;
-								if (zipResult.statusCode === 200) {
-									zipResult = bodyParsed;
-								}
-							} catch (bodyParseErr: any) {
-								logger.warn('Failed to parse Lambda response body', {
-									error: bodyParseErr.message,
-									galleryId,
-									orderId
-								});
-								continue;
-							}
-						}
-
-						if (zipResult && zipResult.zipKey) {
-							// Update order with zipKey
-							await ddb.send(new UpdateCommand({
-								TableName: ordersTable,
-								Key: { galleryId, orderId },
-								UpdateExpression: 'SET zipKey = :z',
-								ExpressionAttributeValues: { ':z': zipResult.zipKey }
-							}));
-							generatedZips.push(orderId);
-							logger.info('ZIP generated after addon purchase', { galleryId, orderId, zipKey: zipResult.zipKey });
-						}
+			const session = await stripe.checkout.sessions.create({
+				payment_method_types: ['card'],
+				mode: 'payment',
+				line_items: [
+					{
+						price_data: {
+							currency: 'pln',
+							product_data: {
+								name: 'Backup Storage Addon',
+								description: `Backup storage addon for gallery ${galleryId}`
+							},
+							unit_amount: backupStorageCents
+						},
+						quantity: 1
 					}
-				} catch (err: any) {
-					// Log but continue - ZIP generation can be retried later
-					logger.warn('ZIP generation failed after addon purchase', { 
-						error: err.message, 
-						galleryId, 
-						orderId: order.orderId 
-					});
+				],
+				success_url: successUrl,
+				cancel_url: cancelUrl,
+				metadata: {
+					userId: requester,
+					type: 'addon_payment',
+					galleryId,
+					redirectUrl: redirectUrl
 				}
-			}
+			});
+
+			checkoutUrl = session.url;
+			logger.info('Stripe checkout session created for addon purchase', { 
+				checkoutUrl, 
+				sessionId: session.id, 
+				galleryId 
+			});
+		} catch (err: any) {
+			logger.error('Stripe checkout creation failed for addon purchase', {
+				error: {
+					name: err.name,
+					message: err.message,
+					code: err.code,
+					type: err.type
+				},
+				galleryId
+			});
 		}
 	}
 
-	return {
-		statusCode: 200,
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({
-			galleryId,
-			backupStorageCents,
-			generatedZipsCount: generatedZips.length,
-			generatedZips,
-			message: 'Backup storage addon purchased successfully for gallery. ZIPs generated for existing orders.'
-		})
-	};
+	// If payment succeeded (wallet debit), create addon and generate ZIPs immediately
+	if (paid) {
+		try {
+			await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
+			logger.info('Backup storage addon purchased for gallery (wallet)', { 
+				galleryId, 
+				backupStorageCents, 
+				multiplier: BACKUP_STORAGE_MULTIPLIER 
+			});
+		} catch (err: any) {
+			logger.error('Failed to create backup storage addon', {
+				error: err.message,
+				galleryId
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Failed to create addon', message: err.message })
+			};
+		}
+
+		// Trigger ZIP generation Lambda asynchronously (fire and forget)
+		if (generateZipsFnName) {
+			try {
+				const payload = Buffer.from(JSON.stringify({ galleryId }));
+				await lambda.send(new InvokeCommand({ 
+					FunctionName: generateZipsFnName, 
+					Payload: payload, 
+					InvocationType: 'Event' // Asynchronous invocation
+				}));
+				logger.info('Triggered ZIP generation Lambda for addon purchase', { 
+					galleryId, 
+					generateZipsFnName 
+				});
+			} catch (invokeErr: any) {
+				logger.error('Failed to invoke ZIP generation Lambda', {
+					error: invokeErr.message,
+					galleryId,
+					generateZipsFnName
+				});
+				// Don't fail - addon is created, ZIPs can be generated later manually
+			}
+		} else {
+			logger.warn('GENERATE_ZIPS_FOR_ADDON_FN_NAME not configured, ZIPs will not be generated automatically', { galleryId });
+		}
+
+		return {
+			statusCode: 200,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				galleryId,
+				backupStorageCents,
+				message: 'Backup storage addon purchased successfully for gallery. ZIPs will be generated automatically.'
+			})
+		};
+	} else if (checkoutUrl) {
+		// Return checkout URL for Stripe payment
+		return {
+			statusCode: 200,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				checkoutUrl,
+				galleryId,
+				backupStorageCents,
+				message: 'Insufficient wallet balance. Please complete payment via Stripe checkout.'
+			})
+		};
+	} else {
+		// No payment method available
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Insufficient wallet balance and Stripe not configured. Please top up your wallet or configure Stripe.' 
+			})
+		};
+	}
 });
 

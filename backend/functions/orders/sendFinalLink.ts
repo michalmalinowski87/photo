@@ -101,41 +101,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
 	}
 
-	// After successfully sending email, mark order as DELIVERED and clean up originals/thumbs/previews
-	const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
-
-	// Clean up originals, thumbs, and previews for selected photos (but keep ZIPs)
-	if (selectedKeys.length > 0) {
-		try {
-			const toDelete: { Key: string }[] = [];
-			for (const key of selectedKeys) {
-				// Add originals, thumbs, and previews to deletion list
-				toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
-			}
-
-			// Batch delete (S3 allows up to 1000 objects per request)
-			for (let i = 0; i < toDelete.length; i += 1000) {
-				const chunk = toDelete.slice(i, i + 1000);
-				await s3.send(new DeleteObjectsCommand({
-					Bucket: bucket,
-					Delete: { Objects: chunk }
-				}));
-			}
-			logger.info('Cleaned up originals/thumbs/previews', { galleryId, orderId, count: selectedKeys.length });
-		} catch (err: any) {
-			logger.error('Failed to clean up originals/thumbs/previews', {
-				error: err.message,
-				galleryId,
-				orderId,
-				selectedKeysCount: selectedKeys.length
-			});
-			// Continue with marking as delivered even if cleanup fails
-		}
-	}
-
 	// Mark order as DELIVERED
+	// Note: Originals/thumbs/previews are already removed when status changed to PREPARING_DELIVERY
+	// (unless backup storage addon exists, in which case they are kept)
 	const now = new Date().toISOString();
 	try {
 		await ddb.send(new UpdateCommand({

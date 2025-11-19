@@ -1,14 +1,16 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
@@ -87,8 +89,12 @@ export const handler = lambdaLogger(async (event: any) => {
 	}));
 	const isFirstPhoto = !existingFiles.Contents || existingFiles.Contents.length === 0;
 
-	// If this is the first photo and status is CLIENT_APPROVED, update to PREPARING_DELIVERY
+	// If this is the first photo and status is CLIENT_APPROVED, update to PREPARING_DELIVERY and remove originals
 	if (isFirstPhoto && order.deliveryStatus === 'CLIENT_APPROVED') {
+		// Check if gallery has backup storage addon - if yes, keep originals
+		const hasBackupStorage = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+		
+		// Update status to PREPARING_DELIVERY
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId },
@@ -97,6 +103,40 @@ export const handler = lambdaLogger(async (event: any) => {
 				':ds': 'PREPARING_DELIVERY'
 			}
 		}));
+		
+		// Remove originals, thumbs, and previews if no backup addon (keep them if addon exists)
+		if (!hasBackupStorage) {
+			const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
+			if (selectedKeys.length > 0) {
+				try {
+					const toDelete: { Key: string }[] = [];
+					for (const key of selectedKeys) {
+						// Add originals, thumbs, and previews to deletion list
+						toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
+						toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
+						toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
+					}
+
+					// Batch delete (S3 allows up to 1000 objects per request)
+					for (let i = 0; i < toDelete.length; i += 1000) {
+						const chunk = toDelete.slice(i, i + 1000);
+						await s3.send(new DeleteObjectsCommand({
+							Bucket: bucket,
+							Delete: { Objects: chunk }
+						}));
+					}
+					logger?.info('Cleaned up originals/thumbs/previews', { galleryId, orderId, count: selectedKeys.length });
+				} catch (err: any) {
+					// Log error but continue - originals deletion failure shouldn't block upload
+					logger?.error('Failed to clean up originals/thumbs/previews', {
+						error: err.message,
+						galleryId,
+						orderId,
+						selectedKeysCount: selectedKeys.length
+					});
+				}
+			}
+		}
 	}
 
 	// Key format: galleries/{galleryId}/final/{orderId}/{filename}

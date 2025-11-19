@@ -1,6 +1,5 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 
@@ -81,6 +80,9 @@ export const handler = lambdaLogger(async (event: any) => {
 		const zipBuffer = Buffer.concat(chunks);
 
 		// Upload ZIP to S3
+		// Note: ZIP files should NOT be directly accessible via S3 URLs
+		// They must be accessed through the Download ZIP Lambda function for security
+		// The bucket has BLOCK_ALL public access, so files are private by default
 		await s3.send(new PutObjectCommand({
 			Bucket: bucket,
 			Key: zipKey,
@@ -88,24 +90,14 @@ export const handler = lambdaLogger(async (event: any) => {
 			ContentType: 'application/zip'
 		}));
 
-		// Generate presigned URL (24 hour expiry)
-		const presignedUrl = await getSignedUrl(
-			s3,
-			new GetObjectCommand({
-				Bucket: bucket,
-				Key: zipKey
-			}),
-			{ expiresIn: 86400 }
-		);
-
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				zipKey,
-				url: presignedUrl,
 				galleryId,
-				orderId
+				orderId,
+				message: 'ZIP created successfully. Use download endpoint to access.'
 			})
 		};
 	} catch (error: any) {

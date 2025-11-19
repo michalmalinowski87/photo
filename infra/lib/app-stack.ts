@@ -139,7 +139,10 @@ export class AppStack extends Stack {
 			memorySize: 256,
 			timeout: Duration.seconds(10),
 			bundling: {
-				externalModules: ['aws-sdk']
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
 			}
 		};
 
@@ -215,6 +218,9 @@ export class AppStack extends Stack {
 		wallet.grantReadWriteData(webhookFn);
 		walletLedger.grantReadWriteData(webhookFn);
 		galleries.grantReadWriteData(webhookFn);
+		orders.grantReadWriteData(webhookFn); // Needed for addon_payment to update orders with zipKey
+		galleryAddons.grantReadWriteData(webhookFn); // Needed for addon_payment to create addon
+		// generateZipsForAddonFn.grantInvoke(webhookFn) will be set after generateZipsForAddonFn is created
 		httpApi.addRoutes({
 			path: '/payments/checkout',
 			methods: [HttpMethod.POST],
@@ -333,10 +339,12 @@ export class AppStack extends Stack {
 		walletLedger.grantReadWriteData(galleriesCreateFn);
 		galleries.grantReadData(galleriesGetFn);
 		galleries.grantReadData(galleriesListFn);
+		galleryAddons.grantReadData(galleriesListFn); // Needed to check hasBackupStorage
 		galleries.grantReadData(galleriesListImagesFn);
 		galleries.grantReadData(galleriesPayFn);
 		galleries.grantReadWriteData(galleriesDeleteFn);
 		orders.grantReadWriteData(galleriesDeleteFn);
+		galleryAddons.grantReadWriteData(galleriesDeleteFn); // Needed to delete gallery addons when gallery is deleted
 		galleries.grantReadWriteData(galleriesDeletePhotoFn);
 		galleries.grantReadWriteData(galleriesSetSelectionModeFn);
 		galleries.grantReadWriteData(galleriesUpdatePricingFn);
@@ -444,13 +452,32 @@ export class AppStack extends Stack {
 			memorySize: 512,
 			timeout: Duration.minutes(5),
 			bundling: {
-				externalModules: ['aws-sdk']
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
 			},
 			environment: envVars
 		});
 		galleriesBucket.grantReadWrite(zipFn);
 		// Make zip function name available to other lambdas
 		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+		
+		// Generate ZIPs for addon purchase (created early so env var is available to webhook)
+		const generateZipsForAddonFn = new NodejsFunction(this, 'GenerateZipsForAddonFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/generateZipsForAddon.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			timeout: Duration.minutes(5), // ZIP generation can take time
+			memorySize: 512, // More memory for processing multiple orders
+			environment: envVars
+		});
+		orders.grantReadWriteData(generateZipsForAddonFn); // Needed to update orders with zipKey
+		zipFn.grantInvoke(generateZipsForAddonFn); // Needed to generate ZIPs
+		// Make function name available to other lambdas (especially webhook)
+		envVars['GENERATE_ZIPS_FOR_ADDON_FN_NAME'] = generateZipsForAddonFn.functionName;
+		generateZipsForAddonFn.grantInvoke(webhookFn); // webhook can invoke it for ZIP generation
+		
 		httpApi.addRoutes({
 			path: '/downloads/zip',
 			methods: [HttpMethod.POST],
@@ -602,7 +629,10 @@ export class AppStack extends Stack {
 		orders.grantReadWriteData(ordersDownloadZipFn);
 		orders.grantReadWriteData(ordersGenerateZipFn);
 		orders.grantReadWriteData(ordersPurchaseAddonFn);
+		wallet.grantReadWriteData(ordersPurchaseAddonFn); // Needed to debit wallet for addon purchase
+		walletLedger.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create ledger entry for debit
 		galleries.grantReadData(ordersListFn);
+		galleryAddons.grantReadData(ordersListFn); // Needed to check hasBackupStorage for orders list
 		galleries.grantReadData(ordersGetFn);
 		galleryAddons.grantReadData(ordersGetFn);
 		galleries.grantReadData(ordersDownloadZipFn);
@@ -614,11 +644,12 @@ export class AppStack extends Stack {
 		galleries.grantReadData(ordersGenerateZipFn);
 		galleriesBucket.grantRead(ordersDownloadZipFn);
 		galleriesBucket.grantReadWrite(ordersDownloadZipFn);
-		galleriesBucket.grantRead(ordersGenerateZipFn);
-		galleriesBucket.grantReadWrite(ordersPurchaseAddonFn);
+		// ordersGenerateZipFn doesn't need S3 access - it only invokes zipFn Lambda which handles S3 operations
+		// ordersPurchaseAddonFn no longer needs S3 access - it invokes generateZipsForAddonFn instead
 		zipFn.grantInvoke(ordersDownloadZipFn);
 		zipFn.grantInvoke(ordersGenerateZipFn);
-		zipFn.grantInvoke(ordersPurchaseAddonFn);
+		generateZipsForAddonFn.grantInvoke(ordersPurchaseAddonFn); // purchaseAddon can invoke it
+		generateZipsForAddonFn.grantInvoke(webhookFn); // webhook can invoke it
 		galleryAddons.grantReadWriteData(ordersDownloadZipFn);
 		galleryAddons.grantReadWriteData(ordersGenerateZipFn);
 		galleryAddons.grantReadWriteData(ordersPurchaseAddonFn);
@@ -773,7 +804,8 @@ export class AppStack extends Stack {
 		});
 		galleries.grantReadData(ordersUploadFinalFn);
 		orders.grantReadWriteData(ordersUploadFinalFn); // Needs write to update order status to PREPARING_DELIVERY
-		galleriesBucket.grantReadWrite(ordersUploadFinalFn); // Needs ListBucket to check if first photo, and Write to upload
+		galleryAddons.grantReadData(ordersUploadFinalFn); // Needed to check hasBackupStorage before deleting originals
+		galleriesBucket.grantReadWrite(ordersUploadFinalFn); // Needs ListBucket to check if first photo, Write to upload, and Delete to remove originals
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/upload',
 			methods: [HttpMethod.POST],
@@ -789,7 +821,10 @@ export class AppStack extends Stack {
 			memorySize: 512,
 			timeout: Duration.minutes(5),
 			bundling: {
-				externalModules: ['aws-sdk']
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
 			},
 			environment: envVars
 		});
@@ -881,7 +916,10 @@ export class AppStack extends Stack {
 			timeout: Duration.minutes(1),
 			bundling: {
 				externalModules: ['aws-sdk'], // Exclude aws-sdk (provided by Lambda runtime)
-				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
 			},
 			environment: envVars
 		});

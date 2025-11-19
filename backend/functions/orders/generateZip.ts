@@ -215,9 +215,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		if (zipResult.zipKey) {
-			// Check if gallery has backup addon (gallery-level)
-			const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-			
 			// Update order with zipKey
 			await ddb.send(new UpdateCommand({
 				TableName: ordersTable,
@@ -228,83 +225,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			
 			logger.info('ZIP generated manually for order', { galleryId, orderId, zipKey: zipResult.zipKey });
 			
-			// After generating, immediately serve the ZIP file
-			// Import S3 client to fetch and serve the ZIP
-			const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-			const s3 = new S3Client({});
-			const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-			
-			if (bucket) {
-				try {
-					const getObjectResponse = await s3.send(new GetObjectCommand({
-						Bucket: bucket,
-						Key: zipResult.zipKey
-					}));
-
-					if (getObjectResponse.Body) {
-						// Read the ZIP file into a buffer
-						const chunks: Buffer[] = [];
-						const stream = getObjectResponse.Body as any;
-						for await (const chunk of stream) {
-							chunks.push(Buffer.from(chunk));
-						}
-						const zipBuffer = Buffer.concat(chunks);
-
-						// If gallery does NOT have backup addon, delete ZIP after serving (one-time use)
-						if (!galleryHasBackup) {
-							try {
-								await s3.send(new DeleteObjectCommand({
-									Bucket: bucket,
-									Key: zipResult.zipKey
-								}));
-								
-								// Remove zipKey from order record
-								await ddb.send(new UpdateCommand({
-									TableName: ordersTable,
-									Key: { galleryId, orderId },
-									UpdateExpression: 'REMOVE zipKey'
-								}));
-								
-								logger.info('ZIP deleted after generation and download (no backup addon)', {
-									galleryId,
-									orderId,
-									zipKey: zipResult.zipKey
-								});
-							} catch (deleteErr: any) {
-								// Log error but don't fail the download
-								logger.error('Failed to delete ZIP after generation', {
-									error: deleteErr.message,
-									galleryId,
-									orderId,
-									zipKey: zipResult.zipKey
-								});
-							}
-						}
-
-						// Return ZIP file directly through API as binary response
-						// API Gateway will handle base64 encoding automatically when isBase64Encoded is true
-						return {
-							statusCode: 200,
-							headers: { 
-								'content-type': 'application/zip',
-								'Content-Disposition': `attachment; filename="${orderId}.zip"`,
-								'Content-Length': zipBuffer.length.toString(),
-								'x-one-time-use': (!galleryHasBackup).toString()
-							},
-							body: zipBuffer.toString('base64'),
-							isBase64Encoded: true
-						};
-					}
-				} catch (s3Err: any) {
-					logger.warn('Failed to fetch ZIP after generation, returning zipKey only', {
-						error: s3Err.message,
-						galleryId,
-						orderId
-					});
-				}
-			}
-			
-			// Fallback: return zipKey if we can't serve the file directly
+			// Return JSON response only - client should call Download ZIP endpoint to get the file
+			// This maintains clear separation of concerns: Generate creates, Download serves
 			return {
 				statusCode: 200,
 				headers: { 'content-type': 'application/json' },

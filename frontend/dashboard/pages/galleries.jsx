@@ -82,6 +82,14 @@ export default function Galleries() {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
+			
+			// If checkout URL is returned, redirect to Stripe checkout
+			if (data.checkoutUrl) {
+				window.location.href = data.checkoutUrl;
+				return; // Don't set message or reload - user will be redirected
+			}
+			
+			// Wallet payment succeeded - show success message
 			setMsg(`Backup storage addon purchased successfully for gallery. Price: ${(data.backupStorageCents / 100).toFixed(2)} PLN. ZIPs generated for ${data.generatedZipsCount || 0} order(s).`);
 			await loadGalleries(); // Reload to get updated addon status
 		} catch (error) {
