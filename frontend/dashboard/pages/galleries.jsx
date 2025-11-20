@@ -103,6 +103,39 @@ export default function Galleries() {
 		setMsg('');
 		try {
 			switch (action) {
+				case 'pay':
+					try {
+						const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
+							method: 'POST',
+							headers: { Authorization: `Bearer ${idToken}` }
+						});
+						if (data.checkoutUrl) {
+							window.location.href = data.checkoutUrl;
+						} else {
+							setMsg('Payment initiated. Please check your wallet or complete Stripe checkout.');
+							await loadGalleries();
+						}
+					} catch (error) {
+						setMsg(formatApiError(error));
+					}
+					break;
+				case 'cancel-gallery':
+					if (!confirm(`Are you sure you want to cancel payment for gallery ${galleryId}? The gallery will be deleted.`)) {
+						return;
+					}
+					try {
+						// Find transaction for this gallery and cancel it
+						// For now, just delete the gallery (transaction cancellation will be handled by backend)
+						const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}`, {
+							method: 'DELETE',
+							headers: { Authorization: `Bearer ${idToken}` }
+						});
+						setMsg(`Gallery canceled and deleted: ${data.s3ObjectsDeleted || 0} S3 objects removed`);
+						await loadGalleries();
+					} catch (error) {
+						setMsg(formatApiError(error));
+					}
+					break;
 				case 'purchase-addon':
 					await purchaseAddon(galleryId);
 					break;
@@ -300,14 +333,18 @@ export default function Galleries() {
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Expires</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Pricing</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Orders</th>
-								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Revenue</th>
+								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Cost</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Addons</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Created</th>
 								<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
-							{galleriesList.map((g) => (
+							{galleriesList.map((g) => {
+								const isPaid = g.isPaid !== false && (g.paymentStatus === 'PAID' || g.state === 'PAID_ACTIVE');
+								const isUnpaid = g.paymentStatus === 'UNPAID' || (!isPaid && g.state !== 'EXPIRED');
+								
+								return (
 								<tr key={g.galleryId}>
 									<td style={{ padding: 8, border: '1px solid #ddd' }}>
 										{g.galleryName ? (
@@ -317,6 +354,19 @@ export default function Galleries() {
 											</div>
 										) : (
 											<code style={{ fontSize: '12px' }}>{g.galleryId}</code>
+										)}
+										{isUnpaid && (
+											<div style={{ marginTop: 4 }}>
+												<span style={{ 
+													padding: '2px 6px', 
+													background: '#ff9800', 
+													color: 'white', 
+													borderRadius: '3px', 
+													fontSize: '10px'
+												}}>
+													UNPAID
+												</span>
+											</div>
 										)}
 									</td>
 									<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
@@ -388,79 +438,128 @@ export default function Galleries() {
 										{g.hasBackupStorage ? (
 											<span style={{ color: '#28a745', fontWeight: 'bold' }}>✓ Backup Storage</span>
 										) : (
-											<button 
-												onClick={() => handleAction('purchase-addon', g.galleryId)} 
-												disabled={purchasingAddon[g.galleryId]}
-												style={{ 
-													padding: '4px 8px', 
-													fontSize: '11px', 
-													background: '#ff9800', 
-													color: 'white', 
-													border: 'none', 
-													borderRadius: 4, 
-													cursor: purchasingAddon[g.galleryId] ? 'not-allowed' : 'pointer',
-													opacity: purchasingAddon[g.galleryId] ? 0.6 : 1
-												}}
-												title="Purchase backup storage addon for this gallery"
-											>
-												{purchasingAddon[g.galleryId] ? 'Purchasing...' : 'Buy Backup'}
-											</button>
+											// Only show "Buy Backup" button if gallery is paid
+											isPaid && (
+												<button 
+													onClick={() => handleAction('purchase-addon', g.galleryId)} 
+													disabled={purchasingAddon[g.galleryId]}
+													style={{ 
+														padding: '4px 8px', 
+														fontSize: '11px', 
+														background: '#ff9800', 
+														color: 'white', 
+														border: 'none', 
+														borderRadius: 4, 
+														cursor: purchasingAddon[g.galleryId] ? 'not-allowed' : 'pointer',
+														opacity: purchasingAddon[g.galleryId] ? 0.6 : 1
+													}}
+													title="Purchase backup storage addon for this gallery"
+												>
+													{purchasingAddon[g.galleryId] ? 'Purchasing...' : 'Buy Backup'}
+												</button>
+											)
 										)}
 									</td>
 									<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
 										{new Date(g.createdAt).toLocaleDateString()}
 									</td>
 									<td style={{ padding: 8, border: '1px solid #ddd' }}>
-										{/* Send to Client - only if selectionEnabled and clientEmail exist */}
-										{g.selectionEnabled && g.clientEmail && (
+										{/* Pay button for unpaid galleries */}
+										{isUnpaid && (
 											<button 
-												onClick={() => handleAction('send-to-client', g.galleryId)} 
+												onClick={() => handleAction('pay', g.galleryId)} 
 												style={{ 
 													marginRight: 4, 
 													padding: '4px 8px', 
 													fontSize: '12px', 
-													background: '#007bff', 
+													background: '#28a745', 
 													color: 'white', 
 													border: 'none', 
 													borderRadius: '4px', 
 													cursor: 'pointer' 
 												}}
 											>
+												Pay
+											</button>
+										)}
+										{/* Cancel button for unpaid galleries */}
+										{isUnpaid && (
+											<button 
+												onClick={() => handleAction('cancel-gallery', g.galleryId)} 
+												style={{ 
+													marginRight: 4, 
+													padding: '4px 8px', 
+													fontSize: '12px', 
+													background: '#ff9800', 
+													color: 'white', 
+													border: 'none', 
+													borderRadius: '4px', 
+													cursor: 'pointer' 
+												}}
+											>
+												Cancel
+											</button>
+										)}
+										{/* Send to Client - only if paid, selectionEnabled and clientEmail exist */}
+										{isPaid && g.selectionEnabled && g.clientEmail && (
+											<button 
+												onClick={() => handleAction('send-to-client', g.galleryId)} 
+												disabled={isUnpaid}
+												style={{ 
+													marginRight: 4, 
+													padding: '4px 8px', 
+													fontSize: '12px', 
+													background: isUnpaid ? '#ccc' : '#007bff', 
+													color: 'white', 
+													border: 'none', 
+													borderRadius: '4px', 
+													cursor: isUnpaid ? 'not-allowed' : 'pointer',
+													opacity: isUnpaid ? 0.6 : 1
+												}}
+											>
 												Send to Client
 											</button>
 										)}
-										{/* Open Client View */}
-										<button 
-											onClick={() => handleAction('open-client', g.galleryId)} 
-											style={{ 
-												marginRight: 4, 
-												padding: '4px 8px', 
-												fontSize: '12px',
-												background: '#6c757d',
-												color: 'white',
-												border: 'none',
-												borderRadius: '4px',
-												cursor: 'pointer'
-											}}
-										>
-											Open Client View
-										</button>
-										{/* View as Owner */}
-										<button 
-											onClick={() => router.push(`/galleries/${g.galleryId}/view`)} 
-											style={{ 
-												marginRight: 4, 
-												padding: '4px 8px', 
-												fontSize: '12px',
-												background: '#007bff',
-												color: 'white',
-												border: 'none',
-												borderRadius: '4px',
-												cursor: 'pointer'
-											}}
-										>
-											View as Owner
-										</button>
+										{/* Open Client View - only if paid */}
+										{isPaid && (
+											<button 
+												onClick={() => handleAction('open-client', g.galleryId)} 
+												disabled={isUnpaid}
+												style={{ 
+													marginRight: 4, 
+													padding: '4px 8px', 
+													fontSize: '12px',
+													background: isUnpaid ? '#ccc' : '#6c757d',
+													color: 'white',
+													border: 'none',
+													borderRadius: '4px',
+													cursor: isUnpaid ? 'not-allowed' : 'pointer',
+													opacity: isUnpaid ? 0.6 : 1
+												}}
+											>
+												Open Client View
+											</button>
+										)}
+										{/* View as Owner - only if paid */}
+										{isPaid && (
+											<button 
+												onClick={() => router.push(`/galleries/${g.galleryId}/view`)} 
+												disabled={isUnpaid}
+												style={{ 
+													marginRight: 4, 
+													padding: '4px 8px', 
+													fontSize: '12px',
+													background: isUnpaid ? '#ccc' : '#007bff',
+													color: 'white',
+													border: 'none',
+													borderRadius: '4px',
+													cursor: isUnpaid ? 'not-allowed' : 'pointer',
+													opacity: isUnpaid ? 0.6 : 1
+												}}
+											>
+												View as Owner
+											</button>
+										)}
 										{/* Delete */}
 										<button 
 											onClick={() => handleAction('delete', g.galleryId)} 
@@ -478,7 +577,8 @@ export default function Galleries() {
 										</button>
 									</td>
 								</tr>
-							))}
+							);
+							})}
 						</tbody>
 					</table>
 					</div>

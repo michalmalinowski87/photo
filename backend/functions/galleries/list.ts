@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
+import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -59,7 +60,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			updatedAt: g.updatedAt
 		}));
 
-		// Optionally enrich with order summaries and addon status (can be done in parallel)
+		// Optionally enrich with order summaries, addon status, and payment status (can be done in parallel)
 		const enrichedGalleries = await Promise.all(galleries.map(async (g: any) => {
 			let orderData = { changeRequestPending: false, orderCount: 0, totalRevenueCents: 0, latestOrder: null };
 			if (ordersTable && g.galleryId) {
@@ -93,8 +94,32 @@ export const handler = lambdaLogger(async (event: any) => {
 				// If addon check fails, continue without addon data
 			}
 
+			// Derive payment status from transactions
+			let isPaid = false;
+			let paymentStatus = 'UNPAID';
+			try {
+				const paidTransaction = await getPaidTransactionForGallery(g.galleryId);
+				isPaid = !!paidTransaction;
+				paymentStatus = isPaid ? 'PAID' : 'UNPAID';
+			} catch (err) {
+				// If transaction check fails, fall back to gallery state
+				isPaid = g.state === 'PAID_ACTIVE';
+				paymentStatus = isPaid ? 'PAID' : 'UNPAID';
+			}
+
+			// Update state based on payment status
+			let effectiveState = g.state;
+			if (!isPaid && g.state !== 'EXPIRED') {
+				effectiveState = 'DRAFT';
+			} else if (isPaid && g.state !== 'EXPIRED') {
+				effectiveState = 'PAID_ACTIVE';
+			}
+
 			return {
 				...g,
+				state: effectiveState,
+				paymentStatus,
+				isPaid,
 				...orderData,
 				hasBackupStorage
 			};

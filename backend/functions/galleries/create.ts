@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
+import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -39,7 +40,19 @@ const PRICING_PLANS: Record<string, PlanMetadata> = {
 	}
 };
 
-async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string): Promise<boolean> {
+async function getWalletBalance(userId: string, walletsTable: string): Promise<number> {
+	try {
+		const walletGet = await ddb.send(new GetCommand({
+			TableName: walletsTable,
+			Key: { userId }
+		}));
+		return walletGet.Item?.balanceCents || 0;
+	} catch (error) {
+		return 0;
+	}
+}
+
+async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, transactionId: string): Promise<boolean> {
 	const now = new Date().toISOString();
 	
 	try {
@@ -55,7 +68,6 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 		}
 
 		const newBalance = currentBalance - amountCents;
-		const txnId = `debit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 		// Atomic update with condition
 		// If wallet doesn't exist, create it with balance 0 first, then fail the condition check
@@ -77,10 +89,10 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 				TableName: ledgerTable,
 				Item: {
 					userId,
-					txnId,
+					txnId: transactionId,
 					type: 'DEBIT',
 					amountCents: -amountCents,
-					refId: txnId,
+					refId: transactionId,
 					createdAt: now
 				}
 			}));
@@ -200,25 +212,76 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Total price includes gallery plan + addon (if requested)
 	const totalPriceCents = priceCents + addonPriceCents;
 
-	// Try wallet debit first if enabled
+	// Try wallet debit first if enabled (with fractional payment support)
 	let paid = false;
+	let walletAmountCents = 0;
+	let stripeAmountCents = 0;
 	let checkoutUrl: string | undefined;
 
 	if (useWallet && walletsTable && ledgerTable) {
-		paid = await debitWallet(ownerId, totalPriceCents, walletsTable, ledgerTable);
+		const walletBalance = await getWalletBalance(ownerId, walletsTable);
+		walletAmountCents = Math.min(walletBalance, totalPriceCents);
+		stripeAmountCents = totalPriceCents - walletAmountCents;
+
+		if (walletAmountCents > 0) {
+			paid = await debitWallet(ownerId, walletAmountCents, walletsTable, ledgerTable, `debit_${Date.now()}`);
+		}
+		
 		logger.info('Wallet debit attempt', { 
 			ownerId, 
 			galleryPriceCents: priceCents,
 			addonPriceCents,
 			totalPriceCents,
+			walletBalance,
+			walletAmountCents,
+			stripeAmountCents,
 			paid, 
 			hasWalletsTable: !!walletsTable, 
 			hasLedgerTable: !!ledgerTable 
 		});
+	} else {
+		stripeAmountCents = totalPriceCents;
 	}
 
-	// If wallet debit failed and Stripe is configured, offer one-off payment
-	if (!paid && stripeSecretKey) {
+	// Create transaction immediately
+	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	let transactionId: string | undefined;
+	
+	if (transactionsTable) {
+		try {
+			const paymentMethod = walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE';
+			transactionId = await createTransaction(
+				ownerId,
+				'GALLERY_PLAN',
+				totalPriceCents,
+				{
+					galleryId,
+					walletAmountCents,
+					stripeAmountCents,
+					paymentMethod: paymentMethod as any,
+					metadata: {
+						plan,
+						hasBackupStorage,
+						addonPriceCents
+					}
+				}
+			);
+			logger.info('Transaction created', { transactionId, galleryId, totalPriceCents, walletAmountCents, stripeAmountCents });
+			
+			// If fully paid with wallet, update transaction status immediately
+			if (paid && stripeAmountCents === 0) {
+				await updateTransactionStatus(ownerId, transactionId, 'PAID');
+			}
+		} catch (err: any) {
+			logger.error('Failed to create transaction', {
+				error: err.message,
+				galleryId
+			});
+		}
+	}
+
+	// If not fully paid and Stripe is configured, create checkout for remaining amount
+	if (!paid && stripeSecretKey && stripeAmountCents > 0) {
 		try {
 			const stripe = new Stripe(stripeSecretKey);
 			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
@@ -233,40 +296,77 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 			logger.info('Creating Stripe checkout session', {
 				galleryId,
-				priceCents,
+				totalPriceCents,
+				walletAmountCents,
+				stripeAmountCents,
 				successUrl,
 				cancelUrl,
 				redirectUrl,
-				apiUrlConfigured: !!apiUrl
+				apiUrlConfigured: !!apiUrl,
+				transactionId
 			});
 
-			// Build line items: gallery plan + addon (if requested)
-			const lineItems: any[] = [
-					{
-						price_data: {
-							currency: 'pln',
-							product_data: {
-								name: `Gallery: ${galleryId}`,
-								description: `PhotoHub gallery creation - ${plan} plan`
-							},
-							unit_amount: priceCents
-						},
-						quantity: 1
-					}
-			];
+			// Build line items: only charge the Stripe amount (remaining after wallet deduction)
+			const lineItems: any[] = [];
 			
-			if (hasBackupStorage && addonPriceCents > 0) {
+			// Calculate proportional amounts for line items
+			if (walletAmountCents > 0) {
+				// Partial payment: show breakdown
+				const galleryStripeAmount = Math.round((priceCents / totalPriceCents) * stripeAmountCents);
+				const addonStripeAmount = stripeAmountCents - galleryStripeAmount;
+				
 				lineItems.push({
 					price_data: {
 						currency: 'pln',
 						product_data: {
-							name: 'Backup Storage Addon',
-							description: `Backup storage addon for gallery ${galleryId}`
+							name: `Gallery: ${galleryId}`,
+							description: `PhotoHub gallery creation - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
 						},
-						unit_amount: addonPriceCents
+						unit_amount: galleryStripeAmount
 					},
 					quantity: 1
 				});
+				
+				if (hasBackupStorage && addonStripeAmount > 0) {
+					lineItems.push({
+						price_data: {
+							currency: 'pln',
+							product_data: {
+								name: 'Backup Storage Addon',
+								description: `Backup storage addon for gallery ${galleryId}`
+							},
+							unit_amount: addonStripeAmount
+						},
+						quantity: 1
+					});
+				}
+			} else {
+				// Full Stripe payment
+				lineItems.push({
+					price_data: {
+						currency: 'pln',
+						product_data: {
+							name: `Gallery: ${galleryId}`,
+							description: `PhotoHub gallery creation - ${plan} plan`
+						},
+						unit_amount: priceCents
+					},
+					quantity: 1
+				});
+				
+				if (hasBackupStorage && addonPriceCents > 0) {
+					lineItems.push({
+						price_data: {
+							currency: 'pln',
+							product_data: {
+								name: 'Backup Storage Addon',
+								description: `Backup storage addon for gallery ${galleryId}`
+							},
+							unit_amount: addonPriceCents
+						},
+						quantity: 1
+					});
+				}
 			}
 
 			const session = await stripe.checkout.sessions.create({
@@ -279,11 +379,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					userId: ownerId,
 					type: 'gallery_payment',
 					galleryId,
+					transactionId: transactionId || '',
+					walletAmountCents: walletAmountCents.toString(),
+					stripeAmountCents: stripeAmountCents.toString(),
 					hasBackupStorage: hasBackupStorage ? 'true' : 'false',
 					addonPriceCents: addonPriceCents.toString(),
-					redirectUrl: redirectUrl // Store redirect URL in metadata
+					redirectUrl: redirectUrl
 				}
 			});
+
+			// Update transaction with Stripe session ID
+			if (transactionId && transactionsTable) {
+				await updateTransactionStatus(ownerId, transactionId, 'UNPAID', {
+					stripeSessionId: session.id
+				});
+			}
 
 			checkoutUrl = session.url;
 			logger.info('Stripe checkout session created', { checkoutUrl, sessionId: session.id });
@@ -369,18 +479,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Item: item
 	}));
 
-	// Create backup storage addon if requested and payment succeeded
-	if (hasBackupStorage && paid && addonPriceCents > 0) {
+	// Create backup storage addon if requested (regardless of payment status)
+	// Addon will be activated when transaction is paid
+	if (hasBackupStorage && addonPriceCents > 0) {
 		const addonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
 		if (addonsTable) {
 			try {
 				const { createBackupStorageAddon } = require('../../lib/src/addons');
 				const BACKUP_STORAGE_MULTIPLIER = 0.3;
 				await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
-				logger.info('Backup storage addon created during gallery creation (wallet payment)', { 
+				logger.info('Backup storage addon created during gallery creation', { 
 					galleryId, 
 					addonPriceCents,
-					multiplier: BACKUP_STORAGE_MULTIPLIER
+					multiplier: BACKUP_STORAGE_MULTIPLIER,
+					paid
 				});
 			} catch (err: any) {
 				logger.error('Failed to create backup storage addon during gallery creation', {
@@ -445,7 +557,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 201,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ galleryId, paid: true, method: 'wallet' })
+			body: JSON.stringify({ 
+				galleryId, 
+				paid: true, 
+				method: walletAmountCents === totalPriceCents ? 'wallet' : 'mixed',
+				transactionId
+			})
 		};
 	} else if (checkoutUrl) {
 		return {
@@ -455,7 +572,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleryId, 
 				paid: false, 
 				checkoutUrl,
-				message: 'Insufficient wallet balance. Please complete payment to activate gallery.'
+				transactionId,
+				walletAmountCents,
+				stripeAmountCents,
+				message: walletAmountCents > 0 
+					? `${(walletAmountCents / 100).toFixed(2)} PLN deducted from wallet. Please complete payment of ${(stripeAmountCents / 100).toFixed(2)} PLN to activate gallery.`
+					: 'Insufficient wallet balance. Please complete payment to activate gallery.'
 			})
 		};
 	} else {
@@ -465,7 +587,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ 
 				error: 'Payment required',
 				galleryId,
-				priceCents,
+				priceCents: totalPriceCents,
+				transactionId,
 				message: 'Insufficient wallet balance and payment system not configured. Please top up your wallet or configure Stripe.'
 			})
 		};

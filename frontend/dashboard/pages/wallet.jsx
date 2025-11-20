@@ -72,10 +72,16 @@ export default function Wallet() {
 			const { data } = await apiFetch(`${apiUrl}/wallet/transactions`, {
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
+			console.log('Transactions loaded:', data);
 			setTransactions(data.transactions || []);
-			setMessage(''); // Clear any previous errors
+			if (data.transactions && data.transactions.length > 0) {
+				setMessage(`Loaded ${data.transactions.length} transaction(s)`);
+			} else {
+				setMessage('No transactions found');
+			}
 		} catch (error) {
 			const errorMsg = formatApiError(error);
+			console.error('Error loading transactions:', error);
 			setMessage(`Error loading transactions: ${errorMsg}`);
 			setTransactions([]);
 		} finally {
@@ -213,40 +219,82 @@ export default function Wallet() {
 				{loading && <p>Loading transactions...</p>}
 				{transactions.length > 0 && (
 					<div style={{ overflowX: 'auto' }}>
-						<table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 500 }}>
+						<table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
 							<thead>
 								<tr style={{ background: '#f5f5f5' }}>
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Date</th>
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Type</th>
+									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Status</th>
 									<th style={{ padding: 8, textAlign: 'right', border: '1px solid #ddd' }}>Amount</th>
+									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Payment Method</th>
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Reference</th>
 								</tr>
 							</thead>
 							<tbody>
-								{transactions.map((tx) => (
-									<tr key={tx.txnId}>
-										<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
-											{new Date(tx.createdAt).toLocaleString()}
-										</td>
-										<td style={{ padding: 8, border: '1px solid #ddd' }}>
-											<span style={{ 
-												padding: '2px 8px', 
-												background: tx.type === 'TOP_UP' ? '#00aa00' : '#cc0000', 
-												color: 'white', 
-												borderRadius: '4px', 
-												fontSize: '12px'
-											}}>
-												{tx.type}
-											</span>
-										</td>
-										<td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right', fontWeight: tx.type === 'TOP_UP' ? 'bold' : 'normal' }}>
-											{tx.type === 'TOP_UP' ? '+' : '-'}{(Math.abs(tx.amountCents) / 100).toFixed(2)} PLN
-										</td>
-										<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
-											<code>{tx.refId}</code>
-										</td>
-									</tr>
-								))}
+								{transactions.map((tx) => {
+									const isCredit = tx.type === 'CREDIT' || tx.type === 'WALLET_TOPUP';
+									const isDebit = tx.type === 'WALLET_DEBIT' || tx.type === 'STRIPE_CHECKOUT' || tx.type === 'MIXED' || tx.type === 'REFUND';
+									const typeColors = {
+										'CREDIT': '#00aa00',
+										'WALLET_DEBIT': '#cc0000',
+										'STRIPE_CHECKOUT': '#0066cc',
+										'MIXED': '#ff9800',
+										'REFUND': '#9c27b0'
+									};
+									const statusColors = {
+										'PAID': '#00aa00',
+										'UNPAID': '#ff9800',
+										'CANCELED': '#999',
+										'FAILED': '#cc0000',
+										'REFUNDED': '#9c27b0'
+									};
+									
+									return (
+										<tr key={tx.transactionId || tx.txnId}>
+											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
+												{new Date(tx.createdAt).toLocaleString()}
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd' }}>
+												<span style={{ 
+													padding: '2px 8px', 
+													background: typeColors[tx.type] || '#666', 
+													color: 'white', 
+													borderRadius: '4px', 
+													fontSize: '12px'
+												}}>
+													{tx.type}
+												</span>
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd' }}>
+												{tx.status && (
+													<span style={{ 
+														padding: '2px 8px', 
+														background: statusColors[tx.status] || '#666', 
+														color: 'white', 
+														borderRadius: '4px', 
+														fontSize: '11px'
+													}}>
+														{tx.status}
+													</span>
+												)}
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right', fontWeight: isCredit ? 'bold' : 'normal' }}>
+												{isCredit ? '+' : '-'}{(Math.abs(tx.amountCents) / 100).toFixed(2)} PLN
+												{tx.type === 'MIXED' && tx.walletAmountCents > 0 && tx.stripeAmountCents > 0 && (
+													<div style={{ fontSize: '10px', color: '#666', marginTop: 2 }}>
+														({(tx.walletAmountCents / 100).toFixed(2)} wallet + {(tx.stripeAmountCents / 100).toFixed(2)} Stripe)
+													</div>
+												)}
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
+												{tx.paymentMethod || (isCredit ? 'WALLET' : 'N/A')}
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
+												<code>{tx.refId || tx.transactionId || tx.txnId}</code>
+											</td>
+										</tr>
+									);
+								})}
 							</tbody>
 						</table>
 					</div>

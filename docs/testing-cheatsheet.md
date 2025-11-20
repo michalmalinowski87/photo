@@ -46,11 +46,27 @@ This document provides a comprehensive testing guide for all flows in the PhotoH
 1. Ensure wallet has insufficient balance (e.g., 0 PLN)
 2. Create gallery (with or without addon)
 3. **Expected:**
+   - Transaction created immediately with status `UNPAID` and type `GALLERY_PLAN`
+   - Transaction stored with `paymentMethod: STRIPE`
    - Redirected to Stripe checkout
    - Stripe checkout shows correct line items:
      - Gallery plan (e.g., 7 PLN)
      - Addon (if requested, e.g., 2.10 PLN)
-   - After payment, webhook creates addon (if requested)
+   - Transaction ID included in Stripe metadata
+   - After payment, webhook updates transaction status to `PAID`
+   - Gallery payment status derived from transaction (becomes `PAID_ACTIVE`)
+
+### 1.3a Gallery Creation - Fractional Wallet Payment
+**Steps:**
+1. Ensure wallet has partial balance (e.g., 2 PLN, gallery costs 10 PLN)
+2. Create gallery
+3. **Expected:**
+   - Transaction created with `paymentMethod: MIXED`
+   - 2 PLN deducted from wallet immediately
+   - Stripe checkout created for remaining 8 PLN
+   - Transaction shows `walletAmountCents: 200` and `stripeAmountCents: 800`
+   - Stripe checkout description shows wallet deduction
+   - After Stripe payment, transaction status becomes `PAID`
 
 ### 1.4 Gallery Creation - Stripe Payment Success
 **Steps:**
@@ -62,6 +78,36 @@ This document provides a comprehensive testing guide for all flows in the PhotoH
    - Addon created (if `hasBackupStorage: true` in metadata)
    - ZIP generation Lambda triggered (if addon created)
 
+### 1.5 Gallery Creation - Payment Retry
+**Steps:**
+1. Create gallery with insufficient wallet balance
+2. Don't complete Stripe payment (or click back)
+3. Transaction status should be `UNPAID` or `CANCELED`
+4. Click "Pay" button on gallery list
+5. **Expected:**
+   - System finds existing transaction (if UNPAID) or creates new one
+   - Stripe checkout created with transaction ID
+   - After payment, existing transaction updated to `PAID`
+
+### 1.6 Gallery Creation - Payment Cancel
+**Steps:**
+1. Create gallery with insufficient wallet balance
+2. Click "Cancel" button on gallery list
+3. **Expected:**
+   - Transaction status updated to `CANCELED`
+   - Gallery deleted
+   - Transaction remains in transaction history with CANCELED status
+
+### 1.7 Gallery Creation - Auto-Expiry
+**Steps:**
+1. Create gallery with insufficient wallet balance
+2. Wait 3+ days (or manually adjust transaction createdAt)
+3. Run transaction expiry Lambda
+4. **Expected:**
+   - Transaction status updated to `CANCELED`
+   - Gallery deleted
+   - Transaction remains in history
+
 ---
 
 ## 2. Addon Purchase Flows
@@ -72,11 +118,14 @@ This document provides a comprehensive testing guide for all flows in the PhotoH
 2. Ensure wallet has sufficient balance (e.g., 5 PLN)
 3. Click "Buy Backup" button
 4. **Expected:**
+   - Transaction created immediately with type `ADDON_PURCHASE` and status `UNPAID`
    - Wallet debited: 30% of plan price (e.g., 2.10 PLN for Basic)
+   - Transaction status updated to `PAID` (paymentMethod: WALLET)
    - Addon record created
    - ZIP generation Lambda triggered for existing orders
    - "Buy Backup" button disappears
    - Gallery shows `hasBackupStorage: true` in orders list
+   - Transaction appears in wallet with type `WALLET_DEBIT`
 
 ### 2.2 Purchase Addon - Wallet Payment (Insufficient Balance) - Stripe Redirect
 **Steps:**
@@ -84,10 +133,24 @@ This document provides a comprehensive testing guide for all flows in the PhotoH
 2. Ensure wallet has insufficient balance
 3. Click "Buy Backup" button
 4. **Expected:**
+   - Transaction created with type `ADDON_PURCHASE` and status `UNPAID`
+   - Transaction stored with `paymentMethod: STRIPE`
    - Redirected to Stripe checkout
    - Stripe checkout shows addon price only
-   - After payment, webhook creates addon
+   - Transaction ID included in Stripe metadata
+   - After payment, webhook updates transaction to `PAID` and creates addon
    - ZIP generation Lambda triggered
+
+### 2.2a Purchase Addon - Fractional Wallet Payment
+**Steps:**
+1. Create gallery without addon
+2. Ensure wallet has partial balance (e.g., 1 PLN, addon costs 2.10 PLN)
+3. Click "Buy Backup" button
+4. **Expected:**
+   - Transaction created with `paymentMethod: MIXED`
+   - 1 PLN deducted from wallet
+   - Stripe checkout for remaining 1.10 PLN
+   - After Stripe payment, transaction becomes `PAID`
 
 ### 2.3 Purchase Addon - Already Purchased
 **Steps:**

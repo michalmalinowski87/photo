@@ -6,6 +6,7 @@ const Stripe = require('stripe');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { createBackupStorageAddon, ADDON_TYPES } from '../../lib/src/addons';
+import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
@@ -103,6 +104,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const userId = session.metadata?.userId;
 			const type = session.metadata?.type || 'wallet_topup';
 			const galleryId = session.metadata?.galleryId;
+			const transactionId = session.metadata?.transactionId;
 			const amountCents = session.amount_total;
 			const paymentId = `pay_${session.id}`;
 
@@ -118,10 +120,60 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 			}
 
+			// Update transaction status if transactionId is provided
+			if (transactionId && userId) {
+				try {
+					const transaction = await getTransaction(userId, transactionId);
+					if (transaction && transaction.status === 'UNPAID') {
+						await updateTransactionStatus(userId, transactionId, 'PAID', {
+							stripeSessionId: session.id,
+							stripePaymentIntentId: session.payment_intent as string
+						});
+						logger.info('Transaction status updated to PAID', { transactionId, userId, sessionId: session.id });
+					}
+				} catch (txnErr: any) {
+					logger.error('Failed to update transaction status', {
+						error: txnErr.message,
+						transactionId,
+						userId
+					});
+				}
+			}
+
 			if (type === 'wallet_topup' && userId) {
 				// Credit wallet
 				const newBalance = await creditWallet(userId, amountCents, paymentId, walletsTable, ledgerTable);
 				logger.info('Wallet credited', { userId, amountCents, newBalance, paymentId });
+				
+				// Create transaction for wallet top-up
+				const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+				if (transactionsTable) {
+					try {
+						const { createTransaction, updateTransactionStatus } = require('../../lib/src/transactions');
+						const topupTransactionId = await createTransaction(
+							userId,
+							'WALLET_TOPUP',
+							amountCents,
+							{
+								walletAmountCents: amountCents,
+								stripeAmountCents: 0,
+								paymentMethod: 'STRIPE',
+								refId: paymentId
+							}
+						);
+						await updateTransactionStatus(userId, topupTransactionId, 'PAID', {
+							stripeSessionId: session.id,
+							stripePaymentIntentId: session.payment_intent as string
+						});
+						logger.info('Wallet top-up transaction created', { transactionId: topupTransactionId, userId, amountCents });
+					} catch (txnErr: any) {
+						logger.error('Failed to create wallet top-up transaction', {
+							error: txnErr.message,
+							userId,
+							amountCents
+						});
+					}
+				}
 			} else if (type === 'addon_payment' && userId && galleryId) {
 				// Addon payment - create backup storage addon and trigger ZIP generation Lambda
 				const BACKUP_STORAGE_MULTIPLIER = 0.3; // Should match the multiplier used in purchaseAddon
@@ -257,7 +309,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						});
 						
 						// Create backup storage addon if requested during gallery creation (Stripe payment)
-						const hasBackupStorage = session.metadata?.hasBackupStorage === 'true';
+						// Note: Addon should already exist (created during gallery creation), but ensure it exists
+						const hasBackupStorage = session.metadata?.hasBackupStorage === 'true' || session.metadata?.hasBackupStorage === true;
 						const addonPriceCents = session.metadata?.addonPriceCents ? parseInt(session.metadata.addonPriceCents, 10) : 0;
 						if (hasBackupStorage && addonPriceCents > 0) {
 							try {
@@ -265,11 +318,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 								const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
 								
 								if (!addonExists) {
+									// Addon should have been created during gallery creation, but create it now if missing
 									const BACKUP_STORAGE_MULTIPLIER = 0.3;
 									await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
-									logger.info('Backup storage addon created during gallery creation (Stripe payment)', { 
+									logger.info('Backup storage addon created via webhook (was missing)', { 
 										galleryId, 
-										addonPriceCents,
+										addonPriceCents, 
 										multiplier: BACKUP_STORAGE_MULTIPLIER,
 										paymentId
 									});
@@ -298,6 +352,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 									}
 								} else {
 									logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
+									
+									// Trigger ZIP generation Lambda even if addon already exists (payment completed)
+									const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
+									if (generateZipsFnName) {
+										try {
+											const payload = Buffer.from(JSON.stringify({ galleryId }));
+											await lambda.send(new InvokeCommand({ 
+												FunctionName: generateZipsFnName, 
+												Payload: payload, 
+												InvocationType: 'Event' // Asynchronous invocation
+											}));
+											logger.info('Triggered ZIP generation Lambda for addon purchase (gallery creation - addon existed)', { 
+												galleryId, 
+												generateZipsFnName 
+											});
+										} catch (invokeErr: any) {
+											logger.error('Failed to invoke ZIP generation Lambda', {
+												error: invokeErr.message,
+												galleryId,
+												generateZipsFnName
+											});
+										}
+									}
 								}
 							} catch (addonErr: any) {
 								logger.error('Failed to create backup storage addon via webhook (gallery creation)', {
@@ -372,6 +449,66 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						createdAt: new Date().toISOString()
 					}
 				}));
+			}
+		} else if (stripeEvent.type === 'checkout.session.expired') {
+			const session = stripeEvent.data.object;
+			const userId = session.metadata?.userId;
+			const transactionId = session.metadata?.transactionId;
+
+			if (transactionId && userId) {
+				try {
+					const transaction = await getTransaction(userId, transactionId);
+					if (transaction && transaction.status === 'UNPAID') {
+						await updateTransactionStatus(userId, transactionId, 'CANCELED');
+						logger.info('Transaction status updated to CANCELED (session expired)', { transactionId, userId });
+					}
+				} catch (txnErr: any) {
+					logger.error('Failed to update transaction status (expired)', {
+						error: txnErr.message,
+						transactionId,
+						userId
+					});
+				}
+			}
+		} else if (stripeEvent.type === 'payment_intent.payment_failed') {
+			const paymentIntent = stripeEvent.data.object;
+			const userId = paymentIntent.metadata?.userId;
+			const transactionId = paymentIntent.metadata?.transactionId;
+
+			if (transactionId && userId) {
+				try {
+					const transaction = await getTransaction(userId, transactionId);
+					if (transaction && transaction.status === 'UNPAID') {
+						await updateTransactionStatus(userId, transactionId, 'FAILED');
+						logger.info('Transaction status updated to FAILED', { transactionId, userId });
+					}
+				} catch (txnErr: any) {
+					logger.error('Failed to update transaction status (failed)', {
+						error: txnErr.message,
+						transactionId,
+						userId
+					});
+				}
+			}
+		} else if (stripeEvent.type === 'payment_intent.canceled') {
+			const paymentIntent = stripeEvent.data.object;
+			const userId = paymentIntent.metadata?.userId;
+			const transactionId = paymentIntent.metadata?.transactionId;
+
+			if (transactionId && userId) {
+				try {
+					const transaction = await getTransaction(userId, transactionId);
+					if (transaction && transaction.status === 'UNPAID') {
+						await updateTransactionStatus(userId, transactionId, 'CANCELED');
+						logger.info('Transaction status updated to CANCELED (payment intent canceled)', { transactionId, userId });
+					}
+				} catch (txnErr: any) {
+					logger.error('Failed to update transaction status (canceled)', {
+						error: txnErr.message,
+						transactionId,
+						userId
+					});
+				}
 			}
 		}
 

@@ -82,18 +82,28 @@ Photographers create galleries, configure pricing, and send invitations to clien
    - Submit form → `POST /galleries`
 
 2. **Payment Processing**
-   - System attempts wallet debit first:
+   - **Transaction Creation**: System creates transaction immediately with status `UNPAID` and type `GALLERY_PLAN`
+   - **Fractional Payment Support**: System attempts fractional wallet payment:
      - Checks wallet balance
-     - If sufficient: debits wallet, creates gallery with `PAID_ACTIVE` state
-     - Creates ledger entry for debit
-   - If insufficient balance:
-     - Creates Stripe checkout session (if Stripe configured)
-     - Gallery created with `DRAFT` state
+     - If balance > 0 but < total: deducts available amount from wallet, charges remainder via Stripe
+     - If balance >= total: debits full amount from wallet
+     - If balance = 0: creates Stripe checkout for full amount
+   - **Payment Methods**:
+     - `WALLET`: Fully paid with wallet → Transaction status `PAID`, gallery `PAID_ACTIVE`
+     - `STRIPE`: Fully paid via Stripe → Transaction status `UNPAID`, Stripe checkout created
+     - `MIXED`: Partial wallet + Stripe → Wallet deducted, Stripe checkout for remainder
+   - **Stripe Checkout**: If Stripe payment needed:
+     - Creates checkout session with transaction ID in metadata
+     - Shows breakdown in description if fractional payment
      - Returns checkout URL to photographer
-   - Photographer completes Stripe payment
-   - Webhook processes payment:
-     - Marks gallery as `PAID_ACTIVE`
-     - Updates gallery state in DynamoDB
+   - **Payment Completion**:
+     - Webhook processes payment → Updates transaction status to `PAID`
+     - Gallery payment status derived from transactions (not stored in gallery)
+     - Gallery becomes `PAID_ACTIVE` when transaction status is `PAID`
+   - **Payment Status Derivation**: Gallery payment status is determined by querying transactions:
+     - Query for transaction with `type: GALLERY_PLAN` and `status: PAID` for gallery
+     - If found: gallery is paid and enabled
+     - If not found: gallery is unpaid and disabled (only Pay/Cancel actions allowed)
 
 3. **Configure Gallery Settings**
    - Set client password: `POST /galleries/{id}/client-password`
@@ -108,11 +118,47 @@ Photographers create galleries, configure pricing, and send invitations to clien
      - Client can access gallery immediately
 
 ### Key Endpoints
-- `POST /galleries` - Create new gallery
+- `POST /galleries` - Create new gallery (creates transaction immediately)
+- `POST /galleries/{id}/pay` - Pay for unpaid gallery (uses existing transaction or creates new)
 - `POST /galleries/{id}/client-password` - Set client access password
 - `POST /galleries/{id}/pricing-package` - Update pricing configuration
 - `POST /galleries/{id}/selection-mode` - Enable/disable selection mode
-- `POST /galleries/{id}/send` - Send gallery invitation to client
+- `POST /galleries/{id}/send-to-client` - Send gallery invitation to client
+
+### Payment Flow Edge Cases
+
+1. **Stripe Cancel (Back Button)**
+   - User clicks back from Stripe checkout
+   - `GET /payments/cancel` endpoint called
+   - Transaction status updated to `CANCELED`
+   - Gallery is NOT deleted (allows retry)
+   - User can retry payment via "Pay" button
+
+2. **Retry Payment**
+   - User can retry payment from:
+     - Transactions list: Click "Retry" on UNPAID transaction
+     - Gallery list: Click "Pay" button on unpaid gallery
+   - System checks for existing UNPAID transaction
+   - If exists: Updates existing transaction with new Stripe session
+   - If not: Creates new transaction (old one canceled)
+   - Supports fractional payments (wallet + Stripe)
+
+3. **Auto-Expiry**
+   - Scheduled job runs daily at 2 AM Warsaw time
+   - Finds UNPAID transactions older than 3 days
+   - Updates transaction status to `CANCELED`
+   - Deletes associated gallery (if type is GALLERY_PLAN)
+
+4. **Manual Cancel**
+   - User can cancel UNPAID transaction via "Cancel" button
+   - Transaction status updated to `CANCELED`
+   - Gallery deleted (if type is GALLERY_PLAN)
+
+5. **Payment Status Derivation**
+   - Gallery payment status derived from transactions (not stored in gallery)
+   - Query transactions table for `GALLERY_PLAN` type with `PAID` status
+   - If no paid transaction exists: gallery disabled (only Pay/Cancel actions)
+   - If paid transaction exists: gallery enabled (all actions allowed)
 
 ### Gallery States
 - `DRAFT` - Created but payment pending

@@ -7,11 +7,24 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const Stripe = require('stripe');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { hasAddon, createBackupStorageAddon, ADDON_TYPES } from '../../lib/src/addons';
+import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
 
-async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, logger: any): Promise<boolean> {
+async function getWalletBalance(userId: string, walletsTable: string, logger: any): Promise<number> {
+	try {
+		const walletGet = await ddb.send(new GetCommand({
+			TableName: walletsTable,
+			Key: { userId }
+		}));
+		return walletGet.Item?.balanceCents || 0;
+	} catch (error) {
+		return 0;
+	}
+}
+
+async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, transactionId: string, logger: any): Promise<boolean> {
 	const now = new Date().toISOString();
 	
 	try {
@@ -46,7 +59,6 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 		}
 
 		const newBalance = currentBalance - amountCents;
-		const txnId = `debit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 		// Atomic update with condition
 		try {
@@ -67,15 +79,15 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 				TableName: ledgerTable,
 				Item: {
 					userId,
-					txnId,
+					txnId: transactionId,
 					type: 'DEBIT',
 					amountCents: -amountCents,
-					refId: txnId,
+					refId: transactionId,
 					createdAt: now
 				}
 			}));
 
-			logger.info('Wallet debit successful', { userId, amountCents, oldBalance: currentBalance, newBalance, txnId });
+			logger.info('Wallet debit successful', { userId, amountCents, oldBalance: currentBalance, newBalance, transactionId });
 			return true;
 		} catch (err: any) {
 			if (err.name === 'ConditionalCheckFailedException') {
@@ -180,28 +192,77 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const planPriceCents = gallery.priceCents || 700; // Default to Basic plan price (7 PLN) if not set
 	const backupStorageCents = Math.round(planPriceCents * BACKUP_STORAGE_MULTIPLIER);
 
-	// Try wallet debit first if enabled
+	// Try wallet debit first if enabled (with fractional payment support)
 	let paid = false;
+	let walletAmountCents = 0;
+	let stripeAmountCents = 0;
 	let checkoutUrl: string | undefined;
 
 	if (walletsTable && ledgerTable) {
-		paid = await debitWallet(requester, backupStorageCents, walletsTable, ledgerTable, logger);
+		const walletBalance = await getWalletBalance(requester, walletsTable, logger);
+		walletAmountCents = Math.min(walletBalance, backupStorageCents);
+		stripeAmountCents = backupStorageCents - walletAmountCents;
+
+		if (walletAmountCents > 0) {
+			paid = await debitWallet(requester, walletAmountCents, walletsTable, ledgerTable, `debit_${Date.now()}`, logger);
+		}
+		
 		logger.info('Wallet debit attempt for addon purchase', { 
 			userId: requester, 
-			amountCents: backupStorageCents, 
+			amountCents: backupStorageCents,
+			walletBalance,
+			walletAmountCents,
+			stripeAmountCents,
 			paid, 
 			hasWalletsTable: !!walletsTable, 
 			hasLedgerTable: !!ledgerTable 
 		});
 	} else {
+		stripeAmountCents = backupStorageCents;
 		logger.warn('Wallet tables not configured, skipping wallet debit', {
 			hasWalletsTable: !!walletsTable,
 			hasLedgerTable: !!ledgerTable
 		});
 	}
 
-	// If wallet debit failed and Stripe is configured, create checkout session
-	if (!paid && stripeSecretKey) {
+	// Create transaction immediately
+	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	let transactionId: string | undefined;
+	
+	if (transactionsTable) {
+		try {
+			const paymentMethod = walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE';
+			transactionId = await createTransaction(
+				requester,
+				'ADDON_PURCHASE',
+				backupStorageCents,
+				{
+					galleryId,
+					walletAmountCents,
+					stripeAmountCents,
+					paymentMethod: paymentMethod as any,
+					metadata: {
+						addonType: ADDON_TYPES.BACKUP_STORAGE,
+						multiplier: BACKUP_STORAGE_MULTIPLIER
+					}
+				}
+			);
+			logger.info('Transaction created for addon purchase', { transactionId, galleryId, backupStorageCents, walletAmountCents, stripeAmountCents });
+			
+			// If fully paid with wallet, update transaction status immediately
+			if (paid && stripeAmountCents === 0) {
+				await updateTransactionStatus(requester, transactionId, 'PAID');
+			}
+		} catch (err: any) {
+			logger.error('Failed to create transaction for addon purchase', {
+				error: err.message,
+				galleryId
+			});
+		}
+	}
+
+	// If not fully paid and Stripe is configured, create checkout for remaining amount
+	if (!paid && stripeSecretKey && stripeAmountCents > 0) {
 		try {
 			const stripe = new Stripe(stripeSecretKey);
 			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
@@ -223,9 +284,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							currency: 'pln',
 							product_data: {
 								name: 'Backup Storage Addon',
-								description: `Backup storage addon for gallery ${galleryId}`
+								description: `Backup storage addon for gallery ${galleryId}${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
 							},
-							unit_amount: backupStorageCents
+							unit_amount: stripeAmountCents
 						},
 						quantity: 1
 					}
@@ -236,9 +297,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					userId: requester,
 					type: 'addon_payment',
 					galleryId,
+					transactionId: transactionId || '',
+					walletAmountCents: walletAmountCents.toString(),
+					stripeAmountCents: stripeAmountCents.toString(),
 					redirectUrl: redirectUrl
 				}
 			});
+
+			// Update transaction with Stripe session ID
+			if (transactionId && transactionsTable) {
+				await updateTransactionStatus(requester, transactionId, 'UNPAID', {
+					stripeSessionId: session.id
+				});
+			}
 
 			checkoutUrl = session.url;
 			logger.info('Stripe checkout session created for addon purchase', { 
@@ -311,9 +382,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		body: JSON.stringify({
 			galleryId,
 			backupStorageCents,
-				message: 'Backup storage addon purchased successfully for gallery. ZIPs will be generated automatically.'
-			})
-		};
+			transactionId,
+			message: 'Backup storage addon purchased successfully for gallery. ZIPs will be generated automatically.'
+		})
+	};
 	} else if (checkoutUrl) {
 		// Return checkout URL for Stripe payment
 		return {
@@ -323,7 +395,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				checkoutUrl,
 				galleryId,
 				backupStorageCents,
-				message: 'Insufficient wallet balance. Please complete payment via Stripe checkout.'
+				transactionId,
+				walletAmountCents,
+				stripeAmountCents,
+				message: walletAmountCents > 0 
+					? `${(walletAmountCents / 100).toFixed(2)} PLN deducted from wallet. Please complete payment of ${(stripeAmountCents / 100).toFixed(2)} PLN via Stripe checkout.`
+					: 'Insufficient wallet balance. Please complete payment via Stripe checkout.'
 			})
 		};
 	} else {
@@ -332,9 +409,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
-				error: 'Insufficient wallet balance and Stripe not configured. Please top up your wallet or configure Stripe.' 
-		})
-	};
+				error: 'Insufficient wallet balance and Stripe not configured. Please top up your wallet or configure Stripe.',
+				transactionId
+			})
+		};
 	}
 });
 

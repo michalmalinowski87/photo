@@ -1,7 +1,8 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { getPaidTransactionForGallery, listTransactionsByUser, updateTransactionStatus } from '../../lib/src/transactions';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -65,8 +66,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	requireOwnerOr403(gallery.ownerId, ownerId);
 
-	// Check if gallery is already paid
-	if (gallery.state === 'PAID_ACTIVE') {
+	// Check if gallery is already paid (from transactions)
+	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	let isPaid = false;
+	if (transactionsTable) {
+		try {
+			const paidTransaction = await getPaidTransactionForGallery(galleryId);
+			isPaid = !!paidTransaction;
+		} catch (err) {
+			// Fall back to gallery state
+			isPaid = gallery.state === 'PAID_ACTIVE';
+		}
+	} else {
+		isPaid = gallery.state === 'PAID_ACTIVE';
+	}
+
+	if (isPaid) {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
@@ -74,14 +89,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Get price from gallery (should be stored when created)
-	const priceCents = gallery.priceCents || 5000; // Default to 50 PLN if not set
-	const plan = gallery.plan || 'Small';
+	// Find existing UNPAID transaction for this gallery
+	let existingTransaction = null;
+	if (transactionsTable) {
+		try {
+			const transactions = await listTransactionsByUser(ownerId, {
+				type: 'GALLERY_PLAN',
+				status: 'UNPAID'
+			});
+			existingTransaction = transactions.find((tx: any) => tx.galleryId === galleryId);
+		} catch (err) {
+			logger.warn('Failed to query transactions, will create new transaction', { error: err });
+		}
+	}
+
+	if (!existingTransaction) {
+		return {
+			statusCode: 404,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'No unpaid transaction found for this gallery' })
+		};
+	}
+
+	// Use transaction as source of truth - get all amounts from transaction
+	const transactionId = existingTransaction.transactionId;
+	const totalAmountCents = existingTransaction.amountCents;
+	const walletAmountCents = existingTransaction.walletAmountCents || 0;
+	const stripeAmountCents = existingTransaction.stripeAmountCents || totalAmountCents;
+	const plan = existingTransaction.metadata?.plan || gallery.plan || 'Small';
+	const hasBackupStorage = existingTransaction.metadata?.hasBackupStorage === true || existingTransaction.metadata?.hasBackupStorage === 'true';
+	const addonPriceCents = existingTransaction.metadata?.addonPriceCents ? parseInt(existingTransaction.metadata.addonPriceCents) : 0;
+	const galleryPriceCents = totalAmountCents - addonPriceCents;
 
 	logger.info('Creating payment checkout for gallery', {
 		galleryId,
-		priceCents,
+		transactionId,
+		totalAmountCents,
+		galleryPriceCents,
+		addonPriceCents,
+		walletAmountCents,
+		stripeAmountCents,
 		plan,
+		hasBackupStorage,
 		currentState: gallery.state
 	});
 
@@ -94,34 +143,75 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
 			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
 		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel`
-			: 'https://your-frontend/payments/cancel';
+			? `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`
+			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`;
+
+		// Build line items from transaction
+		const lineItems: any[] = [];
+		
+		// Gallery plan line item
+		if (galleryPriceCents > 0) {
+			lineItems.push({
+				price_data: {
+					currency: 'pln',
+					product_data: {
+						name: `Gallery: ${galleryId}`,
+						description: `PhotoHub gallery payment - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
+					},
+					unit_amount: walletAmountCents > 0 ? Math.round((galleryPriceCents / totalAmountCents) * stripeAmountCents) : galleryPriceCents
+				},
+				quantity: 1
+			});
+		}
+		
+		// Addon line item (if included in transaction)
+		if (hasBackupStorage && addonPriceCents > 0) {
+			const addonStripeAmount = walletAmountCents > 0 ? Math.round((addonPriceCents / totalAmountCents) * stripeAmountCents) : addonPriceCents;
+			lineItems.push({
+				price_data: {
+					currency: 'pln',
+					product_data: {
+						name: 'Backup Storage Addon',
+						description: `Backup storage addon for gallery ${galleryId}`
+					},
+					unit_amount: addonStripeAmount
+				},
+				quantity: 1
+			});
+		}
 
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			mode: 'payment',
-			line_items: [
-				{
-					price_data: {
-						currency: 'pln',
-						product_data: {
-							name: `Gallery: ${galleryId}`,
-							description: `PhotoHub gallery payment - ${plan} plan`
-						},
-						unit_amount: priceCents
-					},
-					quantity: 1
-				}
-			],
+			line_items: lineItems,
 			success_url: successUrl,
 			cancel_url: cancelUrl,
 			metadata: {
 				userId: ownerId,
 				type: 'gallery_payment',
 				galleryId,
-				redirectUrl: redirectUrl // Store redirect URL in metadata
+				transactionId: transactionId,
+				walletAmountCents: walletAmountCents.toString(),
+				stripeAmountCents: stripeAmountCents.toString(),
+				hasBackupStorage: hasBackupStorage ? 'true' : 'false',
+				addonPriceCents: addonPriceCents.toString(),
+				redirectUrl: redirectUrl
 			}
 		});
+
+		// Update existing transaction with Stripe session ID if it exists
+		if (transactionId && transactionsTable) {
+			try {
+				await updateTransactionStatus(ownerId, transactionId, 'UNPAID', {
+					stripeSessionId: session.id
+				});
+			} catch (txnErr: any) {
+				logger.warn('Failed to update transaction with Stripe session ID', {
+					error: txnErr.message,
+					transactionId
+				});
+			}
+		}
 
 		logger.info('Stripe checkout session created for gallery payment', {
 			checkoutUrl: session.url,
@@ -136,7 +226,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				checkoutUrl: session.url,
 				sessionId: session.id,
 				galleryId,
-				priceCents
+				transactionId,
+				totalAmountCents,
+				walletAmountCents,
+				stripeAmountCents
 			})
 		};
 	} catch (err: any) {

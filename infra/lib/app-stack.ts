@@ -85,6 +85,18 @@ export class AppStack extends Stack {
 		removalPolicy: RemovalPolicy.RETAIN
 	});
 
+	const transactions = new Table(this, 'TransactionsTable', {
+		partitionKey: { name: 'userId', type: AttributeType.STRING },
+		sortKey: { name: 'transactionId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	transactions.addGlobalSecondaryIndex({
+		indexName: 'galleryId-status-index',
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'status', type: AttributeType.STRING }
+	});
+
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true }
@@ -163,7 +175,8 @@ export class AppStack extends Stack {
 			WALLETS_TABLE: wallet.tableName,
 			WALLET_LEDGER_TABLE: walletLedger.tableName,
 			ORDERS_TABLE: orders.tableName,
-			GALLERY_ADDONS_TABLE: galleryAddons.tableName
+			GALLERY_ADDONS_TABLE: galleryAddons.tableName,
+			TRANSACTIONS_TABLE: transactions.tableName
 		};
 
 		const healthFn = new NodejsFunction(this, 'HealthFunction', {
@@ -208,8 +221,11 @@ export class AppStack extends Stack {
 		});
 		payments.grantReadWriteData(checkoutFn);
 		payments.grantReadWriteData(webhookFn);
+		transactions.grantReadWriteData(checkoutFn); // Needed for fractional payments
 		wallet.grantReadWriteData(webhookFn);
 		walletLedger.grantReadWriteData(webhookFn);
+		transactions.grantReadWriteData(webhookFn); // Needed to update transaction status
+		transactions.grantReadWriteData(paymentsCancelFn); // Needed to mark transaction as CANCELED
 		galleries.grantReadWriteData(webhookFn);
 		orders.grantReadWriteData(webhookFn); // Needed for addon_payment to update orders with zipKey
 		galleryAddons.grantReadWriteData(webhookFn); // Needed for addon_payment to create addon
@@ -251,6 +267,7 @@ export class AppStack extends Stack {
 		});
 		wallet.grantReadWriteData(walletBalanceFn); // Needs write to create wallet if missing
 		walletLedger.grantReadData(walletTransactionsFn);
+		transactions.grantReadData(walletTransactionsFn); // Needed to query transactions table
 		httpApi.addRoutes({
 			path: '/wallet/balance',
 			methods: [HttpMethod.GET],
@@ -261,6 +278,49 @@ export class AppStack extends Stack {
 			path: '/wallet/transactions',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('WalletTransactionsIntegration', walletTransactionsFn),
+			authorizer
+		});
+
+		// Transaction endpoints
+		const transactionsGetFn = new NodejsFunction(this, 'TransactionsGetFn', {
+			entry: path.join(__dirname, '../../../backend/functions/transactions/get.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const transactionsCancelFn = new NodejsFunction(this, 'TransactionsCancelFn', {
+			entry: path.join(__dirname, '../../../backend/functions/transactions/cancel.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const transactionsRetryFn = new NodejsFunction(this, 'TransactionsRetryFn', {
+			entry: path.join(__dirname, '../../../backend/functions/transactions/retry.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		transactions.grantReadData(transactionsGetFn);
+		transactions.grantReadWriteData(transactionsCancelFn);
+		transactions.grantReadWriteData(transactionsRetryFn);
+		galleries.grantReadWriteData(transactionsCancelFn);
+		wallet.grantReadData(transactionsRetryFn);
+		httpApi.addRoutes({
+			path: '/transactions/{id}',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('TransactionsGetIntegration', transactionsGetFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/transactions/{id}/cancel',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('TransactionsCancelIntegration', transactionsCancelFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/transactions/{id}/retry',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('TransactionsRetryIntegration', transactionsRetryFn),
 			authorizer
 		});
 
@@ -330,12 +390,16 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(galleriesCreateFn);
 		wallet.grantReadWriteData(galleriesCreateFn);
 		walletLedger.grantReadWriteData(galleriesCreateFn);
+		transactions.grantReadWriteData(galleriesCreateFn); // Needed to create transactions
 		galleryAddons.grantReadWriteData(galleriesCreateFn); // Needed to create backup storage addon during gallery creation
 		galleries.grantReadData(galleriesGetFn);
+		transactions.grantReadData(galleriesGetFn); // Needed to derive payment status
 		galleries.grantReadData(galleriesListFn);
 		galleryAddons.grantReadData(galleriesListFn); // Needed to check hasBackupStorage
+		transactions.grantReadData(galleriesListFn); // Needed to derive payment status from transactions
 		galleries.grantReadData(galleriesListImagesFn);
 		galleries.grantReadData(galleriesPayFn);
+		transactions.grantReadWriteData(galleriesPayFn); // Needed to update transactions
 		galleries.grantReadWriteData(galleriesDeleteFn);
 		orders.grantReadWriteData(galleriesDeleteFn);
 		galleryAddons.grantReadWriteData(galleriesDeleteFn); // Needed to delete gallery addons when gallery is deleted
@@ -625,6 +689,7 @@ export class AppStack extends Stack {
 		orders.grantReadWriteData(ordersPurchaseAddonFn);
 		wallet.grantReadWriteData(ordersPurchaseAddonFn); // Needed to debit wallet for addon purchase
 		walletLedger.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create ledger entry for debit
+		transactions.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create transactions
 		galleries.grantReadData(ordersListFn);
 		galleryAddons.grantReadData(ordersListFn); // Needed to check hasBackupStorage for orders list
 		galleries.grantReadData(ordersGetFn);
@@ -899,6 +964,24 @@ export class AppStack extends Stack {
 		new Rule(this, 'ExpirySchedule', {
 			schedule: Schedule.rate(Duration.days(1)),
 			targets: [new LambdaFunction(expiryFn)]
+		});
+
+		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days)
+		const transactionExpiryFn = new NodejsFunction(this, 'TransactionExpiryCheckFn', {
+			entry: path.join(__dirname, '../../../backend/functions/expiry/checkTransactions.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		transactions.grantReadWriteData(transactionExpiryFn);
+		galleries.grantReadWriteData(transactionExpiryFn);
+		galleriesDeleteFn.grantInvoke(transactionExpiryFn);
+		// Run daily at 2 AM Warsaw time (1 AM UTC in winter, 0 AM UTC in summer)
+		// Using cron expression: minute hour day month day-of-week
+		// 0 1 * * * = 1 AM UTC daily (2 AM CET in winter)
+		new Rule(this, 'TransactionExpirySchedule', {
+			schedule: Schedule.cron({ minute: '0', hour: '1', day: '*', month: '*', year: '*' }),
+			targets: [new LambdaFunction(transactionExpiryFn)]
 		});
 
 		// Images resize with Jimp (pure JavaScript, no native dependencies)
