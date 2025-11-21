@@ -1,4 +1,4 @@
-import { CognitoUserPool, CognitoUser, AuthenticationDetails, CognitoUserAttribute } from 'amazon-cognito-identity-js'
+import { CognitoUserPool, CognitoUser, CognitoUserAttribute } from 'amazon-cognito-identity-js'
 
 let userPool: CognitoUserPool | null = null
 
@@ -93,28 +93,6 @@ export function signOut() {
     }
 }
 
-export async function redirectToCognitoLogout(): Promise<void> {
-    // Clear local tokens first
-    signOut()
-    
-    // Redirect to Cognito logout endpoint
-    const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
-    
-    if (!userPoolDomain || !clientId) {
-        console.error('Cognito configuration missing')
-        return
-    }
-    
-    const landingUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const logoutCallbackUrl = `${landingUrl}/auth/logout-callback`
-    const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutCallbackUrl)
-    
-    if (typeof window !== 'undefined') {
-        window.location.href = logoutUrl
-    }
-}
-
 export function signUp(email: string, password: string): Promise<CognitoUser> {
     return new Promise((resolve, reject) => {
         if (!userPool) {
@@ -139,36 +117,6 @@ export function signUp(email: string, password: string): Promise<CognitoUser> {
                 return
             }
             resolve(result.user)
-        })
-    })
-}
-
-export function signIn(email: string, password: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        if (!userPool) {
-            reject(new Error('Auth not initialized'))
-            return
-        }
-
-        const authenticationDetails = new AuthenticationDetails({
-            Username: email,
-            Password: password
-        })
-
-        const cognitoUser = new CognitoUser({
-            Username: email,
-            Pool: userPool
-        })
-
-        cognitoUser.authenticateUser(authenticationDetails, {
-            onSuccess: (result) => {
-                const idToken = result.getIdToken().getJwtToken()
-                localStorage.setItem('idToken', idToken)
-                resolve(idToken)
-            },
-            onFailure: (err) => {
-                reject(err)
-            }
         })
     })
 }
@@ -291,34 +239,16 @@ export async function redirectToCognito(returnUrl: string | null = null, callbac
         params.append('state', encodeURIComponent(returnUrl))
     }
     
+    // Try silent authentication first if user might already be logged in
+    // This helps when user logged in via SDK and we're redirecting to Cognito
+    // Note: This might not work if SDK session doesn't create server-side cookie
+    // In that case, Cognito will show login page, which is acceptable
+    
     const authUrl = `${baseUrl}/oauth2/authorize?${params.toString()}`
     
     if (typeof window !== 'undefined') {
         window.location.href = authUrl
     }
-}
-
-export function getHostedUILoginUrl(userPoolDomain: string, clientId: string, redirectUri: string): string {
-    let domain = userPoolDomain.replace(/^https?:\/\//, '')
-    
-    if (domain.includes('.amazonaws.com')) {
-        domain = domain.replace('.amazonaws.com', '.amazoncognito.com')
-    }
-    
-    if (!domain.includes('.amazoncognito.com') && !domain.includes('.amazonaws.com')) {
-        const parts = domain.split('.')
-        const region = parts.length > 2 ? parts[parts.length - 2] : 'eu-west-1'
-        domain = `${domain}.auth.${region}.amazoncognito.com`
-    }
-    
-    const baseUrl = `https://${domain}`
-    const params = new URLSearchParams({
-        client_id: clientId,
-        response_type: 'code',
-        scope: 'openid email profile',
-        redirect_uri: redirectUri
-    })
-    return `${baseUrl}/oauth2/authorize?${params.toString()}`
 }
 
 export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<string> {

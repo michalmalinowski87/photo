@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { exchangeCodeForTokens } from '@/lib/auth';
+import Link from 'next/link';
 
 const AuthCallbackPage = () => {
   const router = useRouter();
@@ -67,11 +68,29 @@ const AuthCallbackPage = () => {
   }, [router, searchParams]);
 
   return (
-    <div className="flex items-center justify-center flex-col h-screen relative">
-      <div className="border-[3px] border-neutral-800 rounded-full border-b-neutral-200 animate-spin w-8 h-8"></div>
-      <p className="text-lg font-medium text-center mt-3 text-foreground">
-        Weryfikowanie konta...
-      </p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center max-w-sm w-full px-4">
+        <Link href="/#home" className="mb-8">
+          <span className="text-lg font-bold text-foreground">
+            PhotoHub
+          </span>
+        </Link>
+        
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="border-[3px] border-primary rounded-full border-b-transparent animate-spin w-12 h-12"></div>
+            <div className="absolute inset-0 border-[3px] border-transparent rounded-full border-t-primary/30"></div>
+          </div>
+          <div className="text-center space-y-2">
+            <p className="text-lg font-semibold text-foreground">
+              Weryfikowanie konta...
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Proszę czekać, przekierowujemy Cię
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 };
