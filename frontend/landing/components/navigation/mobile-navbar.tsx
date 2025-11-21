@@ -17,9 +17,12 @@ import { cn, NAV_LINKS } from "@/utils";
 import { LucideIcon, Menu, X } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from 'react';
+import { useAuth } from "@/hooks/use-auth";
 
 const MobileNavbar = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const { isAuthenticated } = useAuth();
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 
   const handleClose = () => {
     setIsOpen(false);
@@ -41,12 +44,20 @@ const MobileNavbar = () => {
           </SheetClose>
           <div className="flex flex-col items-start w-full py-2 mt-10">
             <div className="flex items-center justify-evenly w-full space-x-2">
-              <Link href="/auth/sign-in" className={buttonVariants({ variant: "outline", className: "w-full" })} onClick={handleClose}>
-                Zaloguj się
-              </Link>
-              <Link href="/auth/sign-up" className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
-                Rozpocznij za darmo
-              </Link>
+              {isAuthenticated ? (
+                <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
+                  Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/auth/sign-in" className={buttonVariants({ variant: "outline", className: "w-full" })} onClick={handleClose}>
+                    Zaloguj się
+                  </Link>
+                  <Link href="/auth/sign-up" className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
+                    Rozpocznij za darmo
+                  </Link>
+                </>
+              )}
             </div>
             <ul className="flex flex-col items-start w-full mt-6">
               <Accordion type="single" collapsible className="!w-full">

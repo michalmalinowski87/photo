@@ -1,0 +1,94 @@
+.background-customizable {
+  background-color: #000000 !important;
+}
+
+.logo-customizable {
+  max-height: 40px;
+  width: auto;
+}
+
+.label-customizable {
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.textDescription-customizable {
+  color: #a3a3a3 !important;
+  font-size: 14px;
+}
+
+.legalText-customizable {
+  color: #a3a3a3 !important;
+  font-size: 12px;
+}
+
+.submitButton-customizable {
+  background-color: #6c279d !important;
+  color: #000000 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  width: 100%;
+  cursor: pointer;
+}
+
+.inputField-customizable {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  font-size: 14px;
+}
+
+.errorMessage-customizable {
+  color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  font-size: 14px;
+}
+
+.idpButton-customizable {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 500 !important;
+}
+
+.socialButton-customizable {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+}
+
+.redirect-customizable {
+  color: #6c279d !important;
+  text-decoration: none;
+}
+
+.passwordCheck-notValid-customizable {
+  color: #ef4444 !important;
+}
+
+.passwordCheck-valid-customizable {
+  color: #10b981 !important;
+}
+
+.banner-customizable {
+  background-color: rgba(108, 39, 157, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.idpDescription-customizable {
+  color: #a3a3a3 !important;
+  font-size: 14px;
+}

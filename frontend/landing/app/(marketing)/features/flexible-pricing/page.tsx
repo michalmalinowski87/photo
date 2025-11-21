@@ -16,7 +16,7 @@ const FlexiblePricingPage = () => {
               Elastyczne ceny
             </h1>
             <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
-              System dodatków pozwala dostosować ofertę do potrzeb. Dodaj funkcje, gdy ich potrzebujesz.
+              Bez miesięcznych opłat - płacisz tylko za galerię, co pozwala łatwo wliczyć koszt do pakietu zdjęć dla klienta. System dodatków pozwala dostosować ofertę do potrzeb. Wszystko jest proste, przejrzyste i zaledwie kilka kliknięć od finalizacji.
             </p>
             <div className="flex items-center justify-center gap-x-4 mt-8">
               <Button size="sm" asChild>

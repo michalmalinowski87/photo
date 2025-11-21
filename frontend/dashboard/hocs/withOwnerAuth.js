@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { initAuth, getIdToken } from '../lib/auth';
+import { initAuth, getIdToken, redirectToCognito } from '../lib/auth';
 
 export default function withOwnerAuth(WrappedComponent) {
 	return function AuthenticatedComponent(props) {
@@ -18,7 +18,8 @@ export default function withOwnerAuth(WrappedComponent) {
 			const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
 			
 			if (!userPoolId || !clientId) {
-				router.replace('/login');
+				// Redirect directly to Cognito (not via landing)
+				redirectToCognito(router.asPath);
 				return;
 			}
 
@@ -29,13 +30,13 @@ export default function withOwnerAuth(WrappedComponent) {
 					// Decode token to get owner ID
 					try {
 						const payload = JSON.parse(atob(cognitoToken.split('.')[1]));
-						setToken(cognitoToken);
-						setOwnerId(payload.sub || payload['cognito:username'] || '');
-						setCheckingAuth(false);
-					} catch (e) {
-						console.error('Failed to decode Cognito token:', e);
-						router.replace('/login');
-					}
+					setToken(cognitoToken);
+					setOwnerId(payload.sub || payload['cognito:username'] || '');
+					setCheckingAuth(false);
+				} catch (e) {
+					// Redirect directly to Cognito (not via landing)
+					redirectToCognito(router.asPath);
+				}
 				})
 				.catch(() => {
 					// No valid session, check localStorage for manual token
@@ -47,10 +48,12 @@ export default function withOwnerAuth(WrappedComponent) {
 							setOwnerId(payload.sub || payload['cognito:username'] || '');
 							setCheckingAuth(false);
 						} catch (e) {
-							router.replace('/login');
+							// Redirect directly to Cognito (not via landing)
+							redirectToCognito(router.asPath);
 						}
 					} else {
-						router.replace('/login');
+						// Redirect directly to Cognito (not via landing)
+						redirectToCognito(router.asPath);
 					}
 				});
 		}, [id, router]);

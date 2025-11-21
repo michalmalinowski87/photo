@@ -38,7 +38,7 @@ export const PLANS = [
     btn: {
       text: "Rozpocznij za darmo",
       href: "/auth/sign-up",
-      variant: "purple",
+      variant: "primary",
     }
   },
   {

@@ -64,13 +64,38 @@ export function signIn(email, password) {
 }
 
 export function signOut() {
+	// Clear Cognito SDK session
 	const user = getCurrentUser();
 	if (user) {
 		user.signOut();
 	}
+	
+	// Clear all tokens from localStorage
+	if (typeof window !== 'undefined') {
+		localStorage.removeItem('idToken');
+		localStorage.removeItem('accessToken');
+		localStorage.removeItem('refreshToken');
+		
+		// Clear Cognito sessionStorage items
+		const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+		if (clientId) {
+			// Clear all CognitoIdentityServiceProvider keys
+			const keysToRemove = [];
+			for (let i = 0; i < sessionStorage.length; i++) {
+				const key = sessionStorage.key(i);
+				if (key && key.startsWith(`CognitoIdentityServiceProvider.${clientId}`)) {
+					keysToRemove.push(key);
+				}
+			}
+			keysToRemove.forEach(key => sessionStorage.removeItem(key));
+		}
+		
+		// Clear PKCE verifier if present
+		sessionStorage.removeItem('pkce_code_verifier');
+	}
 }
 
-export function getHostedUILoginUrl(userPoolDomain, clientId, redirectUri) {
+export function getHostedUILoginUrl(userPoolDomain, clientId, redirectUri, returnUrl = null, codeChallenge = null) {
 	// userPoolDomain might be:
 	// - Full domain: "photohub-dev.auth.eu-west-1.amazonaws.com" or "photohub-dev.auth.eu-west-1.amazoncognito.com"
 	// - With https://: "https://photohub-dev.auth.eu-west-1.amazonaws.com"
@@ -99,7 +124,95 @@ export function getHostedUILoginUrl(userPoolDomain, clientId, redirectUri) {
 		scope: 'openid email profile',
 		redirect_uri: redirectUri
 	});
+	
+	// Add PKCE challenge if provided
+	if (codeChallenge) {
+		params.append('code_challenge', codeChallenge);
+		params.append('code_challenge_method', 'S256');
+	}
+	
+	// Add state parameter with returnUrl if provided
+	if (returnUrl) {
+		params.append('state', encodeURIComponent(returnUrl));
+	}
+	
 	return `${baseUrl}/oauth2/authorize?${params.toString()}`;
+}
+
+// Track if we're already redirecting to prevent multiple calls (React Strict Mode)
+let isRedirectingToCognito = false;
+
+export async function redirectToCognito(returnUrl = null) {
+	// Prevent multiple redirects (React Strict Mode calls effects twice)
+	if (isRedirectingToCognito) {
+		return;
+	}
+	
+	const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
+	const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+	
+	if (!userPoolDomain || !clientId) {
+		console.error('Cognito configuration missing');
+		return;
+	}
+	
+	// Mark as redirecting
+	isRedirectingToCognito = true;
+	
+	// Use /auth/auth-callback as the redirect URI
+	const redirectUri = typeof window !== 'undefined' ? window.location.origin + '/auth/auth-callback' : '';
+	
+	// If no returnUrl provided, use current path
+	if (!returnUrl && typeof window !== 'undefined') {
+		returnUrl = window.location.pathname + window.location.search;
+	}
+	
+	// Generate PKCE challenge
+	const codeVerifier = generateRandomString(128);
+	const codeChallenge = await generateCodeChallenge(codeVerifier);
+	
+	// Store verifier in sessionStorage (domain-specific, cleared on close)
+	if (typeof window !== 'undefined') {
+		sessionStorage.setItem('pkce_code_verifier', codeVerifier);
+	}
+	
+	const loginUrl = getHostedUILoginUrl(userPoolDomain, clientId, redirectUri, returnUrl, codeChallenge);
+	window.location.href = loginUrl;
+}
+
+// Generate random string for PKCE
+function generateRandomString(length) {
+	const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+	let random = '';
+	const values = new Uint8Array(length);
+	crypto.getRandomValues(values);
+	for (let i = 0; i < length; i++) {
+		random += charset[values[i] % charset.length];
+	}
+	return random;
+}
+
+// Generate code challenge from verifier
+async function generateCodeChallenge(codeVerifier) {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(codeVerifier);
+	const digest = await crypto.subtle.digest('SHA-256', data);
+	return btoa(String.fromCharCode(...new Uint8Array(digest)))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=/g, '');
+}
+
+export function redirectToCognitoSignUp(returnUrl = null) {
+	// Same as redirectToCognito - Cognito Hosted UI shows sign-up option on the authorize page
+	// Users can click "Sign up" on the Cognito page
+	redirectToCognito(returnUrl);
+}
+
+export async function redirectToLandingSignIn(returnUrl = null) {
+	// Redirect directly to Cognito Hosted UI (not via landing sign-in page)
+	// This ensures users go straight to Cognito login without intermediate pages
+	await redirectToCognito(returnUrl);
 }
 
 export async function exchangeCodeForTokens(code, redirectUri) {
@@ -109,6 +222,17 @@ export async function exchangeCodeForTokens(code, redirectUri) {
 	
 	if (!userPoolDomain || !clientId) {
 		throw new Error('Cognito configuration missing');
+	}
+	
+	// Get PKCE verifier from sessionStorage (don't remove it yet - only remove after successful exchange)
+	let codeVerifier = null;
+	if (typeof window !== 'undefined') {
+		codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+		// Don't remove here - remove only after successful token exchange
+	}
+	
+	if (!codeVerifier) {
+		throw new Error('PKCE verifier not found. Please restart the authentication flow.');
 	}
 	
 	// Remove https:// if present and convert to amazoncognito.com
@@ -128,9 +252,10 @@ export async function exchangeCodeForTokens(code, redirectUri) {
 		grant_type: 'authorization_code',
 		client_id: clientId,
 		code: code,
-		redirect_uri: redirectUri
+		redirect_uri: redirectUri,
+		code_verifier: codeVerifier
 	});
-	
+
 	const response = await fetch(tokenUrl, {
 		method: 'POST',
 		headers: {
@@ -145,6 +270,14 @@ export async function exchangeCodeForTokens(code, redirectUri) {
 	}
 	
 	const tokens = await response.json();
+	
+	// Remove PKCE verifier AFTER successful token exchange (use once)
+	if (typeof window !== 'undefined' && codeVerifier) {
+		sessionStorage.removeItem('pkce_code_verifier');
+	}
+	
+	// Reset redirect flag after successful token exchange
+	isRedirectingToCognito = false;
 	
 	// Store tokens in localStorage
 	if (tokens.id_token) {
@@ -185,7 +318,6 @@ export async function exchangeCodeForTokens(code, redirectUri) {
 			}
 		}
 	} catch (err) {
-		console.warn('Failed to set up CognitoUser session:', err);
 		// Tokens are still stored in localStorage, so manual token usage will work
 	}
 	

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { apiFetch, formatApiError } from '../lib/api';
-import { initAuth, getIdToken, signOut } from '../lib/auth';
+import { initAuth, getIdToken, signOut, redirectToCognito, getHostedUILogoutUrl } from '../lib/auth';
 
 export default function Orders() {
 	const router = useRouter();
@@ -29,12 +29,22 @@ export default function Orders() {
 			}).catch(() => {
 				// No valid session, check localStorage for manual token
 				const stored = localStorage.getItem('idToken');
-				if (stored) setIdToken(stored);
+				if (stored) {
+					setIdToken(stored);
+				} else {
+					// No token found, redirect directly to Cognito (not via landing)
+					redirectToCognito(router.asPath);
+				}
 			});
 		} else {
 			// Fallback to localStorage for manual token
 			const stored = localStorage.getItem('idToken');
-			if (stored) setIdToken(stored);
+			if (stored) {
+				setIdToken(stored);
+			} else {
+				// No token found, redirect directly to Cognito (not via landing)
+				redirectToCognito(router.asPath);
+			}
 		}
 	}, []);
 
@@ -358,11 +368,23 @@ export default function Orders() {
 		}
 	}
 
-	const handleLogout = () => {
+	const handleLogout = async () => {
+		// Clear all tokens and session data on dashboard domain
 		signOut();
-		localStorage.removeItem('idToken');
 		setIdToken('');
-		router.push('/login');
+		
+		// Redirect to Cognito logout endpoint to clear server-side session cookies
+		const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
+		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
+		const logoutCallbackUrl = `${landingUrl}/auth/logout-callback`;
+		
+		if (userPoolDomain) {
+			// Use helper function to build Cognito logout URL
+			const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutCallbackUrl);
+			window.location.href = logoutUrl;
+		} else {
+			window.location.href = logoutCallbackUrl;
+		}
 	};
 
 	return (

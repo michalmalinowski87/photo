@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { apiFetch, formatApiError } from '../lib/api';
-import { initAuth, getIdToken, signOut } from '../lib/auth';
+import { initAuth, getIdToken, signOut, redirectToCognito, getHostedUILogoutUrl } from '../lib/auth';
 
 export default function Galleries() {
 	const router = useRouter();
@@ -37,21 +37,45 @@ export default function Galleries() {
 			}).catch(() => {
 				// No valid session, check localStorage for manual token
 				const stored = localStorage.getItem('idToken');
-				if (stored) setIdToken(stored);
+				if (stored) {
+					setIdToken(stored);
+				} else {
+					// No token found, redirect directly to Cognito (not via landing)
+					redirectToCognito('/galleries');
+				}
 			});
 		} else {
 			// Fallback to localStorage for manual token
 			const stored = localStorage.getItem('idToken');
-			if (stored) setIdToken(stored);
+			if (stored) {
+				setIdToken(stored);
+			} else {
+				// No token found, redirect directly to Cognito (not via landing)
+				redirectToCognito('/galleries');
+			}
 		}
 	}, []);
 	
 	
-	const handleLogout = () => {
+	const handleLogout = async () => {
+		// Clear all tokens and session data on dashboard domain
 		signOut();
-		localStorage.removeItem('idToken');
 		setIdToken('');
-		router.push('/login');
+		
+		// Redirect to Cognito logout endpoint to clear server-side session cookies
+		// This ensures Cognito doesn't auto-login the user next time
+		const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
+		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
+		const logoutCallbackUrl = `${landingUrl}/auth/logout-callback`;
+		
+		if (userPoolDomain) {
+			// Use helper function to build Cognito logout URL
+			const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutCallbackUrl);
+			window.location.href = logoutUrl;
+		} else {
+			// Fallback: redirect directly to landing logout callback
+			window.location.href = logoutCallbackUrl;
+		}
 	};
 
 	async function loadGalleries() {
@@ -100,7 +124,6 @@ export default function Galleries() {
 			}
 		} catch (error) {
 			// If we can't check orders, continue anyway
-			console.warn('Failed to check orders before purchase', error);
 		}
 		
 		setPurchasingAddon({ [galleryId]: true });
@@ -359,7 +382,7 @@ export default function Galleries() {
 			<div style={{ marginBottom: 8 }}>
 				<label>ID Token </label>
 				<input style={{ width: '100%', maxWidth: 420 }} value={idToken} onChange={(e) => setIdToken(e.target.value)} placeholder="Auto-filled if logged in" />
-				{!idToken && <span style={{ marginLeft: 8, color: '#666' }}>or <a href="/login">login here</a></span>}
+					{!idToken && <span style={{ marginLeft: 8, color: '#666' }}>or <a href={`${process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3000'}/auth/sign-in`}>login here</a></span>}
 			</div>
 			
 			{/* Gallery List View */}

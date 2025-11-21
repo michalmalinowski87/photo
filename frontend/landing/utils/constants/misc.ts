@@ -19,12 +19,12 @@ export const PROCESS = [
   },
   {
     title: "Udostępnij klientowi",
-    description: "Wyślij link do galerii. Klient może przeglądać i wybierać ulubione zdjęcia.",
+    description: "Wyślij link do galerii. Klient może przeglądać i wybraź zdjęcia do edycji.",
     icon: Users,
   },
   {
-    title: "Odbierz wybrane zdjęcia",
-    description: "Klient wybiera zdjęcia, a Ty otrzymujesz powiadomienie i możesz pobrać wybrane pliki.",
+    title: "Dostarcz finałową wersję",
+    description: "Pobierz zdjęcia wybrane przez klienta w formacie ZIP i po edycji dostarcz klientowi finalną wersję.",
     icon: Image,
   },
 ] as const;
@@ -35,7 +35,7 @@ export const REVIEWS = [
     username: "Fotograf ślubny",
     avatar: "https://randomuser.me/api/portraits/women/1.jpg",
     rating: 5,
-    review: "PhotoHub zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny!"
+    review: "PhotoHub zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny! costam jescze zeby bylo za dlugo do testu clapa"
   },
   {
     name: "Marcin Nowak",

@@ -1,103 +1,47 @@
 "use client"
 
-import { useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { initAuth, getHostedUILoginUrl, exchangeCodeForTokens } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
-import { Icons } from "@/components";
-import Link from "next/link";
+import { useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { redirectToCognito } from '@/lib/auth'
 
 export default function SignInPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
+  const hasRedirected = useRef(false)
 
   useEffect(() => {
-    const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
-    
-    if (userPoolId && clientId) {
-      initAuth(userPoolId, clientId)
-    }
-
-    // Check for OAuth error
-    const oauthError = searchParams.get('error')
-    if (oauthError) {
-      console.error('OAuth error:', oauthError, searchParams.get('error_description'))
-      return
-    }
-    
-    // Check if we have auth code from callback
-    const code = searchParams.get('code')
-    if (code) {
-      const redirectUri = typeof window !== 'undefined' ? window.location.origin + '/auth/auth-callback' : ''
-      exchangeCodeForTokens(code, redirectUri)
-        .then(() => {
-          // Successfully got tokens, redirect to dashboard
-          const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-          window.location.href = dashboardUrl
-        })
-        .catch((err) => {
-          console.error('Token exchange failed:', err)
-        })
-      return
-    }
-  }, [router, searchParams])
-
-  const handleLogin = () => {
-    const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
-    
-    if (!userPoolDomain || !clientId) {
-      alert('Konfiguracja uwierzytelniania nie jest dostępna. Skontaktuj się z administratorem.')
+    // Always redirect directly to Cognito Hosted UI
+    // No form shown - user goes straight to Cognito login page
+    if (hasRedirected.current) {
       return
     }
 
-    const redirectUri = typeof window !== 'undefined' ? window.location.origin + '/auth/auth-callback' : ''
-    const loginUrl = getHostedUILoginUrl(userPoolDomain, clientId, redirectUri)
-    window.location.href = loginUrl
-  }
+    hasRedirected.current = true
 
+    // Get returnUrl from query params or default to dashboard /galleries
+    const returnUrl = searchParams.get('returnUrl')
+    const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
+    
+    // Build return URL - default to dashboard /galleries
+    const fullReturnUrl = returnUrl 
+      ? (returnUrl.startsWith('/') && !returnUrl.startsWith('/auth')
+          ? `${dashboardUrl}${returnUrl}`
+          : returnUrl)
+      : `${dashboardUrl}/galleries`
+    
+    // Redirect directly to Cognito Hosted UI
+    redirectToCognito(fullReturnUrl).catch(() => {
+      // If redirect fails, reset flag to allow retry
+      hasRedirected.current = false
+    })
+  }, [searchParams])
+
+  // Show loading state while redirecting
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href="/#home" className="flex items-center gap-x-2">
-          <span className="text-lg font-bold text-foreground">
-            PhotoHub
-          </span>
-        </Link>
-      </div>
-
-      <div className="flex flex-col w-full mt-8">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Zaloguj się</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Zaloguj się, aby zarządzać swoimi galeriami i klientami
-        </p>
-        <Button onClick={handleLogin} className="w-full" size="lg">
-          Zaloguj się / Zarejestruj
-        </Button>
-      </div>
-
-      <div className="flex flex-col items-start w-full mt-8">
-        <p className="text-sm text-muted-foreground">
-          Logując się, akceptujesz nasze{" "}
-          <Link href="/terms" className="text-primary">
-            Warunki korzystania{" "}
-          </Link>
-          i{" "}
-          <Link href="/privacy" className="text-primary">
-            Politykę prywatności
-          </Link>
-        </p>
-      </div>
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
-          Nie masz konta?{" "}
-          <Link href="/auth/sign-up" className="text-primary">
-            Zarejestruj się
-          </Link>
-        </p>
-      </div>
+    <div className="flex items-center justify-center flex-col h-screen relative">
+      <div className="border-[3px] border-neutral-800 rounded-full border-b-neutral-200 animate-spin w-8 h-8"></div>
+      <p className="text-lg font-medium text-center mt-3 text-foreground">
+        Przekierowywanie do logowania...
+      </p>
     </div>
   )
 }
-

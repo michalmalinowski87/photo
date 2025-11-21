@@ -50,7 +50,7 @@ const MagicCard = ({ children, className }: Props) => {
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             className={cn(
-                "relative max-w-md overflow-hidden rounded-xl border border-border/60 bg-gradient-to-r from-background to-background/40 p-4 md:p-6",
+                "relative max-w-md h-[230px] overflow-hidden rounded-xl border border-border/60 bg-gradient-to-r from-background to-background/40 p-4 md:p-6 flex flex-col",
                 className
             )}
         >
@@ -58,7 +58,7 @@ const MagicCard = ({ children, className }: Props) => {
                 className="pointer-events-none absolute -inset-px opacity-0 transition duration-300"
                 style={{
                     opacity,
-                    background: `radial-gradient(500px circle at ${position.x}px ${position.y}px, rgba(168,85,247,.15), transparent 60%)`,
+                    background: `radial-gradient(500px circle at ${position.x}px ${position.y}px, rgba(var(--theme-primary), 0.15), transparent 60%)`,
                 }}
             />
             {children}

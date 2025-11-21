@@ -1,14 +1,21 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { initAuth, getHostedUILoginUrl, exchangeCodeForTokens } from '@/lib/auth'
+import { initAuth, signUp } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import Link from "next/link";
+import Link from "next/link"
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default function SignUpPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID
@@ -18,42 +25,52 @@ export default function SignUpPage() {
       initAuth(userPoolId, clientId)
     }
 
-    // Check for OAuth error
-    const oauthError = searchParams.get('error')
-    if (oauthError) {
-      console.error('OAuth error:', oauthError, searchParams.get('error_description'))
-      return
+    // Check for error from query params
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam))
     }
-    
-    // Check if we have auth code from callback
-    const code = searchParams.get('code')
-    if (code) {
-      const redirectUri = typeof window !== 'undefined' ? window.location.origin + '/auth/auth-callback' : ''
-      exchangeCodeForTokens(code, redirectUri)
-        .then(() => {
-          // Successfully got tokens, redirect to dashboard
-          const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-          window.location.href = dashboardUrl
-        })
-        .catch((err) => {
-          console.error('Token exchange failed:', err)
-        })
-      return
-    }
-  }, [router, searchParams])
+  }, [searchParams])
 
-  const handleSignUp = () => {
-    const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
     
-    if (!userPoolDomain || !clientId) {
-      alert('Konfiguracja uwierzytelniania nie jest dostępna. Skontaktuj się z administratorem.')
+    // Validation
+    if (!email || !password || !confirmPassword) {
+      setError('Wszystkie pola są wymagane')
       return
     }
 
-    const redirectUri = typeof window !== 'undefined' ? window.location.origin + '/auth/auth-callback' : ''
-    const loginUrl = getHostedUILoginUrl(userPoolDomain, clientId, redirectUri)
-    window.location.href = loginUrl
+    if (password !== confirmPassword) {
+      setError('Hasła nie są identyczne')
+      return
+    }
+
+    if (password.length < 8) {
+      setError('Hasło musi mieć co najmniej 8 znaków')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      await signUp(email, password)
+      // Redirect to verification page with email
+      router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`)
+    } catch (err: any) {
+      setLoading(false)
+      // Handle Cognito errors
+      if (err.code === 'UsernameExistsException') {
+        setError('Użytkownik o tym adresie email już istnieje')
+      } else if (err.code === 'InvalidPasswordException') {
+        setError('Hasło nie spełnia wymagań bezpieczeństwa')
+      } else if (err.message) {
+        setError(err.message)
+      } else {
+        setError('Nie udało się utworzyć konta. Spróbuj ponownie.')
+      }
+    }
   }
 
   return (
@@ -71,9 +88,65 @@ export default function SignUpPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
         </p>
-        <Button onClick={handleSignUp} className="w-full" size="lg">
-          Rozpocznij za darmo
-        </Button>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSignUp} className="w-full space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="twoj@email.com"
+              disabled={loading}
+              required
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Hasło</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimum 8 znaków"
+              disabled={loading}
+              required
+              autoComplete="new-password"
+              minLength={8}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Powtórz hasło"
+              disabled={loading}
+              required
+              autoComplete="new-password"
+            />
+          </div>
+
+          <Button type="submit" className="w-full" size="lg" disabled={loading}>
+            {loading ? 'Tworzenie konta...' : 'Rozpocznij za darmo'}
+          </Button>
+        </form>
+        
+        <p className="text-xs text-muted-foreground mt-4 text-center">
+          Po rejestracji otrzymasz email z kodem weryfikacyjnym
+        </p>
       </div>
 
       <div className="flex flex-col items-start w-full mt-8">
@@ -88,6 +161,7 @@ export default function SignUpPage() {
           </Link>
         </p>
       </div>
+      
       <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
         <p className="text-sm text-muted-foreground">
           Masz już konto?{" "}
@@ -99,4 +173,3 @@ export default function SignUpPage() {
     </div>
   )
 }
-

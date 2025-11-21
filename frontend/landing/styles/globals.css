@@ -33,6 +33,11 @@
     --ring: 0 0% 83.1%;
 
     --radius: 0.5rem;
+
+    /* Theme colors - easily changeable (primary/secondary, not tied to specific colors) */
+    --theme-primary: 108, 39, 157;
+    /* --theme-primary: 101, 255, 200; */
+    --theme-secondary: 0, 135, 255;
   }
 
   .dark {
@@ -96,7 +101,15 @@ html, body {
 }
 
 .gradient {
-  background: conic-gradient(from 230.29deg at 51.63% 52.16%, rgb(36, 0, 255) 0deg, rgb(0, 135, 255) 67.5deg, rgb(108, 39, 157) 198.75deg, rgb(24, 38, 163) 251.25deg, rgb(54, 103, 196) 301.88deg, rgb(105, 30, 255) 360deg);
+  background: conic-gradient(
+    from 230.29deg at 51.63% 52.16%,
+    rgba(var(--theme-secondary), 1) 0deg,
+    rgba(var(--theme-secondary), 0.9) 67.5deg,
+    rgba(var(--theme-primary), 0.8) 198.75deg,
+    rgba(var(--theme-secondary), 0.7) 251.25deg,
+    rgba(var(--theme-secondary), 0.85) 301.88deg,
+    rgba(var(--theme-primary), 0.95) 360deg
+  );
 }
 
 .not-found {

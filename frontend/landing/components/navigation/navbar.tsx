@@ -11,15 +11,18 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { cn, NAV_LINKS } from "@/utils";
-import { LucideIcon, ZapIcon } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import React, { useEffect, useState } from 'react';
 import MaxWidthWrapper from "../global/max-width-wrapper";
 import MobileNavbar from "./mobile-navbar";
 import AnimationContainer from "../global/animation-container";
+import { useAuth } from "@/hooks/use-auth";
 
 const Navbar = () => {
   const [scroll, setScroll] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 
   const handleScroll = () => {
     if (window.scrollY > 8) {
@@ -108,13 +111,20 @@ const Navbar = () => {
           </div>
 
           <div className="hidden lg:flex items-center gap-x-4">
-            <Link href="/auth/sign-in" className={buttonVariants({ size: "sm", variant: "ghost" })}>
-              Zaloguj się
-            </Link>
-            <Link href="/auth/sign-up" className={buttonVariants({ size: "sm" })}>
-              Rozpocznij za darmo
-              <ZapIcon className="size-3.5 ml-1.5 text-orange-500 fill-orange-500" />
-            </Link>
+            {isAuthenticated ? (
+              <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ size: "sm" })}>
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/auth/sign-in" className={buttonVariants({ size: "sm", variant: "ghost" })}>
+                  Zaloguj się
+                </Link>
+                <Link href="/auth/sign-up" className={buttonVariants({ size: "sm" })}>
+                  Rozpocznij za darmo
+                </Link>
+              </>
+            )}
           </div>
 
           <MobileNavbar />

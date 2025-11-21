@@ -18,20 +18,9 @@ const HomePage = async () => {
       <MaxWidthWrapper>
         <div className="flex flex-col items-center justify-center w-full text-center bg-gradient-to-t from-background">
           <AnimationContainer className="flex flex-col items-center justify-center w-full text-center">
-            <button className="group relative grid overflow-hidden rounded-full px-4 py-1 shadow-[0_1000px_0_0_hsl(0_0%_20%)_inset] transition-colors duration-200">
-              <span>
-                <span className="spark mask-gradient absolute inset-0 h-[100%] w-[100%] animate-flip overflow-hidden rounded-full [mask:linear-gradient(white,_transparent_50%)] before:absolute before:aspect-square before:w-[200%] before:rotate-[-90deg] before:animate-rotate before:bg-[conic-gradient(from_0deg,transparent_0_340deg,white_360deg)] before:content-[''] before:[inset:0_auto_auto_50%] before:[translate:-50%_-15%]" />
-              </span>
-              <span className="backdrop absolute inset-[1px] rounded-full bg-neutral-950 transition-colors duration-200 group-hover:bg-neutral-900" />
-              <span className="h-full w-full blur-md absolute bottom-0 inset-x-0 bg-gradient-to-tr from-primary/20"></span>
-              <span className="z-10 py-0.5 text-sm text-neutral-100 flex items-center justify-center gap-1">
-                ✨ Rozpocznij z 1 darmową galerią
-                <ArrowRightIcon className="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
-              </span>
-            </button>
             <h1 className="text-foreground text-center py-6 text-5xl font-medium tracking-normal text-balance sm:text-6xl md:text-7xl lg:text-8xl !leading-[1.15] w-full font-heading">
               Prosty sposób na udostępnianie{" "}
-              <span className="text-transparent bg-gradient-to-r from-violet-500 to-fuchsia-500 bg-clip-text inline-block">
+              <span className="text-transparent bg-gradient-to-r from-theme-secondary to-theme-primary bg-clip-text inline-block">
                 zdjęć klientom
               </span>
             </h1>
@@ -41,10 +30,9 @@ const HomePage = async () => {
               <span className="hidden md:block">Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.</span>
             </p>
             <div className="flex items-center justify-center whitespace-nowrap gap-4 z-50">
-              <Button asChild>
-                <Link href="/auth/sign-up" className="flex items-center">
+              <Button asChild className="bg-theme-primary hover:bg-theme-primary/90 text-white">
+                <Link href="/auth/sign-up">
                   Rozpocznij za darmo
-                  <ArrowRightIcon className="w-4 h-4 ml-2" />
                 </Link>
               </Button>
             </div>
@@ -67,32 +55,6 @@ const HomePage = async () => {
           </AnimationContainer>
         </div>
       </MaxWidthWrapper>
-
-      {/* Companies Section - Optional, can be removed or kept minimal */}
-      {COMPANIES.length > 0 && (
-        <MaxWidthWrapper>
-          <AnimationContainer delay={0.4}>
-            <div className="py-14">
-              <div className="mx-auto px-4 md:px-8">
-                <h2 className="text-center text-sm font-medium font-heading text-neutral-400 uppercase">
-                  Zaufane przez fotografów
-                </h2>
-                <div className="mt-8">
-                  <ul className="flex flex-wrap items-center gap-x-6 gap-y-6 md:gap-x-16 justify-center">
-                    {COMPANIES.map((company) => (
-                      <li key={company.name}>
-                        <div className="w-28 h-auto text-muted-foreground font-semibold">
-                          {company.name}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </AnimationContainer>
-        </MaxWidthWrapper>
-      )}
 
       {/* Features Section */}
       <MaxWidthWrapper className="pt-10">
@@ -133,16 +95,16 @@ const HomePage = async () => {
           {PROCESS.map((process, id) => (
             <AnimationContainer delay={0.2 * id} key={id}>
               <MagicCard className="group md:py-8">
-                <div className="flex flex-col items-start justify-center w-full">
-                  <process.icon strokeWidth={1.5} className="w-10 h-10 text-foreground" />
-                  <div className="flex flex-col relative items-start">
+                <div className="flex flex-col items-start justify-center w-full h-full">
+                  <process.icon strokeWidth={1.5} className="w-10 h-10 text-foreground flex-shrink-0" />
+                  <div className="flex flex-col relative items-start w-full flex-1 min-h-0">
                     <span className="absolute -top-6 right-0 border-2 border-border text-foreground font-medium text-2xl rounded-full w-12 h-12 flex items-center justify-center pt-0.5">
                       {id + 1}
                     </span>
-                    <h3 className="text-base mt-6 font-medium text-foreground">
+                    <h3 className="text-base mt-6 font-medium text-foreground line-clamp-2">
                       {process.title}
                     </h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
                       {process.description}
                     </p>
                   </div>
@@ -162,22 +124,12 @@ const HomePage = async () => {
               Wybierz plan, który działa dla Ciebie
             </h2>
             <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              Rozpocznij z PhotoHub już dziś i ciesz się większą funkcjonalnością z naszymi planami.
+              Prosty, przejrzysty cennik bez abonamentu – płacisz tylko za galerię i łatwo wliczasz koszt w pakiet dla klienta. Szanujemy Twój czas.
             </p>
           </div>
         </AnimationContainer>
         <AnimationContainer delay={0.2}>
           <PricingCards />
-        </AnimationContainer>
-        <AnimationContainer delay={0.3}>
-          <div className="flex flex-wrap items-start md:items-center justify-center lg:justify-evenly gap-6 mt-12 max-w-5xl mx-auto w-full">
-            <div className="flex items-center gap-2">
-              <CreditCardIcon className="w-5 h-5 text-foreground" />
-              <span className="text-muted-foreground">
-                Bez karty kredytowej
-              </span>
-            </div>
-          </div>
         </AnimationContainer>
       </MaxWidthWrapper>
 
@@ -208,8 +160,8 @@ const HomePage = async () => {
                         {review.username}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4 pb-4">
-                      <p className="text-muted-foreground">
+                    <CardContent className="h-[100px] pb-4 flex items-start">
+                      <p className="text-muted-foreground line-clamp-4">
                         {review.review}
                       </p>
                     </CardContent>
@@ -236,8 +188,8 @@ const HomePage = async () => {
                         {review.username}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4 pb-4">
-                      <p className="text-muted-foreground">
+                    <CardContent className="h-[100px] pb-4 flex items-start">
+                      <p className="text-muted-foreground line-clamp-4">
                         {review.review}
                       </p>
                     </CardContent>
@@ -264,8 +216,8 @@ const HomePage = async () => {
                         {review.username}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4 pb-4">
-                      <p className="text-muted-foreground">
+                    <CardContent className="h-[100px] pb-4 flex items-start">
+                      <p className="text-muted-foreground line-clamp-4">
                         {review.review}
                       </p>
                     </CardContent>

@@ -50,7 +50,7 @@ const PricingPage = () => {
             Prosty i przejrzysty cennik
           </h1>
           <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
-            Wybierz plan, który najlepiej odpowiada Twoim potrzebom. Bez ukrytych opłat. Bez niespodzianek.
+            Wybierz plan, który najlepiej odpowiada Twoim potrzebom. Bez miesięcznych opłat - płacisz tylko za galerię, co pozwala łatwo wliczyć koszt do pakietu zdjęć dla klienta. Wszystko jest proste, przejrzyste i zaledwie kilka kliknięć od finalizacji. Wiemy, że profesjonaliści są zajęci i chcemy ułatwić im pracę, a nie ją komplikować.
           </p>
         </div>
       </AnimationContainer>

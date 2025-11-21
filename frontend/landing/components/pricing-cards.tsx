@@ -15,6 +15,7 @@ type Tab = "1m" | "3m" | "12m";
 const PricingCards = () => {
   const MotionTabTrigger = motion(TabsTrigger);
   const [activeTab, setActiveTab] = useState<Tab>("1m");
+  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
 
   const getTabLabel = (value: Tab) => {
     switch (value) {
@@ -81,183 +82,223 @@ const PricingCards = () => {
       </TabsList>
 
       <TabsContent value="1m" className="grid grid-cols-1 lg:grid-cols-3 gap-5 w-full md:gap-8 flex-wrap max-w-5xl mx-auto pt-6">
-        {PLANS.map((plan) => (
-          <Card
-            key={plan.name}
-            className={cn(
-              "flex flex-col w-full border-border/50 rounded-xl bg-card/50 backdrop-blur-sm",
-              plan.name === "3 GB" && "border-2 border-primary"
-            )}
-          >
-            <CardHeader className={cn(
-              "border-b border-border/50",
-              plan.name === "3 GB" ? "bg-primary/[0.07]" : "bg-foreground/[0.03]"
-            )}>
-              <CardTitle className={cn(plan.name !== "3 GB" && "text-muted-foreground", "text-lg font-medium text-foreground")}>
-                {plan.name}
-              </CardTitle>
-              <CardDescription>
-                {plan.info}
-              </CardDescription>
-              <h5 className="text-3xl font-semibold text-foreground mt-4">
-                {plan.price["1m"]} PLN
-                <span className="text-base text-muted-foreground font-normal ml-2">
-                  / miesiąc
-                </span>
-              </h5>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {plan.features.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <CheckCircleIcon className="text-primary w-4 h-4" />
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
-                          {feature.text}
-                        </p>
-                      </TooltipTrigger>
-                      {feature.tooltip && (
-                        <TooltipContent>
-                          <p>{feature.tooltip}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              ))}
-            </CardContent>
-            <CardFooter className="w-full mt-auto">
-              <Link
-                href={plan.btn.href}
-                style={{ width: "100%" }}
-                className={buttonVariants({ className: plan.name === "3 GB" && "bg-primary hover:bg-primary/90 text-primary-foreground" })}
-              >
-                {plan.btn.text}
-              </Link>
-            </CardFooter>
-          </Card>
-        ))}
+        {PLANS.map((plan) => {
+          const isHovered = hoveredPlan === plan.name;
+          return (
+            <Card
+              key={plan.name}
+              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseLeave={() => setHoveredPlan(null)}
+              className={cn(
+                "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
+                "border-2",
+                isHovered ? "border-theme-primary" : "border-transparent"
+              )}
+            >
+              <CardHeader className={cn(
+                "border-b border-border/50 transition-colors duration-300",
+                isHovered ? "bg-theme-primary/[0.07]" : "bg-foreground/[0.03]"
+              )}>
+                <CardTitle className={cn(!isHovered && "text-muted-foreground", "text-lg font-medium text-foreground transition-colors duration-300")}>
+                  {plan.name}
+                </CardTitle>
+                <CardDescription>
+                  {plan.info}
+                </CardDescription>
+                <h5 className="text-3xl font-semibold text-foreground mt-4">
+                  {plan.price["1m"]} PLN
+                  <span className="text-base text-muted-foreground font-normal ml-2">
+                    / miesiąc
+                  </span>
+                </h5>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {plan.features.map((feature, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CheckCircleIcon className={cn("w-4 h-4 transition-colors duration-300", isHovered ? "text-theme-primary" : "text-white")} />
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
+                            {feature.text}
+                          </p>
+                        </TooltipTrigger>
+                        {feature.tooltip && (
+                          <TooltipContent>
+                            <p>{feature.tooltip}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter className="w-full mt-auto">
+                <Link
+                  href="/auth/sign-up"
+                  style={{ width: "100%" }}
+                  className={buttonVariants({ 
+                    variant: isHovered ? "primary" : "ghost",
+                    className: cn(
+                      "transition-colors duration-300",
+                      isHovered 
+                        ? "bg-theme-primary hover:bg-theme-primary/90 text-white border-0" 
+                        : "!bg-black !border !border-white text-white hover:!bg-white/90 hover:!text-black"
+                    )
+                  })}
+                >
+                  {plan.btn.text}
+                </Link>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </TabsContent>
 
       <TabsContent value="3m" className="grid grid-cols-1 lg:grid-cols-3 gap-5 w-full md:gap-8 flex-wrap max-w-5xl mx-auto pt-6">
-        {PLANS.map((plan) => (
-          <Card
-            key={plan.name}
-            className={cn(
-              "flex flex-col w-full border-border/50 rounded-xl bg-card/50 backdrop-blur-sm",
-              plan.name === "3 GB" && "border-2 border-primary"
-            )}
-          >
-            <CardHeader className={cn(
-              "border-b border-border/50",
-              plan.name === "3 GB" ? "bg-primary/[0.07]" : "bg-foreground/[0.03]"
-            )}>
-              <CardTitle className={cn(plan.name !== "3 GB" && "text-muted-foreground", "text-lg font-medium text-foreground")}>
-                {plan.name}
-              </CardTitle>
-              <CardDescription>
-                {plan.info}
-              </CardDescription>
-              <h5 className="text-3xl font-semibold text-foreground mt-4">
-                {plan.price["3m"]} PLN
-                <span className="text-base text-muted-foreground font-normal ml-2">
-                  / 3 miesiące
-                </span>
-              </h5>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {plan.features.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <CheckCircleIcon className="text-primary w-4 h-4" />
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
-                          {feature.text}
-                        </p>
-                      </TooltipTrigger>
-                      {feature.tooltip && (
-                        <TooltipContent>
-                          <p>{feature.tooltip}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              ))}
-            </CardContent>
-            <CardFooter className="w-full mt-auto">
-              <Link
-                href={plan.btn.href}
-                style={{ width: "100%" }}
-                className={buttonVariants({ className: plan.name === "3 GB" && "bg-primary hover:bg-primary/90 text-primary-foreground" })}
-              >
-                {plan.btn.text}
-              </Link>
-            </CardFooter>
-          </Card>
-        ))}
+        {PLANS.map((plan) => {
+          const isHovered = hoveredPlan === plan.name;
+          return (
+            <Card
+              key={plan.name}
+              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseLeave={() => setHoveredPlan(null)}
+              className={cn(
+                "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
+                "border-2",
+                isHovered ? "border-theme-primary" : "border-transparent"
+              )}
+            >
+              <CardHeader className={cn(
+                "border-b border-border/50 transition-colors duration-300",
+                isHovered ? "bg-theme-primary/[0.07]" : "bg-foreground/[0.03]"
+              )}>
+                <CardTitle className={cn(!isHovered && "text-muted-foreground", "text-lg font-medium text-foreground transition-colors duration-300")}>
+                  {plan.name}
+                </CardTitle>
+                <CardDescription>
+                  {plan.info}
+                </CardDescription>
+                <h5 className="text-3xl font-semibold text-foreground mt-4">
+                  {plan.price["3m"]} PLN
+                  <span className="text-base text-muted-foreground font-normal ml-2">
+                    / 3 miesiące
+                  </span>
+                </h5>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {plan.features.map((feature, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CheckCircleIcon className={cn("w-4 h-4 transition-colors duration-300", isHovered ? "text-theme-primary" : "text-white")} />
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
+                            {feature.text}
+                          </p>
+                        </TooltipTrigger>
+                        {feature.tooltip && (
+                          <TooltipContent>
+                            <p>{feature.tooltip}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter className="w-full mt-auto">
+                <Link
+                  href={plan.btn.href}
+                  style={{ width: "100%" }}
+                  className={buttonVariants({ 
+                    className: cn(
+                      "transition-colors duration-300",
+                      isHovered 
+                        ? "bg-theme-primary hover:bg-theme-primary/90 text-white" 
+                        : "bg-white text-foreground hover:bg-white/90"
+                    )
+                  })}
+                >
+                  {plan.btn.text}
+                </Link>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </TabsContent>
 
       <TabsContent value="12m" className="grid grid-cols-1 lg:grid-cols-3 gap-5 w-full md:gap-8 flex-wrap max-w-5xl mx-auto pt-6">
-        {PLANS.map((plan) => (
-          <Card
-            key={plan.name}
-            className={cn(
-              "flex flex-col w-full border-border/50 rounded-xl bg-card/50 backdrop-blur-sm",
-              plan.name === "3 GB" && "border-2 border-primary"
-            )}
-          >
-            <CardHeader className={cn(
-              "border-b border-border/50",
-              plan.name === "3 GB" ? "bg-primary/[0.07]" : "bg-foreground/[0.03]"
-            )}>
-              <CardTitle className={cn(plan.name !== "3 GB" && "text-muted-foreground", "text-lg font-medium text-foreground")}>
-                {plan.name}
-              </CardTitle>
-              <CardDescription>
-                {plan.info}
-              </CardDescription>
-              <h5 className="text-3xl font-semibold text-foreground mt-4 flex items-end">
-                {plan.price["12m"]} PLN
-                <div className="text-base text-muted-foreground font-normal ml-2">
-                  / rok
-                </div>
-              </h5>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {plan.features.map((feature, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <CheckCircleIcon className="text-primary w-4 h-4" />
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
-                          {feature.text}
-                        </p>
-                      </TooltipTrigger>
-                      {feature.tooltip && (
-                        <TooltipContent>
-                          <p>{feature.tooltip}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              ))}
-            </CardContent>
-            <CardFooter className="w-full mt-auto">
-              <Link
-                href={plan.btn.href}
-                style={{ width: "100%" }}
-                className={buttonVariants({ className: plan.name === "3 GB" && "bg-primary hover:bg-primary/90 text-primary-foreground" })}
-              >
-                {plan.btn.text}
-              </Link>
-            </CardFooter>
-          </Card>
-        ))}
+        {PLANS.map((plan) => {
+          const isHovered = hoveredPlan === plan.name;
+          return (
+            <Card
+              key={plan.name}
+              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseLeave={() => setHoveredPlan(null)}
+              className={cn(
+                "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
+                "border-2",
+                isHovered ? "border-theme-primary" : "border-transparent"
+              )}
+            >
+              <CardHeader className={cn(
+                "border-b border-border/50 transition-colors duration-300",
+                isHovered ? "bg-theme-primary/[0.07]" : "bg-foreground/[0.03]"
+              )}>
+                <CardTitle className={cn(!isHovered && "text-muted-foreground", "text-lg font-medium text-foreground transition-colors duration-300")}>
+                  {plan.name}
+                </CardTitle>
+                <CardDescription>
+                  {plan.info}
+                </CardDescription>
+                <h5 className="text-3xl font-semibold text-foreground mt-4 flex items-end">
+                  {plan.price["12m"]} PLN
+                  <div className="text-base text-muted-foreground font-normal ml-2">
+                    / rok
+                  </div>
+                </h5>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {plan.features.map((feature, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CheckCircleIcon className={cn("w-4 h-4 transition-colors duration-300", isHovered ? "text-theme-primary" : "text-white")} />
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <p className={cn(feature.tooltip && "border-b !border-dashed border-border cursor-pointer text-foreground")}>
+                            {feature.text}
+                          </p>
+                        </TooltipTrigger>
+                        {feature.tooltip && (
+                          <TooltipContent>
+                            <p>{feature.tooltip}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter className="w-full mt-auto">
+                <Link
+                  href={plan.btn.href}
+                  style={{ width: "100%" }}
+                  className={buttonVariants({ 
+                    className: cn(
+                      "transition-colors duration-300",
+                      isHovered 
+                        ? "bg-theme-primary hover:bg-theme-primary/90 text-white" 
+                        : "bg-white text-foreground hover:bg-white/90"
+                    )
+                  })}
+                >
+                  {plan.btn.text}
+                </Link>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </TabsContent>
     </Tabs>
   )
