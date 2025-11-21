@@ -66,9 +66,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						} else if (tx.paymentMethod === 'MIXED') {
 							displayType = 'MIXED';
 						}
-					} else if (tx.type === 'WALLET_TOPUP') {
-						displayType = 'CREDIT';
 					}
+					// WALLET_TOPUP stays as WALLET_TOPUP (no mapping needed)
 
 					return {
 						transactionId: tx.transactionId,
@@ -83,6 +82,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						galleryId: tx.galleryId,
 						refId: tx.refId || tx.transactionId,
 						stripeSessionId: tx.stripeSessionId,
+						composites: tx.composites,
 						createdAt: tx.createdAt,
 						paidAt: tx.paidAt,
 						canceledAt: tx.canceledAt
@@ -120,7 +120,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			transactions = (query.Items || []).map((item: any) => ({
 				transactionId: item.txnId,
 				txnId: item.txnId,
-				type: item.type === 'TOP_UP' ? 'CREDIT' : 'WALLET_DEBIT',
+				type: item.type === 'TOP_UP' ? 'WALLET_TOPUP' : 'WALLET_DEBIT',
 				status: 'PAID',
 				paymentMethod: 'WALLET',
 				amountCents: Math.abs(item.amountCents),

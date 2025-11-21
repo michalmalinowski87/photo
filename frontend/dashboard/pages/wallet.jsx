@@ -72,7 +72,6 @@ export default function Wallet() {
 			const { data } = await apiFetch(`${apiUrl}/wallet/transactions`, {
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			console.log('Transactions loaded:', data);
 			setTransactions(data.transactions || []);
 			if (data.transactions && data.transactions.length > 0) {
 				setMessage(`Loaded ${data.transactions.length} transaction(s)`);
@@ -81,7 +80,6 @@ export default function Wallet() {
 			}
 		} catch (error) {
 			const errorMsg = formatApiError(error);
-			console.error('Error loading transactions:', error);
 			setMessage(`Error loading transactions: ${errorMsg}`);
 			setTransactions([]);
 		} finally {
@@ -227,15 +225,16 @@ export default function Wallet() {
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Status</th>
 									<th style={{ padding: 8, textAlign: 'right', border: '1px solid #ddd' }}>Amount</th>
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Payment Method</th>
+									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Composites</th>
 									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Reference</th>
 								</tr>
 							</thead>
 							<tbody>
 								{transactions.map((tx) => {
-									const isCredit = tx.type === 'CREDIT' || tx.type === 'WALLET_TOPUP';
+									const isCredit = tx.type === 'WALLET_TOPUP';
 									const isDebit = tx.type === 'WALLET_DEBIT' || tx.type === 'STRIPE_CHECKOUT' || tx.type === 'MIXED' || tx.type === 'REFUND';
 									const typeColors = {
-										'CREDIT': '#00aa00',
+										'WALLET_TOPUP': '#00aa00',
 										'WALLET_DEBIT': '#cc0000',
 										'STRIPE_CHECKOUT': '#0066cc',
 										'MIXED': '#ff9800',
@@ -279,7 +278,9 @@ export default function Wallet() {
 												)}
 											</td>
 											<td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right', fontWeight: isCredit ? 'bold' : 'normal' }}>
-												{isCredit ? '+' : '-'}{(Math.abs(tx.amountCents) / 100).toFixed(2)} PLN
+												<div>
+													{isCredit ? '+' : '-'}{(Math.abs(tx.amountCents) / 100).toFixed(2)} PLN
+												</div>
 												{tx.type === 'MIXED' && tx.walletAmountCents > 0 && tx.stripeAmountCents > 0 && (
 													<div style={{ fontSize: '10px', color: '#666', marginTop: 2 }}>
 														({(tx.walletAmountCents / 100).toFixed(2)} wallet + {(tx.stripeAmountCents / 100).toFixed(2)} Stripe)
@@ -288,6 +289,19 @@ export default function Wallet() {
 											</td>
 											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
 												{tx.paymentMethod || (isCredit ? 'WALLET' : 'N/A')}
+											</td>
+											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
+												{tx.composites && tx.composites.length > 0 ? (
+													<div>
+														{tx.composites.map((composite, idx) => (
+															<div key={idx} style={{ marginBottom: idx < tx.composites.length - 1 ? 4 : 0 }}>
+																{composite}
+															</div>
+														))}
+													</div>
+												) : (
+													<span style={{ color: '#999' }}>-</span>
+												)}
 											</td>
 											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
 												<code>{tx.refId || tx.transactionId || tx.txnId}</code>

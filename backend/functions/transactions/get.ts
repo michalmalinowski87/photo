@@ -44,9 +44,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			} else if (transaction.paymentMethod === 'MIXED') {
 				displayType = 'MIXED';
 			}
-		} else if (transaction.type === 'WALLET_TOPUP') {
-			displayType = 'CREDIT';
 		}
+		// WALLET_TOPUP stays as WALLET_TOPUP (no mapping needed)
 
 		return {
 			statusCode: 200,

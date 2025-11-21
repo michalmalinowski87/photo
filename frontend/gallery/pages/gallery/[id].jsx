@@ -51,25 +51,40 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 			return;
 		}
 		try {
-			// Load images and selection in parallel with JWT authentication
-			const [imagesResponse, selectionResponse] = await Promise.allSettled([
+			// Load images, selection, and delivered orders in parallel with JWT authentication
+			const [imagesResponse, selectionResponse, deliveredOrdersResponse] = await Promise.allSettled([
 				apiFetch(`${apiUrl}/galleries/${galleryId}/images`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				}),
 				clientId ? apiFetch(`${apiUrl}/galleries/${galleryId}/selections/${encodeURIComponent(clientId)}`, {
 					headers: { 'Authorization': `Bearer ${token}` }
-				}) : Promise.resolve(null)
+				}) : Promise.resolve(null),
+				apiFetch(`${apiUrl}/galleries/${galleryId}/orders/delivered`, {
+					headers: { 'Authorization': `Bearer ${token}` }
+				})
 			]);
 			
 			// Set images
+			let loadedImages = [];
 			if (imagesResponse.status === 'fulfilled') {
 				const imagesData = imagesResponse.value.data;
-				setImages(imagesData.images || []);
+				loadedImages = imagesData.images || [];
+				setImages(loadedImages);
 			} else {
 				setImages([]);
 			}
 			
+			// Check for delivered orders (fallback if selection endpoint doesn't return it)
+			let hasDeliveredOrderFromOrders = false;
+			if (deliveredOrdersResponse.status === 'fulfilled' && deliveredOrdersResponse.value) {
+				const deliveredData = deliveredOrdersResponse.value.data;
+				// Handle different response formats
+				const items = deliveredData?.items || deliveredData?.orders || [];
+				hasDeliveredOrderFromOrders = Array.isArray(items) && items.length > 0;
+			}
+			
 			// Set selection
+			let hasDeliveredOrder = false;
 			if (clientId && selectionResponse.status === 'fulfilled' && selectionResponse.value) {
 				let selectionData = selectionResponse.value.data;
 				
@@ -100,6 +115,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				
 				const currentKeys = new Set(keysArray);
 				setSelectedKeys(currentKeys);
+				hasDeliveredOrder = selectionData.hasDeliveredOrder || hasDeliveredOrderFromOrders;
 				setGalleryInfo({
 					approved: selectionData.approved || false,
 					selectedCount: selectionData.selectedCount || 0,
@@ -108,7 +124,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					canSelect: selectionData.canSelect !== false, // Default to true if not provided
 					changeRequestPending: selectionData.changeRequestPending || false,
 					hasClientApprovedOrder: selectionData.hasClientApprovedOrder || false,
-					hasDeliveredOrder: selectionData.hasDeliveredOrder || false,
+					hasDeliveredOrder: hasDeliveredOrder,
+					selectionEnabled: selectionData.selectionEnabled !== false, // Gallery-level setting
 					pricingPackage: selectionData.pricingPackage || { includedCount: 0, extraPriceCents: 0 }
 				});
 				if (selectionData.approved) {
@@ -116,9 +133,21 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				}
 				
 				// ProcessedPhotosView will load delivered orders automatically
-			} else if (clientId) {
-				// Selection might not exist yet, that's OK - start with empty selection
+			} else {
+				// Selection might not exist yet or endpoint failed - initialize with defaults
 				setSelectedKeys(new Set());
+				// Always initialize galleryInfo, use delivered orders check as fallback
+				setGalleryInfo({
+					approved: false,
+					selectedCount: 0,
+					overageCount: 0,
+					overageCents: 0,
+					canSelect: true,
+					changeRequestPending: false,
+					hasClientApprovedOrder: false,
+					hasDeliveredOrder: hasDeliveredOrderFromOrders, // Use delivered orders check
+					pricingPackage: { includedCount: 0, extraPriceCents: 0 }
+				});
 			}
 		} catch (error) {
 			setMessage(formatApiError(error));
@@ -259,13 +288,15 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 	const hasClientApprovedOrder = galleryInfo?.hasClientApprovedOrder || false;
 	const canRequestChange = hasClientApprovedOrder && !changeRequestPending; // Can request changes if approved and not already pending 
 	
+	// If selection is disabled, always show processed view (no purchase/selection UI)
 	// If there are no photos to select from, no active orders, but there are delivered orders, only show processed view
 	// (all photos have been bought and delivered, nothing left to purchase)
 	const hasNoPhotosToSelect = images.length === 0;
 	const hasNoActiveOrders = !canSelect && !hasClientApprovedOrder; // No CLIENT_SELECTING or CLIENT_APPROVED orders
-	const shouldShowOnlyProcessed = hasNoPhotosToSelect && hasNoActiveOrders && galleryInfo?.hasDeliveredOrder;
+	const selectionDisabled = galleryInfo?.selectionEnabled === false;
+	const shouldShowOnlyProcessed = selectionDisabled || (hasNoPhotosToSelect && hasNoActiveOrders && galleryInfo?.hasDeliveredOrder);
 	
-	// Force viewMode to 'processed' if there's nothing to purchase
+	// Force viewMode to 'processed' if selection is disabled or there's nothing to purchase
 	useEffect(() => {
 		if (shouldShowOnlyProcessed && viewMode === 'purchase') {
 			setViewMode('processed');
@@ -317,8 +348,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					>
 						{loading ? 'Refreshing...' : 'Refresh'}
 					</button>
-					{/* View Mode Toggle - Only show if there's a DELIVERED order AND there are photos to select from */}
-					{galleryInfo?.hasDeliveredOrder && images.length > 0 && (
+					{/* View Mode Toggle - Show if there are photos available AND there's a delivered order AND selection is enabled */}
+					{galleryInfo?.hasDeliveredOrder === true && images.length > 0 && galleryInfo?.selectionEnabled !== false && (
 						<div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 4, borderRadius: 8 }}>
 							<button
 								onClick={() => setViewMode('processed')}
@@ -385,8 +416,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				/>
 			)}
 
-			{/* Purchase Additional Photos View */}
-			{viewMode === 'purchase' && (
+			{/* Purchase Additional Photos View - Only show if selection is enabled */}
+			{viewMode === 'purchase' && galleryInfo?.selectionEnabled !== false && (
 				<PurchaseView
 					galleryId={galleryId}
 					images={images}

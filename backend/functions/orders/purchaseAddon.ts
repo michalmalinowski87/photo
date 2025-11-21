@@ -168,6 +168,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	requireOwnerOr403(gallery.ownerId, requester);
 
+	// Backup addon is only available for galleries with selection enabled
+	if (!gallery.selectionEnabled) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Backup storage addon is only available for galleries with client selection enabled' })
+		};
+	}
+
 	// Check if gallery already has backup addon
 	const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
 	if (addonExists) {
@@ -178,7 +187,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Get all orders for the gallery to calculate total addon price
+	// Get all orders for the gallery to calculate total addon price and check for processed orders
 	const ordersQuery = await ddb.send(new QueryCommand({
 		TableName: ordersTable,
 		KeyConditionExpression: 'galleryId = :g',
@@ -186,26 +195,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const orders = ordersQuery.Items || [];
 	
+	// Check if any orders are DELIVERED or PREPARING_DELIVERY (originals may have been deleted)
+	const processedOrders = orders.filter((o: any) => 
+		o.deliveryStatus === 'DELIVERED' || o.deliveryStatus === 'PREPARING_DELIVERY'
+	);
+	
+	if (processedOrders.length > 0) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Cannot purchase backup addon',
+				warning: `This gallery has ${processedOrders.length} order(s) that are already processed (DELIVERED or PREPARING_DELIVERY). Original photos for these orders may have been deleted and cannot be recovered. Backup addon can only protect future orders.`,
+				processedOrdersCount: processedOrders.length
+			})
+		};
+	}
+	
 	// Calculate addon price based on photographer's plan price (30% of plan price)
 	// This makes more sense than basing it on client pricing (extra photos)
 	const BACKUP_STORAGE_MULTIPLIER = 0.3; // Default 30%, will be configurable through UI in future
 	const planPriceCents = gallery.priceCents || 700; // Default to Basic plan price (7 PLN) if not set
 	const backupStorageCents = Math.round(planPriceCents * BACKUP_STORAGE_MULTIPLIER);
 
-	// Try wallet debit first if enabled (with fractional payment support)
+	// Try wallet debit first if enabled - only debit if wallet has sufficient balance for full amount
 	let paid = false;
 	let walletAmountCents = 0;
-	let stripeAmountCents = 0;
+	let stripeAmountCents = backupStorageCents; // Default to full Stripe payment
 	let checkoutUrl: string | undefined;
 
 	if (walletsTable && ledgerTable) {
 		const walletBalance = await getWalletBalance(requester, walletsTable, logger);
-		walletAmountCents = Math.min(walletBalance, backupStorageCents);
-		stripeAmountCents = backupStorageCents - walletAmountCents;
-
-		if (walletAmountCents > 0) {
-			paid = await debitWallet(requester, walletAmountCents, walletsTable, ledgerTable, `debit_${Date.now()}`, logger);
+		
+		// Only debit wallet if balance is sufficient to cover full cost
+		if (walletBalance >= backupStorageCents) {
+			paid = await debitWallet(requester, backupStorageCents, walletsTable, ledgerTable, `debit_${Date.now()}`, logger);
+			if (paid) {
+				walletAmountCents = backupStorageCents;
+				stripeAmountCents = 0;
+			}
 		}
+		// If insufficient balance, don't debit wallet - redirect to Stripe for full amount
 		
 		logger.info('Wallet debit attempt for addon purchase', { 
 			userId: requester, 
@@ -218,7 +248,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			hasLedgerTable: !!ledgerTable 
 		});
 	} else {
-		stripeAmountCents = backupStorageCents;
 		logger.warn('Wallet tables not configured, skipping wallet debit', {
 			hasWalletsTable: !!walletsTable,
 			hasLedgerTable: !!ledgerTable
@@ -229,9 +258,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	let transactionId: string | undefined;
 	
-	if (transactionsTable) {
+		if (transactionsTable) {
 		try {
-			const paymentMethod = walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE';
+			// Determine payment method: STRIPE if any Stripe amount, otherwise WALLET if wallet was used
+			const paymentMethod = stripeAmountCents > 0 ? 'STRIPE' : (walletAmountCents > 0 ? 'WALLET' : 'STRIPE');
+			
+			// Build composites list for frontend display
+			const composites: string[] = ['Backup addon'];
+			
 			transactionId = await createTransaction(
 				requester,
 				'ADDON_PURCHASE',
@@ -241,6 +275,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					walletAmountCents,
 					stripeAmountCents,
 					paymentMethod: paymentMethod as any,
+					composites,
 					metadata: {
 						addonType: ADDON_TYPES.BACKUP_STORAGE,
 						multiplier: BACKUP_STORAGE_MULTIPLIER
@@ -261,8 +296,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// If not fully paid and Stripe is configured, create checkout for remaining amount
-	if (!paid && stripeSecretKey && stripeAmountCents > 0) {
+	// If not fully paid (stripeAmountCents > 0) and Stripe is configured, create checkout for full amount
+	if (stripeAmountCents > 0 && stripeSecretKey) {
 		try {
 			const stripe = new Stripe(stripeSecretKey);
 			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
@@ -284,9 +319,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							currency: 'pln',
 							product_data: {
 								name: 'Backup Storage Addon',
-								description: `Backup storage addon for gallery ${galleryId}${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
+								description: `Backup storage addon for gallery ${galleryId}`
 							},
-							unit_amount: stripeAmountCents
+							unit_amount: backupStorageCents
 						},
 						quantity: 1
 					}
@@ -398,9 +433,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId,
 				walletAmountCents,
 				stripeAmountCents,
-				message: walletAmountCents > 0 
-					? `${(walletAmountCents / 100).toFixed(2)} PLN deducted from wallet. Please complete payment of ${(stripeAmountCents / 100).toFixed(2)} PLN via Stripe checkout.`
-					: 'Insufficient wallet balance. Please complete payment via Stripe checkout.'
+				message: 'Please complete payment via Stripe checkout.'
 			})
 		};
 	} else {

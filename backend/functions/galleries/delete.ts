@@ -9,6 +9,7 @@ const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createGalleryDeletedEmail } from '../../lib/src/email';
 import { getGalleryAddons } from '../../lib/src/addons';
+import { getUnpaidTransactionForGallery, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -126,6 +127,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	logger.info('Starting gallery deletion', { galleryId, ownerId: gallery.ownerId, triggeredBy: requester ? 'manual' : 'expiry' });
 
 	try {
+		// Cancel any unpaid transactions for this gallery before deletion
+		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+		if (transactionsTable) {
+			try {
+				const unpaidTransaction = await getUnpaidTransactionForGallery(galleryId);
+				if (unpaidTransaction) {
+					await updateTransactionStatus(unpaidTransaction.userId, unpaidTransaction.transactionId, 'CANCELED');
+					logger.info('Canceled unpaid transaction before gallery deletion', {
+						transactionId: unpaidTransaction.transactionId,
+						galleryId,
+						userId: unpaidTransaction.userId
+					});
+				}
+			} catch (txnErr: any) {
+				logger.warn('Failed to cancel transaction before gallery deletion', {
+					error: txnErr.message,
+					galleryId
+				});
+				// Continue with deletion even if transaction cancellation fails
+			}
+		}
 		// Delete all S3 objects for this gallery
 		const s3Prefixes = [
 			`galleries/${galleryId}/originals/`,

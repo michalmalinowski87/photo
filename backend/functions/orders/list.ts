@@ -39,7 +39,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			gallery: {
 				galleryId: gallery.galleryId,
 				galleryName: gallery.galleryName,
-				hasBackupStorage
+				hasBackupStorage,
+				selectionEnabled: gallery.selectionEnabled !== false
 			}
 		})
 	};

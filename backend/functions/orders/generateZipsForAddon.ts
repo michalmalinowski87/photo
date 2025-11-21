@@ -1,19 +1,22 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
+const s3 = new S3Client({});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
+	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	
-	if (!ordersTable || !zipFnName) {
+	if (!ordersTable || !zipFnName || !bucket) {
 		logger.error('Missing required environment variables', { 
 			hasOrdersTable: !!ordersTable, 
 			hasZipFnName: !!zipFnName 
@@ -52,15 +55,95 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Generate ZIPs for all orders that don't have ZIPs yet
 		const generatedZips: string[] = [];
+		const skippedOrders: string[] = [];
+		
 		for (const order of orders) {
-			if (!order.zipKey && order.selectedKeys && Array.isArray(order.selectedKeys) && order.selectedKeys.length > 0) {
+			if (!order.zipKey) {
 				try {
 					const orderId = order.orderId;
-					logger.info('Generating ZIP for order', { galleryId, orderId, selectedKeysCount: order.selectedKeys.length });
+					let keysToZip: string[] = [];
+					
+					// Determine which keys to include in ZIP
+					if (order.selectedKeys && Array.isArray(order.selectedKeys) && order.selectedKeys.length > 0) {
+						// Order has selectedKeys - use them
+						keysToZip = order.selectedKeys;
+					} else {
+						// Empty selectedKeys means all photos - list all originals from S3
+						logger.info('Order has empty selectedKeys, listing all originals from S3', { galleryId, orderId });
+						const originalsPrefix = `galleries/${galleryId}/originals/`;
+						const originalsListResponse = await s3.send(new ListObjectsV2Command({
+							Bucket: bucket,
+							Prefix: originalsPrefix
+						}));
+						keysToZip = (originalsListResponse.Contents || [])
+							.map(obj => {
+								const fullKey = obj.Key || '';
+								return fullKey.replace(originalsPrefix, '');
+							})
+							.filter((key): key is string => Boolean(key));
+					}
+					
+					if (keysToZip.length === 0) {
+						logger.warn('No keys to generate ZIP for order', { galleryId, orderId });
+						skippedOrders.push(orderId);
+						continue;
+					}
+					
+					// Check if original files exist before generating ZIP
+					const existingKeys: string[] = [];
+					for (const key of keysToZip) {
+						const originalKey = `galleries/${galleryId}/originals/${key}`;
+						try {
+							await s3.send(new HeadObjectCommand({
+								Bucket: bucket,
+								Key: originalKey
+							}));
+							existingKeys.push(key);
+						} catch (err: any) {
+							if (err.name === 'NotFound' || err.name === 'NoSuchKey') {
+								logger.warn('Original file does not exist, skipping', { galleryId, orderId, key, originalKey });
+							} else {
+								logger.error('Error checking if original file exists', { 
+									galleryId, 
+									orderId, 
+									key, 
+									originalKey,
+									error: err.message 
+								});
+							}
+						}
+					}
+					
+					if (existingKeys.length === 0) {
+						logger.warn('No original files exist for order, skipping ZIP generation', { 
+							galleryId, 
+							orderId,
+							requestedKeysCount: keysToZip.length
+						});
+						skippedOrders.push(orderId);
+						continue;
+					}
+					
+					if (existingKeys.length < keysToZip.length) {
+						logger.warn('Some original files are missing for order', { 
+							galleryId, 
+							orderId,
+							requestedKeysCount: keysToZip.length,
+							existingKeysCount: existingKeys.length,
+							missingCount: keysToZip.length - existingKeys.length
+						});
+					}
+					
+					logger.info('Generating ZIP for order', { 
+						galleryId, 
+						orderId, 
+						keysCount: existingKeys.length,
+						requestedKeysCount: keysToZip.length
+					});
 					
 					const payload = Buffer.from(JSON.stringify({ 
 						galleryId, 
-						keys: order.selectedKeys, 
+						keys: existingKeys, 
 						orderId 
 					}));
 					const invokeResponse = await lambda.send(new InvokeCommand({ 
@@ -154,7 +237,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		logger.info('ZIP generation completed for addon purchase', { 
 			galleryId, 
 			generatedZipsCount: generatedZips.length,
-			generatedZips
+			generatedZips,
+			skippedOrdersCount: skippedOrders.length,
+			skippedOrders
 		});
 
 		return {
@@ -164,7 +249,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleryId,
 				generatedZipsCount: generatedZips.length,
 				generatedZips,
-				message: `ZIPs generated for ${generatedZips.length} order(s)`
+				skippedOrdersCount: skippedOrders.length,
+				skippedOrders,
+				message: `ZIPs generated for ${generatedZips.length} order(s)${skippedOrders.length > 0 ? `. ${skippedOrders.length} order(s) skipped (no original files available)` : ''}`
 			})
 		};
 	} catch (error: any) {

@@ -93,17 +93,96 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const sevenDaysFromNow = now + 7 * 24 * 3600 * 1000;
 	const twentyFourHoursFromNow = now + 24 * 3600 * 1000;
 	
-	const res = await ddb.send(new ScanCommand({ TableName: galleriesTable }));
+	// Scan galleries with filter for expiry warnings
+	// Note: Deletion is handled automatically by DynamoDB TTL + Streams
+	// This function only sends warning emails for galleries expiring soon
+	// Using scan with filter is acceptable here since:
+	// 1. We run every 6 hours (4x per day) - reasonable cost vs frequency balance
+	// 2. We filter to only galleries with expiresAt set
+	// 3. Most galleries won't match the filter (expiring in next 7 days)
+	const nowISO = new Date(now).toISOString();
+	const sevenDaysFromNowISO = new Date(sevenDaysFromNow).toISOString();
 	
-	for (const item of res.Items ?? []) {
+	const allItems: any[] = [];
+	let lastEvaluatedKey: any = undefined;
+	
+	do {
+		const scanParams: any = {
+			TableName: galleriesTable,
+			FilterExpression: 'attribute_exists(expiresAt) AND expiresAt <= :maxDate',
+			ExpressionAttributeValues: {
+				':maxDate': sevenDaysFromNowISO
+			}
+		};
+		
+		if (lastEvaluatedKey) {
+			scanParams.ExclusiveStartKey = lastEvaluatedKey;
+		}
+		
+		const res = await ddb.send(new ScanCommand(scanParams));
+		if (res.Items) {
+			allItems.push(...res.Items);
+		}
+		lastEvaluatedKey = res.LastEvaluatedKey;
+	} while (lastEvaluatedKey);
+	
+	logger.info('Found galleries to check for expiry warnings', { count: allItems.length });
+	
+	for (const item of allItems) {
 		const galleryId = item.galleryId as string;
 		const galleryName = item.galleryName as string | undefined;
 		const clientEmail = item.clientEmail as string | undefined;
 		const expiresAt = item.expiresAt ? Date.parse(item.expiresAt as string) : undefined;
 		const expiryWarning7dSent = item.expiryWarning7dSent as boolean | undefined;
 		const expiryWarning24hSent = item.expiryWarning24hSent as boolean | undefined;
+		const ttl = item.ttl as number | undefined;
 		
 		if (!expiresAt) continue;
+		
+		// Migration: Set ttl attribute for existing galleries that don't have it
+		// This ensures DynamoDB TTL will work for existing galleries
+		// Note: 'ttl' is a reserved keyword in DynamoDB, so we must use ExpressionAttributeNames
+		if (!ttl && expiresAt) {
+			const ttlExpiresAt = Math.floor(expiresAt / 1000); // Convert to Unix epoch seconds
+			try {
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET #ttl = :ttl',
+					ExpressionAttributeNames: { '#ttl': 'ttl' },
+					ExpressionAttributeValues: { ':ttl': ttlExpiresAt }
+				}));
+				logger.info('Set ttl attribute for existing gallery', { galleryId, ttl: ttlExpiresAt });
+			} catch (updateErr: any) {
+				logger.warn('Failed to set ttl attribute for gallery', { 
+					error: updateErr.message, 
+					galleryId 
+				});
+			}
+		}
+		
+		// Fallback: Handle already-expired galleries that don't have ttl set yet
+		// This ensures galleries that expired before migration are still cleaned up
+		if (expiresAt <= now && !ttl && deleteFnName) {
+			logger.info('Gallery already expired without ttl, triggering immediate cleanup', { galleryId });
+			try {
+				await lambda.send(new InvokeCommand({
+					FunctionName: deleteFnName,
+					InvocationType: 'Event', // Async invocation
+					Payload: Buffer.from(JSON.stringify({
+						pathParameters: { id: galleryId }
+					}))
+				}));
+				logger.info('Delete gallery lambda invoked for expired gallery (fallback)', { galleryId });
+				continue; // Skip warning emails for already-expired galleries
+			} catch (invokeErr: any) {
+				logger.error('Failed to invoke delete gallery lambda (fallback)', {
+					error: invokeErr.message,
+					galleryId,
+					deleteFnName
+				});
+			}
+		}
 		
 		const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
 		const daysRemaining = Math.ceil((expiresAt - now) / (24 * 3600 * 1000));
@@ -165,26 +244,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		// Auto-delete when expired
-		if (expiresAt <= now && deleteFnName) {
-			try {
-				logger.info('Invoking delete gallery lambda for expired gallery', { galleryId });
-				await lambda.send(new InvokeCommand({
-					FunctionName: deleteFnName,
-					InvocationType: 'Event', // Async invocation
-					Payload: Buffer.from(JSON.stringify({
-						pathParameters: { id: galleryId }
-					}))
-				}));
-				logger.info('Delete gallery lambda invoked', { galleryId });
-			} catch (invokeErr: any) {
-				logger.error('Failed to invoke delete gallery lambda', {
-					error: invokeErr.message,
-					galleryId,
-					deleteFnName
-				});
-			}
-		}
+		// Note: Gallery deletion is now handled automatically by DynamoDB TTL + Streams
+		// This function only sends warning emails - no manual deletion needed
+		// When TTL expires, DynamoDB automatically deletes the item and triggers the stream Lambda
 	}
 });
 

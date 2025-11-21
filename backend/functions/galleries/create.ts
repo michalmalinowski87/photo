@@ -192,6 +192,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const createdAtDate = new Date(now);
 	const expiresAtDate = new Date(createdAtDate.getTime() + expiryDays * 24 * 60 * 60 * 1000);
 	const expiresAt = expiresAtDate.toISOString();
+	// TTL attribute for DynamoDB automatic deletion (Unix epoch time in seconds)
+	// DynamoDB will automatically delete the item when TTL expires (typically within 48 hours)
+	const ttlExpiresAt = Math.floor(expiresAtDate.getTime() / 1000);
 
 	// Calculate addon price if requested
 	let addonPriceCents = 0;
@@ -212,20 +215,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Total price includes gallery plan + addon (if requested)
 	const totalPriceCents = priceCents + addonPriceCents;
 
-	// Try wallet debit first if enabled (with fractional payment support)
+	// Try wallet debit first if enabled - only debit if wallet has sufficient balance for full amount
 	let paid = false;
 	let walletAmountCents = 0;
-	let stripeAmountCents = 0;
+	let stripeAmountCents = totalPriceCents; // Default to full Stripe payment
 	let checkoutUrl: string | undefined;
 
 	if (useWallet && walletsTable && ledgerTable) {
 		const walletBalance = await getWalletBalance(ownerId, walletsTable);
-		walletAmountCents = Math.min(walletBalance, totalPriceCents);
-		stripeAmountCents = totalPriceCents - walletAmountCents;
-
-		if (walletAmountCents > 0) {
-			paid = await debitWallet(ownerId, walletAmountCents, walletsTable, ledgerTable, `debit_${Date.now()}`);
+		
+		// Only debit wallet if balance is sufficient to cover full cost
+		if (walletBalance >= totalPriceCents) {
+			paid = await debitWallet(ownerId, totalPriceCents, walletsTable, ledgerTable, `debit_${Date.now()}`);
+			if (paid) {
+				walletAmountCents = totalPriceCents;
+				stripeAmountCents = 0;
+			}
 		}
+		// If insufficient balance, don't debit wallet - redirect to Stripe for full amount
 		
 		logger.info('Wallet debit attempt', { 
 			ownerId, 
@@ -239,17 +246,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			hasWalletsTable: !!walletsTable, 
 			hasLedgerTable: !!ledgerTable 
 		});
-	} else {
-		stripeAmountCents = totalPriceCents;
 	}
 
 	// Create transaction immediately
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	let transactionId: string | undefined;
 	
-	if (transactionsTable) {
+		if (transactionsTable) {
 		try {
-			const paymentMethod = walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE';
+			// Determine payment method: STRIPE if any Stripe amount, otherwise WALLET if wallet was used
+			const paymentMethod = stripeAmountCents > 0 ? 'STRIPE' : (walletAmountCents > 0 ? 'WALLET' : 'STRIPE');
+			
+			// Build composites list for frontend display
+			const composites: string[] = [`Gallery Plan ${plan}`];
+			if (hasBackupStorage) {
+				composites.push('Backup addon');
+			}
+			
 			transactionId = await createTransaction(
 				ownerId,
 				'GALLERY_PLAN',
@@ -259,6 +272,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					walletAmountCents,
 					stripeAmountCents,
 					paymentMethod: paymentMethod as any,
+					composites,
 					metadata: {
 						plan,
 						hasBackupStorage,
@@ -280,8 +294,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// If not fully paid and Stripe is configured, create checkout for remaining amount
-	if (!paid && stripeSecretKey && stripeAmountCents > 0) {
+	// If not fully paid (stripeAmountCents > 0) and Stripe is configured, create checkout for remaining amount
+	// Note: We check stripeAmountCents > 0, not !paid, because paid=true when wallet debit succeeds even for partial payments
+	if (stripeAmountCents > 0 && stripeSecretKey) {
 		try {
 			const stripe = new Stripe(stripeSecretKey);
 			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
@@ -306,67 +321,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId
 			});
 
-			// Build line items: only charge the Stripe amount (remaining after wallet deduction)
+			// Build line items: full Stripe payment (wallet is only used if it covers full amount)
 			const lineItems: any[] = [];
 			
-			// Calculate proportional amounts for line items
-			if (walletAmountCents > 0) {
-				// Partial payment: show breakdown
-				const galleryStripeAmount = Math.round((priceCents / totalPriceCents) * stripeAmountCents);
-				const addonStripeAmount = stripeAmountCents - galleryStripeAmount;
-				
+			lineItems.push({
+				price_data: {
+					currency: 'pln',
+					product_data: {
+						name: `Gallery: ${galleryId}`,
+						description: `PhotoHub gallery creation - ${plan} plan`
+					},
+					unit_amount: priceCents
+				},
+				quantity: 1
+			});
+			
+			if (hasBackupStorage && addonPriceCents > 0) {
 				lineItems.push({
 					price_data: {
 						currency: 'pln',
 						product_data: {
-							name: `Gallery: ${galleryId}`,
-							description: `PhotoHub gallery creation - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
+							name: 'Backup Storage Addon',
+							description: `Backup storage addon for gallery ${galleryId}`
 						},
-						unit_amount: galleryStripeAmount
+						unit_amount: addonPriceCents
 					},
 					quantity: 1
 				});
-				
-				if (hasBackupStorage && addonStripeAmount > 0) {
-					lineItems.push({
-						price_data: {
-							currency: 'pln',
-							product_data: {
-								name: 'Backup Storage Addon',
-								description: `Backup storage addon for gallery ${galleryId}`
-							},
-							unit_amount: addonStripeAmount
-						},
-						quantity: 1
-					});
-				}
-			} else {
-				// Full Stripe payment
-				lineItems.push({
-					price_data: {
-						currency: 'pln',
-						product_data: {
-							name: `Gallery: ${galleryId}`,
-							description: `PhotoHub gallery creation - ${plan} plan`
-						},
-						unit_amount: priceCents
-					},
-					quantity: 1
-				});
-				
-				if (hasBackupStorage && addonPriceCents > 0) {
-					lineItems.push({
-						price_data: {
-							currency: 'pln',
-							product_data: {
-								name: 'Backup Storage Addon',
-								description: `Backup storage addon for gallery ${galleryId}`
-							},
-							unit_amount: addonPriceCents
-						},
-						quantity: 1
-					});
-				}
 			}
 
 			const session = await stripe.checkout.sessions.create({
@@ -422,21 +403,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Create gallery (will be marked PAID_ACTIVE if wallet debit succeeded, otherwise DRAFT)
-	const item: any = {
-		galleryId,
-		ownerId,
-		ownerEmail,
-		state: paid ? 'PAID_ACTIVE' : 'DRAFT',
-		plan,
-		priceCents,
-		storageLimitBytes,
-		expiresAt,
-		bytesUsed: 0,
-		selectionEnabled: !!body.selectionEnabled,
-		selectionStatus: body.selectionEnabled ? (paid ? 'NOT_STARTED' : 'DISABLED') : 'DISABLED',
-		createdAt: now,
-		updatedAt: now
-	};
+		const item: any = {
+			galleryId,
+			ownerId,
+			ownerEmail,
+			state: paid ? 'PAID_ACTIVE' : 'DRAFT',
+			plan,
+			priceCents,
+			storageLimitBytes,
+			expiresAt, // ISO string for display purposes
+			ttl: ttlExpiresAt, // Unix epoch seconds for DynamoDB TTL automatic deletion
+			bytesUsed: 0,
+			selectionEnabled: !!body.selectionEnabled,
+			selectionStatus: body.selectionEnabled ? (paid ? 'NOT_STARTED' : 'DISABLED') : 'DISABLED',
+			createdAt: now,
+			updatedAt: now
+		};
 	
 	// Add galleryName if provided (optional, for nicer presentation)
 	if (body?.galleryName && typeof body.galleryName === 'string' && body.galleryName.trim()) {
@@ -450,27 +432,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		extraPriceCents: pricingPackage.extraPriceCents
 	};
 
-	// If selection is enabled, optionally accept clientEmail and clientPassword during creation
-	// These will be used when sending the gallery to the client
-	if (body.selectionEnabled) {
-		const clientEmail = body?.clientEmail;
-		const clientPassword = body?.clientPassword;
+	// Always accept clientEmail and clientPassword during creation (regardless of selectionEnabled)
+	// These will be used when sending the final gallery link to the client
+	const clientEmail = body?.clientEmail;
+	const clientPassword = body?.clientPassword;
+	
+	if (clientEmail && typeof clientEmail === 'string' && clientEmail.trim()) {
+		item.clientEmail = clientEmail.trim();
 		
-		if (clientEmail && typeof clientEmail === 'string' && clientEmail.trim()) {
-			item.clientEmail = clientEmail.trim();
+		// If password is provided, hash it for verification AND store it encrypted for sending emails
+		if (clientPassword && typeof clientPassword === 'string' && clientPassword.trim()) {
+			const passwordPlain = clientPassword.trim();
+			const secrets = hashPassword(passwordPlain);
+			item.clientPasswordHash = secrets.hash;
+			item.clientPasswordSalt = secrets.salt;
+			item.clientPasswordIter = secrets.iterations;
 			
-			// If password is provided, hash it for verification AND store it encrypted for sending emails
-			if (clientPassword && typeof clientPassword === 'string' && clientPassword.trim()) {
-				const passwordPlain = clientPassword.trim();
-				const secrets = hashPassword(passwordPlain);
-				item.clientPasswordHash = secrets.hash;
-				item.clientPasswordSalt = secrets.salt;
-				item.clientPasswordIter = secrets.iterations;
-				
-				// Store password encrypted (base64 for now - in production, use proper encryption with KMS)
-				// This allows us to send it via email later
-				item.clientPasswordEncrypted = Buffer.from(passwordPlain, 'utf-8').toString('base64');
-			}
+			// Store password encrypted (base64 for now - in production, use proper encryption with KMS)
+			// This allows us to send it via email later
+			item.clientPasswordEncrypted = Buffer.from(passwordPlain, 'utf-8').toString('base64');
 		}
 	}
 
@@ -504,8 +484,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// If selection is disabled and gallery is paid, create an order immediately with APPROVED status
-	if (paid && !body.selectionEnabled) {
+	// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
+	// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
+	// Order is created regardless of payment status so photographer can finalize delivery
+	if (!body.selectionEnabled) {
 		if (ordersTable) {
 			try {
 				const orderNumber = 1;
@@ -518,7 +500,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						galleryId,
 						orderId,
 						orderNumber,
-						deliveryStatus: 'CLIENT_APPROVED', // Use deliveryStatus instead of status
+						deliveryStatus: 'AWAITING_FINAL_PHOTOS', // Start with AWAITING_FINAL_PHOTOS - photographer can upload finals and manage payment
 						paymentStatus: 'UNPAID',
 						selectedKeys: [], // Empty means all photos
 						selectedCount: 0, // Will be updated when photos are processed
@@ -560,7 +542,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ 
 				galleryId, 
 				paid: true, 
-				method: walletAmountCents === totalPriceCents ? 'wallet' : 'mixed',
+				method: 'wallet',
 				transactionId
 			})
 		};
@@ -575,9 +557,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId,
 				walletAmountCents,
 				stripeAmountCents,
-				message: walletAmountCents > 0 
-					? `${(walletAmountCents / 100).toFixed(2)} PLN deducted from wallet. Please complete payment of ${(stripeAmountCents / 100).toFixed(2)} PLN to activate gallery.`
-					: 'Insufficient wallet balance. Please complete payment to activate gallery.'
+				message: 'Please complete payment to activate gallery.'
 			})
 		};
 	} else {

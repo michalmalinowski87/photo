@@ -2,7 +2,8 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Bucket, BlockPublicAccess, HttpMethods } from 'aws-cdk-lib/aws-s3';
-import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, Table, StreamViewType } from 'aws-cdk-lib/aws-dynamodb';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -45,7 +46,10 @@ export class AppStack extends Stack {
 		const galleries = new Table(this, 'GalleriesTable', {
 			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
-			removalPolicy: RemovalPolicy.RETAIN
+			removalPolicy: RemovalPolicy.RETAIN,
+			// Enable DynamoDB Streams for TTL deletion events
+			// When TTL expires, DynamoDB automatically deletes the item and triggers the stream
+			stream: StreamViewType.OLD_IMAGE // Capture old image to get galleryId when TTL deletes
 		});
 		galleries.addGlobalSecondaryIndex({
 			indexName: 'ownerId-index',
@@ -379,6 +383,12 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
+		const galleriesCancelTransactionFn = new NodejsFunction(this, 'GalleriesCancelTransactionFn', {
+			entry: path.join(__dirname, '../../../backend/functions/galleries/cancelTransaction.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
 		const galleriesDeletePhotoFn = new NodejsFunction(this, 'GalleriesDeletePhotoFn', {
 			entry: path.join(__dirname, '../../../backend/functions/galleries/deletePhoto.ts'),
 			handler: 'handler',
@@ -392,6 +402,7 @@ export class AppStack extends Stack {
 		walletLedger.grantReadWriteData(galleriesCreateFn);
 		transactions.grantReadWriteData(galleriesCreateFn); // Needed to create transactions
 		galleryAddons.grantReadWriteData(galleriesCreateFn); // Needed to create backup storage addon during gallery creation
+		orders.grantReadWriteData(galleriesCreateFn); // Needed to create orders for non-selection galleries
 		galleries.grantReadData(galleriesGetFn);
 		transactions.grantReadData(galleriesGetFn); // Needed to derive payment status
 		galleries.grantReadData(galleriesListFn);
@@ -400,7 +411,10 @@ export class AppStack extends Stack {
 		galleries.grantReadData(galleriesListImagesFn);
 		galleries.grantReadData(galleriesPayFn);
 		transactions.grantReadWriteData(galleriesPayFn); // Needed to update transactions
+		galleries.grantReadData(galleriesCancelTransactionFn);
+		transactions.grantReadWriteData(galleriesCancelTransactionFn); // Needed to cancel transactions
 		galleries.grantReadWriteData(galleriesDeleteFn);
+		transactions.grantReadWriteData(galleriesDeleteFn); // Needed to cancel transactions before deletion
 		orders.grantReadWriteData(galleriesDeleteFn);
 		galleryAddons.grantReadWriteData(galleriesDeleteFn); // Needed to delete gallery addons when gallery is deleted
 		galleries.grantReadWriteData(galleriesDeletePhotoFn);
@@ -451,6 +465,18 @@ export class AppStack extends Stack {
 			integration: new HttpLambdaIntegration('GalleriesListImagesIntegration', galleriesListImagesFn)
 		});
 		httpApi.addRoutes({
+			path: '/galleries/{id}/pay',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('GalleriesPayIntegration', galleriesPayFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/cancel-transaction',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('GalleriesCancelTransactionIntegration', galleriesCancelTransactionFn),
+			authorizer
+		});
+		httpApi.addRoutes({
 			path: '/galleries/{id}',
 			methods: [HttpMethod.DELETE],
 			integration: new HttpLambdaIntegration('GalleriesDeleteIntegration', galleriesDeleteFn),
@@ -472,12 +498,6 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/client-password',
 			methods: [HttpMethod.PATCH],
 			integration: new HttpLambdaIntegration('GalleriesSetClientPasswordIntegration', galleriesSetClientPasswordFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/pay',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesPayIntegration', galleriesPayFn),
 			authorizer
 		});
 		httpApi.addRoutes({
@@ -532,6 +552,7 @@ export class AppStack extends Stack {
 		});
 		orders.grantReadWriteData(generateZipsForAddonFn); // Needed to update orders with zipKey
 		zipFn.grantInvoke(generateZipsForAddonFn); // Needed to generate ZIPs
+		galleriesBucket.grantRead(generateZipsForAddonFn); // Needed to check if original files exist (HeadObject, ListObjectsV2)
 		// Make function name available to other lambdas (especially webhook)
 		envVars['GENERATE_ZIPS_FOR_ADDON_FN_NAME'] = generateZipsForAddonFn.functionName;
 		generateZipsForAddonFn.grantInvoke(webhookFn); // webhook can invoke it for ZIP generation
@@ -942,7 +963,39 @@ export class AppStack extends Stack {
 		new CfnOutput(this, 'UserPoolDomain', { value: userPoolDomain.domainName });
 		new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
 
-		// Expiry reminders schedule
+		// DynamoDB Stream handler for TTL deletions - automatically triggered when gallery expires
+		// This is more efficient than daily scans - works to the second, scales infinitely
+		const galleryExpiryStreamFn = new NodejsFunction(this, 'GalleryExpiryStreamFn', {
+			entry: path.join(__dirname, '../../../backend/functions/expiry/onGalleryExpired.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			timeout: Duration.minutes(5), // Handle multiple deletions
+			environment: envVars
+		});
+		galleriesDeleteFn.grantInvoke(galleryExpiryStreamFn); // Can invoke delete Lambda
+		// Connect DynamoDB Stream to Lambda
+		// DynamoEventSource automatically grants the Lambda permission to read from the stream
+		// Filter to only process TTL deletions (userIdentity.type = "Service" and userIdentity.principalId = "dynamodb.amazonaws.com")
+		galleryExpiryStreamFn.addEventSource(new DynamoEventSource(galleries, {
+			startingPosition: 'LATEST',
+			batchSize: 10,
+			maxBatchingWindow: Duration.seconds(5),
+			filters: [
+				{
+					pattern: JSON.stringify({
+						userIdentity: {
+							type: ['Service'],
+							principalId: ['dynamodb.amazonaws.com']
+						},
+						eventName: ['REMOVE']
+					})
+				}
+			]
+		}));
+
+		// Expiry reminders schedule - sends warning emails and migrates existing galleries
+		// Also handles fallback deletion for galleries that expired before migration
+		// Deletion is now primarily handled automatically by DynamoDB TTL + Streams
 		const expiryFn = new NodejsFunction(this, 'ExpiryCheckFn', {
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkAndNotify.ts'),
 			handler: 'handler',
@@ -950,37 +1003,39 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleries.grantReadWriteData(expiryFn);
+		galleriesDeleteFn.grantInvoke(expiryFn); // Needed for fallback deletion of already-expired galleries
 		expiryFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
 			resources: ['*']
 		}));
-		// Grant expiry lambda permission to invoke delete gallery lambda
-		galleriesDeleteFn.grantInvoke(expiryFn);
 		// Grant expiry lambda Cognito read permissions for fallback email retrieval
 		expiryFn.addToRolePolicy(new PolicyStatement({
 			actions: ['cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
+		// Run every 6 hours for more frequent expiry checks and warnings
+		// Cost: ~$37/month for 1M galleries (4 scans/day)
+		// Balance: Frequent enough for timely warnings, cost-effective
 		new Rule(this, 'ExpirySchedule', {
-			schedule: Schedule.rate(Duration.days(1)),
+			schedule: Schedule.rate(Duration.hours(6)),
 			targets: [new LambdaFunction(expiryFn)]
 		});
 
-		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days)
+		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days for galleries, 15 minutes for wallet top-ups)
 		const transactionExpiryFn = new NodejsFunction(this, 'TransactionExpiryCheckFn', {
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkTransactions.ts'),
 			handler: 'handler',
 			...defaultFnProps,
-			environment: envVars
+			environment: envVars,
+			timeout: Duration.minutes(5) // Increase timeout for scanning transactions
 		});
 		transactions.grantReadWriteData(transactionExpiryFn);
 		galleries.grantReadWriteData(transactionExpiryFn);
 		galleriesDeleteFn.grantInvoke(transactionExpiryFn);
-		// Run daily at 2 AM Warsaw time (1 AM UTC in winter, 0 AM UTC in summer)
-		// Using cron expression: minute hour day month day-of-week
-		// 0 1 * * * = 1 AM UTC daily (2 AM CET in winter)
+		// Run every 15 minutes to check for expired wallet top-ups
+		// Also checks gallery transactions (3 days expiry)
 		new Rule(this, 'TransactionExpirySchedule', {
-			schedule: Schedule.cron({ minute: '0', hour: '1', day: '*', month: '*', year: '*' }),
+			schedule: Schedule.rate(Duration.minutes(15)),
 			targets: [new LambdaFunction(transactionExpiryFn)]
 		});
 

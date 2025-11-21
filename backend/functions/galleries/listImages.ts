@@ -81,63 +81,53 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	try {
-		// Check if there are final images - if so, exclude processed photos from listing
-		const finalPrefix = `galleries/${galleryId}/final/`;
-		const finalListResponse = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: finalPrefix
-		}));
-		const processedKeys = new Set(
-			(finalListResponse.Contents || []).map(obj => {
-				const fullKey = obj.Key || '';
-				// Extract filename from final path (e.g., "galleries/gal_123/final/orderId/image.jpg" -> "image.jpg")
-				const parts = fullKey.replace(finalPrefix, '').split('/');
-				return parts.length > 1 ? parts[parts.length - 1] : fullKey.replace(finalPrefix, '');
-			}).filter(Boolean)
-		);
-
-		// List preview images from S3
-		const prefix = `galleries/${galleryId}/previews/`;
-		const listResponse = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: prefix
-		}));
-
-		// Also list originals to verify they exist (only show images that have originals)
+		// List originals from S3 (single source of truth)
+		// Originals are deleted based on selectedKeys when finals are uploaded, not based on filenames
+		// Final images may have different names than originals, so we don't filter by final image names
 		const originalsPrefix = `galleries/${galleryId}/originals/`;
 		const originalsListResponse = await s3.send(new ListObjectsV2Command({
 			Bucket: bucket,
 			Prefix: originalsPrefix
 		}));
-		const originalKeys = new Set(
-			(originalsListResponse.Contents || []).map(obj => {
+		const originalFiles = new Map<string, any>(
+			(originalsListResponse.Contents || [])
+				.map(obj => {
+					const fullKey = obj.Key || '';
+					const filename = fullKey.replace(originalsPrefix, '');
+					return filename ? [filename, obj] : null;
+				})
+				.filter((entry): entry is [string, any] => entry !== null)
+		);
+		const originalKeys = new Set(originalFiles.keys());
+
+		// List preview images from S3 (to build URLs)
+		const prefix = `galleries/${galleryId}/previews/`;
+		const listResponse = await s3.send(new ListObjectsV2Command({
+			Bucket: bucket,
+			Prefix: prefix
+		}));
+		const previewKeys = new Set(
+			(listResponse.Contents || []).map(obj => {
 				const fullKey = obj.Key || '';
-				return fullKey.replace(originalsPrefix, '');
+				return fullKey.replace(prefix, '');
 			}).filter(Boolean)
 		);
 
-		const images = (listResponse.Contents || [])
-			.map(obj => {
-				const fullKey = obj.Key || '';
-				// Extract filename from key (e.g., "galleries/gal_123/previews/image.jpg" -> "image.jpg")
-				const filename = fullKey.replace(prefix, '');
+		// Build images list from originals (S3 is single source of truth)
+		// If an original exists in S3, it's available for purchase
+		const images = Array.from(originalKeys)
+			.map((filename: string) => {
 				if (!filename) return null;
 				
-				// Exclude processed photos (those that exist in final/)
-				if (processedKeys.has(filename)) {
-					return null;
-				}
+				const originalObj = originalFiles.get(filename);
+				if (!originalObj) return null;
 				
-				// Only include images that have originals (for purchase more - originals are removed when delivered)
-				if (!originalKeys.has(filename)) {
-					return null;
-				}
-				
+				// Build preview and thumb URLs if they exist
 				const previewKey = `galleries/${galleryId}/previews/${filename}`;
 				const thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
 				
 				// Build CloudFront URLs - encode path segments
-				const previewUrl = cloudfrontDomain 
+				const previewUrl = previewKeys.has(filename) && cloudfrontDomain
 					? `https://${cloudfrontDomain}/${previewKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 				const thumbUrl = cloudfrontDomain
@@ -148,14 +138,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					key: filename,
 					previewUrl,
 					thumbUrl,
-					size: obj.Size || 0,
-					lastModified: obj.LastModified?.toISOString()
+					size: originalObj.Size || 0,
+					lastModified: originalObj.LastModified?.toISOString()
 				};
 			})
-			.filter(Boolean)
+			.filter((item): item is { key: string; previewUrl: string | null; thumbUrl: string | null; size: number; lastModified: string | undefined } => item !== null)
 			.sort((a, b) => {
 				// Sort by filename for consistent ordering
-				return (a?.key || '').localeCompare(b?.key || '');
+				return a.key.localeCompare(b.key);
 			});
 
 		return {

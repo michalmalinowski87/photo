@@ -72,11 +72,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ error: 'Order not found' })
 		};
 	}
-	if (order.deliveryStatus !== 'CLIENT_APPROVED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
+	if (order.deliveryStatus !== 'CLIENT_APPROVED' && order.deliveryStatus !== 'PREPARING_DELIVERY' && order.deliveryStatus !== 'AWAITING_FINAL_PHOTOS') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: `Order must have deliveryStatus CLIENT_APPROVED or PREPARING_DELIVERY, got ${order.deliveryStatus}` })
+			body: JSON.stringify({ error: `Order must have deliveryStatus CLIENT_APPROVED, PREPARING_DELIVERY, or AWAITING_FINAL_PHOTOS, got ${order.deliveryStatus}` })
 		};
 	}
 
@@ -89,11 +89,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const isFirstPhoto = !existingFiles.Contents || existingFiles.Contents.length === 0;
 
-	// If this is the first photo and status is CLIENT_APPROVED, update to PREPARING_DELIVERY and remove originals
-	if (isFirstPhoto && order.deliveryStatus === 'CLIENT_APPROVED') {
-		// Check if gallery has backup storage addon - if yes, keep originals
-		const hasBackupStorage = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-		
+	// If this is the first photo, update status to PREPARING_DELIVERY
+	// CLIENT_APPROVED → PREPARING_DELIVERY (selection galleries)
+	// AWAITING_FINAL_PHOTOS → PREPARING_DELIVERY (non-selection galleries)
+	if (isFirstPhoto && (order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS')) {
 		// Update status to PREPARING_DELIVERY
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
@@ -103,38 +102,69 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				':ds': 'PREPARING_DELIVERY'
 			}
 		}));
-		
-		// Remove originals, thumbs, and previews if no backup addon (keep them if addon exists)
-		if (!hasBackupStorage) {
-			const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
-			if (selectedKeys.length > 0) {
-				try {
-					const toDelete: { Key: string }[] = [];
-					for (const key of selectedKeys) {
-						// Add originals, thumbs, and previews to deletion list
-						toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
-						toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
-						toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
-					}
+	}
 
-					// Batch delete (S3 allows up to 1000 objects per request)
-					for (let i = 0; i < toDelete.length; i += 1000) {
-						const chunk = toDelete.slice(i, i + 1000);
-						await s3.send(new DeleteObjectsCommand({
-							Bucket: bucket,
-							Delete: { Objects: chunk }
-						}));
-					}
-					logger?.info('Cleaned up originals/thumbs/previews', { galleryId, orderId, count: selectedKeys.length });
-				} catch (err: any) {
-					// Log error but continue - originals deletion failure shouldn't block upload
-					logger?.error('Failed to clean up originals/thumbs/previews', {
-						error: err.message,
-						galleryId,
-						orderId,
-						selectedKeysCount: selectedKeys.length
-					});
+	// Always remove originals, thumbs, and previews when first final photo is uploaded
+	// Backup addon ensures ZIPs are generated, but originals should be removed to save storage
+	// This applies to CLIENT_APPROVED (selection galleries), AWAITING_FINAL_PHOTOS (non-selection galleries), and PREPARING_DELIVERY
+	if (isFirstPhoto && (order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS' || order.deliveryStatus === 'PREPARING_DELIVERY')) {
+		const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
+		let keysToDelete: string[] = selectedKeys;
+		
+		// If selectedKeys is empty (non-selection galleries), list all originals from S3
+		if (selectedKeys.length === 0) {
+			try {
+				const originalsPrefix = `galleries/${galleryId}/originals/`;
+				const originalsListResponse = await s3.send(new ListObjectsV2Command({
+					Bucket: bucket,
+					Prefix: originalsPrefix
+				}));
+				keysToDelete = (originalsListResponse.Contents || [])
+					.map(obj => {
+						const fullKey = obj.Key || '';
+						return fullKey.replace(originalsPrefix, '');
+					})
+					.filter((key): key is string => Boolean(key));
+			} catch (listErr: any) {
+				logger?.error('Failed to list originals for deletion', {
+					error: listErr.message,
+					galleryId,
+					orderId
+				});
+			}
+		}
+		
+		if (keysToDelete.length > 0) {
+			try {
+				const toDelete: { Key: string }[] = [];
+				for (const key of keysToDelete) {
+					// Add originals, thumbs, and previews to deletion list
+					toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
+					toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
+					toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
 				}
+
+				// Batch delete (S3 allows up to 1000 objects per request)
+				for (let i = 0; i < toDelete.length; i += 1000) {
+					const chunk = toDelete.slice(i, i + 1000);
+					await s3.send(new DeleteObjectsCommand({
+						Bucket: bucket,
+						Delete: { Objects: chunk }
+					}));
+				}
+				logger?.info('Cleaned up originals/thumbs/previews (final photos uploaded)', { 
+					galleryId, 
+					orderId, 
+					count: keysToDelete.length 
+				});
+			} catch (err: any) {
+				// Log error but continue - originals deletion failure shouldn't block upload
+				logger?.error('Failed to clean up originals/thumbs/previews', {
+					error: err.message,
+					galleryId,
+					orderId,
+					keysToDeleteCount: keysToDelete.length
+				});
 			}
 		}
 	}

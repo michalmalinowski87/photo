@@ -25,12 +25,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	const cutoffDate = new Date();
-	cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 days ago
+	cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 days ago for gallery transactions
 	const cutoffDateISO = cutoffDate.toISOString();
+	
+	// 15 minutes ago for wallet top-ups
+	const walletTopupCutoffDate = new Date();
+	walletTopupCutoffDate.setMinutes(walletTopupCutoffDate.getMinutes() - 15);
+	const walletTopupCutoffDateISO = walletTopupCutoffDate.toISOString();
 
 	try {
 		let expiredCount = 0;
 		let deletedGalleriesCount = 0;
+		let expiredWalletTopupsCount = 0;
 
 		// Query galleries with DRAFT state older than 3 days
 		// Then check if they have unpaid transactions
@@ -130,13 +136,70 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			} while (lastEvaluatedKey);
 		}
 
+		// Check for expired wallet top-up transactions (15 minutes)
+		if (transactionsTable) {
+			try {
+				// Scan all UNPAID WALLET_TOPUP transactions
+				// Note: This is a simplified approach - in production, consider using a GSI on status+type+createdAt
+				let lastEvaluatedKey: any = undefined;
+				do {
+					const scanParams: any = {
+						TableName: transactionsTable,
+						FilterExpression: '#status = :status AND #type = :type',
+						ExpressionAttributeNames: {
+							'#status': 'status',
+							'#type': 'type'
+						},
+						ExpressionAttributeValues: {
+							':status': 'UNPAID',
+							':type': 'WALLET_TOPUP'
+						}
+					};
+					if (lastEvaluatedKey) {
+						scanParams.ExclusiveStartKey = lastEvaluatedKey;
+					}
+					
+					const scanResult = await ddb.send(new ScanCommand(scanParams));
+					const unpaidTopups = scanResult.Items || [];
+					
+					for (const tx of unpaidTopups) {
+						const createdAt = new Date(tx.createdAt);
+						if (createdAt < walletTopupCutoffDate) {
+							// Cancel expired wallet top-up transaction
+							await updateTransactionStatus(tx.userId, tx.transactionId, 'CANCELED');
+							expiredWalletTopupsCount++;
+							logger?.info('Wallet top-up transaction expired and canceled', {
+								transactionId: tx.transactionId,
+								userId: tx.userId,
+								createdAt: tx.createdAt,
+								ageMinutes: Math.round((Date.now() - createdAt.getTime()) / 60000)
+							});
+						}
+					}
+					
+					lastEvaluatedKey = scanResult.LastEvaluatedKey;
+				} while (lastEvaluatedKey);
+			} catch (topupErr: any) {
+				logger?.error('Failed to check wallet top-up transactions expiry', {
+					error: topupErr.message
+				});
+			}
+		}
+
+		logger?.info('Transaction expiry check completed', {
+			expiredCount,
+			deletedGalleriesCount,
+			expiredWalletTopupsCount
+		});
+
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				expiredCount,
 				deletedGalleriesCount,
-				message: 'Transaction expiry check completed (limited - requires GSI for full implementation)'
+				expiredWalletTopupsCount,
+				message: 'Transaction expiry check completed'
 			})
 		};
 	} catch (error: any) {

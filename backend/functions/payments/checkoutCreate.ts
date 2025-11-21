@@ -1,5 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { getUserIdFromEvent } from '../../lib/src/auth';
+import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -55,12 +56,46 @@ export const handler = lambdaLogger(async (event: any) => {
 		
 		const finalRedirectUrl = redirectUrl || defaultRedirectUrl;
 		
+		// Create transaction for wallet top-up BEFORE creating Stripe session
+		let transactionId: string | undefined;
+		if (type === 'wallet_topup') {
+			const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+			if (transactionsTable) {
+				try {
+					// Build composites list for frontend display
+					const composites: string[] = ['Wallet Top-up'];
+					
+					transactionId = await createTransaction(
+						requester,
+						'WALLET_TOPUP',
+						amountCents,
+						{
+							walletAmountCents: amountCents,
+							stripeAmountCents: 0,
+							paymentMethod: 'STRIPE',
+							composites,
+							metadata: {
+								checkoutType: 'wallet_topup'
+							}
+						}
+					);
+				} catch (txnErr: any) {
+					console.error('Failed to create wallet top-up transaction', {
+						error: txnErr.message,
+						userId: requester,
+						amountCents
+					});
+					// Continue with Stripe session creation even if transaction creation fails
+				}
+			}
+		}
+		
 		const successUrl = apiUrl 
 			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
 			: 'https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}';
 		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel`
-			: 'https://your-frontend/payments/cancel';
+			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`
+			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`;
 
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
@@ -86,17 +121,33 @@ export const handler = lambdaLogger(async (event: any) => {
 				userId: requester,
 				type,
 				galleryId: galleryId,
+				transactionId: transactionId || '',
 				redirectUrl: finalRedirectUrl // Store redirect URL in metadata
 			},
 			client_reference_id: `${requester}-${Date.now()}`
 		});
+
+		// Update transaction with Stripe session ID if transaction was created
+		if (transactionId && type === 'wallet_topup') {
+			try {
+				await updateTransactionStatus(requester, transactionId, 'UNPAID', {
+					stripeSessionId: session.id
+				});
+			} catch (updateErr: any) {
+				console.error('Failed to update transaction with Stripe session ID', {
+					error: updateErr.message,
+					transactionId
+				});
+			}
+		}
 
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				checkoutUrl: session.url,
-				sessionId: session.id
+				sessionId: session.id,
+				transactionId: transactionId
 			})
 		};
 	} catch (error: any) {

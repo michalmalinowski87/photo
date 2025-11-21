@@ -76,6 +76,33 @@ export default function Galleries() {
 
 	async function purchaseAddon(galleryId) {
 		setMsg('');
+		
+		// Check for processed orders before purchase
+		try {
+			const { data: ordersData } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders`, {
+				headers: { Authorization: `Bearer ${idToken}` }
+			});
+			const orders = ordersData.items || [];
+			const processedOrders = orders.filter((o) => 
+				o.deliveryStatus === 'DELIVERED' || o.deliveryStatus === 'PREPARING_DELIVERY'
+			);
+			
+			if (processedOrders.length > 0) {
+				const proceed = confirm(
+					`Warning: This gallery has ${processedOrders.length} order(s) that are already processed (DELIVERED or PREPARING_DELIVERY).\n\n` +
+					`Original photos for these orders may have been deleted and cannot be recovered.\n\n` +
+					`The backup addon can only protect future orders.\n\n` +
+					`Do you want to proceed with the purchase?`
+				);
+				if (!proceed) {
+					return;
+				}
+			}
+		} catch (error) {
+			// If we can't check orders, continue anyway
+			console.warn('Failed to check orders before purchase', error);
+		}
+		
 		setPurchasingAddon({ [galleryId]: true });
 		try {
 			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/purchase-addon`, {
@@ -93,6 +120,10 @@ export default function Galleries() {
 			setMsg(`Backup storage addon purchased successfully for gallery. Price: ${(data.backupStorageCents / 100).toFixed(2)} PLN. ZIPs generated for ${data.generatedZipsCount || 0} order(s).`);
 			await loadGalleries(); // Reload to get updated addon status
 		} catch (error) {
+			const errorData = error.response?.data || error.data || {};
+			if (errorData.warning) {
+				alert(errorData.warning);
+			}
 			setMsg(formatApiError(error));
 		} finally {
 			setPurchasingAddon({});
@@ -120,20 +151,41 @@ export default function Galleries() {
 					}
 					break;
 				case 'cancel-gallery':
-					if (!confirm(`Are you sure you want to cancel payment for gallery ${galleryId}? The gallery will be deleted.`)) {
-						return;
-					}
-					try {
-						// Find transaction for this gallery and cancel it
-						// For now, just delete the gallery (transaction cancellation will be handled by backend)
-						const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}`, {
-							method: 'DELETE',
-							headers: { Authorization: `Bearer ${idToken}` }
-						});
-						setMsg(`Gallery canceled and deleted: ${data.s3ObjectsDeleted || 0} S3 objects removed`);
-						await loadGalleries();
-					} catch (error) {
-						setMsg(formatApiError(error));
+					// Show confirmation dialog with two options
+					// First dialog: Ask what to do
+					const actionChoice = confirm(
+						`Cancel payment for gallery ${galleryId}?\n\n` +
+						`Click OK to cancel transaction and DELETE gallery.\n` +
+						`Click Cancel to cancel transaction ONLY (keep gallery for retry).`
+					);
+					
+					if (actionChoice === false) {
+						// User clicked Cancel button - cancel transaction only
+						try {
+							const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/cancel-transaction`, {
+								method: 'POST',
+								headers: { Authorization: `Bearer ${idToken}` }
+							});
+							setMsg(`Transaction canceled. Gallery remains available for payment.`);
+							await loadGalleries();
+						} catch (error) {
+							setMsg(formatApiError(error));
+						}
+					} else {
+						// User clicked OK - cancel transaction and delete gallery
+						if (!confirm(`Are you sure you want to DELETE gallery ${galleryId}? This will permanently delete all images, selections, and orders. This action cannot be undone.`)) {
+							return;
+						}
+						try {
+							const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}`, {
+								method: 'DELETE',
+								headers: { Authorization: `Bearer ${idToken}` }
+							});
+							setMsg(`Gallery canceled and deleted: ${data.s3ObjectsDeleted || 0} S3 objects removed`);
+							await loadGalleries();
+						} catch (error) {
+							setMsg(formatApiError(error));
+						}
 					}
 					break;
 				case 'purchase-addon':
@@ -438,8 +490,8 @@ export default function Galleries() {
 										{g.hasBackupStorage ? (
 											<span style={{ color: '#28a745', fontWeight: 'bold' }}>✓ Backup Storage</span>
 										) : (
-											// Only show "Buy Backup" button if gallery is paid
-											isPaid && (
+											// Only show "Buy Backup" button if gallery is paid AND has selection enabled
+											isPaid && g.selectionEnabled && (
 												<button 
 													onClick={() => handleAction('purchase-addon', g.galleryId)} 
 													disabled={purchasingAddon[g.galleryId]}
@@ -453,7 +505,7 @@ export default function Galleries() {
 														cursor: purchasingAddon[g.galleryId] ? 'not-allowed' : 'pointer',
 														opacity: purchasingAddon[g.galleryId] ? 0.6 : 1
 													}}
-													title="Purchase backup storage addon for this gallery"
+													title="Purchase backup storage addon for this gallery (only available for galleries with client selection)"
 												>
 													{purchasingAddon[g.galleryId] ? 'Purchasing...' : 'Buy Backup'}
 												</button>
@@ -520,8 +572,8 @@ export default function Galleries() {
 												Send to Client
 											</button>
 										)}
-										{/* Open Client View - only if paid */}
-										{isPaid && (
+										{/* Open Client View - only if paid and selection enabled */}
+										{isPaid && g.selectionEnabled && (
 											<button 
 												onClick={() => handleAction('open-client', g.galleryId)} 
 												disabled={isUnpaid}
@@ -664,7 +716,13 @@ export default function Galleries() {
 							<input 
 								type="checkbox" 
 								checked={selectionEnabled} 
-								onChange={(e) => setSelectionEnabled(e.target.checked)} 
+								onChange={(e) => {
+									setSelectionEnabled(e.target.checked);
+									// Reset backup addon if selection is disabled
+									if (!e.target.checked) {
+										setHasBackupAddon(false);
+									}
+								}} 
 								style={{ marginRight: 8 }}
 							/>
 							<span>Client select photos for processing</span>
@@ -675,49 +733,52 @@ export default function Galleries() {
 								: 'You will process all photos. Order will be created immediately. Only final gallery can be sent to client.'}
 						</div>
 					</div>
-					{selectionEnabled && (
-						<>
-							<div style={{ fontSize: '12px', color: '#666', marginBottom: 8 }}>
-								Set client email and password during creation to enable "Send Gallery to Client" feature. You can also set these later.
-							</div>
-							<div style={{ marginBottom: 4 }}>
-								<label>Client Email: </label>
-								<input 
-									type="email" 
-									value={clientEmail} 
-									onChange={(e) => setClientEmail(e.target.value)} 
-									placeholder="client@example.com"
-									style={{ width: '100%', maxWidth: 300, marginLeft: 8 }}
-								/>
-							</div>
-							<div style={{ marginBottom: 4 }}>
-								<label>Client Password: </label>
-								<input 
-									type="password" 
-									value={clientPass} 
-									onChange={(e) => setClientPass(e.target.value)} 
-									placeholder="Password for client access"
-									style={{ width: '100%', maxWidth: 300, marginLeft: 8 }}
-								/>
-							</div>
-						</>
-					)}
-					<div style={{ marginTop: 12, marginBottom: 12 }}>
-						<label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+					<div style={{ marginTop: 16 }}>
+						<div style={{ fontSize: '12px', color: '#666', marginBottom: 8 }}>
+							{selectionEnabled 
+								? 'Set client email and password during creation to enable "Send Gallery to Client" feature. You can also set these later.'
+								: 'Set client email and password to send final gallery link and enable client access. You can also set these later.'}
+						</div>
+						<div style={{ marginBottom: 4 }}>
+							<label>Client Email: </label>
 							<input 
-								type="checkbox" 
-								checked={hasBackupAddon} 
-								onChange={(e) => setHasBackupAddon(e.target.checked)} 
-								style={{ marginRight: 8 }}
+								type="email" 
+								value={clientEmail} 
+								onChange={(e) => setClientEmail(e.target.value)} 
+								placeholder="client@example.com"
+								style={{ width: '100%', maxWidth: 300, marginLeft: 8 }}
 							/>
-							<span>Purchase Backup Storage Addon</span>
-						</label>
-						<div style={{ fontSize: '12px', color: '#666', marginLeft: 24, marginTop: 4 }}>
-							{hasBackupAddon 
-								? 'Backup storage addon will be purchased for this gallery. ZIPs will be generated automatically for all orders and kept available for download even after delivery. Price: 30% of order total.'
-								: 'Original photos ZIPs will be available for one-time download only. After delivery, originals will be removed unless backup addon is purchased.'}
+						</div>
+						<div style={{ marginBottom: 4 }}>
+							<label>Client Password: </label>
+							<input 
+								type="password" 
+								value={clientPass} 
+								onChange={(e) => setClientPass(e.target.value)} 
+								placeholder="Password for client access"
+								style={{ width: '100%', maxWidth: 300, marginLeft: 8 }}
+							/>
 						</div>
 					</div>
+					{/* Backup addon is only available for galleries with selection enabled */}
+					{selectionEnabled && (
+						<div style={{ marginTop: 12, marginBottom: 12 }}>
+							<label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+								<input 
+									type="checkbox" 
+									checked={hasBackupAddon} 
+									onChange={(e) => setHasBackupAddon(e.target.checked)} 
+									style={{ marginRight: 8 }}
+								/>
+								<span>Purchase Backup Storage Addon</span>
+							</label>
+							<div style={{ fontSize: '12px', color: '#666', marginLeft: 24, marginTop: 4 }}>
+								{hasBackupAddon 
+									? 'Backup storage addon will be purchased for this gallery. ZIPs will be generated automatically for all orders and kept available for download even after delivery. Price: 30% of order total.'
+									: 'Original photos ZIPs will be available for one-time download only. After delivery, originals will be removed unless backup addon is purchased.'}
+							</div>
+						</div>
+					)}
 				</div>
 				<button onClick={createGallery}>Create Gallery</button>
 			</div>

@@ -41,9 +41,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!order) return { statusCode: 404, body: 'order not found' };
 	
 	// Verify order has correct status (galleryId check is redundant - queried by galleryId+orderId)
-	// Can send final link from CLIENT_APPROVED or PREPARING_DELIVERY (photographer has uploaded photos)
-	if (order.deliveryStatus !== 'CLIENT_APPROVED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
-		return { statusCode: 400, body: `order must have deliveryStatus CLIENT_APPROVED or PREPARING_DELIVERY, got ${order.deliveryStatus}` };
+	// Can send final link from PREPARING_DELIVERY (photographer has uploaded photos)
+	// AWAITING_FINAL_PHOTOS orders cannot send final link until photos are uploaded (status changes to PREPARING_DELIVERY)
+	if (order.deliveryStatus !== 'PREPARING_DELIVERY') {
+		return { statusCode: 400, body: `order must have deliveryStatus PREPARING_DELIVERY to send final link, got ${order.deliveryStatus}` };
 	}
 
 
@@ -103,7 +104,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Mark order as DELIVERED
 	// Note: Originals/thumbs/previews are already removed when status changed to PREPARING_DELIVERY
-	// (unless backup storage addon exists, in which case they are kept)
+	// Backup addon ensures ZIPs are generated before originals are removed
 	const now = new Date().toISOString();
 	try {
 		await ddb.send(new UpdateCommand({

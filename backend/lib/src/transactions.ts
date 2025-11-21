@@ -21,6 +21,7 @@ export interface Transaction {
 	galleryId?: string;
 	refId?: string;
 	metadata?: Record<string, any>;
+	composites?: string[]; // List of items/components in this transaction (e.g., ['Gallery Plan Basic', 'Backup addon'])
 	createdAt: string;
 	updatedAt: string;
 	paidAt?: string;
@@ -42,6 +43,7 @@ export async function createTransaction(
 		paymentMethod?: PaymentMethod;
 		metadata?: Record<string, any>;
 		refId?: string;
+		composites?: string[]; // List of items/components in this transaction
 	}
 ): Promise<string> {
 	const envProc = (globalThis as any).process || process;
@@ -69,6 +71,7 @@ export async function createTransaction(
 		galleryId: options.galleryId,
 		refId: options.refId || transactionId,
 		metadata: options.metadata || {},
+		composites: options.composites,
 		createdAt: now,
 		updatedAt: now
 	};
@@ -174,6 +177,30 @@ export async function getPaidTransactionForGallery(galleryId: string): Promise<T
 	return (result.Items && result.Items.length > 0 ? result.Items[0] as Transaction : null);
 }
 
+export async function getUnpaidTransactionForGallery(galleryId: string): Promise<Transaction | null> {
+	const envProc = (globalThis as any).process || process;
+	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	if (!transactionsTable) {
+		throw new Error('TRANSACTIONS_TABLE environment variable not set');
+	}
+
+	const result = await ddb.send(new QueryCommand({
+		TableName: transactionsTable,
+		IndexName: 'galleryId-status-index',
+		KeyConditionExpression: 'galleryId = :g AND #status = :s',
+		ExpressionAttributeValues: {
+			':g': galleryId,
+			':s': 'UNPAID'
+		},
+		ExpressionAttributeNames: {
+			'#status': 'status'
+		},
+		Limit: 1
+	}));
+
+	return (result.Items && result.Items.length > 0 ? result.Items[0] as Transaction : null);
+}
+
 export async function listTransactionsByUser(
 	userId: string,
 	options?: {
@@ -187,13 +214,6 @@ export async function listTransactionsByUser(
 	if (!transactionsTable) {
 		throw new Error('TRANSACTIONS_TABLE environment variable not set');
 	}
-
-	console.log('listTransactionsByUser called', {
-		userId,
-		userIdType: typeof userId,
-		transactionsTable,
-		options
-	});
 
 	const filterExpressions: string[] = [];
 	const exprValues: Record<string, any> = { ':u': userId };
@@ -224,30 +244,7 @@ export async function listTransactionsByUser(
 		queryParams.ExpressionAttributeNames = exprNames;
 	}
 	
-	try {
-		console.log('DynamoDB Query Params:', JSON.stringify(queryParams, null, 2));
-		const result = await ddb.send(new QueryCommand(queryParams));
-		console.log('DynamoDB Query Result:', {
-			itemsCount: result.Items?.length || 0,
-			count: result.Count,
-			scannedCount: result.ScannedCount,
-			items: result.Items?.map((item: any) => ({
-				transactionId: item.transactionId,
-				type: item.type,
-				status: item.status,
-				userId: item.userId
-			}))
-		});
-
-		return (result.Items || []) as Transaction[];
-	} catch (error: any) {
-		console.error('DynamoDB Query Error:', {
-			name: error.name,
-			message: error.message,
-			stack: error.stack,
-			queryParams
-		});
-		throw error;
-	}
+	const result = await ddb.send(new QueryCommand(queryParams));
+	return (result.Items || []) as Transaction[];
 }
 

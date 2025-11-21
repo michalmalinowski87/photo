@@ -145,34 +145,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const newBalance = await creditWallet(userId, amountCents, paymentId, walletsTable, ledgerTable);
 				logger.info('Wallet credited', { userId, amountCents, newBalance, paymentId });
 				
-				// Create transaction for wallet top-up
+				// Update existing transaction for wallet top-up (created when checkout session was created)
 				const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
-				if (transactionsTable) {
+				const transactionId = session.metadata?.transactionId;
+				if (transactionsTable && transactionId) {
 					try {
-						const { createTransaction, updateTransactionStatus } = require('../../lib/src/transactions');
-						const topupTransactionId = await createTransaction(
-							userId,
-							'WALLET_TOPUP',
-							amountCents,
-							{
-								walletAmountCents: amountCents,
-								stripeAmountCents: 0,
-								paymentMethod: 'STRIPE',
-								refId: paymentId
-							}
-						);
-						await updateTransactionStatus(userId, topupTransactionId, 'PAID', {
+						const { updateTransactionStatus } = require('../../lib/src/transactions');
+						await updateTransactionStatus(userId, transactionId, 'PAID', {
 							stripeSessionId: session.id,
 							stripePaymentIntentId: session.payment_intent as string
 						});
-						logger.info('Wallet top-up transaction created', { transactionId: topupTransactionId, userId, amountCents });
+						logger.info('Wallet top-up transaction updated to PAID', { transactionId, userId, amountCents });
 					} catch (txnErr: any) {
-						logger.error('Failed to create wallet top-up transaction', {
+						logger.error('Failed to update wallet top-up transaction', {
 							error: txnErr.message,
+							transactionId,
 							userId,
 							amountCents
 						});
 					}
+				} else if (!transactionId) {
+					logger.warn('No transactionId found in Stripe session metadata for wallet top-up', {
+						sessionId: session.id,
+						userId,
+						amountCents
+					});
 				}
 			} else if (type === 'addon_payment' && userId && galleryId) {
 				// Addon payment - create backup storage addon and trigger ZIP generation Lambda
@@ -386,7 +383,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							}
 						}
 						
-						// If selection is disabled, create an order immediately with APPROVED status
+						// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
+						// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
 						if (!gallery.selectionEnabled && ordersTable) {
 							try {
 								const orderNumber = (gallery.lastOrderNumber ?? 0) + 1;
@@ -397,7 +395,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 										galleryId,
 										orderId,
 										orderNumber,
-										status: 'APPROVED',
+										deliveryStatus: 'AWAITING_FINAL_PHOTOS', // Start with AWAITING_FINAL_PHOTOS - photographer can upload finals and manage payment
+										paymentStatus: 'UNPAID',
 										selectedKeys: [], // Empty means all photos
 										selectedCount: 0, // Will be updated when photos are processed
 										overageCount: 0,

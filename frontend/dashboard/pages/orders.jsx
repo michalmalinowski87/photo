@@ -303,11 +303,17 @@ export default function Orders() {
 			return;
 		}
 		
-		// Check if gallery has backup addon from gallery metadata (gallery-level, same for all orders)
-		const hasBackup = gallery?.hasBackupStorage === true;
+		// Find the order to check its current status
+		const order = orders.find((o) => o.orderId === orderId);
+		const currentStatus = order?.deliveryStatus;
 		
-		// Show warning if no backup addon
-		if (!hasBackup) {
+		// Check if gallery has backup addon and selection enabled from gallery metadata
+		const hasBackup = gallery?.hasBackupStorage === true;
+		const selectionEnabled = gallery?.selectionEnabled !== false;
+		
+		// Show warning if no backup addon AND selection is enabled AND status will change from CLIENT_APPROVED to PREPARING_DELIVERY
+		// Don't show warning if selection is disabled (non-selection galleries) or order is already PREPARING_DELIVERY
+		if (!hasBackup && selectionEnabled && currentStatus === 'CLIENT_APPROVED') {
 			const warning = 'Warning: Once you upload final photos, the status will change to PREPARING_DELIVERY and you will no longer be able to generate the originals ZIP. Original photos will be permanently removed after delivery.\n\nYou can purchase the backup storage addon from the gallery list page.';
 			if (!window.confirm(warning + '\n\nDo you want to continue with upload?')) {
 				return;
@@ -525,8 +531,8 @@ export default function Orders() {
 											Approve Change Request
 										</button>
 									)}
-									{/* Upload Final Photos - available for CLIENT_APPROVED or PREPARING_DELIVERY orders */}
-									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && (
+									{/* Upload Final Photos - available for CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, or PREPARING_DELIVERY orders */}
+									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'AWAITING_FINAL_PHOTOS' || o.deliveryStatus === 'PREPARING_DELIVERY') && (
 										<div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 											<input
 												type="file"
@@ -548,26 +554,16 @@ export default function Orders() {
 											</button>
 										</div>
 									)}
-									{/* Send Final Link - available for CLIENT_APPROVED or PREPARING_DELIVERY orders with PAID payment */}
+									{/* Send Final Link - available for PREPARING_DELIVERY orders with PAID payment */}
 									{/* This action sends the final link email AND marks the order as DELIVERED */}
-									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && o.paymentStatus === 'PAID' && (
+									{/* Only available after photos are uploaded (status changed to PREPARING_DELIVERY) */}
+									{o.deliveryStatus === 'PREPARING_DELIVERY' && o.paymentStatus === 'PAID' && (
 										<button 
 											onClick={() => sendFinalLink(o.orderId)}
 											style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
 											title="Send final link to client, mark as delivered, and clean up originals/thumbs/previews"
 										>
 											Send Final Link
-										</button>
-									)}
-									{/* Mark Delivered - available for CLIENT_APPROVED or PREPARING_DELIVERY orders with PAID payment */}
-									{/* This is a separate action if photographer wants to mark delivered without sending email */}
-									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY') && o.paymentStatus === 'PAID' && (
-										<button 
-											onClick={() => processedComplete(o.orderId)}
-											style={{ padding: '4px 8px', fontSize: '12px', background: '#ff9900', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-											title="Mark as delivered and clean up originals/thumbs/previews (without sending email)"
-										>
-											Mark Delivered
 										</button>
 									)}
 								</td>
