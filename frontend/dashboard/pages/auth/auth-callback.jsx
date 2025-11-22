@@ -29,10 +29,10 @@ export default function AuthCallback() {
 
 		if (error) {
 			hasRedirected.current = true;
-			// Redirect to landing sign-in page to break the loop
-			const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
+			// Redirect to dashboard login page
+			const dashboardUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 			const returnUrl = state ? decodeURIComponent(state) : '/galleries';
-			window.location.href = `${landingUrl}/auth/sign-in?error=${encodeURIComponent(error)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+			window.location.href = `${dashboardUrl}/login?error=${encodeURIComponent(error)}&returnUrl=${encodeURIComponent(returnUrl)}`;
 			return;
 		}
 
@@ -55,24 +55,24 @@ export default function AuthCallback() {
 						return; // Already redirected, prevent loop
 					}
 					hasRedirected.current = true;
-					// Redirect to landing sign-in page to break the loop
-					const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
+					// Redirect to dashboard login page
+					const dashboardUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 					const returnUrl = state ? decodeURIComponent(state) : '/galleries';
 					// Clear any stale PKCE verifier to prevent issues
 					if (typeof window !== 'undefined') {
 						sessionStorage.removeItem('pkce_code_verifier');
 					}
-					window.location.href = `${landingUrl}/auth/sign-in?error=token_exchange_failed&returnUrl=${encodeURIComponent(returnUrl)}`;
+					window.location.href = `${dashboardUrl}/login?error=token_exchange_failed&returnUrl=${encodeURIComponent(returnUrl)}`;
 				});
 		} else {
 			if (hasRedirected.current) {
 				return; // Already redirected, prevent loop
 			}
 			hasRedirected.current = true;
-			// No code, redirect to landing sign-in page to break the loop
-			const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
+			// No code, redirect to dashboard login page
+			const dashboardUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 			const returnUrl = state ? decodeURIComponent(state) : '/galleries';
-			window.location.href = `${landingUrl}/auth/sign-in?returnUrl=${encodeURIComponent(returnUrl)}`;
+			window.location.href = `${dashboardUrl}/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 		}
 	}, [router, router.isReady, router.query]);
 

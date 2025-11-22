@@ -48,17 +48,18 @@ export default function Galleries() {
 		
 		// Redirect to Cognito logout endpoint to clear server-side session cookies
 		// This ensures Cognito doesn't auto-login the user next time
+		// After logout, redirect to landing main page
 		const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
 		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
-		const logoutCallbackUrl = `${landingUrl}/auth/logout-callback`;
+		const logoutRedirectUrl = landingUrl; // Redirect to main landing page, not logout-callback
 		
 		if (userPoolDomain) {
 			// Use helper function to build Cognito logout URL
-			const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutCallbackUrl);
+			const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutRedirectUrl);
 			window.location.href = logoutUrl;
 		} else {
-			// Fallback: redirect directly to landing logout callback
-			window.location.href = logoutCallbackUrl;
+			// Fallback: redirect directly to landing main page
+			window.location.href = logoutRedirectUrl;
 		}
 	};
 

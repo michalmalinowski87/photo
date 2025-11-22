@@ -79,11 +79,12 @@ export function initializeAuth(onTokenFound, onNoToken) {
 }
 
 /**
- * Redirect to landing sign-in page
+ * Redirect to dashboard login page
  * @param {string} returnUrl - URL to return to after login
  */
 export function redirectToLandingSignIn(returnUrl = '/galleries') {
-	const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
-	window.location.href = `${landingUrl}/auth/sign-in?returnUrl=${encodeURIComponent(returnUrl)}`;
+	// Redirect to dashboard login page instead of landing sign-in
+	const dashboardUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+	window.location.href = `${dashboardUrl}/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 }
 
