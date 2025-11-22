@@ -152,7 +152,7 @@ const HelpPage = () => {
           </CardHeader>
           <CardContent className="flex justify-center">
             <Button asChild size="lg">
-              <Link href="/auth/sign-up" className="flex items-center gap-2">
+              <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`} className="flex items-center gap-2">
                 Skontaktuj się z nami
                 <ArrowRight className="w-4 h-4" />
               </Link>

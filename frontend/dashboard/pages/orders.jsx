@@ -19,34 +19,18 @@ export default function Orders() {
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
 		
-		// Initialize auth and try to get token
-		const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-		const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
-		if (userPoolId && clientId) {
-			initAuth(userPoolId, clientId);
-			getIdToken().then(token => {
+		// Initialize auth with token sharing
+		const { initializeAuth, redirectToLandingSignIn } = require('../lib/auth-init');
+		initializeAuth(
+			(token) => {
 				setIdToken(token);
-			}).catch(() => {
-				// No valid session, check localStorage for manual token
-				const stored = localStorage.getItem('idToken');
-				if (stored) {
-					setIdToken(stored);
-				} else {
-					// No token found, redirect directly to Cognito (not via landing)
-					redirectToCognito(router.asPath);
-				}
-			});
-		} else {
-			// Fallback to localStorage for manual token
-			const stored = localStorage.getItem('idToken');
-			if (stored) {
-				setIdToken(stored);
-			} else {
-				// No token found, redirect directly to Cognito (not via landing)
-				redirectToCognito(router.asPath);
+			},
+			() => {
+				// No token found, redirect to landing sign-in
+				redirectToLandingSignIn(router.asPath);
 			}
-		}
-	}, []);
+		);
+	}, [router]);
 
 	async function loadOrders() {
 		setMessage('');

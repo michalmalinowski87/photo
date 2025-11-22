@@ -21,7 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const Navbar = () => {
   const [scroll, setScroll] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 
   const handleScroll = () => {
@@ -111,16 +111,16 @@ const Navbar = () => {
           </div>
 
           <div className="hidden lg:flex items-center gap-x-4">
-            {isAuthenticated ? (
+            {isLoading ? null : isAuthenticated ? (
               <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ size: "sm" })}>
                 Dashboard
               </Link>
             ) : (
               <>
-                <Link href="/auth/sign-in" className={buttonVariants({ size: "sm", variant: "ghost" })}>
+                <Link href={`${dashboardUrl}/login`} className={buttonVariants({ size: "sm", variant: "ghost" })}>
                   Zaloguj się
                 </Link>
-                <Link href="/auth/sign-up" className={buttonVariants({ size: "sm" })}>
+                <Link href={`${dashboardUrl}/sign-up`} className={buttonVariants({ size: "sm" })}>
                   Rozpocznij za darmo
                 </Link>
               </>

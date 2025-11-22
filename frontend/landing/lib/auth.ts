@@ -1,4 +1,4 @@
-import { CognitoUserPool, CognitoUser, CognitoUserAttribute } from 'amazon-cognito-identity-js'
+import { CognitoUserPool, CognitoUser, CognitoUserAttribute, AuthenticationDetails } from 'amazon-cognito-identity-js'
 
 let userPool: CognitoUserPool | null = null
 
@@ -165,6 +165,63 @@ export function resendConfirmationCode(email: string): Promise<void> {
     })
 }
 
+export function signIn(email: string, password: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        if (!userPool) {
+            reject(new Error('Auth not initialized'))
+            return
+        }
+
+        const authenticationDetails = new AuthenticationDetails({
+            Username: email,
+            Password: password
+        })
+
+        const cognitoUser = new CognitoUser({
+            Username: email,
+            Pool: userPool
+        })
+
+        cognitoUser.authenticateUser(authenticationDetails, {
+            onSuccess: (result) => {
+                const idToken = result.getIdToken().getJwtToken()
+                const accessToken = result.getAccessToken().getJwtToken()
+                const refreshToken = result.getRefreshToken().getToken()
+                
+                // Store tokens in localStorage
+                localStorage.setItem('idToken', idToken)
+                localStorage.setItem('accessToken', accessToken)
+                if (refreshToken) {
+                    localStorage.setItem('refreshToken', refreshToken)
+                }
+                
+                // Set up Cognito SDK session in sessionStorage for SDK compatibility
+                try {
+                    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+                    if (clientId && typeof window !== 'undefined') {
+                        const idTokenPayload = JSON.parse(atob(idToken.split('.')[1]))
+                        const username = idTokenPayload['cognito:username'] || idTokenPayload.email || idTokenPayload.sub
+                        
+                        sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.LastAuthUser`, username)
+                        sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.idToken`, idToken)
+                        sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.accessToken`, accessToken)
+                        if (refreshToken) {
+                            sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.refreshToken`, refreshToken)
+                        }
+                    }
+                } catch (e) {
+                    // Session setup failed, but tokens are still stored
+                }
+                
+                resolve(idToken)
+            },
+            onFailure: (err) => {
+                reject(err)
+            }
+        })
+    })
+}
+
 // Generate random string for PKCE
 function generateRandomString(length: number): string {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
@@ -239,16 +296,152 @@ export async function redirectToCognito(returnUrl: string | null = null, callbac
         params.append('state', encodeURIComponent(returnUrl))
     }
     
-    // Try silent authentication first if user might already be logged in
-    // This helps when user logged in via SDK and we're redirecting to Cognito
-    // Note: This might not work if SDK session doesn't create server-side cookie
-    // In that case, Cognito will show login page, which is acceptable
-    
     const authUrl = `${baseUrl}/oauth2/authorize?${params.toString()}`
     
     if (typeof window !== 'undefined') {
         window.location.href = authUrl
     }
+}
+
+/**
+ * Establish Cognito server-side session silently after SDK login
+ * Uses a hidden iframe to do OAuth flow without showing Cognito Hosted UI to user
+ * This creates HttpOnly cookies on Cognito domain for cross-domain authentication
+ */
+export async function establishCognitoSessionSilently(): Promise<void> {
+    if (typeof window === 'undefined') return
+    
+    const idToken = localStorage.getItem('idToken')
+    if (!idToken) {
+        throw new Error('No token available')
+    }
+    
+    // Verify token is valid
+    try {
+        const payload = JSON.parse(atob(idToken.split('.')[1]))
+        const now = Math.floor(Date.now() / 1000)
+        if (payload.exp && payload.exp <= now) {
+            throw new Error('Token expired')
+        }
+    } catch (e) {
+        throw new Error('Invalid token')
+    }
+    
+    const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN
+    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+    
+    if (!userPoolDomain || !clientId) {
+        throw new Error('Cognito configuration missing')
+    }
+    
+    // Create hidden iframe to establish Cognito session
+    // This will create server-side session cookie without showing UI to user
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = 'none'
+    iframe.style.position = 'absolute'
+    iframe.style.left = '-9999px'
+    
+    // Generate PKCE for silent auth
+    const codeVerifier = generateRandomString(128)
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    sessionStorage.setItem('pkce_code_verifier_silent', codeVerifier)
+    
+    // Build Cognito authorize URL
+    let domain = userPoolDomain.replace(/^https?:\/\//, '')
+    if (domain.includes('.amazonaws.com')) {
+        domain = domain.replace('.amazonaws.com', '.amazoncognito.com')
+    }
+    if (!domain.includes('.amazoncognito.com')) {
+        const parts = domain.split('.')
+        const region = parts.length > 2 ? parts[parts.length - 2] : 'eu-west-1'
+        domain = `${domain}.auth.${region}.amazoncognito.com`
+    }
+    
+    const redirectUri = `${window.location.origin}/auth/auth-callback-silent`
+    const authUrl = `https://${domain}/oauth2/authorize?` + new URLSearchParams({
+        client_id: clientId,
+        response_type: 'code',
+        scope: 'openid email profile',
+        redirect_uri: redirectUri,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+        // Note: Cognito doesn't support prompt=none, but if user is already logged in
+        // via SDK, Cognito might recognize the session and redirect immediately
+    }).toString()
+    
+    return new Promise((resolve, reject) => {
+        let resolved = false
+        
+        // Listen for message from silent callback page
+        const messageHandler = (event: MessageEvent) => {
+            // Security: Validate origin
+            const cognitoDomain = `https://${domain}`
+            if (event.origin !== cognitoDomain && event.origin !== window.location.origin) {
+                return
+            }
+            
+            if (event.data && event.data.type === 'PHOTOHUB_SILENT_SESSION_ESTABLISHED') {
+                if (!resolved) {
+                    resolved = true
+                    window.removeEventListener('message', messageHandler)
+                    cleanup()
+                    if (event.data.success) {
+                        resolve()
+                    } else {
+                        reject(new Error('Failed to establish session'))
+                    }
+                }
+            }
+        }
+        
+        window.addEventListener('message', messageHandler)
+        
+        const cleanup = () => {
+            if (iframe.parentNode) {
+                document.body.removeChild(iframe)
+            }
+            sessionStorage.removeItem('pkce_code_verifier_silent')
+        }
+        
+        iframe.onload = () => {
+            // Wait a bit for callback to process
+            setTimeout(() => {
+                if (!resolved) {
+                    resolved = true
+                    window.removeEventListener('message', messageHandler)
+                    cleanup()
+                    // Resolve anyway - session might be established even if callback didn't fire
+                    resolve()
+                }
+            }, 2000)
+        }
+        
+        iframe.onerror = () => {
+            if (!resolved) {
+                resolved = true
+                window.removeEventListener('message', messageHandler)
+                cleanup()
+                reject(new Error('Failed to load iframe'))
+            }
+        }
+        
+        iframe.src = authUrl
+        document.body.appendChild(iframe)
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+            if (!resolved) {
+                resolved = true
+                window.removeEventListener('message', messageHandler)
+                cleanup()
+                // Resolve anyway - session might be established
+                resolve()
+            }
+        }, 5000)
+    })
 }
 
 export async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<string> {
@@ -262,7 +455,7 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
     // Get PKCE verifier from sessionStorage (don't remove it yet - only remove after successful exchange)
     let codeVerifier: string | null = null
     if (typeof window !== 'undefined') {
-        codeVerifier = sessionStorage.getItem('pkce_code_verifier')
+        codeVerifier = sessionStorage.getItem('pkce_code_verifier') || sessionStorage.getItem('pkce_code_verifier_silent')
         // Don't remove here - remove only after successful token exchange
     }
     
@@ -308,6 +501,7 @@ export async function exchangeCodeForTokens(code: string, redirectUri: string): 
     // Remove PKCE verifier AFTER successful token exchange (use once)
     if (typeof window !== 'undefined' && codeVerifier) {
         sessionStorage.removeItem('pkce_code_verifier')
+        sessionStorage.removeItem('pkce_code_verifier_silent')
     }
     
     if (tokens.id_token) {
@@ -357,4 +551,3 @@ export function getHostedUILogoutUrl(userPoolDomain: string, redirectUri: string
     })
     return `${baseUrl}/logout?${params.toString()}`
 }
-

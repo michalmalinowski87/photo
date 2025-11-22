@@ -10,8 +10,8 @@ export default function Galleries() {
 	const [grid, setGrid] = useState('');
 	const [msg, setMsg] = useState('');
 	const [file, setFile] = useState(null);
-	const [clientEmail, setClientEmail] = useState('snky1987@gmail.com');
-	const [clientPass, setClientPass] = useState('1nasa1');
+	const [clientEmail, setClientEmail] = useState('');
+	const [clientPass, setClientPass] = useState('');
 	const [galleryName, setGalleryName] = useState('');
 	const [plan, setPlan] = useState('Basic');
 	const [pkgName, setPkgName] = useState('Basic');
@@ -27,33 +27,17 @@ export default function Galleries() {
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
 		
-		// Initialize auth and try to get token
-		const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-		const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
-		if (userPoolId && clientId) {
-			initAuth(userPoolId, clientId);
-			getIdToken().then(token => {
+		// Initialize auth with token sharing
+		const { initializeAuth, redirectToLandingSignIn } = require('../lib/auth-init');
+		initializeAuth(
+			(token) => {
 				setIdToken(token);
-			}).catch(() => {
-				// No valid session, check localStorage for manual token
-				const stored = localStorage.getItem('idToken');
-				if (stored) {
-					setIdToken(stored);
-				} else {
-					// No token found, redirect directly to Cognito (not via landing)
-					redirectToCognito('/galleries');
-				}
-			});
-		} else {
-			// Fallback to localStorage for manual token
-			const stored = localStorage.getItem('idToken');
-			if (stored) {
-				setIdToken(stored);
-			} else {
-				// No token found, redirect directly to Cognito (not via landing)
-				redirectToCognito('/galleries');
+			},
+			() => {
+				// No token found, redirect to landing sign-in
+				redirectToLandingSignIn('/galleries');
 			}
-		}
+		);
 	}, []);
 	
 	

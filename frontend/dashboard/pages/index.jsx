@@ -1,42 +1,25 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { initAuth, getIdToken, redirectToCognito } from '../lib/auth';
+import { initializeAuth, redirectToLandingSignIn } from '../lib/auth-init';
+import { setupDashboardAuthStatusListener } from '../lib/dashboard-auth-status';
 
 export default function Home() {
 	const router = useRouter();
 
 	useEffect(() => {
-		// Check authentication and redirect
-		const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-		const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
-		
-		if (userPoolId && clientId) {
-			initAuth(userPoolId, clientId);
-			getIdToken()
-				.then(() => {
-					// User is authenticated, redirect to galleries
-					router.replace('/galleries');
-				})
-				.catch(() => {
-					// Check localStorage as fallback
-					const stored = localStorage.getItem('idToken');
-					if (stored) {
-						router.replace('/galleries');
-					} else {
-						// Redirect directly to Cognito (not via landing)
-						redirectToCognito('/galleries');
-					}
-				});
-		} else {
-			// No Cognito config, check localStorage
-			const stored = localStorage.getItem('idToken');
-			if (stored) {
+		// Setup auth status listener for landing page
+		setupDashboardAuthStatusListener();
+
+		initializeAuth(
+			() => {
+				// User is authenticated, redirect to galleries
 				router.replace('/galleries');
-			} else {
-				// Redirect directly to Cognito (not via landing)
-				redirectToCognito('/galleries');
+			},
+			() => {
+				// No token found, redirect to login page
+				router.replace('/login?returnUrl=/galleries');
 			}
-		}
+		);
 	}, [router]);
 
 	// Show loading state while redirecting

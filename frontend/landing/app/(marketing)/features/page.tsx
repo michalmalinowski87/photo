@@ -87,7 +87,7 @@ export default function FeaturesPage() {
             Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoHub.
           </p>
           <Button asChild size="lg">
-            <Link href="/auth/sign-up">
+            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
               Rozpocznij za darmo
             </Link>
           </Button>

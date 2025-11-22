@@ -1,4 +1,4 @@
-import { CognitoUserPool, CognitoUser, AuthenticationDetails } from 'amazon-cognito-identity-js';
+import { CognitoUserPool, CognitoUser, AuthenticationDetails, CognitoUserAttribute } from 'amazon-cognito-identity-js';
 
 let userPool = null;
 
@@ -54,11 +54,112 @@ export function signIn(email, password) {
 		});
 		cognitoUser.authenticateUser(authenticationDetails, {
 			onSuccess: (result) => {
-				resolve(result.getIdToken().getJwtToken());
+				const idToken = result.getIdToken().getJwtToken();
+				const accessToken = result.getAccessToken().getJwtToken();
+				const refreshToken = result.getRefreshToken().getToken();
+				
+				// Store tokens in localStorage
+				localStorage.setItem('idToken', idToken);
+				localStorage.setItem('accessToken', accessToken);
+				if (refreshToken) {
+					localStorage.setItem('refreshToken', refreshToken);
+				}
+				
+				// Set up Cognito SDK session in sessionStorage for SDK compatibility
+				try {
+					const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+					if (clientId && typeof window !== 'undefined') {
+						const idTokenPayload = JSON.parse(atob(idToken.split('.')[1]));
+						const username = idTokenPayload['cognito:username'] || idTokenPayload.email || idTokenPayload.sub;
+						
+						sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.LastAuthUser`, username);
+						sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.idToken`, idToken);
+						sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.accessToken`, accessToken);
+						if (refreshToken) {
+							sessionStorage.setItem(`CognitoIdentityServiceProvider.${clientId}.${username}.refreshToken`, refreshToken);
+						}
+					}
+				} catch (e) {
+					// Session setup failed, but tokens are still stored
+				}
+				
+				resolve(idToken);
 			},
 			onFailure: (err) => {
 				reject(err);
 			}
+		});
+	});
+}
+
+export function signUp(email, password) {
+	return new Promise((resolve, reject) => {
+		if (!userPool) {
+			reject(new Error('Auth not initialized'));
+			return;
+		}
+
+		const attributeList = [
+			new CognitoUserAttribute({
+				Name: 'email',
+				Value: email
+			})
+		];
+
+		userPool.signUp(email, password, attributeList, [], (err, result) => {
+			if (err) {
+				reject(err);
+				return;
+			}
+			if (!result || !result.user) {
+				reject(new Error('Sign up failed'));
+				return;
+			}
+			resolve(result.user);
+		});
+	});
+}
+
+export function confirmSignUp(email, code) {
+	return new Promise((resolve, reject) => {
+		if (!userPool) {
+			reject(new Error('Auth not initialized'));
+			return;
+		}
+
+		const cognitoUser = new CognitoUser({
+			Username: email,
+			Pool: userPool
+		});
+
+		cognitoUser.confirmRegistration(code, true, (err, result) => {
+			if (err) {
+				reject(err);
+				return;
+			}
+			resolve();
+		});
+	});
+}
+
+export function resendConfirmationCode(email) {
+	return new Promise((resolve, reject) => {
+		if (!userPool) {
+			reject(new Error('Auth not initialized'));
+			return;
+		}
+
+		const cognitoUser = new CognitoUser({
+			Username: email,
+			Pool: userPool
+		});
+
+		cognitoUser.resendConfirmationCode((err, result) => {
+			if (err) {
+				reject(err);
+				return;
+			}
+			resolve();
 		});
 	});
 }

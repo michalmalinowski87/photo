@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Auth Check</title>
+</head>
+<body>
+    <script>
+        (function() {
+            // Get landing URL from query param or use default
+            const params = new URLSearchParams(window.location.search);
+            const landingUrl = params.get('landing') || 'http://localhost:3003';
+            const expectedOrigin = new URL(landingUrl).origin;
+            
+            // Listen for auth status requests from parent window (landing page)
+            window.addEventListener('message', function(event) {
+                // Only accept messages from landing page origin
+                if (event.origin !== expectedOrigin && event.origin !== window.location.origin) {
+                    return;
+                }
+
+                const data = event.data;
+                if (data && data.type === 'PHOTOHUB_AUTH_STATUS_REQUEST') {
+                    // Check if user is authenticated
+                    const idToken = localStorage.getItem('idToken');
+                    let isAuthenticated = false;
+
+                    if (idToken) {
+                        try {
+                            const payload = JSON.parse(atob(idToken.split('.')[1]));
+                            const now = Math.floor(Date.now() / 1000);
+                            if (payload.exp && payload.exp > now) {
+                                isAuthenticated = true;
+                            }
+                        } catch (e) {
+                            // Invalid token
+                            isAuthenticated = false;
+                        }
+                    }
+
+                    // Respond with auth status
+                    const response = {
+                        type: 'PHOTOHUB_AUTH_STATUS_RESPONSE',
+                        requestId: data.requestId,
+                        isAuthenticated: isAuthenticated,
+                        source: window.location.origin
+                    };
+
+                    // Send response back to parent
+                    if (event.source && event.source.postMessage) {
+                        event.source.postMessage(response, event.origin);
+                    }
+                }
+            });
+
+            // Send ready signal to parent when loaded
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'PHOTOHUB_AUTH_CHECK_READY',
+                    source: window.location.origin
+                }, '*');
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -16,7 +16,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: "/auth/sign-up",
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
       variant: "default",
     }
   },
@@ -37,7 +37,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: "/auth/sign-up",
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
       variant: "primary",
     }
   },
@@ -58,7 +58,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: "/auth/sign-up",
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
       variant: "default",
     }
   }

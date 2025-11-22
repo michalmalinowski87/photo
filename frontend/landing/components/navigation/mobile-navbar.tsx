@@ -21,7 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 const MobileNavbar = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 
   const handleClose = () => {
@@ -44,16 +44,16 @@ const MobileNavbar = () => {
           </SheetClose>
           <div className="flex flex-col items-start w-full py-2 mt-10">
             <div className="flex items-center justify-evenly w-full space-x-2">
-              {isAuthenticated ? (
+              {isLoading ? null : isAuthenticated ? (
                 <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
                   Dashboard
                 </Link>
               ) : (
                 <>
-                  <Link href="/auth/sign-in" className={buttonVariants({ variant: "outline", className: "w-full" })} onClick={handleClose}>
+                  <Link href={`${dashboardUrl}/login`} className={buttonVariants({ variant: "outline", className: "w-full" })} onClick={handleClose}>
                     Zaloguj się
                   </Link>
-                  <Link href="/auth/sign-up" className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
+                  <Link href={`${dashboardUrl}/sign-up`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
                     Rozpocznij za darmo
                   </Link>
                 </>

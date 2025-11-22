@@ -1,5 +1,6 @@
 import { Providers } from "@/components";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthTokenListener } from "@/components/auth-token-listener";
 import "@/styles/globals.css";
 import { aeonik, cn, generateMetadata, inter } from "@/utils";
 
@@ -23,6 +24,7 @@ export default function RootLayout({
         )}
       >
         <Providers>
+          <AuthTokenListener />
           <Toaster richColors theme="dark" position="top-right" />
           {children}
         </Providers>

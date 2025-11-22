@@ -135,7 +135,7 @@ const PricingCards = () => {
               </CardContent>
               <CardFooter className="w-full mt-auto">
                 <Link
-                  href="/auth/sign-up"
+                  href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}
                   style={{ width: "100%" }}
                   className={buttonVariants({ 
                     variant: isHovered ? "primary" : "ghost",

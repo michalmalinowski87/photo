@@ -31,7 +31,7 @@ const HomePage = async () => {
             </p>
             <div className="flex items-center justify-center whitespace-nowrap gap-4 z-50">
               <Button asChild className="bg-theme-primary hover:bg-theme-primary/90 text-white">
-                <Link href="/auth/sign-up">
+                <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
                   Rozpocznij za darmo
                 </Link>
               </Button>
@@ -247,7 +247,7 @@ const HomePage = async () => {
               </p>
               <div className="mt-6">
                 <Button asChild>
-                  <Link href="/auth/sign-up" className="flex items-center">
+                  <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`} className="flex items-center">
                     Rozpocznij za darmo
                     <ArrowRightIcon className="w-4 h-4 ml-2" />
                   </Link>
