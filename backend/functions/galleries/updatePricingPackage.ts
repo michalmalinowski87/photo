@@ -13,8 +13,8 @@ export const handler = lambdaLogger(async (event: any) => {
 	if (!id) return { statusCode: 400, body: 'missing id' };
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const pkg = body?.pricingPackage;
-	if (!pkg || typeof pkg.packageName !== 'string' || typeof pkg.includedCount !== 'number' || typeof pkg.extraPriceCents !== 'number') {
-		return { statusCode: 400, body: 'pricingPackage requires { packageName, includedCount, extraPriceCents }' };
+	if (!pkg || typeof pkg.packageName !== 'string' || typeof pkg.includedCount !== 'number' || typeof pkg.extraPriceCents !== 'number' || typeof pkg.packagePriceCents !== 'number') {
+		return { statusCode: 400, body: 'pricingPackage requires { packageName, includedCount, extraPriceCents, packagePriceCents }' };
 	}
 	const requester = getUserIdFromEvent(event);
 	const got = await ddb.send(new GetCommand({ TableName: table, Key: { galleryId: id } }));
@@ -59,7 +59,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		Key: { galleryId: id },
 		UpdateExpression: 'SET pricingPackage = :p, updatedAt = :u',
 		ExpressionAttributeValues: {
-			':p': { packageName: pkg.packageName, includedCount: pkg.includedCount, extraPriceCents: pkg.extraPriceCents },
+			':p': { packageName: pkg.packageName, includedCount: pkg.includedCount, extraPriceCents: pkg.extraPriceCents, packagePriceCents: pkg.packagePriceCents },
 			':u': new Date().toISOString()
 		}
 	}));

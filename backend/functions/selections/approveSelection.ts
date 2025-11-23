@@ -61,7 +61,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Compute overage from selected keys
 	const selectedCount = selectedKeys.length;
-	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number } | undefined;
+	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packagePriceCents?: number } | undefined;
 	
 	// Check if this is "purchase more" scenario (there's a DELIVERED order but no active order)
 	const hasDeliveredOrder = orders.some((o: any) => o.deliveryStatus === 'DELIVERED');

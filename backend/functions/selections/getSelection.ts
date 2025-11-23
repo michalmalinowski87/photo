@@ -25,7 +25,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	if (!gallery) return { statusCode: 404, body: 'not found' };
 	
 	// Get pricing package from gallery (set by photographer per gallery)
-	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packageName?: string } | undefined;
+	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packageName?: string; packagePriceCents?: number } | undefined;
 	const ordersQuery = await ddb.send(new QueryCommand({
 		TableName: ordersTable,
 		KeyConditionExpression: 'galleryId = :g',
@@ -73,7 +73,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
 			hasDeliveredOrder, // For showing processed photos view
 			selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
-			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packageName: '' }
+			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packageName: '', packagePriceCents: 0 }
 		})
 	};
 });

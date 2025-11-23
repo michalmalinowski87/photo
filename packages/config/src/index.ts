@@ -13,6 +13,7 @@ export interface PricingPackage {
 	packageName: string;
 	includedCount: number;
 	extraPriceCents: number;
+	packagePriceCents: number;
 }
 
 export const GALLERY_STATES = ['DRAFT', 'PAID_ACTIVE', 'EXPIRED'] as const;

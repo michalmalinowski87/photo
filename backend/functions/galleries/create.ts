@@ -22,21 +22,52 @@ interface PlanMetadata {
 	expiryDays: number;
 }
 
+// Pricing plans based on landing page: 1GB, 3GB, 10GB with duration options (1m, 3m, 12m)
 const PRICING_PLANS: Record<string, PlanMetadata> = {
-	Basic: {
+	'1GB-1m': {
 		priceCents: 700,      // 7 PLN
-		storageLimitBytes: 1 * 1024 * 1024,  // 1 MB
-		expiryDays: 3
-	},
-	Standard: {
-		priceCents: 1000,     // 10 PLN
-		storageLimitBytes: 10 * 1024 * 1024, // 10 MB
+		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 30        // 1 month
 	},
-	Pro: {
-		priceCents: 1500,     // 15 PLN
-		storageLimitBytes: 100 * 1024 * 1024, // 100 MB
+	'1GB-3m': {
+		priceCents: 900,      // 9 PLN
+		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 90        // 3 months
+	},
+	'1GB-12m': {
+		priceCents: 1500,     // 15 PLN
+		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
+		expiryDays: 365       // 12 months
+	},
+	'3GB-1m': {
+		priceCents: 1200,     // 12 PLN
+		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
+		expiryDays: 30        // 1 month
+	},
+	'3GB-3m': {
+		priceCents: 1400,     // 14 PLN
+		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
+		expiryDays: 90        // 3 months
+	},
+	'3GB-12m': {
+		priceCents: 2100,     // 21 PLN
+		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
+		expiryDays: 365       // 12 months
+	},
+	'10GB-1m': {
+		priceCents: 1400,     // 14 PLN
+		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
+		expiryDays: 30        // 1 month
+	},
+	'10GB-3m': {
+		priceCents: 1600,     // 16 PLN
+		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
+		expiryDays: 90        // 3 months
+	},
+	'10GB-12m': {
+		priceCents: 2600,     // 26 PLN
+		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
+		expiryDays: 365       // 12 months
 	}
 };
 
@@ -149,8 +180,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ownerEmail = claims.email || '';
 
 	const body = event?.body ? JSON.parse(event.body) : {};
-	const plan = body?.plan || 'Basic'; // Default plan
-	const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS.Basic;
+	const plan = body?.plan || '1GB-1m'; // Default plan
+	const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS['1GB-1m'];
 	const priceCents = planMetadata.priceCents;
 	const storageLimitBytes = planMetadata.storageLimitBytes;
 	const expiryDays = planMetadata.expiryDays;
@@ -162,25 +193,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'pricingPackage is required: { packageName: string, includedCount: number, extraPriceCents: number }' })
+			body: JSON.stringify({ error: 'pricingPackage is required: { packageName: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
 		};
 	}
 	if (
 		typeof pricingPackage.packageName !== 'string' || 
 		typeof pricingPackage.includedCount !== 'number' || 
-		typeof pricingPackage.extraPriceCents !== 'number'
+		typeof pricingPackage.extraPriceCents !== 'number' ||
+		typeof pricingPackage.packagePriceCents !== 'number'
 	) {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'pricingPackage must have { packageName: string, includedCount: number, extraPriceCents: number }' })
+			body: JSON.stringify({ error: 'pricingPackage must have { packageName: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
 		};
 	}
-	if (pricingPackage.includedCount < 0 || pricingPackage.extraPriceCents < 0) {
+	if (pricingPackage.includedCount < 0 || pricingPackage.extraPriceCents < 0 || pricingPackage.packagePriceCents < 0) {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'includedCount and extraPriceCents must be 0 or greater' })
+			body: JSON.stringify({ error: 'includedCount, extraPriceCents, and packagePriceCents must be 0 or greater' })
 		};
 	}
 
@@ -429,7 +461,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	item.pricingPackage = {
 		packageName: pricingPackage.packageName,
 		includedCount: pricingPackage.includedCount,
-		extraPriceCents: pricingPackage.extraPriceCents
+		extraPriceCents: pricingPackage.extraPriceCents,
+		packagePriceCents: pricingPackage.packagePriceCents
 	};
 
 	// Always accept clientEmail and clientPassword during creation (regardless of selectionEnabled)

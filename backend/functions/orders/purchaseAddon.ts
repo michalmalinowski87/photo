@@ -215,7 +215,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Calculate addon price based on photographer's plan price (30% of plan price)
 	// This makes more sense than basing it on client pricing (extra photos)
 	const BACKUP_STORAGE_MULTIPLIER = 0.3; // Default 30%, will be configurable through UI in future
-	const planPriceCents = gallery.priceCents || 700; // Default to Basic plan price (7 PLN) if not set
+	const planPriceCents = gallery.priceCents || 700; // Default to 1GB-1m plan price (7 PLN) if not set
 	const backupStorageCents = Math.round(planPriceCents * BACKUP_STORAGE_MULTIPLIER);
 
 	// Try wallet debit first if enabled - only debit if wallet has sufficient balance for full amount

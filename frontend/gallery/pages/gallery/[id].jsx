@@ -126,7 +126,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					hasClientApprovedOrder: selectionData.hasClientApprovedOrder || false,
 					hasDeliveredOrder: hasDeliveredOrder,
 					selectionEnabled: selectionData.selectionEnabled !== false, // Gallery-level setting
-					pricingPackage: selectionData.pricingPackage || { includedCount: 0, extraPriceCents: 0 }
+					pricingPackage: selectionData.pricingPackage || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
 				});
 				if (selectionData.approved) {
 					setMessage('Selection already approved');
@@ -146,7 +146,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					changeRequestPending: false,
 					hasClientApprovedOrder: false,
 					hasDeliveredOrder: hasDeliveredOrderFromOrders, // Use delivered orders check
-					pricingPackage: { includedCount: 0, extraPriceCents: 0 }
+					pricingPackage: { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
 				});
 			}
 		} catch (error) {
@@ -304,7 +304,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 	}, [shouldShowOnlyProcessed, viewMode]);
 	
 	// Calculate overage in real-time
-	const pricingPackage = galleryInfo?.pricingPackage || { includedCount: 0, extraPriceCents: 0 };
+	const pricingPackage = galleryInfo?.pricingPackage || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 };
 	const currentSelectedCount = selectedKeys.size;
 	
 	// For "Purchase More" view (when there's a delivered order), each photo costs extra (no included count)

@@ -18,7 +18,8 @@ This document provides a comprehensive testing guide for all flows in the PhotoH
      "pricingPackage": {
        "packageName": "Basic",
        "includedCount": 1,
-       "extraPriceCents": 500
+       "extraPriceCents": 500,
+       "packagePriceCents": 0
      },
      "galleryName": "Test Gallery",
      "clientEmail": "client@example.com",

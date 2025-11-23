@@ -13,10 +13,11 @@ export default function Galleries() {
 	const [clientEmail, setClientEmail] = useState('');
 	const [clientPass, setClientPass] = useState('');
 	const [galleryName, setGalleryName] = useState('');
-	const [plan, setPlan] = useState('Basic');
+	const [plan, setPlan] = useState('1GB-1m');
 	const [pkgName, setPkgName] = useState('Basic');
 	const [pkgIncluded, setPkgIncluded] = useState(1);
 	const [pkgExtra, setPkgExtra] = useState(500);
+	const [pkgPrice, setPkgPrice] = useState(0);
 	const [selectionEnabled, setSelectionEnabled] = useState(true);
 	const [hasBackupAddon, setHasBackupAddon] = useState(false);
 	const [galleriesList, setGalleriesList] = useState([]);
@@ -247,13 +248,13 @@ export default function Galleries() {
 		setMsg('');
 		
 		// Validate required pricing package fields
-		if (!pkgName || pkgIncluded === undefined || pkgExtra === undefined) {
-			setMsg('Please fill in all Client Pricing Package fields (Name, Included Photos, Extra Price)');
+		if (!pkgName || pkgIncluded === undefined || pkgExtra === undefined || pkgPrice === undefined) {
+			setMsg('Please fill in all Client Pricing Package fields (Name, Included Photos, Extra Price, Package Price)');
 			return;
 		}
 		
-		if (pkgIncluded < 0 || pkgExtra < 0) {
-			setMsg('Included Photos and Extra Price must be 0 or greater');
+		if (pkgIncluded < 0 || pkgExtra < 0 || pkgPrice < 0) {
+			setMsg('Included Photos, Extra Price, and Package Price must be 0 or greater');
 			return;
 		}
 		
@@ -264,7 +265,8 @@ export default function Galleries() {
 				pricingPackage: {
 					packageName: pkgName,
 					includedCount: Number(pkgIncluded),
-					extraPriceCents: Number(pkgExtra)
+					extraPriceCents: Number(pkgExtra),
+					packagePriceCents: Number(pkgPrice)
 				},
 				hasBackupStorage: hasBackupAddon
 			};
@@ -671,14 +673,32 @@ export default function Galleries() {
 						onChange={(e) => setPlan(e.target.value)}
 						style={{ width: '100%', maxWidth: 300, marginLeft: 8, padding: '4px 8px' }}
 					>
-						<option value="Basic">Basic - 7 PLN (1 MB, 3 days)</option>
-						<option value="Standard">Standard - 10 PLN (10 MB, 1 month)</option>
-						<option value="Pro">Pro - 15 PLN (100 MB, 3 months)</option>
+						<optgroup label="1 GB Plan">
+							<option value="1GB-1m">1 GB - 7 PLN (1 month)</option>
+							<option value="1GB-3m">1 GB - 9 PLN (3 months)</option>
+							<option value="1GB-12m">1 GB - 15 PLN (12 months)</option>
+						</optgroup>
+						<optgroup label="3 GB Plan">
+							<option value="3GB-1m">3 GB - 12 PLN (1 month)</option>
+							<option value="3GB-3m">3 GB - 14 PLN (3 months)</option>
+							<option value="3GB-12m">3 GB - 21 PLN (12 months)</option>
+						</optgroup>
+						<optgroup label="10 GB Plan">
+							<option value="10GB-1m">10 GB - 14 PLN (1 month)</option>
+							<option value="10GB-3m">10 GB - 16 PLN (3 months)</option>
+							<option value="10GB-12m">10 GB - 26 PLN (12 months)</option>
+						</optgroup>
 					</select>
 					<div style={{ fontSize: '12px', color: '#666', marginTop: 4, marginLeft: 8 }}>
-						{plan === 'Basic' && '1 MB storage limit, expires in 3 days'}
-						{plan === 'Standard' && '10 MB storage limit, expires in 1 month'}
-						{plan === 'Pro' && '100 MB storage limit, expires in 3 months'}
+						{plan === '1GB-1m' && '1 GB storage limit, expires in 1 month (~200-400 zdjęć)'}
+						{plan === '1GB-3m' && '1 GB storage limit, expires in 3 months (~200-400 zdjęć)'}
+						{plan === '1GB-12m' && '1 GB storage limit, expires in 12 months (~200-400 zdjęć)'}
+						{plan === '3GB-1m' && '3 GB storage limit, expires in 1 month (~600-1200 zdjęć)'}
+						{plan === '3GB-3m' && '3 GB storage limit, expires in 3 months (~600-1200 zdjęć)'}
+						{plan === '3GB-12m' && '3 GB storage limit, expires in 12 months (~600-1200 zdjęć)'}
+						{plan === '10GB-1m' && '10 GB storage limit, expires in 1 month (~2000-4000 zdjęć)'}
+						{plan === '10GB-3m' && '10 GB storage limit, expires in 3 months (~2000-4000 zdjęć)'}
+						{plan === '10GB-12m' && '10 GB storage limit, expires in 12 months (~2000-4000 zdjęć)'}
 					</div>
 				</div>
 				<div style={{ marginBottom: 8 }}>
@@ -714,6 +734,19 @@ export default function Galleries() {
 						/>
 						<span style={{ marginLeft: 8, color: '#666', fontSize: '12px' }}>
 							({(pkgExtra / 100).toFixed(2)} PLN per extra photo)
+						</span>
+					</div>
+					<div style={{ marginBottom: 4 }}>
+						<label>Package Price (cents): </label>
+						<input 
+							type="number" 
+							value={pkgPrice} 
+							onChange={(e) => setPkgPrice(Number(e.target.value))} 
+							min="0"
+							style={{ width: 100, marginLeft: 8 }}
+						/>
+						<span style={{ marginLeft: 8, color: '#666', fontSize: '12px' }}>
+							({(pkgPrice / 100).toFixed(2)} PLN base package price)
 						</span>
 					</div>
 				</div>
