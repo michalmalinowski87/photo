@@ -220,13 +220,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryId = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 	
 	// Calculate expiry date (Warsaw timezone - CET/CEST)
-	// Add expiryDays to createdAt timestamp
+	// Add expiryDays to createdAt timestamp for normal expiry (after payment)
 	const createdAtDate = new Date(now);
 	const expiresAtDate = new Date(createdAtDate.getTime() + expiryDays * 24 * 60 * 60 * 1000);
 	const expiresAt = expiresAtDate.toISOString();
+	
+	// NEW LOGIC: UNPAID galleries get 3-day TTL for automatic deletion
 	// TTL attribute for DynamoDB automatic deletion (Unix epoch time in seconds)
 	// DynamoDB will automatically delete the item when TTL expires (typically within 48 hours)
-	const ttlExpiresAt = Math.floor(expiresAtDate.getTime() / 1000);
+	// After payment, TTL will be removed and normal expiry (expiresAt) will be used
+	const ttlExpiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
+	const ttlExpiresAt = Math.floor(ttlExpiresAtDate.getTime() / 1000);
 
 	// Calculate addon price if requested
 	let addonPriceCents = 0;
@@ -247,63 +251,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Total price includes gallery plan + addon (if requested)
 	const totalPriceCents = priceCents + addonPriceCents;
 
-	// Try wallet debit first if enabled - only debit if wallet has sufficient balance for full amount
-	let paid = false;
-	let walletAmountCents = 0;
-	let stripeAmountCents = totalPriceCents; // Default to full Stripe payment
-	let checkoutUrl: string | undefined;
-
-	if (useWallet && walletsTable && ledgerTable) {
-		const walletBalance = await getWalletBalance(ownerId, walletsTable);
-		
-		// Only debit wallet if balance is sufficient to cover full cost
-		if (walletBalance >= totalPriceCents) {
-			paid = await debitWallet(ownerId, totalPriceCents, walletsTable, ledgerTable, `debit_${Date.now()}`);
-			if (paid) {
-				walletAmountCents = totalPriceCents;
-				stripeAmountCents = 0;
-			}
-		}
-		// If insufficient balance, don't debit wallet - redirect to Stripe for full amount
-		
-		logger.info('Wallet debit attempt', { 
-			ownerId, 
-			galleryPriceCents: priceCents,
-			addonPriceCents,
-			totalPriceCents,
-			walletBalance,
-			walletAmountCents,
-			stripeAmountCents,
-			paid, 
-			hasWalletsTable: !!walletsTable, 
-			hasLedgerTable: !!ledgerTable 
-		});
-	}
-
-	// Create transaction immediately
+	// NEW LOGIC: Always create gallery as UNPAID draft (no immediate payment)
+	// Gallery will have 3-day TTL and can be paid later via "Opłać galerię" button
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	let transactionId: string | undefined;
 	
-		if (transactionsTable) {
+	if (transactionsTable) {
 		try {
-			// Determine payment method: STRIPE if any Stripe amount, otherwise WALLET if wallet was used
-			const paymentMethod = stripeAmountCents > 0 ? 'STRIPE' : (walletAmountCents > 0 ? 'WALLET' : 'STRIPE');
-			
 			// Build composites list for frontend display
 			const composites: string[] = [`Gallery Plan ${plan}`];
 			if (hasBackupStorage) {
 				composites.push('Backup addon');
 			}
 			
+			// Create transaction with UNPAID status (no wallet/Stripe payment yet)
 			transactionId = await createTransaction(
 				ownerId,
 				'GALLERY_PLAN',
 				totalPriceCents,
 				{
 					galleryId,
-					walletAmountCents,
-					stripeAmountCents,
-					paymentMethod: paymentMethod as any,
+					walletAmountCents: 0,
+					stripeAmountCents: totalPriceCents,
+					paymentMethod: 'STRIPE' as any,
 					composites,
 					metadata: {
 						plan,
@@ -312,12 +282,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}
 				}
 			);
-			logger.info('Transaction created', { transactionId, galleryId, totalPriceCents, walletAmountCents, stripeAmountCents });
-			
-			// If fully paid with wallet, update transaction status immediately
-			if (paid && stripeAmountCents === 0) {
-				await updateTransactionStatus(ownerId, transactionId, 'PAID');
-			}
+			logger.info('Transaction created (UNPAID)', { transactionId, galleryId, totalPriceCents });
 		} catch (err: any) {
 			logger.error('Failed to create transaction', {
 				error: err.message,
@@ -326,131 +291,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// If not fully paid (stripeAmountCents > 0) and Stripe is configured, create checkout for remaining amount
-	// Note: We check stripeAmountCents > 0, not !paid, because paid=true when wallet debit succeeds even for partial payments
-	if (stripeAmountCents > 0 && stripeSecretKey) {
-		try {
-			const stripe = new Stripe(stripeSecretKey);
-			const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-			const redirectUrl = `${dashboardUrl}/galleries?payment=success&gallery=${galleryId}`;
-			
-			const successUrl = apiUrl 
-				? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-				: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
-			const cancelUrl = apiUrl
-				? `${apiUrl}/payments/cancel`
-				: 'https://your-frontend/payments/cancel';
-
-			logger.info('Creating Stripe checkout session', {
-				galleryId,
-				totalPriceCents,
-				walletAmountCents,
-				stripeAmountCents,
-				successUrl,
-				cancelUrl,
-				redirectUrl,
-				apiUrlConfigured: !!apiUrl,
-				transactionId
-			});
-
-			// Build line items: full Stripe payment (wallet is only used if it covers full amount)
-			const lineItems: any[] = [];
-			
-			lineItems.push({
-				price_data: {
-					currency: 'pln',
-					product_data: {
-						name: `Gallery: ${galleryId}`,
-						description: `PhotoHub gallery creation - ${plan} plan`
-					},
-					unit_amount: priceCents
-				},
-				quantity: 1
-			});
-			
-			if (hasBackupStorage && addonPriceCents > 0) {
-				lineItems.push({
-					price_data: {
-						currency: 'pln',
-						product_data: {
-							name: 'Backup Storage Addon',
-							description: `Backup storage addon for gallery ${galleryId}`
-						},
-						unit_amount: addonPriceCents
-					},
-					quantity: 1
-				});
-			}
-
-			const session = await stripe.checkout.sessions.create({
-				payment_method_types: ['card'],
-				mode: 'payment',
-				line_items: lineItems,
-				success_url: successUrl,
-				cancel_url: cancelUrl,
-				metadata: {
-					userId: ownerId,
-					type: 'gallery_payment',
-					galleryId,
-					transactionId: transactionId || '',
-					walletAmountCents: walletAmountCents.toString(),
-					stripeAmountCents: stripeAmountCents.toString(),
-					hasBackupStorage: hasBackupStorage ? 'true' : 'false',
-					addonPriceCents: addonPriceCents.toString(),
-					redirectUrl: redirectUrl
-				}
-			});
-
-			// Update transaction with Stripe session ID
-			if (transactionId && transactionsTable) {
-				await updateTransactionStatus(ownerId, transactionId, 'UNPAID', {
-					stripeSessionId: session.id
-				});
-			}
-
-			checkoutUrl = session.url;
-			logger.info('Stripe checkout session created', { checkoutUrl, sessionId: session.id });
-			// Gallery will be marked as paid when webhook processes the payment
-		} catch (err: any) {
-			logger.error('Stripe checkout creation failed', {
-				error: {
-					name: err.name,
-					message: err.message,
-					code: err.code,
-					type: err.type,
-					stack: err.stack
-				},
-				stripeSecretKeyConfigured: !!stripeSecretKey,
-				stripeSecretKeyLength: stripeSecretKey?.length || 0,
-				apiUrlConfigured: !!apiUrl
-			});
-		}
-	} else if (!paid) {
-		logger.warn('Stripe not configured', {
-			stripeSecretKeyConfigured: !!stripeSecretKey,
-			useWallet,
-			walletsTableConfigured: !!walletsTable,
-			ledgerTableConfigured: !!ledgerTable
-		});
-	}
-
-	// Create gallery (will be marked PAID_ACTIVE if wallet debit succeeded, otherwise DRAFT)
-		const item: any = {
-			galleryId,
-			ownerId,
-			ownerEmail,
-			state: paid ? 'PAID_ACTIVE' : 'DRAFT',
-			plan,
-			priceCents,
-			storageLimitBytes,
-			expiresAt, // ISO string for display purposes
-			ttl: ttlExpiresAt, // Unix epoch seconds for DynamoDB TTL automatic deletion
-			bytesUsed: 0,
-			selectionEnabled: !!body.selectionEnabled,
-			selectionStatus: body.selectionEnabled ? (paid ? 'NOT_STARTED' : 'DISABLED') : 'DISABLED',
-			createdAt: now,
-			updatedAt: now
-		};
+	// Create gallery as UNPAID DRAFT (always, no immediate payment)
+	const item: any = {
+		galleryId,
+		ownerId,
+		ownerEmail,
+		state: 'DRAFT', // Always DRAFT for new galleries (will become PAID_ACTIVE after payment)
+		plan,
+		priceCents,
+		storageLimitBytes,
+		expiresAt, // ISO string for display purposes (normal expiry after payment)
+		ttl: ttlExpiresAt, // Unix epoch seconds for DynamoDB TTL automatic deletion (3 days for UNPAID)
+		bytesUsed: 0,
+		selectionEnabled: !!body.selectionEnabled,
+		selectionStatus: body.selectionEnabled ? 'DISABLED' : 'DISABLED', // Disabled until paid
+		createdAt: now,
+		updatedAt: now
+	};
 	
 	// Add galleryName if provided (optional, for nicer presentation)
 	if (body?.galleryName && typeof body.galleryName === 'string' && body.galleryName.trim()) {
@@ -520,9 +377,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
 	// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
 	// Order is created regardless of payment status so photographer can finalize delivery
+	// Handle initial payment amount from wizard Step 5
+	const initialPaymentAmountCents = body?.initialPaymentAmountCents || 0; // Amount paid by client initially
+	let orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
+	
 	if (!body.selectionEnabled) {
 		if (ordersTable) {
 			try {
+				// Determine order payment status based on initial payment amount
+				if (initialPaymentAmountCents > 0) {
+					if (initialPaymentAmountCents >= totalPriceCents) {
+						orderPaymentStatus = 'PAID';
+					} else {
+						orderPaymentStatus = 'PARTIALLY_PAID';
+					}
+				}
+				
 				const orderNumber = 1;
 				const orderId = `${orderNumber}-${Date.now()}`;
 				// Create order with all photos (empty selectedKeys means all photos)
@@ -534,7 +404,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						orderId,
 						orderNumber,
 						deliveryStatus: 'AWAITING_FINAL_PHOTOS', // Start with AWAITING_FINAL_PHOTOS - photographer can upload finals and manage payment
-						paymentStatus: 'UNPAID',
+						paymentStatus: orderPaymentStatus,
 						selectedKeys: [], // Empty means all photos
 						selectedCount: 0, // Will be updated when photos are processed
 						overageCount: 0,
@@ -554,7 +424,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						':u': now
 					}
 				}));
-				logger.info('Order created immediately for non-selection gallery', { galleryId, orderId });
+				logger.info('Order created immediately for non-selection gallery', { galleryId, orderId, orderPaymentStatus });
 			} catch (orderErr: any) {
 				// Log but don't fail gallery creation if order creation fails
 				logger.error('Failed to create order for non-selection gallery', {
@@ -568,43 +438,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	if (paid) {
-		return {
-			statusCode: 201,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				galleryId, 
-				paid: true, 
-				method: 'wallet',
-				transactionId
-			})
-		};
-	} else if (checkoutUrl) {
-		return {
-			statusCode: 201,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				galleryId, 
-				paid: false, 
-				checkoutUrl,
-				transactionId,
-				walletAmountCents,
-				stripeAmountCents,
-				message: 'Please complete payment to activate gallery.'
-			})
-		};
-	} else {
-		return {
-			statusCode: 402,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: 'Payment required',
-				galleryId,
-				priceCents: totalPriceCents,
-				transactionId,
-				message: 'Insufficient wallet balance and payment system not configured. Please top up your wallet or configure Stripe.'
-			})
-		};
-	}
+	// Always return success - gallery created as UNPAID draft
+	// User can pay later via "Opłać galerię" button
+	return {
+		statusCode: 201,
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ 
+			galleryId, 
+			paid: false,
+			transactionId,
+			message: 'Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona.'
+		})
+	};
 }); 
 

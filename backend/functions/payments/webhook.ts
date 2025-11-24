@@ -265,20 +265,43 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					} else {
 						const now = new Date().toISOString();
 						
-						// Update gallery state and selectionStatus if selection is enabled
-						// Note: 'state' is a reserved keyword in DynamoDB, so we use ExpressionAttributeNames
+						// Calculate normal expiry based on plan metadata
+						// Get plan metadata from create.ts or use default
+						const plan = gallery.plan || session.metadata?.plan || '1GB-1m';
+						const PRICING_PLANS: Record<string, { expiryDays: number }> = {
+							'1GB-1m': { expiryDays: 30 },
+							'1GB-3m': { expiryDays: 90 },
+							'1GB-12m': { expiryDays: 365 },
+							'3GB-1m': { expiryDays: 30 },
+							'3GB-3m': { expiryDays: 90 },
+							'3GB-12m': { expiryDays: 365 },
+							'10GB-1m': { expiryDays: 30 },
+							'10GB-3m': { expiryDays: 90 },
+							'10GB-12m': { expiryDays: 365 }
+						};
+						const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS['1GB-1m'];
+						const expiryDays = planMetadata.expiryDays;
+						
+						// Calculate normal expiry date (from now, not from creation)
+						const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
+						const expiresAt = expiresAtDate.toISOString();
+						
+						// Update gallery state, remove TTL, set normal expiry, and selectionStatus if selection is enabled
+						// Note: 'state' and 'ttl' are reserved keywords in DynamoDB, so we use ExpressionAttributeNames
 						const updateExpr = gallery.selectionEnabled
-							? 'SET #state = :s, selectionStatus = :ss, updatedAt = :u'
-							: 'SET #state = :s, updatedAt = :u';
+							? 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl'
+							: 'SET #state = :s, expiresAt = :e, updatedAt = :u REMOVE #ttl';
 						
 						const exprValues: any = {
 							':s': 'PAID_ACTIVE',
+							':e': expiresAt,
 							':o': userId,
 							':u': now
 						};
 						
 						const exprNames: any = {
-							'#state': 'state'
+							'#state': 'state',
+							'#ttl': 'ttl'
 						};
 						
 						if (gallery.selectionEnabled) {
@@ -295,14 +318,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}));
 						
 						const previousState = gallery.state || 'UNKNOWN';
-						logger.info('Gallery marked as paid', {
+						logger.info('Gallery marked as paid, TTL removed, normal expiry set', {
 							galleryId,
 							userId,
 							paymentId,
 							previousState,
 							newState: 'PAID_ACTIVE',
 							selectionEnabled: gallery.selectionEnabled,
-							amountCents
+							amountCents,
+							expiresAt,
+							expiryDays
 						});
 						
 						// Create backup storage addon if requested during gallery creation (Stripe payment)

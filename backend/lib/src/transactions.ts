@@ -201,14 +201,21 @@ export async function getUnpaidTransactionForGallery(galleryId: string): Promise
 	return (result.Items && result.Items.length > 0 ? result.Items[0] as Transaction : null);
 }
 
+export interface PaginatedTransactionsResult {
+	transactions: Transaction[];
+	lastKey?: Record<string, any>;
+	hasMore: boolean;
+}
+
 export async function listTransactionsByUser(
 	userId: string,
 	options?: {
 		status?: TransactionStatus;
 		type?: TransactionType;
 		limit?: number;
+		exclusiveStartKey?: Record<string, any>;
 	}
-): Promise<Transaction[]> {
+): Promise<PaginatedTransactionsResult> {
 	const envProc = (globalThis as any).process || process;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	if (!transactionsTable) {
@@ -236,15 +243,30 @@ export async function listTransactionsByUser(
 		KeyConditionExpression: 'userId = :u',
 		ExpressionAttributeValues: exprValues,
 		ScanIndexForward: false,
-		Limit: options?.limit || 100
+		Limit: (options?.limit || 100) + 1 // Fetch one extra to check if there are more
 	};
 	
 	if (filterExpressions.length > 0) {
 		queryParams.FilterExpression = filterExpressions.join(' AND ');
 		queryParams.ExpressionAttributeNames = exprNames;
 	}
+
+	if (options?.exclusiveStartKey) {
+		queryParams.ExclusiveStartKey = options.exclusiveStartKey;
+	}
 	
 	const result = await ddb.send(new QueryCommand(queryParams));
-	return (result.Items || []) as Transaction[];
+	const items = (result.Items || []) as Transaction[];
+	
+	// Check if there are more items
+	const hasMore = items.length > (options?.limit || 100);
+	const transactions = hasMore ? items.slice(0, -1) : items;
+	const lastKey = result.LastEvaluatedKey;
+
+	return {
+		transactions,
+		lastKey,
+		hasMore
+	};
 }
 

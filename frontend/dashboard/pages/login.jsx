@@ -4,10 +4,8 @@ import Link from 'next/link';
 import { initAuth, signIn, getCurrentUser } from '../lib/auth';
 import { shareTokensWithOtherDomains } from '../lib/token-sharing';
 import { setupDashboardAuthStatusListener } from '../lib/dashboard-auth-status';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { LoaderIcon } from 'lucide-react';
+import Button from '../components/ui/button/Button';
+import Input from '../components/ui/input/InputField';
 
 export default function Login() {
 	const router = useRouter();
@@ -154,7 +152,9 @@ export default function Login() {
 
 				<form onSubmit={handleSignIn} className="w-full space-y-4">
 					<div className="space-y-2">
-						<Label htmlFor="email">Email</Label>
+						<label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Email
+						</label>
 						<Input
 							id="email"
 							type="email"
@@ -162,14 +162,14 @@ export default function Login() {
 							onChange={(e) => setEmail(e.target.value)}
 							placeholder="twoj@email.com"
 							disabled={loading}
-							required
-							autoComplete="email"
-							autoFocus
+							className="w-full"
 						/>
 					</div>
 
 					<div className="space-y-2">
-						<Label htmlFor="password">Hasło</Label>
+						<label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Hasło
+						</label>
 						<Input
 							id="password"
 							type="password"
@@ -177,12 +177,11 @@ export default function Login() {
 							onChange={(e) => setPassword(e.target.value)}
 							placeholder="Wprowadź hasło"
 							disabled={loading}
-							required
-							autoComplete="current-password"
+							className="w-full"
 						/>
 					</div>
 
-					<Button type="submit" variant="primary" className="w-full" size="lg" disabled={loading}>
+					<Button type="submit" variant="primary" className="w-full" disabled={loading}>
 						{loading ? 'Logowanie...' : 'Zaloguj się'}
 					</Button>
 				</form>

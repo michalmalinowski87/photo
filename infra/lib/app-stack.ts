@@ -101,6 +101,35 @@ export class AppStack extends Stack {
 		sortKey: { name: 'status', type: AttributeType.STRING }
 	});
 
+	const clients = new Table(this, 'ClientsTable', {
+		partitionKey: { name: 'clientId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	clients.addGlobalSecondaryIndex({
+		indexName: 'ownerId-index',
+		partitionKey: { name: 'ownerId', type: AttributeType.STRING },
+		sortKey: { name: 'createdAt', type: AttributeType.STRING }
+	});
+
+	const packages = new Table(this, 'PackagesTable', {
+		partitionKey: { name: 'packageId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	packages.addGlobalSecondaryIndex({
+		indexName: 'ownerId-index',
+		partitionKey: { name: 'ownerId', type: AttributeType.STRING },
+		sortKey: { name: 'createdAt', type: AttributeType.STRING }
+	});
+
+	const notifications = new Table(this, 'NotificationsTable', {
+		partitionKey: { name: 'userId', type: AttributeType.STRING },
+		sortKey: { name: 'notificationId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true }
@@ -168,6 +197,9 @@ export class AppStack extends Stack {
 			COGNITO_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
 			COGNITO_DOMAIN: userPoolDomain.domainName,
 			JWT_SECRET: jwtSecret,
+			CLIENTS_TABLE: clients.tableName,
+			PACKAGES_TABLE: packages.tableName,
+			NOTIFICATIONS_TABLE: notifications.tableName,
 			SENDER_EMAIL: process.env.SENDER_EMAIL || '',
 			STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
 			STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
@@ -395,6 +427,12 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
+		const galleriesUpdateFn = new NodejsFunction(this, 'GalleriesUpdateFn', {
+			entry: path.join(__dirname, '../../../backend/functions/galleries/update.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
 		// Make delete function name available to expiry lambda
 		envVars['GALLERIES_DELETE_FN_NAME'] = galleriesDeleteFn.functionName;
 		galleries.grantReadWriteData(galleriesCreateFn);
@@ -421,6 +459,7 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(galleriesSetSelectionModeFn);
 		galleries.grantReadWriteData(galleriesUpdatePricingFn);
 		galleries.grantReadWriteData(galleriesSetClientPasswordFn);
+		galleries.grantReadWriteData(galleriesUpdateFn);
 		galleriesBucket.grantReadWrite(galleriesDeletePhotoFn);
 		// Allow sending emails via SES if SENDER_EMAIL is configured
 		galleriesSetClientPasswordFn.addToRolePolicy(new PolicyStatement({
@@ -457,6 +496,12 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('GalleriesGetIntegration', galleriesGetFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}',
+			methods: [HttpMethod.PUT],
+			integration: new HttpLambdaIntegration('GalleriesUpdateIntegration', galleriesUpdateFn),
 			authorizer
 		});
 		httpApi.addRoutes({
@@ -650,6 +695,12 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
+		const ordersListAllFn = new NodejsFunction(this, 'OrdersListAllFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/listAll.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
 		const ordersGetFn = new NodejsFunction(this, 'OrdersGetFn', {
 			entry: path.join(__dirname, '../../../backend/functions/orders/get.ts'),
 			handler: 'handler',
@@ -692,19 +743,20 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
-		const ordersMarkDepositPaidFn = new NodejsFunction(this, 'OrdersMarkDepositPaidFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/markDepositPaid.ts'),
+		const ordersMarkPartiallyPaidFn = new NodejsFunction(this, 'OrdersMarkPartiallyPaidFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/markPartiallyPaid.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
 		orders.grantReadData(ordersListFn);
+		orders.grantReadData(ordersListAllFn);
 		orders.grantReadData(ordersGetFn);
 		orders.grantReadData(ordersDownloadZipFn);
 		orders.grantReadWriteData(ordersMarkPaidFn);
 		orders.grantReadWriteData(ordersMarkCanceledFn);
 		orders.grantReadWriteData(ordersMarkRefundedFn);
-		orders.grantReadWriteData(ordersMarkDepositPaidFn);
+		orders.grantReadWriteData(ordersMarkPartiallyPaidFn);
 		orders.grantReadWriteData(ordersDownloadZipFn);
 		orders.grantReadWriteData(ordersGenerateZipFn);
 		orders.grantReadWriteData(ordersPurchaseAddonFn);
@@ -712,6 +764,7 @@ export class AppStack extends Stack {
 		walletLedger.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create ledger entry for debit
 		transactions.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create transactions
 		galleries.grantReadData(ordersListFn);
+		galleries.grantReadData(ordersListAllFn);
 		galleryAddons.grantReadData(ordersListFn); // Needed to check hasBackupStorage for orders list
 		galleries.grantReadData(ordersGetFn);
 		galleryAddons.grantReadData(ordersGetFn);
@@ -720,7 +773,7 @@ export class AppStack extends Stack {
 		galleries.grantReadData(ordersMarkPaidFn);
 		galleries.grantReadData(ordersMarkCanceledFn);
 		galleries.grantReadData(ordersMarkRefundedFn);
-		galleries.grantReadData(ordersMarkDepositPaidFn);
+		galleries.grantReadData(ordersMarkPartiallyPaidFn);
 		galleries.grantReadData(ordersGenerateZipFn);
 		galleriesBucket.grantRead(ordersDownloadZipFn);
 		galleriesBucket.grantReadWrite(ordersDownloadZipFn);
@@ -737,6 +790,12 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/orders',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('OrdersListIntegration', ordersListFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/orders',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('OrdersListAllIntegration', ordersListAllFn),
 			authorizer
 		});
 		httpApi.addRoutes({
@@ -770,9 +829,9 @@ export class AppStack extends Stack {
 			authorizer
 		});
 		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/mark-deposit-paid',
+			path: '/galleries/{id}/orders/{orderId}/mark-partially-paid',
 			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersMarkDepositPaidIntegration', ordersMarkDepositPaidFn),
+			integration: new HttpLambdaIntegration('OrdersMarkPartiallyPaidIntegration', ordersMarkPartiallyPaidFn),
 			authorizer
 		});
 		httpApi.addRoutes({
@@ -802,6 +861,140 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/orders/{orderId}/regenerate-zip',
 			methods: [HttpMethod.POST],
 			integration: new HttpLambdaIntegration('OrdersRegenerateZipIntegration', ordersRegenerateZipFn),
+			authorizer
+		});
+
+		// Clients CRUD endpoints
+		const clientsCreateFn = new NodejsFunction(this, 'ClientsCreateFn', {
+			entry: path.join(__dirname, '../../../backend/functions/clients/create.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const clientsListFn = new NodejsFunction(this, 'ClientsListFn', {
+			entry: path.join(__dirname, '../../../backend/functions/clients/list.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const clientsGetFn = new NodejsFunction(this, 'ClientsGetFn', {
+			entry: path.join(__dirname, '../../../backend/functions/clients/get.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const clientsUpdateFn = new NodejsFunction(this, 'ClientsUpdateFn', {
+			entry: path.join(__dirname, '../../../backend/functions/clients/update.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const clientsDeleteFn = new NodejsFunction(this, 'ClientsDeleteFn', {
+			entry: path.join(__dirname, '../../../backend/functions/clients/delete.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		clients.grantReadWriteData(clientsCreateFn);
+		clients.grantReadData(clientsListFn);
+		clients.grantReadData(clientsGetFn);
+		clients.grantReadWriteData(clientsUpdateFn);
+		clients.grantReadWriteData(clientsDeleteFn);
+		httpApi.addRoutes({
+			path: '/clients',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('ClientsCreateIntegration', clientsCreateFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/clients',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ClientsListIntegration', clientsListFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/clients/{id}',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ClientsGetIntegration', clientsGetFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/clients/{id}',
+			methods: [HttpMethod.PUT],
+			integration: new HttpLambdaIntegration('ClientsUpdateIntegration', clientsUpdateFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/clients/{id}',
+			methods: [HttpMethod.DELETE],
+			integration: new HttpLambdaIntegration('ClientsDeleteIntegration', clientsDeleteFn),
+			authorizer
+		});
+
+		// Packages CRUD endpoints
+		const packagesCreateFn = new NodejsFunction(this, 'PackagesCreateFn', {
+			entry: path.join(__dirname, '../../../backend/functions/packages/create.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const packagesListFn = new NodejsFunction(this, 'PackagesListFn', {
+			entry: path.join(__dirname, '../../../backend/functions/packages/list.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const packagesGetFn = new NodejsFunction(this, 'PackagesGetFn', {
+			entry: path.join(__dirname, '../../../backend/functions/packages/get.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const packagesUpdateFn = new NodejsFunction(this, 'PackagesUpdateFn', {
+			entry: path.join(__dirname, '../../../backend/functions/packages/update.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		const packagesDeleteFn = new NodejsFunction(this, 'PackagesDeleteFn', {
+			entry: path.join(__dirname, '../../../backend/functions/packages/delete.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
+		packages.grantReadWriteData(packagesCreateFn);
+		packages.grantReadData(packagesListFn);
+		packages.grantReadData(packagesGetFn);
+		packages.grantReadWriteData(packagesUpdateFn);
+		packages.grantReadWriteData(packagesDeleteFn);
+		httpApi.addRoutes({
+			path: '/packages',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('PackagesCreateIntegration', packagesCreateFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/packages',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('PackagesListIntegration', packagesListFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/packages/{id}',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('PackagesGetIntegration', packagesGetFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/packages/{id}',
+			methods: [HttpMethod.PUT],
+			integration: new HttpLambdaIntegration('PackagesUpdateIntegration', packagesUpdateFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/packages/{id}',
+			methods: [HttpMethod.DELETE],
+			integration: new HttpLambdaIntegration('PackagesDeleteIntegration', packagesDeleteFn),
 			authorizer
 		});
 
@@ -1082,6 +1275,8 @@ export class AppStack extends Stack {
 		// Add CloudFront domain to env vars after distribution is created
 		envVars.CLOUDFRONT_DOMAIN = dist.distributionDomainName;
 		// Update Lambda functions that need CloudFront domain (they were created before distribution)
+		galleriesGetFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
+		galleriesListFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
 		galleriesListImagesFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
 		ordersListDeliveredFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
 		ordersListFinalImagesFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);

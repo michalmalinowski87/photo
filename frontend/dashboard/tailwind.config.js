@@ -1,228 +1,144 @@
 /** @type {import('tailwindcss').Config} */
-const colors = require("tailwindcss/colors");
-const svgToDataUri = require("mini-svg-data-uri");
-const { default: flattenColorPalette } = require("tailwindcss/lib/util/flattenColorPalette");
-
 module.exports = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{js,jsx}',
-    './components/**/*.{js,jsx}',
+    './pages/**/*.{js,jsx,ts,tsx}',
+    './components/**/*.{js,jsx,ts,tsx}',
   ],
-  prefix: "",
   theme: {
-    container: {
-      center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
-    },
     extend: {
-      colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        "theme-primary": "rgb(var(--theme-primary))",
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        tertiary: {
-          DEFAULT: "hsl(var(--tertiary))",
-          foreground: "hsl(var(--tertiary-foreground))",
-        },
-        subtle: {
-          DEFAULT: "hsl(var(--subtle))",
-          foreground: "hsl(var(--subtle-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
       fontFamily: {
-        "heading": ["var(--font-aeonik)"],
-        "default": ["var(--font-inter)"],
+        outfit: ["Outfit", "sans-serif"],
       },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-        "grid": {
-          "0%": { transform: "translateY(-50%)" },
-          "100%": { transform: "translateY(0)" },
-        },
-        "wiggle": {
-          "0%, 100%": {
-            transform: "translateX(0%)",
-            transformOrigin: "50% 50%",
-          },
-          "15%": { transform: "translateX(-4px) rotate(-4deg)" },
-          "30%": { transform: "translateX(6px) rotate(4deg)" },
-          "45%": { transform: "translateX(-6px) rotate(-2.4deg)" },
-          "60%": { transform: "translateX(2px) rotate(1.6deg)" },
-          "75%": { transform: "translateX(-1px) rotate(-0.8deg)" },
-        },
-        "spinner": {
-          "0%": {
-            opacity: "1",
-          },
-          "100%": {
-            opacity: "0",
-          },
-        },
-        "blink": {
-          "0%": {
-            opacity: "0.2",
-          },
-          "20%": {
-            opacity: "1",
-          },
-          "100%": {
-            opacity: "0.2",
-          },
-        },
-        "shimmer": {
-          "0%, 90%, 100%": {
-            "background-position": "calc(-100% - var(--shimmer-width)) 0",
-          },
-          "30%, 60%": {
-            "background-position": "calc(100% + var(--shimmer-width)) 0",
-          },
-        },
-        "image-glow": {
-          "0%": {
-            "opacity": "0",
-            "animation-timing-function": "cubic-bezier(.74, .25, .76, 1)",
-          },
-          "10%": {
-            "opacity": "0.5",
-            "animation-timing-function": "cubic-bezier(.12, .01, .08, .99)",
-          },
-          "100%": {
-            "opacity": "0.7",
-          },
-        },
-        "border-beam": {
-          "100%": {
-            "offset-distance": "100%",
-          },
-        },
-        "marquee": {
-          from: { transform: "translateX(0)" },
-          to: { transform: "translateX(calc(-100% - var(--gap)))" },
-        },
-        "flip": {
-          to: {
-            transform: "rotate(360deg)",
-          },
-        },
-        "rotate": {
-          to: {
-            transform: "rotate(90deg)",
-          },
-        },
-        "caret-blink": {
-          "0%,70%,100%": { opacity: "1" },
-          "20%,50%": { opacity: "0" },
-        },
-        "loading": {
-          "0%": {
-            transform: "rotate(0deg)",
-          },
-          "100%": {
-            transform: "rotate(360deg)",
-          },
-        }
+      fontSize: {
+        "theme-xs": ["12px", { lineHeight: "18px" }],
+        "theme-sm": ["14px", { lineHeight: "20px" }],
+        "theme-xl": ["20px", { lineHeight: "30px" }],
       },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        "grid": "grid 15s linear infinite",
-        "wiggle": "wiggle 0.75s infinite",
-        "spinner": "spinner 1.2s linear infinite",
-        "blink": "blink 1.4s infinite both",
-        "shimmer": "shimmer 5s infinite",
-        "border-beam": "border-beam calc(var(--duration)*1s) infinite linear",
-        "image-glow": "image-glow 4s ease-out 0.6s forwards",
-        "marquee": "marquee var(--duration) linear infinite",
-        "flip": "flip 6s infinite steps(2, end)",
-        "rotate": "rotate 3s linear infinite both",
-        "caret-blink": "caret-blink 1.25s ease-out infinite",
-        "loading": "loading 0.5s linear infinite",
+      colors: {
+        brand: {
+          25: "#f2f7ff",
+          50: "#ecf3ff",
+          100: "#dde9ff",
+          200: "#c2d6ff",
+          300: "#9cb9ff",
+          400: "#7592ff",
+          500: "#465fff",
+          600: "#3641f5",
+          700: "#2a31d8",
+          800: "#252dae",
+          900: "#262e89",
+          950: "#161950",
+        },
+        "blue-light": {
+          25: "#f5fbff",
+          50: "#f0f9ff",
+          100: "#e0f2fe",
+          200: "#b9e6fe",
+          300: "#7cd4fd",
+          400: "#36bffa",
+          500: "#0ba5ec",
+          600: "#0086c9",
+          700: "#026aa2",
+          800: "#065986",
+          900: "#0b4a6f",
+          950: "#062c41",
+        },
+        gray: {
+          25: "#fcfcfd",
+          50: "#f9fafb",
+          100: "#f2f4f7",
+          200: "#e4e7ec",
+          300: "#d0d5dd",
+          400: "#98a2b3",
+          500: "#667085",
+          600: "#475467",
+          700: "#344054",
+          800: "#1d2939",
+          900: "#101828",
+          950: "#0c111d",
+          dark: "#1a2231",
+        },
+        orange: {
+          25: "#fffaf5",
+          50: "#fff6ed",
+          100: "#ffead5",
+          200: "#fddcab",
+          300: "#feb273",
+          400: "#fd853a",
+          500: "#fb6514",
+          600: "#ec4a0a",
+          700: "#c4320a",
+          800: "#9c2a10",
+          900: "#7e2410",
+          950: "#511c10",
+        },
+        success: {
+          25: "#f6fef9",
+          50: "#ecfdf3",
+          100: "#d1fadf",
+          200: "#a6f4c5",
+          300: "#6ce9a6",
+          400: "#32d583",
+          500: "#12b76a",
+          600: "#039855",
+          700: "#027a48",
+          800: "#05603a",
+          900: "#054f31",
+          950: "#053321",
+        },
+        error: {
+          25: "#fffbfa",
+          50: "#fef3f2",
+          100: "#fee4e2",
+          200: "#fecdca",
+          300: "#fda29b",
+          400: "#f97066",
+          500: "#f04438",
+          600: "#d92d20",
+          700: "#b42318",
+          800: "#912018",
+          900: "#7a271a",
+          950: "#55160c",
+        },
+        warning: {
+          25: "#fffcf5",
+          50: "#fffaeb",
+          100: "#fef0c7",
+          200: "#fedf89",
+          300: "#fec84b",
+          400: "#fdb022",
+          500: "#f79009",
+          600: "#dc6803",
+          700: "#b54708",
+          800: "#93370d",
+          900: "#7a2e0e",
+          950: "#4e1d09",
+        },
+      },
+      boxShadow: {
+        "theme-xs": "0px 1px 2px 0px rgba(16, 24, 40, 0.05)",
+        "theme-sm": "0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06)",
+        "theme-md": "0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06)",
+        "theme-lg": "0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03)",
+        "theme-xl": "0px 20px 24px -4px rgba(16, 24, 40, 0.08), 0px 8px 8px -4px rgba(16, 24, 40, 0.03)",
+      },
+      screens: {
+        "2xsm": "375px",
+        "xsm": "425px",
+        "3xl": "2000px",
+      },
+      zIndex: {
+        "1": "1",
+        "9": "9",
+        "99": "99",
+        "999": "999",
+        "9999": "9999",
+        "99999": "99999",
+        "999999": "999999",
       },
     },
   },
-  plugins: [
-    require("tailwindcss-animate"),
-    require("tailwind-scrollbar-hide"),
-    addVariablesForColors,
-    function ({ matchUtilities, theme }) {
-      matchUtilities(
-        {
-          "bg-grid": (value) => ({
-            backgroundImage: `url("${svgToDataUri(
-              `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${value}"><path d="M0 .5H31.5V32"/></svg>`
-            )}")`,
-          }),
-          "bg-grid-small": (value) => ({
-            backgroundImage: `url("${svgToDataUri(
-              `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="8" height="8" fill="none" stroke="${value}"><path d="M0 .5H31.5V32"/></svg>`
-            )}")`,
-          }),
-          "bg-dot": (value) => ({
-            backgroundImage: `url("${svgToDataUri(
-              `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="none"><circle fill="${value}" id="pattern-circle" cx="10" cy="10" r="1.6257413380501518"></circle></svg>`
-            )}")`,
-          }),
-        },
-        { values: flattenColorPalette(theme("backgroundColor")), type: "color" }
-      );
-    },
-  ],
-}
-
-function addVariablesForColors({ addBase, theme }) {
-  let allColors = flattenColorPalette(theme("colors"));
-  let newVars = Object.fromEntries(
-    Object.entries(allColors).map(([key, val]) => [`--${key}`, val])
-  );
-
-  addBase({
-    ":root": newVars,
-  });
+  plugins: [],
 }
 

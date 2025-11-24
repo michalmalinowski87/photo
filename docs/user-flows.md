@@ -63,67 +63,96 @@ Dashboard → POST /payments/checkout → Stripe Checkout → Payment → Webhoo
 ## 2. Gallery Creation & Setup
 
 ### Flow Overview
-Photographers create galleries, configure pricing, and send invitations to clients.
+Photographers create galleries using a multi-step wizard, configure pricing, and send invitations to clients. **Galleries are created as UNPAID drafts with a 3-day TTL** - payment is deferred until the photographer clicks "Opłać galerię".
 
 ### Detailed Steps
 
-1. **Create Gallery**
-   - Navigate to galleries page
-   - Click "Create Gallery"
-   - Fill in form:
-     - Gallery name (optional)
-     - Pricing plan: Small (50 PLN), Medium (100 PLN), or Large (200 PLN)
-     - Client pricing package:
-       - Package name
-       - Included photo count
-       - Extra price per photo (in cents)
-     - Enable/disable selection mode
-     - Optionally set client email and password
-   - Submit form → `POST /galleries`
+1. **Create Gallery via Multi-Step Wizard**
+   - Navigate to dashboard
+   - Click "+ Utwórz galerię" button in header (or from galleries page)
+   - **Step 1: Typ galerii**
+     - Choose "Wybór przez klienta" (client selects photos) or "Wszystkie zdjęcia" (all photos)
+   - **Step 2: Nazwa galerii**
+     - Enter unique gallery name
+     - System validates uniqueness
+   - **Step 3: Szczegóły pakietu**
+     - Select gallery plan (1GB-1m, 1GB-3m, etc.)
+     - Choose package source:
+       - "Wprowadź ręcznie": Enter package name, included count, extra price, package price
+       - "Wybierz z istniejących pakietów": Select from saved packages
+     - Optionally enable backup storage addon (30% of plan price)
+   - **Step 4: Dane klienta**
+     - Choose client source:
+       - "Nowy klient": Enter email, password (optional), name/company details
+       - "Wybierz z istniejących klientów": Select from saved clients
+   - **Step 5: Podsumowanie**
+     - Review all settings
+     - Enter initial payment amount (PLN) - can be 0 (UNPAID), partial (PARTIALLY_PAID), or full (PAID)
+     - Click "Utwórz galerię"
 
-2. **Payment Processing**
-   - **Transaction Creation**: System creates transaction immediately with status `UNPAID` and type `GALLERY_PLAN`
-   - **Fractional Payment Support**: System attempts fractional wallet payment:
-     - Checks wallet balance
-     - If balance > 0 but < total: deducts available amount from wallet, charges remainder via Stripe
-     - If balance >= total: debits full amount from wallet
-     - If balance = 0: creates Stripe checkout for full amount
-   - **Payment Methods**:
-     - `WALLET`: Fully paid with wallet → Transaction status `PAID`, gallery `PAID_ACTIVE`
-     - `STRIPE`: Fully paid via Stripe → Transaction status `UNPAID`, Stripe checkout created
-     - `MIXED`: Partial wallet + Stripe → Wallet deducted, Stripe checkout for remainder
-   - **Stripe Checkout**: If Stripe payment needed:
-     - Creates checkout session with transaction ID in metadata
-     - Shows breakdown in description if fractional payment
-     - Returns checkout URL to photographer
-   - **Payment Completion**:
-     - Webhook processes payment → Updates transaction status to `PAID`
-     - Gallery payment status derived from transactions (not stored in gallery)
-     - Gallery becomes `PAID_ACTIVE` when transaction status is `PAID`
-   - **Payment Status Derivation**: Gallery payment status is determined by querying transactions:
-     - Query for transaction with `type: GALLERY_PLAN` and `status: PAID` for gallery
-     - If found: gallery is paid and enabled
-     - If not found: gallery is unpaid and disabled (only Pay/Cancel actions allowed)
+2. **Gallery Creation (UNPAID Draft)**
+   - **No Immediate Payment**: Gallery is created WITHOUT deducting from wallet or redirecting to Stripe
+   - **Draft State**: Gallery created with:
+     - `state: 'DRAFT'`
+     - `ttl`: Set to 3 days from creation (DynamoDB TTL for automatic deletion)
+     - `expiresAt`: Calculated based on full plan duration (for after payment)
+     - `selectionStatus`: `DISABLED` if selection disabled, otherwise `DISABLED` (until paid)
+   - **Transaction Created**: Transaction created with:
+     - `status: 'UNPAID'`
+     - `type: 'GALLERY_PLAN'`
+     - `initialPaymentAmountCents`: Amount entered in wizard (can be 0)
+   - **Response**: Returns `paid: false` with message "Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona."
 
-3. **Configure Gallery Settings**
-   - Set client password: `POST /galleries/{id}/client-password`
-   - Update pricing package: `POST /galleries/{id}/pricing-package`
-   - Enable/disable selection mode: `POST /galleries/{id}/selection-mode`
+3. **Pay for Gallery (Opłać galerię)**
+   - Navigate to gallery detail page or gallery list
+   - Click "Opłać galerię" button (shown for UNPAID galleries)
+   - System finds existing UNPAID transaction for gallery
+   - **Payment Processing**:
+     - Uses transaction details (`totalAmountCents`, `walletAmountCents`, `stripeAmountCents`)
+     - If wallet balance available: Deducts from wallet
+     - If Stripe needed: Creates checkout session
+     - Updates transaction with `stripeSessionId`
+   - **Payment Success** (via webhook):
+     - Updates gallery: `state: 'PAID_ACTIVE'`
+     - **Removes TTL** (gallery no longer expires in 3 days)
+     - Sets `expiresAt` to full plan duration
+     - Sets `selectionStatus` to `NOT_STARTED` if selection enabled
+     - Updates transaction: `status: 'PAID'`
 
-4. **Send Gallery to Client**
-   - Click "Send Gallery" button
+4. **Draft Expiry Warning**
+   - Scheduled job runs every 6 hours
+   - Checks for UNPAID galleries with TTL expiring within 24 hours
+   - Sends email notification to photographer
+   - Stores notification flag (`expiryWarning24hSent: true`)
+   - **After 3 days**: DynamoDB TTL automatically deletes UNPAID gallery
+
+5. **Gallery Management**
+   - **Gallery Detail Page**: Left sidebar shows:
+     - Gallery name and status
+     - UNPAID banner (if unpaid) with "Opłać galerię" button
+     - Gallery URL (with copy button)
+     - Creation date
+     - "Wyślij link do klienta" button (if paid and client email set)
+     - "Ustawienia galerii" button (opens modal)
+     - "Zdjęcia w galerii" link
+   - **Settings Modal**: Edit gallery name, client email, password, pricing package
+   - **Orders Mini-Control-Panel**: Shows all orders with status badges and quick actions
+
+6. **Send Gallery to Client**
+   - Only available if gallery is PAID and has client email
+   - Click "Wyślij link do klienta" in sidebar
    - System sends invitation email via `POST /galleries/{id}/send`:
      - Email includes gallery link
      - Includes password (if set)
      - Client can access gallery immediately
 
 ### Key Endpoints
-- `POST /galleries` - Create new gallery (creates transaction immediately)
-- `POST /galleries/{id}/pay` - Pay for unpaid gallery (uses existing transaction or creates new)
+- `POST /galleries` - Create new gallery (creates UNPAID draft with 3-day TTL)
+- `POST /galleries/{id}/pay` - Pay for unpaid gallery (uses existing UNPAID transaction)
 - `POST /galleries/{id}/client-password` - Set client access password
 - `POST /galleries/{id}/pricing-package` - Update pricing configuration
 - `POST /galleries/{id}/selection-mode` - Enable/disable selection mode
-- `POST /galleries/{id}/send-to-client` - Send gallery invitation to client
+- `POST /galleries/{id}/send` - Send gallery invitation to client
 
 ### Payment Flow Edge Cases
 
@@ -131,23 +160,19 @@ Photographers create galleries, configure pricing, and send invitations to clien
    - User clicks back from Stripe checkout
    - `GET /payments/cancel` endpoint called
    - Transaction status updated to `CANCELED`
-   - Gallery is NOT deleted (allows retry)
-   - User can retry payment via "Pay" button
+   - Gallery remains as UNPAID draft (TTL still active)
+   - User can retry payment via "Opłać galerię" button
 
 2. **Retry Payment**
-   - User can retry payment from:
-     - Transactions list: Click "Retry" on UNPAID transaction
-     - Gallery list: Click "Pay" button on unpaid gallery
-   - System checks for existing UNPAID transaction
-   - If exists: Updates existing transaction with new Stripe session
-   - If not: Creates new transaction (old one canceled)
+   - User clicks "Opłać galerię" on unpaid gallery
+   - System finds existing UNPAID transaction
+   - Updates transaction with new Stripe session
    - Supports fractional payments (wallet + Stripe)
 
-3. **Auto-Expiry**
-   - Scheduled job runs daily at 2 AM Warsaw time
-   - Finds UNPAID transactions older than 3 days
-   - Updates transaction status to `CANCELED`
-   - Deletes associated gallery (if type is GALLERY_PLAN)
+3. **Draft Auto-Expiry**
+   - DynamoDB TTL automatically deletes UNPAID galleries after 3 days
+   - 24h before expiry: Email notification sent to photographer
+   - After expiry: Gallery and associated transaction deleted automatically
 
 4. **Manual Cancel**
    - User can cancel UNPAID transaction via "Cancel" button
@@ -386,7 +411,8 @@ Photographers review orders, process photos, and deliver final products to clien
      - `POST /galleries/{id}/orders/{orderId}/paid` - Mark as fully paid
      - `POST /galleries/{id}/orders/{orderId}/deposit-paid` - Mark deposit paid
      - `POST /galleries/{id}/orders/{orderId}/canceled` - Cancel order
-     - `POST /galleries/{id}/orders/{orderId}/refunded` - Mark as refunded
+     - `POST /galleries/{id}/orders/{orderId}/mark-refunded` - Mark as refunded
+     - `POST /galleries/{id}/orders/{orderId}/mark-partially-paid` - Mark as partially paid (replaces DEPOSIT_PAID)
 
 5. **Send Final Delivery**
    - Once photos processed and payment confirmed:
@@ -432,6 +458,11 @@ Photographers review orders, process photos, and deliver final products to clien
 ### Key Endpoints
 - `GET /galleries/{id}/orders` - List all orders for gallery (photographer)
 - `GET /galleries/{id}/orders/{orderId}` - Get order details (includes backup addon status)
+- `GET /galleries/{id}/orders/{orderId}/final/images` - List final images for order
+- `POST /galleries/{id}/orders/{orderId}/final/images/{filename}` - Upload final image (via presigned URL)
+- `DELETE /galleries/{id}/orders/{orderId}/final/images/{filename}` - Delete final image
+- `GET /galleries/{id}/orders/{orderId}/zip` - Download ZIP (generates on-the-fly if needed)
+- `POST /galleries/{id}/orders/{orderId}/generate-zip` - Generate ZIP for order
 - `POST /galleries/{id}/orders/{orderId}/change-request/approve` - Approve change request
 - `POST /galleries/{id}/purchase-addon` - Purchase backup storage addon for gallery (photographer-only, applies to all orders)
 - `POST /galleries/{id}/orders/{orderId}/generate-zip` - Manually generate ZIP (only for non-addon orders with CLIENT_APPROVED status)
@@ -571,6 +602,61 @@ Photographers manage their galleries: view, update settings, and delete gallerie
 
 ---
 
+## 8. Order Detail View
+
+### Flow Overview
+Photographers view order details, manage original and final photos, and download ZIPs.
+
+### Detailed Steps
+
+1. **Navigate to Order Detail**
+   - From gallery detail page, click "Szczegóły" on order row
+   - Or navigate directly to `/galleries/{galleryId}/orders/{orderId}`
+
+2. **Order Information Display**
+   - Order number and status badges (delivery + payment)
+   - Total amount
+   - Creation date
+   - Selected photos count (if applicable)
+
+3. **Tabs: Oryginały and Finały**
+   - **Oryginały Tab**:
+     - Shows all original photos uploaded to gallery
+     - Highlights photos selected by client (green badge)
+     - Displays selection count: "Wybrane zdjęcia przez klienta: X z Y"
+     - Shows selected keys list
+   - **Finały Tab**:
+     - Shows final processed photos for this order
+     - Upload interface (if order status allows):
+       - File picker (multiple files)
+       - "Prześlij" button
+       - Uses presigned URLs for upload
+     - Delete button on each final photo
+     - Only visible if order is CLIENT_APPROVED, PREPARING_FOR_DELIVERY, or DELIVERED
+
+4. **ZIP Download**
+   - "Pobierz ZIP" button available if:
+     - Order has zipKey (already generated), OR
+     - Order status allows ZIP generation (CLIENT_APPROVED+)
+   - If ZIP doesn't exist: Generates on-the-fly via `POST /galleries/{id}/orders/{orderId}/generate-zip`
+   - Downloads ZIP file directly
+
+5. **Order Actions**
+   - All order status change actions available
+   - Mark as paid, partially paid, canceled, refunded
+   - Send final link to client
+
+### Key Endpoints
+- `GET /galleries/{id}/orders/{orderId}` - Get order details
+- `GET /galleries/{id}/images` - List original images
+- `GET /galleries/{id}/orders/{orderId}/final/images` - List final images
+- `POST /uploads/presign` - Get presigned URL for final photo upload
+- `DELETE /galleries/{id}/orders/{orderId}/final/images/{filename}` - Delete final image
+- `GET /galleries/{id}/orders/{orderId}/zip` - Download ZIP (generates if needed)
+- `POST /galleries/{id}/orders/{orderId}/generate-zip` - Generate ZIP for order
+
+---
+
 ## Order Status Lifecycle
 
 Orders progress through the following statuses:
@@ -621,14 +707,14 @@ Orders track payment status independently from delivery status:
 
 - **UNPAID**: Order created but payment not yet received
 - **PAID**: Full payment received
-- **DEPOSIT_PAID**: Partial payment (deposit) received
+- **PARTIALLY_PAID**: Partial payment received (replaces DEPOSIT_PAID)
 - **CANCELED**: Order canceled by photographer
 - **REFUNDED**: Payment refunded to client
 
 ### Payment Status Flow
 
 ```
-UNPAID → PAID (or DEPOSIT_PAID) → [DELIVERED]
+UNPAID → PAID (or PARTIALLY_PAID) → [DELIVERED]
    ↓
 CANCELED or REFUNDED
 ```

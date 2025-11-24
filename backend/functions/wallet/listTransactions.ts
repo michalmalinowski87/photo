@@ -21,11 +21,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	const limit = parseInt(event?.queryStringParameters?.limit || '50', 10);
+	const limit = parseInt(event?.queryStringParameters?.limit || '10', 10);
 	const limitClamped = Math.min(Math.max(limit, 1), 100);
+	const lastKeyParam = event?.queryStringParameters?.lastKey;
+	let exclusiveStartKey: Record<string, any> | undefined;
+	if (lastKeyParam) {
+		try {
+			exclusiveStartKey = JSON.parse(decodeURIComponent(lastKeyParam));
+		} catch (e) {
+			logger?.warn('Failed to parse lastKey parameter', { lastKey: lastKeyParam });
+		}
+	}
 
 	try {
 		let transactions: any[] = [];
+		let lastKey: Record<string, any> | undefined;
+		let hasMore = false;
 
 		// Query TRANSACTIONS_TABLE if available (preferred)
 		if (transactionsTable) {
@@ -33,13 +44,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				logger?.info('Querying TRANSACTIONS_TABLE', { 
 					userId: requester, 
 					limit: limitClamped,
+					hasExclusiveStartKey: !!exclusiveStartKey,
 					transactionsTable 
 				});
-				const txnList = await listTransactionsByUser(requester, { limit: limitClamped });
+				const result = await listTransactionsByUser(requester, { 
+					limit: limitClamped,
+					exclusiveStartKey 
+				});
 				logger?.info('Transactions retrieved from TRANSACTIONS_TABLE', { 
 					userId: requester, 
-					count: txnList.length,
-					transactions: txnList.map((tx: any) => ({
+					count: result.transactions.length,
+					hasMore: result.hasMore,
+					transactions: result.transactions.map((tx: any) => ({
 						transactionId: tx.transactionId,
 						type: tx.type,
 						status: tx.status,
@@ -47,7 +63,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}))
 				});
 				
-				if (txnList.length === 0) {
+				if (result.transactions.length === 0) {
 					logger?.warn('No transactions found in TRANSACTIONS_TABLE', { 
 						userId: requester,
 						transactionsTable,
@@ -55,7 +71,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					});
 				}
 				
-				transactions = txnList.map((tx: any) => {
+				transactions = result.transactions.map((tx: any) => {
 					// Map transaction types to display types
 					let displayType = tx.type;
 					if (tx.type === 'GALLERY_PLAN' || tx.type === 'ADDON_PURCHASE') {
@@ -88,6 +104,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						canceledAt: tx.canceledAt
 					};
 				});
+				lastKey = result.lastKey;
+				hasMore = result.hasMore;
 			} catch (err: any) {
 				logger?.error('Failed to query TRANSACTIONS_TABLE, falling back to ledger', {
 					error: {
@@ -109,15 +127,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const { DynamoDBDocumentClient, QueryCommand } = await import('@aws-sdk/lib-dynamodb');
 			const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 			
-			const query = await ddb.send(new QueryCommand({
+			const queryParams: any = {
 				TableName: ledgerTable,
 				KeyConditionExpression: 'userId = :u',
 				ExpressionAttributeValues: { ':u': requester },
 				ScanIndexForward: false,
-				Limit: limitClamped
-			}));
+				Limit: limitClamped + 1 // Fetch one extra to check if there are more
+			};
 
-			transactions = (query.Items || []).map((item: any) => ({
+			if (exclusiveStartKey) {
+				queryParams.ExclusiveStartKey = exclusiveStartKey;
+			}
+
+			const query = await ddb.send(new QueryCommand(queryParams));
+			const items = query.Items || [];
+			
+			hasMore = items.length > limitClamped;
+			const ledgerItems = hasMore ? items.slice(0, -1) : items;
+			lastKey = query.LastEvaluatedKey;
+
+			transactions = ledgerItems.map((item: any) => ({
 				transactionId: item.txnId,
 				txnId: item.txnId,
 				type: item.type === 'TOP_UP' ? 'WALLET_TOPUP' : 'WALLET_DEBIT',
@@ -132,10 +161,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}));
 		}
 
-		// Sort by createdAt DESC (newest first)
-		transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+		// Sort by createdAt DESC (newest first) - only if we didn't get sorted results from DB
+		if (transactions.length > 0 && transactions[0].createdAt) {
+			transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+		}
 
-		logger?.info('Transactions retrieved', { userId: requester, count: transactions.length });
+		logger?.info('Transactions retrieved', { userId: requester, count: transactions.length, hasMore });
 
 		return {
 			statusCode: 200,
@@ -143,7 +174,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({
 				userId: requester,
 				transactions,
-				count: transactions.length
+				count: transactions.length,
+				hasMore,
+				lastKey: lastKey ? encodeURIComponent(JSON.stringify(lastKey)) : null
 			})
 		};
 	} catch (error: any) {

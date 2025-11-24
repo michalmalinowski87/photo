@@ -106,13 +106,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const allItems: any[] = [];
 	let lastEvaluatedKey: any = undefined;
 	
+	// Scan all galleries (we'll filter for both expiresAt and ttl)
 	do {
 		const scanParams: any = {
-			TableName: galleriesTable,
-			FilterExpression: 'attribute_exists(expiresAt) AND expiresAt <= :maxDate',
-			ExpressionAttributeValues: {
-				':maxDate': sevenDaysFromNowISO
-			}
+			TableName: galleriesTable
 		};
 		
 		if (lastEvaluatedKey) {
@@ -136,13 +133,42 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const expiryWarning7dSent = item.expiryWarning7dSent as boolean | undefined;
 		const expiryWarning24hSent = item.expiryWarning24hSent as boolean | undefined;
 		const ttl = item.ttl as number | undefined;
+		const state = item.state as string | undefined;
 		
-		if (!expiresAt) continue;
+		// Check payment status to determine if this is an UNPAID gallery
+		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+		let isPaid = false;
+		if (transactionsTable) {
+			try {
+				const { getPaidTransactionForGallery } = require('../../lib/src/transactions');
+				const paidTransaction = await getPaidTransactionForGallery(galleryId);
+				isPaid = !!paidTransaction;
+			} catch (err) {
+				isPaid = state === 'PAID_ACTIVE';
+			}
+		} else {
+			isPaid = state === 'PAID_ACTIVE';
+		}
 		
-		// Migration: Set ttl attribute for existing galleries that don't have it
+		// For UNPAID galleries, use TTL for expiry warnings
+		// For paid galleries, use expiresAt
+		let expiryDate: number | undefined;
+		if (!isPaid && ttl) {
+			expiryDate = ttl * 1000; // Convert Unix epoch seconds to milliseconds
+		} else if (expiresAt) {
+			expiryDate = expiresAt;
+		} else {
+			continue; // Skip if no expiry date
+		}
+		
+		// Only process if expiry is within 7 days (for paid) or 24h (for unpaid)
+		if (isPaid && expiryDate > sevenDaysFromNow) continue;
+		if (!isPaid && expiryDate > twentyFourHoursFromNow) continue;
+		
+		// Migration: Set ttl attribute for existing paid galleries that don't have it
 		// This ensures DynamoDB TTL will work for existing galleries
 		// Note: 'ttl' is a reserved keyword in DynamoDB, so we must use ExpressionAttributeNames
-		if (!ttl && expiresAt) {
+		if (isPaid && !ttl && expiresAt) {
 			const ttlExpiresAt = Math.floor(expiresAt / 1000); // Convert to Unix epoch seconds
 			try {
 				await ddb.send(new UpdateCommand({
@@ -152,7 +178,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					ExpressionAttributeNames: { '#ttl': 'ttl' },
 					ExpressionAttributeValues: { ':ttl': ttlExpiresAt }
 				}));
-				logger.info('Set ttl attribute for existing gallery', { galleryId, ttl: ttlExpiresAt });
+				logger.info('Set ttl attribute for existing paid gallery', { galleryId, ttl: ttlExpiresAt });
 			} catch (updateErr: any) {
 				logger.warn('Failed to set ttl attribute for gallery', { 
 					error: updateErr.message, 
@@ -163,7 +189,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		// Fallback: Handle already-expired galleries that don't have ttl set yet
 		// This ensures galleries that expired before migration are still cleaned up
-		if (expiresAt <= now && !ttl && deleteFnName) {
+		if (expiryDate <= now && !ttl && deleteFnName) {
 			logger.info('Gallery already expired without ttl, triggering immediate cleanup', { galleryId });
 			try {
 				await lambda.send(new InvokeCommand({
@@ -185,13 +211,35 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 		
 		const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
-		const daysRemaining = Math.ceil((expiresAt - now) / (24 * 3600 * 1000));
+		const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
 		
 		// Get owner email (from gallery or Cognito)
 		const ownerEmail = await getOwnerEmail(item, userPoolId, logger);
 		
-		// 7-day warning (send if expires between now and 7 days from now, and not already sent)
-		if (expiresAt > now && expiresAt <= sevenDaysFromNow && !expiryWarning7dSent) {
+		// For UNPAID galleries: send 24h warning before TTL expiry
+		if (!isPaid && expiryDate > now && expiryDate <= twentyFourHoursFromNow) {
+			const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
+			
+			// Send to photographer only (client doesn't need to know about unpaid drafts)
+			if (ownerEmail) {
+				await sendEmail(ownerEmail, template, sender, logger, 'UNPAID Gallery Expiry Warning 24h - Photographer');
+			}
+			
+			// Store notification in gallery (can be retrieved via API for in-app notifications)
+			try {
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET expiryWarning24hSent = :sent',
+					ExpressionAttributeValues: { ':sent': true }
+				}));
+			} catch (updateErr: any) {
+				logger.warn('Failed to update expiryWarning24hSent flag', { error: updateErr.message, galleryId });
+			}
+		}
+		
+		// For paid galleries: 7-day warning
+		if (isPaid && expiryDate > now && expiryDate <= sevenDaysFromNow && !expiryWarning7dSent) {
 			const template = createExpiryWarningEmail(galleryId, galleryName || galleryId, daysRemaining, link);
 			
 			// Send to photographer
@@ -217,8 +265,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		// 24-hour warning (send if expires between now and 24 hours from now, and not already sent)
-		if (expiresAt > now && expiresAt <= twentyFourHoursFromNow && !expiryWarning24hSent) {
+		// For paid galleries: 24-hour warning
+		if (isPaid && expiryDate > now && expiryDate <= twentyFourHoursFromNow && !expiryWarning24hSent) {
 			const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
 			
 			// Send to photographer

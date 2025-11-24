@@ -204,7 +204,8 @@ export default function Orders() {
 
 	async function markAsCanceled(orderId) {
 		setMessage('');
-		if (!window.confirm('Mark this order as canceled? This action cannot be undone.')) {
+		// Note: In production, use a confirmation modal instead of window.confirm
+		if (!confirm('Oznaczyć to zlecenie jako anulowane? Ta akcja nie może być cofnięta.')) {
 			return;
 		}
 		try {
@@ -212,7 +213,7 @@ export default function Orders() {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			setMessage('Order marked as canceled');
+			setMessage('Zlecenie oznaczone jako anulowane');
 			await loadOrders();
 		} catch (error) {
 			setMessage(formatApiError(error));
@@ -221,7 +222,8 @@ export default function Orders() {
 
 	async function markAsRefunded(orderId) {
 		setMessage('');
-		if (!window.confirm('Mark this order as refunded? This should only be done if a refund was processed outside the system.')) {
+		// Note: In production, use a confirmation modal instead of window.confirm
+		if (!confirm('Oznaczyć to zlecenie jako zwrócone? To powinno być wykonane tylko jeśli zwrot został przetworzony poza systemem.')) {
 			return;
 		}
 		try {
@@ -229,24 +231,25 @@ export default function Orders() {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			setMessage('Order marked as refunded');
+			setMessage('Zlecenie oznaczone jako zwrócone');
 			await loadOrders();
 		} catch (error) {
 			setMessage(formatApiError(error));
 		}
 	}
 
-	async function markAsDepositPaid(orderId) {
+	async function markAsPartiallyPaid(orderId) {
 		setMessage('');
-		if (!window.confirm('Mark this order as deposit paid? This should only be done if a deposit payment was received outside the system.')) {
+		// Note: In production, use a confirmation modal instead of window.confirm
+		if (!confirm('Oznaczyć to zlecenie jako częściowo opłacone? To powinno być wykonane tylko jeśli wpłata została otrzymana poza systemem.')) {
 			return;
 		}
 		try {
-			await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-deposit-paid`, {
+			await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-partially-paid`, {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			setMessage('Order marked as deposit paid');
+			setMessage('Zlecenie oznaczone jako częściowo opłacone');
 			await loadOrders();
 		} catch (error) {
 			setMessage(formatApiError(error));
@@ -505,7 +508,7 @@ export default function Orders() {
 									{/* Mark as Deposit Paid - available for UNPAID orders */}
 									{o.paymentStatus === 'UNPAID' && (
 										<button 
-											onClick={() => markAsDepositPaid(o.orderId)}
+											onClick={() => markAsPartiallyPaid(o.orderId)}
 											style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
 										>
 											Mark Deposit Paid
@@ -520,8 +523,8 @@ export default function Orders() {
 											Mark as Canceled
 										</button>
 									)}
-									{/* Mark as Refunded - available for orders with PAID or DEPOSIT_PAID payment status */}
-									{(o.paymentStatus === 'PAID' || o.paymentStatus === 'DEPOSIT_PAID') && o.paymentStatus !== 'REFUNDED' && o.deliveryStatus !== 'DELIVERED' && (
+									{/* Mark as Refunded - available for orders with PAID or PARTIALLY_PAID payment status */}
+									{(o.paymentStatus === 'PAID' || o.paymentStatus === 'PARTIALLY_PAID') && o.paymentStatus !== 'REFUNDED' && o.deliveryStatus !== 'DELIVERED' && (
 										<button 
 											onClick={() => markAsRefunded(o.orderId)}
 											style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#ffc107', color: 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}

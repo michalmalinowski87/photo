@@ -72,24 +72,24 @@ export const handler = lambdaLogger(async (event: any) => {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Cannot mark cancelled order as deposit paid' })
+			body: JSON.stringify({ error: 'Cannot mark cancelled order as partially paid' })
 		};
 	}
 	if (order.deliveryStatus === 'DELIVERED') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Cannot mark delivered order as deposit paid' })
+			body: JSON.stringify({ error: 'Cannot mark delivered order as partially paid' })
 		};
 	}
 
-	// Update order payment status to DEPOSIT_PAID
+	// Update order payment status to PARTIALLY_PAID
 	const now = new Date().toISOString();
 	await ddb.send(new UpdateCommand({
 		TableName: ordersTable,
 		Key: { galleryId, orderId },
-		UpdateExpression: 'SET paymentStatus = :p, depositPaidAt = :t',
-		ExpressionAttributeValues: { ':p': 'DEPOSIT_PAID', ':t': now }
+		UpdateExpression: 'SET paymentStatus = :p, partiallyPaidAt = :t',
+		ExpressionAttributeValues: { ':p': 'PARTIALLY_PAID', ':t': now }
 	}));
 
 	return {
@@ -98,8 +98,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		body: JSON.stringify({
 			orderId,
 			galleryId,
-			paymentStatus: 'DEPOSIT_PAID',
-			depositPaidAt: now
+			paymentStatus: 'PARTIALLY_PAID',
+			partiallyPaidAt: now
 		})
 	};
 });

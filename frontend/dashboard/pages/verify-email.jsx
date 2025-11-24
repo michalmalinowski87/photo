@@ -75,7 +75,9 @@ export default function VerifyEmail() {
 			await resendConfirmationCode(email);
 			setError('');
 			// Show success message
-			alert('Nowy kod weryfikacyjny został wysłany na Twój adres email');
+			// Note: In production, use toast notification instead of alert
+			// showToast("success", "Sukces", "Nowy kod weryfikacyjny został wysłany na Twój adres email");
+			console.log('Nowy kod weryfikacyjny został wysłany na Twój adres email');
 		} catch (err) {
 			if (err.message) {
 				setError(err.message);

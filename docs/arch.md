@@ -11,13 +11,15 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - **API Gateway HTTP API**: RESTful API endpoints with Cognito JWT authentication
 - **Lambda Functions**: Serverless compute for all business logic
 - **DynamoDB Tables**: 
-  - `Galleries` - Gallery metadata and configuration
+  - `Galleries` - Gallery metadata and configuration (with TTL for UNPAID drafts)
   - `Orders` - Order tracking and billing (includes client selections)
   - `GalleryAddons` - Gallery addon purchases (e.g., backup storage) - Partition Key: galleryId, Sort Key: addonId (format: "{addonType}") - Gallery-level addons apply to all orders in the gallery
   - `Wallets` - User wallet balances
   - `WalletLedger` - Transaction history
-  - `Payments` - Payment records
-  - `Users` - User profiles
+  - `Transactions` - Payment transactions (with GSI on galleryId-status)
+  - `Clients` - Client records (with GSI on ownerId)
+  - `Packages` - Pricing package templates (with GSI on ownerId)
+  - `Notifications` - In-app notifications (planned)
 - **S3 Bucket**: Storage for originals, previews, thumbnails, final assets, ZIPs, and archives
 - **CloudFront**: CDN for serving previews and thumbnails
 - **Cognito User Pool**: Authentication for photographers
@@ -27,9 +29,10 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 ### Backend Functions
 
 #### Gallery Management
-- `galleries/create.ts` - Create new gallery
-- `galleries/get.ts` - Get gallery details
-- `galleries/list.ts` - List user's galleries (with GSI on ownerId)
+- `galleries/create.ts` - Create new gallery as UNPAID draft with 3-day TTL
+- `galleries/get.ts` - Get gallery details (includes payment status and effective state)
+- `galleries/list.ts` - List user's galleries with status filtering (with GSI on ownerId)
+- `galleries/pay.ts` - Pay for unpaid gallery (uses existing UNPAID transaction)
 - `galleries/delete.ts` - Comprehensive GDPR deletion
 - `galleries/setClientPassword.ts` - Set client access password
 - `galleries/setSelectionMode.ts` - Enable/disable selection mode
@@ -56,7 +59,7 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - `orders/sendFinalLink.ts` - Send final delivery link to client
 - `orders/approveChangeRequest.ts` - Approve client change requests (restores order to CLIENT_SELECTING)
 - `orders/markPaid.ts` - Mark order as paid
-- `orders/markDepositPaid.ts` - Mark order as deposit paid
+- `orders/markPartiallyPaid.ts` - Mark order as partially paid (replaces markDepositPaid)
 - `orders/markCanceled.ts` - Mark order as canceled
 - `orders/markRefunded.ts` - Mark order as refunded
 
@@ -70,26 +73,55 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 #### Processing
 - `processed/complete.ts` - Mark order as delivered and clean originals
 
-#### Payments (Planned)
-- `payments/checkoutCreate.ts` - Create Stripe checkout session
-- `payments/webhook.ts` - Handle Stripe webhooks
+#### Payments
+- `payments/checkout.ts` - Create Stripe checkout session
+- `payments/webhook.ts` - Handle Stripe webhooks (removes TTL on payment success)
+- `payments/cancel.ts` - Handle Stripe checkout cancellation
+
+#### Clients Management
+- `clients/create.ts` - Create new client
+- `clients/list.ts` - List photographer's clients (with GSI on ownerId)
+- `clients/get.ts` - Get client details
+- `clients/update.ts` - Update client information
+- `clients/delete.ts` - Delete client
+
+#### Packages Management
+- `packages/create.ts` - Create new pricing package
+- `packages/list.ts` - List photographer's packages (with GSI on ownerId)
+- `packages/get.ts` - Get package details
+- `packages/update.ts` - Update package information
+- `packages/delete.ts` - Delete package
 
 #### Expiry
-- `expiry/checkAndNotify.ts` - Scheduled check for expiring galleries
+- `expiry/checkAndNotify.ts` - Scheduled check for expiring galleries (handles both UNPAID drafts with TTL and paid galleries with expiresAt)
 
 ### Frontend Applications
 
 #### Dashboard (`frontend/dashboard`)
-- Next.js application for photographers
+- Next.js application for photographers with Polish UI
 - Cognito Hosted UI authentication
-- Gallery management interface
-- Order management
-- Wallet management
-- **Owner Gallery View**: View galleries as clients see them (read-only mode with delete capability)
-  - Uses shared gallery components
-  - Authenticated via Cognito JWT
-  - Can view processed photos and original photos
-  - Can manually delete photos
+- **Main Navigation** (Left Sidebar):
+  - Panel główny (Dashboard)
+  - Galerie (collapsible with sub-items for status filters)
+  - Klienci (Clients CRUD)
+  - Pakiety (Packages CRUD)
+  - Portfel (Wallet)
+  - Ustawienia (Settings)
+  - Wyloguj (Logout)
+- **Dashboard Page** (`/`):
+  - Statistics cards (delivered orders, client selecting, ready to ship, total revenue)
+  - Active orders list (top 10)
+  - Wallet balance with quick top-up buttons
+- **Gallery Management**:
+  - Multi-step gallery creation wizard (5 steps)
+  - Gallery list with status filtering (6 filter pages)
+  - Gallery detail page with sidebar and orders mini-control-panel
+  - Order detail page with Oryginały/Finały tabs and ZIP download
+- **Clients & Packages CRUD**: Full CRUD interfaces
+- **Wallet Management**: Balance display, transaction history, top-up functionality
+- **Settings**: Business info and password change forms
+- Uses template components from `free-react-tailwind-admin-dashboard-main`
+- No `alert()` or `window.confirm()` - uses template modals/toasts
 
 #### Client Gallery (`frontend/gallery`)
 - Next.js public-facing gallery
@@ -114,10 +146,19 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 
 ### Gallery Creation Flow
 1. Photographer authenticates via Cognito
-2. Creates gallery via `POST /galleries`
-3. Sets client password and pricing package
-4. Uploads originals via presigned URLs
-5. System generates previews/thumbnails automatically
+2. Clicks "+ Utwórz galerię" button in header
+3. Completes 5-step wizard:
+   - Step 1: Select gallery type (client selection or all photos)
+   - Step 2: Enter gallery name
+   - Step 3: Configure package (manual or select from saved packages)
+   - Step 4: Select client (new or existing)
+   - Step 5: Review summary and enter initial payment amount
+4. Submits wizard → `POST /galleries`
+5. Gallery created as UNPAID draft with 3-day TTL
+6. No immediate payment - photographer can pay later via "Opłać galerię" button
+7. Sets client password and pricing package (if provided in wizard)
+8. Uploads originals via presigned URLs
+9. System generates previews/thumbnails automatically
 
 ### Client Selection Flow
 1. Client accesses gallery with password

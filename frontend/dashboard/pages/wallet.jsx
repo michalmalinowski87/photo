@@ -1,344 +1,431 @@
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
-import { apiFetch, formatApiError } from '../lib/api';
-import { initAuth, getIdToken, signOut, redirectToCognito, getHostedUILogoutUrl } from '../lib/auth';
+import { useState, useEffect } from "react";
+import { apiFetch, formatApiError } from "../lib/api";
+import { getIdToken } from "../lib/auth";
+import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
+import Button from "../components/ui/button/Button";
+import Badge from "../components/ui/badge/Badge";
+import Input from "../components/ui/input/InputField";
+import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 
 export default function Wallet() {
-	const router = useRouter();
-	const [apiUrl, setApiUrl] = useState('');
-	const [idToken, setIdToken] = useState('');
-	const [balance, setBalance] = useState(null);
-	const [transactions, setTransactions] = useState([]);
-	const [loading, setLoading] = useState(false);
-	const [topUpAmount, setTopUpAmount] = useState(10000); // 100 PLN default
-	const [message, setMessage] = useState('');
+  const [apiUrl, setApiUrl] = useState("");
+  const [idToken, setIdToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [balance, setBalance] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [topUpAmount, setTopUpAmount] = useState("100");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationCursor, setPaginationCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [pageHistory, setPageHistory] = useState([{ page: 1, cursor: null }]);
 
-	useEffect(() => {
-		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
-		
-		// Initialize auth with token sharing
-		const { initializeAuth, redirectToLandingSignIn } = require('../lib/auth-init');
-		initializeAuth(
-			(token) => {
-				setIdToken(token);
-			},
-			() => {
-				// No token found, redirect to landing sign-in
-				redirectToLandingSignIn('/wallet');
-			}
-		);
-	}, []);
+  useEffect(() => {
+    setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
+    initializeAuth(
+      (token) => {
+        setIdToken(token);
+      },
+      () => {
+        redirectToLandingSignIn("/wallet");
+      }
+    );
+  }, []);
 
-	const handleLogout = async () => {
-		// Clear all tokens and session data on dashboard domain
-		signOut();
-		setIdToken('');
-		
-		// Redirect to Cognito logout endpoint to clear server-side session cookies
-		// After logout, redirect to landing main page
-		const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
-		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3003';
-		const logoutRedirectUrl = landingUrl; // Redirect to main landing page, not logout-callback
-		
-		if (userPoolDomain) {
-			// Use helper function to build Cognito logout URL
-			const logoutUrl = getHostedUILogoutUrl(userPoolDomain, logoutRedirectUrl);
-			window.location.href = logoutUrl;
-		} else {
-			// Fallback: redirect directly to landing main page
-			window.location.href = logoutRedirectUrl;
-		}
-	};
+  useEffect(() => {
+    if (apiUrl && idToken) {
+      loadBalance();
+      loadTransactions(1, null);
+    }
+  }, [apiUrl, idToken]);
 
-	async function loadBalance() {
-		if (!apiUrl || !idToken) {
-			setMessage('Need API URL and ID Token');
-			return;
-		}
-		setLoading(true);
-		setMessage('');
-		try {
-			const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
-				headers: { Authorization: `Bearer ${idToken}` }
-			});
-			setBalance(data.balanceCents || 0);
-			setMessage(''); // Clear any previous errors
-		} catch (error) {
-			const errorMsg = formatApiError(error);
-			setMessage(`Error loading balance: ${errorMsg}`);
-			setBalance(null);
-		} finally {
-			setLoading(false);
-		}
-	}
+  // Check for payment success query parameter
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        setError("");
+        loadBalance();
+        loadTransactions(1, null);
+        // Clean up URL
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, []);
 
-	async function loadTransactions() {
-		if (!apiUrl || !idToken) {
-			setMessage('Need API URL and ID Token');
-			return;
-		}
-		setLoading(true);
-		setMessage('');
-		try {
-			const { data } = await apiFetch(`${apiUrl}/wallet/transactions`, {
-				headers: { Authorization: `Bearer ${idToken}` }
-			});
-			setTransactions(data.transactions || []);
-			if (data.transactions && data.transactions.length > 0) {
-				setMessage(`Loaded ${data.transactions.length} transaction(s)`);
-			} else {
-				setMessage('No transactions found');
-			}
-		} catch (error) {
-			const errorMsg = formatApiError(error);
-			setMessage(`Error loading transactions: ${errorMsg}`);
-			setTransactions([]);
-		} finally {
-			setLoading(false);
-		}
-	}
+  const loadBalance = async () => {
+    if (!apiUrl || !idToken) return;
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      setBalance(data.balanceCents || 0);
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	async function createTopUp() {
-		if (!apiUrl || !idToken) {
-			setMessage('Need API URL and ID Token');
-			return;
-		}
-		setMessage('');
-		try {
-			// Get current URL for redirect back to wallet page
-			const redirectUrl = typeof window !== 'undefined' 
-				? `${window.location.origin}/wallet?payment=success`
-				: '';
-			
-			const { data } = await apiFetch(`${apiUrl}/payments/checkout`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-				body: JSON.stringify({ 
-					amountCents: topUpAmount, 
-					type: 'wallet_topup',
-					redirectUrl: redirectUrl
-				})
-			});
-			if (data.checkoutUrl) {
-				window.location.href = data.checkoutUrl;
-			} else {
-				setMessage('No checkout URL returned');
-			}
-		} catch (error) {
-			setMessage(formatApiError(error));
-		}
-	}
+  const loadTransactions = async (page, lastKey) => {
+    if (!apiUrl || !idToken) return;
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      const params = new URLSearchParams();
+      params.append('limit', '10');
+      if (lastKey) {
+        params.append('lastKey', lastKey);
+      }
+      
+      const { data } = await apiFetch(`${apiUrl}/wallet/transactions?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      setTransactions(data.transactions || []);
+      setHasMore(data.hasMore || false);
+      const newCursor = data.lastKey || null;
+      setPaginationCursor(newCursor);
+      setCurrentPage(page);
+      
+      // Update page history - store the cursor that was used to get to this page
+      const historyIndex = pageHistory.findIndex(h => h.page === page);
+      if (historyIndex >= 0) {
+        // Update existing entry
+        const newHistory = [...pageHistory];
+        newHistory[historyIndex] = { page, cursor: lastKey };
+        setPageHistory(newHistory);
+      } else {
+        // Add new entry
+        setPageHistory([...pageHistory, { page, cursor: lastKey }]);
+      }
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	useEffect(() => {
-		if (apiUrl && idToken) {
-			loadBalance();
-			loadTransactions();
-		}
-	}, [apiUrl, idToken]);
+  const handleNextPage = () => {
+    if (hasMore && paginationCursor) {
+      const nextPage = currentPage + 1;
+      loadTransactions(nextPage, paginationCursor);
+    }
+  };
 
-	// Check for payment success query parameter
-	useEffect(() => {
-		if (typeof window !== 'undefined') {
-			const params = new URLSearchParams(window.location.search);
-			if (params.get('payment') === 'success') {
-				setMessage('Payment successful! Your wallet has been topped up.');
-				// Reload balance to show updated amount
-				if (apiUrl && idToken) {
-					loadBalance();
-					loadTransactions();
-				}
-				// Clean up URL
-				window.history.replaceState({}, '', window.location.pathname);
-			}
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      const previousPage = currentPage - 1;
+      const previousPageData = pageHistory.find(h => h.page === previousPage);
+      if (previousPageData) {
+        loadTransactions(previousPage, previousPageData.cursor);
+      } else {
+        // Fallback: go to page 1
+        loadTransactions(1, null);
+      }
+    }
+  };
 
-	return (
-		<div style={{ padding: 24, maxWidth: '100%', boxSizing: 'border-box' }}>
-			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-				<h1 style={{ margin: 0 }}>Wallet</h1>
-				{idToken && <button onClick={handleLogout} style={{ padding: '8px 16px' }}>Logout</button>}
-			</div>
-			
-			{/* Configuration - Only show if not auto-configured */}
-			{(!process.env.NEXT_PUBLIC_API_URL || !idToken) && (
-				<div style={{ marginBottom: 16, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
-					<div style={{ marginBottom: 8 }}>
-						<label>API URL </label>
-						<input style={{ width: '100%', maxWidth: 420 }} value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
-					</div>
-					<div style={{ marginBottom: 8 }}>
-						<label>ID Token </label>
-						<input style={{ width: '100%', maxWidth: 420 }} value={idToken} onChange={(e) => setIdToken(e.target.value)} placeholder="Auto-filled if logged in" />
-						{!idToken && <span style={{ marginLeft: 8, color: '#666' }}>or <a href={`${process.env.NEXT_PUBLIC_LANDING_URL || 'http://localhost:3000'}/auth/sign-in`}>login here</a></span>}
-					</div>
-				</div>
-			)}
+  const handleTopUp = async (amountCents) => {
+    if (!apiUrl || !idToken) return;
+    
+    const amount = amountCents || Math.round(parseFloat(topUpAmount) * 100);
+    
+    if (amount < 2000) {
+      setError("Minimalna kwota doładowania to 20 PLN");
+      return;
+    }
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      const redirectUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/wallet?payment=success`
+        : "";
+      
+      const { data } = await apiFetch(`${apiUrl}/payments/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          amountCents: amount,
+          type: "wallet_topup",
+          redirectUrl,
+        }),
+      });
+      
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        setError("Nie otrzymano URL do płatności");
+      }
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-			{/* Balance Display */}
-			<div style={{ margin: '24px 0', padding: 24, border: '2px solid #0066cc', borderRadius: '8px', background: '#f0f7ff' }}>
-				<h2 style={{ margin: '0 0 8px 0' }}>Current Balance</h2>
-				{balance !== null ? (
-					<div style={{ fontSize: '32px', fontWeight: 'bold', color: '#0066cc' }}>
-						{(balance / 100).toFixed(2)} PLN
-					</div>
-				) : (
-					<div style={{ color: '#666' }}>Not loaded</div>
-				)}
-				<button onClick={loadBalance} disabled={loading || !apiUrl || !idToken} style={{ marginTop: 12, padding: '8px 16px' }}>
-					{loading ? 'Loading...' : 'Refresh Balance'}
-				</button>
-			</div>
+  const getTransactionTypeLabel = (type) => {
+    const typeMap = {
+      WALLET_TOPUP: "Doładowanie portfela",
+      GALLERY_PLAN: "Plan galerii",
+      ADDON_PURCHASE: "Zakup dodatku",
+      REFUND: "Zwrot",
+    };
+    return typeMap[type] || type;
+  };
 
-			{/* Top Up */}
-			<div style={{ margin: '24px 0', padding: 16, border: '1px solid #ddd', borderRadius: '8px' }}>
-				<h2 style={{ margin: '0 0 16px 0' }}>Top Up Wallet</h2>
-				<div style={{ marginBottom: 12 }}>
-					<label>Amount (PLN) </label>
-					<input 
-						type="number" 
-						value={topUpAmount / 100} 
-						onChange={(e) => setTopUpAmount(Math.max(1, Math.round(parseFloat(e.target.value) * 100)))} 
-						min="1"
-						step="1"
-						style={{ width: '100%', maxWidth: 200 }}
-					/>
-					<span style={{ marginLeft: 8, color: '#666' }}>({topUpAmount} cents)</span>
-				</div>
-				<button onClick={createTopUp} disabled={!apiUrl || !idToken || topUpAmount < 100} style={{ padding: '12px 24px' }}>
-					Top Up via Stripe
-				</button>
-				<p style={{ marginTop: 8, fontSize: '14px', color: '#666' }}>
-					Minimum top-up: 1 PLN (100 cents). You will be redirected to Stripe Checkout.
-				</p>
-			</div>
+  const getTransactionStatusBadge = (status) => {
+    const statusMap = {
+      PAID: { color: "success", label: "Opłacone" },
+      UNPAID: { color: "error", label: "Nieopłacone" },
+      CANCELED: { color: "error", label: "Anulowane" },
+      REFUNDED: { color: "warning", label: "Zwrócone" },
+      FAILED: { color: "error", label: "Nieudane" },
+    };
+    
+    const statusInfo = statusMap[status] || { color: "light", label: status };
+    return (
+      <Badge color={statusInfo.color} variant="light">
+        {statusInfo.label}
+      </Badge>
+    );
+  };
 
-			{/* Transaction History */}
-			<div style={{ margin: '24px 0', padding: 16, border: '1px solid #ddd', borderRadius: '8px' }}>
-				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-					<h2 style={{ margin: 0 }}>Transaction History</h2>
-					<button onClick={loadTransactions} disabled={loading || !apiUrl || !idToken} style={{ padding: '8px 16px' }}>
-						{loading ? 'Loading...' : 'Refresh'}
-					</button>
-				</div>
-				{transactions.length === 0 && !loading && (
-					<p style={{ color: '#666' }}>No transactions yet.</p>
-				)}
-				{loading && <p>Loading transactions...</p>}
-				{transactions.length > 0 && (
-					<div style={{ overflowX: 'auto' }}>
-						<table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
-							<thead>
-								<tr style={{ background: '#f5f5f5' }}>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Date</th>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Type</th>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Status</th>
-									<th style={{ padding: 8, textAlign: 'right', border: '1px solid #ddd' }}>Amount</th>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Payment Method</th>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Composites</th>
-									<th style={{ padding: 8, textAlign: 'left', border: '1px solid #ddd' }}>Reference</th>
-								</tr>
-							</thead>
-							<tbody>
-								{transactions.map((tx) => {
-									const isCredit = tx.type === 'WALLET_TOPUP';
-									const isDebit = tx.type === 'WALLET_DEBIT' || tx.type === 'STRIPE_CHECKOUT' || tx.type === 'MIXED' || tx.type === 'REFUND';
-									const typeColors = {
-										'WALLET_TOPUP': '#00aa00',
-										'WALLET_DEBIT': '#cc0000',
-										'STRIPE_CHECKOUT': '#0066cc',
-										'MIXED': '#ff9800',
-										'REFUND': '#9c27b0'
-									};
-									const statusColors = {
-										'PAID': '#00aa00',
-										'UNPAID': '#ff9800',
-										'CANCELED': '#999',
-										'FAILED': '#cc0000',
-										'REFUNDED': '#9c27b0'
-									};
-									
-									return (
-										<tr key={tx.transactionId || tx.txnId}>
-											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '12px' }}>
-												{new Date(tx.createdAt).toLocaleString()}
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd' }}>
-												<span style={{ 
-													padding: '2px 8px', 
-													background: typeColors[tx.type] || '#666', 
-													color: 'white', 
-													borderRadius: '4px', 
-													fontSize: '12px'
-												}}>
-													{tx.type}
-												</span>
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd' }}>
-												{tx.status && (
-													<span style={{ 
-														padding: '2px 8px', 
-														background: statusColors[tx.status] || '#666', 
-														color: 'white', 
-														borderRadius: '4px', 
-														fontSize: '11px'
-													}}>
-														{tx.status}
-													</span>
-												)}
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'right', fontWeight: isCredit ? 'bold' : 'normal' }}>
-												<div>
-													{isCredit ? '+' : '-'}{(Math.abs(tx.amountCents) / 100).toFixed(2)} PLN
-												</div>
-												{tx.type === 'MIXED' && tx.walletAmountCents > 0 && tx.stripeAmountCents > 0 && (
-													<div style={{ fontSize: '10px', color: '#666', marginTop: 2 }}>
-														({(tx.walletAmountCents / 100).toFixed(2)} wallet + {(tx.stripeAmountCents / 100).toFixed(2)} Stripe)
-													</div>
-												)}
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
-												{tx.paymentMethod || (isCredit ? 'WALLET' : 'N/A')}
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
-												{tx.composites && tx.composites.length > 0 ? (
-													<div>
-														{tx.composites.map((composite, idx) => (
-															<div key={idx} style={{ marginBottom: idx < tx.composites.length - 1 ? 4 : 0 }}>
-																{composite}
-															</div>
-														))}
-													</div>
-												) : (
-													<span style={{ color: '#999' }}>-</span>
-												)}
-											</td>
-											<td style={{ padding: 8, border: '1px solid #ddd', fontSize: '11px' }}>
-												<code>{tx.refId || tx.transactionId || tx.txnId}</code>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
-				)}
-			</div>
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+        Portfel
+      </h1>
 
-			{message && (
-				<div style={{ 
-					marginTop: 16, 
-					padding: 12, 
-					background: message.includes('Error') ? '#fee' : '#efe',
-					border: `1px solid ${message.includes('Error') ? '#fcc' : '#cfc'}`,
-					borderRadius: 8,
-					color: message.includes('Error') ? '#c33' : '#3c3'
-				}}>
-					{message}
-				</div>
-			)}
-		</div>
-	);
+      {error && (
+        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
+          {error}
+        </div>
+      )}
+
+      {/* Balance Card */}
+      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              Saldo portfela
+            </div>
+            <div className="text-4xl font-bold text-gray-900 dark:text-white">
+              {balance !== null ? (balance / 100).toFixed(2) : "0.00"} PLN
+            </div>
+          </div>
+          <Button variant="outline" onClick={loadBalance} disabled={loading}>
+            Odśwież
+          </Button>
+        </div>
+
+        {/* Quick Top-Up Buttons */}
+        <div className="mb-6">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Szybkie doładowanie
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => handleTopUp(2000)}
+              disabled={loading}
+            >
+              +20 PLN
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => handleTopUp(5000)}
+              disabled={loading}
+            >
+              +50 PLN
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => handleTopUp(10000)}
+              disabled={loading}
+            >
+              +100 PLN
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => handleTopUp(20000)}
+              disabled={loading}
+            >
+              +200 PLN
+            </Button>
+          </div>
+        </div>
+
+        {/* Custom Top-Up */}
+        <div>
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Własna kwota
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              placeholder="Kwota (min 20 PLN)"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(e.target.value)}
+              min="20"
+              step="0.01"
+              className="flex-1"
+            />
+            <Button
+              variant="primary"
+              onClick={() => handleTopUp()}
+              disabled={loading}
+            >
+              Doładuj
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Minimalna kwota doładowania: 20 PLN
+          </p>
+        </div>
+      </div>
+
+      {/* Transaction History */}
+      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Historia transakcji
+          </h2>
+          <Button variant="outline" size="sm" onClick={() => {
+            setCurrentPage(1);
+            setPageHistory([{ page: 1, cursor: null }]);
+            loadTransactions(1, null);
+          }} disabled={loading}>
+            Odśwież
+          </Button>
+        </div>
+
+        {loading && transactions.length === 0 ? (
+          <div className="flex items-center justify-center p-8">
+            <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
+          </div>
+        ) : transactions.length === 0 ? (
+          <p className="text-gray-500 dark:text-gray-400">
+            Brak transakcji
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 dark:bg-gray-900">
+                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Data
+                  </TableCell>
+                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Typ
+                  </TableCell>
+                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Status
+                  </TableCell>
+                  <TableCell isHeader className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Kwota
+                  </TableCell>
+                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Metoda płatności
+                  </TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((tx) => {
+                  const isCredit = tx.type === "WALLET_TOPUP";
+                  const amount = tx.amountCents || tx.amount * 100 || 0;
+                  
+                  return (
+                    <TableRow
+                      key={tx.transactionId || tx.txnId}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                        {tx.createdAt
+                          ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                        {getTransactionTypeLabel(tx.type)}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-sm">
+                        {getTransactionStatusBadge(tx.status)}
+                      </TableCell>
+                      <TableCell
+                        className={`px-4 py-3 text-sm text-right font-medium ${
+                          isCredit
+                            ? "text-success-600 dark:text-success-400"
+                            : "text-gray-900 dark:text-white"
+                        }`}
+                      >
+                        {isCredit ? "+" : "-"}
+                        {(amount / 100).toFixed(2)} PLN
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                        {tx.paymentMethod === "WALLET"
+                          ? "Portfel"
+                          : tx.paymentMethod === "STRIPE"
+                          ? "Stripe"
+                          : tx.paymentMethod === "MIXED"
+                          ? "Mieszana"
+                          : tx.paymentMethod || "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {transactions.length > 0 && (
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Strona {currentPage}
+              {transactions.length === 10 && hasMore && " (więcej dostępne)"}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePreviousPage}
+                disabled={loading || currentPage === 1}
+              >
+                Poprzednia
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={loading || !hasMore}
+              >
+                Następna
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
-

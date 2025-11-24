@@ -1,0 +1,303 @@
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { apiFetch, formatApiError } from "../../lib/api";
+import { getIdToken } from "../../lib/auth";
+import Badge from "../ui/badge/Badge";
+import Button from "../ui/button/Button";
+import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
+import PaymentConfirmationModal from "./PaymentConfirmationModal";
+import { useToast } from "../../hooks/useToast";
+
+interface GalleryListProps {
+  filter?: "unpaid" | "wyslano" | "wybrano" | "prosba-o-zmiany" | "gotowe-do-wysylki" | "dostarczone";
+}
+
+const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
+  const [apiUrl, setApiUrl] = useState("");
+  const [idToken, setIdToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [galleries, setGalleries] = useState<any[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState({
+    totalAmountCents: 0,
+    walletAmountCents: 0,
+    stripeAmountCents: 0,
+  });
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
+    getIdToken()
+      .then((token) => {
+        setIdToken(token);
+      })
+      .catch(() => {
+        // No token, redirect to login
+        if (typeof window !== "undefined") {
+          window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (apiUrl && idToken) {
+      loadGalleries();
+      loadWalletBalance();
+    }
+  }, [apiUrl, idToken, filter]);
+
+  const loadWalletBalance = async () => {
+    if (!apiUrl || !idToken) return;
+    
+    try {
+      const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      setWalletBalance(data.balanceCents || 0);
+    } catch (err) {
+      // Ignore wallet errors, default to 0
+      setWalletBalance(0);
+    }
+  };
+
+  const loadGalleries = async () => {
+    if (!apiUrl || !idToken) return;
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      const url = filter ? `${apiUrl}/galleries?filter=${filter}` : `${apiUrl}/galleries`;
+      const { data } = await apiFetch(url, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      setGalleries(data.items || []);
+    } catch (err: any) {
+      setError(formatApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePayClick = async (galleryId: string) => {
+    if (!apiUrl || !idToken) return;
+    
+    setSelectedGalleryId(galleryId);
+    setPaymentLoading(true);
+    
+    try {
+      // First, get payment details using dry run
+      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ dryRun: true }),
+      });
+
+      setPaymentDetails({
+        totalAmountCents: data.totalAmountCents,
+        walletAmountCents: data.walletAmountCents,
+        stripeAmountCents: data.stripeAmountCents,
+        balanceAfterPayment: walletBalance - data.walletAmountCents,
+      });
+      setShowPaymentModal(true);
+    } catch (err: any) {
+      const errorMsg = formatApiError(err);
+      showToast("error", "Błąd", errorMsg || "Nie udało się przygotować płatności");
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handlePaymentConfirm = async () => {
+    if (!apiUrl || !idToken || !selectedGalleryId) return;
+    
+    setShowPaymentModal(false);
+    setPaymentLoading(true);
+    
+    try {
+      // Call pay endpoint without dryRun to actually process payment
+      const { data } = await apiFetch(`${apiUrl}/galleries/${selectedGalleryId}/pay`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else if (data.paid) {
+        showToast("success", "Sukces", "Galeria została opłacona z portfela!");
+        await loadGalleries();
+        await loadWalletBalance();
+      }
+    } catch (err: any) {
+      const errorMsg = formatApiError(err);
+      showToast("error", "Błąd", errorMsg || "Nie udało się opłacić galerii");
+    } finally {
+      setPaymentLoading(false);
+      setSelectedGalleryId(null);
+    }
+  };
+
+  const getStateBadge = (gallery: any) => {
+    if (!gallery.isPaid) {
+      return <Badge color="error" variant="light">Nieopłacone</Badge>;
+    }
+    if (gallery.state === "PAID_ACTIVE") {
+      return <Badge color="success" variant="light">Aktywne</Badge>;
+    }
+    if (gallery.state === "EXPIRED") {
+      return <Badge color="error" variant="light">Wygasłe</Badge>;
+    }
+    return <Badge color="light" variant="light">{gallery.state}</Badge>;
+  };
+
+  if (loading && galleries.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
+          {error}
+        </div>
+      )}
+
+      {galleries.length === 0 ? (
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+          Brak galerii do wyświetlenia
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 dark:bg-gray-900">
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Nazwa galerii
+                </TableCell>
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Plan
+                </TableCell>
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Status
+                </TableCell>
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Zlecenia
+                </TableCell>
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Utworzono
+                </TableCell>
+                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                  Akcje
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {galleries.map((gallery) => (
+                <TableRow
+                  key={gallery.galleryId}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <TableCell className="px-4 py-3">
+                    <Link
+                      href={`/galleries/${gallery.galleryId}`}
+                      className="font-medium text-brand-500 hover:text-brand-600"
+                      onClick={() => {
+                        // Store current page as referrer when navigating to gallery
+                        if (typeof window !== "undefined") {
+                          const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                          sessionStorage.setItem(referrerKey, window.location.pathname);
+                        }
+                      }}
+                    >
+                      {gallery.galleryName || gallery.galleryId}
+                    </Link>
+                    {!gallery.galleryName && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {gallery.galleryId}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    {gallery.plan || "-"}
+                    {gallery.priceCents && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {(gallery.priceCents / 100).toFixed(2)} PLN
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    {getStateBadge(gallery)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    {gallery.orderCount || 0}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    {gallery.createdAt
+                      ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex gap-2">
+                      {!gallery.isPaid && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => handlePayClick(gallery.galleryId)}
+                          disabled={paymentLoading}
+                        >
+                          {paymentLoading && selectedGalleryId === gallery.galleryId ? "Przetwarzanie..." : "Opłać galerię"}
+                        </Button>
+                      )}
+                      <Link 
+                        href={`/galleries/${gallery.galleryId}`}
+                        onClick={() => {
+                          // Store current page as referrer when navigating to gallery
+                          if (typeof window !== "undefined") {
+                            const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                            sessionStorage.setItem(referrerKey, window.location.pathname);
+                          }
+                        }}
+                      >
+                        <Button size="sm" variant="outline">
+                          Szczegóły
+                        </Button>
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Payment Confirmation Modal */}
+      <PaymentConfirmationModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setPaymentLoading(false);
+          setSelectedGalleryId(null);
+        }}
+        onConfirm={handlePaymentConfirm}
+        totalAmountCents={paymentDetails.totalAmountCents}
+        walletBalanceCents={walletBalance}
+        walletAmountCents={paymentDetails.walletAmountCents}
+        stripeAmountCents={paymentDetails.stripeAmountCents}
+        loading={paymentLoading}
+      />
+    </div>
+  );
+};
+
+export default GalleryList;
+
