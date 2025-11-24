@@ -6,11 +6,12 @@ import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { Loading } from "../components/ui/loading/Loading";
 
 export default function Wallet() {
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [error, setError] = useState("");
   const [balance, setBalance] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -314,89 +315,89 @@ export default function Wallet() {
           </Button>
         </div>
 
-        {loading && transactions.length === 0 ? (
-          <div className="flex items-center justify-center p-8">
-            <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-          </div>
-        ) : transactions.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">
-            Brak transakcji
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 dark:bg-gray-900">
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Data
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Typ
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Status
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Kwota
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Metoda płatności
-                  </TableCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((tx) => {
-                  const isCredit = tx.type === "WALLET_TOPUP";
-                  const amount = tx.amountCents || tx.amount * 100 || 0;
-                  
-                  return (
-                    <TableRow
-                      key={tx.transactionId || tx.txnId}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {tx.createdAt
-                          ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {getTransactionTypeLabel(tx.type)}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
-                        {getTransactionStatusBadge(tx.status)}
-                      </TableCell>
-                      <TableCell
-                        className={`px-4 py-3 text-sm text-right font-medium ${
-                          isCredit
-                            ? "text-success-600 dark:text-success-400"
-                            : "text-gray-900 dark:text-white"
-                        }`}
+        <div className="min-h-[530px] flex items-center justify-center">
+          {loading ? (
+            <Loading size="lg" text="Ładowanie transakcji..." />
+          ) : transactions.length === 0 ? (
+            <p className="text-gray-500 dark:text-gray-400">
+              Brak transakcji
+            </p>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-gray-900">
+                    <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Data
+                    </TableCell>
+                    <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Typ
+                    </TableCell>
+                    <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Status
+                    </TableCell>
+                    <TableCell isHeader className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Kwota
+                    </TableCell>
+                    <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Metoda płatności
+                    </TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((tx) => {
+                    const isCredit = tx.type === "WALLET_TOPUP";
+                    const amount = tx.amountCents || tx.amount * 100 || 0;
+                    
+                    return (
+                      <TableRow
+                        key={tx.transactionId || tx.txnId}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
-                        {isCredit ? "+" : "-"}
-                        {(amount / 100).toFixed(2)} PLN
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {tx.paymentMethod === "WALLET"
-                          ? "Portfel"
-                          : tx.paymentMethod === "STRIPE"
-                          ? "Stripe"
-                          : tx.paymentMethod === "MIXED"
-                          ? "Mieszana"
-                          : tx.paymentMethod || "-"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                        <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {tx.createdAt
+                            ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                          {getTransactionTypeLabel(tx.type)}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-sm">
+                          {getTransactionStatusBadge(tx.status)}
+                        </TableCell>
+                        <TableCell
+                          className={`px-4 py-3 text-sm text-right font-medium ${
+                            isCredit
+                              ? "text-success-600 dark:text-success-400"
+                              : "text-gray-900 dark:text-white"
+                          }`}
+                        >
+                          {isCredit ? "+" : "-"}
+                          {(amount / 100).toFixed(2)} PLN
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {tx.paymentMethod === "WALLET"
+                            ? "Portfel"
+                            : tx.paymentMethod === "STRIPE"
+                            ? "Stripe"
+                            : tx.paymentMethod === "MIXED"
+                            ? "Mieszana"
+                            : tx.paymentMethod || "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
 
         {/* Pagination Controls */}
         {transactions.length > 0 && (

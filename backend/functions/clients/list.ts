@@ -45,6 +45,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		let allItems: any[] = [];
 		let lastKey: Record<string, any> | undefined;
 		let hasMore = false;
+		let items: any[] = [];
 
 		if (searchQuery) {
 			// For search, fetch all items (up to reasonable limit) and filter
@@ -124,7 +125,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 
 			const result = await ddb.send(new QueryCommand(queryParams));
-			let items = result.Items || [];
+			items = result.Items || [];
 			lastKey = result.LastEvaluatedKey;
 
 			// Check if there are more items

@@ -76,9 +76,9 @@ const navItems: NavItem[] = [
   {
     icon: <ListIcon />,
     name: "Galerie",
-    subItems: [
-      { name: "Wersje robocze", path: "/galleries" },
-      { name: "Wysłano do klienta", path: "/galleries/wyslano" },
+      subItems: [
+        { name: "Wersje robocze", path: "/galleries/robocze" },
+        { name: "Wysłano do klienta", path: "/galleries/wyslano" },
       { name: "Wybrano zdjęcia", path: "/galleries/wybrano" },
       { name: "Prośba o zmiany", path: "/galleries/prosba-o-zmiany" },
       { name: "Gotowe do wysyłki", path: "/galleries/gotowe-do-wysylki" },

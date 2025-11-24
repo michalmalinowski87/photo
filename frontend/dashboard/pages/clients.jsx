@@ -5,11 +5,13 @@ import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 
 export default function Clients() {
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
+  const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
   const [error, setError] = useState("");
   const [clients, setClients] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -101,6 +103,11 @@ export default function Clients() {
         } else {
           setPageHistory([...pageHistory, { page, cursor: lastKey }]);
         }
+      }
+      
+      // Mark initial load as complete
+      if (initialLoad) {
+        setInitialLoad(false);
       }
     } catch (err) {
       setError(formatApiError(err));
@@ -383,6 +390,10 @@ export default function Clients() {
     );
   }
 
+  if (loading && initialLoad) {
+    return <FullPageLoading text="Ładowanie klientów..." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -417,11 +428,7 @@ export default function Clients() {
         </div>
       ) : null}
 
-      {loading && clients.length === 0 ? (
-        <div className="flex items-center justify-center p-8">
-          <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-        </div>
-      ) : clients.length === 0 ? (
+      {clients.length === 0 ? (
         <div className="p-8 text-center text-gray-500 dark:text-gray-400">
           {searchQuery ? "Brak wyników wyszukiwania." : "Brak klientów. Kliknij \"Dodaj klienta\" aby dodać pierwszego."}
         </div>

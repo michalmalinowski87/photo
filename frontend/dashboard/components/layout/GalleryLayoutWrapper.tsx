@@ -7,6 +7,7 @@ import { useToast } from "../../hooks/useToast";
 import { GalleryProvider } from "../../context/GalleryContext";
 import GalleryLayout from "./GalleryLayout";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
+import { FullPageLoading } from "../ui/loading/Loading";
 
 interface GalleryLayoutWrapperProps {
   children: React.ReactNode;
@@ -186,9 +187,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSendLink={() => {}}
         onSettings={() => {}}
       >
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-        </div>
+        <FullPageLoading text="Ładowanie galerii..." />
       </GalleryLayout>
     );
   }

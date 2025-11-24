@@ -12,6 +12,16 @@ import { ToastProvider } from '../context/ToastContext';
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ['/login', '/sign-up', '/verify-email', '/auth/auth-callback'];
 
+// Filter route names that should NOT be treated as gallery IDs
+const FILTER_ROUTES = [
+  'wyslano',
+  'wybrano',
+  'prosba-o-zmiany',
+  'gotowe-do-wysylki',
+  'dostarczone',
+  'robocze',
+];
+
 // Routes that should use gallery layout (gallery-specific sidebar)
 const GALLERY_ROUTES = ['/galleries/[id]', '/galleries/[id]/photos', '/galleries/[id]/settings', '/galleries/[id]/orders/[orderId]'];
 
@@ -23,11 +33,26 @@ export default function App({ Component, pageProps }) {
   
   // Check if current route is a gallery route (needs special layout)
   // Note: Gallery routes will handle their own layout internally
-  const isGalleryRoute = router.pathname ? GALLERY_ROUTES.some(route => {
-    const routePattern = route.replace(/\[.*?\]/g, '[^/]+');
-    const regex = new RegExp(`^${routePattern}$`);
-    return regex.test(router.pathname);
-  }) : false;
+  // Exclude filter routes from being treated as gallery routes
+  const isGalleryRoute = router.pathname ? (() => {
+    // Check if the actual path (asPath) is a filter route
+    // router.asPath shows the actual URL, router.pathname shows the route pattern
+    if (router.asPath && router.asPath.startsWith('/galleries/')) {
+      const pathSegments = router.asPath.split('/').filter(Boolean);
+      if (pathSegments.length >= 2) {
+        const secondSegment = pathSegments[1];
+        if (FILTER_ROUTES.includes(secondSegment)) {
+          return false;
+        }
+      }
+    }
+    // Check if it matches gallery route patterns
+    return GALLERY_ROUTES.some(route => {
+      const routePattern = route.replace(/\[.*?\]/g, '[^/]+');
+      const regex = new RegExp(`^${routePattern}$`);
+      return regex.test(router.pathname);
+    });
+  })() : false;
 
   // Global error handler for unhandled promise rejections
   useEffect(() => {

@@ -28,9 +28,14 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	// Query parameters
-	const deliveryStatus = event?.queryStringParameters?.deliveryStatus; // Optional filter
-	const limit = parseInt(event?.queryStringParameters?.limit || '1000', 10);
-	const limitClamped = Math.min(Math.max(limit, 1), 1000);
+	const deliveryStatus = event?.queryStringParameters?.deliveryStatus; // Optional filter (exact match)
+	const excludeDeliveryStatus = event?.queryStringParameters?.excludeDeliveryStatus; // Optional filter (exclude status)
+	const page = parseInt(event?.queryStringParameters?.page || '1', 10);
+	const itemsPerPage = parseInt(event?.queryStringParameters?.itemsPerPage || event?.queryStringParameters?.limit || '1000', 10);
+	
+	// Validate and clamp pagination parameters
+	const pageClamped = Math.max(1, page);
+	const itemsPerPageClamped = Math.min(Math.max(itemsPerPage, 1), 1000);
 
 	try {
 		// First, get all galleries for this owner
@@ -82,8 +87,18 @@ export const handler = lambdaLogger(async (event: any) => {
 			const gallery = galleries[index];
 			const orders = result.Items || [];
 			orders.forEach((order: any) => {
-				// Apply deliveryStatus filter if provided
-				if (!deliveryStatus || order.deliveryStatus === deliveryStatus) {
+				// Apply deliveryStatus filters if provided
+				let includeOrder = true;
+				
+				if (deliveryStatus && order.deliveryStatus !== deliveryStatus) {
+					includeOrder = false;
+				}
+				
+				if (excludeDeliveryStatus && order.deliveryStatus === excludeDeliveryStatus) {
+					includeOrder = false;
+				}
+				
+				if (includeOrder) {
 					allOrders.push({
 						...order,
 						galleryId: gallery.galleryId,
@@ -100,16 +115,27 @@ export const handler = lambdaLogger(async (event: any) => {
 			return dateB - dateA;
 		});
 
-		// Apply limit
-		const limitedOrders = allOrders.slice(0, limitClamped);
+		// Calculate pagination
+		const total = allOrders.length;
+		const totalPages = Math.ceil(total / itemsPerPageClamped);
+		const startIndex = (pageClamped - 1) * itemsPerPageClamped;
+		const endIndex = startIndex + itemsPerPageClamped;
+		
+		// Apply pagination
+		const paginatedOrders = allOrders.slice(startIndex, endIndex);
 
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
-				items: limitedOrders,
-				count: limitedOrders.length,
-				total: allOrders.length
+				items: paginatedOrders,
+				count: paginatedOrders.length,
+				total: total,
+				page: pageClamped,
+				itemsPerPage: itemsPerPageClamped,
+				totalPages: totalPages,
+				hasNextPage: pageClamped < totalPages,
+				hasPreviousPage: pageClamped > 1
 			})
 		};
 	} catch (error: any) {

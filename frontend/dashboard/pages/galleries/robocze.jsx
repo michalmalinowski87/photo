@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import GalleryList from "../../components/galleries/GalleryList";
 import { FullPageLoading } from "../../components/ui/loading/Loading";
 
-export default function GalleriesProsbaOZmiany() {
+export default function GalleriesRobocze() {
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
 
@@ -18,9 +18,9 @@ export default function GalleriesProsbaOZmiany() {
       )}
       <div className={loading && initialLoad ? "hidden" : "space-y-6"}>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Prośba o zmiany
+          Wersje robocze
         </h1>
-        <GalleryList filter="prosba-o-zmiany" onLoadingChange={handleLoadingChange} />
+        <GalleryList filter="unpaid" onLoadingChange={handleLoadingChange} />
       </div>
     </>
   );

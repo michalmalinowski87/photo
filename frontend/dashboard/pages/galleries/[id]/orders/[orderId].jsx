@@ -8,6 +8,7 @@ import Button from "../../../../components/ui/button/Button";
 import Badge from "../../../../components/ui/badge/Badge";
 import { Modal } from "../../../../components/ui/modal";
 import Input from "../../../../components/ui/input/InputField";
+import { FullPageLoading } from "../../../../components/ui/loading/Loading";
 import { useToast } from "../../../../hooks/useToast";
 
 export default function OrderDetail() {
@@ -16,7 +17,7 @@ export default function OrderDetail() {
   const { id: galleryId, orderId } = router.query;
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [error, setError] = useState("");
   const [order, setOrder] = useState(null);
   const [gallery, setGallery] = useState(null);
@@ -250,11 +251,7 @@ export default function OrderDetail() {
   };
 
   if (loading && !order) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-      </div>
-    );
+    return <FullPageLoading text="Ładowanie zlecenia..." />;
   }
 
   if (!order) {

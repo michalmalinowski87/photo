@@ -1,13 +1,28 @@
+import { useState, useCallback } from "react";
 import GalleryList from "../../components/galleries/GalleryList";
+import { FullPageLoading } from "../../components/ui/loading/Loading";
 
 export default function GalleriesDostarczone() {
+  const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  const handleLoadingChange = useCallback((isLoading, isInitialLoad) => {
+    setLoading(isLoading);
+    setInitialLoad(isInitialLoad);
+  }, []);
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-        Dostarczone
-      </h1>
-      <GalleryList filter="dostarczone" />
-    </div>
+    <>
+      {loading && initialLoad && (
+        <FullPageLoading text="Ładowanie galerii..." />
+      )}
+      <div className={loading && initialLoad ? "hidden" : "space-y-6"}>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Dostarczone
+        </h1>
+        <GalleryList filter="dostarczone" onLoadingChange={handleLoadingChange} />
+      </div>
+    </>
   );
 }
 

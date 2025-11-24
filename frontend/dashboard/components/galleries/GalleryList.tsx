@@ -1,21 +1,24 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { apiFetch, formatApiError } from "../../lib/api";
-import { getIdToken } from "../../lib/auth";
+import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
+import { FullPageLoading } from "../ui/loading/Loading";
 import PaymentConfirmationModal from "./PaymentConfirmationModal";
 import { useToast } from "../../hooks/useToast";
 
 interface GalleryListProps {
   filter?: "unpaid" | "wyslano" | "wybrano" | "prosba-o-zmiany" | "gotowe-do-wysylki" | "dostarczone";
+  onLoadingChange?: (loading: boolean, initialLoad: boolean) => void;
 }
 
-const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
+const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingChange }) => {
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
+  const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
   const [error, setError] = useState("");
   const [galleries, setGalleries] = useState<any[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -26,21 +29,25 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
     totalAmountCents: 0,
     walletAmountCents: 0,
     stripeAmountCents: 0,
+    balanceAfterPayment: 0,
   });
   const { showToast } = useToast();
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
-    getIdToken()
-      .then((token) => {
+    initializeAuth(
+      (token) => {
         setIdToken(token);
-      })
-      .catch(() => {
-        // No token, redirect to login
-        if (typeof window !== "undefined") {
-          window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
+      },
+      () => {
+        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/galleries");
+        if (onLoadingChange) {
+          setInitialLoad(false);
+          setLoading(false);
+          onLoadingChange(false, false);
         }
-      });
+      }
+    );
   }, []);
 
   useEffect(() => {
@@ -65,10 +72,21 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
   };
 
   const loadGalleries = async () => {
-    if (!apiUrl || !idToken) return;
+    if (!apiUrl || !idToken) {
+      if (onLoadingChange && initialLoad) {
+        setInitialLoad(false);
+        setLoading(false);
+        onLoadingChange(false, false);
+      }
+      return;
+    }
     
     setLoading(true);
     setError("");
+    
+    if (onLoadingChange && initialLoad) {
+      onLoadingChange(true, true);
+    }
     
     try {
       const url = filter ? `${apiUrl}/galleries?filter=${filter}` : `${apiUrl}/galleries`;
@@ -77,12 +95,30 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
       });
       
       setGalleries(data.items || []);
+      
+      if (initialLoad) {
+        setInitialLoad(false);
+      }
     } catch (err: any) {
       setError(formatApiError(err));
+      if (initialLoad) {
+        setInitialLoad(false);
+      }
     } finally {
       setLoading(false);
+      if (onLoadingChange) {
+        onLoadingChange(false, false);
+      }
     }
   };
+
+  // Notify parent of loading state changes
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(loading, initialLoad);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialLoad]);
 
   const handlePayClick = async (galleryId: string) => {
     if (!apiUrl || !idToken) return;
@@ -154,14 +190,6 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid" }) => {
     }
     return <Badge color="light" variant="light">{gallery.state}</Badge>;
   };
-
-  if (loading && galleries.length === 0) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">

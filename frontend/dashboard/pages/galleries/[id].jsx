@@ -9,8 +9,19 @@ import Button from "../../components/ui/button/Button";
 import Badge from "../../components/ui/badge/Badge";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
+import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { useToast } from "../../hooks/useToast";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
+
+// List of filter route names that should not be treated as gallery IDs
+const FILTER_ROUTES = [
+  "wyslano",
+  "wybrano",
+  "prosba-o-zmiany",
+  "gotowe-do-wysylki",
+  "dostarczone",
+  "robocze",
+];
 
 export default function GalleryDetail() {
   const router = useRouter();
@@ -19,7 +30,7 @@ export default function GalleryDetail() {
   const { gallery, loading: galleryLoading } = useGallery();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [error, setError] = useState("");
   const [orders, setOrders] = useState([]);
   const [showSendLinkModal, setShowSendLinkModal] = useState(false);
@@ -32,6 +43,11 @@ export default function GalleryDetail() {
     stripeAmountCents: 0,
   });
   const toast = useToast();
+
+  // Don't render gallery detail if this is a filter route - let Next.js handle static routes
+  if (router.isReady && galleryId && FILTER_ROUTES.includes(String(galleryId))) {
+    return null;
+  }
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -264,11 +280,7 @@ export default function GalleryDetail() {
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
   // Show loading only for orders, not gallery (gallery loading is handled by wrapper)
   if (galleryLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-      </div>
-    );
+    return <FullPageLoading text="Ładowanie zleceń..." />;
   }
 
   if (!gallery) {

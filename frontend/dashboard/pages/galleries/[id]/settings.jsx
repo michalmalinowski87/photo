@@ -5,6 +5,7 @@ import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init"
 import { useGallery } from "../../../context/GalleryContext";
 import Button from "../../../components/ui/button/Button";
 import Input from "../../../components/ui/input/InputField";
+import { FullPageLoading } from "../../../components/ui/loading/Loading";
 import { useToast } from "../../../hooks/useToast";
 
 export default function GallerySettings() {
@@ -141,19 +142,11 @@ export default function GallerySettings() {
   };
 
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
-  if (galleryLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-      </div>
-    );
-  }
-
-  if (!gallery) {
+  if (!gallery && !galleryLoading) {
     return null; // Error is handled by GalleryLayoutWrapper
   }
 
-  const isPaid = gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE");
+  const isPaid = gallery ? (gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")) : false;
 
   return (
     <>
@@ -178,19 +171,25 @@ export default function GallerySettings() {
               />
             </div>
             
-            <div>
+            <div style={{ minHeight: '88px' }}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email klienta
+                Email logowania
               </label>
               <Input
                 type="email"
-                placeholder="Email klienta"
-                value={settingsForm.clientEmail}
+                placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
+                value={galleryLoading ? "" : (settingsForm.clientEmail || "")}
                 onChange={(e) =>
                   setSettingsForm({ ...settingsForm, clientEmail: e.target.value })
                 }
-                disabled={!isPaid}
-                hint={!isPaid ? "Opłać galerię aby edytować email klienta" : ""}
+                disabled={galleryLoading || !isPaid}
+                hint={
+                  galleryLoading 
+                    ? "Ładowanie danych..." 
+                    : !isPaid 
+                    ? "Opłać galerię aby edytować email klienta" 
+                    : ""
+                }
               />
             </div>
             

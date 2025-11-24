@@ -61,7 +61,7 @@ const Input: FC<InputProps> = ({
         id={id}
         name={name}
         placeholder={placeholder}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         onBlur={onBlur}
         min={min}
@@ -72,6 +72,7 @@ const Input: FC<InputProps> = ({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         className={inputClasses}
+        style={{ minHeight: '44px' }}
       />
 
       {hint && (

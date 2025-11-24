@@ -27,9 +27,30 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let exclusiveStartKey: Record<string, any> | undefined;
 	if (lastKeyParam) {
 		try {
-			exclusiveStartKey = JSON.parse(decodeURIComponent(lastKeyParam));
+			// Handle potential double-encoding: try decoding multiple times if needed
+			let decoded = lastKeyParam;
+			let previousDecoded = '';
+			// Decode until no more changes occur (handles double/triple encoding)
+			while (decoded !== previousDecoded) {
+				previousDecoded = decoded;
+				try {
+					const nextDecoded = decodeURIComponent(decoded);
+					if (nextDecoded !== decoded) {
+						decoded = nextDecoded;
+					} else {
+						break;
+					}
+				} catch (e) {
+					// If decodeURIComponent fails, we've decoded as much as we can
+					break;
+				}
+			}
+			exclusiveStartKey = JSON.parse(decoded);
 		} catch (e) {
-			logger?.warn('Failed to parse lastKey parameter', { lastKey: lastKeyParam });
+			logger?.warn('Failed to parse lastKey parameter', { 
+				lastKey: lastKeyParam,
+				error: e instanceof Error ? e.message : String(e)
+			});
 		}
 	}
 

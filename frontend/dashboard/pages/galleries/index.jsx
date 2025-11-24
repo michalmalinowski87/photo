@@ -1,13 +1,13 @@
-import GalleryList from "../../components/galleries/GalleryList";
+import { useEffect } from "react";
+import { useRouter } from "next/router";
 
 export default function GalleriesIndex() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-        Wersje robocze
-      </h1>
-      <GalleryList filter="unpaid" />
-    </div>
-  );
+  const router = useRouter();
+  
+  useEffect(() => {
+    router.replace("/galleries/robocze");
+  }, [router]);
+  
+  return null;
 }
 

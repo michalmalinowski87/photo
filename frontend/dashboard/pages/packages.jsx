@@ -5,11 +5,13 @@ import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 
 export default function Packages() {
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
+  const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
   const [error, setError] = useState("");
   const [packages, setPackages] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -51,6 +53,11 @@ export default function Packages() {
       });
       
       setPackages(data.items || []);
+      
+      // Mark initial load as complete
+      if (initialLoad) {
+        setInitialLoad(false);
+      }
     } catch (err) {
       setError(formatApiError(err));
     } finally {
@@ -263,6 +270,10 @@ export default function Packages() {
     );
   }
 
+  if (loading && initialLoad) {
+    return <FullPageLoading text="Ładowanie pakietów..." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -280,11 +291,7 @@ export default function Packages() {
         </div>
       )}
 
-      {loading && packages.length === 0 ? (
-        <div className="flex items-center justify-center p-8">
-          <p className="text-gray-600 dark:text-gray-400">Ładowanie...</p>
-        </div>
-      ) : packages.length === 0 ? (
+      {packages.length === 0 ? (
         <div className="p-8 text-center text-gray-500 dark:text-gray-400">
           Brak pakietów. Kliknij "Dodaj pakiet" aby dodać pierwszy.
         </div>
