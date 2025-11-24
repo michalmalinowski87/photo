@@ -2,7 +2,7 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Bucket, BlockPublicAccess, HttpMethods } from 'aws-cdk-lib/aws-s3';
-import { AttributeType, BillingMode, Table, StreamViewType } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, Table, StreamViewType, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
@@ -56,6 +56,14 @@ export class AppStack extends Stack {
 			partitionKey: { name: 'ownerId', type: AttributeType.STRING },
 			sortKey: { name: 'createdAt', type: AttributeType.STRING }
 		});
+		
+		// Enable TTL on the galleries table using the 'ttl' attribute
+		// This allows DynamoDB to automatically delete expired items (typically within 48 hours)
+		const galleriesCfnTable = galleries.node.defaultChild as CfnTable;
+		galleriesCfnTable.timeToLiveSpecification = {
+			enabled: true,
+			attributeName: 'ttl'
+		};
 
 		const payments = new Table(this, 'PaymentsTable', {
 			partitionKey: { name: 'paymentId', type: AttributeType.STRING },
