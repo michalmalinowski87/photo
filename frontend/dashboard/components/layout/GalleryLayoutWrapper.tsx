@@ -5,6 +5,7 @@ import { getIdToken } from "../../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { useToast } from "../../hooks/useToast";
 import { GalleryProvider } from "../../context/GalleryContext";
+import { useZipDownload } from "../../context/ZipDownloadContext";
 import GalleryLayout from "./GalleryLayout";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
@@ -18,6 +19,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
   const { showToast } = useToast();
+  const { startZipDownload, updateZipDownload, removeZipDownload } = useZipDownload();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true);
@@ -253,52 +255,62 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
     })() : order;
     
-    try {
-      // Download ZIP (will generate on-demand if needed)
-      const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
-      const response = await fetch(zipUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      
-      // Handle 202 - ZIP is being generated
-      if (response.status === 202) {
-        const data = await response.json();
-        showToast("info", "Generowanie ZIP", data.message || "ZIP jest generowany. Spróbuj ponownie za chwilę.");
-        // Optionally retry after a delay
-        setTimeout(() => {
-          handleDownloadZip();
-        }, 3000); // Retry after 3 seconds
-        return;
-      }
-      
-      // Handle 200 - ZIP is ready
-      if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${orderId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        showToast("success", "Sukces", "Pobieranie ZIP rozpoczęte");
-      } else if (response.ok) {
-        // JSON response (error or other status)
-        const data = await response.json();
-        if (data.error) {
-          showToast("error", "Błąd", data.error);
-        } else {
-          showToast("error", "Błąd", "Nie udało się pobrać pliku ZIP");
+    // Start download progress indicator
+    const downloadId = startZipDownload(orderId as string, galleryId as string);
+    
+    const pollForZip = async (): Promise<void> => {
+      try {
+        const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
+        const response = await fetch(zipUrl, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        
+        // Handle 202 - ZIP is being generated
+        if (response.status === 202) {
+          updateZipDownload(downloadId, { status: 'generating' });
+          // Retry after delay
+          setTimeout(() => {
+            pollForZip();
+          }, 2000); // Poll every 2 seconds
+          return;
         }
-      } else {
-        // Error response
-        const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
-        showToast("error", "Błąd", errorData.error || "Nie udało się pobrać pliku ZIP");
+        
+        // Handle 200 - ZIP is ready
+        if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
+          updateZipDownload(downloadId, { status: 'downloading' });
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${orderId}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          updateZipDownload(downloadId, { status: 'success' });
+          // Auto-dismiss after 3 seconds
+          setTimeout(() => {
+            removeZipDownload(downloadId);
+          }, 3000);
+        } else if (response.ok) {
+          // JSON response (error or other status)
+          const data = await response.json();
+          const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
+          updateZipDownload(downloadId, { status: 'error', error: errorMsg });
+        } else {
+          // Error response
+          const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
+          updateZipDownload(downloadId, { status: 'error', error: errorData.error || "Nie udało się pobrać pliku ZIP" });
+        }
+      } catch (err) {
+        const errorMsg = formatApiError(err);
+        updateZipDownload(downloadId, { status: 'error', error: errorMsg });
       }
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
-    }
+    };
+    
+    // Start polling
+    pollForZip();
   };
 
   const handlePayClick = async () => {
@@ -329,15 +341,22 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const confirmPayment = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
+    if (!apiUrl || !idToken || !galleryId || !paymentDetails) return;
 
     setShowPaymentModal(false);
     setPaymentLoading(true);
 
     try {
+      // If wallet balance is insufficient (split payment), force full Stripe payment
+      const forceStripeOnly = paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
+      
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}` 
+        },
+        body: JSON.stringify({ forceStripeOnly }),
       });
       
       if (data.checkoutUrl) {
@@ -442,34 +461,92 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   const handleDownloadFinals = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId) return;
-    try {
-      const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.zip) {
-          const zipBlob = Uint8Array.from(atob(data.zip), c => c.charCodeAt(0));
-          const blob = new Blob([zipBlob], { type: 'application/zip' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
+    
+    // Start download progress indicator
+    const downloadId = startZipDownload(`${orderId}-finals`, galleryId as string);
+    
+    const pollForFinalsZip = async (): Promise<void> => {
+      try {
+        const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`;
+        const response = await fetch(zipUrl, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        
+        // Handle 202 - ZIP is being generated
+        if (response.status === 202) {
+          updateZipDownload(downloadId, { status: 'generating' });
+          // Retry after delay
+          setTimeout(() => {
+            pollForFinalsZip();
+          }, 2000); // Poll every 2 seconds
+          return;
+        }
+        
+        // Handle 200 - ZIP is ready
+        if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
+          updateZipDownload(downloadId, { status: 'downloading' });
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
           a.href = url;
-          a.download = data.filename || `order-${orderId}-finals.zip`;
+          // Try to get filename from Content-Disposition header or use default
+          const contentDisposition = response.headers.get('content-disposition');
+          let filename = `order-${orderId}-finals.zip`;
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+              filename = filenameMatch[1].replace(/['"]/g, '');
+            }
+          }
+          a.download = filename;
           document.body.appendChild(a);
           a.click();
+          window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          showToast("success", "Sukces", "Pobieranie rozpoczęte");
+          
+          updateZipDownload(downloadId, { status: 'success' });
+          // Auto-dismiss after 3 seconds
+          setTimeout(() => {
+            removeZipDownload(downloadId);
+          }, 3000);
+        } else if (response.ok) {
+          // JSON response (error or other status) - handle base64 ZIP for backward compatibility
+          const data = await response.json();
+          if (data.zip) {
+            // Backward compatibility: handle base64 ZIP response
+            updateZipDownload(downloadId, { status: 'downloading' });
+            const zipBlob = Uint8Array.from(atob(data.zip), c => c.charCodeAt(0));
+            const blob = new Blob([zipBlob], { type: 'application/zip' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = data.filename || `order-${orderId}-finals.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            updateZipDownload(downloadId, { status: 'success' });
+            setTimeout(() => {
+              removeZipDownload(downloadId);
+            }, 3000);
+          } else {
+            const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
+            updateZipDownload(downloadId, { status: 'error', error: errorMsg });
+          }
+        } else {
+          // Error response
+          const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
+          updateZipDownload(downloadId, { status: 'error', error: errorData.error || "Nie udało się pobrać pliku ZIP" });
         }
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Nie udało się pobrać pliku ZIP");
+      } catch (err) {
+        const errorMsg = formatApiError(err);
+        updateZipDownload(downloadId, { status: 'error', error: errorMsg });
       }
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
-    }
+    };
+    
+    // Start polling
+    pollForFinalsZip();
   };
 
   const handleSendFinalsToClient = async () => {
@@ -537,6 +614,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Calculate canDownloadZip for order
   // Only show ZIP download if selection is enabled (ZIP contains selected photos)
+  // If backup addon exists, ZIP is always available regardless of order status
   const orderObj = order && typeof order === 'object' ? order : (order && typeof order === 'string' ? (() => {
     try {
       return JSON.parse(order);
@@ -556,7 +634,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     orderObj.deliveryStatus === "DELIVERED"
   );
   
+  // ZIP download is available if:
+  // 1. Backup addon exists (always available regardless of status)
+  // 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
+  const hasBackupAddon = gallery?.hasBackupStorage === true;
   const canDownloadZip = orderObj && selectionEnabled ? (
+    hasBackupAddon || // Always available with backup addon
     orderObj.deliveryStatus === "CLIENT_APPROVED" ||
     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
     orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||

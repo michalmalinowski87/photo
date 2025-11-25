@@ -15,6 +15,7 @@ import { useToast } from "../../../../hooks/useToast";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../../lib/currency";
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
 import { useGallery } from "../../../../context/GalleryContext";
+import { useZipDownload } from "../../../../context/ZipDownloadContext";
 
 // Component that retries loading an image until it's available on CloudFront
 const RetryableImage = ({ src, alt, className, maxRetries = 30, initialDelay = 500 }) => {
@@ -127,6 +128,7 @@ export default function OrderDetail() {
   const { id: galleryId, orderId } = router.query;
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
+  const { startZipDownload, updateZipDownload, removeZipDownload } = useZipDownload();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
@@ -140,6 +142,13 @@ export default function OrderDetail() {
   const [finalImages, setFinalImages] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({
+    current: 0,
+    total: 0,
+    currentFileName: '',
+    errors: [],
+    successes: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState(null);
@@ -156,6 +165,7 @@ export default function OrderDetail() {
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const fileInputRef = useRef(null);
+  const uploadCancelRef = useRef(false); // Track if upload was cancelled
 
   // Sync refs with state so closures always have latest values
   useEffect(() => {
@@ -227,9 +237,13 @@ export default function OrderDetail() {
         }
       })() : (order || {});
       
-      const shouldHideSelectedSection = orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
-                                       orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-                                       orderObj.deliveryStatus === "DELIVERED";
+      // Only hide if backup addon is NOT purchased (with backup addon, originals should always be visible)
+      const hasBackupAddon = gallery?.hasBackupStorage === true;
+      const shouldHideSelectedSection = !hasBackupAddon && (
+        orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
+        orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+        orderObj.deliveryStatus === "DELIVERED"
+      );
       
       if (shouldHideSelectedSection && gallery?.selectionEnabled !== false && activeTab === "originals") {
         setActiveTab("finals");
@@ -295,18 +309,22 @@ export default function OrderDetail() {
   };
 
   const handlePaymentConfirm = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
+    if (!apiUrl || !idToken || !galleryId || !paymentDetails) return;
 
     setShowPaymentModal(false);
     setPaymentLoading(true);
 
     try {
+      // If wallet balance is insufficient (split payment), force full Stripe payment
+      const forceStripeOnly = paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
+      
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}` 
         },
+        body: JSON.stringify({ forceStripeOnly }),
       });
       
       if (data.checkoutUrl) {
@@ -368,9 +386,13 @@ export default function OrderDetail() {
       const selectionEnabled = galleryData?.selectionEnabled !== false;
       
       // Auto-switch to finals tab if originals section should be hidden
-      const shouldHideSelectedSection = orderData.deliveryStatus === "PREPARING_DELIVERY" || 
-                                       orderData.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-                                       orderData.deliveryStatus === "DELIVERED";
+      // BUT only hide if backup addon is NOT purchased (with backup addon, originals should always be visible)
+      const hasBackupAddon = galleryData?.hasBackupStorage === true;
+      const shouldHideSelectedSection = !hasBackupAddon && (
+        orderData.deliveryStatus === "PREPARING_DELIVERY" || 
+        orderData.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+        orderData.deliveryStatus === "DELIVERED"
+      );
       if (shouldHideSelectedSection && selectionEnabled && activeTab === "originals") {
         setActiveTab("finals");
       }
@@ -379,6 +401,7 @@ export default function OrderDetail() {
         !selectionEnabled ||
         orderData.deliveryStatus === "CLIENT_APPROVED" ||
         orderData.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
+        orderData.deliveryStatus === "PREPARING_DELIVERY" ||
         orderData.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
         orderData.deliveryStatus === "DELIVERED"
       ) {
@@ -511,7 +534,17 @@ export default function OrderDetail() {
     if (!apiUrl || !idToken || !galleryId || !orderId) return;
     
     setUploading(true);
+    uploadCancelRef.current = false; // Reset cancellation flag
     setError("");
+    
+    // Initialize upload progress
+    setUploadProgress({
+      current: 0,
+      total: imageFiles.length,
+      currentFileName: '',
+      errors: [],
+      successes: 0,
+    });
     
     // Capture initial real image count BEFORE adding placeholders
     const initialFinalImageCount = finalImages.filter((img) => !img.isPlaceholder).length;
@@ -535,69 +568,194 @@ export default function OrderDetail() {
     try {
       const token = await getIdToken();
       
-      // Get presigned URLs for each file and upload using the dedicated final upload endpoint
-      const uploadPromises = imageFiles.map(async (file) => {
-        // Use the dedicated final upload endpoint which handles the correct S3 path
-        const presignResponse = await apiFetch(
-          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/upload`,
-          {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-              key: file.name,
-            contentType: file.type || "image/jpeg",
-          }),
+      // Helper function to retry a request with exponential backoff and jitter
+      const retryWithBackoff = async (fn, maxRetries = 5, baseDelay = 500) => {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (error) {
+            if (attempt === maxRetries - 1) throw error;
+            // Exponential backoff with jitter: 0.5s, 1s, 2s, 4s, 8s
+            const exponentialDelay = baseDelay * Math.pow(2, attempt);
+            const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
+            const delay = exponentialDelay + jitter;
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
+        }
+      };
+      
+      // Dynamic batch sizing: start larger, reduce if errors occur
+      let currentBatchSize = Math.min(15, Math.max(5, Math.floor(imageFiles.length / 10)));
+      let consecutiveErrors = 0;
+      const uploadErrors = [];
+      let uploadSuccesses = 0;
+      
+      // Process uploads in batches with adaptive sizing
+      for (let i = 0; i < imageFiles.length; i += currentBatchSize) {
+        // Check for cancellation
+        if (uploadCancelRef.current) {
+          throw new Error('Upload cancelled by user');
+        }
+        
+        const batch = imageFiles.slice(i, i + currentBatchSize);
+        const batchStartTime = Date.now();
+        let batchErrors = 0;
+        
+        // Process batch with individual error handling
+        const batchResults = await Promise.allSettled(
+          batch.map(async (file, batchIndex) => {
+            const globalIndex = i + batchIndex;
+            
+            // Check for cancellation before each file
+            if (uploadCancelRef.current) {
+              throw new Error('Upload cancelled');
+            }
+            
+            // Update progress
+            setUploadProgress((prev) => ({
+              ...prev,
+              current: globalIndex + 1,
+              currentFileName: file.name,
+            }));
+            
+            try {
+              // Use the dedicated final upload endpoint which handles the correct S3 path
+              const presignResponse = await retryWithBackoff(async () => {
+                return await apiFetch(
+                  `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/upload`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      key: file.name,
+                      contentType: file.type || "image/jpeg",
+                    }),
+                  }
+                );
+              });
+              
+              // Upload file to S3 with timeout
+              const uploadController = new AbortController();
+              const uploadTimeout = setTimeout(() => uploadController.abort(), 300000); // 5 min timeout
+              
+              try {
+                const uploadResponse = await fetch(presignResponse.data.url, {
+                  method: "PUT",
+                  body: file,
+                  headers: {
+                    "Content-Type": file.type || "image/jpeg",
+                  },
+                  signal: uploadController.signal,
+                });
+                
+                clearTimeout(uploadTimeout);
+                
+                if (!uploadResponse.ok) {
+                  throw new Error(`Failed to upload ${file.name}: ${uploadResponse.status} ${uploadResponse.statusText}`);
+                }
+                
+                uploadSuccesses++;
+                return { success: true, file: file.name };
+              } catch (uploadError) {
+                clearTimeout(uploadTimeout);
+                throw uploadError;
+              }
+            } catch (error) {
+              const errorMessage = error.message || 'Unknown error';
+              uploadErrors.push({ file: file.name, error: errorMessage });
+              batchErrors++;
+              return { success: false, file: file.name, error: errorMessage };
+            }
+          })
         );
         
-        // Upload file to S3
-        const uploadResponse = await fetch(presignResponse.data.url, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type || "image/jpeg",
-          },
-        });
+        // Update progress with batch results
+        setUploadProgress((prev) => ({
+          ...prev,
+          successes: uploadSuccesses,
+          errors: uploadErrors,
+        }));
         
-        if (!uploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name}`);
+        // Adaptive batch sizing: reduce if too many errors, increase if successful
+        if (batchErrors > 0) {
+          consecutiveErrors++;
+          // Reduce batch size if we're getting errors (minimum 3)
+          currentBatchSize = Math.max(3, Math.floor(currentBatchSize * 0.7));
+        } else {
+          consecutiveErrors = 0;
+          // Gradually increase batch size if successful (maximum 20)
+          if (currentBatchSize < 20) {
+            currentBatchSize = Math.min(20, Math.floor(currentBatchSize * 1.1));
+          }
         }
-      });
+        
+        // Dynamic delay between batches based on batch size and errors
+        // Larger batches = longer delay, errors = longer delay
+        const baseDelay = 100;
+        const errorPenalty = batchErrors * 50;
+        const batchSizePenalty = currentBatchSize * 10;
+        const delay = baseDelay + errorPenalty + batchSizePenalty;
+        
+        // Only delay if there are more batches to process
+        if (i + currentBatchSize < imageFiles.length && !uploadCancelRef.current) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
       
-      // Wait for all uploads to complete
-      await Promise.all(uploadPromises);
+      // Final progress update
+      setUploadProgress((prev) => ({
+        ...prev,
+        current: imageFiles.length,
+        currentFileName: '',
+      }));
+      
+      // Show summary toast
+      if (uploadErrors.length === 0) {
+        showToast("success", "Sukces", `Wszystkie ${imageFiles.length} zdjęć finalnych zostało przesłanych`);
+      } else if (uploadSuccesses > 0) {
+        showToast(
+          "warning",
+          "Częściowy sukces",
+          `Przesłano ${uploadSuccesses} z ${imageFiles.length} zdjęć finalnych. ${uploadErrors.length} nie powiodło się.`
+        );
+      } else {
+        showToast("error", "Błąd", `Nie udało się przesłać żadnego zdjęcia finalnego. Sprawdź konsolę.`);
+      }
       
       // Call completion endpoint - it will check S3 state server-side
       // This is idempotent and safe - checks actual S3 files, not client claims
-      try {
-        await apiFetch(
-          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/upload-complete`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
+      // Only call if we have at least some successful uploads
+      if (uploadSuccesses > 0 && !uploadCancelRef.current) {
+        try {
+          await apiFetch(
+            `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/upload-complete`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          
+          // Reload order data immediately to get updated status
+          await loadOrderData();
+          
+          // Notify GalleryLayoutWrapper to reload order data after status update
+          // This ensures the sidebar order actions appear when deliveryStatus changes to PREPARING_DELIVERY
+          if (typeof window !== 'undefined') {
+            console.log('Order page: Dispatching orderUpdated event after upload-complete', { orderId });
+            window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
           }
-        );
-        
-        // Reload order data immediately to get updated status
-        await loadOrderData();
-        
-        // Notify GalleryLayoutWrapper to reload order data after status update
-        // This ensures the sidebar order actions appear when deliveryStatus changes to PREPARING_DELIVERY
-        if (typeof window !== 'undefined') {
-          console.log('Order page: Dispatching orderUpdated event after upload-complete', { orderId });
-          window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+        } catch (completeErr) {
+          // If completion fails, show warning but don't fail the upload
+          // The endpoint can be called again later - it's idempotent
+          showToast("warning", "Ostrzeżenie", "Zdjęcia zostały przesłane. Jeśli originals nie zostały usunięte, spróbuj ponownie.");
+          console.error("Upload completion processing failed:", completeErr);
         }
-      } catch (completeErr) {
-        // If completion fails, show warning but don't fail the upload
-        // The endpoint can be called again later - it's idempotent
-        showToast("warning", "Ostrzeżenie", "Zdjęcia zostały przesłane. Jeśli originals nie zostały usunięte, spróbuj ponownie.");
-        console.error("Upload completion processing failed:", completeErr);
       }
       
       // Poll for final images to appear on CloudFront
@@ -780,9 +938,22 @@ export default function OrderDetail() {
         });
         return prevImages.filter((img) => !img.isPlaceholder);
       });
-      showToast("error", "Błąd", formatApiError(err) || "Nie udało się przesłać zdjęć");
+      if (uploadCancelRef.current) {
+        showToast("info", "Anulowano", "Przesyłanie zdjęć finalnych zostało anulowane");
+      } else {
+        const errorMsg = formatApiError(err) || "Nie udało się przesłać zdjęć finalnych";
+        showToast("error", "Błąd", errorMsg);
+        console.error("Final upload error:", err);
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({
+        current: 0,
+        total: 0,
+        currentFileName: '',
+        errors: [],
+        successes: 0,
+      });
     }
   };
 
@@ -1127,48 +1298,67 @@ export default function OrderDetail() {
       }
     })() : order;
     
-    try {
-      // Download ZIP (will generate on-demand if needed)
-      const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
-      const response = await fetch(zipUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      
-      // Handle 202 - ZIP is being generated
-      if (response.status === 202) {
-        const data = await response.json();
-        setError(`Generowanie ZIP: ${data.message || 'ZIP jest generowany. Spróbuj ponownie za chwilę.'}`);
-        // Optionally retry after a delay
-        setTimeout(() => {
-          handleDownloadZip();
-        }, 3000); // Retry after 3 seconds
-        return;
+    // Start download progress indicator
+    const downloadId = startZipDownload(String(orderId), String(galleryId));
+    
+    const pollForZip = async () => {
+      try {
+        const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
+        const response = await fetch(zipUrl, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        
+        // Handle 202 - ZIP is being generated
+        if (response.status === 202) {
+          updateZipDownload(downloadId, { status: 'generating' });
+          // Retry after delay
+          setTimeout(() => {
+            pollForZip();
+          }, 2000); // Poll every 2 seconds
+          return;
+        }
+        
+        // Handle 200 - ZIP is ready
+        if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
+          updateZipDownload(downloadId, { status: 'downloading' });
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${orderId}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          updateZipDownload(downloadId, { status: 'success' });
+          setError(''); // Clear any previous errors
+          // Auto-dismiss after 3 seconds
+          setTimeout(() => {
+            removeZipDownload(downloadId);
+          }, 3000);
+        } else if (response.ok) {
+          // JSON response (error or other status)
+          const data = await response.json();
+          const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
+          updateZipDownload(downloadId, { status: 'error', error: errorMsg });
+          setError(errorMsg);
+        } else {
+          // Error response
+          const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
+          const errorMsg = errorData.error || "Nie udało się pobrać pliku ZIP";
+          updateZipDownload(downloadId, { status: 'error', error: errorMsg });
+          setError(errorMsg);
+        }
+      } catch (err) {
+        const errorMsg = formatApiError(err);
+        updateZipDownload(downloadId, { status: 'error', error: errorMsg });
+        setError(errorMsg);
       }
-      
-      // Handle 200 - ZIP is ready
-      if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${orderId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        setError(''); // Clear any previous errors
-      } else if (response.ok) {
-        // JSON response (error or other status)
-        const data = await response.json();
-        setError(data.error || "Nie udało się pobrać pliku ZIP");
-      } else {
-        // Error response
-        const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
-        setError(errorData.error || "Nie udało się pobrać pliku ZIP");
-      }
-    } catch (err) {
-      setError(formatApiError(err));
-    }
+    };
+    
+    // Start polling
+    pollForZip();
   };
 
   const getDeliveryStatusBadge = (status) => {
@@ -1234,9 +1424,13 @@ export default function OrderDetail() {
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
   
   // Hide "Wybrane przez klienta" section when finals are uploaded (PREPARING_DELIVERY or DELIVERED)
-  const hideSelectedSection = orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
-                              orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-                              orderObj.deliveryStatus === "DELIVERED";
+  // BUT only hide if backup addon is NOT purchased (with backup addon, originals should always be visible)
+  const hasBackupAddon = gallery?.hasBackupStorage === true;
+  const hideSelectedSection = !hasBackupAddon && (
+    orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
+    orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+    orderObj.deliveryStatus === "DELIVERED"
+  );
   
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
@@ -1251,7 +1445,11 @@ export default function OrderDetail() {
     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
     orderObj.deliveryStatus === "PREPARING_DELIVERY" // Backend sets this status after finals upload
   );
-  const canDownloadZip = canUploadFinals || orderObj.deliveryStatus === "DELIVERED" || orderObj.deliveryStatus === "CLIENT_APPROVED";
+      // ZIP download is available if:
+      // 1. Backup addon exists (always available regardless of status)
+      // 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
+      // 3. Order is DELIVERED (for one-time download if no backup addon)
+  const canDownloadZip = hasBackupAddon || canUploadFinals || orderObj.deliveryStatus === "DELIVERED" || orderObj.deliveryStatus === "CLIENT_APPROVED";
 
   return (
     <div className="space-y-6">
@@ -1488,6 +1686,54 @@ export default function OrderDetail() {
             </div>
           )}
           
+          {/* Upload Progress Bar */}
+          {uploading && uploadProgress.total > 0 && (
+            <div className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3 flex-1">
+                  <Loading size="sm" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        Przesyłanie zdjęć finalnych...
+                      </span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {uploadProgress.current} / {uploadProgress.total}
+                      </span>
+                    </div>
+                    {uploadProgress.currentFileName && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {uploadProgress.currentFileName}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    uploadCancelRef.current = true;
+                    setUploading(false);
+                  }}
+                  className="ml-4 px-3 py-1.5 text-sm font-medium text-error-600 dark:text-error-400 hover:text-error-700 dark:hover:text-error-300 border border-error-300 dark:border-error-700 rounded-md hover:bg-error-50 dark:hover:bg-error-900/20 transition-colors"
+                >
+                  Anuluj
+                </button>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-brand-500 h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                  }}
+                />
+              </div>
+              {uploadProgress.errors.length > 0 && (
+                <div className="mt-2 text-xs text-error-600 dark:text-error-400">
+                  Błędy: {uploadProgress.errors.length} | Sukcesy: {uploadProgress.successes}
+                </div>
+              )}
+            </div>
+          )}
+          
           {canUploadFinals && (
             <div
               className={`relative w-full rounded-lg border-2 border-dashed transition-colors ${
@@ -1498,7 +1744,7 @@ export default function OrderDetail() {
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !uploading && fileInputRef.current?.click()}
             >
               <div className="p-8 text-center cursor-pointer">
                 {uploading ? (

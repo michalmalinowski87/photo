@@ -185,9 +185,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// CRITICAL: Check dryRun parameter - must be explicitly true
 	// Only check if body is a non-array object
 	const dryRun = body && typeof body === 'object' && !Array.isArray(body) && body.dryRun === true;
+	const forceStripeOnly = body && typeof body === 'object' && !Array.isArray(body) && body.forceStripeOnly === true;
 	logger.info('Payment request received', { 
 		galleryId, 
-		dryRun, 
+		dryRun,
+		forceStripeOnly,
 		hasBody: !!event.body, 
 		bodyType: typeof body,
 		isArray: Array.isArray(body),
@@ -236,7 +238,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const totalAmountCents = galleryPriceCents + addonPriceCents;
 		
 		// Calculate wallet vs stripe amounts based on current wallet balance (read-only)
-		if (walletsTable && ledgerTable) {
+		if (forceStripeOnly) {
+			// User chose to pay full amount via Stripe (ignoring wallet balance)
+			walletAmountCents = 0;
+			stripeAmountCents = totalAmountCents;
+		} else if (walletsTable && ledgerTable) {
 			const walletBalance = await getWalletBalance(ownerId, walletsTable);
 			if (walletBalance >= totalAmountCents) {
 				walletAmountCents = totalAmountCents;
@@ -450,7 +456,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let walletAmountCents = 0;
 	let stripeAmountCents = totalAmountCents;
 	
-	if (walletsTable && ledgerTable) {
+	if (forceStripeOnly) {
+		// User chose to pay full amount via Stripe (ignoring wallet balance)
+		walletAmountCents = 0;
+		stripeAmountCents = totalAmountCents;
+	} else if (walletsTable && ledgerTable) {
 		const walletBalance = await getWalletBalance(ownerId, walletsTable);
 		if (walletBalance >= totalAmountCents) {
 			walletAmountCents = totalAmountCents;
@@ -551,9 +561,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Transaction amounts are just a snapshot from creation time, wallet balance may have changed
 	let paid = false;
 	let checkoutUrl: string | undefined;
+	let walletBalance = 0;
 
-	if (walletsTable && ledgerTable) {
-		const walletBalance = await getWalletBalance(ownerId, walletsTable);
+	if (forceStripeOnly) {
+		// User chose to pay full amount via Stripe (ignoring wallet balance)
+		logger.info('Force Stripe only payment - ignoring wallet balance', {
+			galleryId,
+			totalAmountCents
+		});
+		walletAmountCents = 0;
+		stripeAmountCents = totalAmountCents;
+	} else if (walletsTable && ledgerTable) {
+		walletBalance = await getWalletBalance(ownerId, walletsTable);
 		
 		// Recalculate wallet vs stripe amounts based on current balance
 		if (walletBalance >= totalAmountCents) {
@@ -566,25 +585,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			walletAmountCents = 0;
 			stripeAmountCents = totalAmountCents;
 		}
-		
-		// NOTE: Dry run is handled at the top of the function (line 153)
-		// This code path only executes when dryRun is false
-		
-		// Process actual payment (dry run already handled above)
-		// CRITICAL: Double-check dryRun is false before processing
-		if (dryRun) {
-			logger.error('CRITICAL ERROR: dryRun is true but reached payment processing code - this should never happen!', {
-				galleryId,
-				transactionId
-			});
-			return {
-				statusCode: 500,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Internal error: dry run check failed' })
-			};
-		}
-		
-		if (walletBalance >= totalAmountCents) {
+	} else {
+		// No wallet tables configured, full Stripe payment
+		walletAmountCents = 0;
+		stripeAmountCents = totalAmountCents;
+	}
+	
+	// NOTE: Dry run is handled at the top of the function (line 153)
+	// This code path only executes when dryRun is false
+	
+	// Process actual payment (dry run already handled above)
+	// CRITICAL: Double-check dryRun is false before processing
+	if (dryRun) {
+		logger.error('CRITICAL ERROR: dryRun is true but reached payment processing code - this should never happen!', {
+			galleryId,
+			transactionId
+		});
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Internal error: dry run check failed' })
+		};
+	}
+	
+	// Process wallet payment if balance is sufficient and not forcing Stripe only
+	if (!forceStripeOnly && walletsTable && ledgerTable && walletBalance >= totalAmountCents) {
 			logger.info('Processing wallet payment (NOT dry run)', {
 				galleryId,
 				transactionId,
@@ -663,21 +688,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					})
 				};
 			}
-		} else if (walletBalance > 0) {
-			// Partial wallet payment
-			walletAmountCents = walletBalance;
-			stripeAmountCents = totalAmountCents - walletBalance;
 		}
-		
-		logger.info('Wallet payment attempt', {
-			ownerId,
-			totalAmountCents,
-			walletBalance,
-			walletAmountCents,
-			stripeAmountCents,
-			paid
-		});
-	}
 
 	// If payment was already completed via wallet, return success
 	if (paid) {
@@ -778,12 +789,30 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		});
 
-		// Update existing transaction with Stripe session ID if it exists
+		// Update existing transaction with Stripe session ID and payment method if it exists
 		if (transactionId && transactionsTable) {
 			try {
 				await updateTransactionStatus(ownerId, transactionId, 'UNPAID', {
 					stripeSessionId: session.id
 				});
+				// If forceStripeOnly is true, update payment method to STRIPE (not MIXED)
+				if (forceStripeOnly) {
+					await ddb.send(new UpdateCommand({
+						TableName: transactionsTable,
+						Key: { userId: ownerId, transactionId },
+						UpdateExpression: 'SET paymentMethod = :pm, walletAmountCents = :wa, stripeAmountCents = :sa',
+						ExpressionAttributeValues: {
+							':pm': 'STRIPE',
+							':wa': 0,
+							':sa': stripeAmountCents
+						}
+					}));
+					logger.info('Updated transaction payment method to STRIPE (forceStripeOnly)', {
+						transactionId,
+						galleryId,
+						stripeAmountCents
+					});
+				}
 			} catch (txnErr: any) {
 				logger.warn('Failed to update transaction with Stripe session ID', {
 					error: txnErr.message,

@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -261,6 +262,39 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			deliveryStatus: order.deliveryStatus,
 			finalFilesCount: finalFiles.length
 		});
+	}
+
+	// Check if gallery has backup addon - if it does, skip cleanup (keep originals)
+	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+	
+	if (galleryHasBackup) {
+		logger?.info('Gallery has backup storage addon - skipping originals cleanup', {
+			galleryId,
+			orderId,
+			finalFilesCount: finalFiles.length
+		});
+		
+		// Mark cleanup as done (even though we didn't delete anything) to prevent future attempts
+		await ddb.send(new UpdateCommand({
+			TableName: ordersTable,
+			Key: { galleryId, orderId },
+			UpdateExpression: 'SET finalsCleanupDone = :fcd',
+			ExpressionAttributeValues: {
+				':fcd': true
+			}
+		}));
+		
+		return {
+			statusCode: 200,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				message: 'Upload completion processed successfully - originals kept (backup addon active)',
+				statusUpdated: order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS',
+				cleanupCount: 0,
+				finalFilesCount: finalFiles.length,
+				backupAddonActive: true
+			})
+		};
 	}
 
 	// Cleanup originals, thumbs, and previews

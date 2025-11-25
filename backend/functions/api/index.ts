@@ -67,7 +67,8 @@ app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.hand
 app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
 app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
 app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
-app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
+app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler)); // GET for polling
+app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler)); // POST for backward compatibility
 
 // API Routes - all require authentication via API Gateway authorizer
 // Note: API Gateway validates tokens before requests reach Lambda,

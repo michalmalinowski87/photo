@@ -135,11 +135,19 @@ export default function GalleryPhotos() {
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState(new Set()); // Images in approved/preparing orders (cannot delete)
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState(new Set()); // Images in ANY order (show "Selected")
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({
+    current: 0,
+    total: 0,
+    currentFileName: '',
+    errors: [],
+    successes: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState(null);
   const [deletingImages, setDeletingImages] = useState(new Set()); // Track which images are being deleted
   const fileInputRef = useRef(null);
+  const uploadCancelRef = useRef(false); // Track if upload was cancelled
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -352,6 +360,16 @@ export default function GalleryPhotos() {
     }
     
     setUploading(true);
+    uploadCancelRef.current = false; // Reset cancellation flag
+    
+    // Initialize upload progress
+    setUploadProgress({
+      current: 0,
+      total: imageFiles.length,
+      currentFileName: '',
+      errors: [],
+      successes: 0,
+    });
     
     // Capture initial real image count BEFORE adding placeholders
     const initialRealImageCount = images.filter((img) => !img.isPlaceholder).length;
@@ -373,41 +391,162 @@ export default function GalleryPhotos() {
     
     try {
       const token = await getIdToken();
-      const uploadPromises = imageFiles.map(async (file, index) => {
-        // Use original filename with timestamp to avoid conflicts
-        const timestamp = Date.now();
-        const fileExtension = file.name.split(".").pop() || "jpg";
-        const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-        const key = `originals/${timestamp}_${sanitizedFilename}`;
-        
-        // Get presigned URL
-        const presignResponse = await apiFetch(`${apiUrl}/uploads/presign`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            galleryId,
-            key,
-            contentType: file.type || "image/jpeg",
-            fileSize: file.size,
-          }),
-        });
-        
-        // Upload file to S3
-        await fetch(presignResponse.data.url, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type || "image/jpeg",
-          },
-        });
-      });
       
-      await Promise.all(uploadPromises);
+      // Helper function to retry a request with exponential backoff and jitter
+      const retryWithBackoff = async (fn, maxRetries = 5, baseDelay = 500) => {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (error) {
+            if (attempt === maxRetries - 1) throw error;
+            // Exponential backoff with jitter: 0.5s, 1s, 2s, 4s, 8s
+            const exponentialDelay = baseDelay * Math.pow(2, attempt);
+            const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
+            const delay = exponentialDelay + jitter;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      };
       
-      showToast("success", "Sukces", `${imageFiles.length} zdjęć zostało przesłanych`);
+      // Dynamic batch sizing: start larger, reduce if errors occur
+      let currentBatchSize = Math.min(15, Math.max(5, Math.floor(imageFiles.length / 10)));
+      let consecutiveErrors = 0;
+      const uploadErrors = [];
+      let uploadSuccesses = 0;
+      
+      // Process uploads in batches with adaptive sizing
+      for (let i = 0; i < imageFiles.length; i += currentBatchSize) {
+        // Check for cancellation
+        if (uploadCancelRef.current) {
+          throw new Error('Upload cancelled by user');
+        }
+        
+        const batch = imageFiles.slice(i, i + currentBatchSize);
+        const batchStartTime = Date.now();
+        let batchErrors = 0;
+        
+        // Process batch with individual error handling
+        const batchResults = await Promise.allSettled(
+          batch.map(async (file, batchIndex) => {
+            const globalIndex = i + batchIndex;
+            
+            // Check for cancellation before each file
+            if (uploadCancelRef.current) {
+              throw new Error('Upload cancelled');
+            }
+            
+            // Update progress
+            setUploadProgress((prev) => ({
+              ...prev,
+              current: globalIndex + 1,
+              currentFileName: file.name,
+            }));
+            
+            try {
+              // Use original filename with timestamp to avoid conflicts
+              const timestamp = Date.now();
+              const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+              const key = `originals/${timestamp}_${sanitizedFilename}`;
+              
+              // Get presigned URL with retry logic
+              const presignResponse = await retryWithBackoff(async () => {
+                return await apiFetch(`${apiUrl}/uploads/presign`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    galleryId,
+                    key,
+                    contentType: file.type || "image/jpeg",
+                    fileSize: file.size,
+                  }),
+                });
+              });
+              
+              // Upload file to S3 with timeout
+              const uploadController = new AbortController();
+              const uploadTimeout = setTimeout(() => uploadController.abort(), 300000); // 5 min timeout
+              
+              try {
+                await fetch(presignResponse.data.url, {
+                  method: "PUT",
+                  body: file,
+                  headers: {
+                    "Content-Type": file.type || "image/jpeg",
+                  },
+                  signal: uploadController.signal,
+                });
+                clearTimeout(uploadTimeout);
+                uploadSuccesses++;
+                return { success: true, file: file.name };
+              } catch (uploadError) {
+                clearTimeout(uploadTimeout);
+                throw uploadError;
+              }
+            } catch (error) {
+              const errorMessage = error.message || 'Unknown error';
+              uploadErrors.push({ file: file.name, error: errorMessage });
+              batchErrors++;
+              return { success: false, file: file.name, error: errorMessage };
+            }
+          })
+        );
+        
+        // Update progress with batch results
+        setUploadProgress((prev) => ({
+          ...prev,
+          successes: uploadSuccesses,
+          errors: uploadErrors,
+        }));
+        
+        // Adaptive batch sizing: reduce if too many errors, increase if successful
+        if (batchErrors > 0) {
+          consecutiveErrors++;
+          // Reduce batch size if we're getting errors (minimum 3)
+          currentBatchSize = Math.max(3, Math.floor(currentBatchSize * 0.7));
+        } else {
+          consecutiveErrors = 0;
+          // Gradually increase batch size if successful (maximum 20)
+          // Only increase if we've had a few successful batches in a row
+          if (currentBatchSize < 20) {
+            currentBatchSize = Math.min(20, Math.floor(currentBatchSize * 1.1));
+          }
+        }
+        
+        // Dynamic delay between batches based on batch size and errors
+        // Larger batches = longer delay, errors = longer delay
+        const baseDelay = 100;
+        const errorPenalty = batchErrors * 50;
+        const batchSizePenalty = currentBatchSize * 10;
+        const delay = baseDelay + errorPenalty + batchSizePenalty;
+        
+        // Only delay if there are more batches to process
+        if (i + currentBatchSize < imageFiles.length && !uploadCancelRef.current) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+      
+      // Final progress update
+      setUploadProgress((prev) => ({
+        ...prev,
+        current: imageFiles.length,
+        currentFileName: '',
+      }));
+      
+      // Show summary toast
+      if (uploadErrors.length === 0) {
+        showToast("success", "Sukces", `Wszystkie ${imageFiles.length} zdjęć zostało przesłanych`);
+      } else if (uploadSuccesses > 0) {
+        showToast(
+          "warning",
+          "Częściowy sukces",
+          `Przesłano ${uploadSuccesses} z ${imageFiles.length} zdjęć. ${uploadErrors.length} nie powiodło się.`
+        );
+      } else {
+        showToast("error", "Błąd", `Nie udało się przesłać żadnego zdjęcia. Sprawdź konsolę.`);
+      }
       
       // Wait for backend to process images and update bytesUsed
       // The resize Lambda processes images asynchronously, so we need to poll
@@ -486,9 +625,23 @@ export default function GalleryPhotos() {
     } catch (err) {
       // On error, remove placeholders
       setImages((prevImages) => prevImages.filter((img) => !img.isPlaceholder || img.uploadTimestamp < Date.now() - 1000));
-      showToast("error", "Błąd", formatApiError(err) || "Nie udało się przesłać zdjęć");
+      
+      if (uploadCancelRef.current) {
+        showToast("info", "Anulowano", "Przesyłanie zostało anulowane");
+      } else {
+        const errorMsg = formatApiError(err) || "Nie udało się przesłać zdjęć";
+        showToast("error", "Błąd", errorMsg);
+        console.error("Upload error:", err);
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({
+        current: 0,
+        total: 0,
+        currentFileName: '',
+        errors: [],
+        successes: 0,
+      });
     }
   };
 
@@ -722,6 +875,54 @@ export default function GalleryPhotos() {
           </div>
         </div>
 
+        {/* Upload Progress Bar */}
+        {uploading && uploadProgress.total > 0 && (
+          <div className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-3 flex-1">
+                <Loading size="sm" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      Przesyłanie zdjęć...
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {uploadProgress.current} / {uploadProgress.total}
+                    </span>
+                  </div>
+                  {uploadProgress.currentFileName && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {uploadProgress.currentFileName}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  uploadCancelRef.current = true;
+                  setUploading(false);
+                }}
+                className="ml-4 px-3 py-1.5 text-sm font-medium text-error-600 dark:text-error-400 hover:text-error-700 dark:hover:text-error-300 border border-error-300 dark:border-error-700 rounded-md hover:bg-error-50 dark:hover:bg-error-900/20 transition-colors"
+              >
+                Anuluj
+              </button>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-brand-500 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                }}
+              />
+            </div>
+            {uploadProgress.errors.length > 0 && (
+              <div className="mt-2 text-xs text-error-600 dark:text-error-400">
+                Błędy: {uploadProgress.errors.length} | Sukcesy: {uploadProgress.successes}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Drag and Drop Upload Area */}
         <div
           className={`relative w-full rounded-lg border-2 border-dashed transition-colors ${
@@ -732,7 +933,7 @@ export default function GalleryPhotos() {
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !uploading && fileInputRef.current?.click()}
         >
           <div className="p-8 text-center cursor-pointer">
             {uploading ? (

@@ -268,10 +268,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	} catch (error: any) {
 		console.error('ZIP generation failed:', error);
+		
+		// Clear zipGenerating flag on failure so user can retry
+		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+		if (ordersTable && galleryId && orderId) {
+			try {
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+				}));
+				console.log('Cleared zipGenerating flag after failure', { galleryId, orderId });
+			} catch (clearErr: any) {
+				// Log but don't fail - we're already in error state
+				console.error('Failed to clear zipGenerating flag after error:', {
+					error: clearErr.message,
+					galleryId,
+					orderId
+				});
+			}
+		}
+		
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'ZIP generation failed', message: error.message })
-	};
+		};
 	}
 });

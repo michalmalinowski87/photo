@@ -218,16 +218,23 @@ export default function GalleryDetail() {
   };
 
   const handlePaymentConfirm = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
+    if (!apiUrl || !idToken || !galleryId || !paymentDetails) return;
     
     setShowPaymentModal(false);
     setPaymentLoading(true);
     
     try {
+      // If wallet balance is insufficient (split payment), force full Stripe payment
+      const forceStripeOnly = paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
+      
       // Call pay endpoint without dryRun to actually process payment
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}` 
+        },
+        body: JSON.stringify({ forceStripeOnly }),
       });
       
       if (data.checkoutUrl) {

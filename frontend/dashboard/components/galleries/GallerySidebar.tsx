@@ -753,11 +753,11 @@ export default function GallerySidebar({
           </div>
           
           <div className="space-y-2 px-3">
-            {/* Download Selected Originals ZIP (if selection enabled and not in PREPARING_DELIVERY/DELIVERED status) */}
-            {!galleryLoading && gallery && gallery.selectionEnabled !== false && canDownloadZip && onDownloadZip && 
-             order?.deliveryStatus !== "PREPARING_DELIVERY" && 
-             order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
-             order?.deliveryStatus !== "DELIVERED" && (
+            {/* Download Selected Originals ZIP 
+                - Always available if backup addon exists (regardless of status)
+                - Available for CLIENT_APPROVED/AWAITING_FINAL_PHOTOS if no backup addon
+            */}
+            {!galleryLoading && gallery && gallery.selectionEnabled !== false && canDownloadZip && onDownloadZip && (
               <Button
                 size="sm"
                 variant="outline"
@@ -768,6 +768,11 @@ export default function GallerySidebar({
                   <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
                 </svg>
                 Pobierz wybrane oryginały (ZIP)
+                {gallery.hasBackupStorage && (
+                  <span className="ml-2 text-xs text-success-600 dark:text-success-400">
+                    (backup)
+                  </span>
+                )}
               </Button>
             )}
 

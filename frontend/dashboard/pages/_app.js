@@ -8,6 +8,7 @@ import AuthLayout from '../components/auth/AuthLayout';
 import AppLayout from '../components/layout/AppLayout';
 import GalleryLayoutWrapper from '../components/layout/GalleryLayoutWrapper';
 import { ToastProvider } from '../context/ToastContext';
+import { ZipDownloadProvider } from '../context/ZipDownloadContext';
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ['/login', '/sign-up', '/verify-email', '/auth/auth-callback'];
@@ -94,17 +95,23 @@ export default function App({ Component, pageProps }) {
     // Gallery routes use persistent GalleryLayoutWrapper that keeps sidebar mounted
     return (
       <ToastProvider>
-        <GalleryLayoutWrapper>
-          <Component {...pageProps} />
-        </GalleryLayoutWrapper>
+        <ZipDownloadProvider>
+          <GalleryLayoutWrapper>
+            <Component {...pageProps} />
+          </GalleryLayoutWrapper>
+        </ZipDownloadProvider>
       </ToastProvider>
     );
   }
   
   return (
-    <AppLayout>
-      <Component {...pageProps} />
-    </AppLayout>
+    <ToastProvider>
+      <ZipDownloadProvider>
+        <AppLayout>
+          <Component {...pageProps} />
+        </AppLayout>
+      </ZipDownloadProvider>
+    </ToastProvider>
   );
 }
 

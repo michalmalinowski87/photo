@@ -139,23 +139,18 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Combine chunks into single buffer
 		const zipBuffer = Buffer.concat(chunks);
 
-		// Return ZIP directly as base64-encoded data (do not store in S3)
-		const zipBase64 = zipBuffer.toString('base64');
-
+		// Return ZIP as binary (base64-encoded for API Gateway)
+		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
+		
 		return {
 			statusCode: 200,
 			headers: {
-				'content-type': 'application/json',
-				'content-disposition': `attachment; filename="gallery-${galleryId}-order-${orderId}-final.zip"`
+				'content-type': 'application/zip',
+				'content-disposition': `attachment; filename="${filename}"`,
+				'content-length': zipBuffer.length.toString()
 			},
-			body: JSON.stringify({
-				zip: zipBase64,
-				filename: `gallery-${galleryId}-order-${orderId}-final.zip`,
-				galleryId,
-				orderId,
-				count: listResponse.Contents.length,
-				size: zipBuffer.length
-			})
+			body: zipBuffer.toString('base64'),
+			isBase64Encoded: true
 		};
 	} catch (error: any) {
 		console.error('Final ZIP generation failed:', error);

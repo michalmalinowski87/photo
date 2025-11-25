@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -126,15 +126,16 @@ export const handler = lambdaLogger(async (event: any) => {
 		const isGenerating = order.zipGenerating === true;
 		const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
 		
-		// If ZIP has been generating for more than 5 minutes, clear the flag and retry
+		// If ZIP has been generating for more than 60 seconds, clear the flag and retry
+		// Reduced from 5 minutes to catch quick failures (like missing files)
 		if (isGenerating && zipGeneratingSince) {
-			const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-			if (zipGeneratingSince < fiveMinutesAgo) {
+			const oneMinuteAgo = Date.now() - (60 * 1000);
+			if (zipGeneratingSince < oneMinuteAgo) {
 				console.log('ZIP generation timeout - clearing flag and retrying', {
 					galleryId,
 					orderId,
 					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
-					elapsedMinutes: Math.round((Date.now() - zipGeneratingSince) / 60000)
+					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
 				});
 				// Clear the flag to allow retry
 				try {
@@ -170,10 +171,55 @@ export const handler = lambdaLogger(async (event: any) => {
 		
 		if (!isGenerating || !zipGeneratingSince) {
 			try {
+				// Pre-check: Verify at least some files exist before starting generation
+				// This prevents getting stuck in generating state if all files are missing
+				const selectedKeys = order.selectedKeys || [];
+				let existingFilesCount = 0;
+				const missingFiles: string[] = [];
+				
+				// Check first few files to see if any exist (sample check for performance)
+				const filesToCheck = selectedKeys.slice(0, Math.min(5, selectedKeys.length));
+				for (const key of filesToCheck) {
+					const originalKey = `galleries/${galleryId}/originals/${key}`;
+					try {
+						await s3.send(new HeadObjectCommand({
+							Bucket: bucket,
+							Key: originalKey
+						}));
+						existingFilesCount++;
+					} catch (headErr: any) {
+						if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
+							missingFiles.push(key);
+						}
+					}
+				}
+				
+				// If we checked files and none exist, fail fast
+				if (filesToCheck.length > 0 && existingFilesCount === 0) {
+					console.error('All checked files are missing - failing ZIP generation', {
+						galleryId,
+						orderId,
+						checkedFiles: filesToCheck.length,
+						missingFiles: missingFiles.slice(0, 5)
+					});
+					return {
+						statusCode: 404,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ 
+							error: 'Files not found',
+							message: `Cannot generate ZIP: Selected files are missing from storage. ${missingFiles.length > 0 ? `Missing files: ${missingFiles.slice(0, 3).join(', ')}${missingFiles.length > 3 ? '...' : ''}` : 'Please check your selection.'}`,
+							missingFilesCount: missingFiles.length,
+							totalSelectedCount: selectedKeys.length
+						})
+					};
+				}
+				
 				console.log('Starting ZIP generation', {
 					galleryId,
 					orderId,
-					selectedKeysCount: order.selectedKeys?.length || 0,
+					selectedKeysCount: selectedKeys.length,
+					existingFilesChecked: existingFilesCount,
+					missingFilesChecked: missingFiles.length,
 					zipFnName
 				});
 				

@@ -7,6 +7,12 @@ import { Express, Request, Response } from 'express';
  */
 export function createServerlessHandler(app: Express) {
 	return async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
+		// CORS headers to include in all responses (including errors)
+		const corsHeaders = {
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+		};
 		// Normalize event format
 		const method = event.requestContext?.http?.method || event.httpMethod || 'GET';
 		const path = event.requestContext?.http?.path || event.path || '/';
@@ -84,9 +90,11 @@ export function createServerlessHandler(app: Express) {
 					if (!this.headers['content-type']) {
 						this.headers['content-type'] = 'application/json';
 					}
+					// Ensure CORS headers are always included
+					const finalHeaders = { ...corsHeaders, ...this.headers };
 					resolve({
 						statusCode: this.statusCode,
-						headers: this.headers,
+						headers: finalHeaders,
 						body: this.body,
 					});
 					return this;
@@ -96,9 +104,11 @@ export function createServerlessHandler(app: Express) {
 						// Handle binary data - convert to base64 for API Gateway
 						this.body = data.toString('base64');
 						// Mark as base64 encoded so API Gateway knows to decode it
+						// Ensure CORS headers are always included
+						const finalHeaders = { ...corsHeaders, ...this.headers };
 						resolve({
 							statusCode: this.statusCode,
-							headers: this.headers,
+							headers: finalHeaders,
 							body: this.body,
 							isBase64Encoded: true
 						});
@@ -111,9 +121,11 @@ export function createServerlessHandler(app: Express) {
 					} else {
 						this.body = data;
 					}
+					// Ensure CORS headers are always included
+					const finalHeaders = { ...corsHeaders, ...this.headers };
 					resolve({
 						statusCode: this.statusCode,
-						headers: this.headers,
+						headers: finalHeaders,
 						body: this.body,
 					});
 					return this;
@@ -131,9 +143,11 @@ export function createServerlessHandler(app: Express) {
 							// Handle binary data - convert to base64 for API Gateway
 							this.body = data.toString('base64');
 							// Mark as base64 encoded so API Gateway knows to decode it
+							// Ensure CORS headers are always included
+							const finalHeaders = { ...corsHeaders, ...this.headers };
 							resolve({
 								statusCode: this.statusCode,
-								headers: this.headers,
+								headers: finalHeaders,
 								body: this.body,
 								isBase64Encoded: true
 							});
@@ -142,22 +156,27 @@ export function createServerlessHandler(app: Express) {
 							this.body = data;
 						}
 					}
+					// Ensure CORS headers are always included
+					const finalHeaders = { ...corsHeaders, ...this.headers };
 					resolve({
 						statusCode: this.statusCode,
-						headers: this.headers,
+						headers: finalHeaders,
 						body: this.body,
 					});
 					return this;
 				},
 			}) as any;
 
-			// Error handler
+			// Error handler - ensure CORS headers are always included
 			const next = (err?: any) => {
 				if (err) {
 					console.error('Express error:', err);
 					resolve({
 						statusCode: 500,
-						headers: { 'content-type': 'application/json' },
+						headers: {
+							'content-type': 'application/json',
+							...corsHeaders,
+						},
 						body: JSON.stringify({ error: 'Internal server error', message: err.message }),
 					});
 				}
@@ -175,7 +194,15 @@ export function createServerlessHandler(app: Express) {
 			try {
 				app(req as Request, res as Response, next);
 			} catch (err: any) {
-				reject(err);
+				// Ensure CORS headers are included even on unhandled errors
+				resolve({
+					statusCode: 500,
+					headers: {
+						'content-type': 'application/json',
+						...corsHeaders,
+					},
+					body: JSON.stringify({ error: 'Internal server error', message: err.message }),
+				});
 			}
 		});
 	};

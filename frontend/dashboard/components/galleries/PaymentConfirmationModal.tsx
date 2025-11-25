@@ -1,5 +1,6 @@
 import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
+import Link from "next/link";
 
 interface PaymentConfirmationModalProps {
   isOpen: boolean;
@@ -80,23 +81,32 @@ export default function PaymentConfirmationModal({
 
           {isSplitPayment && (
             <div className="space-y-2">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-                <div className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Część z portfela
+              <div className="p-4 bg-info-50 dark:bg-info-500/10 border border-info-200 dark:border-info-500/20 rounded-lg">
+                <div className="text-sm font-medium text-info-800 dark:text-white mb-2">
+                  Niewystarczające saldo portfela
                 </div>
-                <div className="text-sm text-blue-900 dark:text-blue-50 font-medium">
-                  Z Twojego portfela zostanie pobrane {walletAmount} PLN
+                <div className="text-sm text-info-700 dark:text-white mb-2">
+                  Masz {walletBalance} PLN w portfelu, ale potrzebujesz {totalAmount} PLN.
                 </div>
-                <div className="text-sm text-blue-800 dark:text-blue-100 mt-2">
-                  Saldo po płatności: {(walletBalanceCents - walletAmountCents) / 100} PLN
+                <div className="text-sm text-info-700 dark:text-white mb-3">
+                  <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych opłat transakcyjnych Stripe.
                 </div>
+                <Link href="/wallet">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-info-300 dark:border-info-600 text-info-700 dark:text-info-300 hover:bg-info-100 dark:hover:bg-info-900/20"
+                  >
+                    Przejdź do portfela
+                  </Button>
+                </Link>
               </div>
               <div className="p-4 bg-warning-50 dark:bg-warning-500/10 border border-warning-200 dark:border-warning-500/20 rounded-lg">
                 <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                  Część przez Stripe
+                  Alternatywnie: Płatność przez Stripe
                 </div>
                 <div className="text-xs text-warning-600 dark:text-warning-400">
-                  Zostaniesz przekierowany do Stripe aby dopłacić {stripeAmount} PLN
+                  Jeśli potwierdzisz, zostaniesz przekierowany do Stripe aby zapłacić pełną kwotę {totalAmount} PLN (+ opłaty transakcyjne Stripe)
                 </div>
               </div>
             </div>

@@ -363,7 +363,7 @@ export class AppStack extends Stack {
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/zip',
-			methods: [HttpMethod.POST],
+			methods: [HttpMethod.GET, HttpMethod.POST], // Support both GET (new) and POST (backward compatibility)
 			integration: new HttpLambdaIntegration('ApiOrdersFinalZipIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
