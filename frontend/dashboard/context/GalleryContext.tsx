@@ -6,6 +6,7 @@ interface GalleryContextType {
   error: string | null;
   galleryId: string | undefined;
   reloadGallery: () => Promise<void>;
+  reloadOrder?: () => Promise<void>;
 }
 
 const GalleryContext = createContext<GalleryContextType | undefined>(undefined);
@@ -16,7 +17,8 @@ export function GalleryProvider({
   loading, 
   error, 
   galleryId,
-  reloadGallery 
+  reloadGallery,
+  reloadOrder
 }: { 
   children: ReactNode;
   gallery: any;
@@ -24,9 +26,10 @@ export function GalleryProvider({
   error: string | null;
   galleryId: string | undefined;
   reloadGallery: () => Promise<void>;
+  reloadOrder?: () => Promise<void>;
 }) {
   return (
-    <GalleryContext.Provider value={{ gallery, loading, error, galleryId, reloadGallery }}>
+    <GalleryContext.Provider value={{ gallery, loading, error, galleryId, reloadGallery, reloadOrder }}>
       {children}
     </GalleryContext.Provider>
   );

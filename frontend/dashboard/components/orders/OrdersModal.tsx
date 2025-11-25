@@ -98,6 +98,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
       AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
       CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
       PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+      PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
       DELIVERED: { color: "success", label: "Dostarczone" },
       CANCELLED: { color: "error", label: "Anulowane" },
     };

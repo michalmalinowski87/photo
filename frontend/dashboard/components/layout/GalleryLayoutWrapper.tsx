@@ -66,6 +66,25 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   }, [router.isReady, apiUrl, idToken, galleryId, orderId]);
 
+  // Listen for order updates from order page (e.g., after final upload)
+  useEffect(() => {
+    if (!orderId) return;
+
+    const handleOrderUpdate = (event) => {
+      // Only reload if this is the same order
+      if (event.detail?.orderId === orderId) {
+        loadOrderData();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('orderUpdated', handleOrderUpdate);
+      return () => {
+        window.removeEventListener('orderUpdated', handleOrderUpdate);
+      };
+    }
+  }, [orderId, apiUrl, idToken, galleryId]);
+
   const loadGalleryData = async (silent = false) => {
     if (!apiUrl || !idToken || !galleryId) return;
     
@@ -125,7 +144,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         }
       }
       setOrder(orderData);
+      // Debug logging
+      console.log('GalleryLayoutWrapper: Order loaded', {
+        orderId,
+        hasOrder: !!orderData,
+        deliveryStatus: orderData?.deliveryStatus,
+        paymentStatus: orderData?.paymentStatus
+      });
     } catch (err) {
+      console.error('GalleryLayoutWrapper: Failed to load order', err);
       setOrder(null);
     }
   };
@@ -221,6 +248,17 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         showToast("success", "Sukces", "Galeria została opłacona z portfela!");
         await loadGalleryData();
         await loadWalletBalance();
+        
+        // If we're on an order page, reload order data and notify the order page
+        if (orderId) {
+          await loadOrderData();
+          // Dispatch event to notify order page to refresh
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+            // Also dispatch a gallery payment event to ensure order page refreshes
+            window.dispatchEvent(new CustomEvent('galleryPaymentCompleted', { detail: { galleryId } }));
+          }
+        }
       }
     } catch (err) {
       const errorMsg = formatApiError(err);
@@ -240,7 +278,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     if (!apiUrl || !idToken || !galleryId) return;
     
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/send`, {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
       });
@@ -253,6 +291,78 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   const handleSettings = () => {
     router.push(`/galleries/${galleryId}/settings`);
+  };
+
+  // Order-specific handlers
+  const handleMarkOrderPaid = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-paid`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
+      // Reload order data in wrapper to update sidebar
+      await loadOrderData();
+      // Trigger a custom event to notify order page to reload
+      // The order page will listen to this event and reload its own order data
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
+    }
+  };
+
+  const handleDownloadFinals = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    try {
+      const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.zip) {
+          const zipBlob = Uint8Array.from(atob(data.zip), c => c.charCodeAt(0));
+          const blob = new Blob([zipBlob], { type: 'application/zip' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || `order-${orderId}-finals.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showToast("success", "Sukces", "Pobieranie rozpoczęte");
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Nie udało się pobrać pliku ZIP");
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
+    }
+  };
+
+  const handleSendFinalsToClient = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/send-final-link`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
+      // Reload order data in wrapper to update sidebar
+      await loadOrderData();
+      // Trigger a custom event to notify order page to reload
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
+    }
   };
 
   // Show loading only if we don't have gallery data yet
@@ -308,22 +418,47 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   })() : null);
   
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
+  
+  // Check if finals are uploaded - finals exist if deliveryStatus indicates they've been uploaded
+  // Backend uses PREPARING_DELIVERY (without "FOR")
+  // Status is updated automatically by backend when first final is uploaded or last final is deleted
+  const hasFinals = orderObj && (
+    orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+    orderObj.deliveryStatus === "PREPARING_DELIVERY" ||
+    orderObj.deliveryStatus === "DELIVERED"
+  );
+  
   const canDownloadZip = orderObj && selectionEnabled ? (
     orderObj.zipKey || 
     orderObj.deliveryStatus === "CLIENT_APPROVED" ||
     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
     orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+    orderObj.deliveryStatus === "PREPARING_DELIVERY" ||
     orderObj.deliveryStatus === "DELIVERED"
   ) : false;
 
+  // Debug logging
+  console.log('GalleryLayoutWrapper: Order actions check', {
+    orderId,
+    hasOrder: !!orderObj,
+    isPaid,
+    hasFinals,
+    deliveryStatus: orderObj?.deliveryStatus,
+    galleryId,
+    galleryState: gallery?.state,
+    galleryIsPaid: gallery?.isPaid,
+    galleryPaymentStatus: gallery?.paymentStatus
+  });
+
   return (
-    <GalleryProvider
-      gallery={gallery}
-      loading={loading}
-      error={loadError}
-      galleryId={galleryId as string}
-      reloadGallery={() => loadGalleryData(true)}
-    >
+      <GalleryProvider
+        gallery={gallery}
+        loading={loading}
+        error={loadError}
+        galleryId={galleryId as string}
+        reloadGallery={() => loadGalleryData(true)}
+        reloadOrder={orderId ? () => loadOrderData() : undefined}
+      >
       <GalleryLayout
         gallery={gallery}
         isPaid={isPaid}
@@ -334,8 +469,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSettings={handleSettings}
         onReloadGallery={() => loadGalleryData(true)}
         order={orderObj}
+        orderId={orderId as string}
         onDownloadZip={orderId ? handleDownloadZip : undefined}
         canDownloadZip={canDownloadZip}
+        onMarkOrderPaid={orderId ? handleMarkOrderPaid : undefined}
+        onDownloadFinals={orderId ? handleDownloadFinals : undefined}
+        onSendFinalsToClient={orderId ? handleSendFinalsToClient : undefined}
+        hasFinals={hasFinals}
       >
         {children}
       </GalleryLayout>

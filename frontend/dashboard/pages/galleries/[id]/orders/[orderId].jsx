@@ -182,6 +182,35 @@ export default function OrderDetail() {
     }
   }, [apiUrl, idToken, galleryId, orderId]);
 
+  // Listen for order updates from sidebar actions (e.g., mark as paid, send finals)
+  useEffect(() => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+
+    const handleOrderUpdate = (event) => {
+      // Only reload if this is the same order
+      if (event.detail?.orderId === orderId) {
+        loadOrderData();
+      }
+    };
+
+    const handleGalleryPaymentCompleted = (event) => {
+      // Reload order data when gallery payment is completed
+      // This ensures the order view updates when gallery is paid via sidebar
+      if (event.detail?.galleryId === galleryId) {
+        loadOrderData();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('orderUpdated', handleOrderUpdate);
+      window.addEventListener('galleryPaymentCompleted', handleGalleryPaymentCompleted);
+      return () => {
+        window.removeEventListener('orderUpdated', handleOrderUpdate);
+        window.removeEventListener('galleryPaymentCompleted', handleGalleryPaymentCompleted);
+      };
+    }
+  }, [orderId, apiUrl, idToken, galleryId]);
+
   // Auto-set to finals tab if selection is disabled
   useEffect(() => {
     if (gallery && gallery.selectionEnabled === false) {
@@ -527,6 +556,16 @@ export default function OrderDetail() {
             },
           }
         );
+        
+        // Reload order data immediately to get updated status
+        await loadOrderData();
+        
+        // Notify GalleryLayoutWrapper to reload order data after status update
+        // This ensures the sidebar order actions appear when deliveryStatus changes to PREPARING_DELIVERY
+        if (typeof window !== 'undefined') {
+          console.log('Order page: Dispatching orderUpdated event after upload-complete', { orderId });
+          window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+        }
       } catch (completeErr) {
         // If completion fails, show warning but don't fail the upload
         // The endpoint can be called again later - it's idempotent
@@ -660,6 +699,12 @@ export default function OrderDetail() {
               return prevImages;
             });
             showToast("success", "Sukces", `${imageFiles.length} zdjęć zostało przesłanych`);
+            
+            // Notify GalleryLayoutWrapper to reload order data so sidebar updates
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+            }
+            
             return;
           }
           
@@ -669,6 +714,11 @@ export default function OrderDetail() {
           console.error("Error polling for final images:", err);
           // On error, still reload final images (will merge with placeholders)
           await loadOrderData();
+          
+          // Notify GalleryLayoutWrapper to reload order data
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+          }
           
           // Continue polling unless we've hit max attempts
           if (attempts < maxAttempts) {
@@ -800,8 +850,12 @@ export default function OrderDetail() {
         // If this was the last deletion, reload data (will filter out deleted images)
         if (updated.size === 0) {
           // Use setTimeout to ensure state update completes before reload
-          setTimeout(() => {
-            loadOrderData();
+          setTimeout(async () => {
+            await loadOrderData();
+            // Notify GalleryLayoutWrapper to reload order data and check for finals
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+            }
           }, 0);
         }
         return updated;
@@ -890,8 +944,12 @@ export default function OrderDetail() {
         // If this was the last deletion, reload data (will filter out deleted images)
         if (updated.size === 0) {
           // Use setTimeout to ensure state update completes before reload
-          setTimeout(() => {
-            loadOrderData();
+          setTimeout(async () => {
+            await loadOrderData();
+            // Notify GalleryLayoutWrapper to reload order data and check for finals
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('orderUpdated', { detail: { orderId } }));
+            }
           }, 0);
         }
         return updated;
@@ -1034,6 +1092,7 @@ export default function OrderDetail() {
       AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
       CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
       PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+      PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
       DELIVERED: { color: "success", label: "Dostarczone" },
       CANCELLED: { color: "error", label: "Anulowane" },
     };

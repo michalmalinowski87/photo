@@ -129,8 +129,13 @@ interface GallerySidebarProps {
   onSettings: () => void;
   onReloadGallery?: () => Promise<void>;
   order?: any;
+  orderId?: string;
   onDownloadZip?: () => void;
   canDownloadZip?: boolean;
+  onMarkOrderPaid?: () => void;
+  onDownloadFinals?: () => void;
+  onSendFinalsToClient?: () => void;
+  hasFinals?: boolean;
 }
 
 export default function GallerySidebar({
@@ -143,8 +148,13 @@ export default function GallerySidebar({
   onSettings,
   onReloadGallery,
   order,
+  orderId,
   onDownloadZip,
   canDownloadZip,
+  onMarkOrderPaid,
+  onDownloadFinals,
+  onSendFinalsToClient,
+  hasFinals,
 }: GallerySidebarProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -642,6 +652,98 @@ export default function GallerySidebar({
           </li>
         </ul>
       </nav>
+
+      {/* Order Actions Section - Show when on order page and gallery is paid */}
+      {orderId && order && isPaid && (
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="px-3 mb-3">
+            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              Zlecenie
+            </div>
+            <div className="text-sm font-medium text-gray-900 dark:text-white">
+              {orderId}
+            </div>
+          </div>
+          
+          <div className="space-y-2 px-3">
+            {/* Download Selected Originals ZIP (if selection enabled) */}
+            {gallery?.selectionEnabled !== false && canDownloadZip && onDownloadZip && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDownloadZip}
+                className="w-full justify-start"
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
+                </svg>
+                Pobierz wybrane oryginały (ZIP)
+              </Button>
+            )}
+
+            {/* Download Finals - Only show if finals are uploaded */}
+            {onDownloadFinals && hasFinals && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDownloadFinals}
+                className="w-full justify-start"
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
+                </svg>
+                Pobierz finały
+              </Button>
+            )}
+
+            {/* Mark Order as Paid */}
+            {onMarkOrderPaid && order?.paymentStatus !== 'PAID' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onMarkOrderPaid}
+                className="w-full justify-start"
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <path d="M8 13L4 9L5.41 7.59L8 10.17L14.59 3.58L16 5L8 13Z" fill="currentColor"/>
+                </svg>
+                Oznacz jako opłacone
+              </Button>
+            )}
+
+            {/* Send Link to Client - Only show if selection is enabled */}
+            {gallery?.selectionEnabled !== false && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onSendLink}
+                className="w-full justify-start"
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <path d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Wyślij link do klienta
+              </Button>
+            )}
+
+            {/* Send Finals to Client - Only show if finals are uploaded */}
+            {onSendFinalsToClient && hasFinals && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onSendFinalsToClient}
+                className="w-full justify-start"
+                disabled={order?.deliveryStatus === 'DELIVERED'}
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                  <path d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {order?.deliveryStatus === 'DELIVERED' ? 'Finały wysłane' : 'Wyślij finały do klienta'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* UNPAID Banner */}
       {!isPaid && (

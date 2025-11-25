@@ -81,6 +81,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ error: 'Order not found' })
 		};
 	}
+	
+	logger?.info('Upload final complete - order status check', {
+		galleryId,
+		orderId,
+		currentDeliveryStatus: order.deliveryStatus,
+		selectionEnabled: gallery.selectionEnabled
+	});
 
 	// SERVER-SIDE CHECK: List all final photos that actually exist in S3
 	// This prevents client-side manipulation - we check actual S3 state, not client claims
@@ -101,6 +108,82 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ message: 'No final photos found, nothing to process' })
 		};
+	}
+
+	// Update order status to PREPARING_DELIVERY if needed (do this FIRST, before any early returns)
+	// CLIENT_APPROVED → PREPARING_DELIVERY (selection galleries)
+	// AWAITING_FINAL_PHOTOS → PREPARING_DELIVERY (non-selection galleries)
+	// Also handle undefined/null status (legacy orders)
+	const needsStatusUpdate = !order.deliveryStatus || 
+		order.deliveryStatus === 'CLIENT_APPROVED' || 
+		order.deliveryStatus === 'AWAITING_FINAL_PHOTOS';
+	
+	logger?.info('Upload final complete - status update check', {
+		galleryId,
+		orderId,
+		currentDeliveryStatus: order.deliveryStatus,
+		needsStatusUpdate,
+		finalFilesCount: finalFiles.length
+	});
+	
+	if (needsStatusUpdate) {
+		try {
+			// Build update command based on whether deliveryStatus exists
+			if (order.deliveryStatus) {
+				// Status exists - use conditional update to prevent race conditions
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'SET deliveryStatus = :ds',
+					ConditionExpression: 'deliveryStatus = :currentStatus',
+					ExpressionAttributeValues: {
+						':ds': 'PREPARING_DELIVERY',
+						':currentStatus': order.deliveryStatus
+					}
+				}));
+			} else {
+				// Status doesn't exist - set it directly (no condition needed)
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'SET deliveryStatus = :ds',
+					ExpressionAttributeValues: {
+						':ds': 'PREPARING_DELIVERY'
+					}
+				}));
+			}
+			logger?.info('Updated order status to PREPARING_DELIVERY', { 
+				galleryId, 
+				orderId,
+				previousStatus: order.deliveryStatus || 'undefined',
+				newStatus: 'PREPARING_DELIVERY'
+			});
+			// Update the order object in memory so subsequent checks use the new status
+			order.deliveryStatus = 'PREPARING_DELIVERY';
+		} catch (updateErr: any) {
+			// If status changed between check and update, log and continue
+			if (updateErr.name === 'ConditionalCheckFailedException') {
+				logger?.warn('Order status changed between check and update - continuing with cleanup', {
+					galleryId,
+					orderId,
+					expectedStatus: order.deliveryStatus || 'undefined'
+				});
+			} else {
+				logger?.error('Failed to update order status', {
+					error: updateErr.message,
+					galleryId,
+					orderId,
+					currentStatus: order.deliveryStatus
+				});
+				// Don't throw - status update failure shouldn't prevent cleanup
+			}
+		}
+	} else {
+		logger?.info('Status update not needed - order already in correct status', {
+			galleryId,
+			orderId,
+			currentDeliveryStatus: order.deliveryStatus
+		});
 	}
 
 	// Check if originals still exist (if not, cleanup already happened)
@@ -178,39 +261,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			deliveryStatus: order.deliveryStatus,
 			finalFilesCount: finalFiles.length
 		});
-	}
-
-	// Update order status to PREPARING_DELIVERY if needed
-	// CLIENT_APPROVED → PREPARING_DELIVERY (selection galleries)
-	// AWAITING_FINAL_PHOTOS → PREPARING_DELIVERY (non-selection galleries)
-	// Use conditional update to prevent race condition
-	const needsStatusUpdate = order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS';
-	
-	if (needsStatusUpdate) {
-		try {
-			await ddb.send(new UpdateCommand({
-				TableName: ordersTable,
-				Key: { galleryId, orderId },
-				UpdateExpression: 'SET deliveryStatus = :ds',
-				ConditionExpression: 'deliveryStatus = :currentStatus',
-				ExpressionAttributeValues: {
-					':ds': 'PREPARING_DELIVERY',
-					':currentStatus': order.deliveryStatus
-				}
-			}));
-			logger?.info('Updated order status to PREPARING_DELIVERY', { galleryId, orderId });
-		} catch (updateErr: any) {
-			// If status changed between check and update, log and continue
-			if (updateErr.name === 'ConditionalCheckFailedException') {
-				logger?.warn('Order status changed between check and update - continuing with cleanup', {
-					galleryId,
-					orderId,
-					expectedStatus: order.deliveryStatus
-				});
-			} else {
-				throw updateErr;
-			}
-		}
 	}
 
 	// Cleanup originals, thumbs, and previews

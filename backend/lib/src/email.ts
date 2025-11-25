@@ -44,6 +44,14 @@ export function createFinalLinkEmail(galleryId: string, galleryName: string, cli
 	};
 }
 
+export function createFinalLinkEmailWithPasswordInfo(galleryId: string, galleryName: string, clientEmail: string, link: string): EmailTemplate {
+	return {
+		subject: `Your photos are ready: ${galleryName || galleryId}`,
+		text: `Hello,\n\nYour photos from ${galleryName || galleryId} are ready!\n\nView and download: ${link}\n\nYour gallery password will be sent to you in a separate email for security reasons.\n\nThank you for choosing us!`,
+		html: `<h2>Your Photos Are Ready!</h2><p>Your photos from <strong>${galleryName || galleryId}</strong> are ready.</p><p><a href="${link}">View and download your photos</a></p><p><strong>Important:</strong> Your gallery password will be sent to you in a separate email for security reasons.</p><p>Thank you for choosing us!</p>`
+	};
+}
+
 export function createChangeRequestEmail(galleryId: string, clientId: string): EmailTemplate {
 	return {
 		subject: `Change request - Gallery ${galleryId}`,

@@ -5,7 +5,7 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { createFinalLinkEmail } from '../../lib/src/email';
+import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -49,57 +49,196 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 
 	const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
-	const emailTemplate = createFinalLinkEmail(galleryId, gallery.galleryName || galleryId, gallery.clientEmail, link);
-	try {
-		logger.info('Sending SES email - Final Link', {
-			from: sender,
-			to: gallery.clientEmail,
-			subject: emailTemplate.subject,
-			galleryId,
-			orderId,
-			link
-		});
-		const result = await ses.send(new SendEmailCommand({
-			Source: sender,
-			Destination: { ToAddresses: [gallery.clientEmail] },
-			Message: {
-				Subject: { Data: emailTemplate.subject },
-				Body: {
-					Text: { Data: emailTemplate.text },
-					Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+	const galleryName = gallery.galleryName || galleryId;
+	const isNonSelectionGallery = gallery.selectionEnabled === false;
+
+	// For non-selection galleries, send two emails: one with link and password info, another with password
+	if (isNonSelectionGallery) {
+		// Check if password is available
+		if (!gallery.clientPasswordEncrypted) {
+			logger.error('Cannot send final link: password not available for non-selection gallery', {
+				galleryId,
+				orderId,
+				selectionEnabled: gallery.selectionEnabled
+			});
+			return { statusCode: 400, body: JSON.stringify({ error: 'Password not set for gallery. Please set client password first.' }) };
+		}
+
+		// Decrypt password
+		let password: string;
+		try {
+			password = Buffer.from(gallery.clientPasswordEncrypted, 'base64').toString('utf-8');
+		} catch (e: any) {
+			logger.error('Failed to decrypt stored password', {
+				galleryId,
+				orderId,
+				error: e.message
+			});
+			return { statusCode: 500, body: JSON.stringify({ error: 'Failed to retrieve password', message: e.message }) };
+		}
+
+		// Send first email: link with password info
+		const linkEmailTemplate = createFinalLinkEmailWithPasswordInfo(galleryId, galleryName, gallery.clientEmail, link);
+		try {
+			logger.info('Sending SES email - Final Link (with password info)', {
+				from: sender,
+				to: gallery.clientEmail,
+				subject: linkEmailTemplate.subject,
+				galleryId,
+				orderId,
+				link,
+				selectionEnabled: false
+			});
+			const linkResult = await ses.send(new SendEmailCommand({
+				Source: sender,
+				Destination: { ToAddresses: [gallery.clientEmail] },
+				Message: {
+					Subject: { Data: linkEmailTemplate.subject },
+					Body: {
+						Text: { Data: linkEmailTemplate.text },
+						Html: linkEmailTemplate.html ? { Data: linkEmailTemplate.html } : undefined
+					}
 				}
-			}
-		}));
-		logger.info('SES email sent successfully - Final Link', {
-			messageId: result.MessageId,
-			requestId: result.$metadata?.requestId,
-			from: sender,
-			to: gallery.clientEmail
-		});
-	} catch (err: any) {
-		logger.error('SES send failed - Final Link Email', {
-			error: {
-				name: err.name,
-				message: err.message,
-				code: err.code,
-				statusCode: err.$metadata?.httpStatusCode,
-				requestId: err.$metadata?.requestId,
-				stack: err.stack
-			},
-			emailDetails: {
+			}));
+			logger.info('SES email sent successfully - Final Link (with password info)', {
+				messageId: linkResult.MessageId,
+				requestId: linkResult.$metadata?.requestId,
+				from: sender,
+				to: gallery.clientEmail
+			});
+		} catch (err: any) {
+			logger.error('SES send failed - Final Link Email (with password info)', {
+				error: {
+					name: err.name,
+					message: err.message,
+					code: err.code,
+					statusCode: err.$metadata?.httpStatusCode,
+					requestId: err.$metadata?.requestId,
+					stack: err.stack
+				},
+				emailDetails: {
+					from: sender,
+					to: gallery.clientEmail,
+					subject: linkEmailTemplate.subject,
+					galleryId,
+					orderId,
+					link
+				},
+				envCheck: {
+					senderConfigured: !!sender,
+					apiUrlConfigured: !!apiUrl
+				}
+			});
+			return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
+		}
+
+		// Send second email: password
+		const passwordEmailTemplate = createGalleryPasswordEmail(galleryId, galleryName, gallery.clientEmail, password, link);
+		try {
+			logger.info('Sending SES email - Gallery Password (for final link)', {
+				from: sender,
+				to: gallery.clientEmail,
+				subject: passwordEmailTemplate.subject,
+				galleryId,
+				orderId,
+				selectionEnabled: false
+			});
+			const passwordResult = await ses.send(new SendEmailCommand({
+				Source: sender,
+				Destination: { ToAddresses: [gallery.clientEmail] },
+				Message: {
+					Subject: { Data: passwordEmailTemplate.subject },
+					Body: {
+						Text: { Data: passwordEmailTemplate.text },
+						Html: passwordEmailTemplate.html ? { Data: passwordEmailTemplate.html } : undefined
+					}
+				}
+			}));
+			logger.info('SES email sent successfully - Gallery Password (for final link)', {
+				messageId: passwordResult.MessageId,
+				requestId: passwordResult.$metadata?.requestId,
+				from: sender,
+				to: gallery.clientEmail
+			});
+		} catch (err: any) {
+			logger.error('SES send failed - Gallery Password Email (for final link)', {
+				error: {
+					name: err.name,
+					message: err.message,
+					code: err.code,
+					statusCode: err.$metadata?.httpStatusCode,
+					requestId: err.$metadata?.requestId,
+					stack: err.stack
+				},
+				emailDetails: {
+					from: sender,
+					to: gallery.clientEmail,
+					subject: passwordEmailTemplate.subject,
+					galleryId,
+					orderId
+				},
+				envCheck: {
+					senderConfigured: !!sender,
+					apiUrlConfigured: !!apiUrl
+				}
+			});
+			return { statusCode: 500, body: JSON.stringify({ error: 'password email failed', message: err.message }) };
+		}
+	} else {
+		// For selection galleries, send single email as before
+		const emailTemplate = createFinalLinkEmail(galleryId, galleryName, gallery.clientEmail, link);
+		try {
+			logger.info('Sending SES email - Final Link', {
 				from: sender,
 				to: gallery.clientEmail,
 				subject: emailTemplate.subject,
 				galleryId,
 				orderId,
-				link
-			},
-			envCheck: {
-				senderConfigured: !!sender,
-				apiUrlConfigured: !!apiUrl
-			}
-		});
-		return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
+				link,
+				selectionEnabled: true
+			});
+			const result = await ses.send(new SendEmailCommand({
+				Source: sender,
+				Destination: { ToAddresses: [gallery.clientEmail] },
+				Message: {
+					Subject: { Data: emailTemplate.subject },
+					Body: {
+						Text: { Data: emailTemplate.text },
+						Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+					}
+				}
+			}));
+			logger.info('SES email sent successfully - Final Link', {
+				messageId: result.MessageId,
+				requestId: result.$metadata?.requestId,
+				from: sender,
+				to: gallery.clientEmail
+			});
+		} catch (err: any) {
+			logger.error('SES send failed - Final Link Email', {
+				error: {
+					name: err.name,
+					message: err.message,
+					code: err.code,
+					statusCode: err.$metadata?.httpStatusCode,
+					requestId: err.$metadata?.requestId,
+					stack: err.stack
+				},
+				emailDetails: {
+					from: sender,
+					to: gallery.clientEmail,
+					subject: emailTemplate.subject,
+					galleryId,
+					orderId,
+					link
+				},
+				envCheck: {
+					senderConfigured: !!sender,
+					apiUrlConfigured: !!apiUrl
+				}
+			});
+			return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
+		}
 	}
 
 	// Mark order as DELIVERED

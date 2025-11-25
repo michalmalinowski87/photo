@@ -15,8 +15,13 @@ interface GalleryLayoutProps {
   onCreateGallery?: () => void;
   onReloadGallery?: () => Promise<void>;
   order?: any;
+  orderId?: string;
   onDownloadZip?: () => void;
   canDownloadZip?: boolean;
+  onMarkOrderPaid?: () => void;
+  onDownloadFinals?: () => void;
+  onSendFinalsToClient?: () => void;
+  hasFinals?: boolean;
 }
 
 const GalleryLayout: React.FC<GalleryLayoutProps> = ({
@@ -31,8 +36,13 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onCreateGallery,
   onReloadGallery,
   order,
+  orderId,
   onDownloadZip,
   canDownloadZip,
+  onMarkOrderPaid,
+  onDownloadFinals,
+  onSendFinalsToClient,
+  hasFinals,
 }) => {
   return (
     <ThemeProvider>
@@ -50,8 +60,13 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 onSettings={onSettings}
                 onReloadGallery={onReloadGallery}
                 order={order}
+                orderId={orderId}
                 onDownloadZip={onDownloadZip}
                 canDownloadZip={canDownloadZip}
+                onMarkOrderPaid={onMarkOrderPaid}
+                onDownloadFinals={onDownloadFinals}
+                onSendFinalsToClient={onSendFinalsToClient}
+                hasFinals={hasFinals}
               />
             </div>
             <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
