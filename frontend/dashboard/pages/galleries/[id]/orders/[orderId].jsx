@@ -8,6 +8,7 @@ import Button from "../../../../components/ui/button/Button";
 import Badge from "../../../../components/ui/badge/Badge";
 import { Modal } from "../../../../components/ui/modal";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
+import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
 import Input from "../../../../components/ui/input/InputField";
 import { FullPageLoading, Loading } from "../../../../components/ui/loading/Loading";
 import { useToast } from "../../../../hooks/useToast";
@@ -133,6 +134,8 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null);
   const [gallery, setGallery] = useState(null);
   const [activeTab, setActiveTab] = useState("originals");
+  const [denyModalOpen, setDenyModalOpen] = useState(false);
+  const [denyLoading, setDenyLoading] = useState(false);
   const [originalImages, setOriginalImages] = useState([]);
   const [finalImages, setFinalImages] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -211,12 +214,28 @@ export default function OrderDetail() {
     }
   }, [orderId, apiUrl, idToken, galleryId]);
 
-  // Auto-set to finals tab if selection is disabled
+  // Auto-set to finals tab if selection is disabled or if originals section should be hidden
   useEffect(() => {
     if (gallery && gallery.selectionEnabled === false) {
       setActiveTab("finals");
+    } else if (order) {
+      const orderObj = typeof order === 'string' ? (() => {
+        try {
+          return JSON.parse(order);
+        } catch {
+          return {};
+        }
+      })() : (order || {});
+      
+      const shouldHideSelectedSection = orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
+                                       orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+                                       orderObj.deliveryStatus === "DELIVERED";
+      
+      if (shouldHideSelectedSection && gallery?.selectionEnabled !== false && activeTab === "originals") {
+        setActiveTab("finals");
+      }
     }
-  }, [gallery]);
+  }, [gallery, order, activeTab]);
 
   const loadWalletBalance = async () => {
     if (!apiUrl || !idToken) return 0;
@@ -347,6 +366,14 @@ export default function OrderDetail() {
       // Load final images if order status allows it OR if selection is disabled
       const galleryData = galleryResponse.data;
       const selectionEnabled = galleryData?.selectionEnabled !== false;
+      
+      // Auto-switch to finals tab if originals section should be hidden
+      const shouldHideSelectedSection = orderData.deliveryStatus === "PREPARING_DELIVERY" || 
+                                       orderData.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+                                       orderData.deliveryStatus === "DELIVERED";
+      if (shouldHideSelectedSection && selectionEnabled && activeTab === "originals") {
+        setActiveTab("finals");
+      }
       
       if (
         !selectionEnabled ||
@@ -1035,6 +1062,59 @@ export default function OrderDetail() {
     }
   };
 
+  const handleApproveChangeRequest = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    try {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór.");
+      await loadOrderData();
+      // Reload gallery to update order status in sidebar
+      if (reloadGallery) {
+        await reloadGallery();
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się zatwierdzić prośby o zmiany");
+    }
+  };
+
+  const handleDenyChangeRequest = () => {
+    setDenyModalOpen(true);
+  };
+
+  const handleDenyConfirm = async (reason) => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    setDenyLoading(true);
+    
+    try {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/deny-change`, {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason || undefined })
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu.");
+      setDenyModalOpen(false);
+      await loadOrderData();
+      // Reload gallery to update order status in sidebar
+      if (reloadGallery) {
+        await reloadGallery();
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się odrzucić prośby o zmiany");
+    } finally {
+      setDenyLoading(false);
+    }
+  };
+
   const handleDownloadZip = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId || !order) return;
     
@@ -1048,26 +1128,25 @@ export default function OrderDetail() {
     })() : order;
     
     try {
-      // Check if ZIP exists, if not generate it
-      if (!orderObj.zipKey) {
-        await apiFetch(
-          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/generate-zip`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${idToken}` },
-          }
-        );
-        // Reload order to get zipKey
-        await loadOrderData();
-      }
-      
-      // Download ZIP
+      // Download ZIP (will generate on-demand if needed)
       const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
       const response = await fetch(zipUrl, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
-      if (response.ok) {
+      // Handle 202 - ZIP is being generated
+      if (response.status === 202) {
+        const data = await response.json();
+        setError(`Generowanie ZIP: ${data.message || 'ZIP jest generowany. Spróbuj ponownie za chwilę.'}`);
+        // Optionally retry after a delay
+        setTimeout(() => {
+          handleDownloadZip();
+        }, 3000); // Retry after 3 seconds
+        return;
+      }
+      
+      // Handle 200 - ZIP is ready
+      if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1077,8 +1156,15 @@ export default function OrderDetail() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        setError(''); // Clear any previous errors
+      } else if (response.ok) {
+        // JSON response (error or other status)
+        const data = await response.json();
+        setError(data.error || "Nie udało się pobrać pliku ZIP");
       } else {
-        throw new Error("Nie udało się pobrać pliku ZIP");
+        // Error response
+        const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
+        setError(errorData.error || "Nie udało się pobrać pliku ZIP");
       }
     } catch (err) {
       setError(formatApiError(err));
@@ -1147,6 +1233,11 @@ export default function OrderDetail() {
   const selectedKeys = orderObj.selectedKeys || [];
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
   
+  // Hide "Wybrane przez klienta" section when finals are uploaded (PREPARING_DELIVERY or DELIVERED)
+  const hideSelectedSection = orderObj.deliveryStatus === "PREPARING_DELIVERY" || 
+                              orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+                              orderObj.deliveryStatus === "DELIVERED";
+  
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
   
@@ -1160,18 +1251,7 @@ export default function OrderDetail() {
     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
     orderObj.deliveryStatus === "PREPARING_DELIVERY" // Backend sets this status after finals upload
   );
-  const canDownloadZip = orderObj.zipKey || canUploadFinals || orderObj.deliveryStatus === "DELIVERED";
-
-  // Debug logging to help diagnose visibility issues
-  console.log("Order Finals View Debug:", {
-    selectionEnabled,
-    activeTab,
-    deliveryStatus: orderObj.deliveryStatus,
-    canUploadFinals,
-    showFinalsSection: selectionEnabled ? activeTab === "finals" : true,
-    finalImagesCount: finalImages.length,
-    orderObjKeys: Object.keys(orderObj)
-  });
+  const canDownloadZip = canUploadFinals || orderObj.deliveryStatus === "DELIVERED" || orderObj.deliveryStatus === "CLIENT_APPROVED";
 
   return (
     <div className="space-y-6">
@@ -1196,6 +1276,39 @@ export default function OrderDetail() {
       {error && (
         <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
           {error}
+        </div>
+      )}
+
+      {/* Change Request Actions */}
+      {orderObj.deliveryStatus === 'CHANGES_REQUESTED' && (
+        <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
+                Prośba o zmiany
+              </div>
+              <div className="text-xs text-warning-600 dark:text-warning-400">
+                Klient prosi o możliwość modyfikacji wyboru. Zatwierdź, aby odblokować wybór, lub odrzuć, aby przywrócić poprzedni status.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleApproveChangeRequest}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                Zatwierdź
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDenyChangeRequest}
+              >
+                Odrzuć
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1282,8 +1395,8 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {/* Tabs - Only show if selection is enabled */}
-      {selectionEnabled && (
+      {/* Tabs - Only show if selection is enabled and not in PREPARING_DELIVERY/DELIVERED status */}
+      {selectionEnabled && !hideSelectedSection && (
       <div className="border-b border-gray-200 dark:border-gray-700">
         <div className="flex gap-4">
           <button
@@ -1294,7 +1407,7 @@ export default function OrderDetail() {
                 : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
-            Oryginały ({originalImages.length})
+            Wybrane przez klienta ({selectedKeys.length})
           </button>
           <button
             onClick={() => setActiveTab("finals")}
@@ -1311,49 +1424,41 @@ export default function OrderDetail() {
       )}
 
       {/* Tab Content */}
-      {selectionEnabled && activeTab === "originals" && (
+      {selectionEnabled && !hideSelectedSection && activeTab === "originals" && (
         <div className="space-y-4">
-          <div className="p-4 bg-info-50 border border-info-200 rounded-lg">
-            <p className="text-sm text-info-800 dark:text-info-200">
-              <strong>Wybrane zdjęcia przez klienta:</strong> {selectedKeys.length} z{" "}
-              {originalImages.length}
-            </p>
-            {selectedKeys.length > 0 && (
-              <div className="mt-2 text-xs text-info-600 dark:text-info-400">
-                Klucze: {selectedKeys.slice(0, 5).join(", ")}
-                {selectedKeys.length > 5 && "..."}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-4 gap-4">
-            {originalImages.map((img, idx) => {
-              const isSelected = selectedKeys.includes(img.key);
-              return (
-                <div
-                  key={idx}
-                  className={`relative border-2 rounded-lg overflow-hidden ${
-                    isSelected
-                      ? "border-brand-500 ring-2 ring-brand-200"
-                      : "border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <img
-                    src={img.url}
-                    alt={img.key}
-                    className="w-full h-48 object-cover"
-                  />
-                  {isSelected && (
+          {selectedKeys.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              <p>Klient nie wybrał jeszcze żadnych zdjęć.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              {originalImages
+                .filter((img) => selectedKeys.includes(img.key))
+                .map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="relative border-2 border-brand-500 ring-2 ring-brand-200 rounded-lg overflow-hidden"
+                  >
+                    <img
+                      src={img.previewUrl || img.thumbUrl || img.url}
+                      alt={img.key}
+                      className="w-full h-48 object-cover"
+                      onError={(e) => {
+                        // Fallback to thumbUrl if previewUrl fails
+                        if (img.previewUrl && img.thumbUrl && e.currentTarget.src === img.previewUrl) {
+                          e.currentTarget.src = img.thumbUrl;
+                        }
+                      }}
+                    />
                     <div className="absolute top-2 right-2">
                       <Badge color="success" variant="solid">
                         Wybrane
                       </Badge>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1474,7 +1579,7 @@ export default function OrderDetail() {
                       ) : (
                         <>
                           <RetryableImage
-                            src={img.url}
+                            src={img.finalUrl || img.url}
                             alt={img.key || img.filename}
                             className="w-full h-full object-cover rounded-lg"
                           />
@@ -1534,6 +1639,14 @@ export default function OrderDetail() {
         variant="danger"
         loading={imageToDelete ? deletingImages.has(imageToDelete.key || imageToDelete.filename) : false}
         suppressKey="final_image_delete_confirm_suppress"
+      />
+
+      {/* Deny Change Request Modal */}
+      <DenyChangeRequestModal
+        isOpen={denyModalOpen}
+        onClose={() => setDenyModalOpen(false)}
+        onConfirm={handleDenyConfirm}
+        loading={denyLoading}
       />
 
       {/* Payment Confirmation Modal */}

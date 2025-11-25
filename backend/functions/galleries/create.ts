@@ -3,7 +3,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
-import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+// Transaction creation removed - transactions are now created on-demand in pay.ts endpoint
+// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -253,43 +254,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// NEW LOGIC: Always create gallery as UNPAID draft (no immediate payment)
 	// Gallery will have 3-day TTL and can be paid later via "Opłać galerię" button
-	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
-	let transactionId: string | undefined;
-	
-	if (transactionsTable) {
-		try {
-			// Build composites list for frontend display
-			const composites: string[] = [`Gallery Plan ${plan}`];
-			if (hasBackupStorage) {
-				composites.push('Backup addon');
-			}
-			
-			// Create transaction with UNPAID status (no wallet/Stripe payment yet)
-			transactionId = await createTransaction(
-				ownerId,
-				'GALLERY_PLAN',
-				totalPriceCents,
-				{
-					galleryId,
-					walletAmountCents: 0,
-					stripeAmountCents: totalPriceCents,
-					paymentMethod: 'STRIPE' as any,
-					composites,
-					metadata: {
-						plan,
-						hasBackupStorage,
-						addonPriceCents
-					}
-				}
-			);
-			logger.info('Transaction created (UNPAID)', { transactionId, galleryId, totalPriceCents });
-		} catch (err: any) {
-			logger.error('Failed to create transaction', {
-				error: err.message,
-				galleryId
-			});
-		}
-	}
+	// Transaction will be created on-demand when user clicks "Opłać galerię" button
+	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
 
 	// Create gallery as UNPAID DRAFT (always, no immediate payment)
 	const item: any = {
@@ -446,7 +412,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		body: JSON.stringify({ 
 			galleryId, 
 			paid: false,
-			transactionId,
 			message: 'Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona.'
 		})
 	};

@@ -124,7 +124,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
 	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
 	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
-	const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
 	
 	if (!galleriesTable || !ordersTable) {
 		return {

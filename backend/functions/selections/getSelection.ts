@@ -11,13 +11,16 @@ export const handler = lambdaLogger(async (event: any) => {
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	if (!galleriesTable || !ordersTable) return { statusCode: 500, body: 'Missing tables' };
 	const galleryId = event?.pathParameters?.id;
-	const clientId = event?.pathParameters?.clientId;
-	if (!galleryId || !clientId) return { statusCode: 400, body: 'missing params' };
+	if (!galleryId) return { statusCode: 400, body: 'missing galleryId' };
 
-	// Verify JWT token
+	// Verify JWT token - get clientId from token, not URL
 	const jwtPayload = getJWTFromEvent(event);
-	if (!jwtPayload || jwtPayload.galleryId !== galleryId || jwtPayload.clientId !== clientId) {
+	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
 		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
+	}
+	const clientId = jwtPayload.clientId;
+	if (!clientId) {
+		return { statusCode: 401, body: 'Invalid token. Missing clientId.' };
 	}
 
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));

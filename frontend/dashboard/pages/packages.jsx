@@ -28,8 +28,8 @@ export default function Packages() {
     pricePerExtraPhoto: 0,
     price: 0,
   });
-  const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState<string | null>(null);
-  const [priceInput, setPriceInput] = useState<string | null>(null);
+  const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState(null);
+  const [priceInput, setPriceInput] = useState(null);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");

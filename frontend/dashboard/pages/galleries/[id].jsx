@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../compon
 import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { useToast } from "../../hooks/useToast";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
+import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -37,6 +38,9 @@ export default function GalleryDetail() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [denyModalOpen, setDenyModalOpen] = useState(false);
+  const [denyLoading, setDenyLoading] = useState(false);
+  const [denyOrderId, setDenyOrderId] = useState(null);
   const [paymentDetails, setPaymentDetails] = useState({
     totalAmountCents: 0,
     walletAmountCents: 0,
@@ -96,6 +100,73 @@ export default function GalleryDetail() {
       loadOrders();
     }
   }, [apiUrl, idToken, galleryId]);
+
+  // Listen for gallery orders update event (e.g., after sending link from sidebar)
+  useEffect(() => {
+    if (!apiUrl || !idToken || !galleryId) return;
+
+    const handleGalleryOrdersUpdate = (event) => {
+      // Only reload if this is the same gallery
+      if (event.detail?.galleryId === galleryId) {
+        loadOrders();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('galleryOrdersUpdated', handleGalleryOrdersUpdate);
+      return () => {
+        window.removeEventListener('galleryOrdersUpdated', handleGalleryOrdersUpdate);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, idToken, galleryId]);
+
+  const handleApproveChangeRequest = async (orderId) => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór.");
+      await loadOrders();
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się zatwierdzić prośby o zmiany");
+    }
+  };
+
+  const handleDenyChangeRequest = (orderId) => {
+    setDenyOrderId(orderId);
+    setDenyModalOpen(true);
+  };
+
+  const handleDenyConfirm = async (reason) => {
+    if (!apiUrl || !idToken || !galleryId || !denyOrderId) return;
+    
+    setDenyLoading(true);
+    
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${denyOrderId}/deny-change`, {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason || undefined })
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu.");
+      setDenyModalOpen(false);
+      setDenyOrderId(null);
+      await loadOrders();
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się odrzucić prośby o zmiany");
+    } finally {
+      setDenyLoading(false);
+    }
+  };
 
   const loadOrders = async () => {
     if (!apiUrl || !idToken || !galleryId) return;
@@ -177,14 +248,29 @@ export default function GalleryDetail() {
   const handleSendLink = async () => {
     if (!apiUrl || !idToken || !galleryId) return;
     
+    // Check if this is a reminder (has existing orders) or initial invitation
+    const isReminder = orders && orders.length > 0;
+    
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
-      showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
+      const responseData = response.data || {};
+      const isReminderResponse = responseData.isReminder || isReminder;
+      
+      showToast(
+        "success", 
+        "Sukces", 
+        isReminderResponse 
+          ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
+          : "Link do galerii został wysłany do klienta"
+      );
       setShowSendLinkModal(false);
+      
+      // Reload orders (only creates order if no orders exist)
+      await loadOrders();
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
@@ -197,7 +283,7 @@ export default function GalleryDetail() {
       // Update client password if provided (requires clientEmail)
       if (settingsForm.clientPassword && settingsForm.clientEmail) {
         await apiFetch(`${apiUrl}/galleries/${galleryId}/client-password`, {
-          method: "POST",
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,
@@ -323,12 +409,20 @@ export default function GalleryDetail() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Zlecenia
             </h2>
-            <Badge color="info" variant="light">
-              {orders.length} {orders.length === 1 ? "zlecenie" : "zleceń"}
-            </Badge>
+            {!loading && (
+              <Badge color="info" variant="light">
+                {orders.length} {orders.length === 1 ? "zlecenie" : "zleceń"}
+              </Badge>
+            )}
           </div>
           
-          {orders.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-gray-500 dark:text-gray-400">
+                Ładowanie zleceń...
+              </div>
+            </div>
+          ) : orders.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">
               Brak zleceń dla tej galerii
             </p>
@@ -381,11 +475,32 @@ export default function GalleryDetail() {
                           : "-"}
                       </TableCell>
                       <TableCell className="px-4 py-3">
-                        <Link href={`/galleries/${galleryId}/orders/${order.orderId}`}>
-                          <Button size="sm" variant="outline">
-                            Szczegóły
-                          </Button>
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {order.deliveryStatus === 'CHANGES_REQUESTED' && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="primary"
+                                onClick={() => handleApproveChangeRequest(order.orderId)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                Zatwierdź
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleDenyChangeRequest(order.orderId)}
+                              >
+                                Odrzuć
+                              </Button>
+                            </>
+                          )}
+                          <Link href={`/galleries/${galleryId}/orders/${order.orderId}`}>
+                            <Button size="sm" variant="outline">
+                              Szczegóły
+                            </Button>
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -421,6 +536,17 @@ export default function GalleryDetail() {
           </div>
         </div>
           </Modal>
+
+          {/* Deny Change Request Modal */}
+          <DenyChangeRequestModal
+            isOpen={denyModalOpen}
+            onClose={() => {
+              setDenyModalOpen(false);
+              setDenyOrderId(null);
+            }}
+            onConfirm={handleDenyConfirm}
+            loading={denyLoading}
+          />
 
           {/* Payment Confirmation Modal */}
           <PaymentConfirmationModal

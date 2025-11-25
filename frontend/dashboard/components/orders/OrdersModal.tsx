@@ -7,6 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table"
 import { Loading } from "../ui/loading/Loading";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
+import { DenyChangeRequestModal } from "./DenyChangeRequestModal";
 import Link from "next/link";
 
 interface OrdersModalProps {
@@ -33,6 +34,10 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   const [hasNextPage, setHasNextPage] = useState(false);
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const itemsPerPage = 20;
+  const [denyModalOpen, setDenyModalOpen] = useState(false);
+  const [denyLoading, setDenyLoading] = useState(false);
+  const [denyGalleryId, setDenyGalleryId] = useState(null);
+  const [denyOrderId, setDenyOrderId] = useState(null);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -186,6 +191,9 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                     <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
                       Data utworzenia
                     </TableCell>
+                    <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                      Akcje
+                    </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -232,6 +240,49 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                           ? new Date(order.createdAt).toLocaleDateString("pl-PL")
                           : "-"}
                       </TableCell>
+                      <TableCell className="px-4 py-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          {order.deliveryStatus === 'CHANGES_REQUESTED' && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="primary"
+                                onClick={async () => {
+                                  try {
+                                    await apiFetch(`${apiUrl}/galleries/${order.galleryId}/orders/${order.orderId}/approve-change`, {
+                                      method: 'POST',
+                                      headers: { Authorization: `Bearer ${idToken}` }
+                                    });
+                                    await loadOrders();
+                                  } catch (err) {
+                                    console.error("Error approving change request:", err);
+                                    setError(formatApiError(err));
+                                  }
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                Zatwierdź
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => {
+                                  setDenyGalleryId(order.galleryId);
+                                  setDenyOrderId(order.orderId);
+                                  setDenyModalOpen(true);
+                                }}
+                              >
+                                Odrzuć
+                              </Button>
+                            </>
+                          )}
+                          <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
+                            <Button variant="outline" size="sm" onClick={onClose}>
+                              Szczegóły
+                            </Button>
+                          </Link>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -265,6 +316,42 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
           </>
         )}
       </div>
+
+      {/* Deny Change Request Modal */}
+      <DenyChangeRequestModal
+        isOpen={denyModalOpen}
+        onClose={() => {
+          setDenyModalOpen(false);
+          setDenyGalleryId(null);
+          setDenyOrderId(null);
+        }}
+        onConfirm={async (reason?: string) => {
+          if (!apiUrl || !idToken || !denyGalleryId || !denyOrderId) return;
+          
+          setDenyLoading(true);
+          
+          try {
+            await apiFetch(`${apiUrl}/galleries/${denyGalleryId}/orders/${denyOrderId}/deny-change`, {
+              method: 'POST',
+              headers: { 
+                Authorization: `Bearer ${idToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ reason: reason || undefined })
+            });
+            setDenyModalOpen(false);
+            setDenyGalleryId(null);
+            setDenyOrderId(null);
+            await loadOrders();
+          } catch (err) {
+            console.error("Error denying change request:", err);
+            setError(formatApiError(err));
+          } finally {
+            setDenyLoading(false);
+          }
+        }}
+        loading={denyLoading}
+      />
     </Modal>
   );
 };

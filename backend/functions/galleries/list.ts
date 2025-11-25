@@ -99,7 +99,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				changeRequestPending: false, 
 				orderCount: 0, 
 				totalRevenueCents: 0, 
-				latestOrder: null,
+				latestOrder: null as any | null,
 				orders: [] as any[],
 				orderStatuses: [] as string[]
 			};
@@ -178,20 +178,24 @@ export const handler = lambdaLogger(async (event: any) => {
 		if (filter) {
 			switch (filter) {
 				case 'unpaid':
-					// Wersje robocze: UNPAID galleries
-					filteredGalleries = enrichedGalleries.filter((g: any) => !g.isPaid);
+					// Wersje robocze: unpaid galleries OR paid galleries with no orders
+					// Once a paid gallery has orders, it should appear in workflow status views
+					filteredGalleries = enrichedGalleries.filter((g: any) => {
+						// Unpaid galleries are always drafts
+						if (!g.isPaid) return true;
+						
+						// Paid galleries with no orders are still drafts (not sent to client yet)
+						if (!g.orders || g.orders.length === 0) return true;
+						
+						// Paid galleries with orders should be in workflow status views, not drafts
+						return false;
+					});
 					break;
 				case 'wyslano':
-					// Wysłano do klienta: galleries with at least one order (CLIENT_SELECTING+)
+					// Wysłano do klienta: galleries with CLIENT_SELECTING orders only
 					filteredGalleries = enrichedGalleries.filter((g: any) => {
 						if (!g.orders || g.orders.length === 0) return false;
-						return g.orders.some((o: any) => 
-							o.deliveryStatus === 'CLIENT_SELECTING' ||
-							o.deliveryStatus === 'CLIENT_APPROVED' ||
-							o.deliveryStatus === 'PREPARING_DELIVERY' ||
-							o.deliveryStatus === 'CHANGES_REQUESTED' ||
-							o.deliveryStatus === 'DELIVERED'
-						);
+						return g.orders.some((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
 					});
 					break;
 				case 'wybrano':

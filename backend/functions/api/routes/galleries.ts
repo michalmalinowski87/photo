@@ -27,7 +27,8 @@ router.put('/:id', wrapHandler(galleriesUpdate.handler));
 router.delete('/:id', wrapHandler(galleriesDelete.handler));
 
 // Gallery sub-routes
-router.get('/:id/images', wrapHandler(galleriesListImages.handler));
+// images route is registered as public route in index.ts (no requireAuth)
+// router.get('/:id/images', wrapHandler(galleriesListImages.handler));
 router.post('/:id/pay', wrapHandler(galleriesPay.handler));
 router.post('/:id/cancel-transaction', wrapHandler(galleriesCancelTransaction.handler));
 router.patch('/:id/selection-mode', wrapHandler(galleriesSetSelectionMode.handler));
@@ -35,7 +36,8 @@ router.patch('/:id/pricing-package', wrapHandler(galleriesUpdatePricing.handler)
 router.patch('/:id/client-password', wrapHandler(galleriesSetClientPassword.handler));
 router.delete('/:id/photos/:filename', wrapHandler(galleriesDeletePhoto.handler));
 router.post('/:id/recalculate-bytes-used', wrapHandler(galleriesRecalculateBytesUsed.handler));
-router.post('/:id/client-login', wrapHandler(galleriesClientLogin.handler));
+// client-login is registered as a public route in index.ts (before requireAuth middleware)
+// router.post('/:id/client-login', wrapHandler(galleriesClientLogin.handler));
 router.post('/:id/send-to-client', wrapHandler(galleriesSendToClient.handler));
 router.post('/:id/export', wrapHandler(galleriesExport.handler));
 

@@ -35,13 +35,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	const body = event?.body ? JSON.parse(event.body) : {};
-	const password = body?.password;
+	const passwordRaw = body?.password;
 
-	if (!password || typeof password !== 'string') {
+	if (!passwordRaw || typeof passwordRaw !== 'string') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Password required' })
+		};
+	}
+
+	// Trim password to ensure consistency with create.ts and setClientPassword.ts
+	const password = passwordRaw.trim();
+	if (!password) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Password cannot be empty' })
 		};
 	}
 
@@ -61,6 +71,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
+	// Check if password fields exist
+	if (!gallery.clientPasswordHash || !gallery.clientPasswordSalt || !gallery.clientPasswordIter) {
+		logger.warn('Password not set for gallery', { 
+			galleryId,
+			hasHash: !!gallery.clientPasswordHash,
+			hasSalt: !!gallery.clientPasswordSalt,
+			hasIter: !!gallery.clientPasswordIter
+		});
+		return {
+			statusCode: 401,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Password not set for this gallery' })
+		};
+	}
+
 	// Verify password
 	const passwordValid = verifyPassword(
 		password,
@@ -70,7 +95,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	);
 
 	if (!passwordValid) {
-		logger.warn('Invalid password attempt', { galleryId });
+		logger.warn('Invalid password attempt', { 
+			galleryId,
+			hasHash: !!gallery.clientPasswordHash,
+			hasSalt: !!gallery.clientPasswordSalt,
+			hasIter: !!gallery.clientPasswordIter,
+			iterValue: gallery.clientPasswordIter
+		});
 		return {
 			statusCode: 401,
 			headers: { 'content-type': 'application/json' },

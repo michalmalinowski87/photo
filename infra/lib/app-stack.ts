@@ -230,6 +230,27 @@ export class AppStack extends Stack {
 			TRANSACTIONS_TABLE: transactions.tableName
 		};
 
+		// Downloads zip - helper function invoked by API Lambda and other functions
+		// Created before apiFn so DOWNLOADS_ZIP_FN_NAME can be added to envVars
+		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512,
+			timeout: Duration.minutes(5),
+			bundling: {
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
+			},
+			environment: envVars
+		});
+		galleriesBucket.grantReadWrite(zipFn);
+		// Grant permission to update orders table to clear zipGenerating flag
+		orders.grantReadWriteData(zipFn);
+		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+
 		// Single API Lambda function - handles all HTTP endpoints via Express router
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
@@ -287,6 +308,66 @@ export class AppStack extends Stack {
 			// No authorizer for OPTIONS requests
 		});
 
+		// Public routes (no authorizer required)
+		// Client login endpoint - clients authenticate with gallery password, not Cognito
+		httpApi.addRoutes({
+			path: '/galleries/{id}/client-login',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('ApiClientLoginIntegration', apiFn)
+			// No authorizer - public endpoint
+		});
+
+		// Client gallery endpoints (use client JWT tokens, not Cognito)
+		// These endpoints verify client JWT tokens in the Lambda function itself
+		httpApi.addRoutes({
+			path: '/galleries/{id}/images',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiGalleryImagesIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/delivered',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiOrdersDeliveredIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/selections',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiSelectionsGetIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/selections/approve',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('ApiSelectionsApproveIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/selection-change-request',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('ApiSelectionChangeRequestIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/zip',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiOrdersZipIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/final/images',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiOrdersFinalImagesIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/final/zip',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('ApiOrdersFinalZipIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+
 		// Single catch-all route for all API endpoints
 		httpApi.addRoutes({
 			path: '/{proxy+}',
@@ -302,50 +383,13 @@ export class AppStack extends Stack {
 			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
 		});
 
-		// Downloads zip - helper function invoked by API Lambda and other functions
-		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
-			handler: 'handler',
-			runtime: Runtime.NODEJS_20_X,
-			memorySize: 512,
-			timeout: Duration.minutes(5),
-			bundling: {
-				externalModules: ['aws-sdk'],
-				minify: true,
-				treeShaking: true,
-				sourceMap: false
-			},
-			environment: envVars
-		});
-		galleriesBucket.grantReadWrite(zipFn);
-		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+		// Grant API Lambda permission to invoke zipFn
 		apiFn.addToRolePolicy(new PolicyStatement({
 			actions: ['lambda:InvokeFunction'],
 			resources: [zipFn.functionArn]
 		}));
-		
-		// Generate ZIPs for addon purchase - helper function invoked by API Lambda and webhook
-		const generateZipsForAddonFn = new NodejsFunction(this, 'GenerateZipsForAddonFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/generateZipsForAddon.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			timeout: Duration.minutes(5),
-			memorySize: 512,
-			environment: envVars
-		});
-		orders.grantReadWriteData(generateZipsForAddonFn);
-		zipFn.grantInvoke(generateZipsForAddonFn);
-		galleriesBucket.grantRead(generateZipsForAddonFn);
-		envVars['GENERATE_ZIPS_FOR_ADDON_FN_NAME'] = generateZipsForAddonFn.functionName;
-		apiFn.addToRolePolicy(new PolicyStatement({
-			actions: ['lambda:InvokeFunction'],
-			resources: [generateZipsForAddonFn.functionArn]
-		}));
-		// API Lambda can invoke generateZipsForAddonFn (webhook permission will be granted below)
-		generateZipsForAddonFn.grantInvoke(apiFn);
 
 		// Stripe payment functions - separate Lambda functions for better isolation and scaling
-		// Created after generateZipsForAddonFn so webhook can invoke it
 		const paymentsCheckoutFn = new NodejsFunction(this, 'PaymentsCheckoutFn', {
 			entry: path.join(__dirname, '../../../backend/functions/payments/checkoutCreate.ts'),
 			handler: 'handler',
@@ -380,9 +424,8 @@ export class AppStack extends Stack {
 		wallet.grantReadWriteData(paymentsWebhookFn);
 		walletLedger.grantReadWriteData(paymentsWebhookFn);
 		galleries.grantReadWriteData(paymentsWebhookFn);
-		orders.grantReadWriteData(paymentsWebhookFn); // Needed for addon_payment to update orders with zipKey
+		orders.grantReadWriteData(paymentsWebhookFn);
 		galleryAddons.grantReadWriteData(paymentsWebhookFn); // Needed for addon_payment to create addon
-		generateZipsForAddonFn.grantInvoke(paymentsWebhookFn); // webhook can invoke it for ZIP generation
 
 		// Add Stripe payment routes
 		httpApi.addRoutes({

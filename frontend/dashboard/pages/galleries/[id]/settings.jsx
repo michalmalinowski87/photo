@@ -18,6 +18,8 @@ export default function GallerySettings() {
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [saving, setSaving] = useState(false);
+  const [hasDeliveredOrders, setHasDeliveredOrders] = useState(false);
+  const [checkingDelivered, setCheckingDelivered] = useState(true);
   const [settingsForm, setSettingsForm] = useState({
     galleryName: "",
     clientEmail: "",
@@ -42,6 +44,30 @@ export default function GallerySettings() {
       }
     );
   }, [galleryId]);
+
+  useEffect(() => {
+    if (apiUrl && idToken && galleryId) {
+      checkDeliveredOrders();
+    }
+  }, [apiUrl, idToken, galleryId]);
+
+  const checkDeliveredOrders = async () => {
+    if (!apiUrl || !idToken || !galleryId) return;
+    setCheckingDelivered(true);
+    try {
+      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/delivered`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const items = data?.items || data?.orders || [];
+      const hasDelivered = Array.isArray(items) && items.length > 0;
+      setHasDeliveredOrders(hasDelivered);
+    } catch (err) {
+      console.error("Failed to check delivered orders:", err);
+      setHasDeliveredOrders(false);
+    } finally {
+      setCheckingDelivered(false);
+    }
+  };
 
   // Gallery data comes from GalleryContext - initialize form when gallery loads
   useEffect(() => {
@@ -74,7 +100,7 @@ export default function GallerySettings() {
       // Update client password if provided (requires clientEmail)
       if (settingsForm.clientPassword && settingsForm.clientEmail) {
         await apiFetch(`${apiUrl}/galleries/${galleryId}/client-password`, {
-          method: "POST",
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,
@@ -152,6 +178,172 @@ export default function GallerySettings() {
   }
 
   const isPaid = gallery ? (gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")) : false;
+
+  // Show loading while checking delivered orders or loading gallery
+  if (checkingDelivered || galleryLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          Ustawienia galerii
+        </h1>
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="text-center py-8">
+            <div className="text-gray-500 dark:text-gray-400">
+              {galleryLoading ? "Ładowanie danych galerii..." : "Sprawdzanie statusu galerii..."}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show locked form if gallery is delivered - show form but disabled
+  if (hasDeliveredOrders) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          Ustawienia galerii
+        </h1>
+        
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-4 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20 mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <svg className="w-6 h-6 text-error-600 dark:text-error-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h2 className="text-lg font-semibold text-error-800 dark:text-error-200">
+                Ustawienia galerii są zablokowane
+              </h2>
+            </div>
+            <p className="text-sm text-error-700 dark:text-error-300">
+              Nie możesz edytować ustawień galerii, która ma dostarczone zlecenia. Ustawienia są zablokowane po dostarczeniu zdjęć do klienta.
+            </p>
+          </div>
+
+          <div className="space-y-4 opacity-60">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Nazwa galerii
+              </label>
+              <Input
+                type="text"
+                placeholder="Nazwa galerii"
+                value={settingsForm.galleryName}
+                disabled={true}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Email logowania
+              </label>
+              <Input
+                type="email"
+                placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
+                value={galleryLoading ? "" : (settingsForm.clientEmail || "")}
+                disabled={true}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Hasło klienta (opcjonalne)
+              </label>
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <Input
+                    type="password"
+                    placeholder="Nowe hasło"
+                    value=""
+                    disabled={true}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={true}
+                  className="bg-gray-400 hover:bg-gray-400 text-white whitespace-nowrap h-11 cursor-not-allowed"
+                >
+                  Generuj
+                </Button>
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                Pakiet cenowy
+              </h3>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Nazwa pakietu
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Nazwa pakietu"
+                    value={settingsForm.packageName}
+                    disabled={true}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Liczba zdjęć w pakiecie
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={settingsForm.includedCount}
+                    disabled={true}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Cena za dodatkowe zdjęcie (PLN)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="0.00"
+                    value={centsToPlnString(settingsForm.extraPriceCents)}
+                    disabled={true}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Cena pakietu (PLN)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="0.00"
+                    value={centsToPlnString(settingsForm.packagePriceCents)}
+                    disabled={true}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push(`/galleries/${galleryId}`)}
+            >
+              Powrót do galerii
+            </Button>
+            <Button 
+              variant="primary" 
+              disabled={true}
+              className="opacity-50 cursor-not-allowed"
+            >
+              Zapisz
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { apiFetch, formatApiError } from '../lib/api';
-import { initAuth, getIdToken, signOut, redirectToCognito, getHostedUILogoutUrl } from '../lib/auth';
+import { signOut, getHostedUILogoutUrl } from '../lib/auth';
 
 export default function Orders() {
 	const router = useRouter();
@@ -12,7 +12,6 @@ export default function Orders() {
 	const [gallery, setGallery] = useState(null);
 	const [message, setMessage] = useState('');
 	const [downloadingZip, setDownloadingZip] = useState({});
-	const [generatingZip, setGeneratingZip] = useState({});
 	const [uploadingFinal, setUploadingFinal] = useState({});
 	const [finalFiles, setFinalFiles] = useState({});
 
@@ -85,64 +84,34 @@ export default function Orders() {
 		}
 		try {
 			await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
-			method: 'POST',
-			headers: { Authorization: `Bearer ${idToken}` }
-		});
-		setMessage('Change request approved - selection unlocked');
-		await loadOrders();
-		} catch (error) {
-			setMessage(formatApiError(error));
-		}
-	}
-
-	async function generateZip(orderId) {
-		setMessage('');
-		setGeneratingZip({ [orderId]: true });
-		try {
-			// Step 1: Generate ZIP (returns JSON only, no file)
-			const generateResponse = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/generate-zip`, {
 				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			
-			if (!generateResponse.ok) {
-				const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to generate ZIP' }));
-				setMessage(formatApiError(errorData));
-				return;
-			}
-			
-			const generateData = await generateResponse.json();
-			if (!generateData.zipKey) {
-					setMessage('ZIP generation completed but no zipKey returned');
-				return;
-			}
-			
-			// Step 2: Download ZIP via Download ZIP endpoint
-			// This endpoint handles serving the file and deletion (if no backup addon)
-			setMessage('ZIP generated successfully. Downloading...');
-			await downloadZip(orderId);
+			setMessage('Change request approved - selection unlocked');
+			await loadOrders();
 		} catch (error) {
 			setMessage(formatApiError(error));
-		} finally {
-			setGeneratingZip({});
 		}
 	}
 
-	// Helper function to check if order has backup storage addon
-	// For now, we'll check if order has hasBackupStorage field or check via API
-	async function checkHasBackupAddon(orderId) {
+	async function denyChange(orderId) {
+		setMessage('');
+		if (!orderId) {
+			setMessage('Order ID required');
+			return;
+		}
 		try {
-			const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}`, {
+			await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/deny-change`, {
+				method: 'POST',
 				headers: { Authorization: `Bearer ${idToken}` }
 			});
-			// Check if order has addon info - we'll add this to order data later
-			// For now, assume no addon if not explicitly set
-			return data.hasBackupStorage === true;
+			setMessage('Change request denied - order reverted to previous status');
+			await loadOrders();
 		} catch (error) {
-			// If we can't check, assume no addon to be safe
-			return false;
+			setMessage(formatApiError(error));
 		}
 	}
+
 
 	async function downloadZip(orderId) {
 		setMessage('');
@@ -433,31 +402,10 @@ export default function Orders() {
 								<td>{o.paymentStatus || '-'}</td>
 								<td>{o.selectedCount}</td>
 								<td>{o.overageCents ? `${(o.overageCents / 100).toFixed(2)} PLN` : '0 PLN'}</td>
-								<td>{o.zipKey || '-'}</td>
+								<td>-</td>
 								<td>
-									{/* Generate ZIP button (displaying as Download ZIP) - only show when no backup addon and CLIENT_APPROVED status */}
-									{!gallery?.hasBackupStorage && o.deliveryStatus === 'CLIENT_APPROVED' && !o.zipKey && (
-										<button 
-											onClick={() => generateZip(o.orderId)} 
-											disabled={generatingZip[o.orderId]}
-											style={{ 
-												marginRight: 8, 
-												padding: '4px 8px', 
-												fontSize: '12px', 
-												background: '#17a2b8', 
-												color: 'white', 
-												border: 'none', 
-												borderRadius: 4, 
-												cursor: generatingZip[o.orderId] ? 'not-allowed' : 'pointer',
-												opacity: generatingZip[o.orderId] ? 0.6 : 1
-											}}
-											title="Download ZIP file for this order (one-time download available)"
-										>
-											{generatingZip[o.orderId] ? 'Generating...' : 'Download ZIP'}
-										</button>
-									)}
-									{/* Download ZIP - available when ZIP exists and order is not CANCELLED or DELIVERED */}
-									{o.zipKey && o.deliveryStatus !== 'CANCELLED' && o.deliveryStatus !== 'DELIVERED' && (
+									{/* Download ZIP - available for CLIENT_APPROVED orders */}
+									{o.deliveryStatus === 'CLIENT_APPROVED' && (
 										<button 
 											onClick={() => downloadZip(o.orderId)} 
 											disabled={downloadingZip[o.orderId]}
@@ -477,7 +425,7 @@ export default function Orders() {
 										</button>
 									)}
 									{/* Download ZIP for DELIVERED orders with backup addon */}
-									{o.zipKey && o.deliveryStatus === 'DELIVERED' && gallery?.hasBackupStorage && (
+									{o.deliveryStatus === 'DELIVERED' && gallery?.hasBackupStorage && (
 										<button 
 											onClick={() => downloadZip(o.orderId)} 
 											disabled={downloadingZip[o.orderId]}
@@ -532,15 +480,24 @@ export default function Orders() {
 											Mark as Refunded
 										</button>
 									)}
-									{/* Approve Change Request - available for CHANGES_REQUESTED orders */}
+									{/* Approve/Deny Change Request - available for CHANGES_REQUESTED orders */}
 									{o.deliveryStatus === 'CHANGES_REQUESTED' && (
-										<button 
-											onClick={() => approveChange(o.orderId)}
-											style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#17a2b8', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-											title="Approve change request and unlock selection"
-										>
-											Approve Change Request
-										</button>
+										<>
+											<button 
+												onClick={() => denyChange(o.orderId)}
+												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												title="Deny change request and revert to previous status"
+											>
+												Deny Change Request
+											</button>
+											<button 
+												onClick={() => approveChange(o.orderId)}
+												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												title="Approve change request and unlock selection"
+											>
+												Approve Change Request
+											</button>
+										</>
 									)}
 									{/* Upload Final Photos - available for CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, or PREPARING_DELIVERY orders */}
 									{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'AWAITING_FINAL_PHOTOS' || o.deliveryStatus === 'PREPARING_DELIVERY') && (

@@ -2,11 +2,16 @@ import express, { Request, Response } from 'express';
 import { lambdaLogger } from '../../../packages/logger/src';
 import { createServerlessHandler } from './serverless';
 import { requireAuth } from './middleware/auth';
+import { wrapHandler } from './routes/handlerWrapper';
 
 // Import route modules
 import { authRoutes } from './routes/auth';
 import { galleriesRoutes } from './routes/galleries';
+import * as galleriesClientLogin from '../galleries/clientLogin';
+import * as galleriesListImages from '../galleries/listImages';
 import { ordersRoutes } from './routes/orders';
+import * as ordersListDelivered from '../../functions/orders/listDelivered';
+import * as ordersDownloadZip from '../../functions/orders/downloadZip';
 import { clientsRoutes } from './routes/clients';
 import { packagesRoutes } from './routes/packages';
 // Stripe payments are handled by separate Lambda functions
@@ -15,6 +20,11 @@ import { walletRoutes } from './routes/wallet';
 import { uploadsRoutes } from './routes/uploads';
 import { downloadsRoutes } from './routes/downloads';
 import { selectionsRoutes } from './routes/selections';
+import * as selectionsGet from '../../functions/selections/getSelection';
+import * as selectionsApprove from '../../functions/selections/approveSelection';
+import * as selectionsChangeRequest from '../../functions/selections/changeRequest';
+import * as ordersListFinalImages from '../../functions/orders/listFinalImages';
+import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip';
 import { processedRoutes } from './routes/processed';
 
 const app = express();
@@ -43,6 +53,21 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req: Request, res: Response) => {
 	res.json({ ok: true });
 });
+
+// Public gallery routes (no auth required)
+// Client login endpoint - clients authenticate with gallery password, not Cognito
+app.post('/galleries/:id/client-login', wrapHandler(galleriesClientLogin.handler));
+
+// Client gallery endpoints (use client JWT tokens, not Cognito)
+// These endpoints verify client JWT tokens in the Lambda function itself
+app.get('/galleries/:id/images', wrapHandler(galleriesListImages.handler));
+app.get('/galleries/:id/orders/delivered', wrapHandler(ordersListDelivered.handler));
+app.get('/galleries/:id/selections', wrapHandler(selectionsGet.handler));
+app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.handler));
+app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
+app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
+app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
+app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 
 // API Routes - all require authentication via API Gateway authorizer
 // Note: API Gateway validates tokens before requests reach Lambda,

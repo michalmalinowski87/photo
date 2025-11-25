@@ -67,7 +67,31 @@ export function wrapHandler(handler: Handler) {
 			if (result && typeof result === 'object') {
 				const statusCode = result.statusCode || 200;
 				const headers = result.headers || {};
-				const body = result.body || '';
+				let body = result.body || '';
+
+				// Handle base64-encoded binary responses
+				if (result.isBase64Encoded && typeof body === 'string') {
+					// Decode base64 to binary buffer
+					try {
+						const buffer = Buffer.from(body, 'base64');
+						console.log('Decoding base64 binary response', {
+							originalSize: body.length,
+							decodedSize: buffer.length,
+							contentType: headers['content-type']
+						});
+						// Set headers BEFORE sending
+						Object.keys(headers).forEach(key => {
+							res.setHeader(key, headers[key]);
+						});
+						// Use res.end() for binary data to ensure proper handling
+						res.status(statusCode);
+						res.end(buffer);
+						return;
+					} catch (decodeErr: any) {
+						console.error('Failed to decode base64 body:', decodeErr);
+						return res.status(500).json({ error: 'Failed to decode binary response' });
+					}
+				}
 
 				// Set headers
 				Object.keys(headers).forEach(key => {

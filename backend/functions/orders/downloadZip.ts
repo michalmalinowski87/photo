@@ -3,9 +3,10 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
-import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { getUserIdFromEvent, requireOwnerOr403, verifyGalleryAccess } from '../../lib/src/auth';
 import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -36,16 +37,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	const requester = getUserIdFromEvent(event);
-	if (!requester) {
-		return {
-			statusCode: 401,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Unauthorized' })
-		};
-	}
-
-	// Verify gallery ownership
+	// Verify gallery exists
 	const galleryGet = await ddb.send(new GetCommand({
 		TableName: galleriesTable,
 		Key: { galleryId }
@@ -58,7 +50,16 @@ export const handler = lambdaLogger(async (event: any) => {
 			body: JSON.stringify({ error: 'Gallery not found' })
 		};
 	}
-	requireOwnerOr403(gallery.ownerId, requester);
+
+	// Verify access - supports both owner (Cognito) and client (JWT) tokens
+	const access = verifyGalleryAccess(event, galleryId, gallery);
+	if (!access.isOwner && !access.isClient) {
+		return {
+			statusCode: 401,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
+		};
+	}
 
 	// Get order
 	const orderGet = await ddb.send(new GetCommand({
@@ -83,193 +84,209 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// If ZIP doesn't exist in order record, check if it exists in S3 first
-	if (!order.zipKey) {
-		// Check if ZIP already exists in S3 (maybe it was created but order wasn't updated)
-		const expectedZipKey = `galleries/${galleryId}/zips/${orderId}.zip`;
-		try {
-			// Try to access the ZIP file in S3
-			await s3.send(new GetObjectCommand({
-				Bucket: bucket,
-				Key: expectedZipKey
-			}));
-			// ZIP exists! Update the order record with the zipKey
-			await ddb.send(new UpdateCommand({
-				TableName: ordersTable,
-				Key: { galleryId, orderId },
-				UpdateExpression: 'SET zipKey = :z',
-				ExpressionAttributeValues: { ':z': expectedZipKey }
-			}));
-			order.zipKey = expectedZipKey;
-		} catch (s3Err: any) {
-			// ZIP doesn't exist in S3, try to generate it
-			if (s3Err.name !== 'NoSuchKey' && s3Err.name !== 'NotFound') {
-				console.error('Error checking S3 for existing ZIP:', s3Err.message);
-				return {
-					statusCode: 500,
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ error: 'Failed to check for existing ZIP', message: s3Err.message })
-				};
-			}
-			
-			// ZIP doesn't exist, generate it
-			const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
-			if (zipFnName && order.selectedKeys && Array.isArray(order.selectedKeys) && order.selectedKeys.length > 0) {
-				try {
-					const lambda = new LambdaClient({});
-					const payload = Buffer.from(JSON.stringify({ galleryId, keys: order.selectedKeys, orderId }));
-					const invokeResponse = await lambda.send(new InvokeCommand({ 
-						FunctionName: zipFnName, 
-						Payload: payload, 
-						InvocationType: 'RequestResponse'
-					}));
-					
-					if (invokeResponse.Payload) {
-						const payloadString = Buffer.from(invokeResponse.Payload).toString();
-						let zipResult: any;
-						try {
-							zipResult = JSON.parse(payloadString);
-						} catch (parseErr: any) {
-							console.error('Failed to parse ZIP generation response:', {
-								payloadString,
-								error: parseErr.message
-							});
-							return {
-								statusCode: 500,
-								headers: { 'content-type': 'application/json' },
-								body: JSON.stringify({ 
-									error: 'ZIP generation returned invalid JSON', 
-									message: parseErr.message,
-									payloadPreview: payloadString.substring(0, 200)
-								})
-							};
-						}
-					
-					// Check if Lambda invocation itself failed (errorMessage indicates Lambda error)
-					if (zipResult.errorMessage) {
-						console.error('ZIP generation Lambda invocation error:', zipResult);
-						return {
-							statusCode: 500,
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ 
-								error: 'ZIP generation Lambda invocation failed', 
-								lambdaError: zipResult.errorMessage,
-								errorType: zipResult.errorType,
-								stackTrace: zipResult.stackTrace
-							})
-						};
-					}
-					
-					// When Lambda is invoked directly, it returns { statusCode, body } format
-					// The body is a JSON string that needs to be parsed
-					if (zipResult.statusCode && zipResult.body) {
-						try {
-							const bodyParsed = typeof zipResult.body === 'string' ? JSON.parse(zipResult.body) : zipResult.body;
-							if (zipResult.statusCode !== 200) {
-								console.error('ZIP generation Lambda returned error status:', {
-									statusCode: zipResult.statusCode,
-									body: bodyParsed
-								});
-								return {
-									statusCode: zipResult.statusCode,
-									headers: { 'content-type': 'application/json' },
-									body: JSON.stringify({ 
-										error: 'ZIP generation failed', 
-										lambdaError: bodyParsed.error || bodyParsed,
-										message: bodyParsed.message
-									})
-								};
-							}
-							// Success - use the parsed body as the result
-							zipResult = bodyParsed;
-						} catch (bodyParseErr: any) {
-							console.error('Failed to parse Lambda response body:', {
-								body: zipResult.body,
-								error: bodyParseErr.message
-							});
-							return {
-								statusCode: 500,
-								headers: { 'content-type': 'application/json' },
-								body: JSON.stringify({ 
-									error: 'ZIP generation returned invalid body format', 
-									message: bodyParseErr.message
-								})
-							};
-						}
-					}
-					
-					if (zipResult.zipKey) {
-						// Update order with zipKey
-						await ddb.send(new UpdateCommand({
-							TableName: ordersTable,
-							Key: { galleryId, orderId },
-							UpdateExpression: 'SET zipKey = :z',
-							ExpressionAttributeValues: { ':z': zipResult.zipKey }
-						}));
-						order.zipKey = zipResult.zipKey;
-					} else {
-						console.error('ZIP generation did not return zipKey:', zipResult);
-						return {
-							statusCode: 500,
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ 
-								error: 'ZIP generation did not return zipKey',
-								response: zipResult
-							})
-						};
-					}
-					} else {
-						console.error('ZIP generation returned no payload');
-						return {
-							statusCode: 500,
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ error: 'ZIP generation returned no payload' })
-						};
-					}
-				} catch (err: any) {
-					console.error('Failed to auto-generate ZIP:', {
-						error: err.message,
-						stack: err.stack,
-						galleryId,
-						orderId,
-						hasZipFnName: !!zipFnName,
-						hasSelectedKeys: !!order.selectedKeys,
-						selectedKeysCount: order.selectedKeys?.length || 0
-					});
-					return {
-						statusCode: 500,
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ 
-							error: 'ZIP generation failed', 
-							message: err.message,
-							details: {
-								galleryId,
-								orderId,
-								hasZipFnName: !!zipFnName,
-								hasSelectedKeys: !!order.selectedKeys,
-								selectedKeysCount: order.selectedKeys?.length || 0
-							}
-						})
-					};
-				}
-			} else {
-				return {
-					statusCode: 404,
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ error: 'ZIP not found for this order. Order has no selectedKeys to generate ZIP from.' })
-				};
-			}
+	// Always generate ZIP on-demand - check if generation is in progress or start new generation
+	const expectedZipKey = `galleries/${galleryId}/zips/${orderId}.zip`;
+	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
+	
+	if (!zipFnName || !order.selectedKeys || !Array.isArray(order.selectedKeys) || order.selectedKeys.length === 0) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'ZIP generation service not configured or order has no selectedKeys',
+				hasZipFnName: !!zipFnName,
+				hasSelectedKeys: !!order.selectedKeys,
+				selectedKeysCount: order.selectedKeys?.length || 0
+			})
+		};
+	}
+
+	// Check if ZIP exists in S3 (might have been generated recently)
+	let zipExists = false;
+	try {
+		await s3.send(new GetObjectCommand({
+			Bucket: bucket,
+			Key: expectedZipKey
+		}));
+		zipExists = true;
+	} catch (s3Err: any) {
+		// ZIP doesn't exist, need to generate
+		if (s3Err.name !== 'NoSuchKey' && s3Err.name !== 'NotFound') {
+			console.error('Error checking S3 for ZIP:', s3Err.message);
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Failed to check for ZIP', message: s3Err.message })
+			};
 		}
 	}
 
+	// If ZIP doesn't exist, start generation
+	if (!zipExists) {
+		const isGenerating = order.zipGenerating === true;
+		const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
+		
+		// If ZIP has been generating for more than 5 minutes, clear the flag and retry
+		if (isGenerating && zipGeneratingSince) {
+			const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+			if (zipGeneratingSince < fiveMinutesAgo) {
+				console.log('ZIP generation timeout - clearing flag and retrying', {
+					galleryId,
+					orderId,
+					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
+					elapsedMinutes: Math.round((Date.now() - zipGeneratingSince) / 60000)
+				});
+				// Clear the flag to allow retry
+				try {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+					}));
+				} catch (clearErr: any) {
+					console.error('Failed to clear zipGenerating flag', clearErr.message);
+				}
+				// Fall through to start new generation
+			} else {
+				// Still generating, return 202
+				console.log('ZIP still generating', {
+					galleryId,
+					orderId,
+					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
+					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
+				});
+				return {
+					statusCode: 202, // Accepted - processing
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						status: 'generating',
+						message: 'ZIP is being generated. Please check again in a moment.',
+						orderId,
+						galleryId
+					})
+				};
+			}
+		}
+		
+		if (!isGenerating || !zipGeneratingSince) {
+			try {
+				console.log('Starting ZIP generation', {
+					galleryId,
+					orderId,
+					selectedKeysCount: order.selectedKeys?.length || 0,
+					zipFnName
+				});
+				
+				const lambda = new LambdaClient({});
+				const payload = Buffer.from(JSON.stringify({ galleryId, keys: order.selectedKeys, orderId }));
+				
+				// Start async generation (fire and forget)
+				const invokeResult = await lambda.send(new InvokeCommand({ 
+					FunctionName: zipFnName, 
+					Payload: payload, 
+					InvocationType: 'Event' // Async invocation
+				}));
+				
+				console.log('ZIP generation Lambda invoked', {
+					galleryId,
+					orderId,
+					statusCode: invokeResult.StatusCode,
+					functionName: zipFnName
+				});
+				
+				// Mark order as generating with timestamp
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'SET zipGenerating = :g, zipGeneratingSince = :ts',
+					ExpressionAttributeValues: { 
+						':g': true,
+						':ts': Date.now()
+					}
+				}));
+			} catch (err: any) {
+				console.error('Failed to start ZIP generation:', {
+					error: err.message,
+					stack: err.stack,
+					galleryId,
+					orderId,
+					zipFnName,
+					hasSelectedKeys: !!order.selectedKeys,
+					selectedKeysCount: order.selectedKeys?.length || 0
+				});
+				return {
+					statusCode: 500,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Failed to start ZIP generation', 
+						message: err.message
+					})
+				};
+			}
+		}
+		
+		// Return generating status
+		return {
+			statusCode: 202, // Accepted - processing
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				status: 'generating',
+				message: 'ZIP is being generated. Please check again in a moment.',
+				orderId,
+				galleryId
+			})
+		};
+	}
+
 	try {
+		// Check if ZIP is still generating (clear the flag if ZIP exists)
+		if (order.zipGenerating) {
+			// Check if ZIP now exists in S3
+			try {
+				await s3.send(new GetObjectCommand({
+					Bucket: bucket,
+					Key: expectedZipKey
+				}));
+				// ZIP exists, clear generating flag
+				console.log('ZIP generation completed, clearing flag', { galleryId, orderId });
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+				}));
+			} catch (s3Err: any) {
+				// ZIP still doesn't exist, return generating status
+				if (s3Err.name === 'NoSuchKey' || s3Err.name === 'NotFound') {
+					const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
+					const elapsedSeconds = zipGeneratingSince ? Math.round((Date.now() - zipGeneratingSince) / 1000) : 'unknown';
+					console.log('ZIP still generating', {
+						galleryId,
+						orderId,
+						elapsedSeconds,
+						zipGeneratingSince: zipGeneratingSince ? new Date(zipGeneratingSince).toISOString() : undefined
+					});
+					return {
+						statusCode: 202,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ 
+							status: 'generating',
+							message: 'ZIP is still being generated. Please check again in a moment.',
+							orderId,
+							galleryId
+						})
+					};
+				}
+				throw s3Err;
+			}
+		}
+		
 		// Check if gallery has backup addon (gallery-level)
 		const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
 		
 		// Get ZIP file from S3
 		const getObjectResponse = await s3.send(new GetObjectCommand({
 			Bucket: bucket,
-			Key: order.zipKey
+			Key: expectedZipKey
 		}));
 
 		if (!getObjectResponse.Body) {
@@ -282,31 +299,100 @@ export const handler = lambdaLogger(async (event: any) => {
 
 		// Read the ZIP file into a buffer
 		const chunks: Buffer[] = [];
-		const stream = getObjectResponse.Body as any;
-		for await (const chunk of stream) {
-			chunks.push(Buffer.from(chunk));
+		const stream = getObjectResponse.Body;
+		
+		if (!stream) {
+			return {
+				statusCode: 404,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'ZIP file body is empty' })
+			};
 		}
+		
+		// Read stream into buffer chunks
+		console.log('Reading ZIP from S3', {
+			galleryId,
+			orderId,
+			zipKey: expectedZipKey,
+			contentLength: getObjectResponse.ContentLength,
+			contentType: getObjectResponse.ContentType
+		});
+		
+		for await (const chunk of stream as Readable) {
+			chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+		}
+		
 		const zipBuffer = Buffer.concat(chunks);
+		
+		console.log('ZIP read from S3', {
+			galleryId,
+			orderId,
+			chunksCount: chunks.length,
+			bufferSize: zipBuffer.length,
+			firstBytes: Array.from(zipBuffer.slice(0, 4))
+		});
+		
+		// Verify we got the expected amount of data
+		const contentLength = getObjectResponse.ContentLength;
+		if (contentLength && zipBuffer.length !== contentLength) {
+			console.warn('ZIP buffer size mismatch', {
+				expected: contentLength,
+				actual: zipBuffer.length,
+				galleryId,
+				orderId,
+				zipKey: expectedZipKey
+			});
+		}
+
+		// Validate ZIP buffer - check for ZIP magic bytes (PK header)
+		if (zipBuffer.length === 0) {
+			console.error('ZIP file is empty', { galleryId, orderId, zipKey: expectedZipKey });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'ZIP file is empty' })
+			};
+		}
+
+		// Check for ZIP file signature (PK\x03\x04 or PK\x05\x06 for empty ZIP)
+		const zipSignature = zipBuffer.slice(0, 2).toString('ascii');
+		if (zipSignature !== 'PK') {
+			console.error('Invalid ZIP file signature', {
+				signature: zipSignature,
+				firstBytes: Array.from(zipBuffer.slice(0, 10)),
+				bufferLength: zipBuffer.length,
+				galleryId,
+				orderId,
+				zipKey: expectedZipKey
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'ZIP file appears to be corrupted' })
+			};
+		}
+
+		console.log('Serving ZIP file', {
+			galleryId,
+			orderId,
+			zipKey: expectedZipKey,
+			zipSize: zipBuffer.length,
+			zipSignature,
+			hasBackupAddon: galleryHasBackup
+		});
 
 		// If gallery does NOT have backup addon, delete ZIP after serving (one-time use)
-		if (!galleryHasBackup && order.zipKey) {
+		if (!galleryHasBackup) {
 			try {
 				await s3.send(new DeleteObjectCommand({
 					Bucket: bucket,
-					Key: order.zipKey
-				}));
-				
-				// Remove zipKey from order record
-				await ddb.send(new UpdateCommand({
-					TableName: ordersTable,
-					Key: { galleryId, orderId },
-					UpdateExpression: 'REMOVE zipKey'
+					Key: expectedZipKey
 				}));
 				
 				console.log('ZIP deleted after one-time download (no backup addon)', {
 					galleryId,
 					orderId,
-					zipKey: order.zipKey
+					zipKey: expectedZipKey
 				});
 			} catch (deleteErr: any) {
 				// Log error but don't fail the download
@@ -314,7 +400,7 @@ export const handler = lambdaLogger(async (event: any) => {
 					error: deleteErr.message,
 					galleryId,
 					orderId,
-					zipKey: order.zipKey
+					zipKey: expectedZipKey
 				});
 			}
 		}

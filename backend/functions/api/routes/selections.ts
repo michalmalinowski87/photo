@@ -6,9 +6,12 @@ import * as selectionsGet from '../../../functions/selections/getSelection';
 
 const router = Router();
 
-router.post('/:id/selections/approve', wrapHandler(selectionsApprove.handler));
-router.post('/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
-router.get('/:id/selections/:clientId', wrapHandler(selectionsGet.handler));
+// selections/approve route is registered as public route in index.ts (no requireAuth)
+// router.post('/:id/selections/approve', wrapHandler(selectionsApprove.handler));
+// selection-change-request route is registered as public route in index.ts (no requireAuth)
+// router.post('/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
+// selections GET route is registered as public route in index.ts (no requireAuth)
+// router.get('/:id/selections', wrapHandler(selectionsGet.handler));
 
 export { router as selectionsRoutes };
 

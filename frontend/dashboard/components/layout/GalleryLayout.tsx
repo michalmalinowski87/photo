@@ -16,12 +16,15 @@ interface GalleryLayoutProps {
   onReloadGallery?: () => Promise<void>;
   order?: any;
   orderId?: string;
+  sendLinkLoading?: boolean;
   onDownloadZip?: () => void;
   canDownloadZip?: boolean;
   onMarkOrderPaid?: () => void;
   onDownloadFinals?: () => void;
   onSendFinalsToClient?: () => void;
   hasFinals?: boolean;
+  hasDeliveredOrders?: boolean | undefined;
+  galleryLoading?: boolean;
 }
 
 const GalleryLayout: React.FC<GalleryLayoutProps> = ({
@@ -43,6 +46,9 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onDownloadFinals,
   onSendFinalsToClient,
   hasFinals,
+  hasDeliveredOrders,
+  galleryLoading,
+  sendLinkLoading,
 }) => {
   return (
     <ThemeProvider>
@@ -57,6 +63,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 onPay={onPay}
                 onCopyUrl={onCopyUrl}
                 onSendLink={onSendLink}
+                sendLinkLoading={sendLinkLoading}
                 onSettings={onSettings}
                 onReloadGallery={onReloadGallery}
                 order={order}
@@ -67,6 +74,8 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 onDownloadFinals={onDownloadFinals}
                 onSendFinalsToClient={onSendFinalsToClient}
                 hasFinals={hasFinals}
+                hasDeliveredOrders={hasDeliveredOrders}
+                galleryLoading={galleryLoading}
               />
             </div>
             <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">

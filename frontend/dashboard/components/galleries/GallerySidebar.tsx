@@ -130,12 +130,17 @@ interface GallerySidebarProps {
   onReloadGallery?: () => Promise<void>;
   order?: any;
   orderId?: string;
+  sendLinkLoading?: boolean;
   onDownloadZip?: () => void;
   canDownloadZip?: boolean;
   onMarkOrderPaid?: () => void;
   onDownloadFinals?: () => void;
   onSendFinalsToClient?: () => void;
+  onApproveChangeRequest?: () => void;
+  onDenyChangeRequest?: () => void;
   hasFinals?: boolean;
+  hasDeliveredOrders?: boolean | undefined;
+  galleryLoading?: boolean;
 }
 
 export default function GallerySidebar({
@@ -149,12 +154,17 @@ export default function GallerySidebar({
   onReloadGallery,
   order,
   orderId,
+  sendLinkLoading = false,
   onDownloadZip,
   canDownloadZip,
   onMarkOrderPaid,
   onDownloadFinals,
   onSendFinalsToClient,
+  onApproveChangeRequest,
+  onDenyChangeRequest,
   hasFinals,
+  hasDeliveredOrders,
+  galleryLoading,
 }: GallerySidebarProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -381,17 +391,26 @@ export default function GallerySidebar({
       </div>
 
       {/* Gallery Info */}
-      <div className="py-6 border-b border-gray-200 dark:border-gray-800">
-        <Link
-          href={`/galleries/${gallery?.galleryId}`}
-          className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
-        >
-          {gallery?.galleryName || "Galeria"}
-        </Link>
-      </div>
+      {!galleryLoading && gallery ? (
+        <div className="py-6 border-b border-gray-200 dark:border-gray-800">
+          <Link
+            href={`/galleries/${gallery.galleryId}`}
+            className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+          >
+            {gallery.galleryName || "Galeria"}
+          </Link>
+        </div>
+      ) : (
+        <div className="py-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">
+            Ładowanie...
+          </div>
+        </div>
+      )}
 
       {/* Cover Photo Section */}
-      <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+      {!galleryLoading && gallery && (
+        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
         <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
         <div
           className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
@@ -411,18 +430,21 @@ export default function GallerySidebar({
               <RetryableImage
                 src={coverPhotoUrl}
                 alt="Okładka galerii"
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-lg pointer-events-none"
                 maxRetries={30}
                 initialDelay={500}
               />
-              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group pointer-events-none">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium pointer-events-auto">
+              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
                   {uploadingCover ? "Przesyłanie..." : "Kliknij na obraz aby zmienić"}
                 </div>
                 <button
-                  onClick={handleRemoveCoverPhoto}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveCoverPhoto(e);
+                  }}
                   disabled={uploadingCover}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Usuń okładkę"
                 >
                   Usuń okładkę
@@ -470,23 +492,6 @@ export default function GallerySidebar({
             className="hidden"
           />
         </div>
-      </div>
-
-      {/* Share Button */}
-      {isPaid && gallery?.selectionEnabled && gallery?.clientEmail && (
-        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-          <Button
-            variant="primary"
-            onClick={onSendLink}
-            className="w-full"
-            startIcon={
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            }
-          >
-            Udostępnij klientowi
-          </Button>
         </div>
       )}
 
@@ -526,63 +531,109 @@ export default function GallerySidebar({
               </span>
             </span>
           </Button>
-          {canDownloadZip && onDownloadZip && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDownloadZip}
-              className="w-full mt-2"
-            >
-              Pobierz ZIP
-            </Button>
+          
+          {/* Share Button - moved under Kopiuj URL */}
+          {!galleryLoading && gallery && isPaid && gallery.selectionEnabled && gallery.clientEmail && 
+           order?.deliveryStatus !== "PREPARING_DELIVERY" && 
+           order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
+           order?.deliveryStatus !== "DELIVERED" && (
+            <>
+              {(() => {
+                // Check if gallery has a CLIENT_SELECTING order
+                const hasClientSelectingOrder = gallery.orders && Array.isArray(gallery.orders) && 
+                  gallery.orders.some((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
+                
+                // Check if gallery has any existing orders (for determining button text)
+                const hasExistingOrders = gallery.orders && Array.isArray(gallery.orders) && gallery.orders.length > 0;
+                
+                if (hasClientSelectingOrder) {
+                  // Show disabled "Udostępniono klientowi" button
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="w-full mt-2"
+                      startIcon={
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      }
+                    >
+                      Udostępniono klientowi
+                    </Button>
+                  );
+                } else {
+                  // Show enabled button - "Udostępnij klientowi" for new galleries, "Wyślij link do galerii" for existing orders
+                  const buttonText = hasExistingOrders ? "Wyślij link do galerii" : "Udostępnij klientowi";
+                  return (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={onSendLink}
+                      disabled={sendLinkLoading}
+                      className="w-full mt-2"
+                      startIcon={
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      }
+                    >
+                      {sendLinkLoading ? "Wysyłanie..." : buttonText}
+                    </Button>
+                  );
+                }
+              })()}
+            </>
           )}
         </div>
       )}
 
       {/* Creation Date */}
-      <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
-        <div className="text-sm text-gray-900 dark:text-white">
-          {gallery?.createdAt
-            ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "-"}
+      {!galleryLoading && gallery && (
+        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
+          <div className="text-sm text-gray-900 dark:text-white">
+            {gallery.createdAt
+              ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "-"}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Expiry Date */}
-      <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Ważna do:</div>
-        <div className="text-sm text-gray-900 dark:text-white">
-          {(() => {
-            if (!gallery) return "-";
-            
-            let expiryDate = null;
-            
-            if (!isPaid) {
-              // UNPAID draft: 3 days from creation (TTL expiry)
-              if (gallery.ttlExpiresAt) {
-                expiryDate = new Date(gallery.ttlExpiresAt);
-              } else if (gallery.ttl) {
-                // TTL is in Unix epoch seconds
-                expiryDate = new Date(gallery.ttl * 1000);
-              } else if (gallery.createdAt) {
-                // Fallback: calculate 3 days from creation
-                expiryDate = new Date(new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000);
+      {!galleryLoading && gallery && (
+        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Ważna do:</div>
+          <div className="text-sm text-gray-900 dark:text-white">
+            {(() => {
+              let expiryDate = null;
+              
+              if (!isPaid) {
+                // UNPAID draft: 3 days from creation (TTL expiry)
+                if (gallery.ttlExpiresAt) {
+                  expiryDate = new Date(gallery.ttlExpiresAt);
+                } else if (gallery.ttl) {
+                  // TTL is in Unix epoch seconds
+                  expiryDate = new Date(gallery.ttl * 1000);
+                } else if (gallery.createdAt) {
+                  // Fallback: calculate 3 days from creation
+                  expiryDate = new Date(new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000);
+                }
+              } else {
+                // PAID: use expiresAt from plan
+                if (gallery.expiresAt) {
+                  expiryDate = new Date(gallery.expiresAt);
+                }
               }
-            } else {
-              // PAID: use expiresAt from plan
-              if (gallery.expiresAt) {
-                expiryDate = new Date(gallery.expiresAt);
-              }
-            }
-            
-            if (expiryDate) {
+              
+              if (expiryDate) {
               return expiryDate.toLocaleDateString("pl-PL", {
                 year: "numeric",
                 month: "long",
@@ -592,35 +643,45 @@ export default function GallerySidebar({
               });
             }
             
-            return "-";
-          })()}
+              return "-";
+            })()}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Navigation Menu */}
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-1">
           <li>
-            <Link
-              href={`/galleries/${gallery?.galleryId}`}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                router.pathname === `/galleries/[id]` && !router.asPath.includes('/photos') && !router.asPath.includes('/settings')
-                  ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-              }`}
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z" fill="currentColor"/>
-              </svg>
-              <span>Zlecenia</span>
-            </Link>
+            {gallery && gallery.galleryId ? (
+              <Link
+                href={`/galleries/${gallery.galleryId}`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  router.pathname === `/galleries/[id]` && !router.asPath.includes('/photos') && !router.asPath.includes('/settings')
+                    ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
+                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                }`}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z" fill="currentColor"/>
+                </svg>
+                <span>Zlecenia</span>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z" fill="currentColor"/>
+                </svg>
+                <span>Zlecenia</span>
+              </div>
+            )}
           </li>
-          {/* Only show "Zdjęcia" if selection is enabled OR backup addon is purchased */}
+          {/* Only show "Zdjęcia" if gallery is loaded AND (selection is enabled OR backup addon is purchased) */}
           {/* Non-selection galleries without backup addon don't have originals to upload */}
-          {((gallery?.selectionEnabled !== false) || (gallery?.hasBackupStorage === true)) && (
+          {!galleryLoading && gallery && ((gallery.selectionEnabled !== false) || (gallery.hasBackupStorage === true)) && (
             <li>
               <Link
-                href={`/galleries/${gallery?.galleryId}/photos`}
+                href={`/galleries/${gallery.galleryId}/photos`}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   router.pathname === `/galleries/[id]/photos`
                     ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
@@ -635,20 +696,46 @@ export default function GallerySidebar({
             </li>
           )}
           <li>
-            <Link
-              href={`/galleries/${gallery?.galleryId}/settings`}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                router.pathname === `/galleries/[id]/settings`
-                  ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-              }`}
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
-                <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
-              </svg>
-              <span>Ustawienia</span>
-            </Link>
+            {!galleryLoading && gallery ? (
+              hasDeliveredOrders === true ? (
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50"
+                  title="Ustawienia galerii są zablokowane dla dostarczonych galerii"
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
+                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  </svg>
+                  <span>Ustawienia</span>
+                </div>
+              ) : hasDeliveredOrders === false ? (
+                <Link
+                  href={`/galleries/${gallery.galleryId}/settings`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    router.pathname === `/galleries/[id]/settings`
+                      ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
+                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
+                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  </svg>
+                  <span>Ustawienia</span>
+                </Link>
+              ) : (
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50"
+                  title="Sprawdzanie statusu galerii..."
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
+                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  </svg>
+                  <span>Ustawienia</span>
+                </div>
+              )
+            ) : null}
           </li>
         </ul>
       </nav>
@@ -666,8 +753,11 @@ export default function GallerySidebar({
           </div>
           
           <div className="space-y-2 px-3">
-            {/* Download Selected Originals ZIP (if selection enabled) */}
-            {gallery?.selectionEnabled !== false && canDownloadZip && onDownloadZip && (
+            {/* Download Selected Originals ZIP (if selection enabled and not in PREPARING_DELIVERY/DELIVERED status) */}
+            {!galleryLoading && gallery && gallery.selectionEnabled !== false && canDownloadZip && onDownloadZip && 
+             order?.deliveryStatus !== "PREPARING_DELIVERY" && 
+             order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
+             order?.deliveryStatus !== "DELIVERED" && (
               <Button
                 size="sm"
                 variant="outline"
@@ -696,6 +786,36 @@ export default function GallerySidebar({
               </Button>
             )}
 
+            {/* Change Request Actions */}
+            {order?.deliveryStatus === 'CHANGES_REQUESTED' && onApproveChangeRequest && onDenyChangeRequest && (
+              <>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={onApproveChangeRequest}
+                  className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                    <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M7 10L9 12L13 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Zatwierdź prośbę o zmiany
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onDenyChangeRequest}
+                  className="w-full justify-start"
+                >
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
+                    <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M7 7L13 13M13 7L7 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Odrzuć prośbę o zmiany
+                </Button>
+              </>
+            )}
+
             {/* Mark Order as Paid */}
             {onMarkOrderPaid && order?.paymentStatus !== 'PAID' && (
               <Button
@@ -708,21 +828,6 @@ export default function GallerySidebar({
                   <path d="M8 13L4 9L5.41 7.59L8 10.17L14.59 3.58L16 5L8 13Z" fill="currentColor"/>
                 </svg>
                 Oznacz jako opłacone
-              </Button>
-            )}
-
-            {/* Send Link to Client - Only show if selection is enabled */}
-            {gallery?.selectionEnabled !== false && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onSendLink}
-                className="w-full justify-start"
-              >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                  <path d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Wyślij link do klienta
               </Button>
             )}
 
@@ -746,7 +851,7 @@ export default function GallerySidebar({
       )}
 
       {/* UNPAID Banner */}
-      {!isPaid && (
+      {!galleryLoading && gallery && !isPaid && (
         <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
           <div className="p-3 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20">
             <div className="text-sm font-medium text-error-800 dark:text-error-200 mb-1">

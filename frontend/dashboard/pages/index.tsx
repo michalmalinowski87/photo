@@ -8,6 +8,7 @@ import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { OrdersModal } from "../components/orders/OrdersModal";
+import { DenyChangeRequestModal } from "../components/orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../components/ui/loading/Loading";
 import Link from "next/link";
 
@@ -35,6 +36,10 @@ export default function Dashboard() {
   
   // Modal states
   const [activeOrdersModalOpen, setActiveOrdersModalOpen] = useState(false);
+  const [denyModalOpen, setDenyModalOpen] = useState(false);
+  const [denyLoading, setDenyLoading] = useState(false);
+  const [denyGalleryId, setDenyGalleryId] = useState(null);
+  const [denyOrderId, setDenyOrderId] = useState(null);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -143,6 +148,57 @@ export default function Dashboard() {
       setError(formatApiError(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveChangeRequest = async (galleryId, orderId) => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      
+      // Reload dashboard data to refresh the orders list
+      await loadDashboardData();
+    } catch (err) {
+      console.error("Error approving change request:", err);
+      setError(formatApiError(err));
+    }
+  };
+
+  const handleDenyChangeRequest = (galleryId, orderId) => {
+    setDenyGalleryId(galleryId);
+    setDenyOrderId(orderId);
+    setDenyModalOpen(true);
+  };
+
+  const handleDenyConfirm = async (reason?: string) => {
+    if (!apiUrl || !idToken || !denyGalleryId || !denyOrderId) return;
+    
+    setDenyLoading(true);
+    
+    try {
+      await apiFetch(`${apiUrl}/galleries/${denyGalleryId}/orders/${denyOrderId}/deny-change`, {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason || undefined })
+      });
+      
+      // Reload dashboard data to refresh the orders list
+      setDenyModalOpen(false);
+      setDenyGalleryId(null);
+      setDenyOrderId(null);
+      await loadDashboardData();
+    } catch (err) {
+      console.error("Error denying change request:", err);
+      setError(formatApiError(err));
+    } finally {
+      setDenyLoading(false);
     }
   };
 
@@ -453,11 +509,32 @@ export default function Dashboard() {
                         : "-"}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
-                      <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
-                        <Button variant="outline" size="sm">
-                          Szczegóły
-                        </Button>
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {order.deliveryStatus === 'CHANGES_REQUESTED' && (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="primary"
+                              onClick={() => handleApproveChangeRequest(order.galleryId, order.orderId)}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              Zatwierdź
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleDenyChangeRequest(order.galleryId, order.orderId)}
+                            >
+                              Odrzuć
+                            </Button>
+                          </>
+                        )}
+                        <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
+                          <Button variant="outline" size="sm">
+                            Szczegóły
+                          </Button>
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -473,6 +550,18 @@ export default function Dashboard() {
         onClose={() => setActiveOrdersModalOpen(false)}
         title="Wszystkie Aktywne Zlecenia"
         excludeDeliveryStatus="DELIVERED"
+      />
+
+      {/* Deny Change Request Modal */}
+      <DenyChangeRequestModal
+        isOpen={denyModalOpen}
+        onClose={() => {
+          setDenyModalOpen(false);
+          setDenyGalleryId(null);
+          setDenyOrderId(null);
+        }}
+        onConfirm={handleDenyConfirm}
+        loading={denyLoading}
       />
     </div>
   );

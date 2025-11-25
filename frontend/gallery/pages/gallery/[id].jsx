@@ -18,13 +18,18 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 	const [modalImageIndex, setModalImageIndex] = useState(null);
 	const [viewMode, setViewMode] = useState('purchase'); // 'purchase' or 'processed'
 	const [finalImages, setFinalImages] = useState([]); // For modal display
+	const [hasPreparingDeliveryOrder, setHasPreparingDeliveryOrder] = useState(false);
 
-	// Default to processed view if processed items exist after login
+	// Default to processed view if processed items exist after login (but not if PREPARING_DELIVERY)
 	useEffect(() => {
-		if (galleryInfo?.hasDeliveredOrder && viewMode === 'purchase' && !loading) {
+		if (galleryInfo?.hasDeliveredOrder && !hasPreparingDeliveryOrder && viewMode === 'purchase' && !loading) {
 			setViewMode('processed');
 		}
-	}, [galleryInfo?.hasDeliveredOrder, loading]);
+		// If order is PREPARING_DELIVERY, switch back to purchase view
+		if (hasPreparingDeliveryOrder && viewMode === 'processed') {
+			setViewMode('purchase');
+		}
+	}, [galleryInfo?.hasDeliveredOrder, hasPreparingDeliveryOrder, viewMode, loading]);
 
 	useEffect(() => {
 		setApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
@@ -51,15 +56,18 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 			return;
 		}
 		try {
-			// Load images, selection, and delivered orders in parallel with JWT authentication
-			const [imagesResponse, selectionResponse, deliveredOrdersResponse] = await Promise.allSettled([
+			// Load images, selection, delivered orders, and all orders (to check for PREPARING_DELIVERY) in parallel with JWT authentication
+			const [imagesResponse, selectionResponse, deliveredOrdersResponse, allOrdersResponse] = await Promise.allSettled([
 				apiFetch(`${apiUrl}/galleries/${galleryId}/images`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				}),
-				clientId ? apiFetch(`${apiUrl}/galleries/${galleryId}/selections/${encodeURIComponent(clientId)}`, {
+				apiFetch(`${apiUrl}/galleries/${galleryId}/selections`, {
 					headers: { 'Authorization': `Bearer ${token}` }
-				}) : Promise.resolve(null),
+				}),
 				apiFetch(`${apiUrl}/galleries/${galleryId}/orders/delivered`, {
+					headers: { 'Authorization': `Bearer ${token}` }
+				}),
+				apiFetch(`${apiUrl}/galleries/${galleryId}/orders`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				})
 			]);
@@ -76,12 +84,25 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 			
 			// Check for delivered orders (fallback if selection endpoint doesn't return it)
 			let hasDeliveredOrderFromOrders = false;
+			let hasPreparingDelivery = false;
 			if (deliveredOrdersResponse.status === 'fulfilled' && deliveredOrdersResponse.value) {
 				const deliveredData = deliveredOrdersResponse.value.data;
 				// Handle different response formats
 				const items = deliveredData?.items || deliveredData?.orders || [];
 				hasDeliveredOrderFromOrders = Array.isArray(items) && items.length > 0;
 			}
+			
+			// Check all orders for PREPARING_DELIVERY status
+			if (allOrdersResponse.status === 'fulfilled' && allOrdersResponse.value) {
+				const allOrdersData = allOrdersResponse.value.data;
+				// Handle different response formats
+				const allOrders = allOrdersData?.items || allOrdersData?.orders || Array.isArray(allOrdersData) ? allOrdersData : [];
+				hasPreparingDelivery = Array.isArray(allOrders) && allOrders.some((order) => 
+					order.deliveryStatus === 'PREPARING_DELIVERY' || 
+					order.deliveryStatus === 'PREPARING_FOR_DELIVERY'
+				);
+			}
+			setHasPreparingDeliveryOrder(hasPreparingDelivery);
 			
 			// Set selection
 			let hasDeliveredOrder = false;
@@ -222,7 +243,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				},
 				body: JSON.stringify({ selectedKeys: Array.from(selectedKeys) })
 			});
-			setMessage(`Approved! Order: ${data.orderId || 'N/A'}${data.zipKey ? `, ZIP: ${data.zipKey}` : ''}`);
+			setMessage(`Approved! Order: ${data.orderId || 'N/A'}`);
 			setGalleryInfo(prev => ({ ...prev, approved: true, canSelect: false }));
 			// Reload gallery to get updated selection from order
 			loadGallery();
@@ -348,8 +369,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					>
 						{loading ? 'Refreshing...' : 'Refresh'}
 					</button>
-					{/* View Mode Toggle - Show if there are photos available AND there's a delivered order AND selection is enabled */}
-					{galleryInfo?.hasDeliveredOrder === true && images.length > 0 && galleryInfo?.selectionEnabled !== false && (
+					{/* View Mode Toggle - Show if there are photos available AND there's a delivered order AND selection is enabled AND not PREPARING_DELIVERY */}
+					{galleryInfo?.hasDeliveredOrder === true && !hasPreparingDeliveryOrder && images.length > 0 && galleryInfo?.selectionEnabled !== false && (
 						<div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 4, borderRadius: 8 }}>
 							<button
 								onClick={() => setViewMode('processed')}
@@ -400,8 +421,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				</div>
 			</div>
 
-			{/* Processed Photos View */}
-			{viewMode === 'processed' && (
+			{/* Processed Photos View - Hide if order is PREPARING_DELIVERY */}
+			{viewMode === 'processed' && !hasPreparingDeliveryOrder && (
 				<ProcessedPhotosView
 					galleryId={galleryId}
 					token={token}

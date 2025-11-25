@@ -38,7 +38,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!gallery) return { statusCode: 404, body: 'not found' };
 	requireOwnerOr403(gallery.ownerId, requester);
 
-	const secrets = hashPassword(newPassword);
+	// Trim password to ensure consistency with create.ts and clientLogin.ts
+	const passwordPlain = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
+	const emailPlain = typeof clientEmail === 'string' ? clientEmail.trim() : clientEmail;
+	
+	if (!passwordPlain || !emailPlain) {
+		return { statusCode: 400, body: 'password and clientEmail cannot be empty after trimming' };
+	}
+
+	const secrets = hashPassword(passwordPlain);
 	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
 	const galleryLink = apiUrl ? `${apiUrl}/gallery/${id}` : `https://your-frontend/gallery/${id}`;
 	
@@ -50,8 +58,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			':h': secrets.hash,
 			':s': secrets.salt,
 			':i': secrets.iterations,
-			':e': clientEmail,
-			':enc': Buffer.from(newPassword, 'utf-8').toString('base64'), // Store encrypted for future email sending
+			':e': emailPlain,
+			':enc': Buffer.from(passwordPlain, 'utf-8').toString('base64'), // Store encrypted for future email sending
 			':u': new Date().toISOString()
 		}
 	}));
@@ -113,7 +121,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ galleryId: id, clientEmail })
+		body: JSON.stringify({ galleryId: id, clientEmail: emailPlain })
 	};
 });
 

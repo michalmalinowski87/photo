@@ -7,6 +7,7 @@ import { useToast } from "../../hooks/useToast";
 import { GalleryProvider } from "../../context/GalleryContext";
 import GalleryLayout from "./GalleryLayout";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
+import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../ui/loading/Loading";
 
 interface GalleryLayoutWrapperProps {
@@ -24,9 +25,14 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const [loadError, setLoadError] = useState<string | null>(null);
   const [galleryUrl, setGalleryUrl] = useState("");
   const [order, setOrder] = useState(null);
+  const [hasDeliveredOrders, setHasDeliveredOrders] = useState<boolean | undefined>(undefined);
+  const [galleryOrders, setGalleryOrders] = useState<any[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [denyModalOpen, setDenyModalOpen] = useState(false);
+  const [denyLoading, setDenyLoading] = useState(false);
+  const [sendLinkLoading, setSendLinkLoading] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState({
     totalAmountCents: 0,
     walletAmountCents: 0,
@@ -55,8 +61,24 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         loadGalleryData();
       }
       loadWalletBalance();
+      checkDeliveredOrders();
+      loadGalleryOrders();
     }
   }, [router.isReady, apiUrl, idToken, galleryId]);
+
+  const loadGalleryOrders = async () => {
+    if (!apiUrl || !idToken || !galleryId) return;
+    try {
+      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const orders = data?.items || [];
+      setGalleryOrders(Array.isArray(orders) ? orders : []);
+    } catch (err) {
+      console.error("Failed to load gallery orders:", err);
+      setGalleryOrders([]);
+    }
+  };
 
   useEffect(() => {
     if (router.isReady && apiUrl && idToken && galleryId && orderId) {
@@ -74,6 +96,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       // Only reload if this is the same order
       if (event.detail?.orderId === orderId) {
         loadOrderData();
+        // Also refresh delivered orders check in case status changed to DELIVERED
+        checkDeliveredOrders();
       }
     };
 
@@ -129,6 +153,20 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   };
 
+  const checkDeliveredOrders = async () => {
+    if (!apiUrl || !idToken || !galleryId) return;
+    try {
+      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/delivered`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const items = data?.items || data?.orders || [];
+      setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
+    } catch (err) {
+      console.error("Failed to check delivered orders:", err);
+      setHasDeliveredOrders(false);
+    }
+  };
+
   const loadOrderData = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId) return;
     try {
@@ -157,6 +195,53 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   };
 
+  const handleApproveChangeRequest = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    try {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór.");
+      await loadOrderData();
+      await loadGalleryOrders();
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się zatwierdzić prośby o zmiany");
+    }
+  };
+
+  const handleDenyChangeRequest = () => {
+    setDenyModalOpen(true);
+  };
+
+  const handleDenyConfirm = async (reason?: string) => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    
+    setDenyLoading(true);
+    
+    try {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/deny-change`, {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason || undefined })
+      });
+      
+      showToast("success", "Sukces", "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu.");
+      setDenyModalOpen(false);
+      await loadOrderData();
+      await loadGalleryOrders();
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się odrzucić prośby o zmiany");
+    } finally {
+      setDenyLoading(false);
+    }
+  };
+
   const handleDownloadZip = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId || !order) return;
     
@@ -169,23 +254,25 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     })() : order;
     
     try {
-      if (!orderObj.zipKey) {
-        await apiFetch(
-          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/generate-zip`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${idToken}` },
-          }
-        );
-        await loadOrderData();
-      }
-      
+      // Download ZIP (will generate on-demand if needed)
       const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
       const response = await fetch(zipUrl, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
-      if (response.ok) {
+      // Handle 202 - ZIP is being generated
+      if (response.status === 202) {
+        const data = await response.json();
+        showToast("info", "Generowanie ZIP", data.message || "ZIP jest generowany. Spróbuj ponownie za chwilę.");
+        // Optionally retry after a delay
+        setTimeout(() => {
+          handleDownloadZip();
+        }, 3000); // Retry after 3 seconds
+        return;
+      }
+      
+      // Handle 200 - ZIP is ready
+      if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -195,8 +282,19 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        showToast("success", "Sukces", "Pobieranie ZIP rozpoczęte");
+      } else if (response.ok) {
+        // JSON response (error or other status)
+        const data = await response.json();
+        if (data.error) {
+          showToast("error", "Błąd", data.error);
+        } else {
+          showToast("error", "Błąd", "Nie udało się pobrać pliku ZIP");
+        }
       } else {
-        showToast("error", "Błąd", "Nie udało się pobrać pliku ZIP");
+        // Error response
+        const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
+        showToast("error", "Błąd", errorData.error || "Nie udało się pobrać pliku ZIP");
       }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
@@ -275,17 +373,45 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const handleSendLink = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
+    if (!apiUrl || !idToken || !galleryId || sendLinkLoading) return;
+    
+    // Check if this is a reminder (has existing orders) or initial invitation
+    const isReminder = galleryOrders && galleryOrders.length > 0;
+    
+    setSendLinkLoading(true);
     
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
+      const response = await apiFetch(`${apiUrl}/galleries/${galleryId}/send-to-client`, {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
-      showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
+      const responseData = response.data || {};
+      const isReminderResponse = responseData.isReminder || isReminder;
+      
+      showToast(
+        "success", 
+        "Sukces", 
+        isReminderResponse 
+          ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
+          : "Link do galerii został wysłany do klienta"
+      );
+      
+      // Only reload if it's an initial invitation (creates order), not for reminders
+      if (!isReminderResponse) {
+        // Reload gallery data and orders to get the newly created CLIENT_SELECTING order
+        await loadGalleryData();
+        await loadGalleryOrders();
+        
+        // Trigger event to reload orders if we're on the gallery detail page
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('galleryOrdersUpdated', { detail: { galleryId } }));
+        }
+      }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
+    } finally {
+      setSendLinkLoading(false);
     }
   };
 
@@ -377,6 +503,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSendLink={() => {}}
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
+        hasDeliveredOrders={undefined}
       >
         <FullPageLoading text="Ładowanie galerii..." />
       </GalleryLayout>
@@ -395,6 +522,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSendLink={() => {}}
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
+        hasDeliveredOrders={undefined}
       >
         <div className="p-6">
           <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -429,26 +557,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   );
   
   const canDownloadZip = orderObj && selectionEnabled ? (
-    orderObj.zipKey || 
     orderObj.deliveryStatus === "CLIENT_APPROVED" ||
     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
     orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
     orderObj.deliveryStatus === "PREPARING_DELIVERY" ||
     orderObj.deliveryStatus === "DELIVERED"
   ) : false;
-
-  // Debug logging
-  console.log('GalleryLayoutWrapper: Order actions check', {
-    orderId,
-    hasOrder: !!orderObj,
-    isPaid,
-    hasFinals,
-    deliveryStatus: orderObj?.deliveryStatus,
-    galleryId,
-    galleryState: gallery?.state,
-    galleryIsPaid: gallery?.isPaid,
-    galleryPaymentStatus: gallery?.paymentStatus
-  });
 
   return (
       <GalleryProvider
@@ -460,14 +574,18 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         reloadOrder={orderId ? () => loadOrderData() : undefined}
       >
       <GalleryLayout
-        gallery={gallery}
+        gallery={{ ...gallery, orders: galleryOrders }}
         isPaid={isPaid}
         galleryUrl={galleryUrl}
         onPay={handlePayClick}
         onCopyUrl={handleCopyUrl}
         onSendLink={handleSendLink}
+        sendLinkLoading={sendLinkLoading}
         onSettings={handleSettings}
-        onReloadGallery={() => loadGalleryData(true)}
+        onReloadGallery={() => {
+          loadGalleryData(true);
+          loadGalleryOrders();
+        }}
         order={orderObj}
         orderId={orderId as string}
         onDownloadZip={orderId ? handleDownloadZip : undefined}
@@ -475,10 +593,21 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onMarkOrderPaid={orderId ? handleMarkOrderPaid : undefined}
         onDownloadFinals={orderId ? handleDownloadFinals : undefined}
         onSendFinalsToClient={orderId ? handleSendFinalsToClient : undefined}
+        onApproveChangeRequest={orderId ? handleApproveChangeRequest : undefined}
+        onDenyChangeRequest={orderId ? handleDenyChangeRequest : undefined}
         hasFinals={hasFinals}
+        hasDeliveredOrders={hasDeliveredOrders}
+        galleryLoading={loading}
       >
         {children}
       </GalleryLayout>
+
+      <DenyChangeRequestModal
+        isOpen={denyModalOpen}
+        onClose={() => setDenyModalOpen(false)}
+        onConfirm={handleDenyConfirm}
+        loading={denyLoading}
+      />
 
       {showPaymentModal && (
         <PaymentConfirmationModal

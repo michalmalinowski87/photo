@@ -93,7 +93,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		|| orders.find((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
 	
 	let orderId: string | undefined;
-	let zipKey: string | undefined;
 	let orderNumber: number | undefined;
 	
 	if (existingOrder) {
@@ -231,7 +230,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId,
 			clientId,
 			orderId,
-			zipKey,
 			selectedCount,
 			overageCount,
 			overageCents,

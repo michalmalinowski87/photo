@@ -60,6 +60,40 @@ export function createChangeRequestEmail(galleryId: string, clientId: string): E
 	};
 }
 
+export function createChangeRequestApprovedEmail(galleryId: string, galleryName: string, clientEmail: string, link: string): EmailTemplate {
+	return {
+		subject: `Change request approved - ${galleryName || galleryId}`,
+		text: `Hello,\n\nYour change request for gallery ${galleryName || galleryId} has been approved!\n\nYou can now modify your selection.\n\nAccess your gallery: ${link}\n\nPlease log in and make your changes. Once you're satisfied with your selection, you can approve it again.`,
+		html: `<h2>Change Request Approved!</h2><p>Your change request for gallery <strong>${galleryName || galleryId}</strong> has been approved!</p><p>You can now modify your selection.</p><p><a href="${link}">Access your gallery</a></p><p>Please log in and make your changes. Once you're satisfied with your selection, you can approve it again.</p>`
+	};
+}
+
+export function createChangeRequestDeniedEmail(galleryId: string, galleryName: string, clientEmail: string, link: string, reason?: string): EmailTemplate {
+	const reasonSection = reason 
+		? `\n\nReason: ${reason}`
+		: '';
+	
+	// Escape HTML characters in reason to prevent XSS
+	const escapeHtml = (text: string) => {
+		return text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
+	};
+	
+	const reasonHtmlSection = reason
+		? `<div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-left: 4px solid #dc3545; border-radius: 4px;"><p style="margin: 0; font-weight: bold; color: #333;">Powód:</p><p style="margin: 5px 0 0 0; color: #666; white-space: pre-wrap;">${escapeHtml(reason).replace(/\n/g, '<br>')}</p></div>`
+		: '';
+	
+	return {
+		subject: `Change request - ${galleryName || galleryId}`,
+		text: `Hello,\n\nThank you for your change request for gallery ${galleryName || galleryId}.\n\nAfter reviewing your request, we're unable to make changes at this time. Your current selection remains approved and we'll proceed with processing your photos as selected.${reasonSection}\n\nIf you have any questions or concerns, please contact your photographer.\n\nView your gallery: ${link}`,
+		html: `<h2>Change Request</h2><p>Thank you for your change request for gallery <strong>${galleryName || galleryId}</strong>.</p><p>After reviewing your request, we're unable to make changes at this time. Your current selection remains approved and we'll proceed with processing your photos as selected.</p>${reasonHtmlSection}<p>If you have any questions or concerns, please contact your photographer.</p><p><a href="${link}">View your gallery</a></p>`
+	};
+}
+
 export function createExpiryReminderEmail(galleryId: string, galleryName: string, clientEmail: string, daysRemaining: number, link: string): EmailTemplate {
 	return {
 		subject: `Gallery expiring soon: ${galleryName || galleryId}`,
@@ -81,6 +115,14 @@ export function createGalleryPasswordEmail(galleryId: string, galleryName: strin
 		subject: `Your gallery password: ${galleryName || galleryId}`,
 		text: `Hello,\n\nYour gallery password for ${galleryName || galleryId}:\n\nPassword: ${password}\n\nAccess your gallery: ${link}\n\nPlease keep this password secure. If you didn't expect this email, please contact your photographer.`,
 		html: `<h2>Your Gallery Password</h2><p>Your gallery password for <strong>${galleryName || galleryId}</strong>:</p><p style="font-size: 18px; font-weight: bold; padding: 12px; background: #f5f5f5; border-radius: 4px; display: inline-block;">${password}</p><p><a href="${link}">Access your gallery</a></p><p><small>Please keep this password secure. If you didn't expect this email, please contact your photographer.</small></p>`
+	};
+}
+
+export function createGalleryReminderEmail(galleryId: string, galleryName: string, clientEmail: string, link: string): EmailTemplate {
+	return {
+		subject: `Reminder: Access your gallery - ${galleryName || galleryId}`,
+		text: `Hello,\n\nThis is a reminder that your gallery ${galleryName || galleryId} is still available for viewing.\n\nAccess your gallery: ${link}\n\nYour gallery password will be sent to you in a separate email for security reasons.\n\nIf you have any questions, please contact your photographer.`,
+		html: `<h2>Gallery Reminder</h2><p>This is a reminder that your gallery <strong>${galleryName || galleryId}</strong> is still available for viewing.</p><p><a href="${link}">Access your gallery</a></p><p><strong>Important:</strong> Your gallery password will be sent to you in a separate email for security reasons.</p><p>If you have any questions, please contact your photographer.</p>`
 	};
 }
 

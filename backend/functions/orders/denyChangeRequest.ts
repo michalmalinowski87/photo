@@ -1,14 +1,12 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { createChangeRequestApprovedEmail } from '../../lib/src/email';
+import { createChangeRequestDeniedEmail } from '../../lib/src/email';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3 = new S3Client({});
 const ses = new SESClient({});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -16,17 +14,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
 	const sender = envProc?.env?.SENDER_EMAIL as string;
 	
-	if (!galleriesTable || !ordersTable || !bucket) {
+	if (!galleriesTable || !ordersTable) {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Missing required environment variables' })
 		};
 	}
+	
 	const galleryId = event?.pathParameters?.id;
 	const orderId = event?.pathParameters?.orderId;
 	if (!galleryId) {
@@ -36,7 +34,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ error: 'Missing galleryId' })
 		};
 	}
+	
 	const requester = getUserIdFromEvent(event);
+	if (!requester) {
+		return {
+			statusCode: 401,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Unauthorized' })
+		};
+	}
 
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
 	const gallery = g.Item as any;
@@ -93,43 +99,41 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		targetOrderId = order.orderId;
 	}
 
-	// Change the order to CLIENT_SELECTING status (preserves all order data)
+	// Determine previous status - check order history or default to CLIENT_APPROVED
+	// Since we don't store previous status, we'll revert to CLIENT_APPROVED as the most common case
+	// If photographer was preparing delivery, they can manually change it back if needed
+	const previousStatus = 'CLIENT_APPROVED'; // Default revert status
+	
 	const now = new Date().toISOString();
+	
+	// Revert order status to previous status (CLIENT_APPROVED)
 	await ddb.send(new UpdateCommand({
 		TableName: ordersTable,
 		Key: { galleryId, orderId: targetOrderId },
-		UpdateExpression: 'SET deliveryStatus = :ds, updatedAt = :u REMOVE canceledAt',
+		UpdateExpression: 'SET deliveryStatus = :ds, updatedAt = :u',
 		ExpressionAttributeValues: { 
-			':ds': 'CLIENT_SELECTING',
+			':ds': previousStatus,
 			':u': now
 		}
 	}));
 
-	// Unlock selection (no need to clear changeRequestPending flag - it's derived from order status)
-	// Selection state is now stored in orders, not a separate selections table
-	await ddb.send(new UpdateCommand({
-		TableName: galleriesTable,
-		Key: { galleryId },
-		UpdateExpression: 'SET selectionStatus = :s, currentOrderId = :oid, updatedAt = :u',
-		ExpressionAttributeValues: {
-			':s': 'IN_PROGRESS',
-			':oid': targetOrderId,
-			':u': now
-		}
-	}));
+	// Get reason from request body (optional)
+	const requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body || {});
+	const reason = requestBody.reason?.trim() || undefined;
 
-	// Send email to client notifying them the change request was approved
+	// Send email to client notifying them the change request was denied
 	if (sender && gallery.clientEmail) {
 		const galleryLink = `${apiUrl}/gallery/${galleryId}`;
-		const emailTemplate = createChangeRequestApprovedEmail(
+		const emailTemplate = createChangeRequestDeniedEmail(
 			galleryId,
 			gallery.name || galleryId,
 			gallery.clientEmail,
-			galleryLink
+			galleryLink,
+			reason
 		);
 		
 		try {
-			logger.info('Sending SES email - Change Request Approved', {
+			logger.info('Sending SES email - Change Request Denied', {
 				from: sender,
 				to: gallery.clientEmail,
 				subject: emailTemplate.subject,
@@ -149,14 +153,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 			}));
 			
-			logger.info('SES email sent successfully - Change Request Approved', {
+			logger.info('SES email sent successfully - Change Request Denied', {
 				messageId: result.MessageId,
 				requestId: result.$metadata?.requestId,
 				from: sender,
 				to: gallery.clientEmail
 			});
 		} catch (err: any) {
-			logger.error('SES send failed - Change Request Approved Email', {
+			logger.error('SES send failed - Change Request Denied Email', {
 				error: {
 					name: err.name,
 					message: err.message,
@@ -184,7 +188,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ galleryId, orderId: targetOrderId, unlocked: true })
+		body: JSON.stringify({
+			galleryId,
+			orderId: targetOrderId,
+			previousStatus,
+			reason: reason || null,
+			message: 'Change request denied. Order reverted to previous status.'
+		})
 	};
 });
 

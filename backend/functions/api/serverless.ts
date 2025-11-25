@@ -91,8 +91,19 @@ export function createServerlessHandler(app: Express) {
 					});
 					return this;
 				},
-				send: function(data: string | object) {
-					if (typeof data === 'object') {
+				send: function(data: string | object | Buffer) {
+					if (Buffer.isBuffer(data)) {
+						// Handle binary data - convert to base64 for API Gateway
+						this.body = data.toString('base64');
+						// Mark as base64 encoded so API Gateway knows to decode it
+						resolve({
+							statusCode: this.statusCode,
+							headers: this.headers,
+							body: this.body,
+							isBase64Encoded: true
+						});
+						return this;
+					} else if (typeof data === 'object') {
 						this.body = JSON.stringify(data);
 						if (!this.headers['content-type']) {
 							this.headers['content-type'] = 'application/json';
@@ -114,8 +125,23 @@ export function createServerlessHandler(app: Express) {
 				getHeader: function(name: string) {
 					return this.headers[name.toLowerCase()];
 				},
-				end: function(data?: string) {
-					if (data) this.body = data;
+				end: function(data?: string | Buffer) {
+					if (data) {
+						if (Buffer.isBuffer(data)) {
+							// Handle binary data - convert to base64 for API Gateway
+							this.body = data.toString('base64');
+							// Mark as base64 encoded so API Gateway knows to decode it
+							resolve({
+								statusCode: this.statusCode,
+								headers: this.headers,
+								body: this.body,
+								isBase64Encoded: true
+							});
+							return this;
+						} else {
+							this.body = data;
+						}
+					}
 					resolve({
 						statusCode: this.statusCode,
 						headers: this.headers,

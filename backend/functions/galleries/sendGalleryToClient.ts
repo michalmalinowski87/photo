@@ -1,10 +1,10 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { createGalleryInvitationEmail, createGalleryPasswordEmail } from '../../lib/src/email';
+import { createGalleryInvitationEmail, createGalleryPasswordEmail, createGalleryReminderEmail } from '../../lib/src/email';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -13,6 +13,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
 	const sender = envProc?.env?.SENDER_EMAIL as string;
 	
@@ -113,38 +114,61 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryName = gallery.galleryName || galleryId;
 	const clientEmail = gallery.clientEmail;
 
-	// Send invitation email
+	// Check if gallery has existing orders to determine if this is a reminder or initial invitation
+	let hasExistingOrders = false;
+	if (ordersTable) {
+		try {
+			const ordersQuery = await ddb.send(new QueryCommand({
+				TableName: ordersTable,
+				KeyConditionExpression: 'galleryId = :g',
+				ExpressionAttributeValues: { ':g': galleryId }
+			}));
+			const orders = ordersQuery.Items || [];
+			hasExistingOrders = orders.length > 0;
+		} catch (err) {
+			// Log but continue - if we can't check orders, default to invitation behavior
+			logger?.warn('Failed to check existing orders', { galleryId, error: err });
+		}
+	}
+
+	// Send invitation or reminder email based on whether orders exist
 	try {
-		const invitationTemplate = createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
+		const emailTemplate = hasExistingOrders 
+			? createGalleryReminderEmail(galleryId, galleryName, clientEmail, galleryLink)
+			: createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
 		
-		logger.info('Sending SES email - Gallery Invitation', {
+		const emailType = hasExistingOrders ? 'Gallery Reminder' : 'Gallery Invitation';
+		
+		logger.info(`Sending SES email - ${emailType}`, {
 			from: sender,
 			to: clientEmail,
-			subject: invitationTemplate.subject,
+			subject: emailTemplate.subject,
 			galleryId,
-			galleryName
+			galleryName,
+			isReminder: hasExistingOrders
 		});
 
-		const invitationResult = await ses.send(new SendEmailCommand({
+		const emailResult = await ses.send(new SendEmailCommand({
 			Source: sender,
 			Destination: { ToAddresses: [clientEmail] },
 			Message: {
-				Subject: { Data: invitationTemplate.subject },
+				Subject: { Data: emailTemplate.subject },
 				Body: {
-					Text: { Data: invitationTemplate.text },
-					Html: invitationTemplate.html ? { Data: invitationTemplate.html } : undefined
+					Text: { Data: emailTemplate.text },
+					Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
 				}
 			}
 		}));
 
-		logger.info('SES email sent successfully - Gallery Invitation', {
-			messageId: invitationResult.MessageId,
-			requestId: invitationResult.$metadata?.requestId,
+		logger.info(`SES email sent successfully - ${emailType}`, {
+			messageId: emailResult.MessageId,
+			requestId: emailResult.$metadata?.requestId,
 			from: sender,
-			to: clientEmail
+			to: clientEmail,
+			isReminder: hasExistingOrders
 		});
 	} catch (err: any) {
-		logger.error('SES send failed - Gallery Invitation Email', {
+		logger.error(`SES send failed - ${emailType} Email`, {
 			error: {
 				name: err.name,
 				message: err.message,
@@ -159,11 +183,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to send invitation email', message: err.message })
+			body: JSON.stringify({ error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, message: err.message })
 		};
 	}
 
 	// Send password email (separate function call for future flexibility - e.g., SMS)
+	// Always send password email regardless of whether it's invitation or reminder
 	try {
 		const passwordTemplate = createGalleryPasswordEmail(galleryId, galleryName, clientEmail, password, galleryLink);
 		
@@ -213,6 +238,92 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
+	// Create order with CLIENT_SELECTING status ONLY if no orders exist at all (initial invitation)
+	// For reminders (when orders exist), don't create a new order
+	if (ordersTable && !hasExistingOrders) {
+		try {
+			// Double-check for existing orders (in case the earlier check failed)
+			const ordersQuery = await ddb.send(new QueryCommand({
+				TableName: ordersTable,
+				KeyConditionExpression: 'galleryId = :g',
+				ExpressionAttributeValues: { ':g': galleryId }
+			}));
+			const orders = ordersQuery.Items || [];
+			
+			// Only create order if no orders exist at all
+			if (orders.length === 0) {
+				const now = new Date().toISOString();
+				const orderNumber = (gallery.lastOrderNumber ?? 0) + 1;
+				const orderId = `${orderNumber}-${Date.now()}`;
+				
+				// Determine payment status for first order
+				// For selection galleries, payment status is typically UNPAID until client approves selection
+				// However, if this is the first order and there was an initial payment, we could check it
+				// For now, set to UNPAID since we don't know the order total yet (client hasn't selected)
+				let orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
+				
+				// If this is the first order, check if there's any initial payment logic to apply
+				// Note: For selection galleries, the order total depends on what client selects,
+				// so we can't determine payment status until selection is approved
+				// But if there was an initial payment that covers the package price, we could mark as PARTIALLY_PAID
+				// For now, we'll keep it as UNPAID and let the selection approval process handle payment status
+				
+				await ddb.send(new PutCommand({
+					TableName: ordersTable,
+					Item: {
+						galleryId,
+						orderId,
+						orderNumber,
+						deliveryStatus: 'CLIENT_SELECTING',
+						paymentStatus: orderPaymentStatus,
+						selectedKeys: [],
+						selectedCount: 0,
+						overageCount: 0,
+						overageCents: 0,
+						totalCents: 0,
+						createdAt: now
+					}
+				}));
+				
+				// Update gallery with order info
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET lastOrderNumber = :n, currentOrderId = :oid, updatedAt = :u',
+					ExpressionAttributeValues: {
+						':n': orderNumber,
+						':oid': orderId,
+						':u': now
+					}
+				}));
+				
+				logger.info('Order created with CLIENT_SELECTING status when sending initial gallery invitation', {
+					galleryId,
+					orderId,
+					orderNumber,
+					orderPaymentStatus
+				});
+			} else {
+				logger.info('Orders already exist, skipping order creation (reminder email sent)', {
+					galleryId,
+					existingOrders: orders.map((o: any) => ({
+						orderId: o.orderId,
+						deliveryStatus: o.deliveryStatus
+					}))
+				});
+			}
+		} catch (orderErr: any) {
+			// Log but don't fail email sending if order creation fails
+			logger.error('Failed to create order when sending gallery to client', {
+				error: {
+					name: orderErr.name,
+					message: orderErr.message
+				},
+				galleryId
+			});
+		}
+	}
+
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
@@ -220,8 +331,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId, 
 			sent: true, 
 			clientEmail,
-			invitationSent: true,
-			passwordSent: true
+			invitationSent: !hasExistingOrders,
+			reminderSent: hasExistingOrders,
+			passwordSent: true,
+			isReminder: hasExistingOrders
 		})
 	};
 });
