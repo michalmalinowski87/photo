@@ -365,7 +365,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// If payment succeeded (wallet debit), create addon and generate ZIPs immediately
+	// If payment succeeded (wallet debit), create addon
 	if (paid) {
 	try {
 		await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
@@ -386,31 +386,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-		// Trigger ZIP generation Lambda asynchronously (fire and forget)
-		if (generateZipsFnName) {
-				try {
-				const payload = Buffer.from(JSON.stringify({ galleryId }));
-				await lambda.send(new InvokeCommand({ 
-					FunctionName: generateZipsFnName, 
-						Payload: payload, 
-					InvocationType: 'Event' // Asynchronous invocation
-				}));
-				logger.info('Triggered ZIP generation Lambda for addon purchase', { 
-								galleryId,
-					generateZipsFnName 
-				});
-			} catch (invokeErr: any) {
-				logger.error('Failed to invoke ZIP generation Lambda', {
-					error: invokeErr.message,
-									galleryId,
-					generateZipsFnName
-				});
-				// Don't fail - addon is created, ZIPs can be generated later manually
-			}
-		} else {
-			logger.warn('GENERATE_ZIPS_FOR_ADDON_FN_NAME not configured, ZIPs will not be generated automatically', { galleryId });
-	}
-
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
@@ -418,7 +393,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId,
 			backupStorageCents,
 			transactionId,
-			message: 'Backup storage addon purchased successfully for gallery. ZIPs will be generated automatically.'
+			message: 'Backup storage addon purchased successfully for gallery. ZIPs can be generated on-demand when needed.'
 		})
 	};
 	} else if (checkoutUrl) {

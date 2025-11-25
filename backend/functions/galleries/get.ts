@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { ddbGet } from '../../lib/src/ddb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 export const handler = lambdaLogger(async (event: any) => {
 	const id = event?.pathParameters?.id;
@@ -68,6 +69,14 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 
+	// Check for backup storage addon
+	let hasBackupStorage = false;
+	try {
+		hasBackupStorage = await hasAddon(id, ADDON_TYPES.BACKUP_STORAGE);
+	} catch (err) {
+		// If addon check fails, continue without addon data
+	}
+
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
@@ -78,7 +87,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			paymentStatus,
 			isPaid,
 			daysUntilExpiry,
-			ttlExpiresAt
+			ttlExpiresAt,
+			hasBackupStorage
 		})
 	};
 });

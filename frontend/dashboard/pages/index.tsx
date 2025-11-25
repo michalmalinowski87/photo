@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { apiFetch, formatApiError } from "../lib/api";
 import { getIdToken } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
+import { formatCurrencyInput } from "../lib/currency";
 import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
@@ -31,12 +32,9 @@ export default function Dashboard() {
   
   // Active orders
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
-  // Recent orders (all orders, including delivered)
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
   
   // Modal states
   const [activeOrdersModalOpen, setActiveOrdersModalOpen] = useState(false);
-  const [recentOrdersModalOpen, setRecentOrdersModalOpen] = useState(false);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -75,8 +73,8 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
-      // Load recent orders (all orders) with pagination
-      const { data: recentOrdersData } = await apiFetch(`${apiUrl}/orders?page=1&itemsPerPage=5`, {
+      // Load galleries to get plan prices for total revenue calculation
+      const { data: galleriesData } = await apiFetch(`${apiUrl}/galleries`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
@@ -92,12 +90,21 @@ export default function Dashboard() {
         return;
       }
       
+      // Extract galleries
+      let allGalleries = [];
+      if (Array.isArray(galleriesData)) {
+        allGalleries = galleriesData;
+      } else if (galleriesData && Array.isArray(galleriesData.items)) {
+        allGalleries = galleriesData.items;
+      }
+      
       // Aggregate statistics from all orders
       let deliveredCount = 0;
       let clientSelectingCount = 0;
       let readyToShipCount = 0;
       let totalRevenueCents = 0;
       
+      // Sum revenue from orders (additional photos)
       for (const order of allOrders) {
         if (order.deliveryStatus === "DELIVERED") {
           deliveredCount++;
@@ -110,20 +117,17 @@ export default function Dashboard() {
         totalRevenueCents += order.totalCents || 0;
       }
       
+      // Add photography package prices to total revenue
+      for (const gallery of allGalleries) {
+        totalRevenueCents += gallery.pricingPackage?.packagePriceCents || 0;
+      }
+      
       // Extract active orders from paginated response
       let activeOrders = [];
       if (Array.isArray(activeOrdersData)) {
         activeOrders = activeOrdersData;
       } else if (activeOrdersData && Array.isArray(activeOrdersData.items)) {
         activeOrders = activeOrdersData.items;
-      }
-      
-      // Extract recent orders from paginated response
-      let recentOrders = [];
-      if (Array.isArray(recentOrdersData)) {
-        recentOrders = recentOrdersData;
-      } else if (recentOrdersData && Array.isArray(recentOrdersData.items)) {
-        recentOrders = recentOrdersData.items;
       }
       
       setStats({
@@ -134,7 +138,6 @@ export default function Dashboard() {
       });
       
       setActiveOrders(activeOrders);
-      setRecentOrders(recentOrders);
     } catch (err) {
       console.error("Error loading dashboard data:", err);
       setError(formatApiError(err));
@@ -290,10 +293,10 @@ export default function Dashboard() {
         
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 flex flex-col">
           <div className="h-12 mb-4 text-md font-medium text-gray-600 dark:text-gray-400 leading-tight flex items-start">
-            Całkowity przychód
+            Całkowity przychód (PLN)
           </div>
           <div className="text-4xl font-bold text-gray-900 dark:text-white mt-auto">
-            {(stats.totalRevenue / 100).toFixed(2)} PLN
+            {(stats.totalRevenue / 100).toFixed(2)}
           </div>
         </div>
       </div>
@@ -339,12 +342,13 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           <input
-            type="number"
+            type="text"
             placeholder="Kwota (min 20 PLN)"
             value={customTopUpAmount}
-            onChange={(e) => setCustomTopUpAmount(e.target.value)}
-            min="20"
-            step="0.01"
+            onChange={(e) => {
+              const formatted = formatCurrencyInput(e.target.value);
+              setCustomTopUpAmount(formatted);
+            }}
             className="flex-1 h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-sm dark:bg-gray-900 dark:border-gray-700 dark:text-white"
           />
           <Button
@@ -399,6 +403,9 @@ export default function Dashboard() {
                   <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
                     Data utworzenia
                   </TableCell>
+                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                    Akcje
+                  </TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -444,100 +451,12 @@ export default function Dashboard() {
                         ? new Date(order.createdAt).toLocaleDateString("pl-PL")
                         : "-"}
                     </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
-
-      {/* Recent Orders List (All Orders) */}
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Ostatnie zlecenia
-          </h2>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setRecentOrdersModalOpen(true)}
-          >
-            Zobacz wszystkie
-          </Button>
-        </div>
-        
-        {recentOrders.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400">
-            Brak zleceń
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 dark:bg-gray-900">
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Galeria
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Zlecenie
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Status dostawy
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Status płatności
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Kwota
-                  </TableCell>
-                  <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                    Data utworzenia
-                  </TableCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentOrders.map((order) => (
-                  <TableRow
-                    key={`${order.galleryId}-${order.orderId}`}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      <Link
-                        href={`/galleries/${order.galleryId}`}
-                        className="text-brand-500 hover:text-brand-600"
-                        onClick={() => {
-                          // Store current page as referrer when navigating to gallery
-                          if (typeof window !== "undefined") {
-                            const referrerKey = `gallery_referrer_${order.galleryId}`;
-                            sessionStorage.setItem(referrerKey, window.location.pathname);
-                          }
-                        }}
-                      >
-                        {order.galleryName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      <Link
-                        href={`/galleries/${order.galleryId}/orders/${order.orderId}`}
-                        className="text-brand-500 hover:text-brand-600"
-                      >
-                        #{order.orderNumber}
-                      </Link>
-                    </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
-                      {getDeliveryStatusBadge(order.deliveryStatus)}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-sm">
-                      {getPaymentStatusBadge(order.paymentStatus)}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      {((order.totalCents || 0) / 100).toFixed(2)} PLN
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {order.createdAt
-                        ? new Date(order.createdAt).toLocaleDateString("pl-PL")
-                        : "-"}
+                      <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
+                        <Button variant="outline" size="sm">
+                          Szczegóły
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -553,11 +472,6 @@ export default function Dashboard() {
         onClose={() => setActiveOrdersModalOpen(false)}
         title="Wszystkie Aktywne Zlecenia"
         excludeDeliveryStatus="DELIVERED"
-      />
-      <OrdersModal
-        isOpen={recentOrdersModalOpen}
-        onClose={() => setRecentOrdersModalOpen(false)}
-        title="Wszystkie Zlecenia"
       />
     </div>
   );

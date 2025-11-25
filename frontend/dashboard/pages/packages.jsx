@@ -2,12 +2,16 @@ import { useState, useEffect } from "react";
 import { apiFetch, formatApiError } from "../lib/api";
 import { getIdToken } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
+import { formatCurrencyInput, plnToCents, centsToPlnString } from "../lib/currency";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+import { useToast } from "../hooks/useToast";
+import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 
 export default function Packages() {
+  const { showToast } = useToast();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
@@ -16,12 +20,16 @@ export default function Packages() {
   const [packages, setPackages] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [packageToDelete, setPackageToDelete] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     includedPhotos: 0,
     pricePerExtraPhoto: 0,
     price: 0,
   });
+  const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState<string | null>(null);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -73,6 +81,8 @@ export default function Packages() {
       pricePerExtraPhoto: 0,
       price: 0,
     });
+    setPricePerExtraPhotoInput(null);
+    setPriceInput(null);
     setShowForm(true);
   };
 
@@ -84,6 +94,8 @@ export default function Packages() {
       pricePerExtraPhoto: pkg.pricePerExtraPhoto || 0,
       price: pkg.price || 0,
     });
+    setPricePerExtraPhotoInput(null);
+    setPriceInput(null);
     setShowForm(true);
   };
 
@@ -118,29 +130,41 @@ export default function Packages() {
       
       setShowForm(false);
       await loadPackages();
+      showToast("success", "Sukces", editingPackage ? "Pakiet został zaktualizowany" : "Pakiet został utworzony");
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (packageId) => {
-    if (!apiUrl || !idToken) return;
-    if (!confirm("Czy na pewno chcesz usunąć ten pakiet?")) return;
+  const handleDeleteClick = (packageId) => {
+    setPackageToDelete(packageId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!apiUrl || !idToken || !packageToDelete) return;
     
     setLoading(true);
     setError("");
+    setDeleteConfirmOpen(false);
     
     try {
-      await apiFetch(`${apiUrl}/packages/${packageId}`, {
+      await apiFetch(`${apiUrl}/packages/${packageToDelete}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
       await loadPackages();
+      showToast("success", "Sukces", "Pakiet został usunięty");
+      setPackageToDelete(null);
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -203,57 +227,69 @@ export default function Packages() {
               <Input
                 type="number"
                 placeholder="0"
-                value={formData.includedPhotos}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    includedPhotos: parseInt(e.target.value) || 0,
-                  })
-                }
+                value={formData.includedPhotos === 0 ? "" : formData.includedPhotos}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Allow empty string or valid number
+                  if (value === "" || /^\d+$/.test(value)) {
+                    setFormData({
+                      ...formData,
+                      includedPhotos: value === "" ? 0 : parseInt(value, 10),
+                    });
+                  }
+                }}
                 min="0"
               />
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Cena za dodatkowe zdjęcie (grosze) *
+                Cena za dodatkowe zdjęcie (PLN) *
               </label>
               <Input
-                type="number"
-                placeholder="500"
-                value={formData.pricePerExtraPhoto}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    pricePerExtraPhoto: parseInt(e.target.value) || 0,
-                  })
-                }
-                min="0"
+                type="text"
+                placeholder="5.00"
+                value={pricePerExtraPhotoInput !== null ? pricePerExtraPhotoInput : centsToPlnString(formData.pricePerExtraPhoto)}
+                onChange={(e) => {
+                  const formatted = formatCurrencyInput(e.target.value);
+                  setPricePerExtraPhotoInput(formatted);
+                    setFormData({
+                      ...formData,
+                    pricePerExtraPhoto: plnToCents(formatted),
+                    });
+                }}
+                onBlur={() => {
+                  // Clear input state on blur if empty, let it use cents value
+                  if (!pricePerExtraPhotoInput || pricePerExtraPhotoInput === '') {
+                    setPricePerExtraPhotoInput(null);
+                  }
+                }}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {(formData.pricePerExtraPhoto / 100).toFixed(2)} PLN
-              </p>
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Cena pakietu (grosze) *
+                Cena pakietu (PLN) *
               </label>
               <Input
-                type="number"
-                placeholder="0"
-                value={formData.price}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    price: parseInt(e.target.value) || 0,
-                  })
-                }
-                min="0"
+                type="text"
+                placeholder="0.00"
+                value={priceInput !== null ? priceInput : centsToPlnString(formData.price)}
+                onChange={(e) => {
+                  const formatted = formatCurrencyInput(e.target.value);
+                  setPriceInput(formatted);
+                    setFormData({
+                      ...formData,
+                    price: plnToCents(formatted),
+                    });
+                }}
+                onBlur={() => {
+                  // Clear input state on blur if empty, let it use cents value
+                  if (!priceInput || priceInput === '') {
+                    setPriceInput(null);
+                  }
+                }}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {(formData.price / 100).toFixed(2)} PLN
-              </p>
             </div>
           </div>
           
@@ -280,9 +316,13 @@ export default function Packages() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Pakiety
         </h1>
-        <Button variant="primary" onClick={handleCreate}>
-          + Dodaj pakiet
-        </Button>
+        <button
+          onClick={handleCreate}
+          className="text-xl font-bold text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
+        >
+          <span className="text-2xl">+</span>
+          <span>Dodaj pakiet</span>
+        </button>
       </div>
 
       {error && (
@@ -292,7 +332,7 @@ export default function Packages() {
       )}
 
       {packages.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
           Brak pakietów. Kliknij "Dodaj pakiet" aby dodać pierwszy.
         </div>
       ) : (
@@ -352,13 +392,13 @@ export default function Packages() {
                       >
                         Edytuj
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(pkg.packageId)}
-                      >
-                        Usuń
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteClick(pkg.packageId)}
+                        >
+                          Usuń
+                        </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -367,6 +407,22 @@ export default function Packages() {
           </Table>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setPackageToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń pakiet"
+        message="Czy na pewno chcesz usunąć ten pakiet? Ta operacja jest nieodwracalna."
+        confirmText="Usuń"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={loading}
+      />
     </div>
   );
 }

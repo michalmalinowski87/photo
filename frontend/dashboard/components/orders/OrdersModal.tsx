@@ -6,7 +6,7 @@ import Badge from "../ui/badge/Badge";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 import { Loading } from "../ui/loading/Loading";
 import { apiFetch, formatApiError } from "../../lib/api";
-import { getIdToken } from "../../lib/auth";
+import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import Link from "next/link";
 
 interface OrdersModalProps {
@@ -36,10 +36,14 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
-    const token = getIdToken();
-    if (token) {
-      setIdToken(token);
-    }
+    initializeAuth(
+      (token) => {
+        setIdToken(token);
+      },
+      () => {
+        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/");
+      }
+    );
   }, []);
 
   useEffect(() => {

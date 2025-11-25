@@ -172,17 +172,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					});
 				}
 			} else if (type === 'addon_payment' && userId && galleryId) {
-				// Addon payment - create backup storage addon and trigger ZIP generation Lambda
+				// Addon payment - create backup storage addon
 				const BACKUP_STORAGE_MULTIPLIER = 0.3; // Should match the multiplier used in purchaseAddon
 				const backupStorageCents = amountCents;
-				const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
 				
 				logger.info('Processing addon_payment', { 
 					galleryId, 
 					userId, 
-					backupStorageCents,
-					hasGenerateZipsFnName: !!generateZipsFnName,
-					generateZipsFnName
+					backupStorageCents
 				});
 				
 				try {
@@ -199,44 +196,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							multiplier: BACKUP_STORAGE_MULTIPLIER,
 							paymentId
 						});
-						
-						// Trigger ZIP generation Lambda asynchronously (fire and forget)
-						if (generateZipsFnName) {
-							try {
-								const payload = Buffer.from(JSON.stringify({ galleryId }));
-								logger.info('Invoking ZIP generation Lambda', { 
-									galleryId, 
-									generateZipsFnName,
-									payload: payload.toString()
-								});
-								await lambda.send(new InvokeCommand({ 
-									FunctionName: generateZipsFnName, 
-									Payload: payload, 
-									InvocationType: 'Event' // Asynchronous invocation
-								}));
-								logger.info('Successfully triggered ZIP generation Lambda for addon purchase', { 
-									galleryId, 
-									generateZipsFnName 
-								});
-							} catch (invokeErr: any) {
-								logger.error('Failed to invoke ZIP generation Lambda', {
-									error: {
-										name: invokeErr.name,
-										message: invokeErr.message,
-										code: invokeErr.code,
-										stack: invokeErr.stack
-									},
-									galleryId,
-									generateZipsFnName
-								});
-								// Don't fail the webhook - addon is created, ZIPs can be generated later manually
-							}
-						} else {
-							logger.warn('GENERATE_ZIPS_FOR_ADDON_FN_NAME not configured, ZIPs will not be generated automatically', { 
-								galleryId,
-								envKeys: Object.keys(envProc?.env || {})
-							});
-						}
 					} else {
 						logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
 					}
@@ -350,53 +309,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 										paymentId
 									});
 									
-									// Trigger ZIP generation Lambda asynchronously if addon was created
-									const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
-									if (generateZipsFnName) {
-										try {
-											const payload = Buffer.from(JSON.stringify({ galleryId }));
-											await lambda.send(new InvokeCommand({ 
-												FunctionName: generateZipsFnName, 
-												Payload: payload, 
-												InvocationType: 'Event' // Asynchronous invocation
-											}));
-											logger.info('Triggered ZIP generation Lambda for addon purchase (gallery creation)', { 
-												galleryId, 
-												generateZipsFnName 
-											});
-										} catch (invokeErr: any) {
-											logger.error('Failed to invoke ZIP generation Lambda', {
-												error: invokeErr.message,
-												galleryId,
-												generateZipsFnName
-											});
-										}
-									}
 								} else {
 									logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
-									
-									// Trigger ZIP generation Lambda even if addon already exists (payment completed)
-									const generateZipsFnName = envProc?.env?.GENERATE_ZIPS_FOR_ADDON_FN_NAME as string;
-									if (generateZipsFnName) {
-										try {
-											const payload = Buffer.from(JSON.stringify({ galleryId }));
-											await lambda.send(new InvokeCommand({ 
-												FunctionName: generateZipsFnName, 
-												Payload: payload, 
-												InvocationType: 'Event' // Asynchronous invocation
-											}));
-											logger.info('Triggered ZIP generation Lambda for addon purchase (gallery creation - addon existed)', { 
-												galleryId, 
-												generateZipsFnName 
-											});
-										} catch (invokeErr: any) {
-											logger.error('Failed to invoke ZIP generation Lambda', {
-												error: invokeErr.message,
-												galleryId,
-												generateZipsFnName
-											});
-										}
-									}
 								}
 							} catch (addonErr: any) {
 								logger.error('Failed to create backup storage addon via webhook (gallery creation)', {

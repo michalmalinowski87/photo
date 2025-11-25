@@ -161,70 +161,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 	
-	// Check if gallery has backup storage addon (gallery-level)
-	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-	
-	// Generate ZIP only if gallery has backup addon (best effort) via lambda invoke
-	// If no addon, ZIP will be generated manually by photographer when needed
-	if (galleryHasBackup && zipFnName) {
-		try {
-			const payload = Buffer.from(JSON.stringify({ galleryId, keys: selectedKeys, orderId }));
-			const invokeResponse = await lambda.send(new InvokeCommand({ 
-				FunctionName: zipFnName, 
-				Payload: payload, 
-				InvocationType: 'RequestResponse'
-			}));
-			if (invokeResponse.Payload) {
-				let zipResult = JSON.parse(Buffer.from(invokeResponse.Payload).toString());
-				
-				// When Lambda is invoked directly, it returns { statusCode, body } format
-				// The body is a JSON string that needs to be parsed
-				if (zipResult.statusCode && zipResult.body) {
-					try {
-						const bodyParsed = typeof zipResult.body === 'string' ? JSON.parse(zipResult.body) : zipResult.body;
-						if (zipResult.statusCode !== 200) {
-							logger.warn('ZIP generation Lambda returned error status', { 
-								statusCode: zipResult.statusCode, 
-								body: bodyParsed,
-								galleryId,
-								orderId
-							});
-						} else {
-							// Success - use the parsed body as the result
-							zipResult = bodyParsed;
-						}
-					} catch (bodyParseErr: any) {
-						logger.warn('Failed to parse Lambda response body', { 
-							error: bodyParseErr.message,
-							galleryId,
-							orderId
-						});
-						zipResult = null;
-					}
-				}
-				
-				if (zipResult && zipResult.zipKey) {
-					zipKey = zipResult.zipKey;
-					// Update order with zipKey
-					await ddb.send(new UpdateCommand({
-						TableName: ordersTable,
-						Key: { galleryId, orderId },
-						UpdateExpression: 'SET zipKey = :z',
-						ExpressionAttributeValues: { ':z': zipKey }
-					}));
-				} else {
-					logger.warn('ZIP generation did not return zipKey', { 
-						response: zipResult,
-						galleryId,
-						orderId
-					});
-				}
-			}
-		} catch (err: any) {
-			// Log but continue - ZIP generation can be retried later
-			logger.warn('ZIP generation failed', { error: err.message, galleryId, orderId });
-		}
-	}
+	// ZIPs are now generated on-demand only, not automatically
 
 	// Notify photographer with summary (best effort)
 	const sender = (globalThis as any).process?.env?.SENDER_EMAIL as string;

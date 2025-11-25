@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { apiFetch, formatApiError } from "../../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
+import { generatePassword } from "../../../lib/password";
+import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../lib/currency";
 import { useGallery } from "../../../context/GalleryContext";
 import Button from "../../../components/ui/button/Button";
 import Input from "../../../components/ui/input/InputField";
@@ -25,6 +27,8 @@ export default function GallerySettings() {
     extraPriceCents: 0,
     packagePriceCents: 0,
   });
+  const [extraPriceInput, setExtraPriceInput] = useState(null);
+  const [packagePriceInput, setPackagePriceInput] = useState(null);
   const [galleryUrl, setGalleryUrl] = useState("");
 
   useEffect(() => {
@@ -51,6 +55,8 @@ export default function GallerySettings() {
         extraPriceCents: gallery.pricingPackage?.extraPriceCents || 0,
         packagePriceCents: gallery.pricingPackage?.packagePriceCents || 0,
       });
+      setExtraPriceInput(null);
+      setPackagePriceInput(null);
       setGalleryUrl(
         typeof window !== "undefined"
           ? `${window.location.origin}/gallery/${galleryId}`
@@ -89,7 +95,7 @@ export default function GallerySettings() {
       
       if (pkgChanged) {
         await apiFetch(`${apiUrl}/galleries/${galleryId}/pricing-package`, {
-          method: "POST",
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,
@@ -137,7 +143,6 @@ export default function GallerySettings() {
   const handleCopyUrl = () => {
     if (typeof window !== "undefined" && galleryUrl) {
       navigator.clipboard.writeText(galleryUrl);
-      showToast("success", "Sukces", "URL skopiowany do schowka");
     }
   };
 
@@ -171,7 +176,7 @@ export default function GallerySettings() {
               />
             </div>
             
-            <div style={{ minHeight: '88px' }}>
+            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email logowania
               </label>
@@ -182,14 +187,7 @@ export default function GallerySettings() {
                 onChange={(e) =>
                   setSettingsForm({ ...settingsForm, clientEmail: e.target.value })
                 }
-                disabled={galleryLoading || !isPaid}
-                hint={
-                  galleryLoading 
-                    ? "Ładowanie danych..." 
-                    : !isPaid 
-                    ? "Opłać galerię aby edytować email klienta" 
-                    : ""
-                }
+                disabled={galleryLoading}
               />
             </div>
             
@@ -197,15 +195,29 @@ export default function GallerySettings() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Hasło klienta (opcjonalne)
               </label>
-              <Input
-                type="password"
-                placeholder="Nowe hasło"
-                value={settingsForm.clientPassword}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, clientPassword: e.target.value })
-                }
-                hint="Pozostaw puste aby nie zmieniać hasła"
-              />
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <Input
+                    type="password"
+                    placeholder="Nowe hasło"
+                    value={settingsForm.clientPassword}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, clientPassword: e.target.value })
+                    }
+                    hint="Pozostaw puste aby nie zmieniać hasła"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const newPassword = generatePassword();
+                    setSettingsForm({ ...settingsForm, clientPassword: newPassword });
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11"
+                >
+                  Generuj
+                </Button>
+              </div>
             </div>
             
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -248,37 +260,51 @@ export default function GallerySettings() {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cena za dodatkowe zdjęcie (grosze)
+                    Cena za dodatkowe zdjęcie (PLN)
                   </label>
                   <Input
-                    type="number"
-                    placeholder="0"
-                    value={settingsForm.extraPriceCents}
-                    onChange={(e) =>
+                    type="text"
+                    placeholder="0.00"
+                    value={extraPriceInput !== null ? extraPriceInput : centsToPlnString(settingsForm.extraPriceCents)}
+                    onChange={(e) => {
+                      const formatted = formatCurrencyInput(e.target.value);
+                      setExtraPriceInput(formatted);
                       setSettingsForm({
                         ...settingsForm,
-                        extraPriceCents: parseInt(e.target.value) || 0,
-                      })
+                        extraPriceCents: plnToCents(formatted),
+                      });
+                    }}
+                    onBlur={() => {
+                      // Clear input state on blur if empty, let it use cents value
+                      if (!extraPriceInput || extraPriceInput === '') {
+                        setExtraPriceInput(null);
                     }
-                    min="0"
+                    }}
                   />
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cena pakietu (grosze)
+                    Cena pakietu (PLN)
                   </label>
                   <Input
-                    type="number"
-                    placeholder="0"
-                    value={settingsForm.packagePriceCents}
-                    onChange={(e) =>
+                    type="text"
+                    placeholder="0.00"
+                    value={packagePriceInput !== null ? packagePriceInput : centsToPlnString(settingsForm.packagePriceCents)}
+                    onChange={(e) => {
+                      const formatted = formatCurrencyInput(e.target.value);
+                      setPackagePriceInput(formatted);
                       setSettingsForm({
                         ...settingsForm,
-                        packagePriceCents: parseInt(e.target.value) || 0,
-                      })
+                        packagePriceCents: plnToCents(formatted),
+                      });
+                    }}
+                    onBlur={() => {
+                      // Clear input state on blur if empty, let it use cents value
+                      if (!packagePriceInput || packagePriceInput === '') {
+                        setPackagePriceInput(null);
                     }
-                    min="0"
+                    }}
                   />
                 </div>
               </div>

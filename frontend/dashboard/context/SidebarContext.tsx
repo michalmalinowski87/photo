@@ -26,10 +26,8 @@ export const useSidebar = () => {
 export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
 
@@ -50,10 +48,6 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  const toggleSidebar = () => {
-    setIsExpanded((prev) => !prev);
-  };
-
   const toggleMobileSidebar = () => {
     setIsMobileOpen((prev) => !prev);
   };
@@ -62,17 +56,20 @@ export const SidebarProvider: React.FC<{ children: React.ReactNode }> = ({
     setOpenSubmenu((prev) => (prev === item ? null : item));
   };
 
+  // Always expanded on desktop, only mobile can toggle
+  const isExpanded = !isMobile;
+
   return (
     <SidebarContext.Provider
       value={{
-        isExpanded: isMobile ? false : isExpanded,
+        isExpanded,
         isMobileOpen,
-        isHovered,
+        isHovered: false, // No hover expansion needed
         activeItem,
         openSubmenu,
-        toggleSidebar,
+        toggleSidebar: () => {}, // No-op, sidebar always expanded
         toggleMobileSidebar,
-        setIsHovered,
+        setIsHovered: () => {}, // No-op
         setActiveItem,
         toggleSubmenu,
       }}

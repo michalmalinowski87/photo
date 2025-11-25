@@ -15,7 +15,7 @@ interface GalleryLayoutWrapperProps {
 
 export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperProps) {
   const router = useRouter();
-  const { id: galleryId } = router.query;
+  const { id: galleryId, orderId } = router.query;
   const { showToast } = useToast();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
@@ -23,6 +23,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const [gallery, setGallery] = useState(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [galleryUrl, setGalleryUrl] = useState("");
+  const [order, setOrder] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -57,11 +58,21 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   }, [router.isReady, apiUrl, idToken, galleryId]);
 
-  const loadGalleryData = async () => {
+  useEffect(() => {
+    if (router.isReady && apiUrl && idToken && galleryId && orderId) {
+      loadOrderData();
+    } else {
+      setOrder(null);
+    }
+  }, [router.isReady, apiUrl, idToken, galleryId, orderId]);
+
+  const loadGalleryData = async (silent = false) => {
     if (!apiUrl || !idToken || !galleryId) return;
     
-    setLoading(true);
-    setLoadError(null);
+    if (!silent) {
+      setLoading(true);
+      setLoadError(null);
+    }
     
     try {
       const galleryResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}`, {
@@ -75,11 +86,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           : ""
       );
     } catch (err) {
-      const errorMsg = formatApiError(err);
-      setLoadError(errorMsg || "Nie udało się załadować danych galerii");
-      showToast("error", "Błąd", errorMsg || "Nie udało się załadować danych galerii");
+      if (!silent) {
+        const errorMsg = formatApiError(err);
+        setLoadError(errorMsg || "Nie udało się załadować danych galerii");
+        showToast("error", "Błąd", errorMsg || "Nie udało się załadować danych galerii");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -92,6 +107,72 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       setWalletBalance(data.balanceCents || 0);
     } catch (err) {
       console.error("Failed to load wallet balance:", err);
+    }
+  };
+
+  const loadOrderData = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    try {
+      const orderResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      let orderData = orderResponse.data;
+      if (typeof orderData === 'string') {
+        try {
+          orderData = JSON.parse(orderData);
+        } catch {
+          orderData = null;
+        }
+      }
+      setOrder(orderData);
+    } catch (err) {
+      setOrder(null);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId || !order) return;
+    
+    const orderObj = typeof order === 'string' ? (() => {
+      try {
+        return JSON.parse(order);
+      } catch {
+        return {};
+      }
+    })() : order;
+    
+    try {
+      if (!orderObj.zipKey) {
+        await apiFetch(
+          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/generate-zip`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${idToken}` },
+          }
+        );
+        await loadOrderData();
+      }
+      
+      const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
+      const response = await fetch(zipUrl, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${orderId}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        showToast("error", "Błąd", "Nie udało się pobrać pliku ZIP");
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
     }
   };
 
@@ -152,7 +233,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const handleCopyUrl = () => {
     if (typeof window !== "undefined" && galleryUrl) {
       navigator.clipboard.writeText(galleryUrl);
-      showToast("success", "Sukces", "URL skopiowany do schowka");
     }
   };
 
@@ -186,6 +266,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onCopyUrl={() => {}}
         onSendLink={() => {}}
         onSettings={() => {}}
+        onReloadGallery={loadGalleryData}
       >
         <FullPageLoading text="Ładowanie galerii..." />
       </GalleryLayout>
@@ -203,6 +284,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onCopyUrl={() => {}}
         onSendLink={() => {}}
         onSettings={() => {}}
+        onReloadGallery={loadGalleryData}
       >
         <div className="p-6">
           <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -215,13 +297,32 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   const isPaid = gallery ? (gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")) : false;
 
+  // Calculate canDownloadZip for order
+  // Only show ZIP download if selection is enabled (ZIP contains selected photos)
+  const orderObj = order && typeof order === 'object' ? order : (order && typeof order === 'string' ? (() => {
+    try {
+      return JSON.parse(order);
+    } catch {
+      return null;
+    }
+  })() : null);
+  
+  const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
+  const canDownloadZip = orderObj && selectionEnabled ? (
+    orderObj.zipKey || 
+    orderObj.deliveryStatus === "CLIENT_APPROVED" ||
+    orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
+    orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+    orderObj.deliveryStatus === "DELIVERED"
+  ) : false;
+
   return (
     <GalleryProvider
       gallery={gallery}
       loading={loading}
       error={loadError}
       galleryId={galleryId as string}
-      reloadGallery={loadGalleryData}
+      reloadGallery={() => loadGalleryData(true)}
     >
       <GalleryLayout
         gallery={gallery}
@@ -231,6 +332,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onCopyUrl={handleCopyUrl}
         onSendLink={handleSendLink}
         onSettings={handleSettings}
+        onReloadGallery={() => loadGalleryData(true)}
+        order={orderObj}
+        onDownloadZip={orderId ? handleDownloadZip : undefined}
+        canDownloadZip={canDownloadZip}
       >
         {children}
       </GalleryLayout>

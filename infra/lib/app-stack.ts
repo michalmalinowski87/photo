@@ -138,6 +138,12 @@ export class AppStack extends Stack {
 		removalPolicy: RemovalPolicy.RETAIN
 	});
 
+	const users = new Table(this, 'UsersTable', {
+		partitionKey: { name: 'userId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true }
@@ -208,6 +214,7 @@ export class AppStack extends Stack {
 			CLIENTS_TABLE: clients.tableName,
 			PACKAGES_TABLE: packages.tableName,
 			NOTIFICATIONS_TABLE: notifications.tableName,
+			USERS_TABLE: users.tableName,
 			SENDER_EMAIL: process.env.SENDER_EMAIL || '',
 			STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
 			STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
@@ -223,29 +230,129 @@ export class AppStack extends Stack {
 			TRANSACTIONS_TABLE: transactions.tableName
 		};
 
-		const healthFn = new NodejsFunction(this, 'HealthFunction', {
-			entry: path.join(__dirname, '../../../backend/functions/health/index.ts'),
+		// Single API Lambda function - handles all HTTP endpoints via Express router
+		const apiFn = new NodejsFunction(this, 'ApiFunction', {
+			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
 			handler: 'handler',
-			...defaultFnProps,
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512, // Increased for Express overhead
+			timeout: Duration.seconds(30), // Increased timeout for complex operations
+			bundling: {
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+			},
 			environment: envVars
 		});
 
+		// Grant all necessary permissions to the API Lambda
+		// DynamoDB tables
+		galleries.grantReadWriteData(apiFn);
+		payments.grantReadWriteData(apiFn);
+		wallet.grantReadWriteData(apiFn);
+		walletLedger.grantReadWriteData(apiFn);
+		orders.grantReadWriteData(apiFn);
+		galleryAddons.grantReadWriteData(apiFn);
+		transactions.grantReadWriteData(apiFn);
+		clients.grantReadWriteData(apiFn);
+		packages.grantReadWriteData(apiFn);
+		notifications.grantReadWriteData(apiFn);
+		users.grantReadWriteData(apiFn);
+
+		// S3 bucket
+		galleriesBucket.grantReadWrite(apiFn);
+
+		// Cognito permissions
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['cognito-idp:AdminInitiateAuth', 'cognito-idp:AdminSetUserPassword', 'cognito-idp:AdminGetUser'],
+			resources: [userPool.userPoolArn]
+		}));
+
+		// SES permissions
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
+
+		// Lambda invoke permissions (for zip generation functions)
+		// Will be granted after zip functions are created
+
+		// OPTIONS route for CORS preflight - no authorizer required
+		httpApi.addRoutes({
+			path: '/{proxy+}',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiOptionsIntegration', apiFn)
+			// No authorizer for OPTIONS requests
+		});
+
+		// Single catch-all route for all API endpoints
+		httpApi.addRoutes({
+			path: '/{proxy+}',
+			methods: [HttpMethod.ANY],
+			integration: new HttpLambdaIntegration('ApiIntegration', apiFn),
+			authorizer // Apply authorizer to all routes
+		});
+
+		// Also add root routes (without proxy)
 		httpApi.addRoutes({
 			path: '/health',
 			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('HealthIntegration', healthFn)
+			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
 		});
 
-		galleriesBucket.grantReadWrite(healthFn);
+		// Downloads zip - helper function invoked by API Lambda and other functions
+		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512,
+			timeout: Duration.minutes(5),
+			bundling: {
+				externalModules: ['aws-sdk'],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
+			},
+			environment: envVars
+		});
+		galleriesBucket.grantReadWrite(zipFn);
+		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['lambda:InvokeFunction'],
+			resources: [zipFn.functionArn]
+		}));
+		
+		// Generate ZIPs for addon purchase - helper function invoked by API Lambda and webhook
+		const generateZipsForAddonFn = new NodejsFunction(this, 'GenerateZipsForAddonFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/generateZipsForAddon.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			timeout: Duration.minutes(5),
+			memorySize: 512,
+			environment: envVars
+		});
+		orders.grantReadWriteData(generateZipsForAddonFn);
+		zipFn.grantInvoke(generateZipsForAddonFn);
+		galleriesBucket.grantRead(generateZipsForAddonFn);
+		envVars['GENERATE_ZIPS_FOR_ADDON_FN_NAME'] = generateZipsForAddonFn.functionName;
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['lambda:InvokeFunction'],
+			resources: [generateZipsForAddonFn.functionArn]
+		}));
+		// API Lambda can invoke generateZipsForAddonFn (webhook permission will be granted below)
+		generateZipsForAddonFn.grantInvoke(apiFn);
 
-		// Payments: checkout + webhook
-		const checkoutFn = new NodejsFunction(this, 'PaymentsCheckoutFn', {
+		// Stripe payment functions - separate Lambda functions for better isolation and scaling
+		// Created after generateZipsForAddonFn so webhook can invoke it
+		const paymentsCheckoutFn = new NodejsFunction(this, 'PaymentsCheckoutFn', {
 			entry: path.join(__dirname, '../../../backend/functions/payments/checkoutCreate.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
-		const webhookFn = new NodejsFunction(this, 'PaymentsWebhookFn', {
+		const paymentsWebhookFn = new NodejsFunction(this, 'PaymentsWebhookFn', {
 			entry: path.join(__dirname, '../../../backend/functions/payments/webhook.ts'),
 			handler: 'handler',
 			...defaultFnProps,
@@ -263,27 +370,31 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
-		payments.grantReadWriteData(checkoutFn);
-		payments.grantReadWriteData(webhookFn);
-		transactions.grantReadWriteData(checkoutFn); // Needed for fractional payments
-		wallet.grantReadWriteData(webhookFn);
-		walletLedger.grantReadWriteData(webhookFn);
-		transactions.grantReadWriteData(webhookFn); // Needed to update transaction status
+
+		// Grant permissions for Stripe payment functions
+		payments.grantReadWriteData(paymentsCheckoutFn);
+		payments.grantReadWriteData(paymentsWebhookFn);
+		transactions.grantReadWriteData(paymentsCheckoutFn); // Needed for fractional payments
+		transactions.grantReadWriteData(paymentsWebhookFn); // Needed to update transaction status
 		transactions.grantReadWriteData(paymentsCancelFn); // Needed to mark transaction as CANCELED
-		galleries.grantReadWriteData(webhookFn);
-		orders.grantReadWriteData(webhookFn); // Needed for addon_payment to update orders with zipKey
-		galleryAddons.grantReadWriteData(webhookFn); // Needed for addon_payment to create addon
-		// generateZipsForAddonFn.grantInvoke(webhookFn) will be set after generateZipsForAddonFn is created
+		wallet.grantReadWriteData(paymentsWebhookFn);
+		walletLedger.grantReadWriteData(paymentsWebhookFn);
+		galleries.grantReadWriteData(paymentsWebhookFn);
+		orders.grantReadWriteData(paymentsWebhookFn); // Needed for addon_payment to update orders with zipKey
+		galleryAddons.grantReadWriteData(paymentsWebhookFn); // Needed for addon_payment to create addon
+		generateZipsForAddonFn.grantInvoke(paymentsWebhookFn); // webhook can invoke it for ZIP generation
+
+		// Add Stripe payment routes
 		httpApi.addRoutes({
 			path: '/payments/checkout',
 			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('CheckoutIntegration', checkoutFn),
+			integration: new HttpLambdaIntegration('PaymentsCheckoutIntegration', paymentsCheckoutFn),
 			authorizer
 		});
 		httpApi.addRoutes({
 			path: '/payments/webhook',
 			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('WebhookIntegration', webhookFn)
+			integration: new HttpLambdaIntegration('PaymentsWebhookIntegration', paymentsWebhookFn)
 		});
 		httpApi.addRoutes({
 			path: '/payments/success',
@@ -296,887 +407,41 @@ export class AppStack extends Stack {
 			integration: new HttpLambdaIntegration('PaymentsCancelIntegration', paymentsCancelFn)
 		});
 
-		// Wallet endpoints
-		const walletBalanceFn = new NodejsFunction(this, 'WalletBalanceFn', {
-			entry: path.join(__dirname, '../../../backend/functions/wallet/getBalance.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const walletTransactionsFn = new NodejsFunction(this, 'WalletTransactionsFn', {
-			entry: path.join(__dirname, '../../../backend/functions/wallet/listTransactions.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		wallet.grantReadWriteData(walletBalanceFn); // Needs write to create wallet if missing
-		walletLedger.grantReadData(walletTransactionsFn);
-		transactions.grantReadData(walletTransactionsFn); // Needed to query transactions table
-		httpApi.addRoutes({
-			path: '/wallet/balance',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('WalletBalanceIntegration', walletBalanceFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/wallet/transactions',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('WalletTransactionsIntegration', walletTransactionsFn),
-			authorizer
-		});
-
-		// Transaction endpoints
-		const transactionsGetFn = new NodejsFunction(this, 'TransactionsGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/transactions/get.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const transactionsCancelFn = new NodejsFunction(this, 'TransactionsCancelFn', {
-			entry: path.join(__dirname, '../../../backend/functions/transactions/cancel.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const transactionsRetryFn = new NodejsFunction(this, 'TransactionsRetryFn', {
-			entry: path.join(__dirname, '../../../backend/functions/transactions/retry.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		transactions.grantReadData(transactionsGetFn);
-		transactions.grantReadWriteData(transactionsCancelFn);
-		transactions.grantReadWriteData(transactionsRetryFn);
-		galleries.grantReadWriteData(transactionsCancelFn);
-		wallet.grantReadData(transactionsRetryFn);
-		httpApi.addRoutes({
-			path: '/transactions/{id}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('TransactionsGetIntegration', transactionsGetFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/transactions/{id}/cancel',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('TransactionsCancelIntegration', transactionsCancelFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/transactions/{id}/retry',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('TransactionsRetryIntegration', transactionsRetryFn),
-			authorizer
-		});
-
-		// Galleries CRUD
-		const galleriesCreateFn = new NodejsFunction(this, 'GalleriesCreateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/create.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesGetFn = new NodejsFunction(this, 'GalleriesGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/get.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesListFn = new NodejsFunction(this, 'GalleriesListFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/list.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesListImagesFn = new NodejsFunction(this, 'GalleriesListImagesFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/listImages.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesDeleteFn = new NodejsFunction(this, 'GalleriesDeleteFn', {
+		// Gallery delete helper - used by expiry event handlers
+		const galleriesDeleteHelperFn = new NodejsFunction(this, 'GalleriesDeleteHelperFn', {
 			entry: path.join(__dirname, '../../../backend/functions/galleries/delete.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
-		const galleriesSetSelectionModeFn = new NodejsFunction(this, 'GalleriesSetSelectionModeFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/setSelectionMode.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesUpdatePricingFn = new NodejsFunction(this, 'GalleriesUpdatePricingFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/updatePricingPackage.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesSetClientPasswordFn = new NodejsFunction(this, 'GalleriesSetClientPasswordFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/setClientPassword.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesPayFn = new NodejsFunction(this, 'GalleriesPayFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/pay.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesCancelTransactionFn = new NodejsFunction(this, 'GalleriesCancelTransactionFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/cancelTransaction.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesDeletePhotoFn = new NodejsFunction(this, 'GalleriesDeletePhotoFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/deletePhoto.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const galleriesUpdateFn = new NodejsFunction(this, 'GalleriesUpdateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/update.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		// Make delete function name available to expiry lambda
-		envVars['GALLERIES_DELETE_FN_NAME'] = galleriesDeleteFn.functionName;
-		galleries.grantReadWriteData(galleriesCreateFn);
-		wallet.grantReadWriteData(galleriesCreateFn);
-		walletLedger.grantReadWriteData(galleriesCreateFn);
-		transactions.grantReadWriteData(galleriesCreateFn); // Needed to create transactions
-		galleryAddons.grantReadWriteData(galleriesCreateFn); // Needed to create backup storage addon during gallery creation
-		orders.grantReadWriteData(galleriesCreateFn); // Needed to create orders for non-selection galleries
-		galleries.grantReadData(galleriesGetFn);
-		transactions.grantReadData(galleriesGetFn); // Needed to derive payment status
-		galleries.grantReadData(galleriesListFn);
-		galleryAddons.grantReadData(galleriesListFn); // Needed to check hasBackupStorage
-		transactions.grantReadData(galleriesListFn); // Needed to derive payment status from transactions
-		galleries.grantReadData(galleriesListImagesFn);
-		galleries.grantReadData(galleriesPayFn);
-		transactions.grantReadWriteData(galleriesPayFn); // Needed to update transactions
-		galleries.grantReadData(galleriesCancelTransactionFn);
-		transactions.grantReadWriteData(galleriesCancelTransactionFn); // Needed to cancel transactions
-		galleries.grantReadWriteData(galleriesDeleteFn);
-		transactions.grantReadWriteData(galleriesDeleteFn); // Needed to cancel transactions before deletion
-		orders.grantReadWriteData(galleriesDeleteFn);
-		galleryAddons.grantReadWriteData(galleriesDeleteFn); // Needed to delete gallery addons when gallery is deleted
-		galleries.grantReadWriteData(galleriesDeletePhotoFn);
-		galleries.grantReadWriteData(galleriesSetSelectionModeFn);
-		galleries.grantReadWriteData(galleriesUpdatePricingFn);
-		galleries.grantReadWriteData(galleriesSetClientPasswordFn);
-		galleries.grantReadWriteData(galleriesUpdateFn);
-		galleriesBucket.grantReadWrite(galleriesDeletePhotoFn);
-		// Allow sending emails via SES if SENDER_EMAIL is configured
-		galleriesSetClientPasswordFn.addToRolePolicy(new PolicyStatement({
+		galleries.grantReadWriteData(galleriesDeleteHelperFn);
+		transactions.grantReadWriteData(galleriesDeleteHelperFn);
+		orders.grantReadWriteData(galleriesDeleteHelperFn);
+		galleryAddons.grantReadWriteData(galleriesDeleteHelperFn);
+		galleriesBucket.grantReadWrite(galleriesDeleteHelperFn);
+		galleriesDeleteHelperFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
 			resources: ['*']
 		}));
-		galleriesBucket.grantReadWrite(galleriesCreateFn);
-		galleriesBucket.grantReadWrite(galleriesDeleteFn);
-		galleriesBucket.grantRead(galleriesListImagesFn);
-		// Grant delete lambda SES permissions for confirmation emails
-		galleriesDeleteFn.addToRolePolicy(new PolicyStatement({
-			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-			resources: ['*']
-		}));
-		// Grant delete lambda Cognito read permissions for fallback email retrieval
-		galleriesDeleteFn.addToRolePolicy(new PolicyStatement({
+		galleriesDeleteHelperFn.addToRolePolicy(new PolicyStatement({
 			actions: ['cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
+		envVars['GALLERIES_DELETE_FN_NAME'] = galleriesDeleteHelperFn.functionName;
 
-		httpApi.addRoutes({
-			path: '/galleries',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesCreateIntegration', galleriesCreateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('GalleriesListIntegration', galleriesListFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('GalleriesGetIntegration', galleriesGetFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}',
-			methods: [HttpMethod.PUT],
-			integration: new HttpLambdaIntegration('GalleriesUpdateIntegration', galleriesUpdateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/images',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('GalleriesListImagesIntegration', galleriesListImagesFn)
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/pay',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesPayIntegration', galleriesPayFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/cancel-transaction',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesCancelTransactionIntegration', galleriesCancelTransactionFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}',
-			methods: [HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('GalleriesDeleteIntegration', galleriesDeleteFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selection-mode',
-			methods: [HttpMethod.PATCH],
-			integration: new HttpLambdaIntegration('GalleriesSetSelectionModeIntegration', galleriesSetSelectionModeFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/pricing-package',
-			methods: [HttpMethod.PATCH],
-			integration: new HttpLambdaIntegration('GalleriesUpdatePricingIntegration', galleriesUpdatePricingFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/client-password',
-			methods: [HttpMethod.PATCH],
-			integration: new HttpLambdaIntegration('GalleriesSetClientPasswordIntegration', galleriesSetClientPasswordFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/photos/{filename}',
-			methods: [HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('GalleriesDeletePhotoIntegration', galleriesDeletePhotoFn)
-		});
-
-		// Uploads presign
-		const presignFn = new NodejsFunction(this, 'UploadsPresignFn', {
-			entry: path.join(__dirname, '../../../backend/functions/uploads/presign.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleriesBucket.grantReadWrite(presignFn);
-		galleries.grantReadData(presignFn);
-		httpApi.addRoutes({
-			path: '/uploads/presign',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('UploadsPresignIntegration', presignFn),
-			authorizer
-		});
-
-		// Downloads zip
-		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
-			handler: 'handler',
-			runtime: Runtime.NODEJS_20_X,
-			memorySize: 512,
-			timeout: Duration.minutes(5),
-			bundling: {
-				externalModules: ['aws-sdk'],
-				minify: true,
-				treeShaking: true,
-				sourceMap: false
-			},
-			environment: envVars
-		});
-		galleriesBucket.grantReadWrite(zipFn);
-		// Make zip function name available to other lambdas
-		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
-		
-		// Generate ZIPs for addon purchase (created early so env var is available to webhook)
-		const generateZipsForAddonFn = new NodejsFunction(this, 'GenerateZipsForAddonFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/generateZipsForAddon.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			timeout: Duration.minutes(5), // ZIP generation can take time
-			memorySize: 512, // More memory for processing multiple orders
-			environment: envVars
-		});
-		orders.grantReadWriteData(generateZipsForAddonFn); // Needed to update orders with zipKey
-		zipFn.grantInvoke(generateZipsForAddonFn); // Needed to generate ZIPs
-		galleriesBucket.grantRead(generateZipsForAddonFn); // Needed to check if original files exist (HeadObject, ListObjectsV2)
-		// Make function name available to other lambdas (especially webhook)
-		envVars['GENERATE_ZIPS_FOR_ADDON_FN_NAME'] = generateZipsForAddonFn.functionName;
-		generateZipsForAddonFn.grantInvoke(webhookFn); // webhook can invoke it for ZIP generation
-		
-		httpApi.addRoutes({
-			path: '/downloads/zip',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('DownloadsZipIntegration', zipFn)
-		});
-
-		// Selections (public, password-gated in handler)
-		const approveSelectionFn = new NodejsFunction(this, 'SelectionsApproveFn', {
-			entry: path.join(__dirname, '../../../backend/functions/selections/approveSelection.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadWriteData(approveSelectionFn);
-		orders.grantReadWriteData(approveSelectionFn);
-		galleryAddons.grantReadWriteData(approveSelectionFn);
-		zipFn.grantInvoke(approveSelectionFn);
-		// Allow SES for notifications
-		approveSelectionFn.addToRolePolicy(new PolicyStatement({
-			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-			resources: ['*']
-		}));
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selections/approve',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('SelectionsApproveIntegration', approveSelectionFn)
-		});
-		// Client login (public)
-		const clientLoginFn = new NodejsFunction(this, 'GalleriesClientLoginFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/clientLogin.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(clientLoginFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/client-login',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesClientLoginIntegration', clientLoginFn)
-		});
-
-		// Get selection (public, password via query)
-		const getSelectionFn = new NodejsFunction(this, 'SelectionsGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/selections/getSelection.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(getSelectionFn);
-		orders.grantReadData(getSelectionFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selections/{clientId}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('SelectionsGetIntegration', getSelectionFn)
-		});
-
-		// Change request (public) & approval (authorizer)
-		const changeRequestFn = new NodejsFunction(this, 'SelectionsChangeRequestFn', {
-			entry: path.join(__dirname, '../../../backend/functions/selections/changeRequest.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const changeApproveFn = new NodejsFunction(this, 'OrdersApproveChangeRequestFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/approveChangeRequest.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadWriteData(changeRequestFn);
-		orders.grantReadWriteData(changeRequestFn);
-		galleries.grantReadWriteData(changeApproveFn);
-		orders.grantReadWriteData(changeApproveFn);
-		galleriesBucket.grantWrite(changeApproveFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selection-change-request',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('SelectionsChangeRequestIntegration', changeRequestFn)
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/approve-change',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersApproveChangeRequestIntegration', changeApproveFn),
-			authorizer
-		});
-
-		// Orders admin endpoints
-		const ordersListFn = new NodejsFunction(this, 'OrdersListFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/list.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersListAllFn = new NodejsFunction(this, 'OrdersListAllFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/listAll.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersGetFn = new NodejsFunction(this, 'OrdersGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/get.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersDownloadZipFn = new NodejsFunction(this, 'OrdersDownloadZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/downloadZip.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersGenerateZipFn = new NodejsFunction(this, 'OrdersGenerateZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/generateZip.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersPurchaseAddonFn = new NodejsFunction(this, 'OrdersPurchaseAddonFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/purchaseAddon.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersMarkPaidFn = new NodejsFunction(this, 'OrdersMarkPaidFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/markPaid.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersMarkCanceledFn = new NodejsFunction(this, 'OrdersMarkCanceledFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/markCanceled.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersMarkRefundedFn = new NodejsFunction(this, 'OrdersMarkRefundedFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/markRefunded.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const ordersMarkPartiallyPaidFn = new NodejsFunction(this, 'OrdersMarkPartiallyPaidFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/markPartiallyPaid.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		orders.grantReadData(ordersListFn);
-		orders.grantReadData(ordersListAllFn);
-		orders.grantReadData(ordersGetFn);
-		orders.grantReadData(ordersDownloadZipFn);
-		orders.grantReadWriteData(ordersMarkPaidFn);
-		orders.grantReadWriteData(ordersMarkCanceledFn);
-		orders.grantReadWriteData(ordersMarkRefundedFn);
-		orders.grantReadWriteData(ordersMarkPartiallyPaidFn);
-		orders.grantReadWriteData(ordersDownloadZipFn);
-		orders.grantReadWriteData(ordersGenerateZipFn);
-		orders.grantReadWriteData(ordersPurchaseAddonFn);
-		wallet.grantReadWriteData(ordersPurchaseAddonFn); // Needed to debit wallet for addon purchase
-		walletLedger.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create ledger entry for debit
-		transactions.grantReadWriteData(ordersPurchaseAddonFn); // Needed to create transactions
-		galleries.grantReadData(ordersListFn);
-		galleries.grantReadData(ordersListAllFn);
-		galleryAddons.grantReadData(ordersListFn); // Needed to check hasBackupStorage for orders list
-		galleries.grantReadData(ordersGetFn);
-		galleryAddons.grantReadData(ordersGetFn);
-		galleries.grantReadData(ordersDownloadZipFn);
-		galleries.grantReadData(ordersPurchaseAddonFn);
-		galleries.grantReadData(ordersMarkPaidFn);
-		galleries.grantReadData(ordersMarkCanceledFn);
-		galleries.grantReadData(ordersMarkRefundedFn);
-		galleries.grantReadData(ordersMarkPartiallyPaidFn);
-		galleries.grantReadData(ordersGenerateZipFn);
-		galleriesBucket.grantRead(ordersDownloadZipFn);
-		galleriesBucket.grantReadWrite(ordersDownloadZipFn);
-		// ordersGenerateZipFn doesn't need S3 access - it only invokes zipFn Lambda which handles S3 operations
-		// ordersPurchaseAddonFn no longer needs S3 access - it invokes generateZipsForAddonFn instead
-		zipFn.grantInvoke(ordersDownloadZipFn);
-		zipFn.grantInvoke(ordersGenerateZipFn);
-		generateZipsForAddonFn.grantInvoke(ordersPurchaseAddonFn); // purchaseAddon can invoke it
-		generateZipsForAddonFn.grantInvoke(webhookFn); // webhook can invoke it
-		galleryAddons.grantReadWriteData(ordersDownloadZipFn);
-		galleryAddons.grantReadWriteData(ordersGenerateZipFn);
-		galleryAddons.grantReadWriteData(ordersPurchaseAddonFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersListIntegration', ordersListFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/orders',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersListAllIntegration', ordersListAllFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersGetIntegration', ordersGetFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/zip',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersDownloadZipIntegration', ordersDownloadZipFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/generate-zip',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersGenerateZipIntegration', ordersGenerateZipFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/purchase-addon',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersPurchaseAddonIntegration', ordersPurchaseAddonFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/mark-paid',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersMarkPaidIntegration', ordersMarkPaidFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/mark-partially-paid',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersMarkPartiallyPaidIntegration', ordersMarkPartiallyPaidFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/mark-canceled',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersMarkCanceledIntegration', ordersMarkCanceledFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/mark-refunded',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersMarkRefundedIntegration', ordersMarkRefundedFn),
-			authorizer
-		});
-
-		// Regenerate ZIP
-		const ordersRegenerateZipFn = new NodejsFunction(this, 'OrdersRegenerateZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/regenerateZip.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		orders.grantReadWriteData(ordersRegenerateZipFn);
-		galleries.grantReadData(ordersRegenerateZipFn);
-		zipFn.grantInvoke(ordersRegenerateZipFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/regenerate-zip',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersRegenerateZipIntegration', ordersRegenerateZipFn),
-			authorizer
-		});
-
-		// Clients CRUD endpoints
-		const clientsCreateFn = new NodejsFunction(this, 'ClientsCreateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/clients/create.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const clientsListFn = new NodejsFunction(this, 'ClientsListFn', {
-			entry: path.join(__dirname, '../../../backend/functions/clients/list.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const clientsGetFn = new NodejsFunction(this, 'ClientsGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/clients/get.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const clientsUpdateFn = new NodejsFunction(this, 'ClientsUpdateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/clients/update.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const clientsDeleteFn = new NodejsFunction(this, 'ClientsDeleteFn', {
-			entry: path.join(__dirname, '../../../backend/functions/clients/delete.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		clients.grantReadWriteData(clientsCreateFn);
-		clients.grantReadData(clientsListFn);
-		clients.grantReadData(clientsGetFn);
-		clients.grantReadWriteData(clientsUpdateFn);
-		clients.grantReadWriteData(clientsDeleteFn);
-		httpApi.addRoutes({
-			path: '/clients',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('ClientsCreateIntegration', clientsCreateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/clients',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('ClientsListIntegration', clientsListFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/clients/{id}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('ClientsGetIntegration', clientsGetFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/clients/{id}',
-			methods: [HttpMethod.PUT],
-			integration: new HttpLambdaIntegration('ClientsUpdateIntegration', clientsUpdateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/clients/{id}',
-			methods: [HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('ClientsDeleteIntegration', clientsDeleteFn),
-			authorizer
-		});
-
-		// Packages CRUD endpoints
-		const packagesCreateFn = new NodejsFunction(this, 'PackagesCreateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/packages/create.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const packagesListFn = new NodejsFunction(this, 'PackagesListFn', {
-			entry: path.join(__dirname, '../../../backend/functions/packages/list.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const packagesGetFn = new NodejsFunction(this, 'PackagesGetFn', {
-			entry: path.join(__dirname, '../../../backend/functions/packages/get.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const packagesUpdateFn = new NodejsFunction(this, 'PackagesUpdateFn', {
-			entry: path.join(__dirname, '../../../backend/functions/packages/update.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		const packagesDeleteFn = new NodejsFunction(this, 'PackagesDeleteFn', {
-			entry: path.join(__dirname, '../../../backend/functions/packages/delete.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		packages.grantReadWriteData(packagesCreateFn);
-		packages.grantReadData(packagesListFn);
-		packages.grantReadData(packagesGetFn);
-		packages.grantReadWriteData(packagesUpdateFn);
-		packages.grantReadWriteData(packagesDeleteFn);
-		httpApi.addRoutes({
-			path: '/packages',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('PackagesCreateIntegration', packagesCreateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/packages',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('PackagesListIntegration', packagesListFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/packages/{id}',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('PackagesGetIntegration', packagesGetFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/packages/{id}',
-			methods: [HttpMethod.PUT],
-			integration: new HttpLambdaIntegration('PackagesUpdateIntegration', packagesUpdateFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/packages/{id}',
-			methods: [HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('PackagesDeleteIntegration', packagesDeleteFn),
-			authorizer
-		});
-
-		// Processed complete
-		const processedCompleteFn = new NodejsFunction(this, 'ProcessedCompleteFn', {
-			entry: path.join(__dirname, '../../../backend/functions/processed/complete.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		orders.grantReadWriteData(processedCompleteFn);
-		galleries.grantReadData(processedCompleteFn);
-		galleriesBucket.grantWrite(processedCompleteFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/processed/complete',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('ProcessedCompleteIntegration', processedCompleteFn),
-			authorizer
-		});
-
-		// Send final link (order-based)
-		const ordersSendFinalLinkFn = new NodejsFunction(this, 'OrdersSendFinalLinkFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/sendFinalLink.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(ordersSendFinalLinkFn);
-		orders.grantReadWriteData(ordersSendFinalLinkFn); // Needs write to mark order as DELIVERED
-		galleriesBucket.grantWrite(ordersSendFinalLinkFn);
-		ordersSendFinalLinkFn.addToRolePolicy(new PolicyStatement({
-			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-			resources: ['*']
-		}));
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/send-final-link',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersSendFinalLinkIntegration', ordersSendFinalLinkFn),
-			authorizer
-		});
-
-		// List delivered orders (client access)
-		const ordersListDeliveredFn = new NodejsFunction(this, 'OrdersListDeliveredFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/listDelivered.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(ordersListDeliveredFn);
-		orders.grantReadData(ordersListDeliveredFn);
-		galleriesBucket.grantRead(ordersListDeliveredFn); // Needed to list final images
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/delivered',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersListDeliveredIntegration', ordersListDeliveredFn)
-		});
-
-		// List final images for a specific order (client access)
-		const ordersListFinalImagesFn = new NodejsFunction(this, 'OrdersListFinalImagesFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/listFinalImages.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(ordersListFinalImagesFn);
-		orders.grantReadData(ordersListFinalImagesFn);
-		galleriesBucket.grantRead(ordersListFinalImagesFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/images',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('OrdersListFinalImagesIntegration', ordersListFinalImagesFn)
-		});
-
-		// Upload final photos for a specific order (photographer access)
-		const ordersUploadFinalFn = new NodejsFunction(this, 'OrdersUploadFinalFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/uploadFinal.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(ordersUploadFinalFn);
-		orders.grantReadWriteData(ordersUploadFinalFn); // Needs write to update order status to PREPARING_DELIVERY
-		galleryAddons.grantReadData(ordersUploadFinalFn); // Needed to check hasBackupStorage before deleting originals
-		galleriesBucket.grantReadWrite(ordersUploadFinalFn); // Needs ListBucket to check if first photo, Write to upload, and Delete to remove originals
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/upload',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersUploadFinalIntegration', ordersUploadFinalFn),
-			authorizer
-		});
-
-		// Download final ZIP for a specific order (client access)
-		const ordersDownloadFinalZipFn = new NodejsFunction(this, 'OrdersDownloadFinalZipFn', {
-			entry: path.join(__dirname, '../../../backend/functions/orders/downloadFinalZip.ts'),
-			handler: 'handler',
-			runtime: Runtime.NODEJS_20_X,
-			memorySize: 512,
-			timeout: Duration.minutes(5),
-			bundling: {
-				externalModules: ['aws-sdk'],
-				minify: true,
-				treeShaking: true,
-				sourceMap: false
-			},
-			environment: envVars
-		});
-		galleries.grantReadData(ordersDownloadFinalZipFn);
-		orders.grantReadData(ordersDownloadFinalZipFn);
-		galleriesBucket.grantRead(ordersDownloadFinalZipFn);
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/zip',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('OrdersDownloadFinalZipIntegration', ordersDownloadFinalZipFn)
-		});
-
-		// Send gallery to client (invitation + password emails)
-		const sendGalleryToClientFn = new NodejsFunction(this, 'GalleriesSendGalleryToClientFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/sendGalleryToClient.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(sendGalleryToClientFn);
-		sendGalleryToClientFn.addToRolePolicy(new PolicyStatement({
-			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-			resources: ['*']
-		}));
-		httpApi.addRoutes({
-			path: '/galleries/{id}/send-to-client',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesSendGalleryToClientIntegration', sendGalleryToClientFn),
-			authorizer
-		});
-
-		// Export to Google/Apple Photos
-		const exportFn = new NodejsFunction(this, 'GalleriesExportFn', {
-			entry: path.join(__dirname, '../../../backend/functions/galleries/export.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			environment: envVars
-		});
-		galleries.grantReadData(exportFn);
-		orders.grantReadData(exportFn);
-		galleriesBucket.grantRead(exportFn);
-		exportFn.addToRolePolicy(new PolicyStatement({
-			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-			resources: ['*']
-		}));
-		httpApi.addRoutes({
-			path: '/galleries/{id}/export',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('GalleriesExportIntegration', exportFn)
-		});
-
-		new CfnOutput(this, 'BucketName', { value: galleriesBucket.bucketName });
-		new CfnOutput(this, 'OrdersTableName', { value: orders.tableName });
-		new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
-		new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
-		new CfnOutput(this, 'UserPoolDomain', { value: userPoolDomain.domainName });
-		new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
+		// Remove all individual HTTP Lambda functions - they're now handled by the single API Lambda
+		// Keeping only event-triggered and helper functions below
 
 		// DynamoDB Stream handler for TTL deletions - automatically triggered when gallery expires
-		// This is more efficient than daily scans - works to the second, scales infinitely
 		const galleryExpiryStreamFn = new NodejsFunction(this, 'GalleryExpiryStreamFn', {
 			entry: path.join(__dirname, '../../../backend/functions/expiry/onGalleryExpired.ts'),
 			handler: 'handler',
 			...defaultFnProps,
-			timeout: Duration.minutes(5), // Handle multiple deletions
+			timeout: Duration.minutes(5),
 			environment: envVars
 		});
-		galleriesDeleteFn.grantInvoke(galleryExpiryStreamFn); // Can invoke delete Lambda
+		galleriesDeleteHelperFn.grantInvoke(galleryExpiryStreamFn);
 		// Connect DynamoDB Stream to Lambda
-		// DynamoEventSource automatically grants the Lambda permission to read from the stream
-		// Filter to only process TTL deletions (userIdentity.type = "Service" and userIdentity.principalId = "dynamodb.amazonaws.com")
 		galleryExpiryStreamFn.addEventSource(new DynamoEventSource(galleries, {
 			startingPosition: 'LATEST',
 			batchSize: 10,
@@ -1204,7 +469,7 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleries.grantReadWriteData(expiryFn);
-		galleriesDeleteFn.grantInvoke(expiryFn); // Needed for fallback deletion of already-expired galleries
+		galleriesDeleteHelperFn.grantInvoke(expiryFn); // Needed for fallback deletion of already-expired galleries
 		expiryFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
 			resources: ['*']
@@ -1215,8 +480,6 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 		// Run every 6 hours for more frequent expiry checks and warnings
-		// Cost: ~$37/month for 1M galleries (4 scans/day)
-		// Balance: Frequent enough for timely warnings, cost-effective
 		new Rule(this, 'ExpirySchedule', {
 			schedule: Schedule.rate(Duration.hours(6)),
 			targets: [new LambdaFunction(expiryFn)]
@@ -1232,7 +495,7 @@ export class AppStack extends Stack {
 		});
 		transactions.grantReadWriteData(transactionExpiryFn);
 		galleries.grantReadWriteData(transactionExpiryFn);
-		galleriesDeleteFn.grantInvoke(transactionExpiryFn);
+		galleriesDeleteHelperFn.grantInvoke(transactionExpiryFn);
 		// Run every 15 minutes to check for expired wallet top-ups
 		// Also checks gallery transactions (3 days expiry)
 		new Rule(this, 'TransactionExpirySchedule', {
@@ -1280,14 +543,26 @@ export class AppStack extends Stack {
 		});
 		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy
 		// No manual policy needed - CDK handles it automatically
-		// Add CloudFront domain to env vars after distribution is created
+		// Add CloudFront domain and distribution ID to env vars after distribution is created
 		envVars.CLOUDFRONT_DOMAIN = dist.distributionDomainName;
-		// Update Lambda functions that need CloudFront domain (they were created before distribution)
-		galleriesGetFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
-		galleriesListFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
-		galleriesListImagesFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
-		ordersListDeliveredFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
-		ordersListFinalImagesFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
+		envVars.CLOUDFRONT_DISTRIBUTION_ID = dist.distributionId;
+		// Update API Lambda environment with CloudFront domain and distribution ID
+		apiFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
+		apiFn.addEnvironment('CLOUDFRONT_DISTRIBUTION_ID', dist.distributionId);
+
+		// CloudFront invalidation permissions (must be added after distribution is created)
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['cloudfront:CreateInvalidation'],
+			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
+		}));
+
+		// Outputs
+		new CfnOutput(this, 'BucketName', { value: galleriesBucket.bucketName });
+		new CfnOutput(this, 'OrdersTableName', { value: orders.tableName });
+		new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
+		new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
+		new CfnOutput(this, 'UserPoolDomain', { value: userPoolDomain.domainName });
+		new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
 		new CfnOutput(this, 'PreviewsDomainName', { value: dist.distributionDomainName });
 		new CfnOutput(this, 'PreviewsDistributionId', { value: dist.distributionId });
 	}

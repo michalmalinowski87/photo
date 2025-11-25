@@ -218,7 +218,7 @@ export default function GalleryDetail() {
       
       if (pkgChanged) {
         await apiFetch(`${apiUrl}/galleries/${galleryId}/pricing-package`, {
-          method: "POST",
+          method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,

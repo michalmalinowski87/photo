@@ -148,6 +148,43 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return a.key.localeCompare(b.key);
 			});
 
+		// Check for sync issue: no images but bytesUsed > 0
+		// Trigger automatic recalculation if detected (debounced internally)
+		if (images.length === 0 && (gallery.bytesUsed || 0) > 0) {
+			logger.info('Detected sync issue: no images but bytesUsed > 0, triggering automatic recalculation', {
+				galleryId,
+				bytesUsed: gallery.bytesUsed || 0
+			});
+			
+			// Trigger recalculation asynchronously (fire and forget to avoid blocking response)
+			(async () => {
+				try {
+					const { recalculateBytesUsedInternal } = await import('./recalculateBytesUsed');
+					// Check debounce before calling (5 minute debounce)
+					const now = Date.now();
+					const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
+						? new Date(gallery.lastBytesUsedRecalculatedAt).getTime() 
+						: 0;
+					const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+					
+					if (now - lastRecalculatedAt >= RECALCULATE_DEBOUNCE_MS) {
+						await recalculateBytesUsedInternal(galleryId, galleriesTable, bucket, gallery, logger);
+					} else {
+						logger.info('Automatic recalculation skipped (debounced)', {
+							galleryId,
+							timeSinceLastRecalculation: now - lastRecalculatedAt
+						});
+					}
+				} catch (recalcErr: any) {
+					// Log but don't fail image listing if recalculation fails
+					logger.warn('Automatic recalculation failed', {
+						error: recalcErr?.message,
+						galleryId
+					});
+				}
+			})();
+		}
+
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },

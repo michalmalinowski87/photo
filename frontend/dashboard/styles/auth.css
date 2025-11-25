@@ -3,77 +3,52 @@
 @tailwind utilities;
 
 /* Auth-specific styles - landing page theme for authentication pages */
+/* ALWAYS dark mode - dashboard theme should NEVER affect auth pages */
 @layer base {
-  :root {
-    --foreground: 0 0% 98%;
-    --background: 0 0% 3.9%;
+  /* Force dark mode for auth pages - override everything */
+  html:has(.auth-layout),
+  html .auth-layout,
+  .auth-layout {
+    --foreground: 0 0% 98% !important;
+    --background: 0 0% 3.9% !important;
 
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 3.9% !important;
+    --card-foreground: 0 0% 98% !important;
 
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9% !important;
+    --popover-foreground: 0 0% 98% !important;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 0 0% 98% !important;
+    --primary-foreground: 0 0% 9% !important;
 
     /* Theme colors - matching landing page */
-    --theme-primary: 108, 39, 157;
-    --theme-secondary: 0, 135, 255;
+    --theme-primary: 108, 39, 157 !important;
+    --theme-secondary: 0, 135, 255 !important;
 
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 0 0% 14.9% !important;
+    --secondary-foreground: 0 0% 98% !important;
 
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 0 0% 14.9% !important;
+    --muted-foreground: 0 0% 63.9% !important;
 
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 0 0% 14.9% !important;
+    --accent-foreground: 0 0% 98% !important;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6% !important;
+    --destructive-foreground: 0 0% 98% !important;
 
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 0 0% 14.9% !important;
+    --input: 0 0% 14.9% !important;
+    --ring: 0 0% 83.1% !important;
 
-    --radius: 0.5rem;
+    --radius: 0.5rem !important;
   }
 
-  .dark {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-
-    --tertiary: 0 0% 90%;
-    --tertiary-foreground: 0 0% 9%;
-
-    --subtle: 240 6% 90%;
-    --subtle-foreground: 0 0% 9%;
-
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+  /* Force dark background and text colors */
+  html:has(.auth-layout) body,
+  .auth-layout {
+    background-color: hsl(0 0% 3.9%) !important;
+    color: hsl(0 0% 98%) !important;
   }
 }
 
@@ -116,8 +91,38 @@ html, body {
   box-shadow: rgba(150, 18, 226, 0.3) 5px 5px;
 }
 
-/* Auth-specific styles */
-.auth-layout {
+/* Auth-specific styles - FORCE dark mode, override ALL dashboard styles */
+.auth-layout,
+html:has(.auth-layout),
+html:has(.auth-layout) body {
   font-family: "Inter", sans-serif !important;
+  background-color: hsl(0 0% 3.9%) !important;
+  color: hsl(0 0% 98%) !important;
+}
+
+/* Override globals.css body styles for auth pages */
+html:has(.auth-layout) body {
+  background-color: hsl(0 0% 3.9%) !important;
+  color: hsl(0 0% 98%) !important;
+}
+
+/* Force all text elements to be light colored */
+.auth-layout,
+.auth-layout * {
+  color: hsl(0 0% 98%) !important;
+}
+
+/* Force input fields to have dark background */
+.auth-layout input,
+.auth-layout textarea,
+.auth-layout select {
+  background-color: hsl(0 0% 14.9%) !important;
+  color: hsl(0 0% 98%) !important;
+  border-color: hsl(0 0% 14.9%) !important;
+}
+
+/* Force labels to be light */
+.auth-layout label {
+  color: hsl(0 0% 98%) !important;
 }
 

@@ -13,7 +13,7 @@ interface AppLayoutProps {
 }
 
 const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
-  const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { isExpanded, isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const handleCreateGallery = () => {
@@ -37,9 +37,9 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
         <Backdrop />
       </div>
       <div
-        className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark ${
-          isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
-        } ${isMobileOpen ? "ml-0" : ""}`}
+        className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[290px] ${
+          isMobileOpen ? "ml-0" : ""
+        }`}
       >
         <AppHeader onCreateGallery={onCreateGallery || handleCreateGallery} />
         <div className="p-4 mx-auto max-w-7xl md:p-6">

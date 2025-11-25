@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
@@ -6,6 +6,9 @@ import Select from "../ui/select/Select";
 import Badge from "../ui/badge/Badge";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { getIdToken } from "../../lib/auth";
+import { generatePassword } from "../../lib/password";
+import { formatCurrencyInput, plnToCents as plnToCentsUtil, centsToPlnString as centsToPlnStringUtil } from "../../lib/currency";
+import { useToast } from "../../hooks/useToast";
 
 interface CreateGalleryWizardProps {
   isOpen: boolean;
@@ -64,6 +67,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { showToast } = useToast();
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -79,6 +83,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
   const [paymentAmountInput, setPaymentAmountInput] = useState<string | null>(null);
+  // Ref to prevent duplicate API calls
+  const dataLoadedRef = useRef(false);
 
   const [data, setData] = useState<WizardData>({
     selectionEnabled: true,
@@ -103,18 +109,23 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
+      if (!dataLoadedRef.current) {
+        const apiUrlValue = process.env.NEXT_PUBLIC_API_URL || "";
+        setApiUrl(apiUrlValue);
+        dataLoadedRef.current = true;
       getIdToken()
         .then((token) => {
           setIdToken(token);
-          loadExistingPackages(token);
-          loadExistingClients(token);
+            // Pass apiUrl directly to avoid race condition with state update
+            loadExistingPackages(token, apiUrlValue);
+            loadExistingClients(token, apiUrlValue);
         })
         .catch(() => {
           if (typeof window !== "undefined") {
             window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
           }
         });
+      }
       setCurrentStep(1);
       setError("");
       setGalleryNameError("");
@@ -153,22 +164,21 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         hasBackupStorage: false,
         initialPaymentAmountCents: 0,
       });
+    } else {
+      // Reset ref when wizard closes
+      dataLoadedRef.current = false;
     }
   }, [isOpen]);
 
   useEffect(() => {
-    // Calculate total price
+    // Calculate total price (excluding package price - that's what client pays photographer, not gallery cost)
     const planData = PRICING_PLANS.find((p) => p.value === data.plan);
     const planPriceCents = planData ? planData.price * 100 : 700;
     const addonPriceCents = data.hasBackupStorage ? Math.round(planPriceCents * 0.3) : 0;
-    const packagePriceCents = data.packagePriceCents || 0;
     
-    // Total = plan + addon + package
-    const subtotal = planPriceCents + addonPriceCents + packagePriceCents;
-    // VAT 23%
-    const vatCents = Math.round(subtotal * 0.23);
-    setTotalPriceCents(subtotal + vatCents);
-  }, [data.plan, data.hasBackupStorage, data.packagePriceCents]);
+    // Total = plan + addon (VAT included in prices)
+    setTotalPriceCents(planPriceCents + addonPriceCents);
+  }, [data.plan, data.hasBackupStorage]);
 
   useEffect(() => {
     // Initialize selectedPlan when reaching step 5
@@ -185,29 +195,49 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   }, [currentStep, data.plan, selectedPlan]);
 
-  const loadExistingPackages = async (token?: string) => {
+  const loadExistingPackages = async (token?: string, apiUrlParam?: string) => {
     const tokenToUse = token || idToken;
-    if (!apiUrl || !tokenToUse) return;
+    const apiUrlToUse = apiUrlParam || apiUrl;
+    if (!apiUrlToUse || !tokenToUse) {
+      console.warn('loadExistingPackages: Missing apiUrl or token', { apiUrlToUse, hasToken: !!tokenToUse });
+      return;
+    }
     try {
-      const { data } = await apiFetch(`${apiUrl}/packages`, {
+      console.log('Loading packages from:', `${apiUrlToUse}/packages`);
+      const response = await apiFetch(`${apiUrlToUse}/packages`, {
         headers: { Authorization: `Bearer ${tokenToUse}` },
       });
-      setExistingPackages(data.items || []);
+      // apiFetch returns { data: body, response }
+      // The API returns { items: [...], count: ... }
+      const packages = response.data?.items || [];
+      console.log('Loaded packages:', packages.length);
+      setExistingPackages(packages);
     } catch (err) {
-      // Ignore errors
+      console.error('Failed to load packages:', err);
+      setExistingPackages([]);
     }
   };
 
-  const loadExistingClients = async (token?: string) => {
+  const loadExistingClients = async (token?: string, apiUrlParam?: string) => {
     const tokenToUse = token || idToken;
-    if (!apiUrl || !tokenToUse) return;
+    const apiUrlToUse = apiUrlParam || apiUrl;
+    if (!apiUrlToUse || !tokenToUse) {
+      console.warn('loadExistingClients: Missing apiUrl or token', { apiUrlToUse, hasToken: !!tokenToUse });
+      return;
+    }
     try {
-      const { data } = await apiFetch(`${apiUrl}/clients`, {
+      console.log('Loading clients from:', `${apiUrlToUse}/clients`);
+      const response = await apiFetch(`${apiUrlToUse}/clients`, {
         headers: { Authorization: `Bearer ${tokenToUse}` },
       });
-      setExistingClients(data.items || []);
+      // apiFetch returns { data: body, response }
+      // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
+      const clients = response.data?.items || [];
+      console.log('Loaded clients:', clients.length);
+      setExistingClients(clients);
     } catch (err) {
-      // Ignore errors
+      console.error('Failed to load clients:', err);
+      setExistingClients([]);
     }
   };
 
@@ -246,44 +276,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   };
 
-  // Helper function to format PLN input (allows only numbers and one decimal point)
-  const formatPriceInput = (value: string): string => {
-    // Remove any non-digit characters except decimal point
-    let cleaned = value.replace(/[^\d.]/g, '');
-    
-    // Split by decimal point to check
-    const parts = cleaned.split('.');
-    
-    // Ensure only one decimal point
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
-    }
-    
-    // Re-split after potential modification
-    const finalParts = cleaned.split('.');
-    
-    // Limit to 2 decimal places if decimal point exists
-    if (finalParts.length === 2 && finalParts[1].length > 2) {
-      cleaned = finalParts[0] + '.' + finalParts[1].substring(0, 2);
-    }
-    
-    return cleaned;
-  };
+  // Use currency utilities
+  const formatPriceInput = formatCurrencyInput;
+  const plnToCents = plnToCentsUtil;
+  const centsToPlnString = centsToPlnStringUtil;
 
-  // Helper function to convert PLN string to cents
-  const plnToCents = (plnString: string): number => {
-    if (!plnString || plnString === '') return 0;
-    const value = parseFloat(plnString);
-    return isNaN(value) ? 0 : Math.round(value * 100);
-  };
-
-  // Helper function to convert cents to PLN string for display
-  const centsToPlnString = (cents: number): string => {
-    if (cents === 0) return '';
-    const value = cents / 100;
-    // Preserve 2 decimal places if it's a whole number, otherwise show as is
-    return value % 1 === 0 ? value.toFixed(0) : value.toString();
-  };
 
   const validateStep = (step: number): boolean => {
     setError("");
@@ -307,6 +304,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           setError("Wartości pakietu nie mogą być ujemne");
           return false;
         }
+        if (data.initialPaymentAmountCents < 0) {
+          setError("Kwota wpłacona nie może być ujemna");
+          return false;
+        }
         return true;
       case 4:
         if (data.selectedClientId) {
@@ -314,6 +315,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
         if (!data.clientEmail.trim()) {
           setError("Email klienta jest wymagany");
+          return false;
+        }
+        if (!data.clientPassword.trim()) {
+          setError("Hasło jest wymagane");
           return false;
         }
         if (!data.isCompany && (!data.firstName.trim() || !data.lastName.trim())) {
@@ -332,21 +337,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       case 5:
         return true;
       case 6:
-        if (data.initialPaymentAmountCents < 0) {
-          setError("Kwota wpłacona nie może być ujemna");
-          return false;
-        }
-        const planData = PRICING_PLANS.find((p) => p.value === data.plan);
-        const planPriceCents = planData ? planData.price * 100 : 700;
-        const addonPriceCents = data.hasBackupStorage ? Math.round(planPriceCents * 0.3) : 0;
-        const packagePriceCents = data.packagePriceCents || 0;
-        const subtotal = planPriceCents + addonPriceCents + packagePriceCents;
-        const vatCents = Math.round(subtotal * 0.23);
-        const maxPrice = subtotal + vatCents;
-        if (data.initialPaymentAmountCents > maxPrice) {
-          setError("Kwota wpłacona nie może przekraczać całkowitej ceny");
-          return false;
-        }
+        // No validation needed for step 6 - payment amount is collected in step 3
         return true;
       default:
         return true;
@@ -385,6 +376,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       };
 
       // Add client data
+      // Password is always required for gallery access
+      requestBody.clientPassword = data.clientPassword.trim();
+      
       if (data.selectedClientId) {
         const client = existingClients.find((c) => c.clientId === data.selectedClientId);
         if (client) {
@@ -392,9 +386,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       } else {
         requestBody.clientEmail = data.clientEmail.trim();
-        if (data.clientPassword.trim()) {
-          requestBody.clientPassword = data.clientPassword.trim();
-        }
         if (data.isCompany) {
           requestBody.isVatRegistered = data.isVatRegistered;
         }
@@ -409,10 +400,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         body: JSON.stringify(requestBody),
       });
 
+      showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
       onSuccess(responseData.galleryId);
       onClose();
     } catch (err: any) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -541,6 +535,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         );
 
       case 3:
+        // Calculate payment status based on package price and payment amount
+        const packagePriceCentsForStatus = data.packagePriceCents || 0;
+        const paymentStatusForPakiet =
+          data.initialPaymentAmountCents === 0
+            ? "UNPAID"
+            : data.initialPaymentAmountCents >= packagePriceCentsForStatus
+            ? "PAID"
+            : "PARTIALLY_PAID";
+
         return (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center space-y-2">
@@ -558,13 +561,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     Wybierz pakiet (opcjonalne)
                   </label>
                   <Select
-                    options={[
-                      { value: "", label: "Wprowadź ręcznie" },
-                      ...existingPackages.map((pkg) => ({
+                    options={existingPackages.map((pkg) => ({
                         value: pkg.packageId,
                         label: `${pkg.name} - ${(pkg.price / 100).toFixed(2)} PLN`,
-                      }))
-                    ]}
+                    }))}
                     placeholder="Wybierz pakiet"
                     value={data.selectedPackageId || ""}
                     onChange={(value) => {
@@ -646,6 +646,56 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     }}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Kwota wpłacona przez klienta za pakiet (PLN)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="0.00"
+                    value={paymentAmountInput !== null ? paymentAmountInput : centsToPlnString(data.initialPaymentAmountCents)}
+                    onChange={(e) => {
+                      const formatted = formatPriceInput(e.target.value);
+                      setPaymentAmountInput(formatted);
+                      setData({
+                        ...data,
+                        initialPaymentAmountCents: plnToCents(formatted),
+                      });
+                    }}
+                    onBlur={() => {
+                      // Clear input state on blur if empty, let it use cents value
+                      if (!paymentAmountInput || paymentAmountInput === '') {
+                        setPaymentAmountInput(null);
+                      }
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Kwota wpłacona przez klienta za pakiet zakupiony od fotografa
+                  </p>
+                </div>
+                {packagePriceCentsForStatus > 0 && (
+                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      Status płatności:
+                    </p>
+                    <Badge
+                      color={
+                        paymentStatusForPakiet === "PAID"
+                          ? "success"
+                          : paymentStatusForPakiet === "PARTIALLY_PAID"
+                          ? "warning"
+                          : "error"
+                      }
+                      variant="light"
+                    >
+                      {paymentStatusForPakiet === "PAID"
+                        ? "Opłacone"
+                        : paymentStatusForPakiet === "PARTIALLY_PAID"
+                        ? "Częściowo opłacone"
+                        : "Nieopłacone"}
+                    </Badge>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -669,15 +719,12 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     Wybierz klienta (opcjonalne)
                   </label>
                   <Select
-                    options={[
-                      { value: "", label: "Nowy klient" },
-                      ...existingClients.map((client) => ({
+                    options={existingClients.map((client) => ({
                         value: client.clientId,
                         label: client.isCompany
                           ? `${client.companyName} (${client.email})`
                           : `${client.firstName} ${client.lastName} (${client.email})`,
-                      }))
-                    ]}
+                    }))}
                     placeholder="Wybierz klienta"
                     value={data.selectedClientId || ""}
                     onChange={(value) => {
@@ -702,7 +749,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                 </div>
               )}
 
-              {!data.selectedClientId && (
                 <div className="space-y-4 p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -717,14 +763,34 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Hasło (opcjonalne)
+                      Hasło *
                     </label>
-                    <Input
-                      type="password"
-                      placeholder="Hasło"
-                      value={data.clientPassword}
-                      onChange={(e) => setData({ ...data, clientPassword: e.target.value })}
-                    />
+                    <div className="flex gap-2 items-stretch">
+                      <div className="flex-1">
+                        <Input
+                          type="password"
+                          placeholder="Hasło"
+                          value={data.clientPassword}
+                          onChange={(e) => setData({ ...data, clientPassword: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const newPassword = generatePassword();
+                          setData({ ...data, clientPassword: newPassword });
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11 self-stretch"
+                      >
+                        Generuj
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {data.selectionEnabled
+                        ? "Hasło do wyboru zdjęć przez klienta"
+                        : "Hasło do dostępu do finalnej galerii"}
+                    </p>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -811,7 +877,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     />
                   </div>
                 </div>
-              )}
             </div>
           </div>
         );
@@ -924,19 +989,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         const planData = PRICING_PLANS.find((p) => p.value === data.plan);
         const planPriceCents = planData ? planData.price * 100 : 700;
         const addonPriceCents = data.hasBackupStorage ? Math.round(planPriceCents * 0.3) : 0;
-        const packagePriceCents = data.packagePriceCents || 0;
-        const subtotal = planPriceCents + addonPriceCents + packagePriceCents;
-        const vatCents = Math.round(subtotal * 0.23);
-        const finalTotal = subtotal + vatCents;
-        
-        // Payment status based on package price (photography packet)
-        const packageTotal = packagePriceCents;
-        const paymentStatus =
-          data.initialPaymentAmountCents === 0
-            ? "UNPAID"
-            : data.initialPaymentAmountCents >= packageTotal
-            ? "PAID"
-            : "PARTIALLY_PAID";
+        // Total price excludes package price - that's what client pays photographer, not gallery cost
+        const finalTotal = planPriceCents + addonPriceCents;
 
         return (
           <div className="space-y-6 max-w-3xl mx-auto">
@@ -986,8 +1040,14 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Cena pakietu:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{(packagePriceCents / 100).toFixed(2)} PLN</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{(data.packagePriceCents / 100).toFixed(2)} PLN</span>
                     </div>
+                    {data.initialPaymentAmountCents > 0 && (
+                      <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
+                        <span className="text-gray-600 dark:text-gray-400">Kwota wpłacona przez klienta:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{(data.initialPaymentAmountCents / 100).toFixed(2)} PLN</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1006,15 +1066,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                         <span className="font-medium text-gray-900 dark:text-white">{(addonPriceCents / 100).toFixed(2)} PLN</span>
                       </div>
                     )}
-                    {packagePriceCents > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Pakiet cenowy:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{(packagePriceCents / 100).toFixed(2)} PLN</span>
-                      </div>
-                    )}
                     <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
-                      <span className="text-gray-600 dark:text-gray-400">VAT 23%:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{(vatCents / 100).toFixed(2)} PLN</span>
+                      <span className="text-gray-600 dark:text-gray-400">VAT:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">wliczony</span>
                     </div>
                     <div className="flex justify-between pt-1.5 border-t-2 border-gray-300 dark:border-gray-600">
                       <span className="text-sm font-semibold text-gray-900 dark:text-white">Całkowita cena:</span>
@@ -1022,54 +1076,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Kwota wpłacona przez klienta (PLN)
-                </label>
-                <Input
-                  type="text"
-                  placeholder="0.00"
-                  value={paymentAmountInput !== null ? paymentAmountInput : centsToPlnString(data.initialPaymentAmountCents)}
-                  onChange={(e) => {
-                    const formatted = formatPriceInput(e.target.value);
-                    setPaymentAmountInput(formatted);
-                    setData({
-                      ...data,
-                      initialPaymentAmountCents: plnToCents(formatted),
-                    });
-                  }}
-                  onBlur={() => {
-                    // Clear input state on blur if empty, let it use cents value
-                    if (!paymentAmountInput || paymentAmountInput === '') {
-                      setPaymentAmountInput(null);
-                    }
-                  }}
-                />
-              </div>
-              <div className="p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Status płatności:
-                </p>
-                <Badge
-                  color={
-                    paymentStatus === "PAID"
-                      ? "success"
-                      : paymentStatus === "PARTIALLY_PAID"
-                      ? "warning"
-                      : "error"
-                  }
-                  variant="light"
-                >
-                  {paymentStatus === "PAID"
-                    ? "Opłacone"
-                    : paymentStatus === "PARTIALLY_PAID"
-                    ? "Częściowo opłacone"
-                    : "Nieopłacone"}
-                </Badge>
               </div>
             </div>
           </div>
@@ -1156,21 +1162,30 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
         <Button
           variant="outline"
           onClick={currentStep === 1 ? onClose : handleBack}
           disabled={loading}
+          className="flex-1 flex items-center justify-center gap-2"
         >
+          {currentStep !== 1 && (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
           {currentStep === 1 ? "Anuluj" : "Wstecz"}
         </Button>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-1 justify-end">
           {currentStep < 6 ? (
-            <Button onClick={handleNext} disabled={loading}>
+            <Button onClick={handleNext} disabled={loading} className="flex-1 flex items-center justify-center gap-2">
               Dalej
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={loading} variant="primary">
+            <Button onClick={handleSubmit} disabled={loading} variant="primary" className="flex-1">
               {loading ? "Tworzenie..." : "Utwórz galerię"}
             </Button>
           )}

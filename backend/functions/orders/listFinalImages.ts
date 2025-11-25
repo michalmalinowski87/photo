@@ -58,7 +58,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
-		// Verify order exists and is DELIVERED or PREPARING_DELIVERY
+		// Verify order exists
 		const orderGet = await ddb.send(new GetCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId }
@@ -69,13 +69,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				statusCode: 404,
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ error: 'Order not found' })
-			};
-		}
-		if (order.deliveryStatus !== 'DELIVERED' && order.deliveryStatus !== 'PREPARING_DELIVERY') {
-			return {
-				statusCode: 400,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Order is not delivered or preparing delivery' })
 			};
 		}
 

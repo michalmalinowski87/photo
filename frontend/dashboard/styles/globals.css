@@ -151,3 +151,78 @@
 .tableCheckbox:checked ~ span {
   @apply border-brand-500 bg-brand-500;
 }
+
+/* Toast z-index override - ensure toasts always appear above everything */
+[data-toast-container],
+.toast-container {
+  z-index: 2147483647 !important;
+  position: fixed !important;
+  border-radius: 0.75rem !important; /* rounded-xl to match toast alerts */
+  overflow: hidden !important; /* Ensure rounded corners are respected */
+}
+
+/* Round corners on individual toast wrappers */
+[data-toast-container] > div,
+.toast-container > div {
+  border-radius: 0.75rem !important; /* rounded-xl */
+  overflow: hidden !important;
+}
+
+/* Toast container background - matches page background to hide content underneath */
+.dark [data-toast-container],
+.dark .toast-container {
+  background-color: rgb(26 34 49) !important; /* gray-dark */
+}
+
+/* Ensure toast container and children are above everything - override any button/header z-index */
+[data-toast-container] *,
+.toast-container * {
+  position: relative !important;
+}
+
+/* Make toast Alert backgrounds more opaque for better visibility */
+[data-toast-container] .bg-success-50,
+.toast-container .bg-success-50 {
+  background-color: rgb(236 253 243) !important; /* success-50 with full opacity */
+}
+
+[data-toast-container] .dark\:bg-success-500\/15,
+.toast-container .dark\:bg-success-500\/15 {
+  background-color: rgba(18, 183, 106, 0.3) !important; /* success-500 with 30% opacity instead of 15% */
+}
+
+[data-toast-container] .bg-error-50,
+.toast-container .bg-error-50 {
+  background-color: rgb(254 243 242) !important; /* error-50 with full opacity */
+}
+
+[data-toast-container] .dark\:bg-error-500\/15,
+.toast-container .dark\:bg-error-500\/15 {
+  background-color: rgba(240, 68, 56, 0.3) !important; /* error-500 with 30% opacity instead of 15% */
+}
+
+[data-toast-container] .bg-warning-50,
+.toast-container .bg-warning-50 {
+  background-color: rgb(255 250 235) !important; /* warning-50 with full opacity */
+}
+
+[data-toast-container] .dark\:bg-warning-500\/15,
+.toast-container .dark\:bg-warning-500\/15 {
+  background-color: rgba(247, 144, 9, 0.3) !important; /* warning-500 with 30% opacity instead of 15% */
+}
+
+[data-toast-container] .bg-blue-light-50,
+.toast-container .bg-blue-light-50 {
+  background-color: rgb(240 249 255) !important; /* blue-light-50 with full opacity */
+}
+
+[data-toast-container] .dark\:bg-blue-light-500\/15,
+.toast-container .dark\:bg-blue-light-500\/15 {
+  background-color: rgba(11, 165, 236, 0.3) !important; /* blue-light-500 with 30% opacity instead of 15% */
+}
+
+/* Remove border from toast Alerts */
+[data-toast-container] .border,
+.toast-container .border {
+  border: none !important;
+}

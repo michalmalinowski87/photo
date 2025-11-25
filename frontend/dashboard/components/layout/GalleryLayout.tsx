@@ -13,6 +13,10 @@ interface GalleryLayoutProps {
   onSendLink: () => void;
   onSettings: () => void;
   onCreateGallery?: () => void;
+  onReloadGallery?: () => Promise<void>;
+  order?: any;
+  onDownloadZip?: () => void;
+  canDownloadZip?: boolean;
 }
 
 const GalleryLayout: React.FC<GalleryLayoutProps> = ({
@@ -25,6 +29,10 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onSendLink,
   onSettings,
   onCreateGallery,
+  onReloadGallery,
+  order,
+  onDownloadZip,
+  canDownloadZip,
 }) => {
   return (
     <ThemeProvider>
@@ -40,6 +48,10 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 onCopyUrl={onCopyUrl}
                 onSendLink={onSendLink}
                 onSettings={onSettings}
+                onReloadGallery={onReloadGallery}
+                order={order}
+                onDownloadZip={onDownloadZip}
+                canDownloadZip={canDownloadZip}
               />
             </div>
             <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">

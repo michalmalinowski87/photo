@@ -49,14 +49,14 @@ export default function PaymentConfirmationModal({
           </div>
 
           {isWalletOnly && (
-            <div className="p-4 bg-info-50 dark:bg-info-500/10 border border-info-200 dark:border-info-500/20 rounded-lg">
-              <div className="text-sm font-medium text-info-800 dark:text-info-200 mb-1">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                 Płatność z portfela
               </div>
-              <div className="text-xs text-info-600 dark:text-info-400">
+              <div className="text-sm text-blue-900 dark:text-blue-50 font-medium">
                 Z Twojego portfela zostanie pobrane {walletAmount} PLN
               </div>
-              <div className="text-xs text-info-600 dark:text-info-400 mt-1">
+              <div className="text-sm text-blue-800 dark:text-blue-100 mt-2">
                 Saldo po płatności: {(walletBalanceCents - walletAmountCents) / 100} PLN
               </div>
             </div>
@@ -80,14 +80,14 @@ export default function PaymentConfirmationModal({
 
           {isSplitPayment && (
             <div className="space-y-2">
-              <div className="p-4 bg-info-50 dark:bg-info-500/10 border border-info-200 dark:border-info-500/20 rounded-lg">
-                <div className="text-sm font-medium text-info-800 dark:text-info-200 mb-1">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <div className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                   Część z portfela
                 </div>
-                <div className="text-xs text-info-600 dark:text-info-400">
+                <div className="text-sm text-blue-900 dark:text-blue-50 font-medium">
                   Z Twojego portfela zostanie pobrane {walletAmount} PLN
                 </div>
-                <div className="text-xs text-info-600 dark:text-info-400 mt-1">
+                <div className="text-sm text-blue-800 dark:text-blue-100 mt-2">
                   Saldo po płatności: {(walletBalanceCents - walletAmountCents) / 100} PLN
                 </div>
               </div>

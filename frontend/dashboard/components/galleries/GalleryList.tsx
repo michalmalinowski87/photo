@@ -7,6 +7,7 @@ import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 import { FullPageLoading } from "../ui/loading/Loading";
 import PaymentConfirmationModal from "./PaymentConfirmationModal";
+import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { useToast } from "../../hooks/useToast";
 
 interface GalleryListProps {
@@ -31,6 +32,9 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     stripeAmountCents: 0,
     balanceAfterPayment: 0,
   });
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [galleryToDelete, setGalleryToDelete] = useState<any | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -178,6 +182,36 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     }
   };
 
+  const handleDeleteClick = (gallery: any) => {
+    setGalleryToDelete(gallery);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!apiUrl || !idToken || !galleryToDelete) return;
+    
+    setDeleteLoading(true);
+    
+    try {
+      await apiFetch(`${apiUrl}/galleries/${galleryToDelete.galleryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      showToast("success", "Sukces", "Galeria została usunięta");
+      setShowDeleteDialog(false);
+      setGalleryToDelete(null);
+      
+      // Reload galleries list
+      await loadGalleries();
+    } catch (err: any) {
+      const errorMsg = formatApiError(err);
+      showToast("error", "Błąd", errorMsg || "Nie udało się usunąć galerii");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const getStateBadge = (gallery: any) => {
     if (!gallery.isPaid) {
       return <Badge color="error" variant="light">Nieopłacone</Badge>;
@@ -200,7 +234,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
       )}
 
       {galleries.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
           Brak galerii do wyświetlenia
         </div>
       ) : (
@@ -299,6 +333,15 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                           Szczegóły
                         </Button>
                       </Link>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteClick(gallery)}
+                        disabled={deleteLoading}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+                      >
+                        Usuń
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -322,6 +365,24 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         walletAmountCents={paymentDetails.walletAmountCents}
         stripeAmountCents={paymentDetails.stripeAmountCents}
         loading={paymentLoading}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          if (!deleteLoading) {
+            setShowDeleteDialog(false);
+            setGalleryToDelete(null);
+          }
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń galerię"
+        message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName || galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        confirmText="Usuń galerię"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={deleteLoading}
       />
     </div>
   );

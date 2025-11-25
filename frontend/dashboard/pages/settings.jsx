@@ -4,15 +4,15 @@ import { getIdToken } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
-import { Alert } from "../components/ui/alert/Alert";
+import { useToast } from "../hooks/useToast";
 
 export default function Settings() {
+  const { showToast } = useToast();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [businessInfoLoading, setBusinessInfoLoading] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -46,13 +46,6 @@ export default function Settings() {
         const email = decodeTokenEmail(token);
         if (email) {
           setLoginEmail(email);
-          // Initialize contact email with login email if not set
-          setBusinessForm(prev => {
-            if (!prev.email) {
-              return { ...prev, email: email };
-            }
-            return prev;
-          });
         }
       },
       () => {
@@ -61,28 +54,65 @@ export default function Settings() {
     );
   }, []);
 
+  useEffect(() => {
+    if (apiUrl && idToken) {
+      loadBusinessInfo();
+    }
+  }, [apiUrl, idToken]);
+
+  const loadBusinessInfo = async () => {
+    if (!apiUrl || !idToken) return;
+    
+    try {
+      const { data } = await apiFetch(`${apiUrl}/auth/business-info`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      // Update business form with loaded data
+      setBusinessForm({
+        businessName: data.businessName || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        address: data.address || "",
+        nip: data.nip || "",
+      });
+      
+      // If email is not set in business info, use login email as default
+      if (!data.email && loginEmail) {
+        setBusinessForm(prev => ({
+          ...prev,
+          email: loginEmail
+        }));
+      }
+    } catch (err) {
+      // If 404 or no data, that's okay - user just hasn't set business info yet
+      // Use login email as default for contact email
+      if (loginEmail) {
+        setBusinessForm(prev => ({
+          ...prev,
+          email: loginEmail
+        }));
+      }
+    }
+  };
+
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (!apiUrl || !idToken) return;
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setError("Nowe hasła nie są identyczne");
+      showToast("error", "Błąd", "Nowe hasła nie są identyczne");
       return;
     }
 
     if (passwordForm.newPassword.length < 8) {
-      setError("Hasło musi mieć co najmniej 8 znaków");
+      showToast("error", "Błąd", "Hasło musi mieć co najmniej 8 znaków");
       return;
     }
 
-    setLoading(true);
-    setError("");
-    setSuccess("");
+    setPasswordLoading(true);
 
     try {
-      // Note: This endpoint needs to be created in the backend
-      // For now, we'll use Cognito's change password API
-      // In a real implementation, you'd call your backend which calls Cognito
       await apiFetch(`${apiUrl}/auth/change-password`, {
         method: "POST",
         headers: {
@@ -95,16 +125,16 @@ export default function Settings() {
         }),
       });
 
-      setSuccess("Hasło zostało zmienione pomyślnie");
+      showToast("success", "Sukces", "Hasło zostało zmienione pomyślnie");
       setPasswordForm({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
     } catch (err) {
-      setError(formatApiError(err));
+      showToast("error", "Błąd", formatApiError(err));
     } finally {
-      setLoading(false);
+      setPasswordLoading(false);
     }
   };
 
@@ -112,13 +142,9 @@ export default function Settings() {
     e.preventDefault();
     if (!apiUrl || !idToken) return;
 
-    setLoading(true);
-    setError("");
-    setSuccess("");
+    setBusinessInfoLoading(true);
 
     try {
-      // Note: This endpoint needs to be created in the backend
-      // It should update user attributes in Cognito
       await apiFetch(`${apiUrl}/auth/business-info`, {
         method: "PUT",
         headers: {
@@ -128,11 +154,11 @@ export default function Settings() {
         body: JSON.stringify(businessForm),
       });
 
-      setSuccess("Informacje biznesowe zostały zaktualizowane");
+      showToast("success", "Sukces", "Informacje biznesowe zostały zaktualizowane");
     } catch (err) {
-      setError(formatApiError(err));
+      showToast("error", "Błąd", formatApiError(err));
     } finally {
-      setLoading(false);
+      setBusinessInfoLoading(false);
     }
   };
 
@@ -141,22 +167,6 @@ export default function Settings() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
         Ustawienia
       </h1>
-
-      {error && (
-        <Alert
-          variant="error"
-          title="Błąd"
-          message={error}
-        />
-      )}
-
-      {success && (
-        <Alert
-          variant="success"
-          title="Sukces"
-          message={success}
-        />
-      )}
 
       {/* Login Email Display */}
       <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
@@ -233,8 +243,8 @@ export default function Settings() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" variant="primary" disabled={loading}>
-              {loading ? "Zapisywanie..." : "Zmień hasło"}
+            <Button type="submit" variant="primary" disabled={passwordLoading}>
+              {passwordLoading ? "Zapisywanie..." : "Zmień hasło"}
             </Button>
           </div>
         </form>
@@ -333,8 +343,8 @@ export default function Settings() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" variant="primary" disabled={loading}>
-              {loading ? "Zapisywanie..." : "Zapisz informacje"}
+            <Button type="submit" variant="primary" disabled={businessInfoLoading}>
+              {businessInfoLoading ? "Zapisywanie..." : "Zapisz informacje"}
             </Button>
           </div>
         </form>

@@ -6,8 +6,11 @@ import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+import { useToast } from "../hooks/useToast";
+import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 
 export default function Clients() {
+  const { showToast } = useToast();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
@@ -30,6 +33,8 @@ export default function Clients() {
   const [paginationCursor, setPaginationCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [pageHistory, setPageHistory] = useState([{ page: 1, cursor: null }]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -175,29 +180,41 @@ export default function Clients() {
       
       setShowForm(false);
       await loadClients(currentPage, pageHistory.find(h => h.page === currentPage)?.cursor || null, searchQuery);
+      showToast("success", "Sukces", editingClient ? "Klient został zaktualizowany" : "Klient został utworzony");
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (clientId) => {
-    if (!apiUrl || !idToken) return;
-    if (!confirm("Czy na pewno chcesz usunąć tego klienta?")) return;
+  const handleDeleteClick = (clientId) => {
+    setClientToDelete(clientId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!apiUrl || !idToken || !clientToDelete) return;
     
     setLoading(true);
     setError("");
+    setDeleteConfirmOpen(false);
     
     try {
-      await apiFetch(`${apiUrl}/clients/${clientId}`, {
+      await apiFetch(`${apiUrl}/clients/${clientToDelete}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${idToken}` },
       });
       
       await loadClients(currentPage, pageHistory.find(h => h.page === currentPage)?.cursor || null, searchQuery);
+      showToast("success", "Sukces", "Klient został usunięty");
+      setClientToDelete(null);
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -400,9 +417,13 @@ export default function Clients() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Klienci
         </h1>
-        <Button variant="primary" onClick={handleCreate}>
-          + Dodaj klienta
-        </Button>
+        <button
+          onClick={handleCreate}
+          className="text-xl font-bold text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
+        >
+          <span className="text-2xl">+</span>
+          <span>Dodaj klienta</span>
+        </button>
       </div>
 
       {error && (
@@ -429,7 +450,7 @@ export default function Clients() {
       ) : null}
 
       {clients.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
           {searchQuery ? "Brak wyników wyszukiwania." : "Brak klientów. Kliknij \"Dodaj klienta\" aby dodać pierwszego."}
         </div>
       ) : (
@@ -496,7 +517,7 @@ export default function Clients() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDelete(client.clientId)}
+                          onClick={() => handleDeleteClick(client.clientId)}
                         >
                           Usuń
                         </Button>
@@ -537,6 +558,22 @@ export default function Clients() {
           )}
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setClientToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń klienta"
+        message="Czy na pewno chcesz usunąć tego klienta? Ta operacja jest nieodwracalna."
+        confirmText="Usuń"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={loading}
+      />
     </div>
   );
 }

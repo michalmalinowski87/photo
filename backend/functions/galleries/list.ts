@@ -114,10 +114,15 @@ export const handler = lambdaLogger(async (event: any) => {
 					// Derive changeRequestPending from CHANGES_REQUESTED order status (not from gallery flag)
 					const changeRequestPending = orders.some((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
 					const orderStatuses = orders.map((o: any) => o.deliveryStatus).filter(Boolean);
+					// Calculate total revenue: sum of all order totals (additional photos) + photography package price
+					const ordersRevenueCents = orders.reduce((sum: number, o: any) => sum + (o.totalCents || 0), 0);
+					const photographyPackagePriceCents = g.pricingPackage?.packagePriceCents || 0;
+					const totalRevenueCents = ordersRevenueCents + photographyPackagePriceCents;
+					
 					orderData = {
 						changeRequestPending,
 						orderCount: orders.length,
-						totalRevenueCents: orders.reduce((sum: number, o: any) => sum + (o.totalCents || 0), 0),
+						totalRevenueCents,
 						latestOrder: orders.length > 0 ? orders.sort((a: any, b: any) => 
 							new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
 						)[0] : null,

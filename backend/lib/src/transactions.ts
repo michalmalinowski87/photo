@@ -184,21 +184,41 @@ export async function getUnpaidTransactionForGallery(galleryId: string): Promise
 		throw new Error('TRANSACTIONS_TABLE environment variable not set');
 	}
 
-	const result = await ddb.send(new QueryCommand({
-		TableName: transactionsTable,
-		IndexName: 'galleryId-status-index',
-		KeyConditionExpression: 'galleryId = :g AND #status = :s',
-		ExpressionAttributeValues: {
-			':g': galleryId,
-			':s': 'UNPAID'
-		},
-		ExpressionAttributeNames: {
-			'#status': 'status'
-		},
-		Limit: 1
-	}));
+	try {
+		const result = await ddb.send(new QueryCommand({
+			TableName: transactionsTable,
+			IndexName: 'galleryId-status-index',
+			KeyConditionExpression: 'galleryId = :g AND #status = :s',
+			ExpressionAttributeValues: {
+				':g': galleryId,
+				':s': 'UNPAID'
+			},
+			ExpressionAttributeNames: {
+				'#status': 'status'
+			},
+			Limit: 1
+		}));
 
-	return (result.Items && result.Items.length > 0 ? result.Items[0] as Transaction : null);
+		if (result.Items && result.Items.length > 0) {
+			return result.Items[0] as Transaction;
+		}
+		return null;
+	} catch (err: any) {
+		// Create a more descriptive error message
+		const errorMessage = err?.message || err?.toString() || JSON.stringify(err) || 'Unknown error';
+		const errorName = err?.name || 'UnknownError';
+		
+		// If GSI doesn't exist or query fails, throw with more context
+		if (errorName === 'ResourceNotFoundException' || errorMessage.includes('index') || errorMessage.includes('GSI')) {
+			throw new Error(`GSI 'galleryId-status-index' not found or not ready. Error: ${errorMessage}`);
+		}
+		
+		// Re-throw with more context
+		const enhancedError = new Error(`Failed to query unpaid transaction for gallery ${galleryId}: ${errorMessage}`);
+		(enhancedError as any).originalError = err;
+		(enhancedError as any).errorName = errorName;
+		throw enhancedError;
+	}
 }
 
 export interface PaginatedTransactionsResult {

@@ -33,6 +33,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		lastName,
 		phone,
 		isCompany = false,
+		isVatRegistered = false,
 		companyName,
 		nip
 	} = body;
@@ -64,16 +65,19 @@ export const handler = lambdaLogger(async (event: any) => {
 	const now = new Date().toISOString();
 	const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+	// When isCompany is true: use companyName and nip, reset firstName and lastName
+	// When isCompany is false: use firstName and lastName, reset companyName and nip
 	const client = {
 		clientId,
 		ownerId,
 		email: email.trim().toLowerCase(),
-		firstName: firstName?.trim() || '',
-		lastName: lastName?.trim() || '',
+		firstName: isCompany ? '' : (firstName?.trim() || ''),
+		lastName: isCompany ? '' : (lastName?.trim() || ''),
 		phone: phone?.trim() || '',
 		isCompany: !!isCompany,
-		companyName: isCompany ? companyName.trim() : '',
-		nip: isCompany ? nip.trim() : '',
+		isVatRegistered: isCompany ? !!isVatRegistered : false, // Only relevant for companies
+		companyName: isCompany ? (companyName?.trim() || '') : '',
+		nip: isCompany ? (nip?.trim() || '') : '',
 		createdAt: now,
 		updatedAt: now
 	};

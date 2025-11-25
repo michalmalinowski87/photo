@@ -4,7 +4,120 @@ import Link from "next/link";
 import Button from "../ui/button/Button";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { getIdToken } from "../../lib/auth";
+import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { useToast } from "../../hooks/useToast";
+
+// Component that retries loading an image until it's available on CloudFront
+const RetryableImage = ({ src, alt, className, maxRetries = 30, initialDelay = 500 }) => {
+  const [imageSrc, setImageSrc] = useState(src);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const retryTimeoutRef = useRef(null);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    // Reset when src changes
+    setImageSrc(src);
+    setRetryCount(0);
+    setIsLoading(true);
+    setHasLoaded(false);
+    
+    // Clear any pending retry
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    // Force image reload by clearing and setting src
+    if (imgRef.current && src) {
+      // Clear current src to force reload
+      imgRef.current.src = '';
+      // Use setTimeout to ensure the src is cleared before setting new one
+      setTimeout(() => {
+        if (imgRef.current && src) {
+          imgRef.current.src = src;
+        }
+      }, 0);
+    }
+  }, [src]);
+
+  const handleError = () => {
+    setRetryCount(currentRetryCount => {
+      const nextRetryCount = currentRetryCount + 1;
+      
+      if (currentRetryCount < maxRetries) {
+        setIsLoading(true);
+        setHasLoaded(false);
+        
+        // Exponential backoff: start with initialDelay, increase gradually
+        const delay = Math.min(initialDelay * Math.pow(1.2, currentRetryCount), 5000);
+        
+        retryTimeoutRef.current = setTimeout(() => {
+          // Add cache-busting query parameter
+          const separator = src.includes('?') ? '&' : '?';
+          const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${nextRetryCount}`;
+          
+          setImageSrc(retryUrl);
+          
+          // Force reload the image
+          if (imgRef.current) {
+            imgRef.current.src = retryUrl;
+          }
+        }, delay);
+        
+        return nextRetryCount;
+      } else {
+        setIsLoading(false);
+        setHasLoaded(false);
+        return currentRetryCount;
+      }
+    });
+  };
+
+  const handleLoad = () => {
+    setIsLoading(false);
+    setHasLoaded(true);
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    // Cleanup timeout on unmount
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Ładowanie obrazu...
+          </div>
+        </div>
+      )}
+      <img
+        ref={imgRef}
+        src={imageSrc}
+        alt={alt}
+        className={className}
+        onError={handleError}
+        onLoad={handleLoad}
+        style={{ 
+          opacity: hasLoaded ? 1 : 0,
+          transition: 'opacity 0.3s ease-in-out',
+          display: hasLoaded ? 'block' : 'none'
+        }}
+      />
+    </div>
+  );
+};
 
 interface GallerySidebarProps {
   gallery: any;
@@ -14,6 +127,10 @@ interface GallerySidebarProps {
   onCopyUrl: () => void;
   onSendLink: () => void;
   onSettings: () => void;
+  onReloadGallery?: () => Promise<void>;
+  order?: any;
+  onDownloadZip?: () => void;
+  canDownloadZip?: boolean;
 }
 
 export default function GallerySidebar({
@@ -24,6 +141,10 @@ export default function GallerySidebar({
   onCopyUrl,
   onSendLink,
   onSettings,
+  onReloadGallery,
+  order,
+  onDownloadZip,
+  canDownloadZip,
 }: GallerySidebarProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -32,11 +153,15 @@ export default function GallerySidebar({
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Update cover photo URL when gallery prop changes
+  // Update cover photo URL when gallery prop changes (backend already converts to CloudFront)
   useEffect(() => {
-    if (gallery?.coverPhotoUrl) {
-      setCoverPhotoUrl(gallery.coverPhotoUrl);
+    const newUrl = gallery?.coverPhotoUrl || null;
+    // Only update if URL actually changed to avoid unnecessary re-renders
+    if (newUrl !== coverPhotoUrl) {
+      setCoverPhotoUrl(newUrl);
     }
   }, [gallery?.coverPhotoUrl]);
 
@@ -70,8 +195,10 @@ export default function GallerySidebar({
       const idToken = await getIdToken();
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
       
-      // Get presigned URL - key should be relative to galleries/{galleryId}/
-      const key = `cover.jpg`;
+      // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const key = `cover_${timestamp}.${fileExtension}`;
       const presignResponse = await apiFetch(`${apiUrl}/uploads/presign`, {
         method: "POST",
         headers: {
@@ -95,34 +222,64 @@ export default function GallerySidebar({
         },
       });
       
-      // Build CloudFront URL for the cover photo
-      const cloudfrontDomain = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN;
-      const fullKey = presignResponse.data.key; // This is galleries/{galleryId}/cover.jpg
-      const newCoverUrl = cloudfrontDomain 
-        ? `https://${cloudfrontDomain}/${fullKey.split('/').map(encodeURIComponent).join('/')}`
-        : presignResponse.data.url.split('?')[0];
+      // Update gallery in backend with S3 URL - backend will convert it to CloudFront
+      const s3Url = presignResponse.data.url.split('?')[0]; // Remove query params
       
-      // Update gallery in backend (if there's an endpoint for this)
-      try {
-        await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            coverPhotoUrl: newCoverUrl,
-          }),
-        });
-      } catch (err) {
-        // If update endpoint doesn't exist, that's okay - we'll just use the URL
-        console.warn("Could not update gallery cover photo URL:", err);
+      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          coverPhotoUrl: s3Url,
+        }),
+      });
+      
+      // Reload gallery data to get the CloudFront URL from backend
+      if (onReloadGallery) {
+        await onReloadGallery();
       }
       
-      setCoverPhotoUrl(newCoverUrl);
       showToast("success", "Sukces", "Okładka galerii została przesłana");
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err) || "Nie udało się przesłać okładki");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  const handleRemoveCoverPhoto = async (e) => {
+    e.stopPropagation(); // Prevent triggering the file input
+    
+    if (!gallery?.galleryId) return;
+    
+    setUploadingCover(true);
+    
+    try {
+      const idToken = await getIdToken();
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      
+      // Remove cover photo by setting coverPhotoUrl to null
+      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          coverPhotoUrl: null,
+        }),
+      });
+      
+      // Reload gallery data to ensure consistency
+      if (onReloadGallery) {
+        await onReloadGallery();
+      }
+      
+      showToast("success", "Sukces", "Okładka galerii została usunięta");
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) || "Nie udało się usunąć okładki");
     } finally {
       setUploadingCover(false);
     }
@@ -153,6 +310,37 @@ export default function GallerySidebar({
   const handleDragLeave = (e) => {
     e.preventDefault();
     setIsDragging(false);
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!gallery?.galleryId) return;
+    
+    setDeleteLoading(true);
+    
+    try {
+      const idToken = await getIdToken();
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      
+      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      
+      showToast("success", "Sukces", "Galeria została usunięta");
+      setShowDeleteDialog(false);
+      
+      // Navigate back to galleries list
+      router.push("/");
+    } catch (err: any) {
+      const errorMsg = formatApiError(err);
+      showToast("error", "Błąd", errorMsg || "Nie udało się usunąć galerii");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   return (
@@ -196,7 +384,7 @@ export default function GallerySidebar({
       <div className="py-4 border-b border-gray-200 dark:border-gray-800">
         <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
         <div
-          className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors ${
+          className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
             isDragging
               ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
               : coverPhotoUrl
@@ -210,15 +398,25 @@ export default function GallerySidebar({
         >
           {coverPhotoUrl ? (
             <>
-              <img
+              <RetryableImage
                 src={coverPhotoUrl}
                 alt="Okładka galerii"
                 className="w-full h-full object-cover rounded-lg"
+                maxRetries={30}
+                initialDelay={500}
               />
-              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex items-center justify-center group">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
-                  {uploadingCover ? "Przesyłanie..." : "Kliknij aby zmienić"}
+              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group pointer-events-none">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium pointer-events-auto">
+                  {uploadingCover ? "Przesyłanie..." : "Kliknij na obraz aby zmienić"}
                 </div>
+                <button
+                  onClick={handleRemoveCoverPhoto}
+                  disabled={uploadingCover}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  title="Usuń okładkę"
+                >
+                  Usuń okładkę
+                </button>
               </div>
             </>
           ) : (
@@ -318,6 +516,16 @@ export default function GallerySidebar({
               </span>
             </span>
           </Button>
+          {canDownloadZip && onDownloadZip && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDownloadZip}
+              className="w-full mt-2"
+            >
+              Pobierz ZIP
+            </Button>
+          )}
         </div>
       )}
 
@@ -397,21 +605,25 @@ export default function GallerySidebar({
               <span>Zlecenia</span>
             </Link>
           </li>
-          <li>
-            <Link
-              href={`/galleries/${gallery?.galleryId}/photos`}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                router.pathname === `/galleries/[id]/photos`
-                  ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-              }`}
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 3C2.89543 3 2 3.89543 2 5V15C2 16.1046 2.89543 17 4 17H16C17.1046 17 18 16.1046 18 15V5C18 3.89543 17.1046 3 16 3H4ZM4 5H16V15H4V5ZM6 7C5.44772 7 5 7.44772 5 8C5 8.55228 5.44772 9 6 9C6.55228 9 7 8.55228 7 8C7 7.44772 6.55228 7 6 7ZM8 11L10.5 8.5L13 11L15 9V13H5V9L8 11Z" fill="currentColor"/>
-              </svg>
-              <span>Zdjęcia</span>
-            </Link>
-          </li>
+          {/* Only show "Zdjęcia" if selection is enabled OR backup addon is purchased */}
+          {/* Non-selection galleries without backup addon don't have originals to upload */}
+          {((gallery?.selectionEnabled !== false) || (gallery?.hasBackupStorage === true)) && (
+            <li>
+              <Link
+                href={`/galleries/${gallery?.galleryId}/photos`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  router.pathname === `/galleries/[id]/photos`
+                    ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
+                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                }`}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 3C2.89543 3 2 3.89543 2 5V15C2 16.1046 2.89543 17 4 17H16C17.1046 17 18 16.1046 18 15V5C18 3.89543 17.1046 3 16 3H4ZM4 5H16V15H4V5ZM6 7C5.44772 7 5 7.44772 5 8C5 8.55228 5.44772 9 6 9C6.55228 9 7 8.55228 7 8C7 7.44772 6.55228 7 6 7ZM8 11L10.5 8.5L13 11L15 9V13H5V9L8 11Z" fill="currentColor"/>
+                </svg>
+                <span>Zdjęcia</span>
+              </Link>
+            </li>
+          )}
           <li>
             <Link
               href={`/galleries/${gallery?.galleryId}/settings`}
@@ -452,6 +664,36 @@ export default function GallerySidebar({
           </div>
         </div>
       )}
+
+      {/* Delete Gallery Button */}
+      <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleDeleteClick}
+          disabled={deleteLoading}
+          className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+        >
+          {deleteLoading ? "Usuwanie..." : "Usuń galerię"}
+        </Button>
+      </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          if (!deleteLoading) {
+            setShowDeleteDialog(false);
+          }
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń galerię"
+        message={`Czy na pewno chcesz usunąć galerię "${gallery?.galleryName || gallery?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        confirmText="Usuń galerię"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={deleteLoading}
+      />
     </aside>
   );
 }

@@ -42,6 +42,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		lastName,
 		phone,
 		isCompany,
+		isVatRegistered,
 		companyName,
 		nip
 	} = body;
@@ -63,6 +64,9 @@ export const handler = lambdaLogger(async (event: any) => {
 	const existingClient = getResult.Item as any;
 	requireOwnerOr403(existingClient.ownerId, ownerId);
 
+	// Determine final isCompany value (use provided value or existing value)
+	const finalIsCompany = isCompany !== undefined ? !!isCompany : existingClient.isCompany;
+
 	// Build update expression
 	const updateExpressions: string[] = [];
 	const expressionValues: Record<string, any> = {};
@@ -71,16 +75,6 @@ export const handler = lambdaLogger(async (event: any) => {
 	if (email !== undefined) {
 		updateExpressions.push('email = :email');
 		expressionValues[':email'] = email.trim().toLowerCase();
-	}
-
-	if (firstName !== undefined) {
-		updateExpressions.push('firstName = :firstName');
-		expressionValues[':firstName'] = firstName?.trim() || '';
-	}
-
-	if (lastName !== undefined) {
-		updateExpressions.push('lastName = :lastName');
-		expressionValues[':lastName'] = lastName?.trim() || '';
 	}
 
 	if (phone !== undefined) {
@@ -93,14 +87,43 @@ export const handler = lambdaLogger(async (event: any) => {
 		expressionValues[':isCompany'] = !!isCompany;
 	}
 
-	if (companyName !== undefined) {
-		updateExpressions.push('companyName = :companyName');
-		expressionValues[':companyName'] = companyName?.trim() || '';
+	if (isVatRegistered !== undefined) {
+		updateExpressions.push('isVatRegistered = :isVatRegistered');
+		// Only set VAT registration if it's a company, otherwise reset to false
+		expressionValues[':isVatRegistered'] = finalIsCompany ? !!isVatRegistered : false;
+	} else if (finalIsCompany === false) {
+		// If switching to non-company, reset VAT registration
+		updateExpressions.push('isVatRegistered = :isVatRegistered');
+		expressionValues[':isVatRegistered'] = false;
 	}
 
-	if (nip !== undefined) {
+	// When isCompany is true: use companyName and nip, reset firstName and lastName to ""
+	// When isCompany is false: use firstName and lastName, reset companyName and nip to ""
+	// Always update these fields to ensure consistency
+	if (finalIsCompany) {
+		// Business: reset firstName and lastName, use companyName and nip
+		updateExpressions.push('firstName = :firstName');
+		updateExpressions.push('lastName = :lastName');
+		expressionValues[':firstName'] = '';
+		expressionValues[':lastName'] = '';
+		
+		// Update companyName and nip (use provided values or existing)
+		updateExpressions.push('companyName = :companyName');
 		updateExpressions.push('nip = :nip');
-		expressionValues[':nip'] = nip?.trim() || '';
+		expressionValues[':companyName'] = companyName !== undefined ? (companyName?.trim() || '') : (existingClient.companyName || '');
+		expressionValues[':nip'] = nip !== undefined ? (nip?.trim() || '') : (existingClient.nip || '');
+	} else {
+		// Non-business: use firstName and lastName, reset companyName and nip
+		updateExpressions.push('firstName = :firstName');
+		updateExpressions.push('lastName = :lastName');
+		expressionValues[':firstName'] = firstName !== undefined ? (firstName?.trim() || '') : (existingClient.firstName || '');
+		expressionValues[':lastName'] = lastName !== undefined ? (lastName?.trim() || '') : (existingClient.lastName || '');
+		
+		// Always reset company fields for non-business
+		updateExpressions.push('companyName = :companyName');
+		updateExpressions.push('nip = :nip');
+		expressionValues[':companyName'] = '';
+		expressionValues[':nip'] = '';
 	}
 
 	if (updateExpressions.length === 0) {
@@ -115,13 +138,19 @@ export const handler = lambdaLogger(async (event: any) => {
 	expressionValues[':updatedAt'] = new Date().toISOString();
 
 	try {
-		await ddb.send(new UpdateCommand({
+		const updateParams: any = {
 			TableName: clientsTable,
 			Key: { clientId },
 			UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-			ExpressionAttributeValues: expressionValues,
-			ExpressionAttributeNames: expressionNames
-		}));
+			ExpressionAttributeValues: expressionValues
+		};
+
+		// Only include ExpressionAttributeNames if it has values
+		if (Object.keys(expressionNames).length > 0) {
+			updateParams.ExpressionAttributeNames = expressionNames;
+		}
+
+		await ddb.send(new UpdateCommand(updateParams));
 
 		// Get updated client
 		const updatedResult = await ddb.send(new GetCommand({

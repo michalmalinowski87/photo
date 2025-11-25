@@ -95,15 +95,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Update gallery bytesUsed by subtracting deleted file size
 	if (fileSize > 0) {
 		try {
+			// Get current bytesUsed first to check if update would go negative
+			const currentBytesUsed = gallery.bytesUsed || 0;
+			const newBytesUsed = Math.max(0, currentBytesUsed - fileSize);
+			
+			// Use SET instead of ADD to ensure we don't go negative
 			await ddb.send(new UpdateCommand({
 				TableName: galleriesTable,
 				Key: { galleryId },
-				UpdateExpression: 'ADD bytesUsed :size',
+				UpdateExpression: 'SET bytesUsed = :size',
 				ExpressionAttributeValues: {
-					':size': -fileSize
+					':size': newBytesUsed
 				}
 			}));
-			logger.info('Updated gallery bytesUsed', { galleryId, sizeRemoved: fileSize });
+			logger.info('Updated gallery bytesUsed', { 
+				galleryId, 
+				sizeRemoved: fileSize,
+				oldBytesUsed: currentBytesUsed,
+				newBytesUsed
+			});
 		} catch (updateErr: any) {
 			logger.warn('Failed to update gallery bytesUsed', {
 				error: updateErr.message,
@@ -111,6 +121,43 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				size: fileSize
 			});
 		}
+	} else {
+		// File not found in S3 - bytesUsed might be out of sync
+		// Trigger automatic recalculation (debounced internally)
+		logger.info('File not found in S3, triggering automatic bytesUsed recalculation', {
+			galleryId,
+			filename,
+			currentBytesUsed: gallery.bytesUsed || 0
+		});
+		
+		// Trigger recalculation asynchronously (fire and forget to avoid blocking deletion)
+		// The recalculation function has built-in debouncing to prevent excessive calls
+		(async () => {
+			try {
+				const { recalculateBytesUsedInternal } = await import('./recalculateBytesUsed');
+				// Check debounce before calling (5 minute debounce)
+				const now = Date.now();
+				const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
+					? new Date(gallery.lastBytesUsedRecalculatedAt).getTime() 
+					: 0;
+				const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+				
+				if (now - lastRecalculatedAt >= RECALCULATE_DEBOUNCE_MS) {
+					await recalculateBytesUsedInternal(galleryId, galleriesTable, bucket, gallery, logger);
+				} else {
+					logger.info('Automatic recalculation skipped (debounced)', {
+						galleryId,
+						timeSinceLastRecalculation: now - lastRecalculatedAt
+					});
+				}
+			} catch (recalcErr: any) {
+				// Log but don't fail deletion if recalculation fails
+				logger.warn('Automatic recalculation failed', {
+					error: recalcErr?.message,
+					galleryId
+				});
+			}
+		})();
 	}
 
 	// Get updated gallery to return current storage usage
@@ -119,7 +166,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Key: { galleryId }
 	}));
 
-	const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
+	const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0);
 	const storageLimitBytes = updatedGallery.Item?.storageLimitBytes || 0;
 
 	return {

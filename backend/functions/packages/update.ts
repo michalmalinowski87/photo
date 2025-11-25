@@ -63,9 +63,11 @@ export const handler = lambdaLogger(async (event: any) => {
 	// Build update expression
 	const updateExpressions: string[] = [];
 	const expressionValues: Record<string, any> = {};
+	const expressionNames: Record<string, string> = {};
 
 	if (name !== undefined) {
-		updateExpressions.push('name = :name');
+		updateExpressions.push('#name = :name');
+		expressionNames['#name'] = 'name';
 		expressionValues[':name'] = name.trim();
 	}
 
@@ -117,12 +119,19 @@ export const handler = lambdaLogger(async (event: any) => {
 	expressionValues[':updatedAt'] = new Date().toISOString();
 
 	try {
-		await ddb.send(new UpdateCommand({
+		const updateCommand: any = {
 			TableName: packagesTable,
 			Key: { packageId },
 			UpdateExpression: `SET ${updateExpressions.join(', ')}`,
 			ExpressionAttributeValues: expressionValues
-		}));
+		};
+
+		// Only add ExpressionAttributeNames if we have any (i.e., if name is being updated)
+		if (Object.keys(expressionNames).length > 0) {
+			updateCommand.ExpressionAttributeNames = expressionNames;
+		}
+
+		await ddb.send(new UpdateCommand(updateCommand));
 
 		// Get updated package
 		const updatedResult = await ddb.send(new GetCommand({

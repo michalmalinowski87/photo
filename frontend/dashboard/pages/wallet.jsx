@@ -2,16 +2,20 @@ import { useState, useEffect } from "react";
 import { apiFetch, formatApiError } from "../lib/api";
 import { getIdToken } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
+import { formatCurrencyInput } from "../lib/currency";
 import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Loading } from "../components/ui/loading/Loading";
+import { useToast } from "../hooks/useToast";
 
 export default function Wallet() {
+  const { showToast } = useToast();
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
+  const [transactionsLoading, setTransactionsLoading] = useState(true); // Separate loading state for transactions
   const [error, setError] = useState("");
   const [balance, setBalance] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -46,6 +50,7 @@ export default function Wallet() {
       const params = new URLSearchParams(window.location.search);
       if (params.get("payment") === "success") {
         setError("");
+        showToast("success", "Sukces", "Portfel został doładowany pomyślnie");
         loadBalance();
         loadTransactions(1, null);
         // Clean up URL
@@ -75,7 +80,7 @@ export default function Wallet() {
   const loadTransactions = async (page, lastKey) => {
     if (!apiUrl || !idToken) return;
     
-    setLoading(true);
+    setTransactionsLoading(true);
     setError("");
     
     try {
@@ -106,9 +111,11 @@ export default function Wallet() {
         setPageHistory([...pageHistory, { page, cursor: lastKey }]);
       }
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
-      setLoading(false);
+      setTransactionsLoading(false);
     }
   };
 
@@ -138,7 +145,9 @@ export default function Wallet() {
     const amount = amountCents || Math.round(parseFloat(topUpAmount) * 100);
     
     if (amount < 2000) {
-      setError("Minimalna kwota doładowania to 20 PLN");
+      const errorMsg = "Minimalna kwota doładowania to 20 PLN";
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
       return;
     }
     
@@ -166,10 +175,14 @@ export default function Wallet() {
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        setError("Nie otrzymano URL do płatności");
+        const errorMsg = "Nie otrzymano URL do płatności";
+        setError(errorMsg);
+        showToast("error", "Błąd", errorMsg);
       }
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -181,6 +194,9 @@ export default function Wallet() {
       GALLERY_PLAN: "Plan galerii",
       ADDON_PURCHASE: "Zakup dodatku",
       REFUND: "Zwrot",
+      STRIPE_CHECKOUT: "Płatność kartą",
+      WALLET_DEBIT: "Płatność z portfela",
+      MIXED: "Płatność mieszana",
     };
     return typeMap[type] || type;
   };
@@ -278,12 +294,13 @@ export default function Wallet() {
           </div>
           <div className="flex gap-2">
             <Input
-              type="number"
+              type="text"
               placeholder="Kwota (min 20 PLN)"
               value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              min="20"
-              step="0.01"
+              onChange={(e) => {
+                const formatted = formatCurrencyInput(e.target.value);
+                setTopUpAmount(formatted);
+              }}
               className="flex-1"
             />
             <Button
@@ -310,23 +327,27 @@ export default function Wallet() {
             setCurrentPage(1);
             setPageHistory([{ page: 1, cursor: null }]);
             loadTransactions(1, null);
-          }} disabled={loading}>
+          }} disabled={transactionsLoading}>
             Odśwież
           </Button>
         </div>
 
-        <div className="min-h-[530px] flex items-center justify-center">
-          {loading ? (
+        {transactionsLoading ? (
+          <div className="min-h-[620px] flex items-center justify-center">
             <Loading size="lg" text="Ładowanie transakcji..." />
-          ) : transactions.length === 0 ? (
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="min-h-[530px] flex items-center justify-center">
             <p className="text-gray-500 dark:text-gray-400">
               Brak transakcji
             </p>
-          ) : (
-            <div className="w-full overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-900">
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <div className="h-[530px] overflow-y-auto">
+              <Table className="table-fixed w-full">
+              <TableHeader className="sticky top-0 z-10">
+                <TableRow className="bg-gray-50 dark:bg-gray-900">
                     <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
                       Data
                     </TableCell>
@@ -393,11 +414,21 @@ export default function Wallet() {
                       </TableRow>
                     );
                   })}
+                  {/* Spacer rows to maintain minimum height of 530px (approximately 9 rows) */}
+                  {transactions.length < 9 && Array.from({ length: 9 - transactions.length }).map((_, index) => (
+                    <TableRow key={`spacer-${index}`} className="h-[53px]">
+                      <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                      <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                      <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                      <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                      <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Pagination Controls */}
         {transactions.length > 0 && (
@@ -411,7 +442,7 @@ export default function Wallet() {
                 variant="outline"
                 size="sm"
                 onClick={handlePreviousPage}
-                disabled={loading || currentPage === 1}
+                disabled={transactionsLoading || currentPage === 1}
               >
                 Poprzednia
               </Button>
@@ -419,7 +450,7 @@ export default function Wallet() {
                 variant="outline"
                 size="sm"
                 onClick={handleNextPage}
-                disabled={loading || !hasMore}
+                disabled={transactionsLoading || !hasMore}
               >
                 Następna
               </Button>
