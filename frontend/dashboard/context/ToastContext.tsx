@@ -93,7 +93,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       {mounted && typeof window !== 'undefined' && createPortal(
         <div 
           data-toast-container
-          className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden" 
+          className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-dark" 
           style={{ 
             position: 'fixed',
             top: '87px',
@@ -102,8 +102,6 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
             maxWidth: '420px',
             width: 'auto',
             pointerEvents: 'none',
-            backgroundColor: 'rgb(249 250 251)', // bg-gray-50 for light mode
-            borderRadius: '0.75rem', // rounded-xl to match Alert component
           } as React.CSSProperties}
         >
           {toasts.map((toast) => (

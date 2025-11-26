@@ -371,14 +371,14 @@ export default function Orders() {
 			
 			{/* Configuration - Only show if not auto-configured */}
 			{(!process.env.NEXT_PUBLIC_API_URL || !idToken) && (
-				<div style={{ marginBottom: 16, padding: 16, background: '#f5f5f5', borderRadius: 8 }}>
-					<div style={{ marginBottom: 8 }}>
+				<div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+					<div className="mb-2">
 						<label>API URL </label>
-						<input style={{ width: '100%', maxWidth: 420 }} value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
+						<input className="w-full max-w-[420px]" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
 					</div>
-					<div style={{ marginBottom: 8 }}>
+					<div className="mb-2">
 						<label>ID Token </label>
-						<input style={{ width: '100%', maxWidth: 420 }} value={idToken} onChange={(e) => setIdToken(e.target.value)} placeholder="Auto-filled if logged in" />
+						<input className="w-full max-w-[420px]" value={idToken} onChange={(e) => setIdToken(e.target.value)} placeholder="Auto-filled if logged in" />
 					</div>
 				</div>
 			)}
@@ -407,7 +407,7 @@ export default function Orders() {
 					<tbody>
 						{orders.length === 0 ? (
 							<tr>
-								<td colSpan={7} style={{ textAlign: 'center', padding: 20, color: '#666' }}>
+								<td colSpan={7} className="text-center p-5 text-gray-500 dark:text-gray-400">
 									No orders found
 								</td>
 							</tr>
@@ -426,16 +426,7 @@ export default function Orders() {
 											<button 
 												onClick={() => downloadZip(o.orderId)} 
 												disabled={downloadingZip[o.orderId]}
-												style={{ 
-													marginRight: 8, 
-													padding: '4px 8px', 
-													fontSize: '12px', 
-													background: '#28a745', 
-													color: 'white', 
-													border: 'none', 
-													borderRadius: 4, 
-													cursor: 'pointer'
-												}}
+												className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 												title="Download ZIP file (one-time use)"
 											>
 												{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
@@ -446,16 +437,7 @@ export default function Orders() {
 											<button 
 												onClick={() => downloadZip(o.orderId)} 
 												disabled={downloadingZip[o.orderId]}
-												style={{ 
-													marginRight: 8, 
-													padding: '4px 8px', 
-													fontSize: '12px', 
-													background: '#28a745', 
-													color: 'white', 
-													border: 'none', 
-													borderRadius: 4, 
-													cursor: 'pointer'
-												}}
+												className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 												title="Download ZIP file (one-time use)"
 											>
 												{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
@@ -465,7 +447,7 @@ export default function Orders() {
 										{o.paymentStatus === 'UNPAID' && (
 											<button 
 												onClick={() => markAsPaid(o.orderId)}
-												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#007bff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												className="mr-2 px-2 py-1 text-xs bg-brand-500 dark:bg-brand-500 text-white border-none rounded cursor-pointer"
 											>
 												Mark as Paid
 											</button>
@@ -474,7 +456,7 @@ export default function Orders() {
 										{o.paymentStatus === 'UNPAID' && (
 											<button 
 												onClick={() => markAsPartiallyPaid(o.orderId)}
-												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												className="mr-2 px-2 py-1 text-xs bg-gray-500 dark:bg-gray-500 text-white border-none rounded cursor-pointer"
 											>
 												Mark Deposit Paid
 											</button>
@@ -483,7 +465,7 @@ export default function Orders() {
 										{o.deliveryStatus !== 'CANCELLED' && o.deliveryStatus !== 'DELIVERED' && (
 											<button 
 												onClick={() => markAsCanceled(o.orderId)}
-												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												className="mr-2 px-2 py-1 text-xs bg-error-500 dark:bg-error-500 text-white border-none rounded cursor-pointer"
 											>
 												Mark as Canceled
 											</button>
@@ -492,7 +474,7 @@ export default function Orders() {
 									{(o.paymentStatus === 'PAID' || o.paymentStatus === 'PARTIALLY_PAID') && o.deliveryStatus !== 'DELIVERED' && (
 											<button 
 												onClick={() => markAsRefunded(o.orderId)}
-												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#ffc107', color: 'black', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												className="mr-2 px-2 py-1 text-xs bg-warning-500 dark:bg-warning-500 text-gray-900 dark:text-white border-none rounded cursor-pointer"
 											>
 												Mark as Refunded
 											</button>
@@ -502,14 +484,14 @@ export default function Orders() {
 											<>
 												<button 
 													onClick={() => denyChange(o.orderId)}
-													style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+													className="mr-2 px-2 py-1 text-xs bg-error-500 dark:bg-error-500 text-white border-none rounded cursor-pointer"
 													title="Deny change request and revert to previous status"
 												>
 													Deny Change Request
 												</button>
 												<button 
 													onClick={() => approveChange(o.orderId)}
-													style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+													className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
 													title="Approve change request and unlock selection"
 												>
 													Approve Change Request
@@ -518,7 +500,7 @@ export default function Orders() {
 										)}
 										{/* Upload Final Photos - available for CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, or PREPARING_DELIVERY orders */}
 										{(o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'AWAITING_FINAL_PHOTOS' || o.deliveryStatus === 'PREPARING_DELIVERY') && (
-											<div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+											<div className="mb-2 flex items-center gap-2 flex-wrap">
 												<input
 													type="file"
 													multiple
@@ -527,12 +509,12 @@ export default function Orders() {
 														const files = Array.from(e.target.files || []);
 														setFinalFiles({ ...finalFiles, [o.orderId]: files });
 													}}
-													style={{ fontSize: '12px' }}
+													className="text-xs"
 												/>
 												<button 
 													onClick={() => uploadFinalPhotos(o.orderId)}
 													disabled={!finalFiles[o.orderId] || finalFiles[o.orderId].length === 0 || uploadingFinal[o.orderId]}
-													style={{ padding: '4px 8px', fontSize: '12px', background: uploadingFinal[o.orderId] ? '#ccc' : '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: uploadingFinal[o.orderId] ? 'not-allowed' : 'pointer' }}
+													className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinal[o.orderId] ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed' : 'bg-gray-500 dark:bg-gray-500 cursor-pointer'}`}
 													title="Upload processed photos (stored in original, unprocessed format)"
 												>
 													{uploadingFinal[o.orderId] ? 'Uploading...' : 'Upload Final Photos'}
@@ -545,7 +527,7 @@ export default function Orders() {
 										{o.deliveryStatus === 'PREPARING_DELIVERY' && o.paymentStatus === 'PAID' && (
 											<button 
 												onClick={() => sendFinalLink(o.orderId)}
-												style={{ marginRight: 8, padding: '4px 8px', fontSize: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+												className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
 												title="Send final link to client, mark as delivered, and clean up originals/thumbs/previews"
 											>
 												Send Final Link

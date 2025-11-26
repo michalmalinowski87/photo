@@ -183,49 +183,33 @@ function OwnerGalleryView({ token, ownerId, galleryId, mode }: OwnerGalleryViewP
 					<button
 						onClick={() => loadGallery()}
 						disabled={loading}
-						style={{
-							padding: '8px 16px',
-							background: '#f0f0f0',
-							color: '#333',
-							border: '1px solid #ccc',
-							borderRadius: 4,
-							cursor: loading ? 'not-allowed' : 'pointer',
-							fontSize: '14px'
-						}}
+						className={`px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded cursor-pointer text-sm ${
+							loading ? 'cursor-not-allowed opacity-50' : ''
+						}`}
 						title="Refresh gallery data"
 					>
 						{loading ? 'Refreshing...' : 'Refresh'}
 					</button>
 					{/* View Mode Toggle - Only show if there are delivered/preparing_delivery orders */}
 					{hasDeliveredOrders && (
-						<div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 4, borderRadius: 8 }}>
+						<div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
 							<button
 								onClick={() => setViewMode('processed')}
-								style={{
-									padding: '8px 16px',
-									background: viewMode === 'processed' ? '#0066cc' : 'transparent',
-									color: viewMode === 'processed' ? 'white' : '#666',
-									border: 'none',
-									borderRadius: 4,
-									cursor: 'pointer',
-									fontSize: '14px',
-									fontWeight: viewMode === 'processed' ? 'bold' : 'normal'
-								}}
+								className={`px-4 py-2 border-none rounded cursor-pointer text-sm ${
+									viewMode === 'processed'
+										? 'bg-brand-600 dark:bg-brand-500 text-white font-bold'
+										: 'bg-transparent text-gray-500 dark:text-gray-400 font-normal'
+								}`}
 							>
 								Processed Photos
 							</button>
 							<button
 								onClick={() => setViewMode('purchase')}
-								style={{
-									padding: '8px 16px',
-									background: viewMode === 'purchase' ? '#0066cc' : 'transparent',
-									color: viewMode === 'purchase' ? 'white' : '#666',
-									border: 'none',
-									borderRadius: 4,
-									cursor: 'pointer',
-									fontSize: '14px',
-									fontWeight: viewMode === 'purchase' ? 'bold' : 'normal'
-								}}
+								className={`px-4 py-2 border-none rounded cursor-pointer text-sm ${
+									viewMode === 'purchase'
+										? 'bg-brand-600 dark:bg-brand-500 text-white font-bold'
+										: 'bg-transparent text-gray-500 dark:text-gray-400 font-normal'
+								}`}
 							>
 								Original Photos
 							</button>
@@ -233,15 +217,7 @@ function OwnerGalleryView({ token, ownerId, galleryId, mode }: OwnerGalleryViewP
 					)}
 					<button 
 						onClick={() => router.push('/galleries')}
-						style={{
-							padding: '8px 16px',
-							background: '#666',
-							color: 'white',
-							border: 'none',
-							borderRadius: 4,
-							cursor: 'pointer',
-							fontSize: '14px'
-						}}
+						className="px-4 py-2 bg-gray-500 dark:bg-gray-500 text-white border-none rounded cursor-pointer text-sm"
 					>
 						Back to Galleries
 					</button>
@@ -279,19 +255,17 @@ function OwnerGalleryView({ token, ownerId, galleryId, mode }: OwnerGalleryViewP
 					/>
 
 					{images.length === 0 && !loading && apiUrl && galleryId && token && (
-						<p style={{ color: '#666', marginTop: 24 }}>No images found. Make sure the gallery has uploaded photos.</p>
+						<p className="text-gray-500 dark:text-gray-400 mt-6">No images found. Make sure the gallery has uploaded photos.</p>
 					)}
 				</div>
 			)}
 
 			{message && (
-				<div style={{ 
-					marginTop: 16, 
-					padding: 12, 
-					background: message.includes('Error') ? '#ffe6e6' : '#e6f7e6',
-					borderRadius: 4,
-					color: message.includes('Error') ? '#cc0000' : '#006600'
-				}}>
+				<div className={`mt-4 p-3 rounded ${
+					message.includes('Error')
+						? 'bg-error-50 dark:bg-error-500/15 text-error-600 dark:text-error-400'
+						: 'bg-success-50 dark:bg-success-500/15 text-success-600 dark:text-success-400'
+				}`}>
 					{message}
 				</div>
 			)}
