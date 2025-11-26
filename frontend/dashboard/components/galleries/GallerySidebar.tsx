@@ -2,19 +2,26 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import Button from "../ui/button/Button";
-import { apiFetch, formatApiError } from "../../lib/api";
-import { getIdToken } from "../../lib/auth";
+import api, { formatApiError } from "../../lib/api-service";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { useToast } from "../../hooks/useToast";
 
+interface RetryableImageProps {
+	src: string;
+	alt: string;
+	className?: string;
+	maxRetries?: number;
+	initialDelay?: number;
+}
+
 // Component that retries loading an image until it's available on CloudFront
-const RetryableImage = ({ src, alt, className, maxRetries = 30, initialDelay = 500 }) => {
-  const [imageSrc, setImageSrc] = useState(src);
-  const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const retryTimeoutRef = useRef(null);
-  const imgRef = useRef(null);
+const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "", maxRetries = 30, initialDelay = 500 }) => {
+  const [imageSrc, setImageSrc] = useState<string>(src);
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     // Reset when src changes
@@ -42,8 +49,8 @@ const RetryableImage = ({ src, alt, className, maxRetries = 30, initialDelay = 5
     }
   }, [src]);
 
-  const handleError = () => {
-    setRetryCount(currentRetryCount => {
+  const handleError = (): void => {
+    setRetryCount((currentRetryCount) => {
       const nextRetryCount = currentRetryCount + 1;
       
       if (currentRetryCount < maxRetries) {
@@ -75,7 +82,7 @@ const RetryableImage = ({ src, alt, className, maxRetries = 30, initialDelay = 5
     });
   };
 
-  const handleLoad = () => {
+  const handleLoad = (): void => {
     setIsLoading(false);
     setHasLoaded(true);
     if (retryTimeoutRef.current) {
@@ -200,7 +207,7 @@ export default function GallerySidebar({
     }
   };
 
-  const handleCoverPhotoUpload = async (file) => {
+  const handleCoverPhotoUpload = async (file: File): Promise<void> => {
     if (!file || !gallery?.galleryId) return;
     
     // Validate file size (max 5MB)
@@ -212,29 +219,19 @@ export default function GallerySidebar({
     setUploadingCover(true);
     
     try {
-      const idToken = await getIdToken();
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-      
       // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
       const timestamp = Date.now();
       const fileExtension = file.name.split('.').pop() || 'jpg';
       const key = `cover_${timestamp}.${fileExtension}`;
-      const presignResponse = await apiFetch(`${apiUrl}/uploads/presign`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          galleryId: gallery.galleryId,
-          key,
-          contentType: file.type || "image/jpeg",
-          fileSize: file.size,
-        }),
+      const presignResponse = await api.uploads.getPresignedUrl({
+        galleryId: gallery.galleryId,
+        key,
+        contentType: file.type || "image/jpeg",
+        fileSize: file.size,
       });
       
       // Upload file to S3
-      await fetch(presignResponse.data.url, {
+      await fetch(presignResponse.url, {
         method: "PUT",
         body: file,
         headers: {
@@ -243,17 +240,10 @@ export default function GallerySidebar({
       });
       
       // Update gallery in backend with S3 URL - backend will convert it to CloudFront
-      const s3Url = presignResponse.data.url.split('?')[0]; // Remove query params
+      const s3Url = presignResponse.url.split('?')[0]; // Remove query params
       
-      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          coverPhotoUrl: s3Url,
-        }),
+      await api.galleries.update(gallery.galleryId, {
+        coverPhotoUrl: s3Url,
       });
       
       // Reload gallery data to get the CloudFront URL from backend
@@ -269,7 +259,7 @@ export default function GallerySidebar({
     }
   };
 
-  const handleRemoveCoverPhoto = async (e) => {
+  const handleRemoveCoverPhoto = async (e: React.MouseEvent): Promise<void> => {
     e.stopPropagation(); // Prevent triggering the file input
     
     if (!gallery?.galleryId) return;
@@ -277,24 +267,14 @@ export default function GallerySidebar({
     setUploadingCover(true);
     
     try {
-      const idToken = await getIdToken();
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-      
       // Remove cover photo by setting coverPhotoUrl to null
-      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          coverPhotoUrl: null,
-        }),
+      await api.galleries.update(gallery.galleryId, {
+        coverPhotoUrl: null,
       });
       
       // Reload gallery data to ensure consistency
       if (onReloadGallery) {
-        await onReloadGallery();
+       	await onReloadGallery();
       }
       
       showToast("success", "Sukces", "Okładka galerii została usunięta");
@@ -305,14 +285,14 @@ export default function GallerySidebar({
     }
   };
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       handleCoverPhotoUpload(file);
     }
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(false);
     
@@ -322,12 +302,12 @@ export default function GallerySidebar({
     }
   };
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(false);
   };
@@ -336,19 +316,13 @@ export default function GallerySidebar({
     setShowDeleteDialog(true);
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = async (): Promise<void> => {
     if (!gallery?.galleryId) return;
     
     setDeleteLoading(true);
     
     try {
-      const idToken = await getIdToken();
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-      
-      await apiFetch(`${apiUrl}/galleries/${gallery.galleryId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.galleries.delete(gallery.galleryId);
       
       showToast("success", "Sukces", "Galeria została usunięta");
       setShowDeleteDialog(false);
@@ -855,8 +829,8 @@ export default function GallerySidebar({
         </div>
       )}
 
-      {/* UNPAID Banner */}
-      {!galleryLoading && gallery && !isPaid && (
+      {/* UNPAID Banner - Only show when gallery is fully loaded and confirmed unpaid */}
+      {!galleryLoading && gallery && gallery.galleryId && !isPaid && (
         <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
           <div className="p-3 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20">
             <div className="text-sm font-medium text-error-800 dark:text-error-200 mb-1">

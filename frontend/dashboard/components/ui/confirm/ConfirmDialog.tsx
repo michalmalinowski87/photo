@@ -5,7 +5,7 @@ import Button from "../button/Button";
 interface ConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (suppressChecked?: boolean) => void;
   title: string;
   message: string;
   confirmText?: string;

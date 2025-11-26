@@ -61,9 +61,15 @@ export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
                 {getStatusText()}
               </h4>
               <button
-                onClick={onDismiss}
-                className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDismiss();
+                }}
+                className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer relative z-10 p-1"
+                style={{ zIndex: 10, pointerEvents: 'auto' }}
                 aria-label="Zamknij"
+                type="button"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

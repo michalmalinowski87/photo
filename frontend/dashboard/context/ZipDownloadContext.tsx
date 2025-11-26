@@ -1,17 +1,11 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useDownloadStore } from '../store/downloadSlice';
 import { ZipDownloadProgress } from '../components/ui/zip-download/ZipDownloadProgress';
-
-interface ZipDownload {
-  id: string;
-  orderId: string;
-  galleryId: string;
-  status: 'generating' | 'downloading' | 'error' | 'success';
-  error?: string;
-}
 
 interface ZipDownloadContextType {
   startZipDownload: (orderId: string, galleryId: string) => string;
-  updateZipDownload: (id: string, updates: Partial<ZipDownload>) => void;
+  updateZipDownload: (id: string, updates: Partial<{ status: 'generating' | 'downloading' | 'error' | 'success'; error?: string }>) => void;
   removeZipDownload: (id: string) => void;
 }
 
@@ -30,44 +24,73 @@ interface ZipDownloadProviderProps {
 }
 
 export const ZipDownloadProvider: React.FC<ZipDownloadProviderProps> = ({ children }) => {
-  const [downloads, setDownloads] = useState<ZipDownload[]>([]);
+  // Read from Zustand store (same store used by withZipDownload hook)
+  const downloads = useDownloadStore((state) => state.downloads);
+  const addDownload = useDownloadStore((state) => state.addDownload);
+  const updateDownload = useDownloadStore((state) => state.updateDownload);
+  const removeDownload = useDownloadStore((state) => state.removeDownload);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const startZipDownload = useCallback((orderId: string, galleryId: string): string => {
     const id = `${galleryId}-${orderId}-${Date.now()}`;
-    setDownloads((prev) => [
-      ...prev.filter((d) => !(d.orderId === orderId && d.galleryId === galleryId)),
-      { id, orderId, galleryId, status: 'generating' },
-    ]);
+    // Remove any existing downloads for this order/gallery combination
+    const currentDownloads = useDownloadStore.getState().downloads;
+    Object.entries(currentDownloads).forEach(([existingId, download]) => {
+      if (download.orderId === orderId && download.galleryId === galleryId) {
+        removeDownload(existingId);
+      }
+    });
+    addDownload(id, { orderId, galleryId, status: 'generating' });
     return id;
-  }, []);
+  }, [addDownload, removeDownload]);
 
-  const updateZipDownload = useCallback((id: string, updates: Partial<ZipDownload>) => {
-    setDownloads((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
-    );
-  }, []);
+  const updateZipDownload = useCallback((id: string, updates: Partial<{ status: 'generating' | 'downloading' | 'error' | 'success'; error?: string }>) => {
+    updateDownload(id, updates);
+  }, [updateDownload]);
 
   const removeZipDownload = useCallback((id: string) => {
-    setDownloads((prev) => prev.filter((d) => d.id !== id));
-  }, []);
+    removeDownload(id);
+  }, [removeDownload]);
+
+  const downloadItems = Object.values(downloads);
 
   return (
     <ZipDownloadContext.Provider value={{ startZipDownload, updateZipDownload, removeZipDownload }}>
       {children}
-      {/* Render download progress indicators */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-        {downloads.map((download) => (
-          <div key={download.id} className="pointer-events-auto">
-            <ZipDownloadProgress
-              orderId={download.orderId}
-              galleryId={download.galleryId}
-              status={download.status}
-              error={download.error}
-              onDismiss={() => removeZipDownload(download.id)}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Render download progress indicators via portal */}
+      {mounted && typeof window !== 'undefined' && downloadItems.length > 0 && createPortal(
+        <div 
+          className="flex flex-col gap-2 pointer-events-none" 
+          style={{ 
+            position: 'fixed',
+            bottom: '16px',
+            right: '16px',
+            zIndex: 2147483646, // Very high z-index to ensure it's above everything
+            pointerEvents: 'none',
+          } as React.CSSProperties}
+        >
+          {downloadItems.map((download) => (
+            <div 
+              key={download.id} 
+              className="pointer-events-auto"
+              style={{ pointerEvents: 'auto' }}
+            >
+              <ZipDownloadProgress
+                orderId={download.orderId}
+                galleryId={download.galleryId}
+                status={download.status}
+                error={download.error}
+                onDismiss={() => removeZipDownload(download.id)}
+              />
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
     </ZipDownloadContext.Provider>
   );
 };

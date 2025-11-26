@@ -1,11 +1,16 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
-import { apiFetch, formatApiError } from "../../lib/api";
+import { apiFetch, apiFetchWithAuth, formatApiError } from "../../lib/api";
 import { getIdToken } from "../../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { useToast } from "../../hooks/useToast";
 import { GalleryProvider } from "../../context/GalleryContext";
 import { useZipDownload } from "../../context/ZipDownloadContext";
+import { useModal } from "../../hooks/useModal";
+import { useGalleryStore } from "../../store/gallerySlice";
+import { useOrderStore } from "../../store/orderSlice";
+import { useUserStore } from "../../store/userSlice";
+import { useZipDownload as useZipDownloadHook } from "../../hocs/withZipDownload";
 import GalleryLayout from "./GalleryLayout";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
@@ -20,27 +25,132 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const { id: galleryId, orderId } = router.query;
   const { showToast } = useToast();
   const { startZipDownload, updateZipDownload, removeZipDownload } = useZipDownload();
+  const { downloadZip } = useZipDownloadHook();
+  
+  // Zustand stores
+  const { 
+    currentGallery: gallery, 
+    isLoading: loading, 
+    error: loadError,
+    setCurrentGallery,
+    setLoading,
+    setError,
+    clearCurrentGallery 
+  } = useGalleryStore();
+  // Use selector to ensure re-render when order changes - watch deliveryStatus specifically
+  const order = useOrderStore((state) => state.currentOrder);
+  const deliveryStatus = useOrderStore((state) => state.currentOrder?.deliveryStatus);
+  const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
+  const clearCurrentOrder = useOrderStore((state) => state.clearCurrentOrder);
+  const { walletBalanceCents: walletBalance, refreshWalletBalance } = useUserStore();
+  
+  // Modal hooks
+  const { isOpen: showPaymentModal, openModal: openPaymentModal, closeModal: closePaymentModal } = useModal('payment');
+  const { isOpen: denyModalOpen, openModal: openDenyModal, closeModal: closeDenyModal } = useModal('deny-change');
+  
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [gallery, setGallery] = useState(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [galleryUrl, setGalleryUrl] = useState("");
-  const [order, setOrder] = useState(null);
   const [hasDeliveredOrders, setHasDeliveredOrders] = useState<boolean | undefined>(undefined);
   const [galleryOrders, setGalleryOrders] = useState<any[]>([]);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [denyModalOpen, setDenyModalOpen] = useState(false);
   const [denyLoading, setDenyLoading] = useState(false);
   const [sendLinkLoading, setSendLinkLoading] = useState(false);
+  const [orderUpdateKey, setOrderUpdateKey] = useState(0); // Force re-render when order updates
   const [paymentDetails, setPaymentDetails] = useState({
     totalAmountCents: 0,
     walletAmountCents: 0,
     stripeAmountCents: 0,
     balanceAfterPayment: 0,
   });
+  
+  // Define functions first (before useEffect hooks that use them)
+  const loadGalleryData = useCallback(async (silent = false) => {
+    if (!apiUrl || !idToken || !galleryId) return;
+    
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    
+    try {
+      const galleryResponse = await apiFetchWithAuth(`${apiUrl}/galleries/${galleryId}`);
+      
+      setCurrentGallery(galleryResponse.data);
+      setGalleryUrl(
+        typeof window !== "undefined"
+          ? `${window.location.origin}/gallery/${galleryId}`
+          : ""
+      );
+    } catch (err) {
+      if (!silent) {
+        const errorMsg = formatApiError(err);
+        setError(errorMsg || "Nie udało się załadować danych galerii");
+        showToast("error", "Błąd", errorMsg || "Nie udało się załadować danych galerii");
+      }
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, [apiUrl, idToken, galleryId, setLoading, setError, setCurrentGallery, showToast]);
+
+  const loadGalleryOrders = useCallback(async () => {
+    if (!apiUrl || !galleryId) return;
+    try {
+      const { data } = await apiFetchWithAuth(`${apiUrl}/galleries/${galleryId}/orders`);
+      const orders = data?.items || [];
+      setGalleryOrders(Array.isArray(orders) ? orders : []);
+    } catch (err) {
+      setGalleryOrders([]);
+    }
+  }, [apiUrl, galleryId]);
+
+  const checkDeliveredOrders = useCallback(async () => {
+    if (!apiUrl || !galleryId) return;
+    try {
+      const { data } = await apiFetchWithAuth(`${apiUrl}/galleries/${galleryId}/orders/delivered`);
+      const items = data?.items || data?.orders || [];
+      setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
+    } catch (err) {
+      setHasDeliveredOrders(false);
+    }
+  }, [apiUrl, galleryId]);
+
+  const loadOrderData = useCallback(async () => {
+    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    try {
+      const orderResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      let orderData = orderResponse.data;
+      if (typeof orderData === 'string') {
+        try {
+          orderData = JSON.parse(orderData);
+        } catch {
+          orderData = null;
+        }
+      }
+      // Update the Zustand store - this will trigger re-render of components using useOrderStore
+      setCurrentOrder(orderData);
+      // Force component re-render by updating orderUpdateKey
+      setOrderUpdateKey(prev => prev + 1);
+      // Force a small delay to ensure state updates propagate
+      await new Promise(resolve => setTimeout(resolve, 10));
+    } catch (err) {
+      setCurrentOrder(null);
+    }
+  }, [apiUrl, idToken, galleryId, orderId, setCurrentOrder]);
+
+  // Clear state when navigating away
+  useEffect(() => {
+    return () => {
+      if (!router.pathname.includes('/galleries/')) {
+        clearCurrentGallery();
+        clearCurrentOrder();
+      }
+    };
+  }, [router.pathname, clearCurrentGallery, clearCurrentOrder]);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
@@ -62,44 +172,35 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       if (!gallery || gallery.galleryId !== galleryId) {
         loadGalleryData();
       }
-      loadWalletBalance();
+      // Refresh wallet balance only when we have a valid token
+      if (idToken && idToken.trim() !== '') {
+        refreshWalletBalance();
+      }
       checkDeliveredOrders();
       loadGalleryOrders();
     }
-  }, [router.isReady, apiUrl, idToken, galleryId]);
-
-  const loadGalleryOrders = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
-    try {
-      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      const orders = data?.items || [];
-      setGalleryOrders(Array.isArray(orders) ? orders : []);
-    } catch (err) {
-      console.error("Failed to load gallery orders:", err);
-      setGalleryOrders([]);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, apiUrl, idToken, galleryId, gallery]);
 
   useEffect(() => {
     if (router.isReady && apiUrl && idToken && galleryId && orderId) {
       loadOrderData();
     } else {
-      setOrder(null);
+      setCurrentOrder(null);
     }
-  }, [router.isReady, apiUrl, idToken, galleryId, orderId]);
+  }, [router.isReady, apiUrl, idToken, galleryId, orderId, setCurrentOrder, loadOrderData]);
 
   // Listen for order updates from order page (e.g., after final upload)
   useEffect(() => {
     if (!orderId) return;
 
-    const handleOrderUpdate = (event) => {
+    const handleOrderUpdate = async (event) => {
       // Only reload if this is the same order
       if (event.detail?.orderId === orderId) {
-        loadOrderData();
+        // Reload order data immediately to update sidebar
+        await loadOrderData();
         // Also refresh delivered orders check in case status changed to DELIVERED
-        checkDeliveredOrders();
+        await checkDeliveredOrders();
       }
     };
 
@@ -109,93 +210,18 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         window.removeEventListener('orderUpdated', handleOrderUpdate);
       };
     }
-  }, [orderId, apiUrl, idToken, galleryId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
 
-  const loadGalleryData = async (silent = false) => {
-    if (!apiUrl || !idToken || !galleryId) return;
-    
-    if (!silent) {
-      setLoading(true);
-      setLoadError(null);
+  // Force re-render when order deliveryStatus changes - this ensures sidebar buttons update
+  // MUST be before any early returns to follow Rules of Hooks
+  useEffect(() => {
+    // This effect will run when deliveryStatus changes, forcing a re-render
+    // The orderObj, hasFinals, and canDownloadZip will be recomputed
+    if (deliveryStatus) {
+      setOrderUpdateKey(prev => prev + 1);
     }
-    
-    try {
-      const galleryResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      
-      setGallery(galleryResponse.data);
-      setGalleryUrl(
-        typeof window !== "undefined"
-          ? `${window.location.origin}/gallery/${galleryId}`
-          : ""
-      );
-    } catch (err) {
-      if (!silent) {
-        const errorMsg = formatApiError(err);
-        setLoadError(errorMsg || "Nie udało się załadować danych galerii");
-        showToast("error", "Błąd", errorMsg || "Nie udało się załadować danych galerii");
-      }
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const loadWalletBalance = async () => {
-    if (!apiUrl || !idToken) return;
-    try {
-      const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      setWalletBalance(data.balanceCents || 0);
-    } catch (err) {
-      console.error("Failed to load wallet balance:", err);
-    }
-  };
-
-  const checkDeliveredOrders = async () => {
-    if (!apiUrl || !idToken || !galleryId) return;
-    try {
-      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/delivered`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      const items = data?.items || data?.orders || [];
-      setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
-    } catch (err) {
-      console.error("Failed to check delivered orders:", err);
-      setHasDeliveredOrders(false);
-    }
-  };
-
-  const loadOrderData = async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) return;
-    try {
-      const orderResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      let orderData = orderResponse.data;
-      if (typeof orderData === 'string') {
-        try {
-          orderData = JSON.parse(orderData);
-        } catch {
-          orderData = null;
-        }
-      }
-      setOrder(orderData);
-      // Debug logging
-      console.log('GalleryLayoutWrapper: Order loaded', {
-        orderId,
-        hasOrder: !!orderData,
-        deliveryStatus: orderData?.deliveryStatus,
-        paymentStatus: orderData?.paymentStatus
-      });
-    } catch (err) {
-      console.error('GalleryLayoutWrapper: Failed to load order', err);
-      setOrder(null);
-    }
-  };
+  }, [deliveryStatus]);
 
   const handleApproveChangeRequest = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId) return;
@@ -215,7 +241,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const handleDenyChangeRequest = () => {
-    setDenyModalOpen(true);
+    openDenyModal();
   };
 
   const handleDenyConfirm = async (reason?: string) => {
@@ -234,7 +260,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       });
       
       showToast("success", "Sukces", "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu.");
-      setDenyModalOpen(false);
+      closeDenyModal();
       await loadOrderData();
       await loadGalleryOrders();
     } catch (err) {
@@ -247,70 +273,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const handleDownloadZip = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId || !order) return;
     
-    const orderObj = typeof order === 'string' ? (() => {
-      try {
-        return JSON.parse(order);
-      } catch {
-        return {};
-      }
-    })() : order;
-    
-    // Start download progress indicator
-    const downloadId = startZipDownload(orderId as string, galleryId as string);
-    
-    const pollForZip = async (): Promise<void> => {
-      try {
-        const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
-        const response = await fetch(zipUrl, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        
-        // Handle 202 - ZIP is being generated
-        if (response.status === 202) {
-          updateZipDownload(downloadId, { status: 'generating' });
-          // Retry after delay
-          setTimeout(() => {
-            pollForZip();
-          }, 2000); // Poll every 2 seconds
-          return;
-        }
-        
-        // Handle 200 - ZIP is ready
-        if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
-          updateZipDownload(downloadId, { status: 'downloading' });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${orderId}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
-          updateZipDownload(downloadId, { status: 'success' });
-          // Auto-dismiss after 3 seconds
-          setTimeout(() => {
-            removeZipDownload(downloadId);
-          }, 3000);
-        } else if (response.ok) {
-          // JSON response (error or other status)
-          const data = await response.json();
-          const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-          updateZipDownload(downloadId, { status: 'error', error: errorMsg });
-        } else {
-          // Error response
-          const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
-          updateZipDownload(downloadId, { status: 'error', error: errorData.error || "Nie udało się pobrać pliku ZIP" });
-        }
-      } catch (err) {
-        const errorMsg = formatApiError(err);
-        updateZipDownload(downloadId, { status: 'error', error: errorMsg });
-      }
-    };
-    
-    // Start polling
-    pollForZip();
+    await downloadZip({
+      apiUrl,
+      galleryId: galleryId as string,
+      orderId: orderId as string,
+    });
   };
 
   const handlePayClick = async () => {
@@ -329,9 +296,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         totalAmountCents: data.totalAmountCents,
         walletAmountCents: data.walletAmountCents,
         stripeAmountCents: data.stripeAmountCents,
-        balanceAfterPayment: walletBalance - data.walletAmountCents,
+        balanceAfterPayment: (walletBalance || 0) - data.walletAmountCents,
       });
-      setShowPaymentModal(true);
+      openPaymentModal();
     } catch (err) {
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg || "Nie udało się przygotować płatności");
@@ -343,7 +310,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const confirmPayment = async () => {
     if (!apiUrl || !idToken || !galleryId || !paymentDetails) return;
 
-    setShowPaymentModal(false);
+    closePaymentModal();
     setPaymentLoading(true);
 
     try {
@@ -364,7 +331,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       } else if (data.paid) {
         showToast("success", "Sukces", "Galeria została opłacona z portfela!");
         await loadGalleryData();
-        await loadWalletBalance();
+        await refreshWalletBalance();
         
         // If we're on an order page, reload order data and notify the order page
         if (orderId) {
@@ -462,91 +429,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const handleDownloadFinals = async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId) return;
     
-    // Start download progress indicator
-    const downloadId = startZipDownload(`${orderId}-finals`, galleryId as string);
-    
-    const pollForFinalsZip = async (): Promise<void> => {
-      try {
-        const zipUrl = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`;
-        const response = await fetch(zipUrl, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        
-        // Handle 202 - ZIP is being generated
-        if (response.status === 202) {
-          updateZipDownload(downloadId, { status: 'generating' });
-          // Retry after delay
-          setTimeout(() => {
-            pollForFinalsZip();
-          }, 2000); // Poll every 2 seconds
-          return;
-        }
-        
-        // Handle 200 - ZIP is ready
-        if (response.ok && response.headers.get('content-type')?.includes('application/zip')) {
-          updateZipDownload(downloadId, { status: 'downloading' });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          // Try to get filename from Content-Disposition header or use default
-          const contentDisposition = response.headers.get('content-disposition');
-          let filename = `order-${orderId}-finals.zip`;
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-            if (filenameMatch && filenameMatch[1]) {
-              filename = filenameMatch[1].replace(/['"]/g, '');
-            }
-          }
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
-          updateZipDownload(downloadId, { status: 'success' });
-          // Auto-dismiss after 3 seconds
-          setTimeout(() => {
-            removeZipDownload(downloadId);
-          }, 3000);
-        } else if (response.ok) {
-          // JSON response (error or other status) - handle base64 ZIP for backward compatibility
-          const data = await response.json();
-          if (data.zip) {
-            // Backward compatibility: handle base64 ZIP response
-            updateZipDownload(downloadId, { status: 'downloading' });
-            const zipBlob = Uint8Array.from(atob(data.zip), c => c.charCodeAt(0));
-            const blob = new Blob([zipBlob], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = data.filename || `order-${orderId}-finals.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            updateZipDownload(downloadId, { status: 'success' });
-            setTimeout(() => {
-              removeZipDownload(downloadId);
-            }, 3000);
-          } else {
-            const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-            updateZipDownload(downloadId, { status: 'error', error: errorMsg });
-          }
-        } else {
-          // Error response
-          const errorData = await response.json().catch(() => ({ error: 'Nie udało się pobrać pliku ZIP' }));
-          updateZipDownload(downloadId, { status: 'error', error: errorData.error || "Nie udało się pobrać pliku ZIP" });
-        }
-      } catch (err) {
-        const errorMsg = formatApiError(err);
-        updateZipDownload(downloadId, { status: 'error', error: errorMsg });
-      }
-    };
-    
-    // Start polling
-    pollForFinalsZip();
+    await downloadZip({
+      apiUrl,
+      galleryId: galleryId as string,
+      orderId: orderId as string,
+      endpoint: `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`,
+      filename: `order-${orderId}-finals.zip`,
+    });
   };
 
   const handleSendFinalsToClient = async () => {
@@ -610,11 +499,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     );
   }
 
-  const isPaid = gallery ? (gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")) : false;
+  // Only calculate isPaid when gallery is fully loaded to prevent flash of unpaid state
+  const isPaid = gallery && gallery.galleryId ? (gallery.isPaid !== false && (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")) : false;
 
   // Calculate canDownloadZip for order
   // Only show ZIP download if selection is enabled (ZIP contains selected photos)
   // If backup addon exists, ZIP is always available regardless of order status
+  // Parse order if needed - order comes from Zustand store and should be an object
   const orderObj = order && typeof order === 'object' ? order : (order && typeof order === 'string' ? (() => {
     try {
       return JSON.parse(order);
@@ -637,14 +528,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // ZIP download is available if:
   // 1. Backup addon exists (always available regardless of status)
   // 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
+  //    Note: After finals are uploaded (PREPARING_DELIVERY, DELIVERED), originals are deleted
+  //    unless backup addon is purchased
   const hasBackupAddon = gallery?.hasBackupStorage === true;
   const canDownloadZip = orderObj && selectionEnabled ? (
     hasBackupAddon || // Always available with backup addon
-    orderObj.deliveryStatus === "CLIENT_APPROVED" ||
-    orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
-    orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-    orderObj.deliveryStatus === "PREPARING_DELIVERY" ||
-    orderObj.deliveryStatus === "DELIVERED"
+    (orderObj.deliveryStatus === "CLIENT_APPROVED" ||
+     orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS")
+    // Exclude PREPARING_DELIVERY, PREPARING_FOR_DELIVERY, DELIVERED when no backup addon
+    // because originals are deleted after finals upload
   ) : false;
 
   return (
@@ -665,9 +557,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSendLink={handleSendLink}
         sendLinkLoading={sendLinkLoading}
         onSettings={handleSettings}
-        onReloadGallery={() => {
-          loadGalleryData(true);
-          loadGalleryOrders();
+        onReloadGallery={async () => {
+          await loadGalleryData(true);
+          await loadGalleryOrders();
         }}
         order={orderObj}
         orderId={orderId as string}
@@ -687,7 +579,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
       <DenyChangeRequestModal
         isOpen={denyModalOpen}
-        onClose={() => setDenyModalOpen(false)}
+        onClose={closeDenyModal}
         onConfirm={handleDenyConfirm}
         loading={denyLoading}
       />
@@ -695,10 +587,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       {showPaymentModal && (
         <PaymentConfirmationModal
           isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
+          onClose={closePaymentModal}
           onConfirm={confirmPayment}
           totalAmountCents={paymentDetails.totalAmountCents}
-          walletBalanceCents={walletBalance}
+          walletBalanceCents={walletBalance || 0}
           walletAmountCents={paymentDetails.walletAmountCents}
           stripeAmountCents={paymentDetails.stripeAmountCents}
           loading={paymentLoading}

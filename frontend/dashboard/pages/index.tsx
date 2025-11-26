@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { apiFetch, formatApiError } from "../lib/api";
-import { getIdToken } from "../lib/auth";
+import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput } from "../lib/currency";
 import Button from "../components/ui/button/Button";
@@ -14,8 +13,6 @@ import Link from "next/link";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [apiUrl, setApiUrl] = useState("");
-  const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [error, setError] = useState("");
   
@@ -42,11 +39,10 @@ export default function Dashboard() {
   const [denyOrderId, setDenyOrderId] = useState(null);
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
-    
     initializeAuth(
-      (token) => {
-        setIdToken(token);
+      () => {
+        loadDashboardData();
+        loadWalletBalance();
       },
       () => {
         redirectToLandingSignIn("/");
@@ -54,34 +50,19 @@ export default function Dashboard() {
     );
   }, []);
 
-  useEffect(() => {
-    if (apiUrl && idToken) {
-      loadDashboardData();
-      loadWalletBalance();
-    }
-  }, [apiUrl, idToken]);
-
   const loadDashboardData = async () => {
-    if (!apiUrl || !idToken) return;
-    
     setLoading(true);
     setError("");
     
     try {
       // Load all orders for statistics (get enough to calculate stats accurately)
-      const { data: statsData } = await apiFetch(`${apiUrl}/orders?page=1&itemsPerPage=1000`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const statsData = await api.orders.list({ page: 1, itemsPerPage: 1000 });
       
       // Load active orders (non-delivered) with pagination
-      const { data: activeOrdersData } = await apiFetch(`${apiUrl}/orders?excludeDeliveryStatus=DELIVERED&page=1&itemsPerPage=5`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const activeOrdersData = await api.orders.list({ excludeDeliveryStatus: 'DELIVERED', page: 1, itemsPerPage: 5 });
       
       // Load galleries to get plan prices for total revenue calculation
-      const { data: galleriesData } = await apiFetch(`${apiUrl}/galleries`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const galleriesData = await api.galleries.list();
       
       // Extract orders for statistics
       let allOrders = [];
@@ -90,7 +71,6 @@ export default function Dashboard() {
       } else if (statsData && Array.isArray(statsData.items)) {
         allOrders = statsData.items;
       } else {
-        console.warn("Unexpected orders response structure:", statsData);
         setError("Nieprawidłowy format odpowiedzi z API");
         return;
       }
@@ -144,7 +124,6 @@ export default function Dashboard() {
       
       setActiveOrders(activeOrders);
     } catch (err) {
-      console.error("Error loading dashboard data:", err);
       setError(formatApiError(err));
     } finally {
       setLoading(false);
@@ -152,18 +131,14 @@ export default function Dashboard() {
   };
 
   const handleApproveChangeRequest = async (galleryId, orderId) => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) return;
+    if (!galleryId || !orderId) return;
     
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${idToken}` }
-      });
+      await api.orders.approveChangeRequest(galleryId, orderId);
       
       // Reload dashboard data to refresh the orders list
       await loadDashboardData();
     } catch (err) {
-      console.error("Error approving change request:", err);
       setError(formatApiError(err));
     }
   };
@@ -175,19 +150,12 @@ export default function Dashboard() {
   };
 
   const handleDenyConfirm = async (reason?: string) => {
-    if (!apiUrl || !idToken || !denyGalleryId || !denyOrderId) return;
+    if (!denyGalleryId || !denyOrderId) return;
     
     setDenyLoading(true);
     
     try {
-      await apiFetch(`${apiUrl}/galleries/${denyGalleryId}/orders/${denyOrderId}/deny-change`, {
-        method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reason: reason || undefined })
-      });
+      await api.orders.denyChangeRequest(denyGalleryId, denyOrderId, reason);
       
       // Reload dashboard data to refresh the orders list
       setDenyModalOpen(false);
@@ -195,7 +163,6 @@ export default function Dashboard() {
       setDenyOrderId(null);
       await loadDashboardData();
     } catch (err) {
-      console.error("Error denying change request:", err);
       setError(formatApiError(err));
     } finally {
       setDenyLoading(false);
@@ -203,12 +170,8 @@ export default function Dashboard() {
   };
 
   const loadWalletBalance = async () => {
-    if (!apiUrl || !idToken) return;
-    
     try {
-      const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const data = await api.wallet.getBalance();
       setWalletBalance(data.balanceCents || 0);
     } catch (err) {
       // Ignore wallet errors
@@ -216,8 +179,6 @@ export default function Dashboard() {
   };
 
   const handleTopUp = async (amountCents: number) => {
-    if (!apiUrl || !idToken) return;
-    
     if (amountCents < 2000) {
       setError("Minimalna kwota doładowania to 20 PLN");
       return;
@@ -231,17 +192,10 @@ export default function Dashboard() {
         ? `${window.location.origin}/?payment=success`
         : "";
       
-      const { data } = await apiFetch(`${apiUrl}/payments/checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          amountCents,
-          type: "wallet_topup",
-          redirectUrl,
-        }),
+      const data = await api.payments.createCheckout({
+        amountCents,
+        type: "wallet_topup",
+        redirectUrl,
       });
       
       if (data.checkoutUrl) {

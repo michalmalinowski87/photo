@@ -81,9 +81,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	try {
-		// List originals from S3 (single source of truth)
-		// Originals are deleted based on selectedKeys when finals are uploaded, not based on filenames
-		// Final images may have different names than originals, so we don't filter by final image names
+		// List originals from S3 (may be empty if already deleted after finals upload)
 		const originalsPrefix = `galleries/${galleryId}/originals/`;
 		const originalsListResponse = await s3.send(new ListObjectsV2Command({
 			Bucket: bucket,
@@ -101,26 +99,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const originalKeys = new Set(originalFiles.keys());
 
 		// List preview images from S3 (to build URLs)
-		const prefix = `galleries/${galleryId}/previews/`;
-		const listResponse = await s3.send(new ListObjectsV2Command({
+		// Previews are kept even when originals are deleted, so we can show them as "Wybrane"
+		const previewsPrefix = `galleries/${galleryId}/previews/`;
+		const previewsListResponse = await s3.send(new ListObjectsV2Command({
 			Bucket: bucket,
-			Prefix: prefix
+			Prefix: previewsPrefix
 		}));
-		const previewKeys = new Set(
-			(listResponse.Contents || []).map(obj => {
+		const previewFiles = new Map<string, any>(
+			(previewsListResponse.Contents || [])
+				.map(obj => {
+					const fullKey = obj.Key || '';
+					const filename = fullKey.replace(previewsPrefix, '');
+					return filename ? [filename, obj] : null;
+				})
+				.filter((entry): entry is [string, any] => entry !== null)
+		);
+		const previewKeys = new Set(previewFiles.keys());
+
+		// List thumbnails from S3
+		const thumbsPrefix = `galleries/${galleryId}/thumbs/`;
+		const thumbsListResponse = await s3.send(new ListObjectsV2Command({
+			Bucket: bucket,
+			Prefix: thumbsPrefix
+		}));
+		const thumbKeys = new Set(
+			(thumbsListResponse.Contents || []).map(obj => {
 				const fullKey = obj.Key || '';
-				return fullKey.replace(prefix, '');
+				return fullKey.replace(thumbsPrefix, '');
 			}).filter(Boolean)
 		);
 
-		// Build images list from originals (S3 is single source of truth)
-		// If an original exists in S3, it's available for purchase
-		const images = Array.from(originalKeys)
+		// Build images list from both originals AND previews
+		// This allows showing previews even when originals are deleted (after finals upload)
+		// Combine keys from both originals and previews to ensure we show all available images
+		const allImageKeys = new Set([...originalKeys, ...previewKeys]);
+		
+		const images = Array.from(allImageKeys)
 			.map((filename: string) => {
 				if (!filename) return null;
 				
 				const originalObj = originalFiles.get(filename);
-				if (!originalObj) return null;
+				const previewObj = previewFiles.get(filename);
 				
 				// Build preview and thumb URLs if they exist
 				const previewKey = `galleries/${galleryId}/previews/${filename}`;
@@ -130,16 +149,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const previewUrl = previewKeys.has(filename) && cloudfrontDomain
 					? `https://${cloudfrontDomain}/${previewKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
-				const thumbUrl = cloudfrontDomain
+				const thumbUrl = thumbKeys.has(filename) && cloudfrontDomain
 					? `https://${cloudfrontDomain}/${thumbKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
+
+				// Use original size if available, otherwise use preview size, otherwise 0
+				const size = originalObj?.Size || previewObj?.Size || 0;
+				const lastModified = originalObj?.LastModified?.toISOString() || previewObj?.LastModified?.toISOString();
 
 				return {
 					key: filename,
 					previewUrl,
 					thumbUrl,
-					size: originalObj.Size || 0,
-					lastModified: originalObj.LastModified?.toISOString()
+					size,
+					lastModified
 				};
 			})
 			.filter((item): item is { key: string; previewUrl: string | null; thumbUrl: string | null; size: number; lastModified: string | undefined } => item !== null)

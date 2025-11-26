@@ -4,7 +4,7 @@ import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
 import Select from "../ui/select/Select";
 import Badge from "../ui/badge/Badge";
-import { apiFetch, formatApiError } from "../../lib/api";
+import { apiFetch, apiFetchWithAuth, formatApiError } from "../../lib/api";
 import { getIdToken } from "../../lib/auth";
 import { generatePassword } from "../../lib/password";
 import { formatCurrencyInput, plnToCents as plnToCentsUtil, centsToPlnString as centsToPlnStringUtil } from "../../lib/currency";
@@ -199,21 +199,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     const tokenToUse = token || idToken;
     const apiUrlToUse = apiUrlParam || apiUrl;
     if (!apiUrlToUse || !tokenToUse) {
-      console.warn('loadExistingPackages: Missing apiUrl or token', { apiUrlToUse, hasToken: !!tokenToUse });
       return;
     }
     try {
-      console.log('Loading packages from:', `${apiUrlToUse}/packages`);
-      const response = await apiFetch(`${apiUrlToUse}/packages`, {
-        headers: { Authorization: `Bearer ${tokenToUse}` },
-      });
+      const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
       // apiFetch returns { data: body, response }
       // The API returns { items: [...], count: ... }
       const packages = response.data?.items || [];
-      console.log('Loaded packages:', packages.length);
       setExistingPackages(packages);
     } catch (err) {
-      console.error('Failed to load packages:', err);
       setExistingPackages([]);
     }
   };
@@ -222,21 +216,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     const tokenToUse = token || idToken;
     const apiUrlToUse = apiUrlParam || apiUrl;
     if (!apiUrlToUse || !tokenToUse) {
-      console.warn('loadExistingClients: Missing apiUrl or token', { apiUrlToUse, hasToken: !!tokenToUse });
       return;
     }
     try {
-      console.log('Loading clients from:', `${apiUrlToUse}/clients`);
-      const response = await apiFetch(`${apiUrlToUse}/clients`, {
-        headers: { Authorization: `Bearer ${tokenToUse}` },
-      });
+      const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
       // apiFetch returns { data: body, response }
       // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
       const clients = response.data?.items || [];
-      console.log('Loaded clients:', clients.length);
       setExistingClients(clients);
     } catch (err) {
-      console.error('Failed to load clients:', err);
       setExistingClients([]);
     }
   };
@@ -391,11 +379,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       }
 
-      const { data: responseData } = await apiFetch(`${apiUrl}/galleries`, {
+      const { data: responseData } = await apiFetchWithAuth(`${apiUrl}/galleries`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify(requestBody),
       });

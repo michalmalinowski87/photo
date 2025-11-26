@@ -37,10 +37,16 @@ interface ToastProviderProps {
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [mounted, setMounted] = useState(false);
+  const toastsRef = React.useRef<ToastMessage[]>([]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Keep ref in sync with state to prevent unnecessary re-renders
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
 
   const showToast = useCallback(
     (
@@ -50,14 +56,23 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       duration?: number
     ) => {
       const id = Math.random().toString(36).substring(7);
-      setToasts((prev) => [...prev, { id, variant, title, message, duration }]);
+      const newToast = { id, variant, title, message, duration };
+      setToasts((prev) => {
+        const updated = [...prev, newToast];
+        toastsRef.current = updated;
+        return updated;
+      });
       return id;
     },
     []
   );
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    setToasts((prev) => {
+      const filtered = prev.filter((toast) => toast.id !== id);
+      toastsRef.current = filtered;
+      return filtered;
+    });
   }, []);
 
   useEffect(() => {

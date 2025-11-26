@@ -21,7 +21,8 @@
     "react-dom": "^18.2.0",
     "tailwind-merge": "^2.3.0",
     "tailwind-scrollbar-hide": "^1.1.7",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zustand": "^4.5.7"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.22",

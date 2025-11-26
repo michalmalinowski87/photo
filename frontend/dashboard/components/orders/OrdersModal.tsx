@@ -82,14 +82,12 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
         setHasNextPage(ordersData.hasNextPage || false);
         setHasPreviousPage(ordersData.hasPreviousPage || false);
       } else {
-        console.warn("Unexpected orders response structure:", ordersData);
         setError("Nieprawidłowy format odpowiedzi z API");
         return;
       }
 
       setOrders(allOrders);
     } catch (err) {
-      console.error("Error loading orders:", err);
       setError(formatApiError(err));
     } finally {
       setLoading(false);
@@ -255,7 +253,6 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                                     });
                                     await loadOrders();
                                   } catch (err) {
-                                    console.error("Error approving change request:", err);
                                     setError(formatApiError(err));
                                   }
                                 }}
@@ -344,7 +341,6 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
             setDenyOrderId(null);
             await loadOrders();
           } catch (err) {
-            console.error("Error denying change request:", err);
             setError(formatApiError(err));
           } finally {
             setDenyLoading(false);

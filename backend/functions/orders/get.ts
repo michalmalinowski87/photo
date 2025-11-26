@@ -6,7 +6,8 @@ import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any)?.logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
@@ -15,6 +16,15 @@ export const handler = lambdaLogger(async (event: any) => {
 	const orderId = event?.pathParameters?.orderId;
 	if (!galleryId || !orderId) return { statusCode: 400, body: 'missing params' };
 	const requester = getUserIdFromEvent(event);
+
+	// Check authentication first - return 401 if no valid token
+	if (!requester) {
+		return {
+			statusCode: 401,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
+		};
+	}
 
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
 	const gallery = g.Item as any;
@@ -26,16 +36,35 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	const order = o.Item as any;
 	
+	// Log order data for debugging (can be removed in production)
+	if (logger) {
+		logger.info('Order fetched', {
+			orderId,
+			galleryId,
+			hasSelectedKeys: !!order.selectedKeys,
+			selectedKeysType: typeof order.selectedKeys,
+			selectedKeysIsArray: Array.isArray(order.selectedKeys),
+			selectedKeysLength: Array.isArray(order.selectedKeys) ? order.selectedKeys.length : 'N/A',
+			orderKeys: Object.keys(order)
+		});
+	}
+	
 	// Check if gallery has backup storage addon (gallery-level)
 	const hasBackupStorage = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
 	
-	// Include addon info in response
+	// Ensure selectedKeys is included in response (handle DynamoDB List type conversion)
+	// DynamoDB might return List type which needs to be explicitly included
 	const orderWithAddon = {
 		...order,
+		selectedKeys: order.selectedKeys || [], // Ensure selectedKeys is always present, even if empty
 		hasBackupStorage
 	};
 
-	return { statusCode: 200, body: JSON.stringify(orderWithAddon) };
+	return { 
+		statusCode: 200, 
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(orderWithAddon) 
+	};
 });
 
 

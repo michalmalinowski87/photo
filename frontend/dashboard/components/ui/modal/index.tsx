@@ -21,19 +21,19 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && showCloseButton) {
         onClose();
       }
     };
 
-    if (isOpen) {
+    if (isOpen && showCloseButton) {
       document.addEventListener("keydown", handleEscape);
     }
 
     return () => {
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, showCloseButton]);
 
   useEffect(() => {
     if (isOpen) {
@@ -65,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm"
-          onClick={onClose}
+          onClick={showCloseButton ? onClose : undefined}
         ></div>
       )}
       <div

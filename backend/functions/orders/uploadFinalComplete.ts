@@ -357,10 +357,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		try {
 			const toDelete: { Key: string }[] = [];
 			for (const key of keysToDelete) {
-				// Add originals, thumbs, and previews to deletion list
+				// Only delete originals - keep thumbnails and previews for display purposes
+				// This allows showing "Wybrane" previews even after originals are removed
 				toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
+				// DO NOT delete thumbs and previews - they're needed for display
 			}
 
 			// Batch delete (S3 allows up to 1000 objects per request)
@@ -371,7 +371,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Delete: { Objects: chunk }
 				}));
 			}
-			logger?.info('Cleaned up originals/thumbs/previews (final photos uploaded)', { 
+			logger?.info('Cleaned up originals (final photos uploaded) - kept thumbnails and previews', { 
 				galleryId, 
 				orderId, 
 				count: keysToDelete.length 
@@ -406,7 +406,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		} catch (err: any) {
 			// Cleanup failed - return error instead of success
 			// Don't set the flag if cleanup failed - allows retry
-			logger?.error('Failed to clean up originals/thumbs/previews', {
+			logger?.error('Failed to clean up originals', {
 				error: err.message,
 				galleryId,
 				orderId,
@@ -417,7 +417,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ 
 					error: 'Cleanup failed',
-					message: 'Failed to delete originals/thumbs/previews. Please retry.',
+					message: 'Failed to delete originals. Please retry.',
 					details: err.message
 				})
 			};

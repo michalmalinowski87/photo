@@ -22,6 +22,8 @@ interface GalleryLayoutProps {
   onMarkOrderPaid?: () => void;
   onDownloadFinals?: () => void;
   onSendFinalsToClient?: () => void;
+  onApproveChangeRequest?: () => void;
+  onDenyChangeRequest?: () => void;
   hasFinals?: boolean;
   hasDeliveredOrders?: boolean | undefined;
   galleryLoading?: boolean;
@@ -45,6 +47,8 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onMarkOrderPaid,
   onDownloadFinals,
   onSendFinalsToClient,
+  onApproveChangeRequest,
+  onDenyChangeRequest,
   hasFinals,
   hasDeliveredOrders,
   galleryLoading,
@@ -73,6 +77,8 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 onMarkOrderPaid={onMarkOrderPaid}
                 onDownloadFinals={onDownloadFinals}
                 onSendFinalsToClient={onSendFinalsToClient}
+                onApproveChangeRequest={onApproveChangeRequest}
+                onDenyChangeRequest={onDenyChangeRequest}
                 hasFinals={hasFinals}
                 hasDeliveredOrders={hasDeliveredOrders}
                 galleryLoading={galleryLoading}

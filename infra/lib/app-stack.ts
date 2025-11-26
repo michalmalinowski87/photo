@@ -195,7 +195,8 @@ export class AppStack extends Stack {
 				externalModules: ['aws-sdk'],
 				minify: true,
 				treeShaking: true,
-				sourceMap: false
+				sourceMap: false,
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			}
 		};
 
@@ -242,7 +243,8 @@ export class AppStack extends Stack {
 				externalModules: ['aws-sdk'],
 				minify: true,
 				treeShaking: true,
-				sourceMap: false
+				sourceMap: false,
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: envVars
 		});

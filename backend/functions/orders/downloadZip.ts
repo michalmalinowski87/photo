@@ -84,6 +84,25 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
+	// Check if gallery has backup addon (gallery-level)
+	// If backup addon exists, ZIP is always available regardless of order status
+	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
+	
+	// Don't allow download if originals have been deleted (after finals upload)
+	// Originals are deleted when status changes to PREPARING_DELIVERY or DELIVERED
+	// Exception: If backup addon exists, originals are kept and ZIP is always available
+	if (!galleryHasBackup && (order.deliveryStatus === 'PREPARING_DELIVERY' || order.deliveryStatus === 'PREPARING_FOR_DELIVERY' || order.deliveryStatus === 'DELIVERED')) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Cannot download ZIP - originals have been deleted',
+				message: 'Original photos have been removed after final photos were uploaded. ZIP download is no longer available unless backup storage addon is purchased.',
+				deliveryStatus: order.deliveryStatus
+			})
+		};
+	}
+
 	// Always generate ZIP on-demand - check if generation is in progress or start new generation
 	const expectedZipKey = `galleries/${galleryId}/zips/${orderId}.zip`;
 	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;

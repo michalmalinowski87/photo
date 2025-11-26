@@ -242,7 +242,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Mark order as DELIVERED
-	// Note: Originals/thumbs/previews are already removed when status changed to PREPARING_DELIVERY
+	// Note: Originals are already removed when status changed to PREPARING_DELIVERY
+	// Thumbnails and previews are kept for display purposes (showing "Wybrane" previews)
 	// Backup addon ensures ZIPs are generated before originals are removed
 	const now = new Date().toISOString();
 	try {
