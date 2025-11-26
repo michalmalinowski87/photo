@@ -45,17 +45,22 @@ export default function Login() {
 						if (payload.exp && payload.exp > now) {
 							// Token is valid, redirect to returnUrl or root
 							const queryReturnUrl = router.query.returnUrl;
-							const storedReturnUrl = typeof window !== 'undefined' ? sessionStorage.getItem('authReturnUrl') : null;
-							const returnUrl = queryReturnUrl || storedReturnUrl || '/';
+							let returnUrl = '/';
 							
-							// Clear stored returnUrl after reading it
-							if (storedReturnUrl && typeof window !== 'undefined') {
+							if (queryReturnUrl) {
+								// User was redirected from a protected page, send them back there
+								returnUrl = typeof queryReturnUrl === 'string' ? queryReturnUrl : queryReturnUrl[0];
+							}
+							// For clean logins (no returnUrl query param), always go to root dashboard
+							
+							// Clear any stale authReturnUrl from sessionStorage
+							if (typeof window !== 'undefined') {
 								sessionStorage.removeItem('authReturnUrl');
 							}
 							
 							if (!hasRedirected.current) {
 								hasRedirected.current = true;
-								router.push(typeof returnUrl === 'string' ? returnUrl : '/');
+								router.push(returnUrl);
 								return;
 							}
 						}
@@ -68,17 +73,22 @@ export default function Login() {
 				const user = getCurrentUser();
 				if (user) {
 					const queryReturnUrl = router.query.returnUrl;
-					const storedReturnUrl = typeof window !== 'undefined' ? sessionStorage.getItem('authReturnUrl') : null;
-					const returnUrl = queryReturnUrl || storedReturnUrl || '/';
+					let returnUrl = '/';
 					
-					// Clear stored returnUrl after reading it
-					if (storedReturnUrl && typeof window !== 'undefined') {
+					if (queryReturnUrl) {
+						// User was redirected from a protected page, send them back there
+						returnUrl = typeof queryReturnUrl === 'string' ? queryReturnUrl : queryReturnUrl[0];
+					}
+					// For clean logins (no returnUrl query param), always go to root dashboard
+					
+					// Clear any stale authReturnUrl from sessionStorage
+					if (typeof window !== 'undefined') {
 						sessionStorage.removeItem('authReturnUrl');
 					}
 					
 					if (!hasRedirected.current) {
 						hasRedirected.current = true;
-						router.push(typeof returnUrl === 'string' ? returnUrl : '/');
+						router.push(returnUrl);
 						return;
 					}
 				}
@@ -113,17 +123,24 @@ export default function Login() {
 			// Small delay to ensure postMessage is sent
 			await new Promise(resolve => setTimeout(resolve, 100));
 			
-			// Redirect to returnUrl or root
+			// Redirect logic:
+			// - If returnUrl is in query params (user was redirected from protected page), use it
+			// - Otherwise, go to root dashboard '/' for clean logins
 			const queryReturnUrl = router.query.returnUrl;
-			const storedReturnUrl = typeof window !== 'undefined' ? sessionStorage.getItem('authReturnUrl') : null;
-			const returnUrl = queryReturnUrl || storedReturnUrl || '/';
+			let returnUrl = '/';
 			
-			// Clear stored returnUrl after reading it
-			if (storedReturnUrl && typeof window !== 'undefined') {
+			if (queryReturnUrl) {
+				// User was redirected from a protected page, send them back there
+				returnUrl = typeof queryReturnUrl === 'string' ? queryReturnUrl : queryReturnUrl[0];
+			}
+			// For clean logins (no returnUrl query param), always go to root dashboard
+			
+			// Clear any stale authReturnUrl from sessionStorage (it shouldn't be used for clean logins)
+			if (typeof window !== 'undefined') {
 				sessionStorage.removeItem('authReturnUrl');
 			}
 			
-			router.push(typeof returnUrl === 'string' ? returnUrl : '/');
+			router.push(returnUrl);
 		} catch (err) {
 			setLoading(false);
 			const error = err as CognitoError;

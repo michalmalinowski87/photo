@@ -1,0 +1,192 @@
+import React from 'react';
+import { Modal } from '../ui/modal';
+import Button from '../ui/button/Button';
+import { formatPrice } from '../../lib/format-price';
+import Link from 'next/link';
+
+interface WelcomePopupProps {
+	isOpen: boolean;
+	onClose: () => void;
+	welcomeBonusCents: number;
+}
+
+export const WelcomePopup: React.FC<WelcomePopupProps> = ({
+	isOpen,
+	onClose,
+	welcomeBonusCents,
+}) => {
+	const welcomeBonusAmount = welcomeBonusCents / 100;
+
+	return (
+		<Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[90vh] flex flex-col">
+			<div className="overflow-y-auto flex-1 p-4 md:p-6">
+				{/* Header with celebration */}
+				<div className="text-center mb-5 md:mb-6">
+					<div className="relative inline-flex items-center justify-center mb-4">
+						{/* Animated background circle */}
+						<div className="absolute inset-0 rounded-full bg-brand-400/20 via-brand-500/20 to-brand-600/20 animate-pulse"></div>
+						<div className="relative inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 shadow-lg">
+							<svg
+								className="w-8 h-8 md:w-10 md:h-10 text-white"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+								/>
+							</svg>
+						</div>
+					</div>
+					<h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2 bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">
+						Witamy w PhotoHub! 🎉
+					</h2>
+					<p className="text-base md:text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+						Jesteśmy zachwyceni, że dołączyłeś do naszej społeczności fotografów!
+					</p>
+					<p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1.5">
+						Chcemy, aby Twoja przygoda z nami zaczęła się od czegoś wyjątkowego...
+					</p>
+				</div>
+
+				{/* Welcome Bonus Section - More Exciting */}
+				<div className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-brand-100/50 to-brand-50 dark:from-brand-900/30 dark:via-brand-800/20 dark:to-brand-900/30 rounded-xl md:rounded-2xl p-4 md:p-6 mb-5 md:mb-6 border-2 border-brand-200/50 dark:border-brand-700/50 shadow-lg">
+					{/* Decorative elements */}
+					<div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-brand-400/10 rounded-full -mr-12 -mt-12 md:-mr-16 md:-mt-16"></div>
+					<div className="absolute bottom-0 left-0 w-20 h-20 md:w-24 md:h-24 bg-brand-500/10 rounded-full -ml-10 -mb-10 md:-ml-12 md:-mb-12"></div>
+					
+					<div className="relative flex flex-col md:flex-row items-start gap-3 md:gap-4">
+						<div className="flex-shrink-0">
+							<div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-lg">
+								<svg
+									className="w-6 h-6 md:w-7 md:h-7 text-white"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2.5}
+										d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+									/>
+								</svg>
+							</div>
+						</div>
+						<div className="flex-1 min-w-0">
+							<h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white mb-2">
+								Prezent powitalny od nas! 🎁
+							</h3>
+							<p className="text-sm md:text-base text-gray-800 dark:text-gray-200 mb-3 leading-relaxed">
+								W podziękowaniu za zaufanie, jakie nam okazujesz, przygotowaliśmy dla Ciebie{' '}
+								<span className="inline-flex items-center gap-1 font-bold text-xl md:text-2xl text-brand-600 dark:text-brand-400 px-2 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-brand-200/50 dark:border-brand-700/50">
+									{formatPrice(welcomeBonusCents)}
+								</span>{' '}
+								bonusu powitalnego!
+							</p>
+							<div className="bg-white/60 dark:bg-gray-800/60 rounded-lg md:rounded-xl p-3 md:p-4 border border-brand-200/50 dark:border-brand-700/50">
+								<p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+									<span className="font-semibold text-brand-700 dark:text-brand-300">To wystarczy na plan 1GB - 3 miesiące!</span> 
+									{' '}Możesz od razu rozpocząć pracę i utworzyć swoją pierwszą galerię bez dodatkowych kosztów. 
+									To nasz sposób na pokazanie, jak bardzo cieszymy się, że jesteś z nami! ✨
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* First Steps Section - More Friendly */}
+				<div className="mb-4 md:mb-5">
+					<div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+						<div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+						<h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
+							Zacznijmy razem!
+						</h3>
+						<div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+					</div>
+					<div className="space-y-2 md:space-y-2.5">
+						<div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+							<div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+								1
+							</div>
+							<div className="flex-1 min-w-0 pt-0">
+								<h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm md:text-base">
+									Utwórz swoją pierwszą galerię
+								</h4>
+								<p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+									Kliknij przycisk "Utwórz galerię" w menu. To zajmie tylko chwilę, a już będziesz mógł rozpocząć pracę z klientami!
+								</p>
+							</div>
+						</div>
+
+						<div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+							<div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+								2
+							</div>
+							<div className="flex-1 min-w-0 pt-0">
+								<h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm md:text-base">
+									Prześlij zdjęcia
+								</h4>
+								<p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+									Po utworzeniu galerii, prześlij zdjęcia do przeglądu przez klienta lub od razu finały - Ty decydujesz o przepływie pracy.
+								</p>
+							</div>
+						</div>
+
+						<div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+							<div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+								3
+							</div>
+							<div className="flex-1 min-w-0 pt-0">
+								<h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm md:text-base">
+									Udostępnij galerię klientowi
+								</h4>
+								<p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+									Wyślij link do galerii klientowi jednym kliknięciem. Będzie mógł przeglądać, wybierać i komentować zdjęcia w wygodny sposób.
+								</p>
+							</div>
+						</div>
+
+						<div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+							<div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+								4
+							</div>
+							<div className="flex-1 min-w-0 pt-0">
+								<h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm md:text-base">
+									Zarządzaj zleceniami
+								</h4>
+								<p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+									Śledź status zleceń, przetwarzaj wybory klientów i finalizuj dostawy - wszystko w jednym miejscu, bez zbędnych komplikacji.
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+			
+			{/* Actions - Fixed at bottom */}
+			<div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-b-3xl p-3 md:p-4 pt-3 md:pt-4">
+				<div className="flex flex-col sm:flex-row gap-2 md:gap-3">
+					<Link href="/galleries" className="flex-1" onClick={onClose}>
+						<Button variant="primary" className="w-full text-sm md:text-base py-2.5 md:py-3 font-semibold shadow-lg hover:shadow-xl transition-shadow">
+							Utwórz pierwszą galerię
+						</Button>
+					</Link>
+					<Button variant="outline" className="flex-1 text-sm md:text-base py-2.5 md:py-3 font-medium" onClick={onClose}>
+						Pozwól mi najpierw rozejrzeć się
+					</Button>
+				</div>
+				
+				{/* Closing message */}
+				<p className="text-center text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-3 md:mt-3 italic">
+					Mamy nadzieję, że będziesz się świetnie bawić! Jeśli masz pytania, jesteśmy tutaj, aby pomóc. 💙
+				</p>
+			</div>
+		</Modal>
+	);
+};
+

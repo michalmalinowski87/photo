@@ -15,6 +15,7 @@ import GalleryLayout from "./GalleryLayout";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../ui/loading/Loading";
+import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
 
 interface GalleryLayoutWrapperProps {
   children: React.ReactNode;
@@ -546,6 +547,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         reloadGallery={() => loadGalleryData(true)}
         reloadOrder={orderId ? () => loadOrderData() : undefined}
       >
+      <WelcomePopupWrapper />
       <GalleryLayout
         gallery={{ ...gallery, orders: galleryOrders }}
         isPaid={isPaid}

@@ -6,6 +6,7 @@ import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
 import AppSidebar from "./AppSidebar";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
+import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -32,6 +33,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
 
   return (
     <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
+      <WelcomePopupWrapper />
       <div>
         <AppSidebar />
         <Backdrop />

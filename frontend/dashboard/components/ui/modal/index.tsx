@@ -54,30 +54,31 @@ export const Modal: React.FC<ModalProps> = ({
     : "relative w-full mx-4 rounded-3xl bg-white dark:bg-gray-900 shadow-xl";
   
   // Use default max-w-lg if no className provided, otherwise use className
+  // Check if className includes max-h for scrollable modals
+  const hasMaxHeight = className && className.includes("max-h-");
   const contentClasses = isFullscreen
     ? baseClasses
     : className && className.includes("max-w-")
-    ? `${baseClasses} ${className}`
+    ? `${baseClasses} ${className}${hasMaxHeight ? " flex flex-col" : ""}`
     : `${baseClasses} max-w-lg`;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999 p-4">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[999999] p-4">
       {!isFullscreen && (
         <div
-          className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm z-[999998]"
           onClick={showCloseButton ? onClose : undefined}
         ></div>
       )}
       <div
         ref={modalRef}
-        className={contentClasses}
-        style={{ transform: 'translateY(-200px)' }}
+        className={`${contentClasses} z-[999999] relative`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCloseButton && (
           <button
             onClick={onClose}
-            className="absolute right-2 top-2 z-999 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-3 sm:top-3 sm:h-9 sm:w-9"
+            className="absolute right-2 top-2 z-999 flex h-8 w-8 items-center justify-center rounded-full bg-[#f0e0ca]/80 text-[#4a4a4a] transition-colors hover:bg-[#f0e0ca] hover:text-[#1a1a1a] dark:bg-[#1a1a1a] dark:text-[#f0e0ca]/70 dark:hover:bg-[#2d2d2d] dark:hover:text-[#f0e0ca] sm:right-3 sm:top-3 sm:h-9 sm:w-9"
           >
             <svg
               width="24"
