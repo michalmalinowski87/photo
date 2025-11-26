@@ -36,7 +36,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Map transaction type to display type
 		let displayType = transaction.type;
-		if (transaction.type === 'GALLERY_PLAN' || transaction.type === 'ADDON_PURCHASE') {
+		if (transaction.type === 'GALLERY_PLAN' || transaction.type === 'GALLERY_PLAN_UPGRADE') {
 			if (transaction.paymentMethod === 'WALLET') {
 				displayType = 'WALLET_DEBIT';
 			} else if (transaction.paymentMethod === 'STRIPE') {

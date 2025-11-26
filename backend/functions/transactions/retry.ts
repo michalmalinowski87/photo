@@ -103,29 +103,65 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			? `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${requester}`
 			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${requester}`;
 
+		/**
+		 * Calculate Stripe processing fees for PLN payments
+		 * Stripe fees: ~1.4% + 1 PLN for domestic cards, ~2.9% + 1 PLN for international cards
+		 * We use a conservative estimate: 2.9% + 1 PLN to ensure we cover fees
+		 */
+		function calculateStripeFee(amountCents: number): number {
+			const feePercentage = 0.029; // 2.9%
+			const fixedFeeCents = 100; // 1 PLN
+			const percentageFee = Math.ceil(amountCents * feePercentage);
+			return percentageFee + fixedFeeCents;
+		}
+
+		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
+		// Wallet top-ups don't go through retry - they use checkoutCreate.ts which handles fees correctly
+		const stripeFeeCents = stripeAmountCents > 0 && transaction.type === 'GALLERY_PLAN' 
+			? calculateStripeFee(stripeAmountCents) 
+			: 0;
+		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
+
+		const lineItems: any[] = [
+			{
+				price_data: {
+					currency: 'pln',
+					product_data: {
+						name: transaction.type === 'GALLERY_PLAN' ? `Gallery: ${transaction.galleryId}` : `Transaction: ${transaction.type}`,
+						description: walletAmountCents > 0 
+							? `Total: ${(transaction.amountCents / 100).toFixed(2)} PLN (${(walletAmountCents / 100).toFixed(2)} PLN from wallet, ${(stripeAmountCents / 100).toFixed(2)} PLN due)`
+							: `Payment for ${transaction.type}`
+					},
+					unit_amount: stripeAmountCents
+				},
+				quantity: 1
+			}
+		];
+		
+		// Add Stripe processing fee as separate line item for gallery payments (user pays fees)
+		if (stripeFeeCents > 0 && transaction.type === 'GALLERY_PLAN') {
+			lineItems.push({
+				price_data: {
+					currency: 'pln',
+					product_data: {
+						name: 'Opłata za przetwarzanie płatności',
+						description: 'Stripe processing fee'
+					},
+					unit_amount: stripeFeeCents
+				},
+				quantity: 1
+			});
+		}
+
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			mode: 'payment',
-			line_items: [
-				{
-					price_data: {
-						currency: 'pln',
-						product_data: {
-							name: transaction.type === 'GALLERY_PLAN' ? `Gallery: ${transaction.galleryId}` : 'Addon Purchase',
-							description: walletAmountCents > 0 
-								? `Total: ${(transaction.amountCents / 100).toFixed(2)} PLN (${(walletAmountCents / 100).toFixed(2)} PLN from wallet, ${(stripeAmountCents / 100).toFixed(2)} PLN due)`
-								: `Payment for ${transaction.type}`
-						},
-						unit_amount: stripeAmountCents
-					},
-					quantity: 1
-				}
-			],
+			line_items: lineItems,
 			success_url: successUrl,
 			cancel_url: cancelUrl,
 			metadata: {
 				userId: requester,
-				type: transaction.type === 'GALLERY_PLAN' ? 'gallery_payment' : 'addon_payment',
+				type: transaction.type === 'GALLERY_PLAN' ? 'gallery_payment' : 'transaction_payment',
 				galleryId: transaction.galleryId || '',
 				transactionId: transactionId,
 				walletAmountCents: walletAmountCents.toString(),

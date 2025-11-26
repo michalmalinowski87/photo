@@ -42,25 +42,9 @@ interface WizardData {
   nip: string;
   companyName: string;
   
-  // Step 5: Plan galerii
-  plan: string;
-  hasBackupStorage: boolean;
-  
-  // Step 6: Podsumowanie
+  // Step 5: Podsumowanie
   initialPaymentAmountCents: number;
 }
-
-const PRICING_PLANS = [
-  { value: "1GB-1m", label: "1GB - 1 miesiąc", price: 7, storage: "1 GB", duration: "1 miesiąc" },
-  { value: "1GB-3m", label: "1GB - 3 miesiące", price: 9, storage: "1 GB", duration: "3 miesiące" },
-  { value: "1GB-12m", label: "1GB - 12 miesięcy", price: 15, storage: "1 GB", duration: "12 miesięcy" },
-  { value: "3GB-1m", label: "3GB - 1 miesiąc", price: 12, storage: "3 GB", duration: "1 miesiąc" },
-  { value: "3GB-3m", label: "3GB - 3 miesiące", price: 14, storage: "3 GB", duration: "3 miesiące" },
-  { value: "3GB-12m", label: "3GB - 12 miesięcy", price: 21, storage: "3 GB", duration: "12 miesięcy" },
-  { value: "10GB-1m", label: "10GB - 1 miesiąc", price: 14, storage: "10 GB", duration: "1 miesiąc" },
-  { value: "10GB-3m", label: "10GB - 3 miesiące", price: 16, storage: "10 GB", duration: "3 miesiące" },
-  { value: "10GB-12m", label: "10GB - 12 miesięcy", price: 26, storage: "10 GB", duration: "12 miesięcy" },
-];
 
 const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   isOpen,
@@ -77,8 +61,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const [existingPackages, setExistingPackages] = useState<any[]>([]);
   const [existingClients, setExistingClients] = useState<any[]>([]);
   const [galleryNameError, setGalleryNameError] = useState("");
-  const [totalPriceCents, setTotalPriceCents] = useState(0);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   // Store raw input values to preserve decimal point while typing
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
@@ -102,8 +84,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     phone: "",
     nip: "",
     companyName: "",
-    plan: "1GB-1m",
-    hasBackupStorage: false,
     initialPaymentAmountCents: 0,
   });
 
@@ -133,17 +113,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       setExtraPriceInput("");
       setPackagePriceInput("");
       setPaymentAmountInput("");
-      // Initialize selectedPlan based on current plan
-      const currentPlan = data.plan;
-      if (currentPlan.includes("-1m")) {
-        setSelectedPlan("1m");
-      } else if (currentPlan.includes("-3m")) {
-        setSelectedPlan("3m");
-      } else if (currentPlan.includes("-12m")) {
-        setSelectedPlan("12m");
-      } else {
-        setSelectedPlan("1m");
-      }
       setData({
         selectionEnabled: true,
         galleryName: "",
@@ -160,8 +129,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         phone: "",
         nip: "",
         companyName: "",
-        plan: "1GB-1m",
-        hasBackupStorage: false,
         initialPaymentAmountCents: 0,
       });
     } else {
@@ -170,30 +137,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    // Calculate total price (excluding package price - that's what client pays photographer, not gallery cost)
-    const planData = PRICING_PLANS.find((p) => p.value === data.plan);
-    const planPriceCents = planData ? planData.price * 100 : 700;
-    const addonPriceCents = data.hasBackupStorage ? Math.round(planPriceCents * 0.3) : 0;
-    
-    // Total = plan + addon (VAT included in prices)
-    setTotalPriceCents(planPriceCents + addonPriceCents);
-  }, [data.plan, data.hasBackupStorage]);
-
-  useEffect(() => {
-    // Initialize selectedPlan when reaching step 5
-    if (currentStep === 5 && !selectedPlan) {
-      if (data.plan.includes("-1m")) {
-        setSelectedPlan("1m");
-      } else if (data.plan.includes("-3m")) {
-        setSelectedPlan("3m");
-      } else if (data.plan.includes("-12m")) {
-        setSelectedPlan("12m");
-      } else {
-        setSelectedPlan("1m");
-      }
-    }
-  }, [currentStep, data.plan, selectedPlan]);
 
   const loadExistingPackages = async (token?: string, apiUrlParam?: string) => {
     const tokenToUse = token || idToken;
@@ -323,9 +266,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
         return true;
       case 5:
-        return true;
-      case 6:
-        // No validation needed for step 6 - payment amount is collected in step 3
+        // No validation needed for step 5 - payment amount is collected in step 3
         return true;
       default:
         return true;
@@ -334,7 +275,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
   const handleNext = () => {
     if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, 6));
+      setCurrentStep((prev) => Math.min(prev + 1, 5));
     }
   };
 
@@ -343,14 +284,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(6)) return;
+    if (!validateStep(5)) return;
 
     setLoading(true);
     setError("");
 
     try {
       const requestBody: any = {
-        plan: data.plan,
         selectionEnabled: data.selectionEnabled,
         pricingPackage: {
           packageName: data.packageName,
@@ -358,7 +298,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           extraPriceCents: data.extraPriceCents,
           packagePriceCents: data.packagePriceCents,
         },
-        hasBackupStorage: data.hasBackupStorage,
         galleryName: data.galleryName.trim(),
         initialPaymentAmountCents: data.initialPaymentAmountCents,
       };
@@ -550,7 +489,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Select
                     options={existingPackages.map((pkg) => ({
                         value: pkg.packageId,
-                        label: `${pkg.name} - ${(pkg.price / 100).toFixed(2)} PLN`,
+                        label: `${pkg.name} - ${formatPrice(pkg.price)}`,
                     }))}
                     placeholder="Wybierz pakiet"
                     value={data.selectedPackageId || ""}
@@ -869,116 +808,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         );
 
       case 5:
-        const planGroups = {
-          "1m": PRICING_PLANS.filter((p) => p.value.includes("-1m")),
-          "3m": PRICING_PLANS.filter((p) => p.value.includes("-3m")),
-          "12m": PRICING_PLANS.filter((p) => p.value.includes("-12m")),
-        };
-
-        // Determine current plan period
-        const currentPlanPeriod = selectedPlan || (data.plan.includes("-1m") ? "1m" : data.plan.includes("-3m") ? "3m" : "12m");
-
-        return (
-          <div className="space-y-8 max-w-5xl mx-auto">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Plan galerii
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Wybierz plan przechowywania dla galerii
-              </p>
-            </div>
-
-            <div className="flex justify-center gap-2 mb-8">
-              {(["1m", "3m", "12m"] as const).map((period) => (
-                <button
-                  key={period}
-                  onClick={() => setSelectedPlan(period)}
-                  className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                    currentPlanPeriod === period
-                      ? "bg-brand-500 text-white shadow-lg"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {period === "1m" ? "1 miesiąc" : period === "3m" ? "3 miesiące" : "12 miesięcy"}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {planGroups[currentPlanPeriod].map((plan) => {
-                const isSelected = data.plan === plan.value;
-                return (
-                  <button
-                    key={plan.value}
-                    onClick={() => setData({ ...data, plan: plan.value })}
-                    className={`relative p-6 rounded-xl border-2 transition-all duration-300 text-left ${
-                      isSelected
-                        ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg"
-                        : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
-                    }`}
-                  >
-                    <div className="space-y-4">
-                      <div>
-                        <div className={`text-2xl font-bold mb-1 ${
-                          isSelected ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"
-                        }`}>
-                          {plan.storage}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {plan.duration}
-                        </div>
-                      </div>
-                      <div className={`text-3xl font-bold ${
-                        isSelected ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"
-                      }`}>
-                        {plan.price} PLN
-                      </div>
-                      {isSelected && (
-                        <div className="absolute top-4 right-4">
-                          <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="pt-6">
-              <label className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <input
-                  type="checkbox"
-                  checked={data.hasBackupStorage}
-                  onChange={(e) =>
-                    setData({ ...data, hasBackupStorage: e.target.checked })
-                  }
-                  className="w-5 h-5 text-brand-500 rounded"
-                />
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    Dodaj backup storage
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    30% ceny planu
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-        );
-
-      case 6:
-        const planData = PRICING_PLANS.find((p) => p.value === data.plan);
-        const planPriceCents = planData ? planData.price * 100 : 700;
-        const addonPriceCents = data.hasBackupStorage ? Math.round(planPriceCents * 0.3) : 0;
-        // Total price excludes package price - that's what client pays photographer, not gallery cost
-        const finalTotal = planPriceCents + addonPriceCents;
-
         return (
           <div className="space-y-6 max-w-3xl mx-auto">
             <div className="text-center">
@@ -1023,44 +852,24 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Cena za dodatkowe:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{(data.extraPriceCents / 100).toFixed(2)} PLN</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.extraPriceCents)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Cena pakietu:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{(data.packagePriceCents / 100).toFixed(2)} PLN</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.packagePriceCents)}</span>
                     </div>
                     {data.initialPaymentAmountCents > 0 && (
                       <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
                         <span className="text-gray-600 dark:text-gray-400">Kwota wpłacona przez klienta:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{(data.initialPaymentAmountCents / 100).toFixed(2)} PLN</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.initialPaymentAmountCents)}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 <div className="pt-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1.5">
-                    Szczegóły ceny:
-                  </div>
-                  <div className="pl-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Plan {planData?.storage} {planData?.duration}:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{planData?.price.toFixed(2)} PLN</span>
-                    </div>
-                    {data.hasBackupStorage && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Backup Storage:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{(addonPriceCents / 100).toFixed(2)} PLN</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
-                      <span className="text-gray-600 dark:text-gray-400">VAT:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">wliczony</span>
-                    </div>
-                    <div className="flex justify-between pt-1.5 border-t-2 border-gray-300 dark:border-gray-600">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">Całkowita cena:</span>
-                      <span className="text-sm font-bold text-brand-600 dark:text-brand-400">{(finalTotal / 100).toFixed(2)} PLN</span>
-                    </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Plan galerii zostanie obliczony automatycznie po przesłaniu zdjęć.
                   </div>
                 </div>
               </div>
@@ -1095,7 +904,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       {/* Progress Bar */}
       <div className="px-6 py-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {[1, 2, 3, 4, 5, 6].map((step) => (
+          {[1, 2, 3, 4, 5].map((step) => (
             <div key={step} className="flex items-center flex-1">
               <div className="flex flex-col items-center flex-1">
                 <div
@@ -1114,11 +923,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   {step === 2 && "Nazwa"}
                   {step === 3 && "Pakiet"}
                   {step === 4 && "Klient"}
-                  {step === 5 && "Plan"}
-                  {step === 6 && "Podsumowanie"}
+                  {step === 5 && "Podsumowanie"}
                 </div>
               </div>
-              {step < 6 && (
+              {step < 5 && (
                 <div
                   className={`flex-1 h-1 mx-2 rounded-full transition-all duration-300 ${
                     step < currentStep
@@ -1164,7 +972,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           {currentStep === 1 ? "Anuluj" : "Wstecz"}
         </Button>
         <div className="flex gap-3 flex-1 justify-end">
-          {currentStep < 6 ? (
+          {currentStep < 5 ? (
             <Button onClick={handleNext} disabled={loading} className="flex-1 flex items-center justify-center gap-2">
               Dalej
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

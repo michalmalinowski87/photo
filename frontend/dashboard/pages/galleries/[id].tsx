@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
+import { formatPrice } from "../../lib/format-price";
 import { useGallery } from "../../context/GalleryContext";
 import Button from "../../components/ui/button/Button";
 import Badge from "../../components/ui/badge/Badge";
@@ -12,6 +13,7 @@ import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { useToast } from "../../hooks/useToast";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
+import { PaymentGuidanceBanner } from "../../components/galleries/PaymentGuidanceBanner";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -50,7 +52,7 @@ export default function GalleryDetail() {
 	const router = useRouter();
 	const { id: galleryId } = router.query;
 	const { showToast } = useToast();
-	const { gallery, loading: galleryLoading } = useGallery();
+	const { gallery, loading: galleryLoading, reloadGallery } = useGallery();
 	const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
 	const [error, setError] = useState<string>("");
 	const [orders, setOrders] = useState<Order[]>([]);
@@ -114,6 +116,77 @@ export default function GalleryDetail() {
 			}
 		);
 	}, [galleryId, router.isReady, router.asPath]);
+
+	// UX IMPROVEMENT #1 & #3: Detect payment success after Stripe redirect, auto-refresh, and poll for payment status
+	useEffect(() => {
+		if (typeof window !== "undefined" && galleryId && router.isReady && gallery) {
+			const params = new URLSearchParams(window.location.search);
+			const paymentSuccess = params.get("payment") === "success";
+			const galleryParam = params.get("gallery");
+			
+			if (paymentSuccess && galleryParam === galleryId) {
+				// Show success toast
+				showToast("success", "Sukces", "Płatność zakończona pomyślnie! Weryfikowanie statusu...");
+				
+				// UX IMPROVEMENT #3: Poll for payment status (fallback if webhook is slow)
+				let pollAttempts = 0;
+				const maxPollAttempts = 10; // Poll for up to 10 seconds
+				const pollInterval = 1000; // 1 second
+				const initialGalleryState = gallery.state; // Store initial state to detect change
+				
+				const pollPaymentStatus = async () => {
+					try {
+						// Reload gallery from API to get latest state
+						try {
+							const updatedGallery = await api.galleries.get(galleryId as string);
+							
+							// Check if gallery state changed from DRAFT to PAID_ACTIVE
+							if (updatedGallery.state === 'PAID_ACTIVE' && initialGalleryState === 'DRAFT') {
+								// Payment confirmed! Stop polling
+								if (reloadGallery) {
+									reloadGallery();
+								}
+								loadOrders();
+								showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
+								window.history.replaceState({}, "", window.location.pathname);
+								return;
+							}
+						} catch (apiError) {
+							console.error("Error fetching gallery status:", apiError);
+						}
+						
+						pollAttempts++;
+						
+						// If we've polled enough times, stop polling and do final reload
+						if (pollAttempts >= maxPollAttempts) {
+							// Final reload
+							if (reloadGallery) {
+								reloadGallery();
+							}
+							loadOrders();
+							showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
+							window.history.replaceState({}, "", window.location.pathname);
+						} else {
+							// Continue polling
+							setTimeout(pollPaymentStatus, pollInterval);
+						}
+					} catch (error) {
+						console.error("Error polling payment status:", error);
+						// On error, just reload once and stop polling
+						if (reloadGallery) {
+							reloadGallery();
+						}
+						loadOrders();
+						window.history.replaceState({}, "", window.location.pathname);
+					}
+				};
+				
+				// Start polling immediately
+				pollPaymentStatus();
+			}
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [galleryId, router.isReady, router.query, gallery]);
 
 	// Listen for gallery orders update event (e.g., after sending link from sidebar)
 	useEffect(() => {
@@ -320,28 +393,18 @@ export default function GalleryDetail() {
 
 	return (
 		<>
-			{/* Draft Banner */}
+			{/* Payment Guidance Banner */}
 			{!isPaid && (
-				<div className="mb-6 p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-					<div className="flex items-center justify-between">
-						<div>
-							<div className="text-sm font-semibold text-warning-800 dark:text-warning-200 mb-1">
-								Wersja robocza
-							</div>
-							<div className="text-xs text-warning-600 dark:text-warning-400">
-								Twoja galeria jest w wersji roboczej, klienci nie mają do niej dostępu. Opłać galerię aby Twoi klienci mogli ją zobaczyć.
-							</div>
-						</div>
-							<Button
-								size="sm"
-								variant="primary"
-								onClick={handlePayClick}
-								disabled={paymentLoading}
-							>
-								{paymentLoading ? "Przetwarzanie..." : "Opłać galerię"}
-							</Button>
-					</div>
-				</div>
+				<PaymentGuidanceBanner
+					galleryId={galleryId as string}
+					gallery={gallery}
+					onPaymentComplete={async () => {
+						// Reload gallery after payment
+						await reloadGallery();
+						// Reload orders
+						await loadOrders();
+					}}
+				/>
 			)}
 
 			{/* Main Content - Orders */}
@@ -409,7 +472,7 @@ export default function GalleryDetail() {
 												{getPaymentStatusBadge(order.paymentStatus)}
 											</TableCell>
 											<TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-												{((order.totalCents || 0) / 100).toFixed(2)} PLN
+												{formatPrice(order.totalCents)}
 											</TableCell>
 											<TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
 												{order.createdAt

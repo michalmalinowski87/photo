@@ -62,7 +62,7 @@ frontend/dashboard/
 **Steps**:
 1. **Typ galerii**: Choose selection mode (client selects vs all photos)
 2. **Nazwa galerii**: Enter unique gallery name
-3. **Szczegóły pakietu**: Select plan, configure package (manual or from saved packages), optional backup addon
+3. **Szczegóły pakietu**: Configure package (manual or from saved packages) - plan is calculated after upload
 4. **Dane klienta**: Select existing client or create new (individual or company)
 5. **Podsumowanie**: Review all settings, enter initial payment amount
 

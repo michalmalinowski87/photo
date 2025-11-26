@@ -4,7 +4,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 const s3 = new S3Client({});
@@ -38,6 +37,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const key = body?.key;
 	const contentType = body?.contentType || 'application/octet-stream';
+	const fileSize = body?.fileSize; // Optional file size in bytes
 
 	if (!key) {
 		return {
@@ -101,6 +101,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: `Order must have deliveryStatus CLIENT_APPROVED, PREPARING_DELIVERY, or AWAITING_FINAL_PHOTOS, got ${order.deliveryStatus}` })
 		};
+	}
+
+	// Check finals storage limit if fileSize is provided
+	if (fileSize !== undefined && fileSize !== null && gallery.finalsLimitBytes) {
+		const currentFinalsSize = gallery.finalsBytesUsed || 0;
+		if (currentFinalsSize + fileSize > gallery.finalsLimitBytes) {
+			const usedMB = (currentFinalsSize / (1024 * 1024)).toFixed(2);
+			const limitMB = (gallery.finalsLimitBytes / (1024 * 1024)).toFixed(2);
+			const fileMB = (fileSize / (1024 * 1024)).toFixed(2);
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Finals storage limit exceeded',
+					message: `Finals storage limit reached. Used: ${usedMB} MB / ${limitMB} MB. File size: ${fileMB} MB. Please delete some final photos or upgrade your plan.`
+				})
+			};
+		}
 	}
 
 	// Key format: galleries/{galleryId}/final/{orderId}/{filename}

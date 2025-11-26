@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { Jimp, JimpMime } from 'jimp';
+import sharp from 'sharp';
 import { Readable } from 'stream';
 
 const s3 = new S3Client({});
@@ -108,17 +108,17 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		const imageStream = getObjectResponse.Body as Readable;
 		const imageBuffer = await streamToBuffer(imageStream);
 
-		// Load image with Jimp (will throw if not a valid image)
-		let image: Awaited<ReturnType<typeof Jimp.read>>;
+		// Load image metadata with Sharp to get dimensions
+		let imageMetadata: sharp.Metadata;
 		try {
-			image = await Jimp.read(imageBuffer);
+			imageMetadata = await sharp(imageBuffer).metadata();
 		} catch (err: any) {
 			logger?.info('Skipping non-image file', { key, error: err.message });
 			return;
 		}
 
-		// Get image dimensions for aspect ratio calculation
-		const { width, height } = image.bitmap;
+		const width = imageMetadata.width || 0;
+		const height = imageMetadata.height || 0;
 		logger?.info('Image loaded', { width, height });
 		
 		// Calculate dimensions maintaining aspect ratio (fit inside, no enlargement)
@@ -141,39 +141,75 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 			original: { width, height }
 		});
 
-		// Generate preview and thumbnail in parallel for better performance
+		// Generate preview and thumbnail in both JPEG and WebP formats
 		logger?.info('Starting resize operations');
-		const [previewBuffer, thumbBuffer] = await Promise.all([
-			image
-				.clone()
-				.resize({ w: previewDims.width, h: previewDims.height })
-				.getBuffer(JimpMime.jpeg, { quality: 85 }),
-			image
-				.clone()
-				.resize({ w: thumbDims.width, h: thumbDims.height })
-				.getBuffer(JimpMime.jpeg, { quality: 80 })
+		const [previewJpegBuffer, previewWebpBuffer, thumbJpegBuffer, thumbWebpBuffer] = await Promise.all([
+			sharp(imageBuffer)
+				.resize(previewDims.width, previewDims.height, { fit: 'inside', withoutEnlargement: true })
+				.jpeg({ quality: 85 })
+				.toBuffer(),
+			sharp(imageBuffer)
+				.resize(previewDims.width, previewDims.height, { fit: 'inside', withoutEnlargement: true })
+				.webp({ quality: 85 })
+				.toBuffer(),
+			sharp(imageBuffer)
+				.resize(thumbDims.width, thumbDims.height, { fit: 'inside', withoutEnlargement: true })
+				.jpeg({ quality: 80 })
+				.toBuffer(),
+			sharp(imageBuffer)
+				.resize(thumbDims.width, thumbDims.height, { fit: 'inside', withoutEnlargement: true })
+				.webp({ quality: 80 })
+				.toBuffer()
 		]);
 
 		logger?.info('Resize complete', { 
-			previewSize: previewBuffer.length, 
-			thumbSize: thumbBuffer.length 
+			previewJpegSize: previewJpegBuffer.length,
+			previewWebpSize: previewWebpBuffer.length,
+			thumbJpegSize: thumbJpegBuffer.length,
+			thumbWebpSize: thumbWebpBuffer.length
 		});
 
-		// Upload preview and thumbnail to S3
-		logger?.info('Uploading to S3', { previewKey, thumbKey });
+		// Generate WebP filenames (replace extension with .webp)
+		const getWebpKey = (jpegKey: string) => {
+			const lastDot = jpegKey.lastIndexOf('.');
+			if (lastDot === -1) return `${jpegKey}.webp`;
+			return `${jpegKey.substring(0, lastDot)}.webp`;
+		};
+
+		const previewWebpKey = getWebpKey(previewKey);
+		const thumbWebpKey = getWebpKey(thumbKey);
+
+		// Upload preview and thumbnail in both JPEG and WebP formats to S3
+		logger?.info('Uploading to S3', { previewKey, previewWebpKey, thumbKey, thumbWebpKey });
 		await Promise.all([
+			// JPEG versions (fallback for older browsers)
 			s3.send(new PutObjectCommand({
 				Bucket: bucket,
 				Key: previewKey,
-				Body: previewBuffer,
+				Body: previewJpegBuffer,
 				ContentType: 'image/jpeg',
 				CacheControl: 'max-age=31536000'
 			})),
 			s3.send(new PutObjectCommand({
 				Bucket: bucket,
 				Key: thumbKey,
-				Body: thumbBuffer,
+				Body: thumbJpegBuffer,
 				ContentType: 'image/jpeg',
+				CacheControl: 'max-age=31536000'
+			})),
+			// WebP versions (smaller file size, better compression)
+			s3.send(new PutObjectCommand({
+				Bucket: bucket,
+				Key: previewWebpKey,
+				Body: previewWebpBuffer,
+				ContentType: 'image/webp',
+				CacheControl: 'max-age=31536000'
+			})),
+			s3.send(new PutObjectCommand({
+				Bucket: bucket,
+				Key: thumbWebpKey,
+				Body: thumbWebpBuffer,
+				ContentType: 'image/webp',
 				CacheControl: 'max-age=31536000'
 			}))
 		]);
@@ -181,26 +217,31 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		logger?.info('Image processed successfully', { 
 			key, 
 			previewKey, 
+			previewWebpKey,
 			thumbKey,
-			previewSizeBytes: previewBuffer.length,
-			thumbSizeBytes: thumbBuffer.length,
+			thumbWebpKey,
+			previewJpegSizeBytes: previewJpegBuffer.length,
+			previewWebpSizeBytes: previewWebpBuffer.length,
+			thumbJpegSizeBytes: thumbJpegBuffer.length,
+			thumbWebpSizeBytes: thumbWebpBuffer.length,
 			originalSizeBytes: imageBuffer.length
 		});
 
-		// Update gallery bytesUsed with original file size (only count originals)
+		// Update gallery originalsBytesUsed with original file size (only count originals)
+		// Also update bytesUsed for backward compatibility
 		if (galleriesTable && imageBuffer.length > 0) {
 			try {
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'ADD bytesUsed :size',
+					UpdateExpression: 'ADD originalsBytesUsed :size, bytesUsed :size',
 					ExpressionAttributeValues: {
 						':size': imageBuffer.length
 					}
 				}));
-				logger?.info('Updated gallery bytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+				logger?.info('Updated gallery originalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
 			} catch (updateErr: any) {
-				logger?.warn('Failed to update gallery bytesUsed', {
+				logger?.warn('Failed to update gallery originalsBytesUsed', {
 					error: updateErr.message,
 					galleryId,
 					size: imageBuffer.length

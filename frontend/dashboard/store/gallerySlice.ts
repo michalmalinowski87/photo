@@ -9,7 +9,6 @@ interface Gallery {
   paymentStatus?: string;
   isPaid?: boolean;
   selectionEnabled?: boolean;
-  hasBackupStorage?: boolean;
   coverPhotoUrl?: string;
   createdAt?: string;
   expiresAt?: string;

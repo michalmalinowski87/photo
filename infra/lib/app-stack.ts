@@ -13,8 +13,12 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy } from 'aws-cdk-lib/aws-cloudfront';
+import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
+import { Topic } from 'aws-cdk-lib/aws-sns';
+import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as path from 'path';
 
 interface AppStackProps extends StackProps {
@@ -86,13 +90,6 @@ export class AppStack extends Stack {
 	const orders = new Table(this, 'OrdersTable', {
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'orderId', type: AttributeType.STRING },
-		billingMode: BillingMode.PAY_PER_REQUEST,
-		removalPolicy: RemovalPolicy.RETAIN
-	});
-
-	const galleryAddons = new Table(this, 'GalleryAddonsTable', {
-		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
-		sortKey: { name: 'addonId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
 	});
@@ -227,7 +224,6 @@ export class AppStack extends Stack {
 			WALLETS_TABLE: wallet.tableName,
 			WALLET_LEDGER_TABLE: walletLedger.tableName,
 			ORDERS_TABLE: orders.tableName,
-			GALLERY_ADDONS_TABLE: galleryAddons.tableName,
 			TRANSACTIONS_TABLE: transactions.tableName
 		};
 
@@ -277,7 +273,6 @@ export class AppStack extends Stack {
 		wallet.grantReadWriteData(apiFn);
 		walletLedger.grantReadWriteData(apiFn);
 		orders.grantReadWriteData(apiFn);
-		galleryAddons.grantReadWriteData(apiFn);
 		transactions.grantReadWriteData(apiFn);
 		clients.grantReadWriteData(apiFn);
 		packages.grantReadWriteData(apiFn);
@@ -427,7 +422,6 @@ export class AppStack extends Stack {
 		walletLedger.grantReadWriteData(paymentsWebhookFn);
 		galleries.grantReadWriteData(paymentsWebhookFn);
 		orders.grantReadWriteData(paymentsWebhookFn);
-		galleryAddons.grantReadWriteData(paymentsWebhookFn); // Needed for addon_payment to create addon
 
 		// Add Stripe payment routes
 		httpApi.addRoutes({
@@ -462,7 +456,6 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(galleriesDeleteHelperFn);
 		transactions.grantReadWriteData(galleriesDeleteHelperFn);
 		orders.grantReadWriteData(galleriesDeleteHelperFn);
-		galleryAddons.grantReadWriteData(galleriesDeleteHelperFn);
 		galleriesBucket.grantReadWrite(galleriesDeleteHelperFn);
 		galleriesDeleteHelperFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
@@ -548,15 +541,20 @@ export class AppStack extends Stack {
 			targets: [new LambdaFunction(transactionExpiryFn)]
 		});
 
-		// Images resize with Jimp (pure JavaScript, no native dependencies)
+		// Images resize with Sharp - using Lambda Layer to avoid native dependency bundling issues
+		// Sharp is excluded from bundling and provided via Lambda Layer
+		// To create the layer: Download from https://github.com/pH200/sharp-layer/releases
+		// Then: aws lambda publish-layer-version --layer-name sharp --zip-file fileb://release-x64.zip --compatible-runtimes nodejs20.x --compatible-architectures x86_64
+		// Then provide the ARN via: --context sharpLayerArn=arn:aws:lambda:REGION:ACCOUNT:layer:sharp:VERSION
+		const sharpLayerArn = this.node.tryGetContext('sharpLayerArn');
 		const resizeFn = new NodejsFunction(this, 'ImagesOnUploadResizeFn', {
 			entry: path.join(__dirname, '../../../backend/functions/images/onUploadResize.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
-			memorySize: 1024, // More memory for image processing
+			memorySize: 1024,
 			timeout: Duration.minutes(1),
 			bundling: {
-				externalModules: ['aws-sdk'], // Exclude aws-sdk (provided by Lambda runtime)
+				externalModules: ['aws-sdk', 'sharp'], // Sharp provided by layer
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
 				minify: true,
 				treeShaking: true,
@@ -564,6 +562,12 @@ export class AppStack extends Stack {
 			},
 			environment: envVars
 		});
+		
+		// Add Sharp layer if provided via context
+		if (sharpLayerArn) {
+			const sharpLayer = LayerVersion.fromLayerVersionArn(this, 'SharpLayer', sharpLayerArn);
+			resizeFn.addLayers(sharpLayer);
+		}
 		galleriesBucket.grantReadWrite(resizeFn);
 		galleries.grantReadWriteData(resizeFn);
 		galleriesBucket.addEventNotification(
@@ -574,6 +578,7 @@ export class AppStack extends Stack {
 
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
+		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)
 		const dist = new Distribution(this, 'PreviewsDistribution', {
 			defaultBehavior: {
 				origin: S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
@@ -584,6 +589,7 @@ export class AppStack extends Stack {
 				allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
 				viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
 			},
+			priceClass: PriceClass.PRICE_CLASS_100,
 			comment: `PhotoHub previews ${props.stage}`
 		});
 		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy
@@ -600,6 +606,91 @@ export class AppStack extends Stack {
 			actions: ['cloudfront:CreateInvalidation'],
 			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
 		}));
+
+		// CloudWatch Monitoring & Alarms for CloudFront cost optimization
+		// Create SNS topic for cost alerts (only in production)
+		const costAlertsTopic = props.stage === 'prod' ? new Topic(this, 'CloudFrontCostAlertsTopic', {
+			displayName: `PhotoHub-${props.stage}-CloudFront-Cost-Alerts`,
+			topicName: `photohub-${props.stage}-cloudfront-cost-alerts`
+		}) : undefined;
+
+		// Subscribe email if provided via environment variable (only in production)
+		if (costAlertsTopic && process.env.COST_ALERT_EMAIL) {
+			costAlertsTopic.addSubscription(new EmailSubscription(process.env.COST_ALERT_EMAIL));
+		}
+
+		// Alarm 1: CloudFront data transfer spike (>10GB/day = ~333MB/hour)
+		// This helps detect unexpected traffic spikes that could increase costs
+		const dataTransferAlarm = new Alarm(this, 'CloudFrontDataTransferSpikeAlarm', {
+			alarmName: `PhotoHub-${props.stage}-CloudFront-DataTransfer-Spike`,
+			alarmDescription: 'Alert when CloudFront data transfer exceeds 333MB/hour (10GB/day threshold)',
+			metric: new Metric({
+				namespace: 'AWS/CloudFront',
+				metricName: 'BytesDownloaded',
+				dimensionsMap: {
+					DistributionId: dist.distributionId
+				},
+				statistic: Statistic.SUM,
+				period: Duration.hours(1)
+			}),
+			threshold: 333 * 1024 * 1024, // 333MB in bytes
+			comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+		if (costAlertsTopic) {
+			dataTransferAlarm.addAlarmAction(new SnsAction(costAlertsTopic));
+		}
+
+		// Alarm 2: CloudFront request count spike (>100k requests/day = ~4167 requests/hour)
+		// This helps detect unexpected request spikes
+		const requestCountAlarm = new Alarm(this, 'CloudFrontRequestCountSpikeAlarm', {
+			alarmName: `PhotoHub-${props.stage}-CloudFront-RequestCount-Spike`,
+			alarmDescription: 'Alert when CloudFront requests exceed 4167/hour (100k/day threshold)',
+			metric: new Metric({
+				namespace: 'AWS/CloudFront',
+				metricName: 'Requests',
+				dimensionsMap: {
+					DistributionId: dist.distributionId
+				},
+				statistic: Statistic.SUM,
+				period: Duration.hours(1)
+			}),
+			threshold: 4167,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+		if (costAlertsTopic) {
+			requestCountAlarm.addAlarmAction(new SnsAction(costAlertsTopic));
+		}
+
+		// Note: Cache hit ratio monitoring
+		// CloudFront doesn't provide a direct cache hit ratio metric
+		// We can calculate it from: (1 - (OriginRequests / Requests)) * 100
+		// For monitoring purposes, we'll alarm on high origin requests (low cache hit ratio)
+		// High origin requests indicate low cache hit ratio (<80% target)
+		// If Requests = 1000 and OriginRequests > 200, cache hit ratio < 80%
+		const originRequestRatioAlarm = new Alarm(this, 'CloudFrontOriginRequestRatioAlarm', {
+			alarmName: `PhotoHub-${props.stage}-CloudFront-OriginRequest-Ratio`,
+			alarmDescription: 'Alert when origin requests exceed 20% of total requests (cache hit ratio < 80%)',
+			metric: new Metric({
+				namespace: 'AWS/CloudFront',
+				metricName: 'OriginRequests',
+				dimensionsMap: {
+					DistributionId: dist.distributionId
+				},
+				statistic: Statistic.SUM,
+				period: Duration.hours(1)
+			}),
+			threshold: 1000, // Alert if origin requests > 1000/hour (adjust based on expected traffic)
+			comparisonOperator: ComparisonOperator.GREATER_THAN_THRESHOLD,
+			evaluationPeriods: 2, // Require 2 consecutive periods to reduce false positives
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+		if (costAlertsTopic) {
+			originRequestRatioAlarm.addAlarmAction(new SnsAction(costAlertsTopic));
+		}
 
 		// Outputs
 		new CfnOutput(this, 'BucketName', { value: galleriesBucket.bucketName });

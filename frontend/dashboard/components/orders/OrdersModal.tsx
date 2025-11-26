@@ -231,7 +231,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                         {getPaymentStatusBadge(order.paymentStatus)}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {((order.totalCents || 0) / 100).toFixed(2)} PLN
+                        {formatPrice(order.totalCents)}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                         {order.createdAt

@@ -1,6 +1,7 @@
 import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
 import Link from "next/link";
+import { formatPrice, formatPriceNumber } from "../../lib/format-price";
 
 interface PaymentConfirmationModalProps {
   isOpen: boolean;
@@ -23,10 +24,10 @@ export default function PaymentConfirmationModal({
   stripeAmountCents,
   loading = false,
 }: PaymentConfirmationModalProps) {
-  const totalAmount = (totalAmountCents / 100).toFixed(2);
-  const walletBalance = (walletBalanceCents / 100).toFixed(2);
-  const walletAmount = (walletAmountCents / 100).toFixed(2);
-  const stripeAmount = (stripeAmountCents / 100).toFixed(2);
+  const totalAmount = formatPriceNumber(totalAmountCents);
+  const walletBalance = formatPriceNumber(walletBalanceCents);
+  const walletAmount = formatPriceNumber(walletAmountCents);
+  const stripeAmount = formatPriceNumber(stripeAmountCents);
   
   const isWalletOnly = walletAmountCents === totalAmountCents;
   const isStripeOnly = stripeAmountCents === totalAmountCents;
@@ -58,7 +59,7 @@ export default function PaymentConfirmationModal({
                 Z Twojego portfela zostanie pobrane {walletAmount} PLN
               </div>
               <div className="text-sm text-blue-800 dark:text-blue-100 mt-2">
-                Saldo po płatności: {(walletBalanceCents - walletAmountCents) / 100} PLN
+                Saldo po płatności: {formatPrice(walletBalanceCents - walletAmountCents)}
               </div>
             </div>
           )}

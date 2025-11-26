@@ -33,6 +33,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						type: metadataType,
 						sessionId
 					});
+					
+					// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
+					if (transaction.galleryId) {
+						const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+						if (galleriesTable) {
+							try {
+								const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+								const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+								const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+								await ddb.send(new UpdateCommand({
+									TableName: galleriesTable,
+									Key: { galleryId: transaction.galleryId },
+									UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+									ExpressionAttributeValues: {
+										':u': new Date().toISOString()
+									}
+								}));
+								logger?.info('Cleared paymentLocked flag after payment cancellation', { galleryId: transaction.galleryId });
+							} catch (unlockErr: any) {
+								logger?.warn('Failed to clear paymentLocked flag on cancel', {
+									error: unlockErr.message,
+									galleryId: transaction.galleryId
+								});
+							}
+						}
+					}
 				}
 				
 				// Redirect based on transaction type
@@ -66,6 +92,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				await updateTransactionStatus(userId, transactionId, 'CANCELED');
 				transactionType = transaction.type;
 				logger?.info('Transaction marked as CANCELED (user clicked back)', { transactionId, userId, type: transactionType });
+				
+				// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
+				if (transaction.galleryId) {
+					const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+					if (galleriesTable) {
+						try {
+							const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+							const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+							const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId: transaction.galleryId },
+								UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+								ExpressionAttributeValues: {
+									':u': new Date().toISOString()
+								}
+							}));
+							logger?.info('Cleared paymentLocked flag after payment cancellation', { galleryId: transaction.galleryId });
+						} catch (unlockErr: any) {
+							logger?.warn('Failed to clear paymentLocked flag on cancel', {
+								error: unlockErr.message,
+								galleryId: transaction.galleryId
+							});
+						}
+					}
+				}
 			}
 		} catch (err: any) {
 			logger?.error('Failed to update transaction status on cancel', {

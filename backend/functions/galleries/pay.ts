@@ -8,6 +8,42 @@ const Stripe = require('stripe');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
+/**
+ * Calculate Stripe processing fees for PLN payments
+ * Stripe fees: ~1.4% + 1 PLN for domestic cards, ~2.9% + 1 PLN for international cards
+ * We use a conservative estimate: 2.9% + 1 PLN to ensure we cover fees
+ * @param amountCents Amount in cents
+ * @returns Stripe fee in cents (rounded up)
+ */
+function calculateStripeFee(amountCents: number): number {
+	// Stripe fee: 2.9% + 1 PLN (100 cents)
+	// Using conservative estimate to ensure we cover fees
+	const feePercentage = 0.029; // 2.9%
+	const fixedFeeCents = 100; // 1 PLN
+	const percentageFee = Math.ceil(amountCents * feePercentage);
+	return percentageFee + fixedFeeCents;
+}
+
+/**
+ * Calculate amount to charge user including Stripe fees
+ * User pays: baseAmount + Stripe fees
+ * PhotoHub receives: baseAmount (after Stripe deducts fees)
+ * @param baseAmountCents Base amount in cents (what PhotoHub should receive)
+ * @returns Amount to charge user in cents (including Stripe fees)
+ */
+function calculateAmountWithStripeFee(baseAmountCents: number): number {
+	// We need to solve: chargeAmount - calculateStripeFee(chargeAmount) = baseAmountCents
+	// chargeAmount - (chargeAmount * 0.029 + 100) = baseAmountCents
+	// chargeAmount * (1 - 0.029) - 100 = baseAmountCents
+	// chargeAmount * 0.971 = baseAmountCents + 100
+	// chargeAmount = (baseAmountCents + 100) / 0.971
+	
+	const fixedFeeCents = 100; // 1 PLN
+	const feeMultiplier = 1 - 0.029; // 0.971 (after 2.9% fee)
+	const chargeAmount = Math.ceil((baseAmountCents + fixedFeeCents) / feeMultiplier);
+	return chargeAmount;
+}
+
 async function getWalletBalance(userId: string, walletsTable: string): Promise<number> {
 	try {
 		const walletGet = await ddb.send(new GetCommand({
@@ -209,33 +245,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let walletAmountCents = 0;
 		let stripeAmountCents = 0;
 		
-		// Calculate amounts from gallery pricing
-		let plan = gallery.plan || '1GB-1m';
-		let galleryPriceCents = gallery.priceCents || 0;
-		
-		// Check for backup storage addon (read-only query)
-		const galleryAddonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
-		let addonPriceCents = 0;
-		if (galleryAddonsTable) {
-			try {
-				const addonsQuery = await ddb.send(new QueryCommand({
-					TableName: galleryAddonsTable,
-					KeyConditionExpression: 'galleryId = :g AND addonId = :a',
-					ExpressionAttributeValues: {
-						':g': galleryId,
-						':a': 'BACKUP_STORAGE'
-					}
-				}));
-				if (addonsQuery.Items && addonsQuery.Items.length > 0) {
-					const addon = addonsQuery.Items[0] as any;
-					addonPriceCents = addon.priceCents || 0;
-				}
-			} catch (err) {
-				logger.warn('Failed to query addons in dry run', { error: err });
-			}
+		// Check if gallery has a plan - if not, require plan calculation first
+		if (!gallery.plan || !gallery.priceCents) {
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Gallery plan not set',
+					message: 'Please calculate and select a plan before payment. Call /galleries/:id/calculate-plan first.'
+				})
+			};
 		}
+
+		// Calculate amounts from gallery pricing
+		let plan = gallery.plan;
+		let galleryPriceCents = gallery.priceCents;
 		
-		const totalAmountCents = galleryPriceCents + addonPriceCents;
+		const totalAmountCents = galleryPriceCents;
 		
 		// Calculate wallet vs stripe amounts based on current wallet balance (read-only)
 		if (forceStripeOnly) {
@@ -422,35 +448,104 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Calculate amounts from gallery pricing (for dry run or if no transaction exists)
-	let plan = gallery.plan || '1GB-1m';
-	let galleryPriceCents = gallery.priceCents || 0;
-	
-	// Check for backup storage addon
-	const galleryAddonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
-	let addonPriceCents = 0;
-	let hasBackupStorage = false;
-	if (galleryAddonsTable) {
-		try {
-			const addonsQuery = await ddb.send(new QueryCommand({
-				TableName: galleryAddonsTable,
-				KeyConditionExpression: 'galleryId = :g AND addonId = :a',
-				ExpressionAttributeValues: {
-					':g': galleryId,
-					':a': 'BACKUP_STORAGE'
-				}
+	// Check if gallery has a plan - if not, require plan calculation first
+	if (!gallery.plan || !gallery.priceCents || !gallery.originalsLimitBytes || !gallery.finalsLimitBytes) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Gallery plan not set',
+				message: 'Please calculate and select a plan before payment. Call /galleries/:id/calculate-plan first.'
+			})
+		};
+	}
+
+	// USER-CENTRIC FIX #4 & #5: Recalculate plan before payment to ensure it still fits
+	// This prevents paying for stale plan if user uploaded more photos or deleted photos
+	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+	if (bucket) {
+		const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+		const s3 = new S3Client({});
+		
+		// Calculate current uploaded size from S3 (source of truth)
+		let currentUploadedSize = 0;
+		let continuationToken: string | undefined;
+		const prefix = `galleries/${galleryId}/originals/`;
+		
+		do {
+			const listResponse = await s3.send(new ListObjectsV2Command({
+				Bucket: bucket,
+				Prefix: prefix,
+				ContinuationToken: continuationToken
 			}));
-			if (addonsQuery.Items && addonsQuery.Items.length > 0) {
-				const addon = addonsQuery.Items[0] as any;
-				addonPriceCents = addon.priceCents || 0;
-				hasBackupStorage = true;
+			
+			if (listResponse.Contents) {
+				currentUploadedSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
 			}
-		} catch (err) {
-			logger.warn('Failed to query addons', { error: err });
+			
+			continuationToken = listResponse.NextContinuationToken;
+		} while (continuationToken);
+
+		// Check if uploaded size exceeds plan limit
+		if (currentUploadedSize > gallery.originalsLimitBytes) {
+			const usedGB = (currentUploadedSize / (1024 * 1024 * 1024)).toFixed(2);
+			const limitGB = (gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(0);
+			const excessGB = ((currentUploadedSize - gallery.originalsLimitBytes) / (1024 * 1024 * 1024)).toFixed(2);
+			
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Uploaded size exceeds plan limit',
+					message: `Cannot proceed with payment. Current uploads (${usedGB} GB) exceed selected plan limit (${limitGB} GB) by ${excessGB} GB. Please recalculate plan or delete excess files.`,
+					uploadedSizeBytes: currentUploadedSize,
+					planLimitBytes: gallery.originalsLimitBytes,
+					excessBytes: currentUploadedSize - gallery.originalsLimitBytes,
+					requiresRecalculation: true
+				})
+			};
+		}
+
+		// Check if user is at/near capacity (95%+) - warn but allow payment
+		const usagePercentage = (currentUploadedSize / gallery.originalsLimitBytes) * 100;
+		if (usagePercentage >= 95) {
+			logger.warn('User paying for gallery at/near capacity', {
+				galleryId,
+				usagePercentage: usagePercentage.toFixed(2),
+				uploadedSizeBytes: currentUploadedSize,
+				limitBytes: gallery.originalsLimitBytes
+			});
+			// Don't block payment, but log warning for monitoring
 		}
 	}
+
+	// Ensure gallery has originalsLimitBytes and finalsLimitBytes set
+	// If not set, calculate from plan metadata
+	if (!gallery.originalsLimitBytes || !gallery.finalsLimitBytes) {
+		const { PRICING_PLANS } = await import('../../lib/src/pricing');
+		const planMetadata = PRICING_PLANS[gallery.plan as keyof typeof PRICING_PLANS];
+		if (planMetadata) {
+			// Update gallery with limits if missing
+			await ddb.send(new UpdateCommand({
+				TableName: galleriesTable,
+				Key: { galleryId },
+				UpdateExpression: 'SET originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
+				ExpressionAttributeValues: {
+					':olb': planMetadata.storageLimitBytes,
+					':flb': planMetadata.storageLimitBytes,
+					':u': new Date().toISOString()
+				}
+			}));
+			gallery.originalsLimitBytes = planMetadata.storageLimitBytes;
+			gallery.finalsLimitBytes = planMetadata.storageLimitBytes;
+		}
+	}
+
+	// Calculate amounts from gallery pricing (for dry run or if no transaction exists)
+	let plan = gallery.plan;
+	let galleryPriceCents = gallery.priceCents;
 	
-	let totalAmountCents = galleryPriceCents + addonPriceCents;
+	let totalAmountCents = galleryPriceCents;
 	
 	// Calculate wallet vs stripe amounts
 	let walletAmountCents = 0;
@@ -487,9 +582,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		try {
 			// Build composites list for frontend display
 			const composites: string[] = [`Gallery Plan ${plan}`];
-			if (hasBackupStorage) {
-				composites.push('Backup addon');
-			}
+			
+			// USER-CENTRIC FIX #6 & #11: Store plan details in transaction metadata (not just gallery)
+			// This prevents race conditions where plan is overwritten before payment completes
+			// Also store plan calculation timestamp to detect stale calculations
+			const planCalculationTimestamp = gallery.planCalculationTimestamp || new Date().toISOString();
 			
 			// Create transaction with UNPAID status
 			const newTransactionId = await createTransaction(
@@ -504,11 +601,30 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					composites,
 					metadata: {
 						plan,
-						hasBackupStorage,
-						addonPriceCents
+						priceCents: galleryPriceCents,
+						originalsLimitBytes: gallery.originalsLimitBytes,
+						finalsLimitBytes: gallery.finalsLimitBytes,
+						planCalculationTimestamp,
+						// Store original plan details for upgrade calculations later
+						originalPlan: plan,
+						originalPriceCents: galleryPriceCents,
+						originalSelectionEnabled: gallery.selectionEnabled !== false
 					}
 				}
 			);
+			
+			// USER-CENTRIC FIX #4: Lock uploads once plan is set and payment initiated
+			// Set paymentLocked flag to prevent concurrent uploads during payment
+			await ddb.send(new UpdateCommand({
+				TableName: galleriesTable,
+				Key: { galleryId },
+				UpdateExpression: 'SET paymentLocked = :pl, paymentLockedAt = :pla, updatedAt = :u',
+				ExpressionAttributeValues: {
+					':pl': true,
+					':pla': new Date().toISOString(),
+					':u': new Date().toISOString()
+				}
+			}));
 			logger.info('Transaction created on-demand (UNPAID)', { transactionId: newTransactionId, galleryId, totalAmountCents });
 			
 			// Fetch the newly created transaction
@@ -539,22 +655,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	plan = existingTransaction.metadata?.plan || plan;
 	
 	// Get plan metadata for expiry calculation
-	const PRICING_PLANS: Record<string, { expiryDays: number }> = {
-		'1GB-1m': { expiryDays: 30 },
-		'1GB-3m': { expiryDays: 90 },
-		'1GB-12m': { expiryDays: 365 },
-		'3GB-1m': { expiryDays: 30 },
-		'3GB-3m': { expiryDays: 90 },
-		'3GB-12m': { expiryDays: 365 },
-		'10GB-1m': { expiryDays: 30 },
-		'10GB-3m': { expiryDays: 90 },
-		'10GB-12m': { expiryDays: 365 }
-	};
-	const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS['1GB-1m'];
+	const { PRICING_PLANS } = await import('../../lib/src/pricing');
+	const planMetadata = PRICING_PLANS[plan as keyof typeof PRICING_PLANS] || PRICING_PLANS['1GB-1m'];
 	const expiryDays = planMetadata.expiryDays;
-	hasBackupStorage = existingTransaction.metadata?.hasBackupStorage === true || existingTransaction.metadata?.hasBackupStorage === 'true' || hasBackupStorage;
-	addonPriceCents = existingTransaction.metadata?.addonPriceCents ? parseInt(existingTransaction.metadata.addonPriceCents.toString()) : addonPriceCents;
-	galleryPriceCents = totalAmountCents - addonPriceCents;
+	galleryPriceCents = totalAmountCents;
 
 	// Try wallet payment first if enabled
 	// Recalculate wallet/stripe amounts based on CURRENT wallet balance (not transaction's stored values)
@@ -652,10 +756,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
 				const expiresAt = expiresAtDate.toISOString();
 				
+				// USER-CENTRIC FIX #4: Remove paymentLocked flag when payment succeeds
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl',
+					UpdateExpression: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked',
 					ExpressionAttributeNames: {
 						'#state': 'state',
 						'#ttl': 'ttl'
@@ -736,11 +841,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			? `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`
 			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`;
 
+		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
+		// For wallet top-ups, PhotoHub covers fees (handled in checkoutCreate.ts)
+		// For gallery payments, user pays fees (we add fees to the amount charged)
+		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(stripeAmountCents) : 0;
+		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
+		
 		// Build line items from transaction
 		const lineItems: any[] = [];
 		
-		// Gallery plan line item
+		// Gallery plan line item (base amount)
 		if (galleryPriceCents > 0) {
+			const baseAmountForStripe = walletAmountCents > 0 
+				? Math.round((galleryPriceCents / totalAmountCents) * stripeAmountCents) 
+				: galleryPriceCents;
+			
 			lineItems.push({
 				price_data: {
 					currency: 'pln',
@@ -748,28 +863,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						name: `Gallery: ${galleryId}`,
 						description: `PhotoHub gallery payment - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
 					},
-					unit_amount: walletAmountCents > 0 ? Math.round((galleryPriceCents / totalAmountCents) * stripeAmountCents) : galleryPriceCents
+					unit_amount: baseAmountForStripe
 				},
 				quantity: 1
 			});
 		}
 		
-		// Addon line item (if included in transaction)
-		if (hasBackupStorage && addonPriceCents > 0) {
-			const addonStripeAmount = walletAmountCents > 0 ? Math.round((addonPriceCents / totalAmountCents) * stripeAmountCents) : addonPriceCents;
+		// Add Stripe processing fee as separate line item (user pays fees)
+		if (stripeFeeCents > 0) {
 			lineItems.push({
 				price_data: {
 					currency: 'pln',
 					product_data: {
-						name: 'Backup Storage Addon',
-						description: `Backup storage addon for gallery ${galleryId}`
+						name: 'Opłata za przetwarzanie płatności',
+						description: 'Stripe processing fee'
 					},
-					unit_amount: addonStripeAmount
+					unit_amount: stripeFeeCents
 				},
 				quantity: 1
 			});
 		}
-
+		
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			mode: 'payment',
@@ -783,8 +897,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId: transactionId,
 				walletAmountCents: walletAmountCents.toString(),
 				stripeAmountCents: stripeAmountCents.toString(),
-				hasBackupStorage: hasBackupStorage ? 'true' : 'false',
-				addonPriceCents: addonPriceCents.toString(),
 				redirectUrl: redirectUrl
 			}
 		});

@@ -650,9 +650,8 @@ export default function GallerySidebar({
               </div>
             )}
           </li>
-          {/* Only show "Zdjęcia" if gallery is loaded AND (selection is enabled OR backup addon is purchased) */}
-          {/* Non-selection galleries without backup addon don't have originals to upload */}
-          {!galleryLoading && gallery && ((gallery.selectionEnabled !== false) || (gallery.hasBackupStorage === true)) && (
+          {/* Only show "Zdjęcia" if gallery is loaded AND selection is enabled */}
+          {!galleryLoading && gallery && gallery.selectionEnabled !== false && (
             <li>
               <Link
                 href={`/galleries/${gallery.galleryId}/photos`}
@@ -728,8 +727,7 @@ export default function GallerySidebar({
           
           <div className="space-y-2 px-3">
             {/* Download Selected Originals ZIP 
-                - Always available if backup addon exists (regardless of status)
-                - Available for CLIENT_APPROVED/AWAITING_FINAL_PHOTOS if no backup addon
+                - Available for CLIENT_APPROVED/AWAITING_FINAL_PHOTOS (before finals upload)
             */}
             {!galleryLoading && gallery && gallery.selectionEnabled !== false && canDownloadZip && onDownloadZip && (
               <Button
@@ -742,11 +740,6 @@ export default function GallerySidebar({
                   <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
                 </svg>
                 Pobierz wybrane oryginały (ZIP)
-                {gallery.hasBackupStorage && (
-                  <span className="ml-2 text-xs text-success-600 dark:text-success-400">
-                    (backup)
-                  </span>
-                )}
               </Button>
             )}
 

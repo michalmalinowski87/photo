@@ -4,7 +4,6 @@ import * as ordersList from '../../../functions/orders/list';
 import * as ordersListAll from '../../../functions/orders/listAll';
 import * as ordersGet from '../../../functions/orders/get';
 import * as ordersDownloadZip from '../../../functions/orders/downloadZip';
-import * as ordersPurchaseAddon from '../../../functions/orders/purchaseAddon';
 import * as ordersMarkPaid from '../../../functions/orders/markPaid';
 import * as ordersMarkPartiallyPaid from '../../../functions/orders/markPartiallyPaid';
 import * as ordersMarkCanceled from '../../../functions/orders/markCanceled';
@@ -30,7 +29,6 @@ router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));
 // orders/:orderId/zip route is registered as public route in index.ts (no requireAuth)
 // router.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
-router.post('/galleries/:id/purchase-addon', wrapHandler(ordersPurchaseAddon.handler));
 router.post('/galleries/:id/orders/:orderId/mark-paid', wrapHandler(ordersMarkPaid.handler));
 router.post('/galleries/:id/orders/:orderId/mark-partially-paid', wrapHandler(ordersMarkPartiallyPaid.handler));
 router.post('/galleries/:id/orders/:orderId/mark-canceled', wrapHandler(ordersMarkCanceled.handler));

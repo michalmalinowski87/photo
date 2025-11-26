@@ -145,11 +145,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const previewKey = `galleries/${galleryId}/previews/${filename}`;
 				const thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
 				
+				// Generate WebP filenames (replace extension with .webp)
+				const getWebpFilename = (fname: string) => {
+					const lastDot = fname.lastIndexOf('.');
+					if (lastDot === -1) return `${fname}.webp`;
+					return `${fname.substring(0, lastDot)}.webp`;
+				};
+				const webpFilename = getWebpFilename(filename);
+				const previewWebpKey = `galleries/${galleryId}/previews/${webpFilename}`;
+				const thumbWebpKey = `galleries/${galleryId}/thumbs/${webpFilename}`;
+				
+				// Check if WebP versions exist
+				const hasPreviewWebp = previewFiles.has(webpFilename);
+				const hasThumbWebp = thumbKeys.has(webpFilename);
+				
 				// Build CloudFront URLs - encode path segments
+				// Prefer WebP URLs when available (smaller file size)
 				const previewUrl = previewKeys.has(filename) && cloudfrontDomain
+					? `https://${cloudfrontDomain}/${(hasPreviewWebp ? previewWebpKey : previewKey).split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				const previewUrlFallback = previewKeys.has(filename) && cloudfrontDomain && hasPreviewWebp
 					? `https://${cloudfrontDomain}/${previewKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 				const thumbUrl = thumbKeys.has(filename) && cloudfrontDomain
+					? `https://${cloudfrontDomain}/${(hasThumbWebp ? thumbWebpKey : thumbKey).split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				const thumbUrlFallback = thumbKeys.has(filename) && cloudfrontDomain && hasThumbWebp
 					? `https://${cloudfrontDomain}/${thumbKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 
@@ -160,7 +181,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return {
 					key: filename,
 					previewUrl,
+					previewUrlFallback,
 					thumbUrl,
+					thumbUrlFallback,
 					size,
 					lastModified
 				};
@@ -171,12 +194,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return a.key.localeCompare(b.key);
 			});
 
-		// Check for sync issue: no images but bytesUsed > 0
+		// Check for sync issue: no images but originalsBytesUsed > 0
 		// Trigger automatic recalculation if detected (debounced internally)
-		if (images.length === 0 && (gallery.bytesUsed || 0) > 0) {
-			logger.info('Detected sync issue: no images but bytesUsed > 0, triggering automatic recalculation', {
+		if (images.length === 0 && (gallery.originalsBytesUsed || 0) > 0) {
+			logger.info('Detected sync issue: no images but originalsBytesUsed > 0, triggering automatic recalculation', {
 				galleryId,
-				bytesUsed: gallery.bytesUsed || 0
+				originalsBytesUsed: gallery.originalsBytesUsed || 0
 			});
 			
 			// Trigger recalculation asynchronously (fire and forget to avoid blocking response)

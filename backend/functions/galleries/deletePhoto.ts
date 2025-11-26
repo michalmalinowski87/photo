@@ -92,10 +92,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 
-	// Update gallery bytesUsed by subtracting deleted file size
+	// Update gallery originalsBytesUsed by subtracting deleted file size
+	// Also update bytesUsed for backward compatibility
 	if (fileSize > 0) {
 		try {
-			// Get current bytesUsed first to check if update would go negative
+			// Get current originalsBytesUsed first to check if update would go negative
+			const currentOriginalsBytesUsed = gallery.originalsBytesUsed || 0;
+			const newOriginalsBytesUsed = Math.max(0, currentOriginalsBytesUsed - fileSize);
 			const currentBytesUsed = gallery.bytesUsed || 0;
 			const newBytesUsed = Math.max(0, currentBytesUsed - fileSize);
 			
@@ -103,31 +106,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			await ddb.send(new UpdateCommand({
 				TableName: galleriesTable,
 				Key: { galleryId },
-				UpdateExpression: 'SET bytesUsed = :size',
+				UpdateExpression: 'SET originalsBytesUsed = :originalsSize, bytesUsed = :size',
 				ExpressionAttributeValues: {
+					':originalsSize': newOriginalsBytesUsed,
 					':size': newBytesUsed
 				}
 			}));
-			logger.info('Updated gallery bytesUsed', { 
+			logger.info('Updated gallery originalsBytesUsed', { 
 				galleryId, 
 				sizeRemoved: fileSize,
-				oldBytesUsed: currentBytesUsed,
-				newBytesUsed
+				oldOriginalsBytesUsed: currentOriginalsBytesUsed,
+				newOriginalsBytesUsed
 			});
 		} catch (updateErr: any) {
-			logger.warn('Failed to update gallery bytesUsed', {
+			logger.warn('Failed to update gallery originalsBytesUsed', {
 				error: updateErr.message,
 				galleryId,
 				size: fileSize
 			});
 		}
 	} else {
-		// File not found in S3 - bytesUsed might be out of sync
+		// File not found in S3 - originalsBytesUsed might be out of sync
 		// Trigger automatic recalculation (debounced internally)
-		logger.info('File not found in S3, triggering automatic bytesUsed recalculation', {
+		logger.info('File not found in S3, triggering automatic storage recalculation', {
 			galleryId,
 			filename,
-			currentBytesUsed: gallery.bytesUsed || 0
+			currentOriginalsBytesUsed: gallery.originalsBytesUsed || 0
 		});
 		
 		// Trigger recalculation asynchronously (fire and forget to avoid blocking deletion)
@@ -166,8 +170,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Key: { galleryId }
 	}));
 
-	const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0);
-	const storageLimitBytes = updatedGallery.Item?.storageLimitBytes || 0;
+	const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
+	const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0); // Backward compatibility
+	const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
 
 	return {
 		statusCode: 200,
@@ -176,10 +181,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			message: 'Photo deleted successfully',
 			galleryId,
 			filename,
-			bytesUsed: updatedBytesUsed,
-			storageLimitBytes,
-			storageUsedMB: (updatedBytesUsed / (1024 * 1024)).toFixed(2),
-			storageLimitMB: (storageLimitBytes / (1024 * 1024)).toFixed(2)
+			originalsBytesUsed: updatedOriginalsBytesUsed,
+			bytesUsed: updatedBytesUsed, // Backward compatibility
+			originalsLimitBytes,
+			originalsUsedMB: (updatedOriginalsBytesUsed / (1024 * 1024)).toFixed(2),
+			originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2)
 		})
 	};
 });

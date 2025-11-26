@@ -5,7 +5,6 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCom
 const Stripe = require('stripe');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
-import { createBackupStorageAddon, ADDON_TYPES } from '../../lib/src/addons';
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -171,42 +170,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						amountCents
 					});
 				}
-			} else if (type === 'addon_payment' && userId && galleryId) {
-				// Addon payment - create backup storage addon
-				const BACKUP_STORAGE_MULTIPLIER = 0.3; // Should match the multiplier used in purchaseAddon
-				const backupStorageCents = amountCents;
-				
-				logger.info('Processing addon_payment', { 
-					galleryId, 
-					userId, 
-					backupStorageCents
-				});
-				
-				try {
-					// Check if addon already exists (idempotency check)
-					const { hasAddon } = require('../../lib/src/addons');
-					const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-					
-					if (!addonExists) {
-						// Create addon
-						await createBackupStorageAddon(galleryId, backupStorageCents, BACKUP_STORAGE_MULTIPLIER);
-						logger.info('Backup storage addon created via webhook', { 
-							galleryId, 
-							backupStorageCents, 
-							multiplier: BACKUP_STORAGE_MULTIPLIER,
-							paymentId
-						});
-					} else {
-						logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
-					}
-				} catch (addonErr: any) {
-					logger.error('Failed to create backup storage addon via webhook', {
-						error: addonErr.message,
-						galleryId,
-						paymentId
-					});
-					// Continue to record payment even if addon creation fails
-				}
 			} else if (type === 'gallery_payment' && userId && galleryId) {
 				// Gallery payment (from create or pay button) - mark gallery as paid
 				if (!galleriesTable) {
@@ -227,33 +190,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						// Calculate normal expiry based on plan metadata
 						// Get plan metadata from create.ts or use default
 						const plan = gallery.plan || session.metadata?.plan || '1GB-1m';
-						const PRICING_PLANS: Record<string, { expiryDays: number }> = {
-							'1GB-1m': { expiryDays: 30 },
-							'1GB-3m': { expiryDays: 90 },
-							'1GB-12m': { expiryDays: 365 },
-							'3GB-1m': { expiryDays: 30 },
-							'3GB-3m': { expiryDays: 90 },
-							'3GB-12m': { expiryDays: 365 },
-							'10GB-1m': { expiryDays: 30 },
-							'10GB-3m': { expiryDays: 90 },
-							'10GB-12m': { expiryDays: 365 }
-						};
-						const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS['1GB-1m'];
+						const { PRICING_PLANS } = await import('../../lib/src/pricing');
+						const planMetadata = PRICING_PLANS[plan as keyof typeof PRICING_PLANS] || PRICING_PLANS['1GB-1m'];
 						const expiryDays = planMetadata.expiryDays;
 						
 						// Calculate normal expiry date (from now, not from creation)
 						const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
 						const expiresAt = expiresAtDate.toISOString();
 						
-						// Update gallery state, remove TTL, set normal expiry, and selectionStatus if selection is enabled
+						// Ensure originalsLimitBytes and finalsLimitBytes are set (use plan metadata if not already set)
+						const originalsLimitBytes = gallery.originalsLimitBytes || planMetadata.storageLimitBytes;
+						const finalsLimitBytes = gallery.finalsLimitBytes || planMetadata.storageLimitBytes;
+						
+						// Update gallery state, remove TTL, set normal expiry, storage limits, and selectionStatus if selection is enabled
 						// Note: 'state' and 'ttl' are reserved keywords in DynamoDB, so we use ExpressionAttributeNames
 						const updateExpr = gallery.selectionEnabled
-							? 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl'
-							: 'SET #state = :s, expiresAt = :e, updatedAt = :u REMOVE #ttl';
+							? 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl'
+							: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl';
 						
 						const exprValues: any = {
 							':s': 'PAID_ACTIVE',
 							':e': expiresAt,
+							':olb': originalsLimitBytes,
+							':flb': finalsLimitBytes,
 							':o': userId,
 							':u': now
 						};
@@ -267,10 +226,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							exprValues[':ss'] = 'NOT_STARTED';
 						}
 						
+						// USER-CENTRIC FIX #4: Remove paymentLocked flag when payment succeeds
+						const updateExprWithUnlock = updateExpr.replace('REMOVE #ttl', 'REMOVE #ttl, paymentLocked');
+						
 						await ddb.send(new UpdateCommand({
 							TableName: galleriesTable,
 							Key: { galleryId },
-							UpdateExpression: updateExpr,
+							UpdateExpression: updateExprWithUnlock,
 							ConditionExpression: 'ownerId = :o',
 							ExpressionAttributeValues: exprValues,
 							ExpressionAttributeNames: exprNames
@@ -289,38 +251,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							expiryDays
 						});
 						
-						// Create backup storage addon if requested during gallery creation (Stripe payment)
-						// Note: Addon should already exist (created during gallery creation), but ensure it exists
-						const hasBackupStorage = session.metadata?.hasBackupStorage === 'true' || session.metadata?.hasBackupStorage === true;
-						const addonPriceCents = session.metadata?.addonPriceCents ? parseInt(session.metadata.addonPriceCents, 10) : 0;
-						if (hasBackupStorage && addonPriceCents > 0) {
-							try {
-								const { hasAddon } = require('../../lib/src/addons');
-								const addonExists = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-								
-								if (!addonExists) {
-									// Addon should have been created during gallery creation, but create it now if missing
-									const BACKUP_STORAGE_MULTIPLIER = 0.3;
-									await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
-									logger.info('Backup storage addon created via webhook (was missing)', { 
-										galleryId, 
-										addonPriceCents, 
-										multiplier: BACKUP_STORAGE_MULTIPLIER,
-										paymentId
-									});
-									
-								} else {
-									logger.info('Backup storage addon already exists for gallery (webhook)', { galleryId, paymentId });
-								}
-							} catch (addonErr: any) {
-								logger.error('Failed to create backup storage addon via webhook (gallery creation)', {
-									error: addonErr.message,
-									galleryId,
-									paymentId
-								});
-								// Continue - addon can be purchased later
-							}
-						}
 						
 						// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
 						// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
@@ -369,6 +299,68 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}
 					}
 				}
+			} else if (type === 'gallery_plan_upgrade' && userId && galleryId) {
+				// Plan upgrade payment - update gallery with new plan
+				if (!galleriesTable) {
+					logger.error('Cannot process plan upgrade: GALLERIES_TABLE not configured', { galleryId, userId, paymentId });
+				} else {
+					const galleryGet = await ddb.send(new GetCommand({
+						TableName: galleriesTable,
+						Key: { galleryId }
+					}));
+					
+					const gallery = galleryGet.Item as any;
+					if (!gallery) {
+						logger.error('Gallery not found for plan upgrade', { galleryId, userId, paymentId });
+					} else {
+						const newPlanKey = session.metadata?.plan;
+						const previousPlanKey = session.metadata?.previousPlan;
+						
+						if (!newPlanKey) {
+							logger.error('Missing plan in upgrade metadata', { galleryId, userId, paymentId, metadata: session.metadata });
+						} else {
+							// Get plan metadata
+							const { PRICING_PLANS } = await import('../../lib/src/pricing');
+							const planMetadata = PRICING_PLANS[newPlanKey as keyof typeof PRICING_PLANS];
+							
+							if (planMetadata) {
+								const newPriceCents = parseInt(session.metadata?.newPriceCents || '0');
+								const now = new Date().toISOString();
+								
+								// USER-CENTRIC FIX #7: Keep original expiry date, only upgrade storage size
+								// Update gallery with new plan but keep original expiresAt
+								await ddb.send(new UpdateCommand({
+									TableName: galleriesTable,
+									Key: { galleryId },
+									UpdateExpression: 'SET plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked',
+									ExpressionAttributeValues: {
+										':plan': newPlanKey,
+										':price': newPriceCents,
+										':olb': planMetadata.storageLimitBytes,
+										':flb': planMetadata.storageLimitBytes,
+										':u': now
+										// Note: expiresAt is NOT updated - keeps original expiry date
+									}
+								}));
+								
+								logger.info('Gallery plan upgraded via webhook', {
+									galleryId,
+									userId,
+									previousPlan: previousPlanKey,
+									newPlan: newPlanKey,
+									paymentId
+								});
+							} else {
+								logger.error('Invalid plan key in upgrade metadata', { 
+									galleryId, 
+									userId, 
+									paymentId, 
+									newPlanKey 
+								});
+							}
+						}
+					}
+				}
 			}
 
 			// Record payment
@@ -399,6 +391,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					if (transaction && transaction.status === 'UNPAID') {
 						await updateTransactionStatus(userId, transactionId, 'CANCELED');
 						logger.info('Transaction status updated to CANCELED (session expired)', { transactionId, userId });
+						
+						// USER-CENTRIC FIX: Clear paymentLocked flag when session expires
+						if (transaction.galleryId && galleriesTable) {
+							try {
+								await ddb.send(new UpdateCommand({
+									TableName: galleriesTable,
+									Key: { galleryId: transaction.galleryId },
+									UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+									ExpressionAttributeValues: {
+										':u': new Date().toISOString()
+									}
+								}));
+								logger.info('Cleared paymentLocked flag after session expiry', { galleryId: transaction.galleryId });
+							} catch (unlockErr: any) {
+								logger.warn('Failed to clear paymentLocked flag on session expiry', {
+									error: unlockErr.message,
+									galleryId: transaction.galleryId
+								});
+							}
+						}
 					}
 				} catch (txnErr: any) {
 					logger.error('Failed to update transaction status (expired)', {
@@ -419,6 +431,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					if (transaction && transaction.status === 'UNPAID') {
 						await updateTransactionStatus(userId, transactionId, 'FAILED');
 						logger.info('Transaction status updated to FAILED', { transactionId, userId });
+						
+						// USER-CENTRIC FIX: Clear paymentLocked flag when payment fails
+						if (transaction.galleryId && galleriesTable) {
+							try {
+								await ddb.send(new UpdateCommand({
+									TableName: galleriesTable,
+									Key: { galleryId: transaction.galleryId },
+									UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+									ExpressionAttributeValues: {
+										':u': new Date().toISOString()
+									}
+								}));
+								logger.info('Cleared paymentLocked flag after payment failure', { galleryId: transaction.galleryId });
+							} catch (unlockErr: any) {
+								logger.warn('Failed to clear paymentLocked flag on payment failure', {
+									error: unlockErr.message,
+									galleryId: transaction.galleryId
+								});
+							}
+						}
 					}
 				} catch (txnErr: any) {
 					logger.error('Failed to update transaction status (failed)', {
@@ -439,6 +471,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					if (transaction && transaction.status === 'UNPAID') {
 						await updateTransactionStatus(userId, transactionId, 'CANCELED');
 						logger.info('Transaction status updated to CANCELED (payment intent canceled)', { transactionId, userId });
+						
+						// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
+						if (transaction.galleryId && galleriesTable) {
+							try {
+								await ddb.send(new UpdateCommand({
+									TableName: galleriesTable,
+									Key: { galleryId: transaction.galleryId },
+									UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+									ExpressionAttributeValues: {
+										':u': new Date().toISOString()
+									}
+								}));
+								logger.info('Cleared paymentLocked flag after payment cancellation', { galleryId: transaction.galleryId });
+							} catch (unlockErr: any) {
+								logger.warn('Failed to clear paymentLocked flag on payment cancellation', {
+									error: unlockErr.message,
+									galleryId: transaction.galleryId
+								});
+							}
+						}
 					}
 				} catch (txnErr: any) {
 					logger.error('Failed to update transaction status (canceled)', {

@@ -7,7 +7,6 @@ import { Readable } from 'stream';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getUserIdFromEvent, requireOwnerOr403, verifyGalleryAccess } from '../../lib/src/auth';
-import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -84,20 +83,16 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Check if gallery has backup addon (gallery-level)
-	// If backup addon exists, ZIP is always available regardless of order status
-	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-	
 	// Don't allow download if originals have been deleted (after finals upload)
 	// Originals are deleted when status changes to PREPARING_DELIVERY or DELIVERED
-	// Exception: If backup addon exists, originals are kept and ZIP is always available
-	if (!galleryHasBackup && (order.deliveryStatus === 'PREPARING_DELIVERY' || order.deliveryStatus === 'PREPARING_FOR_DELIVERY' || order.deliveryStatus === 'DELIVERED')) {
+	// After originals are deleted, ZIP download is no longer available
+	if (order.deliveryStatus === 'PREPARING_DELIVERY' || order.deliveryStatus === 'PREPARING_FOR_DELIVERY' || order.deliveryStatus === 'DELIVERED') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				error: 'Cannot download ZIP - originals have been deleted',
-				message: 'Original photos have been removed after final photos were uploaded. ZIP download is no longer available unless backup storage addon is purchased.',
+				message: 'Original photos have been removed after final photos were uploaded. ZIP download is no longer available.',
 				deliveryStatus: order.deliveryStatus
 			})
 		};
@@ -345,9 +340,6 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 		}
 		
-		// Check if gallery has backup addon (gallery-level)
-		const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-		
 		// Get ZIP file from S3
 		const getObjectResponse = await s3.send(new GetObjectCommand({
 			Bucket: bucket,
@@ -442,32 +434,29 @@ export const handler = lambdaLogger(async (event: any) => {
 			orderId,
 			zipKey: expectedZipKey,
 			zipSize: zipBuffer.length,
-			zipSignature,
-			hasBackupAddon: galleryHasBackup
+			zipSignature
 		});
 
-		// If gallery does NOT have backup addon, delete ZIP after serving (one-time use)
-		if (!galleryHasBackup) {
-			try {
-				await s3.send(new DeleteObjectCommand({
-					Bucket: bucket,
-					Key: expectedZipKey
-				}));
-				
-				console.log('ZIP deleted after one-time download (no backup addon)', {
-					galleryId,
-					orderId,
-					zipKey: expectedZipKey
-				});
-			} catch (deleteErr: any) {
-				// Log error but don't fail the download
-				console.error('Failed to delete ZIP after download', {
-					error: deleteErr.message,
-					galleryId,
-					orderId,
-					zipKey: expectedZipKey
-				});
-			}
+		// Delete ZIP after serving (one-time use)
+		try {
+			await s3.send(new DeleteObjectCommand({
+				Bucket: bucket,
+				Key: expectedZipKey
+			}));
+			
+			console.log('ZIP deleted after one-time download', {
+				galleryId,
+				orderId,
+				zipKey: expectedZipKey
+			});
+		} catch (deleteErr: any) {
+			// Log error but don't fail the download
+			console.error('Failed to delete ZIP after download', {
+				error: deleteErr.message,
+				galleryId,
+				orderId,
+				zipKey: expectedZipKey
+			});
 		}
 
 		// Return ZIP file directly through API as binary response
@@ -478,7 +467,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				'content-type': 'application/zip',
 				'Content-Disposition': `attachment; filename="${orderId}.zip"`,
 				'Content-Length': zipBuffer.length.toString(),
-				'x-one-time-use': (!galleryHasBackup).toString()
+				'x-one-time-use': 'true'
 			},
 			body: zipBuffer.toString('base64'),
 			isBase64Encoded: true

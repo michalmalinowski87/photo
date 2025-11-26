@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { apiFetch, formatApiError } from '../lib/api';
 import { signOut, getHostedUILogoutUrl } from '../lib/auth';
 import { initializeAuth, redirectToLandingSignIn } from '../lib/auth-init';
+import { formatPrice } from '../lib/format-price';
 
 interface Order {
 	orderId: string;
@@ -14,7 +15,6 @@ interface Order {
 }
 
 interface Gallery {
-	hasBackupStorage?: boolean;
 	selectionEnabled?: boolean;
 	[key: string]: any;
 }
@@ -294,14 +294,10 @@ export default function Orders() {
 		const order = orders.find((o) => o.orderId === orderId);
 		const currentStatus = order?.deliveryStatus;
 		
-		// Check if gallery has backup addon and selection enabled from gallery metadata
-		const hasBackup = gallery?.hasBackupStorage === true;
+		// Check if selection is enabled from gallery metadata
 		const selectionEnabled = gallery?.selectionEnabled !== false;
 		
-		// Show warning if no backup addon AND selection is enabled AND status will change from CLIENT_APPROVED to PREPARING_DELIVERY
-		// Don't show warning if selection is disabled (non-selection galleries) or order is already PREPARING_DELIVERY
-		if (!hasBackup && selectionEnabled && currentStatus === 'CLIENT_APPROVED') {
-			const warning = 'Warning: Once you upload final photos, the status will change to PREPARING_DELIVERY and you will no longer be able to generate the originals ZIP. Original photos will be permanently removed after delivery.\n\nYou can purchase the backup storage addon from the gallery list page.';
+		// Note: Originals will be deleted after finals upload, but previews remain for display
 			if (!window.confirm(warning + '\n\nDo you want to continue with upload?')) {
 				return;
 			}
@@ -422,7 +418,7 @@ export default function Orders() {
 									<td>{o.deliveryStatus || '-'}</td>
 									<td>{o.paymentStatus || '-'}</td>
 									<td>{o.selectedCount}</td>
-									<td>{o.overageCents ? `${(o.overageCents / 100).toFixed(2)} PLN` : '0 PLN'}</td>
+									<td>{o.overageCents ? formatPrice(o.overageCents) : '0.00 PLN'}</td>
 									<td>-</td>
 									<td>
 										{/* Download ZIP - available for CLIENT_APPROVED orders */}
@@ -440,13 +436,13 @@ export default function Orders() {
 													borderRadius: 4, 
 													cursor: 'pointer'
 												}}
-												title={gallery?.hasBackupStorage ? "Download ZIP file (available for all statuses)" : "Download ZIP file (one-time use)"}
+												title="Download ZIP file (one-time use)"
 											>
 												{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
 											</button>
 										)}
-										{/* Download ZIP for DELIVERED orders with backup addon */}
-										{o.deliveryStatus === 'DELIVERED' && gallery?.hasBackupStorage && (
+										{/* Note: ZIP download only available before finals upload (originals are deleted after delivery) */}
+										{false && o.deliveryStatus === 'DELIVERED' && (
 											<button 
 												onClick={() => downloadZip(o.orderId)} 
 												disabled={downloadingZip[o.orderId]}
@@ -460,7 +456,7 @@ export default function Orders() {
 													borderRadius: 4, 
 													cursor: 'pointer'
 												}}
-												title="Download ZIP file (backup storage addon purchased)"
+												title="Download ZIP file (one-time use)"
 											>
 												{downloadingZip[o.orderId] ? 'Downloading...' : 'Download ZIP'}
 											</button>

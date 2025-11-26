@@ -8,7 +8,6 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createGalleryDeletedEmail } from '../../lib/src/email';
-import { getGalleryAddons } from '../../lib/src/addons';
 import { getUnpaidTransactionForGallery, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -187,28 +186,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			} catch (err: any) {
 				logger.error('Failed to delete orders', { error: err.message, galleryId });
 			}
-		}
-
-		// Delete all addons for this gallery
-		try {
-			const addons = await getGalleryAddons(galleryId);
-			if (addons.length > 0) {
-				const addonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
-				if (addonsTable) {
-					await Promise.allSettled(
-						addons.map(addon =>
-							ddb.send(new DeleteCommand({
-								TableName: addonsTable,
-								Key: { galleryId: addon.galleryId, addonId: addon.addonId }
-							}))
-						)
-					);
-					logger.info('Deleted gallery addons', { count: addons.length, galleryId });
-				}
-			}
-		} catch (err: any) {
-			logger.error('Failed to delete gallery addons', { error: err.message, galleryId });
-			// Continue with gallery deletion even if addon deletion fails
 		}
 
 		// Finally, delete the gallery itself

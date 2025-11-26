@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
+import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
@@ -299,7 +300,21 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                     {gallery.plan || "-"}
                     {gallery.priceCents && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {(gallery.priceCents / 100).toFixed(2)} PLN
+                        {formatPrice(gallery.priceCents)}
+                      </div>
+                    )}
+                    {(gallery.originalsLimitBytes || gallery.finalsLimitBytes) && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {gallery.originalsLimitBytes && (
+                          <div>
+                            Oryginały: {((gallery.originalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                          </div>
+                        )}
+                        {gallery.finalsLimitBytes && (
+                          <div>
+                            Finalne: {((gallery.finalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                          </div>
+                        )}
                       </div>
                     )}
                   </TableCell>

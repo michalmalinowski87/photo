@@ -2,7 +2,6 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
-import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -84,8 +83,12 @@ export const handler = lambdaLogger(async (event: any) => {
 				clientEmail: g.clientEmail, // Include clientEmail for "Send to Client" button visibility
 				plan: g.plan,
 				priceCents: g.priceCents,
-				storageLimitBytes: g.storageLimitBytes,
-				bytesUsed: g.bytesUsed || 0,
+				originalsLimitBytes: g.originalsLimitBytes,
+				finalsLimitBytes: g.finalsLimitBytes,
+				originalsBytesUsed: g.originalsBytesUsed || 0,
+				finalsBytesUsed: g.finalsBytesUsed || 0,
+				storageLimitBytes: g.storageLimitBytes, // Backward compatibility
+				bytesUsed: g.bytesUsed || 0, // Backward compatibility
 				expiresAt: g.expiresAt,
 				createdAt: g.createdAt,
 				updatedAt: g.updatedAt,
@@ -93,7 +96,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		});
 
-		// Optionally enrich with order summaries, addon status, and payment status (can be done in parallel)
+		// Optionally enrich with order summaries and payment status (can be done in parallel)
 		const enrichedGalleries = await Promise.all(galleries.map(async (g: any) => {
 			let orderData = { 
 				changeRequestPending: false, 
@@ -134,14 +137,6 @@ export const handler = lambdaLogger(async (event: any) => {
 				}
 			}
 
-			// Check for backup storage addon
-			let hasBackupStorage = false;
-			try {
-				hasBackupStorage = await hasAddon(g.galleryId, ADDON_TYPES.BACKUP_STORAGE);
-			} catch (err) {
-				// If addon check fails, continue without addon data
-			}
-
 			// Derive payment status from transactions
 			let isPaid = false;
 			let paymentStatus = 'UNPAID';
@@ -168,8 +163,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				state: effectiveState,
 				paymentStatus,
 				isPaid,
-				...orderData,
-				hasBackupStorage
+				...orderData
 			};
 		}));
 

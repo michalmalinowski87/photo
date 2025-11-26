@@ -4,6 +4,7 @@ import Link from "next/link";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
 import { getValidToken } from "../../../../lib/api";
+import { formatPrice } from "../../../../lib/format-price";
 import Button from "../../../../components/ui/button/Button";
 import Badge from "../../../../components/ui/badge/Badge";
 import { Modal } from "../../../../components/ui/modal";
@@ -58,7 +59,6 @@ interface Gallery {
 	name?: string;
 	clientEmail?: string;
 	selectionEnabled?: boolean;
-	hasBackupStorage?: boolean;
 	state?: string;
 	isPaid?: boolean;
 	[key: string]: any;
@@ -1369,9 +1369,8 @@ export default function OrderDetail() {
 	const shouldShowAllImages = !selectionEnabled;
 	
 	// Don't hide "Wybrane przez klienta" section - keep it visible for preview purposes
-	// But disable ZIP download when originals are deleted (after finals upload)
-	const hasBackupAddon = gallery?.hasBackupStorage === true;
-	const originalsDeleted = !hasBackupAddon && (
+	// Originals are deleted after finals upload, but previews remain for display
+	const originalsDeleted = (
 		order.deliveryStatus === "PREPARING_DELIVERY" || 
 		order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
 		order.deliveryStatus === "DELIVERED"
@@ -1382,7 +1381,7 @@ export default function OrderDetail() {
 	const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
 	
 	// Allow upload for final photos when gallery is paid and order is not in a blocked state
-	// Block uploads only for: DELIVERED (unless backup addon exists), CANCELLED, or CHANGES_REQUESTED
+	// Block uploads only for: CANCELLED
 	// Allow uploads for: CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, PREPARING_DELIVERY, PREPARING_FOR_DELIVERY
 	// Also allow uploads for non-selection galleries even if deliveryStatus is undefined (legacy orders)
 	// Note: Backend uses PREPARING_DELIVERY (without "FOR")
@@ -1395,22 +1394,19 @@ export default function OrderDetail() {
 			order.deliveryStatus === "CLIENT_APPROVED" ||
 			order.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
 			order.deliveryStatus === "PREPARING_DELIVERY" ||
-			order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-			(order.deliveryStatus === "DELIVERED" && hasBackupAddon) // Allow re-upload if backup addon exists
+			order.deliveryStatus === "PREPARING_FOR_DELIVERY"
 		)
 	);
-	// ZIP download is available if:
-	// 1. Backup addon exists (always available regardless of status)
-	// 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
-	// Note: After finals are uploaded (PREPARING_DELIVERY, DELIVERED), originals are deleted
-	// so ZIP download is NOT available unless backup addon exists
-	const canDownloadZip = selectionEnabled && (
-		hasBackupAddon || // Always available with backup addon
-		order.deliveryStatus === "CLIENT_APPROVED" ||
-		order.deliveryStatus === "AWAITING_FINAL_PHOTOS"
-		// Exclude PREPARING_DELIVERY, PREPARING_FOR_DELIVERY, DELIVERED when no backup addon
-		// because originals are deleted after finals upload
-	);
+// ZIP download is available if:
+// Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
+// Note: After finals are uploaded (PREPARING_DELIVERY, DELIVERED), originals are deleted
+// so ZIP download is NOT available after finals upload
+const canDownloadZip = selectionEnabled && (
+	order.deliveryStatus === "CLIENT_APPROVED" ||
+	order.deliveryStatus === "AWAITING_FINAL_PHOTOS"
+	// Exclude PREPARING_DELIVERY, PREPARING_FOR_DELIVERY, DELIVERED
+	// because originals are deleted after finals upload
+);
 
 	return (
 		<div className="space-y-6">
@@ -1518,7 +1514,7 @@ export default function OrderDetail() {
 							) : (
 								<>
 									<span className="text-lg font-semibold text-gray-900 dark:text-white">
-										{((order.totalCents || 0) / 100).toFixed(2)} PLN
+										{formatPrice(order.totalCents)}
 									</span>
 									<button
 										onClick={handleStartEditAmount}

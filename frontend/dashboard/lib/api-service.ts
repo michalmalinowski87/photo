@@ -350,6 +350,68 @@ class ApiService {
 			}
 			return await this._request(`/galleries/${galleryId}/orders/delivered`);
 		},
+
+		/**
+		 * Calculate plan for gallery based on uploaded size
+		 */
+		calculatePlan: async (galleryId: string, duration: string = '1m'): Promise<{
+			suggestedPlan: any;
+			originalsLimitBytes: number;
+			finalsLimitBytes: number;
+			uploadedSizeBytes: number;
+			selectionEnabled: boolean;
+			usagePercentage?: number;
+			isNearCapacity?: boolean;
+			isAtCapacity?: boolean;
+			exceedsLargestPlan?: boolean;
+			nextTierPlan?: { planKey: string; name: string; priceCents: number; storageLimitBytes: number; storage: string };
+		}> => {
+			if (!galleryId) {
+				throw new Error('Gallery ID is required');
+			}
+			return await this._request(`/galleries/${galleryId}/calculate-plan?duration=${duration}`);
+		},
+
+		/**
+		 * Validate upload limits after upload completes
+		 */
+		validateUploadLimits: async (galleryId: string): Promise<{ withinLimit: boolean; uploadedSizeBytes: number; originalsLimitBytes?: number; excessBytes?: number; nextTierPlan?: string; nextTierPriceCents?: number; nextTierLimitBytes?: number; isSelectionGallery?: boolean }> => {
+			if (!galleryId) {
+				throw new Error('Gallery ID is required');
+			}
+			return await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
+				method: 'POST',
+			});
+		},
+
+		/**
+		 * Upgrade gallery plan (for paid galleries only - pays difference)
+		 */
+		upgradePlan: async (galleryId: string, data: { plan: string; forceStripeOnly?: boolean }): Promise<{
+			paid: boolean;
+			checkoutUrl?: string;
+			transactionId: string;
+			totalAmountCents: number;
+			walletAmountCents: number;
+			stripeAmountCents: number;
+			currentPlan: string;
+			newPlan: string;
+			currentPriceCents: number;
+			newPriceCents: number;
+			priceDifferenceCents: number;
+			message: string;
+		}> => {
+			if (!galleryId) {
+				throw new Error('Gallery ID is required');
+			}
+			if (!data || !data.plan) {
+				throw new Error('Plan is required');
+			}
+			return await this._request(`/galleries/${galleryId}/upgrade-plan`, {
+				method: 'POST',
+				body: JSON.stringify(data),
+			});
+		},
 	};
 
 	// ==================== ORDERS ====================

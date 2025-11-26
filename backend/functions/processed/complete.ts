@@ -33,15 +33,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Get selected keys from order to clean up originals/thumbs/previews
 	const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
 
-	// Clean up originals, thumbs, and previews for selected photos (but keep ZIPs)
+	// Clean up originals only (keep thumbnails and previews for display purposes)
 	if (selectedKeys.length > 0) {
 		try {
 			const toDelete: { Key: string }[] = [];
 			for (const key of selectedKeys) {
-				// Add originals, thumbs, and previews to deletion list
+				// Only delete originals - keep thumbnails and previews for display
 				toDelete.push({ Key: `galleries/${galleryId}/originals/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/thumbs/${key}` });
-				toDelete.push({ Key: `galleries/${galleryId}/previews/${key}` });
 			}
 
 			// Batch delete (S3 allows up to 1000 objects per request)
@@ -54,7 +52,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		} catch (err: any) {
 			// Log error but continue with marking as delivered
-			logger?.error('Failed to clean up originals/thumbs/previews', {
+			logger?.error('Failed to clean up originals', {
 				error: err.message,
 				galleryId,
 				orderId,

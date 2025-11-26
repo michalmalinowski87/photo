@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../lib/currency";
+import { formatPrice } from "../lib/format-price";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
@@ -350,10 +351,10 @@ export default function Packages() {
 										{pkg.includedPhotos}
 									</TableCell>
 									<TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-										{(pkg.pricePerExtraPhoto / 100).toFixed(2)} PLN
+										{formatPrice(pkg.pricePerExtraPhoto)}
 									</TableCell>
 									<TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-										{(pkg.price / 100).toFixed(2)} PLN
+										{formatPrice(pkg.price)}
 									</TableCell>
 									<TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
 										{pkg.createdAt

@@ -19,7 +19,7 @@ This document describes the main user flows for photographers and clients using 
 ## 1. Photographer Onboarding & Wallet Management
 
 ### Flow Overview
-Photographers authenticate, manage their wallet balance, and view transaction history.
+Photographers authenticate, receive welcome bonus on first registration, manage their wallet balance, and view transaction history.
 
 ### Detailed Steps
 
@@ -28,9 +28,23 @@ Photographers authenticate, manage their wallet balance, and view transaction hi
    - Signs up/logs in via Cognito Hosted UI
    - Receives JWT token for authenticated API calls
 
-2. **Wallet Top-Up**
+2. **Welcome Bonus (New Users Only)**
+   - **Automatic Credit**: When a new user accesses their wallet for the first time (via `GET /wallet/balance`):
+     - System detects new user (no existing wallet and no previous transactions)
+     - Automatically credits **900 cents (9 PLN)** to wallet - equivalent to 1GB 3-month plan cost
+     - This is our customer acquisition cost (CAC) - allows users to try the service for free
+     - Creates transaction record with type `WELCOME_BONUS` and status `PAID`
+     - Creates ledger entry with type `WELCOME_BONUS`
+     - Transaction appears in wallet history as "Bonus powitalny"
+   - **One-Time Only**: Welcome bonus is only credited once per user:
+     - Checks for existing transactions before crediting
+     - Checks ledger for existing `WELCOME_BONUS` entries
+     - Prevents double crediting if user accesses wallet multiple times
+   - **User Benefit**: New users can immediately create their first gallery without needing to top up wallet first
+
+3. **Wallet Top-Up**
    - Navigate to wallet page in dashboard
-   - Enter amount (minimum 100 PLN / 10000 cents)
+   - Enter amount (minimum 20 PLN / 2000 cents)
    - Click "Top Up" button
    - System creates Stripe checkout session via `POST /payments/checkout`
    - Redirects to Stripe checkout page
@@ -41,20 +55,24 @@ Photographers authenticate, manage their wallet balance, and view transaction hi
      - Records payment in `Payments` table
    - Redirects back to wallet page with success confirmation
 
-3. **View Balance & Transactions**
+4. **View Balance & Transactions**
    - Wallet page displays current balance
    - Transaction history shows:
-     - Top-ups (CREDIT)
-     - Gallery creation debits (DEBIT)
+     - Welcome bonus (WELCOME_BONUS) - for new users
+     - Top-ups (WALLET_TOPUP)
+     - Gallery creation debits (GALLERY_PLAN)
+     - Plan upgrades (GALLERY_PLAN_UPGRADE)
+     - Refunds (REFUND)
      - Timestamps and amounts
 
 ### Key Endpoints
+- `GET /wallet/balance` - Get current wallet balance (automatically credits welcome bonus for new users on first access)
 - `POST /payments/checkout` - Create Stripe checkout session for wallet top-up
-- `GET /wallet/balance` - Get current wallet balance
 - `GET /wallet/transactions` - List transaction history
 
 ### Data Flow
 ```
+New User → GET /wallet/balance → Welcome Bonus (900 cents) → Wallet Credit
 Dashboard → POST /payments/checkout → Stripe Checkout → Payment → Webhook → Wallet Credit
 ```
 
@@ -63,7 +81,7 @@ Dashboard → POST /payments/checkout → Stripe Checkout → Payment → Webhoo
 ## 2. Gallery Creation & Setup
 
 ### Flow Overview
-Photographers create galleries using a multi-step wizard, configure pricing, and send invitations to clients. **Galleries are created as UNPAID drafts with a 3-day TTL** - payment is deferred until the photographer clicks "Opłać galerię".
+Photographers create galleries using a multi-step wizard, upload photos first, then calculate and pay for a plan based on actual upload size. **Galleries are created as UNPAID drafts without a plan** - plan is calculated after photos are uploaded, and payment is deferred until the photographer clicks "Opłać galerię".
 
 ### Detailed Steps
 
@@ -76,48 +94,134 @@ Photographers create galleries using a multi-step wizard, configure pricing, and
      - Enter unique gallery name
      - System validates uniqueness
    - **Step 3: Szczegóły pakietu**
-     - Select gallery plan (1GB-1m, 1GB-3m, etc.)
      - Choose package source:
        - "Wprowadź ręcznie": Enter package name, included count, extra price, package price
        - "Wybierz z istniejących pakietów": Select from saved packages
-     - Optionally enable backup storage addon (30% of plan price)
+     - **Note**: Plan selection removed - plan will be calculated automatically after upload
    - **Step 4: Dane klienta**
      - Choose client source:
        - "Nowy klient": Enter email, password (optional), name/company details
        - "Wybierz z istniejących klientów": Select from saved clients
    - **Step 5: Podsumowanie**
      - Review all settings
-     - Enter initial payment amount (PLN) - can be 0 (UNPAID), partial (PARTIALLY_PAID), or full (PAID)
      - Click "Utwórz galerię"
 
-2. **Gallery Creation (UNPAID Draft)**
+2. **Gallery Creation (UNPAID Draft - No Plan)**
    - **No Immediate Payment**: Gallery is created WITHOUT deducting from wallet or redirecting to Stripe
    - **Draft State**: Gallery created with:
      - `state: 'DRAFT'`
+     - `plan`: Not set (will be calculated after upload)
+     - `priceCents`: Not set
+     - `originalsLimitBytes`: Not set (draft galleries limited to 10GB max upload)
+     - `finalsLimitBytes`: Not set
+     - `originalsBytesUsed: 0`
+     - `finalsBytesUsed: 0`
      - `ttl`: Set to 3 days from creation (DynamoDB TTL for automatic deletion)
-     - `expiresAt`: Calculated based on full plan duration (for after payment)
      - `selectionStatus`: `DISABLED` if selection disabled, otherwise `DISABLED` (until paid)
-   - **Transaction Created**: Transaction created with:
-     - `status: 'UNPAID'`
-     - `type: 'GALLERY_PLAN'`
-     - `initialPaymentAmountCents`: Amount entered in wizard (can be 0)
+   - **No Transaction Created**: Transaction will be created when plan is selected and payment is initiated
    - **Response**: Returns `paid: false` with message "Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona."
 
-3. **Pay for Gallery (Opłać galerię)**
-   - Navigate to gallery detail page or gallery list
-   - Click "Opłać galerię" button (shown for UNPAID galleries)
-   - System finds existing UNPAID transaction for gallery
+3. **Upload Photos to Draft Gallery**
+   - Navigate to gallery photos page
+   - Select and upload photos
+   - **Upload Limits**:
+     - **Draft galleries (no plan)**: Maximum 10GB total upload (prevents exceeding largest available plan)
+     - **Paid galleries**: Limited by `originalsLimitBytes` from selected plan
+   - **Upload Locking Protection**:
+     - If `paymentLocked === true`: Uploads are blocked with `423 Locked` error
+     - Message: "Cannot upload photos while payment is being processed. Please wait for payment to complete or cancel the payment to continue uploading."
+     - Prevents concurrent uploads during payment that could invalidate payment state
+   - System validates upload size BEFORE allowing upload:
+     - For draft galleries: Checks if `currentSize + fileSize <= 10GB`
+     - For paid galleries: Checks if `currentSize + fileSize <= originalsLimitBytes`
+   - If limit exceeded: Shows error message with current usage and limit
+   - After upload completes: System processes images and updates `originalsBytesUsed`
+
+4. **Calculate Plan Based on Upload Size**
+   - After uploading photos, photographer clicks "Opłać galerię" button
+   - System automatically calculates plan:
+     - Calls `GET /galleries/{id}/calculate-plan`
+     - Calculates total uploaded size from S3 (`galleries/{galleryId}/originals/`) - **S3 is source of truth**
+     - Finds best matching plan (smallest plan that fits, or largest if exceeds all plans)
+     - Calculates pricing:
+       - **Selection galleries**: Standard plan price
+       - **Non-selection galleries**: 20% discount (plan price × 0.8)
+     - Returns suggested plan with:
+       - Plan name and key (e.g., "3GB - 3 miesiące")
+       - Price (with discount applied if non-selection)
+       - Storage limits (`originalsLimitBytes` and `finalsLimitBytes` = plan size)
+       - Duration options (1m, 3m, 12m)
+       - **Capacity warnings**: `usagePercentage`, `isNearCapacity` (≥95%), `isAtCapacity` (≥99.9%)
+       - **Next tier suggestion**: If near/at capacity, suggests larger plan option
+
+5. **Select Plan and Pay**
+   - Pricing modal displays calculated plan options with **user-centric protections**:
+     - **Capacity Warnings**:
+       - ⚠️ **Critical Warning** (≥95% capacity): Yellow banner showing "Galeria jest prawie pełna" with usage percentage and suggestion to consider larger plan
+       - ℹ️ **Info Warning** (≥80% capacity): Blue banner showing current usage and remaining capacity
+     - Photographer reviews:
+       - Uploaded size
+       - Suggested plan details (storage limits, duration, price)
+       - Gallery type (selection vs non-selection with discount note)
+       - Capacity warnings (if applicable)
+   - Photographer selects plan duration (1m, 3m, or 12m)
+   - System updates gallery with selected plan:
+     - `plan`: Selected plan key
+     - `priceCents`: Calculated price (with discount if applicable)
+     - `originalsLimitBytes`: Plan storage limit
+     - `finalsLimitBytes`: Plan storage limit
+     - `paymentLocked`: Set to `true` (prevents concurrent uploads during payment)
+   - **Pre-Payment Validation** (user-centric protection):
+     - System **recalculates uploaded size from S3** before processing payment
+     - **Blocks payment** if uploaded size exceeds selected plan limit
+     - Returns error: "Cannot proceed with payment. Current uploads (X GB) exceed selected plan limit (Y GB) by Z GB. Please recalculate plan or delete excess files."
+     - This prevents paying for plans that don't fit actual uploads
    - **Payment Processing**:
-     - Uses transaction details (`totalAmountCents`, `walletAmountCents`, `stripeAmountCents`)
-     - If wallet balance available: Deducts from wallet
-     - If Stripe needed: Creates checkout session
+     - Creates transaction with `type: 'GALLERY_PLAN'`
+     - **Stores plan details in transaction metadata** (prevents race conditions):
+       - Plan key, price, limits, calculation timestamp
+       - Original plan details for future upgrade calculations
+     - Uses wallet balance if available
+     - Creates Stripe checkout session if needed
      - Updates transaction with `stripeSessionId`
-   - **Payment Success** (via webhook):
+   - **Upload Locking During Payment**:
+     - While `paymentLocked === true`, uploads are blocked
+     - `presign.ts` returns `423 Locked` error: "Cannot upload photos while payment is being processed"
+     - Prevents concurrent uploads that could invalidate payment
+   - **Payment Success** (via webhook or wallet):
      - Updates gallery: `state: 'PAID_ACTIVE'`
      - **Removes TTL** (gallery no longer expires in 3 days)
+     - **Removes `paymentLocked` flag** (allows uploads again)
      - Sets `expiresAt` to full plan duration
      - Sets `selectionStatus` to `NOT_STARTED` if selection enabled
      - Updates transaction: `status: 'PAID'`
+
+6. **Plan Upgrade (For Paid Galleries)**
+   - If photographer exceeds storage limit after payment:
+     - System detects limit exceeded after upload completes
+     - Shows `LimitExceededModal` with:
+       - Current usage vs limit
+       - Excess amount
+       - Next tier plan option
+   - Photographer can upgrade plan:
+     - Clicks "Zaktualizuj plan" button
+     - System calls `POST /galleries/{id}/upgrade-plan`
+     - Calculates price difference between current and new plan
+     - **Only charges difference** (not full plan price)
+     - **Duration Handling** (user-centric):
+       - **Upgrade keeps original expiry date** - only storage size is upgraded
+       - User doesn't pay for duration they didn't request
+       - Example: If user has 3GB-1m plan (expires in 30 days), upgrading to 10GB-3m keeps original 30-day expiry
+     - Stripe checkout shows clear breakdown:
+       - "Already purchased: [Current Plan] ([Current Price] PLN)"
+       - "Upgrade cost: [Price Difference] PLN"
+     - Payment processes difference only
+     - Gallery plan updated immediately after payment:
+       - `plan`: New plan key
+       - `priceCents`: New plan price
+       - `originalsLimitBytes`: New storage limit
+       - `finalsLimitBytes`: New storage limit
+       - **`expiresAt`: Unchanged** (keeps original expiry date)
 
 4. **Draft Expiry Warning**
    - Scheduled job runs every 6 hours
@@ -147,12 +251,80 @@ Photographers create galleries using a multi-step wizard, configure pricing, and
      - Client can access gallery immediately
 
 ### Key Endpoints
-- `POST /galleries` - Create new gallery (creates UNPAID draft with 3-day TTL)
-- `POST /galleries/{id}/pay` - Pay for unpaid gallery (uses existing UNPAID transaction)
+- `POST /galleries` - Create new gallery (creates UNPAID draft without plan, 3-day TTL)
+- `GET /galleries/{id}/calculate-plan` - Calculate best matching plan based on uploaded size
+- `POST /galleries/{id}/pay` - Pay for unpaid gallery (creates transaction, requires plan to be set first)
+- `POST /galleries/{id}/upgrade-plan` - Upgrade plan for paid gallery (pays difference only)
+- `POST /galleries/{id}/validate-upload-limits` - Validate upload limits after batch upload completes
 - `POST /galleries/{id}/client-password` - Set client access password
 - `POST /galleries/{id}/pricing-package` - Update pricing configuration
 - `POST /galleries/{id}/selection-mode` - Enable/disable selection mode
 - `POST /galleries/{id}/send` - Send gallery invitation to client
+
+### User-Centric Protections & Edge Cases
+
+#### Capacity Warnings Before Payment
+- **When**: Plan calculation returns `usagePercentage ≥ 95%` or `usagePercentage ≥ 80%`
+- **Display**: Pricing modal shows prominent warnings:
+  - **Critical (≥95%)**: Yellow warning banner with icon, usage percentage, and suggestion to consider larger plan
+  - **Info (≥80%)**: Blue info banner showing current usage and remaining capacity
+- **User Benefit**: Users are informed before payment if they're near capacity, preventing frustration after payment
+
+#### Pre-Payment Validation
+- **When**: Before processing payment in `pay.ts`
+- **Action**: System recalculates uploaded size from S3 (source of truth) and compares against selected plan
+- **Blocking**: Payment is blocked if `uploadedSizeBytes > originalsLimitBytes`
+- **Error Message**: Clear error explaining current usage, plan limit, and excess amount
+- **User Benefit**: Prevents users from paying for plans that don't fit their uploads
+
+#### Upload Locking During Payment
+- **When**: `paymentLocked` flag is set when payment is initiated
+- **Effect**: All upload requests return `423 Locked` error with clear message
+- **Cleared**: Automatically removed when payment succeeds (webhook or wallet payment)
+- **User Benefit**: Prevents concurrent uploads during payment, ensuring payment uses correct gallery state
+
+#### Plan Recalculation Before Payment
+- **When**: Always before payment processing
+- **Action**: Recalculates uploaded size from S3, not relying on cached `originalsBytesUsed`
+- **Reason**: S3 is source of truth - Lambda processing may be delayed or failed
+- **User Benefit**: Ensures payment uses current gallery state, not stale calculations
+
+#### Duration Handling in Upgrades
+- **Rule**: Upgrades keep original expiry date, only upgrade storage size
+- **Rationale**: User paid for original duration, shouldn't pay for duration they didn't request
+- **Implementation**: `upgradePlan.ts` only updates plan, price, and storage limits - `expiresAt` unchanged
+- **User Benefit**: Fair pricing - users only pay for what they need (more storage)
+
+#### Plan Stored in Transaction Metadata
+- **When**: Transaction created during payment
+- **Stored**: Plan key, price, limits, calculation timestamp, original plan details
+- **Reason**: Prevents race conditions where plan is overwritten before payment completes
+- **User Benefit**: Ensures payment uses correct plan even if gallery is modified concurrently
+
+#### Gallery Type Change Restriction
+- **Rule**: Only upgrades allowed (non-selection → selection), downgrades blocked
+- **Rationale**: Maintains pricing consistency - users can't switch to cheaper type after upload
+- **Implementation**: `setSelectionMode.ts` checks current type and blocks downgrades
+- **User Benefit**: Prevents pricing manipulation, ensures fair pricing
+
+#### Optimistic Locking with Version Numbers
+- **When**: Gallery updates include optional `version` field
+- **Behavior**: 
+  - Gallery creation sets `version: 1`
+  - Updates increment version automatically
+  - If `version` provided in request, checks matches current version
+  - Version mismatch returns `409 Conflict` with clear message
+- **User Benefit**: Prevents concurrent updates from overwriting each other, clear error guides user to refresh
+
+#### Payment Failure Recovery
+- **When**: Payment fails, cancels, or session expires
+- **Action**: `paymentLocked` flag automatically cleared
+- **Scenarios**: 
+  - User clicks back from Stripe checkout
+  - Payment intent fails
+  - Payment intent canceled
+  - Checkout session expires
+- **User Benefit**: Users can retry payment or continue uploading after payment failure
 
 ### Payment Flow Edge Cases
 
@@ -160,14 +332,33 @@ Photographers create galleries using a multi-step wizard, configure pricing, and
    - User clicks back from Stripe checkout
    - `GET /payments/cancel` endpoint called
    - Transaction status updated to `CANCELED`
+   - **`paymentLocked` flag automatically cleared** (allows uploads again)
    - Gallery remains as UNPAID draft (TTL still active)
    - User can retry payment via "Opłać galerię" button
 
 2. **Retry Payment**
    - User clicks "Opłać galerię" on unpaid gallery
-   - System finds existing UNPAID transaction
+   - If no plan set: System calculates plan first, shows pricing modal
+   - If plan set: **Pre-payment validation runs** - recalculates uploaded size from S3
+   - If uploaded size exceeds plan: Payment blocked with clear error message
+   - If within limit: Creates transaction and processes payment
    - Updates transaction with new Stripe session
    - Supports fractional payments (wallet + Stripe)
+
+3. **Plan Upgrade Flow**
+   - If paid gallery exceeds storage limit:
+     - System detects after upload completes
+     - Shows `LimitExceededModal` with upgrade option
+     - User clicks "Zaktualizuj plan"
+     - System calls `POST /galleries/{id}/upgrade-plan` with new plan
+     - Calculates price difference (new plan price - current plan price)
+     - Only charges difference (not full plan price)
+     - **Duration**: Upgrade keeps original expiry date (only storage size upgraded)
+     - Stripe checkout clearly shows:
+       - "Already purchased: [Current Plan] ([Current Price] PLN)"
+       - "Upgrade cost: [Price Difference] PLN"
+     - After payment: Gallery plan updated immediately
+     - **Note**: `expiresAt` remains unchanged - keeps original expiry date
 
 3. **Draft Auto-Expiry**
    - DynamoDB TTL automatically deletes UNPAID galleries after 3 days
@@ -181,9 +372,21 @@ Photographers create galleries using a multi-step wizard, configure pricing, and
 
 5. **Payment Status Derivation**
    - Gallery payment status derived from transactions (not stored in gallery)
-   - Query transactions table for `GALLERY_PLAN` type with `PAID` status
+   - Query transactions table for `GALLERY_PLAN` or `GALLERY_PLAN_UPGRADE` type with `PAID` status
    - If no paid transaction exists: gallery disabled (only Pay/Cancel actions)
    - If paid transaction exists: gallery enabled (all actions allowed)
+
+6. **Upload Limit Exceeded**
+   - If upload exceeds limit (draft: 10GB, paid: plan limit):
+     - Pre-upload check in `presign.ts` prevents upload
+     - Post-upload validation detects if limit exceeded
+     - Shows `LimitExceededModal` with:
+       - Current usage and limit
+       - Excess amount
+       - Next tier plan option
+     - Options:
+       - Upgrade plan (pays difference only if already paid)
+       - Cancel and remove excess files
 
 ### Gallery States
 - `DRAFT` - Created but payment pending
@@ -210,6 +413,10 @@ Photographers upload original photos, system automatically generates previews an
    - System validates:
      - Photographer is authenticated
      - Photographer owns the gallery (`requireOwnerOr403`)
+     - **Storage Limits** (checked BEFORE upload):
+       - **Draft galleries (no plan)**: Maximum 10GB total (`currentSize + fileSize <= 10GB`)
+       - **Paid galleries**: Limited by plan (`currentSize + fileSize <= originalsLimitBytes`)
+     - Returns error if limit would be exceeded with clear message
    - Returns presigned S3 URL with PUT permission
    - URL expires after configured time (typically 15 minutes)
 
@@ -217,6 +424,7 @@ Photographers upload original photos, system automatically generates previews an
    - Dashboard uploads each image directly to S3 using presigned URL
    - Images stored in: `galleries/{galleryId}/originals/{filename}`
    - Upload progress tracked in frontend
+   - **Note**: Storage limit checked BEFORE upload (prevents partial uploads)
 
 3. **Automatic Processing**
    - S3 upload triggers Lambda function (`onUploadResize`)
@@ -224,16 +432,34 @@ Photographers upload original photos, system automatically generates previews an
      - Generates 1200px preview → `galleries/{galleryId}/previews/{filename}`
      - Generates 200px thumbnail → `galleries/{galleryId}/thumbs/{filename}`
      - Uses Sharp library for resizing
+     - Updates gallery `originalsBytesUsed` field
    - Previews and thumbnails served via CloudFront CDN
    - Processing happens asynchronously (no blocking)
 
-4. **View Uploaded Images**
+4. **Post-Upload Validation**
+   - After batch upload completes, system calls `POST /galleries/{id}/validate-upload-limits`
+   - Validates actual uploaded size against plan limits
+   - If limit exceeded:
+     - Returns error with:
+       - Current usage vs limit
+       - Excess amount
+       - Next tier plan option (for upgrade)
+     - Shows `LimitExceededModal` to photographer
+     - Photographer can:
+       - Upgrade to next tier plan (pays difference only if gallery already paid)
+       - Cancel and remove excess files
+
+5. **View Uploaded Images**
    - Photographer can view gallery images via `GET /galleries/{id}/images`
    - Returns list with CloudFront URLs for previews and thumbnails
    - Images appear in gallery view immediately after upload
+   - Storage usage displayed:
+     - Originals: X GB / Y GB
+     - Finals: A GB / B GB
 
 ### Key Endpoints
-- `POST /uploads/presign` - Generate presigned S3 upload URL
+- `POST /uploads/presign` - Generate presigned S3 upload URL (validates storage limits before upload)
+- `POST /galleries/{id}/validate-upload-limits` - Validate upload limits after batch upload completes
 - `GET /galleries/{id}/images` - List all images with CloudFront URLs
 
 ### Storage Structure
@@ -298,19 +524,11 @@ Clients access password-protected galleries, browse photos, select favorites, an
      - Status: `CLIENT_APPROVED`
      - Payment status: `UNPAID`
      - Stores selected keys, counts, pricing
-   - **Backup Storage Addon (Optional)**:
-     - Client can optionally purchase backup storage addon
-     - Adds 30% to the order total price
-     - Ensures original photos ZIP is always downloadable as long as gallery is active
-     - ZIP remains available even after delivery
    - **ZIP Generation**:
-     - **If backup addon is purchased**: ZIP is generated automatically on approval
-     - **If backup addon is NOT purchased**: ZIP is NOT generated automatically
-     - Photographer must manually generate ZIP when needed (only when order status is CLIENT_APPROVED)
-   - Generates ZIP file (if addon purchased):
-     - Lambda function creates ZIP of selected originals
-     - Stores in `galleries/{galleryId}/zips/{orderId}.zip`
-     - Updates order with ZIP key
+     - ZIPs are generated on-demand when photographer or client requests download
+     - ZIP is generated only when needed (not automatically on approval)
+     - ZIP is one-time use: deleted after first download
+     - ZIP generation available only when order status is `CLIENT_APPROVED` (before final photos uploaded)
    - Updates gallery:
      - Selection status: `APPROVED`
      - Stores selection stats
@@ -360,23 +578,13 @@ Photographers review orders, process photos, and deliver final products to clien
      - Payment status: `UNPAID`
      - Selected photo count
      - Overage count and pricing
-     - Backup storage addon status
      - ZIP download available (if generated)
-   - **Purchase Backup Storage Addon (if not purchased)**:
-     - "Purchase Backup Addon (Gallery)" button appears when:
-       - Backup storage addon is NOT purchased for the gallery
-       - Shown once per gallery (not per order)
-     - Clicking purchases addon for the entire gallery
-     - Applies to all orders in the gallery (current and future)
-     - Automatically generates ZIPs for all existing orders that don't have ZIPs
-     - ZIPs become permanently available for download for all orders
-   - **Generate ZIP (if no backup addon)**:
-     - "Generate ZIP" button appears only when:
-       - Backup storage addon is NOT purchased
-       - Order status is `CLIENT_APPROVED`
-       - ZIP has not been generated yet
-     - Clicking generates ZIP for one-time download
-     - ZIP will be deleted after first download (if no addon)
+   - **Download ZIP**:
+     - "Pobierz ZIP" button available when:
+     - Order status is `CLIENT_APPROVED` (before final photos uploaded)
+     - ZIP is generated on-demand when requested
+     - ZIP is one-time use: deleted after first download
+     - ZIP contains selected original photos
 
 2. **Approve Change Request (If Applicable)**
    - If order status is `CHANGES_REQUESTED`:
@@ -388,13 +596,8 @@ Photographers review orders, process photos, and deliver final products to clien
 
 3. **Process Photos**
    - Photographer processes selected photos in editing software
-   - **Warning Before Upload (if no backup addon)**:
-     - If backup storage addon is NOT purchased for the gallery, system shows warning with option to purchase:
-       - "Once you upload final photos, the status will change to PREPARING_DELIVERY and you will no longer be able to generate the originals ZIP. Original photos will be permanently removed after delivery."
-       - System offers to purchase backup storage addon for the gallery
-       - If photographer chooses to purchase: Addon is purchased for gallery, ZIPs are generated automatically for all orders
-       - If photographer declines: Final confirmation required before proceeding
-     - Photographer can purchase addon for gallery at any time before delivery
+   - **Note**: Once final photos are uploaded, original photos will be deleted after delivery
+   - ZIP download is only available before final photos are uploaded (when order status is `CLIENT_APPROVED`)
    - Upload final processed photos:
      - Click "Upload Final Photos" button
      - Select processed image files
@@ -403,7 +606,7 @@ Photographers review orders, process photos, and deliver final products to clien
      - Photos stored in original, unprocessed format
      - **First photo upload**: Order status automatically changes from `CLIENT_APPROVED` to `PREPARING_DELIVERY`
      - Subsequent uploads: Order remains `PREPARING_DELIVERY` status
-     - **Note**: Once status changes to `PREPARING_DELIVERY`, ZIP generation is no longer available (if no addon)
+     - **Note**: Once status changes to `PREPARING_DELIVERY`, ZIP generation is no longer available (originals will be deleted after delivery)
    - Client can view photos in `PREPARING_DELIVERY` status (before final delivery)
 
 4. **Mark Payment Status**
@@ -423,13 +626,11 @@ Photographers review orders, process photos, and deliver final products to clien
        - Marks order as `DELIVERED`
        - Sets `deliveredAt` timestamp
        - Cleans up storage:
-         - Deletes originals for selected photos
-         - Deletes previews for selected photos
-         - Deletes thumbnails for selected photos
-         - Keeps final photos
-         - **ZIP handling**:
-           - If backup addon purchased: ZIP remains available for download
-           - If no backup addon: ZIP should have been deleted after one-time download (or never generated)
+       - Deletes originals for selected photos
+       - Deletes previews for selected photos
+       - Deletes thumbnails for selected photos
+       - Keeps final photos
+       - **Note**: ZIPs are one-time use and are deleted after first download (if generated)
    - Client receives email notification
 
 6. **Client Downloads Final Photos**
@@ -457,16 +658,14 @@ Photographers review orders, process photos, and deliver final products to clien
 
 ### Key Endpoints
 - `GET /galleries/{id}/orders` - List all orders for gallery (photographer)
-- `GET /galleries/{id}/orders/{orderId}` - Get order details (includes backup addon status)
+- `GET /galleries/{id}/orders/{orderId}` - Get order details
 - `GET /galleries/{id}/orders/{orderId}/final/images` - List final images for order
 - `POST /galleries/{id}/orders/{orderId}/final/images/{filename}` - Upload final image (via presigned URL)
 - `DELETE /galleries/{id}/orders/{orderId}/final/images/{filename}` - Delete final image
 - `GET /galleries/{id}/orders/{orderId}/zip` - Download ZIP (generates on-the-fly if needed)
 - `POST /galleries/{id}/orders/{orderId}/generate-zip` - Generate ZIP for order
 - `POST /galleries/{id}/orders/{orderId}/change-request/approve` - Approve change request
-- `POST /galleries/{id}/purchase-addon` - Purchase backup storage addon for gallery (photographer-only, applies to all orders)
-- `POST /galleries/{id}/orders/{orderId}/generate-zip` - Manually generate ZIP (only for non-addon orders with CLIENT_APPROVED status)
-- `GET /galleries/{id}/orders/{orderId}/zip` - Get presigned download URL for order ZIP (deletes ZIP after download if no addon)
+- `GET /galleries/{id}/orders/{orderId}/zip` - Download ZIP (generates on-demand, one-time use - deleted after download)
 - `POST /galleries/{id}/orders/{orderId}/final/upload` - Upload final processed photos
 - `POST /galleries/{id}/orders/{orderId}/final/send` - Send final link and mark delivered
 - `GET /galleries/{id}/orders/delivered` - List delivered orders (client)
@@ -484,10 +683,10 @@ CLIENT_SELECTING → CLIENT_APPROVED → PREPARING_DELIVERY → DELIVERED
 
 **Status Descriptions**:
 - **CLIENT_SELECTING**: Client is actively selecting photos
-- **CLIENT_APPROVED**: Client approved selection, order created. ZIP generated automatically if backup addon purchased, otherwise must be generated manually by photographer.
+- **CLIENT_APPROVED**: Client approved selection, order created. ZIP can be generated on-demand by photographer or client (one-time use, deleted after download).
 - **CHANGES_REQUESTED**: Client requested changes, photographer can approve to restore to CLIENT_SELECTING
-- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. **ZIP generation no longer available** (if no backup addon).
-- **DELIVERED**: Order delivered, final link sent, originals cleaned up. ZIP remains available if backup addon purchased, otherwise deleted after one-time download.
+- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. **ZIP generation no longer available** (originals will be deleted after delivery).
+- **DELIVERED**: Order delivered, final link sent, originals cleaned up. ZIPs are one-time use and deleted after download (if generated).
 
 ---
 
@@ -508,15 +707,10 @@ After receiving delivered order, clients can purchase additional photos from the
 2. **Select Additional Photos**
    - Client browses gallery in "Purchase" view
    - Selects additional photos
-   - **Backup Storage Addon (Optional)**:
-     - Client can optionally purchase backup storage addon
-     - Adds 30% to the order total price
-     - Ensures original photos ZIP is always downloadable
    - Pricing calculation:
      - All selected photos charged at extra price
      - No included count (first-time selection benefit doesn't apply)
-     - Base total = selected count × extra price per photo
-     - If backup addon purchased: Total = base total + (base total × 0.3)
+     - Total = selected count × extra price per photo
 
 3. **Approve New Selection**
    - Client clicks "Approve Selection"

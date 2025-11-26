@@ -3,10 +3,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
-// Transaction creation removed - transactions are now created on-demand in pay.ts endpoint
-// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const Stripe = require('stripe');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -16,148 +12,11 @@ function hashPassword(password: string) {
 	return { salt, hash, iterations: 100000, algo: 'pbkdf2-sha256' };
 }
 
-// Pricing plans metadata
-interface PlanMetadata {
-	priceCents: number;
-	storageLimitBytes: number;
-	expiryDays: number;
-}
-
-// Pricing plans based on landing page: 1GB, 3GB, 10GB with duration options (1m, 3m, 12m)
-const PRICING_PLANS: Record<string, PlanMetadata> = {
-	'1GB-1m': {
-		priceCents: 700,      // 7 PLN
-		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
-		expiryDays: 30        // 1 month
-	},
-	'1GB-3m': {
-		priceCents: 900,      // 9 PLN
-		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
-		expiryDays: 90        // 3 months
-	},
-	'1GB-12m': {
-		priceCents: 1500,     // 15 PLN
-		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
-		expiryDays: 365       // 12 months
-	},
-	'3GB-1m': {
-		priceCents: 1200,     // 12 PLN
-		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
-		expiryDays: 30        // 1 month
-	},
-	'3GB-3m': {
-		priceCents: 1400,     // 14 PLN
-		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
-		expiryDays: 90        // 3 months
-	},
-	'3GB-12m': {
-		priceCents: 2100,     // 21 PLN
-		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
-		expiryDays: 365       // 12 months
-	},
-	'10GB-1m': {
-		priceCents: 1400,     // 14 PLN
-		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
-		expiryDays: 30        // 1 month
-	},
-	'10GB-3m': {
-		priceCents: 1600,     // 16 PLN
-		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
-		expiryDays: 90        // 3 months
-	},
-	'10GB-12m': {
-		priceCents: 2600,     // 26 PLN
-		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
-		expiryDays: 365       // 12 months
-	}
-};
-
-async function getWalletBalance(userId: string, walletsTable: string): Promise<number> {
-	try {
-		const walletGet = await ddb.send(new GetCommand({
-			TableName: walletsTable,
-			Key: { userId }
-		}));
-		return walletGet.Item?.balanceCents || 0;
-	} catch (error) {
-		return 0;
-	}
-}
-
-async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, transactionId: string): Promise<boolean> {
-	const now = new Date().toISOString();
-	
-	try {
-		// Get current balance
-		const walletGet = await ddb.send(new GetCommand({
-			TableName: walletsTable,
-			Key: { userId }
-		}));
-		
-		const currentBalance = walletGet.Item?.balanceCents || 0;
-		if (currentBalance < amountCents) {
-			return false; // Insufficient balance
-		}
-
-		const newBalance = currentBalance - amountCents;
-
-		// Atomic update with condition
-		// If wallet doesn't exist, create it with balance 0 first, then fail the condition check
-		try {
-			await ddb.send(new UpdateCommand({
-				TableName: walletsTable,
-				Key: { userId },
-				UpdateExpression: 'SET balanceCents = :b, updatedAt = :u',
-				ConditionExpression: 'attribute_exists(userId) AND balanceCents >= :amount',
-				ExpressionAttributeValues: {
-					':b': newBalance,
-					':amount': amountCents,
-					':u': now
-				}
-			}));
-
-			// Create ledger entry
-			await ddb.send(new PutCommand({
-				TableName: ledgerTable,
-				Item: {
-					userId,
-					txnId: transactionId,
-					type: 'DEBIT',
-					amountCents: -amountCents,
-					refId: transactionId,
-					createdAt: now
-				}
-			}));
-
-			return true;
-		} catch (err: any) {
-			if (err.name === 'ConditionalCheckFailedException') {
-				return false; // Balance changed, insufficient
-			}
-			throw err;
-		}
-	} catch (error) {
-		console.error('Wallet debit failed:', error);
-		return false;
-	}
-}
-
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
-	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
-	
-	logger.info('Gallery creation request', {
-		hasStripeKey: !!stripeSecretKey,
-		hasApiUrl: !!apiUrl,
-		hasWalletsTable: !!walletsTable,
-		hasLedgerTable: !!ledgerTable
-	});
 
 	if (!galleriesTable) {
 		return {
@@ -181,12 +40,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ownerEmail = claims.email || '';
 
 	const body = event?.body ? JSON.parse(event.body) : {};
-	const plan = body?.plan || '1GB-1m'; // Default plan
-	const planMetadata = PRICING_PLANS[plan] || PRICING_PLANS['1GB-1m'];
-	const priceCents = planMetadata.priceCents;
-	const storageLimitBytes = planMetadata.storageLimitBytes;
-	const expiryDays = planMetadata.expiryDays;
-	const useWallet = body?.useWallet !== false; // Default to true
 	
 	// Get pricingPackage (required for client pricing)
 	const pricingPackage = body?.pricingPackage;
@@ -220,57 +73,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const now = new Date().toISOString();
 	const galleryId = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 	
-	// Calculate expiry date (Warsaw timezone - CET/CEST)
-	// Add expiryDays to createdAt timestamp for normal expiry (after payment)
-	const createdAtDate = new Date(now);
-	const expiresAtDate = new Date(createdAtDate.getTime() + expiryDays * 24 * 60 * 60 * 1000);
-	const expiresAt = expiresAtDate.toISOString();
-	
 	// NEW LOGIC: UNPAID galleries get 3-day TTL for automatic deletion
 	// TTL attribute for DynamoDB automatic deletion (Unix epoch time in seconds)
 	// DynamoDB will automatically delete the item when TTL expires (typically within 48 hours)
 	// After payment, TTL will be removed and normal expiry (expiresAt) will be used
+	const createdAtDate = new Date(now);
 	const ttlExpiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
 	const ttlExpiresAt = Math.floor(ttlExpiresAtDate.getTime() / 1000);
-
-	// Calculate addon price if requested
-	let addonPriceCents = 0;
-	const hasBackupStorage = body?.hasBackupStorage === true;
-	if (hasBackupStorage) {
-		// Calculate addon price based on photographer's plan price (30% of plan price)
-		// This makes more sense than basing it on client pricing (extra photos)
-		const BACKUP_STORAGE_MULTIPLIER = 0.3;
-		addonPriceCents = Math.round(priceCents * BACKUP_STORAGE_MULTIPLIER);
-		logger.info('Backup storage addon requested', { 
-			galleryId, 
-			addonPriceCents, 
-			planPriceCents: priceCents,
-			multiplier: BACKUP_STORAGE_MULTIPLIER
-		});
-	}
-
-	// Total price includes gallery plan + addon (if requested)
-	const totalPriceCents = priceCents + addonPriceCents;
 
 	// NEW LOGIC: Always create gallery as UNPAID draft (no immediate payment)
 	// Gallery will have 3-day TTL and can be paid later via "Opłać galerię" button
 	// Transaction will be created on-demand when user clicks "Opłać galerię" button
 	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
 
-	// Create gallery as UNPAID DRAFT (always, no immediate payment)
+	// Create gallery as UNPAID DRAFT (always, no immediate payment, no plan)
 	const item: any = {
 		galleryId,
 		ownerId,
 		ownerEmail,
 		state: 'DRAFT', // Always DRAFT for new galleries (will become PAID_ACTIVE after payment)
-		plan,
-		priceCents,
-		storageLimitBytes,
-		expiresAt, // ISO string for display purposes (normal expiry after payment)
+		// No plan, priceCents, storageLimitBytes, or expiresAt - will be set after plan calculation
 		ttl: ttlExpiresAt, // Unix epoch seconds for DynamoDB TTL automatic deletion (3 days for UNPAID)
-		bytesUsed: 0,
+		originalsBytesUsed: 0,
+		finalsBytesUsed: 0,
+		bytesUsed: 0, // Keep for backward compatibility
 		selectionEnabled: !!body.selectionEnabled,
 		selectionStatus: body.selectionEnabled ? 'DISABLED' : 'DISABLED', // Disabled until paid
+		version: 1, // Optimistic locking version number
 		createdAt: now,
 		updatedAt: now
 	};
@@ -315,31 +144,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Item: item
 	}));
 
-	// Create backup storage addon if requested (regardless of payment status)
-	// Addon will be activated when transaction is paid
-	if (hasBackupStorage && addonPriceCents > 0) {
-		const addonsTable = envProc?.env?.GALLERY_ADDONS_TABLE as string;
-		if (addonsTable) {
-			try {
-				const { createBackupStorageAddon } = require('../../lib/src/addons');
-				const BACKUP_STORAGE_MULTIPLIER = 0.3;
-				await createBackupStorageAddon(galleryId, addonPriceCents, BACKUP_STORAGE_MULTIPLIER);
-				logger.info('Backup storage addon created during gallery creation', { 
-					galleryId, 
-					addonPriceCents,
-					multiplier: BACKUP_STORAGE_MULTIPLIER,
-					paid
-				});
-			} catch (err: any) {
-				logger.error('Failed to create backup storage addon during gallery creation', {
-					error: err.message,
-					galleryId
-				});
-				// Continue - addon can be purchased later
-			}
-		}
-	}
-
 	// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
 	// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
 	// Order is created regardless of payment status so photographer can finalize delivery
@@ -351,12 +155,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		if (ordersTable) {
 			try {
 				// Determine order payment status based on initial payment amount
+				// Note: totalPriceCents is not available here since plan is not selected yet
+				// For now, treat any payment as PARTIALLY_PAID (will be updated after plan selection)
 				if (initialPaymentAmountCents > 0) {
-					if (initialPaymentAmountCents >= totalPriceCents) {
-						orderPaymentStatus = 'PAID';
-					} else {
-						orderPaymentStatus = 'PARTIALLY_PAID';
-					}
+					orderPaymentStatus = 'PARTIALLY_PAID';
 				}
 				
 				const orderNumber = 1;

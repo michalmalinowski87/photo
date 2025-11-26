@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCom
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export type TransactionType = 'GALLERY_PLAN' | 'ADDON_PURCHASE' | 'WALLET_TOPUP' | 'REFUND';
+export type TransactionType = 'GALLERY_PLAN' | 'GALLERY_PLAN_UPGRADE' | 'WALLET_TOPUP' | 'WELCOME_BONUS' | 'REFUND';
 export type TransactionStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'REFUNDED' | 'FAILED';
 export type PaymentMethod = 'WALLET' | 'STRIPE' | 'MIXED';
 
@@ -21,7 +21,7 @@ export interface Transaction {
 	galleryId?: string;
 	refId?: string;
 	metadata?: Record<string, any>;
-	composites?: string[]; // List of items/components in this transaction (e.g., ['Gallery Plan Basic', 'Backup addon'])
+	composites?: string[]; // List of items/components in this transaction (e.g., ['Gallery Plan Basic'])
 	createdAt: string;
 	updatedAt: string;
 	paidAt?: string;
@@ -124,12 +124,12 @@ export async function updateTransactionStatus(
 		'#status': 'status'
 	};
 
-	if (status === 'PAID' && !updates?.paidAt) {
+	if (status === 'PAID') {
 		updateExpr.push('paidAt = :paidAt');
 		exprValues[':paidAt'] = now;
 	}
 
-	if (status === 'CANCELED' && !updates?.canceledAt) {
+	if (status === 'CANCELED') {
 		updateExpr.push('canceledAt = :canceledAt');
 		exprValues[':canceledAt'] = now;
 	}

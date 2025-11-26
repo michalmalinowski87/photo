@@ -95,7 +95,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactions = result.transactions.map((tx: any) => {
 					// Map transaction types to display types
 					let displayType = tx.type;
-					if (tx.type === 'GALLERY_PLAN' || tx.type === 'ADDON_PURCHASE') {
+					if (tx.type === 'GALLERY_PLAN' || tx.type === 'GALLERY_PLAN_UPGRADE') {
 						if (tx.paymentMethod === 'WALLET') {
 							displayType = 'WALLET_DEBIT';
 						} else if (tx.paymentMethod === 'STRIPE') {
@@ -167,19 +167,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const ledgerItems = hasMore ? items.slice(0, -1) : items;
 			lastKey = query.LastEvaluatedKey;
 
-			transactions = ledgerItems.map((item: any) => ({
-				transactionId: item.txnId,
-				txnId: item.txnId,
-				type: item.type === 'TOP_UP' ? 'WALLET_TOPUP' : 'WALLET_DEBIT',
-				status: 'PAID',
-				paymentMethod: 'WALLET',
-				amountCents: Math.abs(item.amountCents),
-				walletAmountCents: Math.abs(item.amountCents),
-				stripeAmountCents: 0,
-				amount: Math.abs(item.amountCents) / 100,
-				refId: item.refId,
-				createdAt: item.createdAt
-			}));
+			transactions = ledgerItems.map((item: any) => {
+				// Map ledger type to transaction type
+				let transactionType: string;
+				if (item.type === 'TOP_UP') {
+					transactionType = 'WALLET_TOPUP';
+				} else if (item.type === 'WELCOME_BONUS') {
+					transactionType = 'WELCOME_BONUS';
+				} else {
+					transactionType = 'WALLET_DEBIT';
+				}
+				
+				return {
+					transactionId: item.txnId,
+					txnId: item.txnId,
+					type: transactionType,
+					status: 'PAID',
+					paymentMethod: 'WALLET',
+					amountCents: Math.abs(item.amountCents),
+					walletAmountCents: Math.abs(item.amountCents),
+					stripeAmountCents: 0,
+					amount: Math.abs(item.amountCents) / 100,
+					refId: item.refId,
+					createdAt: item.createdAt
+				};
+			});
 		}
 
 		// Sort by createdAt DESC (newest first) - only if we didn't get sorted results from DB

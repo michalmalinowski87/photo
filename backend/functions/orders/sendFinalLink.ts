@@ -244,7 +244,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Mark order as DELIVERED
 	// Note: Originals are already removed when status changed to PREPARING_DELIVERY
 	// Thumbnails and previews are kept for display purposes (showing "Wybrane" previews)
-	// Backup addon ensures ZIPs are generated before originals are removed
+	// ZIPs are generated before originals are removed (after finals upload)
 	const now = new Date().toISOString();
 	try {
 		await ddb.send(new UpdateCommand({

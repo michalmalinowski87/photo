@@ -50,7 +50,7 @@ const faqItems = [
   {
     id: "8",
     question: "Czy mogę pobrać oryginalne zdjęcia?",
-    answer: "Tak, możesz pobrać oryginalne zdjęcia w formie ZIP. Jeśli klient wybrał zdjęcia, możesz wygenerować ZIP z wybranymi zdjęciami. Możesz również zakupić dodatek backup storage, który zapewnia długoterminowe przechowywanie ZIP-ów."
+    answer: "Tak, możesz pobrać oryginalne zdjęcia w formie ZIP. Jeśli klient wybrał zdjęcia, możesz wygenerować ZIP z wybranymi zdjęciami. ZIP jest dostępny do pobrania przed przesłaniem zdjęć finalnych i jest jednorazowego użytku (usuwany po pobraniu)."
   },
 ];
 

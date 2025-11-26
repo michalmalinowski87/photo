@@ -13,6 +13,9 @@ import * as galleriesUpdatePricing from '../../../functions/galleries/updatePric
 import * as galleriesSetClientPassword from '../../../functions/galleries/setClientPassword';
 import * as galleriesDeletePhoto from '../../../functions/galleries/deletePhoto';
 import * as galleriesRecalculateBytesUsed from '../../../functions/galleries/recalculateBytesUsed';
+import * as galleriesCalculatePlan from '../../../functions/galleries/calculatePlan';
+import * as galleriesValidateUploadLimits from '../../../functions/galleries/validateUploadLimits';
+import * as galleriesUpgradePlan from '../../../functions/galleries/upgradePlan';
 import * as galleriesClientLogin from '../../../functions/galleries/clientLogin';
 import * as galleriesSendToClient from '../../../functions/galleries/sendGalleryToClient';
 import * as galleriesExport from '../../../functions/galleries/export';
@@ -36,6 +39,9 @@ router.patch('/:id/pricing-package', wrapHandler(galleriesUpdatePricing.handler)
 router.patch('/:id/client-password', wrapHandler(galleriesSetClientPassword.handler));
 router.delete('/:id/photos/:filename', wrapHandler(galleriesDeletePhoto.handler));
 router.post('/:id/recalculate-bytes-used', wrapHandler(galleriesRecalculateBytesUsed.handler));
+router.get('/:id/calculate-plan', wrapHandler(galleriesCalculatePlan.handler));
+router.post('/:id/validate-upload-limits', wrapHandler(galleriesValidateUploadLimits.handler));
+router.post('/:id/upgrade-plan', wrapHandler(galleriesUpgradePlan.handler));
 // client-login is registered as a public route in index.ts (before requireAuth middleware)
 // router.post('/:id/client-login', wrapHandler(galleriesClientLogin.handler));
 router.post('/:id/send-to-client', wrapHandler(galleriesSendToClient.handler));

@@ -24,17 +24,55 @@ export const handler = lambdaLogger(async (event: any) => {
 	
 	requireOwnerOr403(gallery.ownerId, requester);
 	
+	// USER-CENTRIC FIX: Optimistic locking - check version number if provided
+	const expectedVersion = body.version;
+	const currentVersion = gallery.version || 1;
+	if (expectedVersion !== undefined && expectedVersion !== currentVersion) {
+		return {
+			statusCode: 409,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Conflict',
+				message: 'Gallery was modified by another operation. Please refresh and try again.',
+				currentVersion,
+				expectedVersion
+			})
+		};
+	}
+	
 	// Build update expression dynamically based on provided fields
 	const setExpressions: string[] = [];
 	const removeExpressions: string[] = [];
 	const expressionAttributeValues: Record<string, any> = {};
 	const expressionAttributeNames: Record<string, string> = {};
 	
+	// Always increment version number for optimistic locking
+	setExpressions.push('version = :version');
+	expressionAttributeValues[':version'] = (currentVersion || 1) + 1;
+	
 	// Allow updating galleryName
 	if (body.galleryName !== undefined && typeof body.galleryName === 'string') {
 		setExpressions.push('#name = :name');
 		expressionAttributeNames['#name'] = 'galleryName';
 		expressionAttributeValues[':name'] = body.galleryName.trim();
+	}
+	
+	// Allow updating plan details (for plan selection/upgrade flow)
+	if (body.plan !== undefined && typeof body.plan === 'string') {
+		setExpressions.push('plan = :plan');
+		expressionAttributeValues[':plan'] = body.plan;
+	}
+	if (body.priceCents !== undefined && typeof body.priceCents === 'number') {
+		setExpressions.push('priceCents = :priceCents');
+		expressionAttributeValues[':priceCents'] = body.priceCents;
+	}
+	if (body.originalsLimitBytes !== undefined && typeof body.originalsLimitBytes === 'number') {
+		setExpressions.push('originalsLimitBytes = :originalsLimitBytes');
+		expressionAttributeValues[':originalsLimitBytes'] = body.originalsLimitBytes;
+	}
+	if (body.finalsLimitBytes !== undefined && typeof body.finalsLimitBytes === 'number') {
+		setExpressions.push('finalsLimitBytes = :finalsLimitBytes');
+		expressionAttributeValues[':finalsLimitBytes'] = body.finalsLimitBytes;
 	}
 	
 	// Allow updating or removing coverPhotoUrl
@@ -156,18 +194,41 @@ export const handler = lambdaLogger(async (event: any) => {
 	
 	const updateExpression = updateExpressionParts.join(' ');
 	
+	// USER-CENTRIC FIX: Add version check to condition expression for optimistic locking
+	const conditionExpression = expectedVersion !== undefined 
+		? 'version = :expectedVersion'
+		: undefined;
+	if (conditionExpression && expectedVersion !== undefined) {
+		expressionAttributeValues[':expectedVersion'] = expectedVersion;
+	}
+	
 	const updateParams: any = {
 		TableName: table,
 		Key: { galleryId: id },
 		UpdateExpression: updateExpression,
-		ExpressionAttributeValues: expressionAttributeValues
+		ConditionExpression: conditionExpression,
+		ExpressionAttributeValues: expressionAttributeValues,
+		ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined
 	};
 	
-	if (Object.keys(expressionAttributeNames).length > 0) {
-		updateParams.ExpressionAttributeNames = expressionAttributeNames;
+	try {
+		await ddb.send(new UpdateCommand(updateParams));
+	} catch (err: any) {
+		// Handle conditional check failure (version mismatch)
+		if (err.name === 'ConditionalCheckFailedException') {
+			return {
+				statusCode: 409,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Conflict',
+					message: 'Gallery was modified by another operation. Please refresh and try again.',
+					currentVersion: (gallery.version || 1) + 1, // Version was incremented by another operation
+					expectedVersion
+				})
+			};
+		}
+		throw err;
 	}
-	
-	await ddb.send(new UpdateCommand(updateParams));
 	
 	// Return updated gallery
 	const updated = await ddb.send(new GetCommand({ TableName: table, Key: { galleryId: id } }));
@@ -175,7 +236,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(updated.Item)
+		body: JSON.stringify({ galleryId: id, version: expressionAttributeValues[':version'], ...updated.Item })
 	};
 });
 

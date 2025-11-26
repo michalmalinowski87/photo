@@ -13,7 +13,6 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - **DynamoDB Tables**: 
   - `Galleries` - Gallery metadata and configuration (with TTL for UNPAID drafts)
   - `Orders` - Order tracking and billing (includes client selections)
-  - `GalleryAddons` - Gallery addon purchases (e.g., backup storage) - Partition Key: galleryId, Sort Key: addonId (format: "{addonType}") - Gallery-level addons apply to all orders in the gallery
   - `Wallets` - User wallet balances
   - `WalletLedger` - Transaction history
   - `Transactions` - Payment transactions (with GSI on galleryId-status)
@@ -40,7 +39,7 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - `galleries/sendGalleryToClient.ts` - Send gallery invitation to client
 
 #### Selections
-- `selections/approveSelection.ts` - Approve selection and create order (supports backup storage addon, conditional ZIP generation)
+- `selections/approveSelection.ts` - Approve selection and create order (ZIPs generated on-demand, one-time use)
 - `selections/getSelection.ts` - Get current selection
 - `selections/changeRequest.ts` - Request selection changes
 
@@ -51,9 +50,7 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 - `orders/listFinalImages.ts` - List final images for a specific order (supports both owner and client access)
 - `orders/uploadFinal.ts` - Upload final processed photos for an order (owner-only)
   - Automatically sets order status to `PREPARING_DELIVERY` when first photo uploaded
-- `orders/downloadZip.ts` - Get presigned download URL for order ZIP (conditionally deletes ZIP after download if no backup addon)
-- `orders/purchaseAddon.ts` - Purchase backup storage addon for gallery (photographer-only, applies to all orders in gallery)
-- `orders/generateZip.ts` - Manually generate ZIP for order (only for non-addon orders with CLIENT_APPROVED status)
+- `orders/downloadZip.ts` - Get presigned download URL for order ZIP (generates on-demand, one-time use - deleted after download)
 - `orders/downloadFinalZip.ts` - Download final ZIP for an order (supports both owner and client access)
 - `orders/regenerateZip.ts` - Regenerate ZIP for an order
 - `orders/sendFinalLink.ts` - Send final delivery link to client
@@ -164,17 +161,15 @@ PhotoHub is a serverless SaaS platform for photographers to create secure privat
 1. Client accesses gallery with password
 2. Views previews via CloudFront
 3. Selects photos (stored in memory on frontend)
-4. Optionally selects backup storage addon (adds 30% to order price)
+4. Selects photos (pricing based on package configuration)
 5. Approves selection via `POST /galleries/{id}/selections/approve`
 6. System creates order (with CLIENT_APPROVED status)
-7. **If backup addon purchased**: ZIP is generated automatically
-8. **If no backup addon**: ZIP is NOT generated (photographer must generate manually)
+7. ZIP can be generated on-demand when photographer or client requests download (one-time use)
 9. Client can request changes (changes order to CHANGES_REQUESTED status)
 10. Photographer approves change request (restores order to CLIENT_SELECTING status)
 11. Photographer processes and marks delivered (changes order to DELIVERED status)
 12. **ZIP handling on delivery**:
-    - If backup addon: ZIP remains available for download
-    - If no backup addon: ZIP deleted after one-time download (or never generated)
+    - ZIPs are one-time use: deleted after first download (if generated)
 
 ### GDPR Deletion Flow
 1. Photographer requests deletion via `DELETE /galleries/{id}`

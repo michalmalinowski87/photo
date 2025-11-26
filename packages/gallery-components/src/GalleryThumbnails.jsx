@@ -1,4 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// Lazy loading component using Intersection Observer
+function LazyImage({ src, alt, style, onLoad }) {
+	const [isInView, setIsInView] = useState(false);
+	const [hasLoaded, setHasLoaded] = useState(false);
+	const imgRef = useRef(null);
+	const containerRef = useRef(null);
+
+	useEffect(() => {
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					setIsInView(true);
+					observer.disconnect();
+				}
+			},
+			{ rootMargin: '50px' } // Start loading 50px before entering viewport
+		);
+
+		if (containerRef.current) {
+			observer.observe(containerRef.current);
+		}
+
+		return () => {
+			observer.disconnect();
+		};
+	}, []);
+
+	return (
+		<div ref={containerRef} style={style}>
+			{isInView ? (
+				<img 
+					ref={imgRef}
+					src={src} 
+					alt={alt}
+					loading="lazy"
+					style={{ 
+						...style,
+						opacity: hasLoaded ? 1 : 0,
+						transition: 'opacity 0.3s ease-in-out'
+					}}
+					onLoad={() => {
+						setHasLoaded(true);
+						if (onLoad) onLoad();
+					}}
+				/>
+			) : (
+				<div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f0f0f0' }}>
+					Loading...
+				</div>
+			)}
+		</div>
+	);
+}
 
 export default function GalleryThumbnails({
 	images = [],
@@ -51,7 +105,7 @@ export default function GalleryThumbnails({
 								style={{ position: 'relative' }}
 							>
 								{img.previewUrl ? (
-									<img 
+									<LazyImage 
 										src={img.previewUrl} 
 										alt={img.key}
 										style={{ 

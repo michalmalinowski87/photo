@@ -4,7 +4,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
-import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -101,6 +100,28 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const fullKey = obj.Key || '';
 		return fullKey.replace(prefix, '');
 	}).filter((key): key is string => Boolean(key) && !key.includes('/'));
+
+	// Calculate total size of final files and update finalsBytesUsed
+	const totalFinalsSize = (finalFilesResponse.Contents || []).reduce((sum, obj) => sum + (obj.Size || 0), 0);
+	if (totalFinalsSize > 0) {
+		try {
+			await ddb.send(new UpdateCommand({
+				TableName: galleriesTable,
+				Key: { galleryId },
+				UpdateExpression: 'ADD finalsBytesUsed :size',
+				ExpressionAttributeValues: {
+					':size': totalFinalsSize
+				}
+			}));
+			logger?.info('Updated gallery finalsBytesUsed', { galleryId, sizeAdded: totalFinalsSize });
+		} catch (updateErr: any) {
+			logger?.warn('Failed to update gallery finalsBytesUsed', {
+				error: updateErr.message,
+				galleryId,
+				size: totalFinalsSize
+			});
+		}
+	}
 
 	// If no final photos exist, nothing to process
 	if (finalFiles.length === 0) {
@@ -264,40 +285,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 
-	// Check if gallery has backup addon - if it does, skip cleanup (keep originals)
-	const galleryHasBackup = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-	
-	if (galleryHasBackup) {
-		logger?.info('Gallery has backup storage addon - skipping originals cleanup', {
-			galleryId,
-			orderId,
-			finalFilesCount: finalFiles.length
-		});
-		
-		// Mark cleanup as done (even though we didn't delete anything) to prevent future attempts
-		await ddb.send(new UpdateCommand({
-			TableName: ordersTable,
-			Key: { galleryId, orderId },
-			UpdateExpression: 'SET finalsCleanupDone = :fcd',
-			ExpressionAttributeValues: {
-				':fcd': true
-			}
-		}));
-		
-		return {
-			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				message: 'Upload completion processed successfully - originals kept (backup addon active)',
-				statusUpdated: order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS',
-				cleanupCount: 0,
-				finalFilesCount: finalFiles.length,
-				backupAddonActive: true
-			})
-		};
-	}
-
-	// Cleanup originals, thumbs, and previews
+	// Cleanup originals (always delete after finals upload)
+	// Keep thumbnails and previews for display purposes
 	// ZIPs are generated on-demand only, originals should be removed to save storage
 	const selectedKeys: string[] = order?.selectedKeys && Array.isArray(order.selectedKeys) ? order.selectedKeys : [];
 	

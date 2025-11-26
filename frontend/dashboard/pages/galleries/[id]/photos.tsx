@@ -7,6 +7,7 @@ import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading
 import { useToast } from "../../../hooks/useToast";
 import Button from "../../../components/ui/button/Button";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
+import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 
 interface RetryableImageProps {
 	src: string;
@@ -14,6 +15,7 @@ interface RetryableImageProps {
 	className?: string;
 	maxRetries?: number;
 	initialDelay?: number;
+	fallbackSrc?: string;
 }
 
 interface GalleryImage {
@@ -22,7 +24,9 @@ interface GalleryImage {
 	filename?: string;
 	url?: string;
 	thumbUrl?: string;
+	thumbUrlFallback?: string;
 	previewUrl?: string;
+	previewUrlFallback?: string;
 	isPlaceholder?: boolean;
 	uploadTimestamp?: number;
 	uploadIndex?: number;
@@ -35,14 +39,52 @@ interface UploadProgress {
 	currentFileName: string;
 	errors: Array<{ file: string; error: string }>;
 	successes: number;
+	startTime?: number; // UX IMPROVEMENT #4: Track upload start time
+	lastUpdateTime?: number; // Track last update time for speed calculation
+	uploadSpeed?: number; // Upload speed in bytes per second
+	estimatedTimeRemaining?: number; // Estimated time remaining in seconds
 }
 
+// Lazy loading wrapper component using Intersection Observer
+const LazyImage: React.FC<RetryableImageProps & { children: (src: string | null) => React.ReactNode }> = ({ src, children }) => {
+	const [isInView, setIsInView] = useState<boolean>(false);
+	const imgRef = useRef<HTMLDivElement | null>(null);
+
+	useEffect(() => {
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					setIsInView(true);
+					observer.disconnect();
+				}
+			},
+			{ rootMargin: '50px' } // Start loading 50px before entering viewport
+		);
+
+		if (imgRef.current) {
+			observer.observe(imgRef.current);
+		}
+
+		return () => {
+			observer.disconnect();
+		};
+	}, []);
+
+	return (
+		<div ref={imgRef} className="w-full h-full">
+			{isInView ? children(src) : children(null)}
+		</div>
+	);
+};
+
 // Component that retries loading an image until it's available on CloudFront
-const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "", maxRetries = 30, initialDelay = 500 }) => {
+// Supports WebP with automatic fallback to JPEG
+const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "", maxRetries = 30, initialDelay = 500, fallbackSrc }) => {
 	const [imageSrc, setImageSrc] = useState<string>(src);
 	const [retryCount, setRetryCount] = useState<number>(0);
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+	const [hasTriedFallback, setHasTriedFallback] = useState<boolean>(false);
 	const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const imgRef = useRef<HTMLImageElement | null>(null);
 
@@ -52,6 +94,7 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
 		setRetryCount(0);
 		setIsLoading(true);
 		setHasLoaded(false);
+		setHasTriedFallback(false);
 		
 		// Clear any pending retry
 		if (retryTimeoutRef.current) {
@@ -74,6 +117,18 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
 
 	const handleError = (): void => {
 		setRetryCount((currentRetryCount) => {
+			// If WebP fails and we have a fallback JPEG, try that first
+			if (!hasTriedFallback && fallbackSrc && imageSrc === src) {
+				setHasTriedFallback(true);
+				setIsLoading(true);
+				setHasLoaded(false);
+				setImageSrc(fallbackSrc);
+				if (imgRef.current) {
+					imgRef.current.src = fallbackSrc;
+				}
+				return currentRetryCount;
+			}
+			
 			const nextRetryCount = currentRetryCount + 1;
 			
 			if (currentRetryCount < maxRetries) {
@@ -85,8 +140,8 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
 				
 				retryTimeoutRef.current = setTimeout(() => {
 					// Add cache-busting query parameter
-					const separator = src.includes('?') ? '&' : '?';
-					const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${nextRetryCount}`;
+					const separator = imageSrc.includes('?') ? '&' : '?';
+					const retryUrl = `${imageSrc}${separator}_t=${Date.now()}&_r=${nextRetryCount}`;
 					
 					setImageSrc(retryUrl);
 					
@@ -137,6 +192,7 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
 				src={imageSrc}
 				alt={alt}
 				className={className}
+				loading="lazy"
 				onError={handleError}
 				onLoad={handleLoad}
 				style={{ 
@@ -174,6 +230,15 @@ export default function GalleryPhotos() {
 	const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set()); // Track which images are being deleted
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const uploadCancelRef = useRef<boolean>(false); // Track if upload was cancelled
+	const [limitExceededData, setLimitExceededData] = useState<{
+		uploadedSizeBytes: number;
+		originalsLimitBytes: number;
+		excessBytes: number;
+		nextTierPlan?: string;
+		nextTierPriceCents?: number;
+		nextTierLimitBytes?: number;
+		isSelectionGallery?: boolean;
+	} | null>(null);
 
 	// Define functions first (before useEffect hooks that use them)
 	const loadPhotos = useCallback(async (silent: boolean = false): Promise<void> => {
@@ -341,43 +406,22 @@ export default function GalleryPhotos() {
 			return;
 		}
 		
-		// Check storage limits before uploading
-		if (gallery?.storageLimitBytes) {
-			const currentBytesUsed = gallery.bytesUsed || 0;
-			const storageLimitBytes = gallery.storageLimitBytes;
-			const totalFilesSize = imageFiles.reduce((sum, file) => sum + file.size, 0);
-			const wouldExceedLimit = currentBytesUsed + totalFilesSize > storageLimitBytes;
-			
-			if (wouldExceedLimit) {
-				const usedMB = (currentBytesUsed / (1024 * 1024)).toFixed(2);
-				const limitMB = (storageLimitBytes / (1024 * 1024)).toFixed(2);
-				const filesMB = (totalFilesSize / (1024 * 1024)).toFixed(2);
-				const availableMB = ((storageLimitBytes - currentBytesUsed) / (1024 * 1024)).toFixed(2);
-				const excessMB = ((currentBytesUsed + totalFilesSize - storageLimitBytes) / (1024 * 1024)).toFixed(2);
-				
-				const errorMessage = 
-					`Przekroczono limit miejsca w galerii!\n\n` +
-					`Użyte: ${usedMB} MB / ${limitMB} MB\n` +
-					`Rozmiar wybranych plików: ${filesMB} MB\n` +
-					`Dostępne miejsce: ${availableMB} MB\n` +
-					`Brakuje: ${excessMB} MB\n\n` +
-					`Usuń niektóre zdjęcia lub zaktualizuj plan galerii, aby zwiększyć limit.`;
-				
-				showToast("error", "Limit miejsca przekroczony", errorMessage);
-				return;
-			}
-		}
+		// Note: Storage limits are now checked AFTER upload completes via validateUploadLimits endpoint
+		// This allows upload-first workflow where plan is calculated based on actual uploaded size
 		
 		setUploading(true);
 		uploadCancelRef.current = false; // Reset cancellation flag
 		
-		// Initialize upload progress
+		// Initialize upload progress with start time for speed calculation
+		const startTime = Date.now();
 		setUploadProgress({
 			current: 0,
 			total: imageFiles.length,
 			currentFileName: '',
 			errors: [],
 			successes: 0,
+			startTime,
+			lastUpdateTime: startTime,
 		});
 		
 		// Capture initial real image count BEFORE adding placeholders
@@ -442,12 +486,28 @@ export default function GalleryPhotos() {
 							throw new Error('Upload cancelled');
 						}
 						
-						// Update progress
-						setUploadProgress((prev) => ({
-							...prev,
-							current: globalIndex + 1,
-							currentFileName: file.name,
-						}));
+						// UX IMPROVEMENT #4: Update progress with speed and time estimation
+						const now = Date.now();
+						setUploadProgress((prev) => {
+							const elapsed = (now - (prev.startTime || now)) / 1000; // seconds
+							const uploaded = globalIndex + 1;
+							const remaining = imageFiles.length - uploaded;
+							
+							// Calculate average speed (files per second)
+							const speed = elapsed > 0 ? uploaded / elapsed : 0;
+							
+							// Estimate time remaining
+							const estimatedTimeRemaining = speed > 0 ? remaining / speed : 0;
+							
+							return {
+								...prev,
+								current: uploaded,
+								currentFileName: file.name,
+								lastUpdateTime: now,
+								uploadSpeed: speed,
+								estimatedTimeRemaining,
+							};
+						});
 						
 						try {
 							// Use original filename with timestamp to avoid conflicts
@@ -548,16 +608,43 @@ export default function GalleryPhotos() {
 				showToast("error", "Błąd", `Nie udało się przesłać żadnego zdjęcia. Sprawdź konsolę.`);
 			}
 			
-			// Wait for backend to process images and update bytesUsed
+			// Validate upload limits after upload completes (if gallery has a plan)
+			// Wait a bit for backend to process images and update originalsBytesUsed
+			if (uploadSuccesses > 0 && gallery?.originalsLimitBytes) {
+				try {
+					// Wait a few seconds for backend processing
+					await new Promise(resolve => setTimeout(resolve, 3000));
+					
+					const validationResult = await api.galleries.validateUploadLimits(galleryId as string);
+					
+					if (!validationResult.withinLimit && validationResult.excessBytes !== undefined) {
+						// Limit exceeded - show modal
+						setLimitExceededData({
+							uploadedSizeBytes: validationResult.uploadedSizeBytes,
+							originalsLimitBytes: validationResult.originalsLimitBytes!,
+							excessBytes: validationResult.excessBytes,
+							nextTierPlan: validationResult.nextTierPlan,
+							nextTierPriceCents: validationResult.nextTierPriceCents,
+							nextTierLimitBytes: validationResult.nextTierLimitBytes,
+							isSelectionGallery: validationResult.isSelectionGallery,
+						});
+					}
+				} catch (validationError) {
+					// If validation fails, log but don't block user
+					console.error('Failed to validate upload limits:', validationError);
+				}
+			}
+			
+			// Wait for backend to process images and update originalsBytesUsed
 			// The resize Lambda processes images asynchronously, so we need to poll
-			const initialBytesUsed = gallery?.bytesUsed || 0;
+			const initialOriginalsBytesUsed = gallery?.originalsBytesUsed || 0;
 			const totalFilesSize = imageFiles.reduce((sum, file) => sum + file.size, 0);
-			const expectedBytesUsed = initialBytesUsed + totalFilesSize;
+			const expectedOriginalsBytesUsed = initialOriginalsBytesUsed + totalFilesSize;
 			
 			// Use the initialRealImageCount captured before placeholders were added
 			const expectedNewImageCount = imageFiles.length;
 			
-			// Poll for new images and updated bytesUsed (backend processes images asynchronously)
+			// Poll for new images and updated originalsBytesUsed (backend processes images asynchronously)
 			// All polling is silent to avoid page flicker
 			let attempts = 0;
 			const maxAttempts = 60; // 60 attempts = ~60 seconds max (images can take time to process)
@@ -573,16 +660,16 @@ export default function GalleryPhotos() {
 						api.galleries.getImages(galleryId as string),
 					]);
 					
-					const currentBytesUsed = galleryResponse?.bytesUsed || 0;
+					const currentOriginalsBytesUsed = galleryResponse?.originalsBytesUsed || 0;
 					const currentImages = photosResponse?.images || [];
 					const currentRealImageCount = currentImages.length;
 					
 					// Check if we have new images (more than initial count)
 					const hasNewImages = currentRealImageCount >= initialRealImageCount + expectedNewImageCount;
 					
-					// Check if bytesUsed has been updated (allow some tolerance for processing overhead)
+					// Check if originalsBytesUsed has been updated (allow some tolerance for processing overhead)
 					// We check if it's at least 80% of expected (to account for compression/processing differences)
-					const hasBytesUpdated = currentBytesUsed >= expectedBytesUsed * 0.8;
+					const hasBytesUpdated = currentOriginalsBytesUsed >= expectedOriginalsBytesUsed * 0.8;
 					
 					// Always reload photos to replace placeholders with real images
 					// This will merge new images with placeholders intelligently
@@ -590,7 +677,7 @@ export default function GalleryPhotos() {
 					
 					// If we have new images AND bytes updated, or max attempts reached, stop polling
 					if ((hasNewImages && hasBytesUpdated) || attempts >= maxAttempts) {
-						// Silently reload gallery context to ensure bytesUsed is up to date
+						// Silently reload gallery context to ensure originalsBytesUsed is up to date
 						await reloadGallery();
 						// Clean up tracking
 						if ((window as any).__uploadTracking) {
@@ -886,6 +973,19 @@ export default function GalleryPhotos() {
 											{uploadProgress.currentFileName}
 										</p>
 									)}
+									{/* UX IMPROVEMENT #4: Show upload speed and estimated time */}
+									{uploadProgress.uploadSpeed !== undefined && uploadProgress.uploadSpeed > 0 && (
+										<div className="flex items-center justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
+											<span>
+												{uploadProgress.uploadSpeed.toFixed(1)} zdj./s
+											</span>
+											{uploadProgress.estimatedTimeRemaining !== undefined && uploadProgress.estimatedTimeRemaining > 0 && (
+												<span>
+													Pozostało: {Math.ceil(uploadProgress.estimatedTimeRemaining)}s
+												</span>
+											)}
+										</div>
+									)}
 								</div>
 							</div>
 							<button
@@ -959,32 +1059,56 @@ export default function GalleryPhotos() {
 								<p className="text-xs text-gray-500 dark:text-gray-500">
 									Obsługiwane formaty: JPEG, PNG
 								</p>
-								{gallery?.storageLimitBytes && (
-									<div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-										<div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-											Miejsce w galerii
-										</div>
-										<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-											<div
-												className={`h-2 rounded-full transition-all ${
-													(gallery.bytesUsed || 0) / gallery.storageLimitBytes > 0.9
-														? "bg-error-500"
-														: (gallery.bytesUsed || 0) / gallery.storageLimitBytes > 0.75
-														? "bg-warning-500"
-														: "bg-brand-500"
-												}`}
-												style={{
-													width: `${Math.min(
-														((gallery.bytesUsed || 0) / gallery.storageLimitBytes) * 100,
-														100
-													)}%`,
-												}}
-											/>
-										</div>
-										<div className="text-xs text-gray-500 dark:text-gray-500">
-											{((gallery.bytesUsed || 0) / (1024 * 1024)).toFixed(2)} MB /{" "}
-											{(gallery.storageLimitBytes / (1024 * 1024)).toFixed(2)} MB
-										</div>
+								{(gallery?.originalsLimitBytes || gallery?.finalsLimitBytes) && (
+									<div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+										{gallery?.originalsLimitBytes && (
+											<div>
+												<div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+													Oryginały: {((gallery.originalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+												</div>
+												<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+													<div
+														className={`h-2 rounded-full transition-all ${
+															(gallery.originalsBytesUsed || 0) / gallery.originalsLimitBytes > 0.9
+																? "bg-error-500"
+																: (gallery.originalsBytesUsed || 0) / gallery.originalsLimitBytes > 0.75
+																? "bg-warning-500"
+																: "bg-brand-500"
+														}`}
+														style={{
+															width: `${Math.min(
+																((gallery.originalsBytesUsed || 0) / gallery.originalsLimitBytes) * 100,
+																100
+															)}%`,
+														}}
+													/>
+												</div>
+											</div>
+										)}
+										{gallery?.finalsLimitBytes && (
+											<div>
+												<div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+													Finalne: {((gallery.finalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+												</div>
+												<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+													<div
+														className={`h-2 rounded-full transition-all ${
+															(gallery.finalsBytesUsed || 0) / gallery.finalsLimitBytes > 0.9
+																? "bg-error-500"
+																: (gallery.finalsBytesUsed || 0) / gallery.finalsLimitBytes > 0.75
+																? "bg-warning-500"
+																: "bg-brand-500"
+														}`}
+														style={{
+															width: `${Math.min(
+																((gallery.finalsBytesUsed || 0) / gallery.finalsLimitBytes) * 100,
+																100
+															)}%`,
+														}}
+													/>
+												</div>
+											</div>
+										)}
 									</div>
 								)}
 							</div>
@@ -1042,11 +1166,22 @@ export default function GalleryPhotos() {
 											</div>
 										) : (
 											<>
-												<RetryableImage
-													src={img.thumbUrl || img.previewUrl || img.url || ''}
-													alt={imageKey}
-													className="w-full h-full object-cover rounded-lg"
-												/>
+												<LazyImage src={img.thumbUrl || img.previewUrl || img.url || ''}>
+													{(lazySrc) => lazySrc ? (
+														<RetryableImage
+															src={lazySrc}
+															fallbackSrc={img.thumbUrlFallback || img.previewUrlFallback}
+															alt={imageKey}
+															className="w-full h-full object-cover rounded-lg"
+														/>
+													) : (
+														<div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+															<div className="text-xs text-gray-500 dark:text-gray-400">
+																Ładowanie...
+															</div>
+														</div>
+													)}
+												</LazyImage>
 												{isApproved && (
 													<div className="absolute top-2 right-2 bg-success-500 text-white text-xs px-2 py-1 rounded z-20">
 														Zatwierdzone
@@ -1097,6 +1232,33 @@ export default function GalleryPhotos() {
 					</div>
 				)}
 			</div>
+
+			{/* Limit Exceeded Modal */}
+			{limitExceededData && (
+				<LimitExceededModal
+					isOpen={!!limitExceededData}
+					onClose={() => {
+						setLimitExceededData(null);
+					}}
+					galleryId={galleryId as string}
+					uploadedSizeBytes={limitExceededData.uploadedSizeBytes}
+					originalsLimitBytes={limitExceededData.originalsLimitBytes}
+					excessBytes={limitExceededData.excessBytes}
+					nextTierPlan={limitExceededData.nextTierPlan}
+					nextTierPriceCents={limitExceededData.nextTierPriceCents}
+					nextTierLimitBytes={limitExceededData.nextTierLimitBytes}
+					isSelectionGallery={limitExceededData.isSelectionGallery}
+					onUpgrade={async () => {
+						// Reload gallery after upgrade
+						await reloadGallery();
+						setLimitExceededData(null);
+					}}
+					onCancel={() => {
+						// TODO: Implement file removal
+						setLimitExceededData(null);
+					}}
+				/>
+			)}
 
 			{/* Delete Confirmation Dialog */}
 			<ConfirmDialog

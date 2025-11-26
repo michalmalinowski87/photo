@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput } from "../lib/currency";
+import { formatPrice } from "../lib/format-price";
 import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import Input from "../components/ui/input/InputField";
@@ -173,8 +174,8 @@ export default function Wallet() {
 	const getTransactionTypeLabel = (type: string): string => {
 		const typeMap: Record<string, string> = {
 			WALLET_TOPUP: "Doładowanie portfela",
+			WELCOME_BONUS: "Bonus powitalny",
 			GALLERY_PLAN: "Plan galerii",
-			ADDON_PURCHASE: "Zakup dodatku",
 			REFUND: "Zwrot",
 			STRIPE_CHECKOUT: "Płatność kartą",
 			WALLET_DEBIT: "Płatność z portfela",
@@ -219,7 +220,7 @@ export default function Wallet() {
 							Saldo portfela
 						</div>
 						<div className="text-4xl font-bold text-gray-900 dark:text-white">
-							{balance !== null ? (balance / 100).toFixed(2) : "0.00"} PLN
+							{balance !== null ? formatPrice(balance) : "0.00 PLN"}
 						</div>
 					</div>
 					<Button variant="outline" onClick={loadBalance} disabled={loading}>
@@ -378,7 +379,7 @@ export default function Wallet() {
 													}`}
 												>
 													{isCredit ? "+" : "-"}
-													{(amount / 100).toFixed(2)} PLN
+													{formatPrice(amount)}
 												</TableCell>
 												<TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
 													{tx.paymentMethod === "WALLET"

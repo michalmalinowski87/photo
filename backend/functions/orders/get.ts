@@ -2,7 +2,6 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { hasAddon, ADDON_TYPES } from '../../lib/src/addons';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -49,21 +48,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 	
-	// Check if gallery has backup storage addon (gallery-level)
-	const hasBackupStorage = await hasAddon(galleryId, ADDON_TYPES.BACKUP_STORAGE);
-	
 	// Ensure selectedKeys is included in response (handle DynamoDB List type conversion)
 	// DynamoDB might return List type which needs to be explicitly included
-	const orderWithAddon = {
+	const orderResponse = {
 		...order,
-		selectedKeys: order.selectedKeys || [], // Ensure selectedKeys is always present, even if empty
-		hasBackupStorage
+		selectedKeys: order.selectedKeys || [] // Ensure selectedKeys is always present, even if empty
 	};
 
 	return { 
 		statusCode: 200, 
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(orderWithAddon) 
+		body: JSON.stringify(orderResponse) 
 	};
 });
 

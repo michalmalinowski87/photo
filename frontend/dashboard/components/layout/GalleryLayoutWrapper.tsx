@@ -504,7 +504,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Calculate canDownloadZip for order
   // Only show ZIP download if selection is enabled (ZIP contains selected photos)
-  // If backup addon exists, ZIP is always available regardless of order status
+  // ZIP is available before finals upload (originals are deleted after finals upload)
   // Parse order if needed - order comes from Zustand store and should be an object
   const orderObj = order && typeof order === 'object' ? order : (order && typeof order === 'string' ? (() => {
     try {
@@ -526,16 +526,14 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   );
   
   // ZIP download is available if:
-  // 1. Backup addon exists (always available regardless of status)
+  // 1. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
   // 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
   //    Note: After finals are uploaded (PREPARING_DELIVERY, DELIVERED), originals are deleted
-  //    unless backup addon is purchased
-  const hasBackupAddon = gallery?.hasBackupStorage === true;
+  //    but previews remain for display
   const canDownloadZip = orderObj && selectionEnabled ? (
-    hasBackupAddon || // Always available with backup addon
     (orderObj.deliveryStatus === "CLIENT_APPROVED" ||
      orderObj.deliveryStatus === "AWAITING_FINAL_PHOTOS")
-    // Exclude PREPARING_DELIVERY, PREPARING_FOR_DELIVERY, DELIVERED when no backup addon
+    // Exclude PREPARING_DELIVERY, PREPARING_FOR_DELIVERY, DELIVERED
     // because originals are deleted after finals upload
   ) : false;
 

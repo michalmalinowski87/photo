@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput } from "../lib/currency";
+import { formatPrice, formatPriceNumber } from "../lib/format-price";
 import Button from "../components/ui/button/Button";
 import Badge from "../components/ui/badge/Badge";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
@@ -307,7 +308,7 @@ export default function Dashboard() {
             Całkowity przychód (PLN)
           </div>
           <div className="text-4xl font-bold text-gray-900 dark:text-white mt-auto">
-            {(stats.totalRevenue / 100).toFixed(2)}
+            {formatPriceNumber(stats.totalRevenue)}
           </div>
         </div>
       </div>
@@ -455,7 +456,7 @@ export default function Dashboard() {
                       {getPaymentStatusBadge(order.paymentStatus)}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      {((order.totalCents || 0) / 100).toFixed(2)} PLN
+                      {formatPrice(order.totalCents)}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {order.createdAt
