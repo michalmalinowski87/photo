@@ -40,33 +40,6 @@ export default function Wallet() {
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
 
-  useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadBalance();
-        void loadTransactions(1, null);
-      },
-      () => {
-        redirectToLandingSignIn("/wallet");
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("payment") === "success") {
-        setError("");
-        showToast("success", "Sukces", "Portfel został doładowany pomyślnie");
-        void loadBalance();
-        void loadTransactions(1, null);
-        window.history.replaceState({}, "", window.location.pathname);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const loadBalance = async (): Promise<void> => {
     setLoading(true);
     setError("");
@@ -114,6 +87,33 @@ export default function Wallet() {
       setTransactionsLoading(false);
     }
   };
+
+  useEffect(() => {
+    initializeAuth(
+      () => {
+        void loadBalance();
+        void loadTransactions(1, null);
+      },
+      () => {
+        redirectToLandingSignIn("/wallet");
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        setError("");
+        showToast("success", "Sukces", "Portfel został doładowany pomyślnie");
+        void loadBalance();
+        void loadTransactions(1, null);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNextPage = (): void => {
     if (hasMore && paginationCursor) {

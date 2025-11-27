@@ -112,6 +112,42 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     initialPaymentAmountCents: 0,
   });
 
+  const loadExistingPackages = useCallback(async (token?: string, apiUrlParam?: string) => {
+    const tokenToUse = token ?? idToken;
+    const apiUrlToUse = apiUrlParam ?? apiUrl;
+    if (!apiUrlToUse || !tokenToUse) {
+      return;
+    }
+    try {
+      const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
+      // apiFetch returns { data: body, response }
+      // The API returns { items: [...], count: ... }
+      const responseData = response.data as { items?: Package[] } | undefined;
+      const packages = (responseData?.items ?? []);
+      setExistingPackages(packages);
+    } catch (_err) {
+      setExistingPackages([]);
+    }
+  }, [idToken, apiUrl]);
+
+  const loadExistingClients = useCallback(async (token?: string, apiUrlParam?: string) => {
+    const tokenToUse = token ?? idToken;
+    const apiUrlToUse = apiUrlParam ?? apiUrl;
+    if (!apiUrlToUse || !tokenToUse) {
+      return;
+    }
+    try {
+      const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
+      // apiFetch returns { data: body, response }
+      // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
+      const responseData = response.data as { items?: Client[] } | undefined;
+      const clients = (responseData?.items ?? []);
+      setExistingClients(clients);
+    } catch (_err) {
+      setExistingClients([]);
+    }
+  }, [idToken, apiUrl]);
+
   useEffect(() => {
     if (isOpen) {
       if (!dataLoadedRef.current) {
@@ -161,42 +197,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       dataLoadedRef.current = false;
     }
   }, [isOpen, loadExistingPackages, loadExistingClients]);
-
-  const loadExistingPackages = useCallback(async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token ?? idToken;
-    const apiUrlToUse = apiUrlParam ?? apiUrl;
-    if (!apiUrlToUse || !tokenToUse) {
-      return;
-    }
-    try {
-      const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
-      // apiFetch returns { data: body, response }
-      // The API returns { items: [...], count: ... }
-      const responseData = response.data as { items?: Package[] } | undefined;
-      const packages = (responseData?.items ?? []);
-      setExistingPackages(packages);
-    } catch (_err) {
-      setExistingPackages([]);
-    }
-  }, [idToken, apiUrl]);
-
-  const loadExistingClients = useCallback(async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token ?? idToken;
-    const apiUrlToUse = apiUrlParam ?? apiUrl;
-    if (!apiUrlToUse || !tokenToUse) {
-      return;
-    }
-    try {
-      const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
-      // apiFetch returns { data: body, response }
-      // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
-      const responseData = response.data as { items?: Client[] } | undefined;
-      const clients = (responseData?.items ?? []);
-      setExistingClients(clients);
-    } catch (_err) {
-      setExistingClients([]);
-    }
-  }, [idToken, apiUrl]);
 
   const handlePackageSelect = (packageId: string) => {
     const pkg = existingPackages.find((p) => p.packageId === packageId);

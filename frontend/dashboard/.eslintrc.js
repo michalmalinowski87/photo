@@ -39,6 +39,15 @@ module.exports = {
     "@typescript-eslint/prefer-nullish-coalescing": "warn",
     "@typescript-eslint/prefer-optional-chain": "warn",
     "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/no-use-before-define": [
+      "error",
+      {
+        functions: false, // Allow function declarations (they're hoisted)
+        classes: true, // Disallow using classes before definition
+        variables: true, // Disallow using variables before definition
+        typedefs: false, // Allow typedefs to be used before definition
+      },
+    ],
     "import/order": [
       "error",
       {

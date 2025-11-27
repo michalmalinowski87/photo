@@ -253,6 +253,15 @@ export default function GalleryPhotos() {
   const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref for closures
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
+  const [limitExceededData, setLimitExceededData] = useState<{
+    uploadedSizeBytes: number;
+    originalsLimitBytes: number;
+    excessBytes: number;
+    nextTierPlan?: string;
+    nextTierPriceCents?: number;
+    nextTierLimitBytes?: number;
+    isSelectionGallery?: boolean;
+  } | null>(null);
   const {
     handleFileSelect,
     uploading,
@@ -303,15 +312,70 @@ export default function GalleryPhotos() {
     deletingImagesRef,
     deletedImageKeysRef,
   });
-  const [limitExceededData, setLimitExceededData] = useState<{
-    uploadedSizeBytes: number;
-    originalsLimitBytes: number;
-    excessBytes: number;
-    nextTierPlan?: string;
-    nextTierPriceCents?: number;
-    nextTierLimitBytes?: number;
-    isSelectionGallery?: boolean;
-  } | null>(null);
+
+  // Define functions first (before useEffect hooks that use them)
+  const handleDeleteConfirmDirect = async (image: GalleryImage): Promise<void> => {
+    const imageKey = image.key ?? image.filename;
+
+    if (!imageKey || !galleryId) {
+      return;
+    }
+
+    // Prevent duplicate deletions
+    if (deletingImages.has(imageKey)) {
+      return;
+    }
+
+    // Mark image as being deleted
+    setDeletingImages((prev) => new Set(prev).add(imageKey));
+
+    // Find image index before removing it (for error recovery)
+    const imageIndex = images.findIndex((img) => (img.key ?? img.filename) === imageKey);
+
+    // Optimistically remove image from local state immediately
+    setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
+
+    try {
+      await api.galleries.deleteImage(galleryId as string, imageKey);
+
+      // Only reload if no other deletions are in progress (to avoid race conditions)
+      setDeletingImages((prev) => {
+        const updated = new Set(prev);
+        updated.delete(imageKey);
+        // If this was the last deletion, reload gallery data
+        if (updated.size === 0) {
+          // Use setTimeout to ensure state update completes before reload
+          setTimeout(() => {
+            void reloadGallery();
+          }, 0);
+        }
+        return updated;
+      });
+
+      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+    } catch (err) {
+      // On error, restore the image to the list
+      setImages((prevImages) => {
+        const restored = [...prevImages];
+        // Insert image back at its original position
+        if (imageIndex >= 0 && imageIndex < restored.length) {
+          restored.splice(imageIndex, 0, image);
+        } else {
+          restored.push(image);
+        }
+        return restored;
+      });
+
+      // Remove from deleting set
+      setDeletingImages((prev) => {
+        const updated = new Set(prev);
+        updated.delete(imageKey);
+        return updated;
+      });
+
+      showToast("error", "Błąd", formatApiError(err));
+    }
+  };
 
   // Define functions first (before useEffect hooks that use them)
   // Simple: Load images directly from API - no placeholders, no merging
@@ -493,69 +557,6 @@ export default function GalleryPhotos() {
 
     setImageToDelete(image);
     setDeleteConfirmOpen(true);
-  };
-
-  const handleDeleteConfirmDirect = async (image: GalleryImage): Promise<void> => {
-    const imageKey = image.key ?? image.filename;
-
-    if (!imageKey || !galleryId) {
-      return;
-    }
-
-    // Prevent duplicate deletions
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Mark image as being deleted
-    setDeletingImages((prev) => new Set(prev).add(imageKey));
-
-    // Find image index before removing it (for error recovery)
-    const imageIndex = images.findIndex((img) => (img.key ?? img.filename) === imageKey);
-
-    // Optimistically remove image from local state immediately
-    setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
-
-    try {
-      await api.galleries.deleteImage(galleryId as string, imageKey);
-
-      // Only reload if no other deletions are in progress (to avoid race conditions)
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        // If this was the last deletion, reload gallery data
-        if (updated.size === 0) {
-          // Use setTimeout to ensure state update completes before reload
-          setTimeout(() => {
-            void reloadGallery();
-          }, 0);
-        }
-        return updated;
-      });
-
-      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-    } catch (err) {
-      // On error, restore the image to the list
-      setImages((prevImages) => {
-        const restored = [...prevImages];
-        // Insert image back at its original position
-        if (imageIndex >= 0 && imageIndex < restored.length) {
-          restored.splice(imageIndex, 0, image);
-        } else {
-          restored.push(image);
-        }
-        return restored;
-      });
-
-      // Remove from deleting set
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        return updated;
-      });
-
-      showToast("error", "Błąd", formatApiError(err));
-    }
   };
 
   const handleDeleteConfirm = async (suppressChecked?: boolean): Promise<void> => {

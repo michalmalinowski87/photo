@@ -78,6 +78,24 @@ export default function GalleryDetail() {
     stripeAmountCents: 0,
   });
 
+  const loadOrders = async (): Promise<void> => {
+    if (!galleryId) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const ordersResponse = await api.orders.getByGallery(galleryId as string);
+
+      setOrders(ordersResponse.items ?? []);
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Don't render gallery detail if this is a filter route - let Next.js handle static routes
   // Check this AFTER hooks to avoid conditional hook call
   const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
@@ -275,24 +293,6 @@ export default function GalleryDetail() {
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany");
     } finally {
       setDenyLoading(false);
-    }
-  };
-
-  const loadOrders = async (): Promise<void> => {
-    if (!galleryId) {
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const ordersResponse = await api.orders.getByGallery(galleryId as string);
-
-      setOrders(ordersResponse.items ?? []);
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
-    } finally {
-      setLoading(false);
     }
   };
 

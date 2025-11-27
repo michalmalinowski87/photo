@@ -61,18 +61,6 @@ export default function Dashboard() {
   const [denyGalleryId, setDenyGalleryId] = useState<string | null>(null);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadDashboardData();
-        void loadWalletBalance();
-      },
-      () => {
-        redirectToLandingSignIn("/");
-      }
-    );
-  }, []);
-
   const loadDashboardData = async () => {
     setLoading(true);
     setError("");
@@ -178,6 +166,28 @@ export default function Dashboard() {
     }
   };
 
+  const loadWalletBalance = async () => {
+    try {
+      const data = await api.wallet.getBalance();
+      setWalletBalance(data.balanceCents || 0);
+    } catch (_err) {
+      // Ignore wallet errors
+    }
+  };
+
+  useEffect(() => {
+    initializeAuth(
+      () => {
+        void loadDashboardData();
+        void loadWalletBalance();
+      },
+      () => {
+        redirectToLandingSignIn("/");
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleApproveChangeRequest = async (galleryId: string, orderId: string) => {
     if (!galleryId || !orderId) {
       return;
@@ -218,15 +228,6 @@ export default function Dashboard() {
       setError(formatApiError(error));
     } finally {
       setDenyLoading(false);
-    }
-  };
-
-  const loadWalletBalance = async () => {
-    try {
-      const data = await api.wallet.getBalance();
-      setWalletBalance(data.balanceCents || 0);
-    } catch (_err) {
-      // Ignore wallet errors
     }
   };
 

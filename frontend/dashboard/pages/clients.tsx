@@ -62,29 +62,6 @@ export default function Clients() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
 
-  useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadClients(1, null, "");
-      },
-      () => {
-        redirectToLandingSignIn("/clients");
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-      setPageHistory([{ page: 1, cursor: null }]);
-      void loadClients(1, null, searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
-
   const loadClients = async (
     page: number,
     lastKey: string | null,
@@ -134,6 +111,29 @@ export default function Clients() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    initializeAuth(
+      () => {
+        void loadClients(1, null, "");
+      },
+      () => {
+        redirectToLandingSignIn("/clients");
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      setPageHistory([{ page: 1, cursor: null }]);
+      void loadClients(1, null, searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   const handleCreate = (): void => {
     setEditingClient(null);

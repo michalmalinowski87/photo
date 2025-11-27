@@ -52,25 +52,6 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   const [denyGalleryId, setDenyGalleryId] = useState<string | null>(null);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
-    initializeAuth(
-      (token) => {
-        setIdToken(token);
-      },
-      () => {
-        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/");
-      }
-    );
-  }, []);
-
-  useEffect(() => {
-    if (isOpen && apiUrl && idToken) {
-      void loadOrders();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, apiUrl, idToken, page, excludeDeliveryStatus]);
-
   const loadOrders = async () => {
     if (!apiUrl || !idToken) {
       return;
@@ -118,6 +99,25 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
+    initializeAuth(
+      (token) => {
+        setIdToken(token);
+      },
+      () => {
+        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/");
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && apiUrl && idToken) {
+      void loadOrders();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, apiUrl, idToken, page, excludeDeliveryStatus]);
 
   const getDeliveryStatusBadge = (status: string) => {
     const statusMap: Record<string, { color: BadgeColor; label: string }> = {

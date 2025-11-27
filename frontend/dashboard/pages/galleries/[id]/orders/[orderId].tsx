@@ -651,37 +651,6 @@ export default function OrderDetail() {
     setIsDragging(false);
   };
 
-  const handleDeleteFinalImageClick = (image: GalleryImage): void => {
-    const imageKey = image.key ?? image.filename;
-
-    if (!imageKey) {
-      return;
-    }
-
-    // Prevent deletion if already being deleted
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Check if deletion confirmation is suppressed
-    const suppressKey = "final_image_delete_confirm_suppress";
-    const suppressUntil = localStorage.getItem(suppressKey);
-    if (suppressUntil) {
-      const suppressUntilTime = parseInt(suppressUntil, 10);
-      if (Date.now() < suppressUntilTime) {
-        // Suppression is still active, proceed directly with deletion
-        void handleDeleteFinalDirect(image);
-        return;
-      } else {
-        // Suppression expired, remove it
-        localStorage.removeItem(suppressKey);
-      }
-    }
-
-    setImageToDelete(image);
-    setDeleteConfirmOpen(true);
-  };
-
   const handleDeleteFinalDirect = async (image: GalleryImage): Promise<void> => {
     const imageKey = image.key ?? image.filename;
     if (!imageKey || !galleryId || !orderId) {
@@ -755,6 +724,37 @@ export default function OrderDetail() {
 
       showToast("error", "Błąd", formatApiError(err));
     }
+  };
+
+  const handleDeleteFinalImageClick = (image: GalleryImage): void => {
+    const imageKey = image.key ?? image.filename;
+
+    if (!imageKey) {
+      return;
+    }
+
+    // Prevent deletion if already being deleted
+    if (deletingImages.has(imageKey)) {
+      return;
+    }
+
+    // Check if deletion confirmation is suppressed
+    const suppressKey = "final_image_delete_confirm_suppress";
+    const suppressUntil = localStorage.getItem(suppressKey);
+    if (suppressUntil) {
+      const suppressUntilTime = parseInt(suppressUntil, 10);
+      if (Date.now() < suppressUntilTime) {
+        // Suppression is still active, proceed directly with deletion
+        void handleDeleteFinalDirect(image);
+        return;
+      } else {
+        // Suppression expired, remove it
+        localStorage.removeItem(suppressKey);
+      }
+    }
+
+    setImageToDelete(image);
+    setDeleteConfirmOpen(true);
   };
 
   const handleDeleteFinal = async (suppressChecked?: boolean): Promise<void> => {

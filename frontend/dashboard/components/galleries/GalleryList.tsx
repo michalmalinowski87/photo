@@ -82,33 +82,6 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
-    initializeAuth(
-      (token) => {
-        setIdToken(token);
-      },
-      () => {
-        redirectToLandingSignIn(
-          typeof window !== "undefined" ? window.location.pathname : "/galleries"
-        );
-        if (onLoadingChange) {
-          setInitialLoad(false);
-          setLoading(false);
-          onLoadingChange(false, false);
-        }
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoadingChange is a prop callback that shouldn't change
-  }, []);
-
-  useEffect(() => {
-    if (apiUrl && idToken) {
-      void loadGalleries();
-      void loadWalletBalance();
-    }
-  }, [apiUrl, idToken, filter, loadGalleries, loadWalletBalance]);
-
   const loadWalletBalance = useCallback(async () => {
     if (!apiUrl || !idToken) {
       return;
@@ -165,6 +138,33 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
       }
     }
   }, [apiUrl, idToken, filter, initialLoad, onLoadingChange]);
+
+  useEffect(() => {
+    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
+    initializeAuth(
+      (token) => {
+        setIdToken(token);
+      },
+      () => {
+        redirectToLandingSignIn(
+          typeof window !== "undefined" ? window.location.pathname : "/galleries"
+        );
+        if (onLoadingChange) {
+          setInitialLoad(false);
+          setLoading(false);
+          onLoadingChange(false, false);
+        }
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoadingChange is a prop callback that shouldn't change
+  }, []);
+
+  useEffect(() => {
+    if (apiUrl && idToken) {
+      void loadGalleries();
+      void loadWalletBalance();
+    }
+  }, [apiUrl, idToken, filter, loadGalleries, loadWalletBalance]);
 
   // Notify parent of loading state changes
   useEffect(() => {
