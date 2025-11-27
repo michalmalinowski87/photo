@@ -120,6 +120,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
             ? `${window.location.origin}/gallery/${galleryId as string}`
             : ""
         );
+
+        // Dispatch galleryUpdated event to notify components (e.g., PaymentGuidanceBanner, GallerySidebar)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("galleryUpdated", { detail: { galleryId } })
+          );
+        }
       } catch (err) {
         if (!silent) {
           const errorMsg = formatApiError(err);

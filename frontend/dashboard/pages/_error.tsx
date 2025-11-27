@@ -10,12 +10,12 @@ function Error({ statusCode }: ErrorProps) {
   const router = useRouter();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="text-center">
         <h1 className="text-4xl font-bold mb-4">
           {statusCode ? `Error ${statusCode}` : "An error occurred"}
         </h1>
-        <p className="text-muted-foreground mb-6">
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
           {statusCode === 404
             ? "This page could not be found."
             : "Something went wrong. Please try again later."}
@@ -24,7 +24,7 @@ function Error({ statusCode }: ErrorProps) {
           onClick={() => {
             void router.push("/");
           }}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90"
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:opacity-90"
         >
           Go Home
         </button>

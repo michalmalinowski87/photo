@@ -12,6 +12,8 @@ interface PaymentConfirmationModalProps {
   walletBalanceCents: number;
   walletAmountCents: number;
   stripeAmountCents: number;
+  paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+  stripeFeeCents?: number;
   loading?: boolean;
 }
 
@@ -23,16 +25,22 @@ export default function PaymentConfirmationModal({
   walletBalanceCents,
   walletAmountCents,
   stripeAmountCents,
+  paymentMethod,
+  stripeFeeCents = 0,
   loading = false,
 }: PaymentConfirmationModalProps) {
   const totalAmount = formatPriceNumber(totalAmountCents);
   const walletBalance = formatPriceNumber(walletBalanceCents);
   const walletAmount = formatPriceNumber(walletAmountCents);
   const stripeAmount = formatPriceNumber(stripeAmountCents);
+  const stripeFee = formatPriceNumber(stripeFeeCents);
+  const totalWithFee = totalAmountCents + stripeFeeCents;
+  const totalWithFeeFormatted = formatPriceNumber(totalWithFee);
 
-  const isWalletOnly = walletAmountCents === totalAmountCents;
-  const isStripeOnly = stripeAmountCents === totalAmountCents;
-  const isSplitPayment = walletAmountCents > 0 && stripeAmountCents > 0;
+  // Use paymentMethod from props if available, otherwise calculate from amounts (backward compatibility)
+  const isWalletOnly = paymentMethod === 'WALLET' || (paymentMethod === undefined && walletAmountCents === totalAmountCents);
+  const isStripeOnly = paymentMethod === 'STRIPE' || (paymentMethod === undefined && stripeAmountCents === totalAmountCents);
+  const isSplitPayment = paymentMethod === 'MIXED' || (paymentMethod === undefined && walletAmountCents > 0 && stripeAmountCents > 0);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -44,11 +52,18 @@ export default function PaymentConfirmationModal({
         <div className="space-y-4 mb-6">
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Całkowita kwota do zapłaty:
+              {isStripeOnly || isSplitPayment
+                ? "Kwota do zapłaty (z opłatami):"
+                : "Całkowita kwota do zapłaty:"}
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {totalAmount} PLN
+              {isStripeOnly || isSplitPayment ? totalWithFeeFormatted : totalAmount} PLN
             </div>
+            {(isStripeOnly || isSplitPayment) && stripeFeeCents > 0 && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                (w tym {stripeFee} PLN opłaty transakcyjnej)
+              </div>
+            )}
           </div>
 
           {isWalletOnly && (
@@ -71,7 +86,8 @@ export default function PaymentConfirmationModal({
                 Płatność przez Stripe
               </div>
               <div className="text-xs text-warning-600 dark:text-warning-400">
-                Zostaniesz przekierowany do Stripe aby dokonać płatności {stripeAmount} PLN
+                Zostaniesz przekierowany do Stripe aby dokonać płatności {totalWithFeeFormatted} PLN
+                {stripeFeeCents > 0 && ` (w tym ${stripeFee} PLN opłaty transakcyjnej)`}
               </div>
               {walletBalanceCents > 0 && (
                 <div className="text-xs text-warning-600 dark:text-warning-400 mt-1">
@@ -92,7 +108,7 @@ export default function PaymentConfirmationModal({
                 </div>
                 <div className="text-sm text-info-700 dark:text-white mb-3">
                   <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych
-                  opłat transakcyjnych Stripe.
+                  opłat transakcyjnych Stripe ({stripeFeeCents > 0 ? `${stripeFee} PLN` : 'ok. 2.9% + 1 PLN'}).
                 </div>
                 <Link href="/wallet">
                   <Button
@@ -110,7 +126,8 @@ export default function PaymentConfirmationModal({
                 </div>
                 <div className="text-xs text-warning-600 dark:text-warning-400">
                   Jeśli potwierdzisz, zostaniesz przekierowany do Stripe aby zapłacić pełną kwotę{" "}
-                  {totalAmount} PLN (+ opłaty transakcyjne Stripe)
+                  {totalWithFeeFormatted} PLN
+                  {stripeFeeCents > 0 && ` (w tym ${stripeFee} PLN opłaty transakcyjnej)`}
                 </div>
               </div>
             </div>

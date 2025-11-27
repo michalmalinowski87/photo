@@ -281,7 +281,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// USER-CENTRIC FIX: Add Stripe fees to upgrade payments (user pays fees)
-	const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(stripeAmountCents) : 0;
+	// IMPORTANT: Calculate fee on FULL price difference (priceDifferenceCents), not on stripeAmountCents
+	// This ensures the fee is calculated correctly on the full upgrade cost, not on the reduced amount after wallet deduction
+	const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(priceDifferenceCents) : 0;
 
 	// Create Stripe checkout session if needed
 	let checkoutUrl: string | undefined;

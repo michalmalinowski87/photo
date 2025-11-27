@@ -11,11 +11,21 @@
  * - 1GB: 1m=700¢ (7 PLN), 3m=900¢ (9 PLN), 12m=1500¢ (15 PLN)
  * - 3GB: 1m=1200¢ (12 PLN), 3m=1400¢ (14 PLN), 12m=2100¢ (21 PLN)
  * - 10GB: 1m=1400¢ (14 PLN), 3m=1600¢ (16 PLN), 12m=2600¢ (26 PLN)
+ * 
+ * Photo estimates are calculated using calculatePhotoEstimateFromStorage()
+ * from utils/photo-estimates.ts (assumes 15-25MB per photo)
  */
+import { calculatePhotoEstimateFromStorage } from "../photo-estimates";
+
+const photoEstimate1GB = calculatePhotoEstimateFromStorage("1GB");
+const photoEstimate3GB = calculatePhotoEstimateFromStorage("3GB");
+const photoEstimate10GB = calculatePhotoEstimateFromStorage("10GB");
+
 export const PLANS = [
   {
     name: "1 GB",
-    info: "~200-400 zdjęć",
+    info: photoEstimate1GB.displayText,
+    photoEstimate: photoEstimate1GB,
     price: {
       "1m": 7,   // Matches backend: 700 cents
       "3m": 9,   // Matches backend: 900 cents
@@ -36,7 +46,8 @@ export const PLANS = [
   },
   {
     name: "3 GB",
-    info: "~600-1200 zdjęć",
+    info: photoEstimate3GB.displayText,
+    photoEstimate: photoEstimate3GB,
     price: {
       "1m": 12,  // Matches backend: 1200 cents
       "3m": 14,  // Matches backend: 1400 cents
@@ -57,7 +68,8 @@ export const PLANS = [
   },
   {
     name: "10 GB",
-    info: "~2000-4000 zdjęć",
+    info: photoEstimate10GB.displayText,
+    photoEstimate: photoEstimate10GB,
     price: {
       "1m": 14,  // Matches backend: 1400 cents
       "3m": 16,  // Matches backend: 1600 cents

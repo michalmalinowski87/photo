@@ -84,7 +84,11 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                   sendLinkLoading={sendLinkLoading}
                   onSettings={onSettings}
                   onReloadGallery={onReloadGallery}
-                  order={order ? (order as { orderId: string; galleryId: string; [key: string]: unknown }) : undefined}
+                  order={
+                    order
+                      ? (order as { orderId: string; galleryId: string; [key: string]: unknown })
+                      : undefined
+                  }
                   orderId={orderId}
                   onDownloadZip={onDownloadZip}
                   canDownloadZip={canDownloadZip}

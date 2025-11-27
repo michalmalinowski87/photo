@@ -47,6 +47,7 @@ interface GalleryState {
   setFilter: (filter: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  updateFinalsBytesUsed: (sizeDelta: number) => void; // Optimistic update for finals bytes
   clearCurrentGallery: () => void;
   clearGalleryList: () => void;
   clearAll: () => void;
@@ -69,6 +70,22 @@ export const useGalleryStore = create<GalleryState>()(
           currentGallery: gallery,
           currentGalleryId: gallery?.galleryId || null,
           galleryCacheTimestamp: gallery ? Date.now() : null,
+        });
+      },
+
+      updateFinalsBytesUsed: (sizeDelta: number) => {
+        set((state) => {
+          if (!state.currentGallery) {
+            return state;
+          }
+          const currentFinalsBytes = (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
+          const newFinalsBytes = Math.max(0, currentFinalsBytes + sizeDelta);
+          return {
+            currentGallery: {
+              ...state.currentGallery,
+              finalsBytesUsed: newFinalsBytes,
+            },
+          };
         });
       },
 

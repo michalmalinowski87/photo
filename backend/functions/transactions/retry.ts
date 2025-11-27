@@ -117,8 +117,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
 		// Wallet top-ups don't go through retry - they use checkoutCreate.ts which handles fees correctly
+		// IMPORTANT: Calculate fee on FULL transaction amount (transaction.amountCents), not on stripeAmountCents
+		// This ensures the fee is calculated correctly on the full plan price, not on the reduced amount after wallet deduction
 		const stripeFeeCents = stripeAmountCents > 0 && transaction.type === 'GALLERY_PLAN' 
-			? calculateStripeFee(stripeAmountCents) 
+			? calculateStripeFee(transaction.amountCents) 
 			: 0;
 		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
 

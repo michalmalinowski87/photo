@@ -312,9 +312,9 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                 onClick={() => {
-                                   setDenyGalleryId(order.galleryId ?? null);
-                                   setDenyOrderId(order.orderId ?? null);
+                                onClick={() => {
+                                  setDenyGalleryId(order.galleryId ?? null);
+                                  setDenyOrderId(order.orderId ?? null);
                                   setDenyModalOpen(true);
                                 }}
                               >

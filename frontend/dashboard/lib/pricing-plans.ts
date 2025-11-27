@@ -132,10 +132,7 @@ export function getPlanKeysByDuration(duration: Duration): PlanKey[] {
 /**
  * Calculate price with discount for non-selection galleries (20% discount)
  */
-export function calculatePriceWithDiscount(
-  planKey: PlanKey,
-  isSelectionGallery: boolean
-): number {
+export function calculatePriceWithDiscount(planKey: PlanKey, isSelectionGallery: boolean): number {
   const plan = getPlan(planKey);
   if (!plan) {
     return 0;

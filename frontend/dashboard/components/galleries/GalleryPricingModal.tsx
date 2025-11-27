@@ -3,6 +3,7 @@ import React, { useState, useMemo } from "react";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import { calculatePhotoEstimateFromStorage } from "../../lib/photo-estimates";
 import type { PlanOption, NextTierPlan } from "../../lib/plan-types";
 import {
   getAllPlansGroupedByStorage,
@@ -13,6 +14,7 @@ import {
   type PlanKey,
 } from "../../lib/pricing-plans";
 import Button from "../ui/button/Button";
+import { StripeRedirectOverlay } from "./StripeRedirectOverlay";
 
 interface GalleryPricingModalProps {
   isOpen: boolean;
@@ -51,6 +53,12 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
+  const [showRedirectOverlay, setShowRedirectOverlay] = useState(false);
+  const [redirectInfo, setRedirectInfo] = useState<{
+    totalAmountCents: number;
+    stripeFeeCents?: number;
+    checkoutUrl?: string;
+  } | null>(null);
 
   // Extract storage size from suggested plan (e.g., "1GB - 1 miesiąc" -> "1GB")
   const suggestedStorage = useMemo(() => {
@@ -106,9 +114,18 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
           ? "3m"
           : "1m";
       setSelectedDuration(suggestedDuration as Duration);
-      setSelectedPlanKey(null); // Reset to use suggested plan
+      // Preselect the suggested plan
+      const suggestedPlanKey = getPlanByStorageAndDuration(
+        suggestedStorage,
+        suggestedDuration as Duration
+      );
+      if (suggestedPlanKey) {
+        setSelectedPlanKey(suggestedPlanKey);
+      } else {
+        setSelectedPlanKey(null); // Reset to use suggested plan
+      }
     }
-  }, [isOpen, suggestedPlan.name]);
+  }, [isOpen, suggestedPlan.name, suggestedStorage]);
 
   if (!isOpen) {
     return null;
@@ -138,21 +155,58 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
         return;
       }
 
+      // First, call dry run to determine payment method
+      const dryRunResult = await api.galleries.pay(galleryId, {
+        dryRun: true,
+        plan: selectedPlan.planKey,
+        priceCents: selectedPlan.priceCents,
+      });
+
+      // If Stripe will be used, show redirect overlay first
+      if (dryRunResult.paymentMethod !== 'WALLET' && dryRunResult.stripeAmountCents && dryRunResult.stripeAmountCents > 0) {
+        // Update gallery first
+        await api.galleries.update(galleryId, {
+          plan: selectedPlan.planKey,
+          priceCents: selectedPlan.priceCents,
+          originalsLimitBytes: planMetadata.storageLimitBytes,
+          finalsLimitBytes: planMetadata.storageLimitBytes,
+        });
+
+        // Get actual payment result
+        const paymentResult = await api.galleries.pay(galleryId, {});
+
+        if (paymentResult.checkoutUrl) {
+          setRedirectInfo({
+            totalAmountCents: paymentResult.totalAmountCents ?? selectedPlan.priceCents,
+            stripeFeeCents: paymentResult.stripeFeeCents,
+            checkoutUrl: paymentResult.checkoutUrl,
+          });
+          setShowRedirectOverlay(true);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // If wallet payment, proceed directly
       // First, update gallery with the selected plan details
-      // This ensures the gallery has plan, priceCents, and limits set before payment
       await api.galleries.update(galleryId, {
         plan: selectedPlan.planKey,
         priceCents: selectedPlan.priceCents,
         originalsLimitBytes: planMetadata.storageLimitBytes,
-        finalsLimitBytes: planMetadata.storageLimitBytes, // Finals limit same as originals
+        finalsLimitBytes: planMetadata.storageLimitBytes,
       });
 
       // Now proceed to payment
       const paymentResult = await api.galleries.pay(galleryId, {});
 
       if (paymentResult.checkoutUrl) {
-        // Redirect to Stripe checkout
-        window.location.href = paymentResult.checkoutUrl;
+        // This shouldn't happen if dry run said wallet, but handle it
+        setRedirectInfo({
+          totalAmountCents: paymentResult.totalAmountCents ?? selectedPlan.priceCents,
+          stripeFeeCents: paymentResult.stripeFeeCents,
+          checkoutUrl: paymentResult.checkoutUrl,
+        });
+        setShowRedirectOverlay(true);
       } else if (paymentResult.paid) {
         // Already paid or paid via wallet
         showToast("success", "Sukces", "Plan został wybrany i opłacony!");
@@ -168,11 +222,18 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
     }
   };
 
+  const handleRedirectConfirm = () => {
+    if (redirectInfo?.checkoutUrl) {
+      // Redirect to Stripe checkout
+      window.location.href = redirectInfo.checkoutUrl;
+    }
+  };
+
   const uploadedMB = (uploadedSizeBytes / (1024 * 1024)).toFixed(2);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             Wybierz plan dla swojej galerii
@@ -270,10 +331,10 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
                           setSelectedDuration(duration);
                           setSelectedPlanKey(planKey);
                         }}
-                        className={`px-4 py-2 rounded-lg border-2 transition-all ${
+                        className={`px-4 py-2 rounded-lg transition-all font-medium ${
                           isSelected
-                            ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
-                            : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600"
+                            ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                            : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"
                         }`}
                       >
                         <div className="text-sm">
@@ -350,62 +411,196 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
 
           {/* All Available Plans */}
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               Wszystkie dostępne plany
             </h3>
-            <div className="space-y-4">
+
+            {/* Duration Toggle */}
+            <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
+                const isSelected = selectedDuration === duration;
+                return (
+                  <button
+                    key={duration}
+                    onClick={() => {
+                      setSelectedDuration(duration);
+                      // Update selected plan to match the suggested storage with new duration
+                      const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
+                      if (planKey) {
+                        setSelectedPlanKey(planKey);
+                      }
+                    }}
+                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      isSelected
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    {duration === "1m"
+                      ? "1 miesiąc"
+                      : duration === "3m"
+                        ? "3 miesiące"
+                        : "12 miesięcy"}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Plan Cards */}
+            <div className="grid grid-cols-3 gap-4">
               {allPlans.map(({ storage, plans }) => {
-                const isSelectedStorage = selectedPlan?.storage === storage;
+                // Get the plan for current storage and selected duration
+                const planForDuration = plans.find((p) => p.duration === selectedDuration);
+                if (!planForDuration) {
+                  return null;
+                }
+
+                const planKey = planForDuration.planKey;
+                const plan = getPlan(planKey);
+                if (!plan) {
+                  return null;
+                }
+
+                const price = calculatePriceWithDiscount(planKey, selectionEnabled);
+                const isSuggested = suggestedStorage === storage;
+                const isSelected = selectedPlanKey === planKey || (isSuggested && !selectedPlanKey);
+
+                // Calculate photo estimates using utility function
+                const photoEstimate = calculatePhotoEstimateFromStorage(storage);
+
                 return (
                   <div
                     key={storage}
-                    className={`border-2 rounded-lg p-4 ${
-                      isSelectedStorage
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                    onClick={() => {
+                      setSelectedPlanKey(planKey);
+                      setSelectedDuration(selectedDuration);
+                    }}
+                    className={`relative rounded-lg border-2 p-5 cursor-pointer transition-all ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {storage}
-                      </h4>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {plans.map(({ duration, planKey }) => {
-                        const isSelected = selectedPlanKey === planKey;
-                        const price = calculatePriceWithDiscount(planKey, selectionEnabled);
+                    {/* Suggested Badge */}
+                    {isSuggested && (
+                      <div className="absolute top-3 right-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                              fillRule="evenodd"
+                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Sugerowany
+                        </span>
+                      </div>
+                    )}
 
-                        return (
-                          <button
-                            key={planKey}
-                            onClick={() => {
-                              setSelectedPlanKey(planKey);
-                              setSelectedDuration(duration);
-                            }}
-                            className={`p-3 rounded-lg border-2 transition-all text-left ${
-                              isSelected
-                                ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30"
-                                : "border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600"
-                            }`}
+                    {/* Selected Checkmark */}
+                    {isSelected && !isSuggested && (
+                      <div className="absolute top-3 right-3">
+                        <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                          <svg
+                            className="w-4 h-4 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                           >
-                            <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                              {duration === "1m"
-                                ? "1 miesiąc"
-                                : duration === "3m"
-                                  ? "3 miesiące"
-                                  : "12 miesięcy"}
-                            </div>
-                            <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                              {formatPrice(price)}
-                            </div>
-                            {!selectionEnabled && (
-                              <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                                -20%
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mb-2">
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white">{storage}</h4>
+                      <div className="mt-1 flex items-center gap-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {photoEstimate.displayText}
+                        </p>
+                        <div className="group relative">
+                          <svg
+                            className="w-3 h-3 text-gray-400 dark:text-gray-500 cursor-help"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                            {photoEstimate.tooltipText}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {formatPrice(price)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
+                      {!selectionEnabled && (
+                        <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          Zniżka 20%
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <svg
+                          className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span>Galeria chroniona hasłem</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <svg
+                          className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span>Wybór zdjęć przez klienta</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <svg
+                          className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <span>Wsparcie techniczne</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -432,6 +627,18 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Stripe Redirect Overlay */}
+      <StripeRedirectOverlay
+        isVisible={showRedirectOverlay}
+        totalAmountCents={redirectInfo?.totalAmountCents ?? 0}
+        stripeFeeCents={redirectInfo?.stripeFeeCents}
+        onCancel={() => {
+          setShowRedirectOverlay(false);
+          setRedirectInfo(null);
+        }}
+        onConfirm={handleRedirectConfirm}
+      />
     </div>
   );
 };

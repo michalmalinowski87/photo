@@ -57,10 +57,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
+	// Helper to convert filename to WebP (previews/thumbs are stored as WebP)
+	const getWebpFilename = (fname: string): string => {
+		const lastDot = fname.lastIndexOf('.');
+		if (lastDot === -1) return `${fname}.webp`;
+		return `${fname.substring(0, lastDot)}.webp`;
+	};
+
 	// Construct S3 keys
+	// Originals keep original extension (PNG/JPEG), but previews/thumbs are WebP
 	const originalKey = `galleries/${galleryId}/originals/${filename}`;
-	const previewKey = `galleries/${galleryId}/previews/${filename}`;
-	const thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
+	const webpFilename = getWebpFilename(filename);
+	const previewKey = `galleries/${galleryId}/previews/${webpFilename}`;
+	const thumbKey = `galleries/${galleryId}/thumbs/${webpFilename}`;
 
 	// Get original file size before deletion
 	let fileSize = 0;

@@ -103,7 +103,33 @@ const PricingCards = () => {
                   {plan.name}
                 </CardTitle>
                 <CardDescription>
-                  {plan.info}
+                  <div className="flex items-center gap-1.5">
+                    <span>{plan.info}</span>
+                    {plan.photoEstimate && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <svg
+                              className="w-3.5 h-3.5 text-muted-foreground cursor-help"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{plan.photoEstimate.tooltipText}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 </CardDescription>
                 <h5 className="text-3xl font-semibold text-foreground mt-4">
                   {plan.price["1m"]} PLN
@@ -177,7 +203,33 @@ const PricingCards = () => {
                   {plan.name}
                 </CardTitle>
                 <CardDescription>
-                  {plan.info}
+                  <div className="flex items-center gap-1.5">
+                    <span>{plan.info}</span>
+                    {plan.photoEstimate && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <svg
+                              className="w-3.5 h-3.5 text-muted-foreground cursor-help"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{plan.photoEstimate.tooltipText}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 </CardDescription>
                 <h5 className="text-3xl font-semibold text-foreground mt-4">
                   {plan.price["3m"]} PLN
@@ -250,7 +302,33 @@ const PricingCards = () => {
                   {plan.name}
                 </CardTitle>
                 <CardDescription>
-                  {plan.info}
+                  <div className="flex items-center gap-1.5">
+                    <span>{plan.info}</span>
+                    {plan.photoEstimate && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <svg
+                              className="w-3.5 h-3.5 text-muted-foreground cursor-help"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{plan.photoEstimate.tooltipText}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 </CardDescription>
                 <h5 className="text-3xl font-semibold text-foreground mt-4 flex items-end">
                   {plan.price["12m"]} PLN

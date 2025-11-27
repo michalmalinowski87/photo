@@ -202,6 +202,15 @@ export class AppStack extends Stack {
 			process.env.JWT_SECRET || 
 			`photocloud-${props.stage}-jwt-secret-change-in-production`;
 
+		// Debug: Log Stripe key status at CDK synthesis time
+		const stripeKeyFromEnv = process.env.STRIPE_SECRET_KEY;
+		if (!stripeKeyFromEnv || stripeKeyFromEnv.trim() === '') {
+			console.warn('⚠️  WARNING: STRIPE_SECRET_KEY is not set in process.env at CDK synthesis time');
+			console.warn('   Available STRIPE-related env vars:', Object.keys(process.env).filter(k => k.includes('STRIPE')).join(', ') || 'none');
+		} else {
+			console.log('✓ STRIPE_SECRET_KEY is available at CDK synthesis time (length:', stripeKeyFromEnv.length, 'chars)');
+		}
+
 		const envVars: Record<string, string> = {
 			STAGE: props.stage,
 			GALLERIES_BUCKET: galleriesBucket.bucketName,
@@ -214,7 +223,7 @@ export class AppStack extends Stack {
 			NOTIFICATIONS_TABLE: notifications.tableName,
 			USERS_TABLE: users.tableName,
 			SENDER_EMAIL: process.env.SENDER_EMAIL || '',
-			STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
+			STRIPE_SECRET_KEY: stripeKeyFromEnv || '',
 			STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
 			PUBLIC_API_URL: process.env.PUBLIC_API_URL || '',
 			PUBLIC_GALLERY_URL: process.env.PUBLIC_GALLERY_URL || '',

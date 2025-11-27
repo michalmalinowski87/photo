@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
-import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
@@ -61,8 +60,11 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     totalAmountCents?: number;
     walletAmountCents?: number;
     stripeAmountCents?: number;
+    paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+    stripeFeeCents?: number;
     checkoutUrl?: string;
     paid?: boolean;
+    dryRun?: boolean;
     [key: string]: unknown;
   }
 
@@ -75,6 +77,8 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     totalAmountCents: 0,
     walletAmountCents: 0,
     stripeAmountCents: 0,
+    paymentMethod: 'STRIPE' as 'WALLET' | 'STRIPE' | 'MIXED',
+    stripeFeeCents: 0,
     balanceAfterPayment: 0,
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -190,10 +194,19 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         body: JSON.stringify({ dryRun: true }),
       });
 
+      // Use paymentMethod from response, or calculate from amounts for backward compatibility
+      const paymentMethod: 'WALLET' | 'STRIPE' | 'MIXED' = 
+        data.paymentMethod ?? 
+        (data.walletAmountCents === data.totalAmountCents ? 'WALLET' :
+         data.stripeAmountCents === data.totalAmountCents ? 'STRIPE' :
+         (data.walletAmountCents && data.walletAmountCents > 0 && data.stripeAmountCents && data.stripeAmountCents > 0) ? 'MIXED' : 'STRIPE');
+
       setPaymentDetails({
         totalAmountCents: data.totalAmountCents ?? 0,
         walletAmountCents: data.walletAmountCents ?? 0,
         stripeAmountCents: data.stripeAmountCents ?? 0,
+        paymentMethod,
+        stripeFeeCents: data.stripeFeeCents ?? 0,
         balanceAfterPayment: walletBalance - (data.walletAmountCents ?? 0),
       });
       setShowPaymentModal(true);
@@ -390,12 +403,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                     )}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {gallery.plan ?? "-"}
-                    {gallery.priceCents && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatPrice(gallery.priceCents)}
-                      </div>
-                    )}
+
                     {(gallery.originalsLimitBytes ?? gallery.finalsLimitBytes) && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {gallery.originalsLimitBytes && (
@@ -484,6 +492,8 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         walletBalanceCents={walletBalance}
         walletAmountCents={paymentDetails.walletAmountCents}
         stripeAmountCents={paymentDetails.stripeAmountCents}
+        paymentMethod={paymentDetails.paymentMethod}
+        stripeFeeCents={paymentDetails.stripeFeeCents}
         loading={paymentLoading}
       />
 

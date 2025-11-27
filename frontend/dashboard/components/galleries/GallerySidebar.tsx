@@ -238,43 +238,118 @@ export default function GallerySidebar({
     }
   }, [gallery?.coverPhotoUrl, coverPhotoUrl]);
 
+  // Optimistic bytes counter - tracks size changes before API confirms
+  const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
+
   // Load plan recommendation when gallery is unpaid - refresh more aggressively
+  // Also refresh when gallery.originalsBytesUsed changes to ensure we have the latest data
   useEffect(() => {
     if (galleryLoading || isPaid || !gallery?.galleryId) {
+      // Clear recommendation when gallery is paid or loading to prevent flicker
+      setPlanRecommendation(null);
+      setOptimisticBytesUsed(null);
+      setIsLoadingPlanRecommendation(false);
       return;
     }
 
+    // Reset optimistic counter when gallery changes
+    setOptimisticBytesUsed(null);
+    // Clear recommendation immediately to prevent showing stale data
+    setPlanRecommendation(null);
+
     // Always try to load plan recommendation to get fresh size data
+    // This ensures we have the latest uploaded size even if gallery prop hasn't updated yet
     setIsLoadingPlanRecommendation(true);
     getPlanRecommendation(gallery.galleryId)
       .then((recommendation) => {
-        setPlanRecommendation(recommendation);
+        // If no photos are uploaded, clear the plan recommendation
+        if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+          setPlanRecommendation(null);
+          setOptimisticBytesUsed(0);
+        } else {
+          setPlanRecommendation(recommendation);
+          setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
+        }
       })
       .catch((error) => {
         console.error("Failed to load plan recommendation:", error);
         setPlanRecommendation(null);
+        setOptimisticBytesUsed(null);
       })
       .finally(() => {
         setIsLoadingPlanRecommendation(false);
       });
   }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
 
-  // Listen for gallery updates (e.g., after uploads) to refresh plan recommendation
+  // Listen for gallery updates (e.g., after uploads/deletions) with optimistic updates
   useEffect(() => {
     if (galleryLoading || isPaid || !gallery?.galleryId) {
       return;
     }
 
-    const handleGalleryUpdate = async () => {
-      // Refresh plan recommendation when gallery is updated
+    let requestCounter = 0;
+
+    const handleGalleryUpdate = async (event?: Event) => {
+      // Check if event has size delta for optimistic update
+      const customEvent = event as CustomEvent<{ galleryId?: string; sizeDelta?: number }> | undefined;
+      const sizeDelta = customEvent?.detail?.sizeDelta;
+
+      // Optimistic update: immediately adjust bytes if size delta is provided
+      if (sizeDelta !== undefined) {
+        setOptimisticBytesUsed((prev) => {
+          const currentBytes = prev !== null ? prev : (planRecommendation?.uploadedSizeBytes ?? (gallery.originalsBytesUsed as number | undefined) ?? 0);
+          const newOptimisticBytes = Math.max(0, currentBytes + sizeDelta);
+          
+          // Update plan recommendation optimistically
+          if (newOptimisticBytes === 0) {
+            setPlanRecommendation(null);
+          } else if (planRecommendation) {
+            // Update the recommendation with new size
+            setPlanRecommendation({
+              ...planRecommendation,
+              uploadedSizeBytes: newOptimisticBytes,
+            });
+          }
+          
+          return newOptimisticBytes;
+        });
+      }
+
+      // Increment counter to track the latest request
+      requestCounter += 1;
+      const currentRequest = requestCounter;
+
+      // Refresh plan recommendation from API in background (for accuracy)
       setIsLoadingPlanRecommendation(true);
       try {
         const recommendation = await getPlanRecommendation(gallery.galleryId);
-        setPlanRecommendation(recommendation);
+        
+        // Only update if this is still the latest request (prevent stale data from race conditions)
+        if (currentRequest === requestCounter) {
+          // If no photos are uploaded, clear the plan recommendation
+          if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+            setPlanRecommendation(null);
+            setOptimisticBytesUsed(0);
+          } else {
+            setPlanRecommendation(recommendation);
+            setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
+          }
+        }
       } catch (error) {
-        console.error("Failed to refresh plan recommendation:", error);
+        // Only update on error if this is still the latest request
+        if (currentRequest === requestCounter) {
+          console.error("Failed to refresh plan recommendation:", error);
+          // On error, clear recommendation if gallery shows no photos
+          if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
+            setPlanRecommendation(null);
+            setOptimisticBytesUsed(0);
+          }
+        }
       } finally {
-        setIsLoadingPlanRecommendation(false);
+        // Only update loading state if this is still the latest request
+        if (currentRequest === requestCounter) {
+          setIsLoadingPlanRecommendation(false);
+        }
       }
     };
 
@@ -282,10 +357,70 @@ export default function GallerySidebar({
       window.addEventListener("galleryUpdated", handleGalleryUpdate);
       return () => {
         window.removeEventListener("galleryUpdated", handleGalleryUpdate);
+        // Invalidate any pending requests
+        requestCounter += 1;
       };
     }
     return undefined;
-  }, [gallery?.galleryId, galleryLoading, isPaid]);
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation]);
+
+  // Also refresh when gallery.originalsBytesUsed changes (in case event didn't fire or was missed)
+  // This ensures we update even if the event wasn't dispatched
+  useEffect(() => {
+    if (galleryLoading || isPaid || !gallery?.galleryId) {
+      return;
+    }
+
+    // If gallery shows 0 bytes, immediately clear recommendation (optimistic update)
+    const currentBytes = gallery.originalsBytesUsed as number | undefined;
+    if (currentBytes === 0 || currentBytes === undefined) {
+      setPlanRecommendation(null);
+      setIsLoadingPlanRecommendation(false);
+      return;
+    }
+
+    // Debounce to avoid too many API calls, but use shorter delay for better UX
+    let timeoutId: NodeJS.Timeout;
+    let isCancelled = false;
+
+    timeoutId = setTimeout(() => {
+      if (isCancelled) return;
+      
+      setIsLoadingPlanRecommendation(true);
+      const requestStartTime = Date.now();
+      
+      getPlanRecommendation(gallery.galleryId)
+        .then((recommendation) => {
+          // Only update if this effect hasn't been cancelled and we're still on the same gallery
+          if (isCancelled) return;
+          
+          // If no photos are uploaded, clear the plan recommendation
+          if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+            setPlanRecommendation(null);
+          } else {
+            setPlanRecommendation(recommendation);
+          }
+        })
+        .catch((error) => {
+          if (isCancelled) return;
+          console.error("Failed to refresh plan recommendation:", error);
+          // On error, clear recommendation if gallery shows no photos
+          if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
+            setPlanRecommendation(null);
+          }
+        })
+        .finally(() => {
+          if (!isCancelled) {
+            setIsLoadingPlanRecommendation(false);
+          }
+        });
+    }, 200); // Reduced from 500ms to 200ms for faster updates
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
 
   const handleBack = () => {
     if (typeof window !== "undefined" && gallery?.galleryId) {
@@ -1139,11 +1274,13 @@ export default function GallerySidebar({
             return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
           };
 
-          // Use plan recommendation data if available (more up-to-date), otherwise fall back to gallery data
+          // Use optimistic bytes if available (instant updates), then plan recommendation, then gallery data
           const originalsBytes =
-            planRecommendation?.uploadedSizeBytes ??
-            (gallery.originalsBytesUsed as number | undefined) ??
-            0;
+            optimisticBytesUsed !== null
+              ? optimisticBytesUsed
+              : planRecommendation?.uploadedSizeBytes ??
+                (gallery.originalsBytesUsed as number | undefined) ??
+                0;
           const finalsBytes = (gallery.finalsBytesUsed as number | undefined) ?? 0;
           // Only show limits if gallery is paid (has a plan)
           const originalsLimit =
@@ -1157,24 +1294,24 @@ export default function GallerySidebar({
 
           // Always show the section if gallery is loaded
           return (
-          <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-              Wykorzystane miejsce
-            </div>
+            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Wykorzystane miejsce
+              </div>
               <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
                 Oryginały: {formatBytes(originalsBytes)}
                 {originalsLimit !== undefined && (
                   <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
-            )}
+                )}
                 {isLoadingPlanRecommendation && planRecommendation === null && (
                   <span className="ml-2 text-xs text-gray-400">(aktualizowanie...)</span>
-            )}
-          </div>
+                )}
+              </div>
               <div className="text-sm text-gray-700 dark:text-gray-300">
                 Finalne: {formatBytes(finalsBytes)}
                 {finalsLimit !== undefined && (
                   <span className="text-gray-500"> / {formatBytes(finalsLimit)}</span>
-        )}
+                )}
               </div>
             </div>
           );
@@ -1196,21 +1333,32 @@ export default function GallerySidebar({
             return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
           };
 
-          const currentUploadedBytes = (gallery.originalsBytesUsed as number | undefined) ?? 0;
-          const hasUploadedPhotos = currentUploadedBytes > 0;
+          // Use optimistic bytes if available (instant updates), then plan recommendation, then gallery data
+          // This ensures we show the correct state immediately on upload/delete
+          // IMPORTANT: Don't use gallery.originalsBytesUsed until loading is complete to prevent flicker
+          const currentUploadedBytes =
+            optimisticBytesUsed !== null
+              ? optimisticBytesUsed
+              : isLoadingPlanRecommendation
+                ? 0 // While loading, assume no photos to prevent flicker
+                : planRecommendation?.uploadedSizeBytes ??
+                  (gallery.originalsBytesUsed as number | undefined) ??
+                  0;
+          // Only show plan content if we're not loading AND we have a plan recommendation
+          const hasUploadedPhotos = !isLoadingPlanRecommendation && currentUploadedBytes > 0 && planRecommendation !== null;
 
           return (
-        <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-          <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-            <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-              Galeria nieopublikowana
-            </div>
+            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+                <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
+                  Galeria nieopublikowana
+                </div>
 
                 {!hasUploadedPhotos ? (
                   <>
                     <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
                       Prześlij zdjęcia, aby system mógł wybrać optymalny plan dla Twojej galerii.
-            </div>
+                    </div>
                     <Button
                       size="sm"
                       variant="primary"
@@ -1251,13 +1399,13 @@ export default function GallerySidebar({
                       ) : null}
                     </div>
 
-            <Button size="sm" variant="primary" onClick={onPay} className="w-full">
-              Opublikuj galerię
-            </Button>
+                    <Button size="sm" variant="primary" onClick={onPay} className="w-full">
+                      Opublikuj galerię
+                    </Button>
                   </>
                 )}
-          </div>
-        </div>
+              </div>
+            </div>
           );
         })()}
 

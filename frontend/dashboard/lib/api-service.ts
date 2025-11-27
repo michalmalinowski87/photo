@@ -88,6 +88,11 @@ class ApiService {
   private initialize(): void {
     if (typeof window !== "undefined") {
       this.baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      if (!this.baseUrl) {
+        console.error(
+          "NEXT_PUBLIC_API_URL is not configured. API requests will fail. Please set NEXT_PUBLIC_API_URL in your environment variables."
+        );
+      }
     }
   }
 
@@ -108,8 +113,19 @@ class ApiService {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async _request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    // Re-initialize baseUrl if it's not set (in case env var was set after initialization)
+    if (!this.baseUrl && typeof window !== "undefined") {
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+    }
+
     if (!this.baseUrl) {
-      throw new Error("API URL not configured");
+      const error = new Error(
+        "API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable."
+      ) as ApiError;
+      error.status = 500;
+      // Don't throw immediately - log and prevent the request
+      console.error("[ApiService] API URL not configured. Request to", endpoint, "was blocked.");
+      throw error;
     }
 
     const url = `${this.baseUrl}${endpoint}`;
@@ -288,6 +304,35 @@ class ApiService {
    */
   formatError(error: ApiError | Error): string {
     const apiError = error as ApiError;
+
+    // Check for Stripe configuration errors
+    const errorMessage = apiError.message || error.message || "";
+    const lowerMessage = errorMessage.toLowerCase();
+    if (
+      lowerMessage.includes("stripe not configured") ||
+      lowerMessage.includes("stripe nie jest skonfigurowany")
+    ) {
+      return "System płatności nie jest skonfigurowany. Skontaktuj się z administratorem systemu.";
+    }
+
+    // Check error body for Stripe configuration errors
+    if (apiError.body) {
+      try {
+        const bodyObj =
+          typeof apiError.body === "string" ? JSON.parse(apiError.body) : apiError.body;
+        const bodyError = bodyObj?.error || bodyObj?.message || "";
+        const lowerBodyError = bodyError.toLowerCase();
+        if (
+          lowerBodyError.includes("stripe not configured") ||
+          lowerBodyError.includes("stripe nie jest skonfigurowany")
+        ) {
+          return "System płatności nie jest skonfigurowany. Skontaktuj się z administratorem systemu.";
+        }
+      } catch (_e) {
+        // If parsing fails, continue with default handling
+      }
+    }
+
     if (apiError.status) {
       const bodyStr =
         typeof apiError.body === "string" ? apiError.body : JSON.stringify(apiError.body);
@@ -400,13 +445,21 @@ class ApiService {
      */
     pay: async (
       galleryId: string,
-      options: { dryRun?: boolean; forceStripeOnly?: boolean } = {}
+      options: { 
+        dryRun?: boolean; 
+        forceStripeOnly?: boolean;
+        plan?: string;
+        priceCents?: number;
+      } = {}
     ): Promise<{
       checkoutUrl?: string;
       paid?: boolean;
       totalAmountCents?: number;
       walletAmountCents?: number;
       stripeAmountCents?: number;
+      paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+      stripeFeeCents?: number;
+      dryRun?: boolean;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");

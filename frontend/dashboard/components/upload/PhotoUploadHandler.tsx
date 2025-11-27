@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 import { requestThrottler } from "../../lib/requestThrottler";
+import { useGalleryStore } from "../../store/gallerySlice";
 
 import { PerImageProgress } from "./UploadProgressOverlay";
 
@@ -280,6 +281,9 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
                 const uploadController = new AbortController();
                 const uploadTimeout = setTimeout(() => uploadController.abort(), 300000); // 5 min timeout
 
+                // Track if upload succeeded (for optimistic update safety)
+                let uploadSucceeded = false;
+
                 try {
                   // Track upload progress using XMLHttpRequest for progress events
                   const uploadPromise = new Promise<void>((resolve, reject) => {
@@ -301,6 +305,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
 
                     xhr.addEventListener("load", () => {
                       if (xhr.status >= 200 && xhr.status < 300) {
+                        uploadSucceeded = true; // Mark as succeeded before resolving
                         // Ensure progress is 100% on completion
                         setPerImageProgress((prev) => {
                           const updated = prev.map((p) =>
@@ -335,6 +340,25 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
 
                   await uploadPromise;
                   clearTimeout(uploadTimeout);
+
+                  // Dispatch optimistic update event only if upload actually succeeded
+                  // This updates the sidebar instantly without waiting for API
+                  // Safety: Only dispatch if uploadSucceeded is true (upload was successful)
+                  if (uploadSucceeded && typeof window !== "undefined" && config.galleryId) {
+                    if (config.type === "originals") {
+                      // Update originals bytes via event (handled by sidebar)
+                      window.dispatchEvent(
+                        new CustomEvent("galleryUpdated", {
+                          detail: { galleryId: config.galleryId, sizeDelta: file.size }, // Positive for upload
+                        })
+                      );
+                    } else if (config.type === "finals") {
+                      // Update finals bytes directly in Zustand store
+                      const storeState = useGalleryStore.getState();
+                      // Type-safe call: updateFinalsBytesUsed is defined in GalleryState interface
+                      (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(file.size);
+                    }
+                  }
 
                   // Update per-image progress to processing
                   setPerImageProgress((prev) => {
@@ -601,6 +625,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
                 config.reloadGallery
               ) {
                 // Wait a bit for backend to process images and update originalsBytesUsed
+                // Reduced delay for faster UI updates - backend should be quick to update
                 setTimeout(async () => {
                   try {
                     const validationResult = await api.galleries.validateUploadLimits(
@@ -628,8 +653,14 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
                   // Reload gallery to update byte usage
                   if (config.reloadGallery) {
                     await config.reloadGallery();
+                    // Also dispatch event manually to ensure components are notified
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("galleryUpdated", { detail: { galleryId: config.galleryId } })
+                      );
+                    }
                   }
-                }, 2000);
+                }, 1000); // Reduced from 2000ms to 1000ms - backend should update quickly
               }
 
               if (config.onUploadComplete) {

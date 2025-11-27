@@ -1,11 +1,18 @@
+import Link from "next/link";
 import { useRouter } from "next/router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { getPlanRecommendation, getPricingModalData } from "../../lib/calculate-plan";
 import { formatPrice } from "../../lib/format-price";
 import type { PlanRecommendation, PricingModalData } from "../../lib/plan-types";
+import {
+  getPlanByStorageAndDuration,
+  calculatePriceWithDiscount,
+  getPlan,
+  type Duration,
+} from "../../lib/pricing-plans";
 
 import { GalleryPricingModal } from "./GalleryPricingModal";
 
@@ -35,88 +42,632 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
 }) => {
   const router = useRouter();
   const { showToast } = useToast();
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [isLoadingWallet, setIsLoadingWallet] = useState(false);
+
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
   const [uploadedSizeBytes, setUploadedSizeBytes] = useState<number | null>(null);
-  const [isLoadingSize, setIsLoadingSize] = useState(false);
   const [planRecommendation, setPlanRecommendation] = useState<PlanRecommendation | null>(null);
   const [isLoadingPlanRecommendation, setIsLoadingPlanRecommendation] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<Duration | null>(null);
+  const [paymentMethodInfo, setPaymentMethodInfo] = useState<{
+    paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+    walletAmountCents?: number;
+    stripeAmountCents?: number;
+    stripeFeeCents?: number;
+    totalAmountCents?: number;
+  } | null>(null);
+  const prevSelectedDurationRef = useRef<Duration | null>(null);
+  const prevGalleryIdRef = useRef<string | null>(null);
+  const lastDryRunParamsRef = useRef<{ planKey: string; priceCents: number } | null>(null);
 
   // Check if gallery needs payment
   const needsPayment = gallery.state === "DRAFT" || gallery.paymentStatus === "UNPAID";
 
-  // Load uploaded size and plan recommendation if photos are uploaded
+  // Listen for gallery updates (e.g., after uploads) to refresh data
   useEffect(() => {
-    if (!needsPayment) {
+    if (!needsPayment || !galleryId) {
+      // Clear recommendation when not needed to prevent flicker
+      setPlanRecommendation(null);
+      setUploadedSizeBytes(null);
+      setIsLoadingPlanRecommendation(false);
       return;
     }
 
-    const loadUploadedSizeAndPlan = async () => {
-      if (gallery.originalsBytesUsed !== undefined) {
-        const size = gallery.originalsBytesUsed || 0;
-        setUploadedSizeBytes(size);
-
-        // If photos are uploaded, load plan recommendation
-        if (size > 0) {
-          setIsLoadingPlanRecommendation(true);
-          try {
-            const recommendation = await getPlanRecommendation(galleryId);
-            setPlanRecommendation(recommendation);
-          } catch (error) {
-            console.error("Failed to load plan recommendation:", error);
-          } finally {
-            setIsLoadingPlanRecommendation(false);
+    // Don't clear recommendation if only duration changed (not galleryId or other props)
+    // This prevents the component from disappearing when only duration changes
+    const onlyDurationChanged = 
+      prevGalleryIdRef.current === galleryId && 
+      prevSelectedDurationRef.current !== selectedDuration &&
+      planRecommendation !== null;
+    
+    // If only duration changed, skip the API call - just update the recommendation in place
+    if (onlyDurationChanged) {
+      // Update refs
+      prevGalleryIdRef.current = galleryId;
+      prevSelectedDurationRef.current = selectedDuration;
+      // Don't fetch from API, just update the existing recommendation with new duration
+      if (planRecommendation) {
+        const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+        const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+        const currentDuration = selectedDuration ?? "1m";
+        const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+        if (planKey) {
+          const plan = getPlan(planKey);
+          if (plan) {
+            setPlanRecommendation((prev) => {
+              if (!prev) {
+                return prev;
+              }
+              return {
+                ...prev,
+                suggestedPlan: {
+                  ...prev.suggestedPlan,
+                  planKey,
+                  name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  duration: plan.duration,
+                },
+                originalsLimitBytes: plan.storageLimitBytes,
+                finalsLimitBytes: plan.storageLimitBytes,
+              };
+            });
           }
         }
+      }
+      return; // Skip the API call when only duration changed
+    }
+    
+    if (!onlyDurationChanged) {
+      setPlanRecommendation(null);
+    }
+    
+    // Update refs
+    prevGalleryIdRef.current = galleryId;
+    prevSelectedDurationRef.current = selectedDuration;
+
+    let requestCounter = 0;
+
+    const handleGalleryUpdate = async () => {
+
+      // Increment counter to track the latest request
+      requestCounter += 1;
+      const currentRequest = requestCounter;
+
+      // Refresh uploaded size and plan recommendation when gallery is updated
+      // Only show loading if we don't have a recommendation yet (to prevent flicker when only duration changes)
+      // When only duration changes, we don't need to reload the recommendation from API
+      if (!planRecommendation) {
+        setIsLoadingPlanRecommendation(true);
+      }
+      try {
+        const recommendation = await getPlanRecommendation(galleryId);
+        
+        // Only update if this is still the latest request (prevent stale data from race conditions)
+        if (currentRequest !== requestCounter) {
+          return;
+        }
+        
+        const size = recommendation.uploadedSizeBytes || 0;
+        setUploadedSizeBytes(size);
+
+        // If photos are uploaded, store plan recommendation with selected duration
+        if (size > 0 && recommendation) {
+          // Extract initial duration from suggested plan if not already set
+          const currentDuration =
+            selectedDuration ??
+            (() => {
+              const suggestedDuration = recommendation.suggestedPlan.name.includes("12")
+                ? "12m"
+                : recommendation.suggestedPlan.name.includes("3")
+                  ? "3m"
+                  : "1m";
+              setSelectedDuration(suggestedDuration as Duration);
+              return suggestedDuration as Duration;
+            })();
+
+          const storageMatch = recommendation.suggestedPlan.name.match(/^(\d+GB)/);
+          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+          if (planKey) {
+            const plan = getPlan(planKey);
+            if (plan) {
+              // Update existing recommendation in place if it exists, otherwise create new one
+              setPlanRecommendation((prev) => {
+                const updated = {
+                  ...recommendation,
+                  suggestedPlan: {
+                    ...recommendation.suggestedPlan,
+                    planKey,
+                    name: plan.label,
+                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                    duration: plan.duration,
+                  },
+                  originalsLimitBytes: plan.storageLimitBytes,
+                  finalsLimitBytes: plan.storageLimitBytes,
+                };
+                // Preserve uploadedSizeBytes and usagePercentage from previous recommendation if available
+                if (prev) {
+                  updated.uploadedSizeBytes = prev.uploadedSizeBytes ?? recommendation.uploadedSizeBytes;
+                  updated.usagePercentage = prev.usagePercentage ?? recommendation.usagePercentage;
+                  updated.isNearCapacity = prev.isNearCapacity ?? recommendation.isNearCapacity;
+                }
+                return updated;
+              });
+            } else {
+              setPlanRecommendation(recommendation);
+            }
+          } else {
+            setPlanRecommendation(recommendation);
+          }
+        } else {
+          // No photos uploaded - clear recommendation
+          setPlanRecommendation(null);
+          setUploadedSizeBytes(0);
+        }
+      } catch (error) {
+        // Only update on error if this is still the latest request
+        if (currentRequest === requestCounter) {
+          console.error("Failed to refresh plan recommendation:", error);
+          setPlanRecommendation(null);
+          setUploadedSizeBytes(0);
+        }
+      } finally {
+        // Only update loading state if this is still the latest request
+        if (currentRequest === requestCounter) {
+          setIsLoadingPlanRecommendation(false);
+        }
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("galleryUpdated", handleGalleryUpdate);
+      return () => {
+        window.removeEventListener("galleryUpdated", handleGalleryUpdate);
+        // Invalidate any pending requests
+        requestCounter += 1;
+      };
+    }
+    return undefined;
+    // Note: selectedDuration is NOT in dependencies - we handle duration changes separately
+    // to avoid refetching plan recommendation when only duration changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, needsPayment, gallery.selectionEnabled]);
+
+  // Also refresh when gallery prop changes (in case event didn't fire or was missed)
+  // This ensures we update even if the event wasn't dispatched
+  useEffect(() => {
+    if (!needsPayment || !galleryId) {
+      // Clear recommendation when not needed to prevent flicker
+      setPlanRecommendation(null);
+      setUploadedSizeBytes(null);
+      setIsLoadingPlanRecommendation(false);
+      return;
+    }
+
+    // Don't clear recommendation if only duration changed (not galleryId or other props)
+    // This prevents the component from disappearing when only duration changes
+    const onlyDurationChanged = 
+      prevGalleryIdRef.current === galleryId && 
+      prevSelectedDurationRef.current !== selectedDuration &&
+      planRecommendation !== null;
+    
+    // If only duration changed, skip the API call - just update the recommendation in place
+    if (onlyDurationChanged) {
+      // Update refs
+      prevGalleryIdRef.current = galleryId;
+      prevSelectedDurationRef.current = selectedDuration;
+      // Don't fetch from API, just update the existing recommendation with new duration
+      if (planRecommendation) {
+        const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+        const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+        const currentDuration = selectedDuration ?? "1m";
+        const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+        if (planKey) {
+          const plan = getPlan(planKey);
+          if (plan) {
+            setPlanRecommendation((prev) => {
+              if (!prev) {
+                return prev;
+              }
+              return {
+                ...prev,
+                suggestedPlan: {
+                  ...prev.suggestedPlan,
+                  planKey,
+                  name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  duration: plan.duration,
+                },
+                originalsLimitBytes: plan.storageLimitBytes,
+                finalsLimitBytes: plan.storageLimitBytes,
+              };
+            });
+          }
+        }
+      }
+      return; // Skip the API call when only duration changed
+    }
+    
+    if (!onlyDurationChanged) {
+      setPlanRecommendation(null);
+    }
+    
+    // Update refs
+    prevGalleryIdRef.current = galleryId;
+    prevSelectedDurationRef.current = selectedDuration;
+
+    // If gallery shows 0 bytes, immediately clear recommendation (optimistic update)
+    const currentBytes = gallery.originalsBytesUsed;
+    if (currentBytes === 0 || currentBytes === undefined) {
+      setUploadedSizeBytes(0);
+      setPlanRecommendation(null);
+      setIsLoadingPlanRecommendation(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const refreshData = async () => {
+      if (isCancelled) {
         return;
       }
+      
+      // Only show loading if we don't have a recommendation yet
+      // If we have one, we're just updating it, so don't show loading
+      if (!planRecommendation) {
+        setIsLoadingPlanRecommendation(true);
+      }
+      try {
+        const recommendation = await getPlanRecommendation(galleryId);
+        
+        // Only update if this effect hasn't been cancelled
+        if (isCancelled) {
+          return;
+        }
+        
+        const size = recommendation.uploadedSizeBytes || 0;
+        setUploadedSizeBytes(size);
 
-      // If not available in gallery, try to calculate it
-      setIsLoadingSize(true);
+        if (size > 0 && recommendation) {
+          const currentDuration =
+            selectedDuration ??
+            (() => {
+              const suggestedDuration = recommendation.suggestedPlan.name.includes("12")
+                ? "12m"
+                : recommendation.suggestedPlan.name.includes("3")
+                  ? "3m"
+                  : "1m";
+              setSelectedDuration(suggestedDuration as Duration);
+              return suggestedDuration as Duration;
+            })();
+
+          const storageMatch = recommendation.suggestedPlan.name.match(/^(\d+GB)/);
+          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+          if (planKey) {
+            const plan = getPlan(planKey);
+            if (plan) {
+              // Update existing recommendation in place if it exists, otherwise create new one
+              setPlanRecommendation((prev) => {
+                const updated = {
+                  ...recommendation,
+                  suggestedPlan: {
+                    ...recommendation.suggestedPlan,
+                    planKey,
+                    name: plan.label,
+                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                    duration: plan.duration,
+                  },
+                  originalsLimitBytes: plan.storageLimitBytes,
+                  finalsLimitBytes: plan.storageLimitBytes,
+                };
+                // Preserve uploadedSizeBytes and usagePercentage from previous recommendation if available
+                if (prev) {
+                  updated.uploadedSizeBytes = prev.uploadedSizeBytes ?? recommendation.uploadedSizeBytes;
+                  updated.usagePercentage = prev.usagePercentage ?? recommendation.usagePercentage;
+                  updated.isNearCapacity = prev.isNearCapacity ?? recommendation.isNearCapacity;
+                }
+                return updated;
+              });
+            } else {
+              setPlanRecommendation(recommendation);
+            }
+          } else {
+            setPlanRecommendation(recommendation);
+          }
+        } else {
+          setPlanRecommendation(null);
+        }
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+        console.error("Failed to refresh data:", error);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPlanRecommendation(false);
+        }
+      }
+    };
+
+    // Debounce to avoid too many API calls, but use shorter delay for better UX
+    const timeoutId = setTimeout(() => {
+      void refreshData();
+    }, 200); // Reduced from 300ms to 200ms for faster updates
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+    // Note: selectedDuration is NOT in dependencies - we handle duration changes separately
+    // to avoid refetching plan recommendation when only duration changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, gallery.originalsBytesUsed, needsPayment, gallery.selectionEnabled]);
+
+  // Load uploaded size and plan recommendation if photos are uploaded
+  useEffect(() => {
+    if (!needsPayment) {
+      // Clear recommendation when not needed to prevent flicker
+      setPlanRecommendation(null);
+      setUploadedSizeBytes(null);
+      setIsLoadingPlanRecommendation(false);
+      return;
+    }
+
+    // Don't clear recommendation if only duration changed (not galleryId or other props)
+    // This prevents the component from disappearing when only duration changes
+    const onlyDurationChanged = 
+      prevGalleryIdRef.current === galleryId && 
+      prevSelectedDurationRef.current !== selectedDuration &&
+      planRecommendation !== null;
+    
+    // If only duration changed, skip the API call - just update the recommendation in place
+    if (onlyDurationChanged) {
+      // Update refs
+      prevGalleryIdRef.current = galleryId;
+      prevSelectedDurationRef.current = selectedDuration;
+      // Don't fetch from API, just update the existing recommendation with new duration
+      if (planRecommendation) {
+        const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+        const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+        const currentDuration = selectedDuration ?? "1m";
+        const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+        if (planKey) {
+          const plan = getPlan(planKey);
+          if (plan) {
+            setPlanRecommendation((prev) => {
+              if (!prev) {
+                return prev;
+              }
+              return {
+                ...prev,
+                suggestedPlan: {
+                  ...prev.suggestedPlan,
+                  planKey,
+                  name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  duration: plan.duration,
+                },
+                originalsLimitBytes: plan.storageLimitBytes,
+                finalsLimitBytes: plan.storageLimitBytes,
+              };
+            });
+          }
+        }
+      }
+      return; // Skip the API call when only duration changed
+    }
+    
+    if (!onlyDurationChanged) {
+      setPlanRecommendation(null);
+    }
+    
+    // Update refs
+    prevGalleryIdRef.current = galleryId;
+    prevSelectedDurationRef.current = selectedDuration;
+
+    const loadUploadedSizeAndPlan = async () => {
+
+      // Always fetch from API to get the latest data, regardless of gallery prop
+      // This ensures we have the most up-to-date information even if gallery prop hasn't updated yet
+      // Only show loading if we don't have a recommendation yet (to prevent flicker when only duration changes)
+      if (!planRecommendation) {
+        setIsLoadingPlanRecommendation(true);
+      }
       try {
         const recommendation = await getPlanRecommendation(galleryId);
         const size = recommendation.uploadedSizeBytes || 0;
         setUploadedSizeBytes(size);
 
-        // If photos are uploaded, store plan recommendation
-        if (size > 0) {
-          setPlanRecommendation(recommendation);
+        // If photos are uploaded, store plan recommendation with selected duration
+        if (size > 0 && recommendation) {
+          // Extract initial duration from suggested plan if not already set
+          const currentDuration =
+            selectedDuration ??
+            (() => {
+              const suggestedDuration = recommendation.suggestedPlan.name.includes("12")
+                ? "12m"
+                : recommendation.suggestedPlan.name.includes("3")
+                  ? "3m"
+                  : "1m";
+              setSelectedDuration(suggestedDuration as Duration);
+              return suggestedDuration as Duration;
+            })();
+
+          const storageMatch = recommendation.suggestedPlan.name.match(/^(\d+GB)/);
+          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+          if (planKey) {
+            const plan = getPlan(planKey);
+            if (plan) {
+              // Update existing recommendation in place if it exists, otherwise create new one
+              setPlanRecommendation((prev) => {
+                const updated = {
+                  ...recommendation,
+                  suggestedPlan: {
+                    ...recommendation.suggestedPlan,
+                    planKey,
+                    name: plan.label,
+                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                    duration: plan.duration,
+                  },
+                  originalsLimitBytes: plan.storageLimitBytes,
+                  finalsLimitBytes: plan.storageLimitBytes,
+                };
+                // Preserve uploadedSizeBytes and usagePercentage from previous recommendation if available
+                if (prev) {
+                  updated.uploadedSizeBytes = prev.uploadedSizeBytes ?? recommendation.uploadedSizeBytes;
+                  updated.usagePercentage = prev.usagePercentage ?? recommendation.usagePercentage;
+                  updated.isNearCapacity = prev.isNearCapacity ?? recommendation.isNearCapacity;
+                }
+                return updated;
+              });
+            } else {
+              setPlanRecommendation(recommendation);
+            }
+          } else {
+            setPlanRecommendation(recommendation);
+          }
+        } else {
+          // No photos uploaded - clear recommendation
+          setPlanRecommendation(null);
+          setUploadedSizeBytes(0);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to load uploaded size:", error);
+        setPlanRecommendation(null);
         setUploadedSizeBytes(0);
       } finally {
-        setIsLoadingSize(false);
+        setIsLoadingPlanRecommendation(false);
       }
     };
 
     void loadUploadedSizeAndPlan();
-  }, [galleryId, gallery.originalsBytesUsed, needsPayment]);
+    // Note: selectedDuration is NOT in dependencies - we handle duration changes separately
+    // to avoid refetching plan recommendation when only duration changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    galleryId,
+    gallery.originalsBytesUsed,
+    needsPayment,
+    gallery.selectionEnabled,
+  ]);
 
+  // Separate useEffect to handle duration changes without calling API
+  // This prevents flickering when user changes duration
   useEffect(() => {
-    if (!needsPayment) {
+    if (!planRecommendation || !selectedDuration) {
       return;
     }
 
-    // Load wallet balance
-    const loadWalletBalance = async () => {
-      setIsLoadingWallet(true);
+    // Update the recommendation in place with new duration
+    const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+    const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+    const currentDuration = selectedDuration ?? "1m";
+    const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+    if (planKey) {
+      const plan = getPlan(planKey);
+      if (plan) {
+        setPlanRecommendation((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          return {
+            ...prev,
+            suggestedPlan: {
+              ...prev.suggestedPlan,
+              planKey,
+              name: plan.label,
+              priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+              duration: plan.duration,
+            },
+            originalsLimitBytes: plan.storageLimitBytes,
+            finalsLimitBytes: plan.storageLimitBytes,
+          };
+        });
+      }
+    }
+  }, [selectedDuration, planRecommendation, gallery.selectionEnabled]);
+
+  // Call dry run to determine payment method when plan recommendation is available
+  useEffect(() => {
+    if (!needsPayment || !galleryId || !planRecommendation || isLoadingPlanRecommendation) {
+      // Don't clear paymentMethodInfo to prevent flickering - keep the last value
+      lastDryRunParamsRef.current = null;
+      return;
+    }
+
+    const callDryRun = async () => {
+      // Get plan key for selected duration
+      const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+      const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+      const currentDuration = selectedDuration ?? "1m";
+      const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+      
+      if (!planKey) {
+        // Don't clear paymentMethodInfo to prevent flickering
+        lastDryRunParamsRef.current = null;
+        return;
+      }
+
+      const plan = getPlan(planKey);
+      if (!plan) {
+        // Don't clear paymentMethodInfo to prevent flickering
+        lastDryRunParamsRef.current = null;
+        return;
+      }
+
+      const priceCents = calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false);
+
+      // Skip API call if we already called it with the same parameters
+      if (
+        lastDryRunParamsRef.current &&
+        lastDryRunParamsRef.current.planKey === planKey &&
+        lastDryRunParamsRef.current.priceCents === priceCents
+      ) {
+        return; // Already have the data for these parameters
+      }
+
+      // Don't set loading state - API is fast and we want to avoid flickering
       try {
-        const balance = await api.wallet.getBalance();
-        setWalletBalance(balance.balanceCents);
-      } catch (error) {
-        console.error("Failed to load wallet balance:", error);
-        // Don't show error to user, just leave walletBalance as null
-      } finally {
-        setIsLoadingWallet(false);
+        // Call dry run with plan details
+        const dryRunResult = await api.galleries.pay(galleryId, {
+          dryRun: true,
+          plan: planKey,
+          priceCents,
+        });
+
+        // Store the parameters we just called with
+        lastDryRunParamsRef.current = { planKey, priceCents };
+
+        setPaymentMethodInfo({
+          paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE") as "WALLET" | "STRIPE" | "MIXED",
+          walletAmountCents: Number(dryRunResult.walletAmountCents) ?? 0,
+          stripeAmountCents: Number(dryRunResult.stripeAmountCents) ?? 0,
+          stripeFeeCents: Number(dryRunResult.stripeFeeCents) ?? 0,
+          totalAmountCents: Number(dryRunResult.totalAmountCents) ?? 0,
+        });
+      } catch (error: unknown) {
+        console.error("Failed to get payment method info:", error);
+        // Don't clear paymentMethodInfo on error to prevent flickering - keep last known value
+        lastDryRunParamsRef.current = null;
       }
     };
 
-    void loadWalletBalance();
-  }, [needsPayment]);
+    void callDryRun();
+    // Use planKey and priceCents derived values instead of planRecommendation object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    galleryId,
+    needsPayment,
+    isLoadingPlanRecommendation,
+    // Extract stable values from planRecommendation instead of the object itself
+    planRecommendation?.suggestedPlan?.name,
+    planRecommendation?.suggestedPlan?.planKey,
+    selectedDuration,
+    gallery.selectionEnabled,
+  ]);
 
   if (!needsPayment) {
     return null;
@@ -132,12 +683,44 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   };
 
+
+  // Use plan recommendation data if available (more up-to-date), otherwise fall back to gallery data
+  // IMPORTANT: Don't use gallery.originalsBytesUsed until loading is complete to prevent flicker
+  const currentUploadedBytes: number =
+    uploadedSizeBytes ?? 
+    (isLoadingPlanRecommendation
+      ? 0 // While loading, assume no photos to prevent flicker
+      : planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0);
+  // Only show plan content if we're not loading AND we have a plan recommendation
+  const hasUploadedPhotos = !isLoadingPlanRecommendation && currentUploadedBytes > 0 && planRecommendation !== null;
+
   const handlePublishGallery = async () => {
     setIsProcessingPayment(true);
     try {
       // Always calculate plan first - this will determine the best plan based on uploaded photos
       try {
         const modalData = await getPricingModalData(galleryId);
+        // Update modal data with selected duration
+        if (modalData && hasUploadedPhotos) {
+          const storageMatch = modalData.suggestedPlan.name.match(/^(\d+GB)/);
+          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+          const currentDuration = selectedDuration ?? "1m";
+          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+          if (planKey) {
+            const plan = getPlan(planKey);
+            if (plan) {
+              modalData.suggestedPlan = {
+                ...modalData.suggestedPlan,
+                planKey,
+                name: plan.label,
+                priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                duration: plan.duration,
+              };
+              modalData.originalsLimitBytes = plan.storageLimitBytes;
+              modalData.finalsLimitBytes = plan.storageLimitBytes;
+            }
+          }
+        }
         setPricingModalData(modalData);
         setIsProcessingPayment(false);
         return;
@@ -151,10 +734,6 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       setIsProcessingPayment(false);
     }
   };
-
-  const walletAmount = walletBalance ?? 0;
-  const currentUploadedBytes: number = uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0;
-  const hasUploadedPhotos = currentUploadedBytes > 0;
 
   if (isMinimized) {
     return (
@@ -206,7 +785,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       </div>
 
       {/* Plan Recommendation */}
-      {hasUploadedPhotos && planRecommendation && (
+      {hasUploadedPhotos && (
         <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
           <div className="flex items-start justify-between mb-5">
             <div className="flex-1">
@@ -228,55 +807,121 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                   Zaproponowany plan
                 </span>
               </div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                {planRecommendation.suggestedPlan.name}
-              </h4>
+              {planRecommendation ? (
+                <>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    {planRecommendation.suggestedPlan.name.split(" - ")[0]}
+                  </h4>
+
+                  {/* Duration Selector */}
+                  <div className="flex gap-2">
+                    {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
+                      const isSelected = (selectedDuration ?? "1m") === duration;
+
+                      return (
+                        <button
+                          key={duration}
+                          onClick={() => setSelectedDuration(duration)}
+                          className={`px-3 py-1.5 rounded-md transition-all text-sm font-medium ${
+                            isSelected
+                              ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                              : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"
+                          }`}
+                        >
+                          {duration === "1m"
+                            ? "1 miesiąc"
+                            : duration === "3m"
+                              ? "3 miesiące"
+                              : "12 miesięcy"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h4 className="text-lg font-semibold text-gray-400 dark:text-gray-500 mb-3">-</h4>
+                  <div className="flex gap-2">
+                    {(["1m", "3m", "12m"] as Duration[]).map((duration) => (
+                      <div
+                        key={duration}
+                        className="px-3 py-1.5 rounded-md border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-sm"
+                      >
+                        {duration === "1m"
+                          ? "1 miesiąc"
+                          : duration === "3m"
+                            ? "3 miesiące"
+                            : "12 miesięcy"}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                {formatPrice(planRecommendation.suggestedPlan.priceCents)}
-              </div>
-              {gallery.selectionEnabled === false && (
-                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
-                  Zniżka 20%
-                </span>
+              {isLoadingPlanRecommendation ? (
+                <div className="text-3xl font-bold text-gray-400 dark:text-gray-500">
+                  Kalkulowanie...
+                </div>
+              ) : planRecommendation ? (
+                <>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                        {(() => {
+                          // Calculate price for selected duration
+                          const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+                          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+                          const currentDuration = selectedDuration ?? "1m";
+                          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+                          if (planKey) {
+                            return formatPrice(calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false));
+                          }
+                          return formatPrice(planRecommendation.suggestedPlan.priceCents);
+                        })()}
+                      </div>
+                      {gallery.selectionEnabled === false && (
+                        <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
+                          Zniżka 20%
+                        </span>
+                      )}
+                </>
+              ) : (
+                <div className="text-3xl font-bold text-gray-400 dark:text-gray-500">-</div>
               )}
             </div>
           </div>
 
           {/* Storage Usage and Limits */}
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Wykorzystane miejsce
-              </p>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {formatBytes(currentUploadedBytes)}
-              </p>
-              {isLoadingSize && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Obliczanie...</p>
-              )}
+          {planRecommendation && (
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Wykorzystane miejsce
+                </p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {formatBytes(currentUploadedBytes)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Limit oryginałów
+                </p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {formatBytes(planRecommendation.originalsLimitBytes)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Limit finalnych
+                </p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {formatBytes(planRecommendation.finalsLimitBytes)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Limit oryginałów
-              </p>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {formatBytes(planRecommendation.originalsLimitBytes)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Limit finalnych
-              </p>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {formatBytes(planRecommendation.finalsLimitBytes)}
-              </p>
-            </div>
-          </div>
+          )}
 
           {/* Usage Indicator */}
-          {planRecommendation.usagePercentage !== undefined && (
+          {planRecommendation?.usagePercentage !== undefined && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -321,33 +966,91 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
         </div>
       )}
 
-      {hasUploadedPhotos && isLoadingPlanRecommendation && (
-        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <svg
-              className="animate-spin h-5 w-5 text-gray-600 dark:text-gray-400"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Obliczanie rekomendacji planu...
-            </p>
-          </div>
+      {/* Payment Method Guidance */}
+      {hasUploadedPhotos && paymentMethodInfo && (
+        <div className="mb-6">
+          {paymentMethodInfo.paymentMethod === 'WALLET' && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-5 border border-blue-200 dark:border-blue-800/30">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                  <svg
+                    className="w-5 h-5 text-blue-600 dark:text-blue-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                    Płatność z portfela
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Masz wystarczające środki w portfelu. Płatność zostanie wykonana automatycznie z portfela bez dodatkowych opłat transakcyjnych.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(paymentMethodInfo.paymentMethod === 'STRIPE' || paymentMethodInfo.paymentMethod === 'MIXED') && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-5 border border-amber-200 dark:border-amber-800/30">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                  <svg
+                    className="w-5 h-5 text-amber-600 dark:text-amber-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                    {paymentMethodInfo.paymentMethod === 'MIXED' 
+                      ? 'Niewystarczające saldo portfela'
+                      : 'Płatność przez Stripe'}
+                  </p>
+                  {paymentMethodInfo.paymentMethod === 'MIXED' ? (
+                    <>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        Masz {formatPrice(paymentMethodInfo.walletAmountCents ?? 0)} w portfelu, ale potrzebujesz {formatPrice(paymentMethodInfo.totalAmountCents ?? 0)}.
+                      </p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                        <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych opłat transakcyjnych Stripe ({formatPrice(paymentMethodInfo.stripeFeeCents ?? 0)}).
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        Płatność zostanie wykonana przez Stripe, co wiąże się z dodatkowymi opłatami transakcyjnymi ({formatPrice(paymentMethodInfo.stripeFeeCents ?? 0)}).
+                      </p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                        <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć opłat transakcyjnych Stripe.
+                      </p>
+                    </>
+                  )}
+                  <Link href="/wallet">
+                    <button className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-sm transition-colors">
+                      Przejdź do portfela
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -395,94 +1098,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
         </div>
       )}
 
-      {/* Payment Amount - Only show if plan is already calculated */}
-      {gallery.plan && gallery.priceCents !== undefined && gallery.priceCents !== null && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-brand-200 dark:border-brand-700">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-lg font-semibold text-gray-900 dark:text-white">
-              Kwota do zapłaty:
-            </span>
-            <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">
-              {formatPrice(gallery.priceCents)}
-            </span>
-          </div>
 
-          {/* Plan Details */}
-          {gallery.plan && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Plan:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {gallery.plan}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600 dark:text-gray-400">Typ galerii:</span>
-                  <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                    {gallery.selectionEnabled !== false ? "Z selekcją" : "Bez selekcji"}
-                    {gallery.selectionEnabled === false && (
-                      <span className="text-success-600 dark:text-success-400 ml-1">
-                        (zniżka 20%)
-                      </span>
-                    )}
-                  </span>
-                </div>
-                {gallery.originalsLimitBytes && (
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Limit oryginałów:</span>
-                    <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                      {formatBytes(gallery.originalsLimitBytes)}
-                    </span>
-                  </div>
-                )}
-                {gallery.finalsLimitBytes && (
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Limit finalnych:</span>
-                    <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                      {formatBytes(gallery.finalsLimitBytes)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Wallet Balance - Only show if plan is already calculated */}
-      {!isLoadingWallet &&
-        walletBalance !== null &&
-        gallery.plan &&
-        gallery.priceCents !== undefined &&
-        gallery.priceCents !== null && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-brand-200 dark:border-brand-700">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Saldo portfela:</span>
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                {formatPrice(walletAmount)}
-              </span>
-            </div>
-            {walletAmount > 0 && (
-              <div className="mt-2">
-                {walletAmount > 0 && (
-                  <p className="text-sm text-success-600 dark:text-success-400 font-medium">
-                    Możesz zaoszczędzić {formatPrice(Math.min(walletAmount, gallery.priceCents))}{" "}
-                    używając portfela
-                  </p>
-                )}
-                {walletAmount < gallery.priceCents && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Pozostało do zapłaty:{" "}
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {formatPrice(Math.max(0, gallery.priceCents - walletAmount))}
-                    </span>
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
       {/* Action Button */}
       <div>

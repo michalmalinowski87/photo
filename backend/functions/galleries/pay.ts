@@ -127,6 +127,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Always use wallet if available (no need for useWallet parameter)
 
 	if (!galleriesTable) {
+		logger.error('Missing GALLERIES_TABLE environment variable');
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -134,7 +135,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	if (!stripeSecretKey) {
+	if (!stripeSecretKey || stripeSecretKey.trim() === '' || stripeSecretKey.includes('...')) {
+		logger.error('Missing or invalid STRIPE_SECRET_KEY environment variable', {
+			hasEnvProc: !!envProc,
+			hasEnv: !!envProc?.env,
+			hasStripeKey: !!stripeSecretKey,
+			stripeKeyLength: stripeSecretKey?.length || 0,
+			stripeKeyPrefix: stripeSecretKey?.substring(0, 10) || 'N/A',
+			envKeys: envProc?.env ? Object.keys(envProc.env).filter(k => k.includes('STRIPE') || k.includes('stripe')) : [],
+			allEnvKeys: envProc?.env ? Object.keys(envProc.env).slice(0, 10) : [] // First 10 keys for debugging
+		});
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -245,21 +255,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let walletAmountCents = 0;
 		let stripeAmountCents = 0;
 		
-		// Check if gallery has a plan - if not, require plan calculation first
-		if (!gallery.plan || !gallery.priceCents) {
+		// NEW: Allow plan to be passed in request body for dry run (for use before plan is set on gallery)
+		// This enables payment method calculation before plan selection
+		let plan: string | undefined;
+		let galleryPriceCents: number | undefined;
+		
+		if (body.plan && body.priceCents) {
+			// Plan provided in request body (for dry run before plan is set)
+			plan = body.plan;
+			galleryPriceCents = typeof body.priceCents === 'number' ? body.priceCents : parseInt(body.priceCents, 10);
+			logger.info('Dry run using plan from request body', { plan, galleryPriceCents });
+		} else if (gallery.plan && gallery.priceCents) {
+			// Use plan from gallery (existing behavior)
+			plan = gallery.plan;
+			galleryPriceCents = gallery.priceCents;
+			logger.info('Dry run using plan from gallery', { plan, galleryPriceCents });
+		} else {
+			// No plan available - return error
 			return {
 				statusCode: 400,
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ 
 					error: 'Gallery plan not set',
-					message: 'Please calculate and select a plan before payment. Call /galleries/:id/calculate-plan first.'
+					message: 'Please provide plan and priceCents in request body, or set plan on gallery first.'
 				})
 			};
 		}
-
-		// Calculate amounts from gallery pricing
-		let plan = gallery.plan;
-		let galleryPriceCents = gallery.priceCents;
 		
 		const totalAmountCents = galleryPriceCents;
 		
@@ -284,6 +305,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			stripeAmountCents = totalAmountCents;
 		}
 		
+		// Determine payment method
+		let paymentMethod: 'WALLET' | 'STRIPE' | 'MIXED' = 'STRIPE';
+		if (walletAmountCents > 0 && stripeAmountCents > 0) {
+			paymentMethod = 'MIXED';
+		} else if (walletAmountCents > 0) {
+			paymentMethod = 'WALLET';
+		}
+		
+		// Calculate Stripe fee if Stripe will be used (for warning display)
+		let stripeFeeCents = 0;
+		if (stripeAmountCents > 0) {
+			stripeFeeCents = calculateStripeFee(galleryPriceCents);
+		}
+		
 		// Return dry run response - NO DATABASE WRITES
 		return {
 			statusCode: 200,
@@ -292,6 +327,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				totalAmountCents,
 				walletAmountCents,
 				stripeAmountCents,
+				paymentMethod,
+				stripeFeeCents,
 				dryRun: true
 			})
 		};
@@ -844,39 +881,42 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
 		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)
 		// For gallery payments, user pays fees (we add fees to the amount charged)
-		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(stripeAmountCents) : 0;
+		// IMPORTANT: Calculate fee on FULL plan price (galleryPriceCents), not on stripeAmountCents
+		// This ensures the fee is calculated correctly on the full 7 PLN plan, not on the reduced amount after wallet deduction
+		// Example: Plan is 7 PLN, wallet covers 2 PLN, Stripe should charge 5 PLN + fee calculated on 7 PLN
+		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(galleryPriceCents) : 0;
 		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
 		
 		// Build line items from transaction
 		const lineItems: any[] = [];
 		
-		// Gallery plan line item (base amount)
-		if (galleryPriceCents > 0) {
-			const baseAmountForStripe = walletAmountCents > 0 
-				? Math.round((galleryPriceCents / totalAmountCents) * stripeAmountCents) 
-				: galleryPriceCents;
-			
+		// Gallery plan line item
+		// Show the portion being paid via Stripe (stripeAmountCents), but the description mentions the full plan price
+		if (galleryPriceCents > 0 && stripeAmountCents > 0) {
 			lineItems.push({
 				price_data: {
 					currency: 'pln',
 					product_data: {
 						name: `Gallery: ${galleryId}`,
-						description: `PhotoCloud gallery payment - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
+						description: walletAmountCents > 0
+							? `PhotoCloud gallery payment - ${plan} plan (${(galleryPriceCents / 100).toFixed(2)} PLN total, ${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
+							: `PhotoCloud gallery payment - ${plan} plan`
 					},
-					unit_amount: baseAmountForStripe
+					unit_amount: stripeAmountCents
 				},
 				quantity: 1
 			});
 		}
 		
 		// Add Stripe processing fee as separate line item (user pays fees)
+		// Fee is calculated on full plan price (galleryPriceCents), ensuring correct fee even when wallet is used
 		if (stripeFeeCents > 0) {
 			lineItems.push({
 				price_data: {
 					currency: 'pln',
 					product_data: {
 						name: 'Opłata za przetwarzanie płatności',
-						description: 'Stripe processing fee'
+						description: `Stripe processing fee (calculated on ${(galleryPriceCents / 100).toFixed(2)} PLN plan)`
 					},
 					unit_amount: stripeFeeCents
 				},

@@ -335,6 +335,23 @@ export default function GalleryPhotos() {
     // Optimistically remove image from local state immediately
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
 
+    // Get image size for optimistic update
+    const imageSize = (image.size) ?? 0;
+
+    // Dispatch optimistic update event immediately (before API call)
+    // Always dispatch the event, even if size is 0, so components know a deletion happened
+    // Components can handle the case where sizeDelta is 0 or undefined
+    if (typeof window !== "undefined" && galleryId) {
+      window.dispatchEvent(
+        new CustomEvent("galleryUpdated", {
+          detail: { 
+            galleryId, 
+            sizeDelta: imageSize > 0 ? -imageSize : undefined, // Negative for deletion, undefined if size unknown
+          },
+        })
+      );
+    }
+
     try {
       await api.galleries.deleteImage(galleryId as string, imageKey);
 
@@ -345,8 +362,14 @@ export default function GalleryPhotos() {
         // If this was the last deletion, reload gallery data
         if (updated.size === 0) {
           // Use setTimeout to ensure state update completes before reload
-          setTimeout(() => {
-            void reloadGallery();
+          setTimeout(async () => {
+            await reloadGallery();
+            // Also dispatch event manually to ensure components are notified
+            if (typeof window !== "undefined" && galleryId) {
+              window.dispatchEvent(
+                new CustomEvent("galleryUpdated", { detail: { galleryId } })
+              );
+            }
           }, 0);
         }
         return updated;
@@ -583,6 +606,23 @@ export default function GalleryPhotos() {
 
     // Optimistically remove image from local state immediately
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
+
+    // Get image size for optimistic update
+    const imageSize = (imageToDelete.size) ?? 0;
+
+    // Dispatch optimistic update event immediately (before API call)
+    // Always dispatch the event, even if size is 0, so components know a deletion happened
+    // Components can handle the case where sizeDelta is 0 or negative
+    if (typeof window !== "undefined" && galleryId) {
+      window.dispatchEvent(
+        new CustomEvent("galleryUpdated", {
+          detail: { 
+            galleryId, 
+            sizeDelta: imageSize > 0 ? -imageSize : undefined, // Negative for deletion, undefined if size unknown
+          },
+        })
+      );
+    }
 
     try {
       await api.galleries.deleteImage(galleryId as string, imageKey);
