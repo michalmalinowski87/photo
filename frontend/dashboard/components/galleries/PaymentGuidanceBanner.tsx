@@ -146,8 +146,8 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
         setIsProcessingPayment(false);
         return;
       }
-    } catch (error) {
-      showToast("error", "Błąd", formatApiError(error));
+    } catch (error: unknown) {
+      showToast("error", "Błąd", formatApiError(error as Error));
       setIsProcessingPayment(false);
     }
   };

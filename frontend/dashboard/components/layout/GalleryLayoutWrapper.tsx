@@ -113,8 +113,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           `${apiUrl}/galleries/${galleryId as string}`
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        setCurrentGallery(galleryResponse.data);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        setCurrentGallery(galleryResponse.data as any);
         setGalleryUrl(
           typeof window !== "undefined"
             ? `${window.location.origin}/gallery/${galleryId as string}`
@@ -166,7 +166,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         );
         const orders = data?.items ?? [];
         const ordersArray = Array.isArray(orders) ? orders : [];
-        setGalleryOrdersLocal(ordersArray);
+        setGalleryOrdersLocal(ordersArray as Order[]);
         // Cache the orders in Zustand store
         setGalleryOrders(galleryId as string, ordersArray);
       } catch (_err) {
@@ -211,7 +211,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         }
       }
       // Update the Zustand store - this will trigger re-render of components using useOrderStore
-      setCurrentOrder(orderData);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCurrentOrder(orderData as any);
       await new Promise((resolve) => setTimeout(resolve, 10));
     } catch (_err) {
       setCurrentOrder(null);

@@ -108,8 +108,8 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
       } else {
         showToast("error", "Błąd", "Nie udało się przetworzyć płatności za nowy plan.");
       }
-    } catch (error) {
-      showToast("error", "Błąd", formatApiError(error));
+    } catch (error: unknown) {
+      showToast("error", "Błąd", formatApiError(error as Error));
     } finally {
       setIsProcessing(false);
     }

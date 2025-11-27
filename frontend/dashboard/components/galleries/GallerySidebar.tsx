@@ -202,6 +202,32 @@ export default function GallerySidebar({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [planRecommendation, setPlanRecommendation] = useState<PlanRecommendation | null>(null);
   const [isLoadingPlanRecommendation, setIsLoadingPlanRecommendation] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number>(
+    typeof window !== "undefined" ? window.innerHeight : 1024
+  );
+
+  // Track viewport height to conditionally hide elements when screen is too short
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      setViewportHeight(window.innerHeight);
+    };
+
+    // Set initial height
+    setViewportHeight(window.innerHeight);
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  // Hide secondary elements when viewport height is below threshold (1100px)
+  // This ensures navigation menu remains accessible
+  const shouldHideSecondaryElements = viewportHeight < 1100;
 
   // Update cover photo URL when gallery prop changes (backend already converts to CloudFront)
   useEffect(() => {
@@ -258,6 +284,7 @@ export default function GallerySidebar({
         window.removeEventListener("galleryUpdated", handleGalleryUpdate);
       };
     }
+    return undefined;
   }, [gallery?.galleryId, galleryLoading, isPaid]);
 
   const handleBack = () => {
@@ -322,8 +349,8 @@ export default function GallerySidebar({
       }
 
       showToast("success", "Sukces", "Okładka galerii została przesłana");
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się przesłać okładki");
+    } catch (err: unknown) {
+      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
     } finally {
       setUploadingCover(false);
     }
@@ -350,8 +377,8 @@ export default function GallerySidebar({
       }
 
       showToast("success", "Sukces", "Okładka galerii została usunięta");
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się usunąć okładki");
+    } catch (err: unknown) {
+      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");
     } finally {
       setUploadingCover(false);
     }
@@ -404,7 +431,7 @@ export default function GallerySidebar({
       // Navigate back to galleries list
       void router.push("/");
     } catch (err: unknown) {
-      const errorMsg = formatApiError(err);
+      const errorMsg = formatApiError(err as Error);
       showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
     } finally {
       setDeleteLoading(false);
@@ -540,7 +567,7 @@ export default function GallerySidebar({
       )}
 
       {/* Gallery URL */}
-      {galleryUrl && (
+      {galleryUrl && !shouldHideSecondaryElements && (
         <div className="py-4 border-b border-gray-200 dark:border-gray-800">
           <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Adres www galerii:</div>
           <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs break-all text-blue-600 dark:text-blue-400 mb-2">
@@ -673,7 +700,7 @@ export default function GallerySidebar({
 
       {/* Creation Date */}
       {(() => {
-        if (!galleryLoading && gallery) {
+        if (!galleryLoading && gallery && !shouldHideSecondaryElements) {
           return (
             <div className="py-4 border-b border-gray-200 dark:border-gray-800">
               <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
@@ -695,7 +722,7 @@ export default function GallerySidebar({
       })()}
 
       {/* Expiry Date */}
-      {!galleryLoading && gallery && (
+      {!galleryLoading && gallery && !shouldHideSecondaryElements && (
         <div className="py-4 border-b border-gray-200 dark:border-gray-800">
           <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Ważna do:</div>
           <div className="text-sm text-gray-900 dark:text-white">
@@ -1130,24 +1157,24 @@ export default function GallerySidebar({
 
           // Always show the section if gallery is loaded
           return (
-            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                Wykorzystane miejsce
-              </div>
+          <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              Wykorzystane miejsce
+            </div>
               <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
                 Oryginały: {formatBytes(originalsBytes)}
                 {originalsLimit !== undefined && (
                   <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
-                )}
+            )}
                 {isLoadingPlanRecommendation && planRecommendation === null && (
                   <span className="ml-2 text-xs text-gray-400">(aktualizowanie...)</span>
-                )}
-              </div>
+            )}
+          </div>
               <div className="text-sm text-gray-700 dark:text-gray-300">
                 Finalne: {formatBytes(finalsBytes)}
                 {finalsLimit !== undefined && (
                   <span className="text-gray-500"> / {formatBytes(finalsLimit)}</span>
-                )}
+        )}
               </div>
             </div>
           );
@@ -1157,6 +1184,7 @@ export default function GallerySidebar({
       {!galleryLoading &&
         gallery?.galleryId &&
         !isPaid &&
+        !shouldHideSecondaryElements &&
         (() => {
           const formatBytes = (bytes: number | undefined | null): string => {
             if (!bytes || bytes === 0) {
@@ -1172,17 +1200,17 @@ export default function GallerySidebar({
           const hasUploadedPhotos = currentUploadedBytes > 0;
 
           return (
-            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-              <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-                <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                  Galeria nieopublikowana
-                </div>
+        <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+            <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
+              Galeria nieopublikowana
+            </div>
 
                 {!hasUploadedPhotos ? (
                   <>
                     <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
                       Prześlij zdjęcia, aby system mógł wybrać optymalny plan dla Twojej galerii.
-                    </div>
+            </div>
                     <Button
                       size="sm"
                       variant="primary"
@@ -1223,13 +1251,13 @@ export default function GallerySidebar({
                       ) : null}
                     </div>
 
-                    <Button size="sm" variant="primary" onClick={onPay} className="w-full">
-                      Opublikuj galerię
-                    </Button>
+            <Button size="sm" variant="primary" onClick={onPay} className="w-full">
+              Opublikuj galerię
+            </Button>
                   </>
                 )}
-              </div>
-            </div>
+          </div>
+        </div>
           );
         })()}
 

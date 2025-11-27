@@ -62,8 +62,7 @@ export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCrea
             if (welcomeBonusTransaction && transactions.length === 1) {
               const bonusAmount =
                 welcomeBonusTransaction.amountCents ??
-                (welcomeBonusTransaction.amount ? welcomeBonusTransaction.amount * 100 : 0) ??
-                900;
+                (welcomeBonusTransaction.amount ? welcomeBonusTransaction.amount * 100 : 900);
               setWelcomeBonusCents(bonusAmount);
               setShowPopup(true);
               setChecking(false);
@@ -90,8 +89,7 @@ export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCrea
               if (retryWelcomeBonus && retryTransactions.length === 1) {
                 const bonusAmount =
                   retryWelcomeBonus.amountCents ??
-                  (retryWelcomeBonus.amount ? retryWelcomeBonus.amount * 100 : 0) ??
-                  900;
+                  (retryWelcomeBonus.amount ? retryWelcomeBonus.amount * 100 : 900);
                 setWelcomeBonusCents(bonusAmount);
                 setShowPopup(true);
               }

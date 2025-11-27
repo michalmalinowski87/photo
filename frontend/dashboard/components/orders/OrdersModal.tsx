@@ -258,7 +258,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                             }
                           }}
                         >
-                          {order.galleryName}
+                          {String(order.galleryName ?? "")}
                         </Link>
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
@@ -267,14 +267,14 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                           className="text-brand-500 hover:text-brand-600"
                           onClick={onClose}
                         >
-                          #{order.orderNumber}
+                          #{String(order.orderNumber ?? "")}
                         </Link>
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">
-                        {getDeliveryStatusBadge(order.deliveryStatus)}
+                        {getDeliveryStatusBadge(order.deliveryStatus ?? "")}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">
-                        {getPaymentStatusBadge(order.paymentStatus)}
+                        {getPaymentStatusBadge(order.paymentStatus ?? "")}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                         {formatPrice(order.totalCents)}
@@ -312,9 +312,9 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  setDenyGalleryId(order.galleryId);
-                                  setDenyOrderId(order.orderId);
+                                 onClick={() => {
+                                   setDenyGalleryId(order.galleryId ?? null);
+                                   setDenyOrderId(order.orderId ?? null);
                                   setDenyModalOpen(true);
                                 }}
                               >

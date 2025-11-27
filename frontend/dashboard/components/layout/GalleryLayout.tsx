@@ -73,29 +73,31 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
         <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
           <div className="flex">
             <div>
-              <GallerySidebar
-                gallery={gallery}
-                isPaid={isPaid}
-                galleryUrl={galleryUrl}
-                onPay={onPay}
-                onCopyUrl={onCopyUrl}
-                onSendLink={onSendLink}
-                sendLinkLoading={sendLinkLoading}
-                onSettings={onSettings}
-                onReloadGallery={onReloadGallery}
-                order={order}
-                orderId={orderId}
-                onDownloadZip={onDownloadZip}
-                canDownloadZip={canDownloadZip}
-                onMarkOrderPaid={onMarkOrderPaid}
-                onDownloadFinals={onDownloadFinals}
-                onSendFinalsToClient={onSendFinalsToClient}
-                onApproveChangeRequest={onApproveChangeRequest}
-                onDenyChangeRequest={onDenyChangeRequest}
-                hasFinals={hasFinals}
-                hasDeliveredOrders={hasDeliveredOrders}
-                galleryLoading={galleryLoading}
-              />
+              {gallery?.galleryId && (
+                <GallerySidebar
+                  gallery={{ ...gallery, galleryId: gallery.galleryId }}
+                  isPaid={isPaid}
+                  galleryUrl={galleryUrl}
+                  onPay={onPay}
+                  onCopyUrl={onCopyUrl}
+                  onSendLink={onSendLink}
+                  sendLinkLoading={sendLinkLoading}
+                  onSettings={onSettings}
+                  onReloadGallery={onReloadGallery}
+                  order={order ? (order as { orderId: string; galleryId: string; [key: string]: unknown }) : undefined}
+                  orderId={orderId}
+                  onDownloadZip={onDownloadZip}
+                  canDownloadZip={canDownloadZip}
+                  onMarkOrderPaid={onMarkOrderPaid}
+                  onDownloadFinals={onDownloadFinals}
+                  onSendFinalsToClient={onSendFinalsToClient}
+                  onApproveChangeRequest={onApproveChangeRequest}
+                  onDenyChangeRequest={onDenyChangeRequest}
+                  hasFinals={hasFinals}
+                  hasDeliveredOrders={hasDeliveredOrders}
+                  galleryLoading={galleryLoading}
+                />
+              )}
             </div>
             <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
               <GalleryHeader />
