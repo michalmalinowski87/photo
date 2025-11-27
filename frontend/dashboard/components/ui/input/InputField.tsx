@@ -2,7 +2,7 @@ import type React from "react";
 import type { FC } from "react";
 
 interface InputProps {
-  type?: "text" | "number" | "email" | "password" | "date" | "time" | string;
+  type?: string;
   id?: string;
   name?: string;
   placeholder?: string;
@@ -72,17 +72,13 @@ const Input: FC<InputProps> = ({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         className={inputClasses}
-        style={{ minHeight: '44px' }}
+        style={{ minHeight: "44px" }}
       />
 
       {hint && (
         <p
           className={`mt-1.5 text-xs ${
-            error
-              ? "text-error-500"
-              : success
-              ? "text-success-500"
-              : "text-gray-500"
+            error ? "text-error-500" : success ? "text-success-500" : "text-gray-500"
           }`}
         >
           {hint}

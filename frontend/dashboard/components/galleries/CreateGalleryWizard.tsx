@@ -1,14 +1,19 @@
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/router";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+import { useToast } from "../../hooks/useToast";
+import { apiFetchWithAuth, formatApiError } from "../../lib/api";
+import { getIdToken } from "../../lib/auth";
+import {
+  formatCurrencyInput,
+  plnToCents as plnToCentsUtil,
+  centsToPlnString as centsToPlnStringUtil,
+} from "../../lib/currency";
+import { formatPrice } from "../../lib/format-price";
+import { generatePassword } from "../../lib/password";
+import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
 import Select from "../ui/select/Select";
-import Badge from "../ui/badge/Badge";
-import { apiFetch, apiFetchWithAuth, formatApiError } from "../../lib/api";
-import { getIdToken } from "../../lib/auth";
-import { generatePassword } from "../../lib/password";
-import { formatCurrencyInput, plnToCents as plnToCentsUtil, centsToPlnString as centsToPlnStringUtil } from "../../lib/currency";
-import { useToast } from "../../hooks/useToast";
 
 interface CreateGalleryWizardProps {
   isOpen: boolean;
@@ -16,20 +21,41 @@ interface CreateGalleryWizardProps {
   onSuccess: (galleryId: string) => void;
 }
 
+interface Package {
+  packageId: string;
+  name?: string;
+  includedPhotos?: number;
+  pricePerExtraPhoto?: number;
+  price?: number;
+  [key: string]: unknown;
+}
+
+interface Client {
+  clientId: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  isCompany?: boolean;
+  companyName?: string;
+  nip?: string;
+  [key: string]: unknown;
+}
+
 interface WizardData {
   // Step 1: Typ galerii
   selectionEnabled: boolean;
-  
+
   // Step 2: Nazwa galerii
   galleryName: string;
-  
+
   // Step 3: Pakiet cenowy
   selectedPackageId?: string;
   packageName: string;
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
-  
+
   // Step 4: Dane klienta
   selectedClientId?: string;
   clientEmail: string;
@@ -41,7 +67,7 @@ interface WizardData {
   phone: string;
   nip: string;
   companyName: string;
-  
+
   // Step 5: Podsumowanie
   initialPaymentAmountCents: number;
 }
@@ -52,14 +78,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   onSuccess,
 }) => {
   const { showToast } = useToast();
-  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
-  const [existingPackages, setExistingPackages] = useState<any[]>([]);
-  const [existingClients, setExistingClients] = useState<any[]>([]);
+  const [existingPackages, setExistingPackages] = useState<Package[]>([]);
+  const [existingClients, setExistingClients] = useState<Client[]>([]);
   const [galleryNameError, setGalleryNameError] = useState("");
   // Store raw input values to preserve decimal point while typing
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
@@ -90,21 +115,21 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (!dataLoadedRef.current) {
-        const apiUrlValue = process.env.NEXT_PUBLIC_API_URL || "";
+        const apiUrlValue = process.env.NEXT_PUBLIC_API_URL ?? "";
         setApiUrl(apiUrlValue);
         dataLoadedRef.current = true;
-      getIdToken()
-        .then((token) => {
-          setIdToken(token);
+        getIdToken()
+          .then((token) => {
+            setIdToken(token);
             // Pass apiUrl directly to avoid race condition with state update
-            loadExistingPackages(token, apiUrlValue);
-            loadExistingClients(token, apiUrlValue);
-        })
-        .catch(() => {
-          if (typeof window !== "undefined") {
-            window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
-          }
-        });
+            void loadExistingPackages(token, apiUrlValue);
+            void loadExistingClients(token, apiUrlValue);
+          })
+          .catch(() => {
+            if (typeof window !== "undefined") {
+              window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
+            }
+          });
       }
       setCurrentStep(1);
       setError("");
@@ -135,12 +160,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       // Reset ref when wizard closes
       dataLoadedRef.current = false;
     }
-  }, [isOpen]);
+  }, [isOpen, loadExistingPackages, loadExistingClients]);
 
-
-  const loadExistingPackages = async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token || idToken;
-    const apiUrlToUse = apiUrlParam || apiUrl;
+  const loadExistingPackages = useCallback(async (token?: string, apiUrlParam?: string) => {
+    const tokenToUse = token ?? idToken;
+    const apiUrlToUse = apiUrlParam ?? apiUrl;
     if (!apiUrlToUse || !tokenToUse) {
       return;
     }
@@ -148,16 +172,17 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
       // apiFetch returns { data: body, response }
       // The API returns { items: [...], count: ... }
-      const packages = response.data?.items || [];
+      const responseData = response.data as { items?: Package[] } | undefined;
+      const packages = (responseData?.items ?? []);
       setExistingPackages(packages);
-    } catch (err) {
+    } catch (_err) {
       setExistingPackages([]);
     }
-  };
+  }, [idToken, apiUrl]);
 
-  const loadExistingClients = async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token || idToken;
-    const apiUrlToUse = apiUrlParam || apiUrl;
+  const loadExistingClients = useCallback(async (token?: string, apiUrlParam?: string) => {
+    const tokenToUse = token ?? idToken;
+    const apiUrlToUse = apiUrlParam ?? apiUrl;
     if (!apiUrlToUse || !tokenToUse) {
       return;
     }
@@ -165,12 +190,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
       // apiFetch returns { data: body, response }
       // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
-      const clients = response.data?.items || [];
+      const responseData = response.data as { items?: Client[] } | undefined;
+      const clients = (responseData?.items ?? []);
       setExistingClients(clients);
-    } catch (err) {
+    } catch (_err) {
       setExistingClients([]);
     }
-  };
+  }, [idToken, apiUrl]);
 
   const handlePackageSelect = (packageId: string) => {
     const pkg = existingPackages.find((p) => p.packageId === packageId);
@@ -178,10 +204,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       setData({
         ...data,
         selectedPackageId: packageId,
-        packageName: pkg.name,
-        includedCount: pkg.includedPhotos || 0,
-        extraPriceCents: pkg.pricePerExtraPhoto || 0,
-        packagePriceCents: pkg.price || 0,
+        packageName: pkg.name ?? "",
+        includedCount: pkg.includedPhotos ?? 0,
+        extraPriceCents: pkg.pricePerExtraPhoto ?? 0,
+        packagePriceCents: pkg.price ?? 0,
       });
       // Reset input states to show prefilled values
       setExtraPriceInput(null);
@@ -195,14 +221,14 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       setData({
         ...data,
         selectedClientId: clientId,
-        clientEmail: client.email,
-        isCompany: client.isCompany || false,
-        isVatRegistered: client.isVatRegistered || false,
-        firstName: client.firstName || "",
-        lastName: client.lastName || "",
-        companyName: client.companyName || "",
-        nip: client.nip || "",
-        phone: client.phone || "",
+        clientEmail: client.email ?? "",
+        isCompany: Boolean(client.isCompany),
+        isVatRegistered: Boolean(client.isVatRegistered),
+        firstName: client.firstName ?? "",
+        lastName: client.lastName ?? "",
+        companyName: client.companyName ?? "",
+        nip: client.nip ?? "",
+        phone: client.phone ?? "",
       });
     }
   };
@@ -211,7 +237,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const formatPriceInput = formatCurrencyInput;
   const plnToCents = plnToCentsUtil;
   const centsToPlnString = centsToPlnStringUtil;
-
 
   const validateStep = (step: number): boolean => {
     setError("");
@@ -284,13 +309,30 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(5)) return;
+    if (!validateStep(5)) {
+      return;
+    }
 
     setLoading(true);
     setError("");
 
     try {
-      const requestBody: any = {
+      interface CreateGalleryRequestBody {
+        selectionEnabled: boolean;
+        pricingPackage: {
+          packageName: string;
+          includedCount: number;
+          extraPriceCents: number;
+          packagePriceCents: number;
+        };
+        galleryName: string;
+        initialPaymentAmountCents: number;
+        clientPassword: string;
+        clientEmail?: string;
+        isVatRegistered?: boolean;
+      }
+
+      const requestBody: CreateGalleryRequestBody = {
         selectionEnabled: data.selectionEnabled,
         pricingPackage: {
           packageName: data.packageName,
@@ -300,25 +342,23 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         },
         galleryName: data.galleryName.trim(),
         initialPaymentAmountCents: data.initialPaymentAmountCents,
+        clientPassword: data.clientPassword.trim(),
       };
 
       // Add client data
-      // Password is always required for gallery access
-      requestBody.clientPassword = data.clientPassword.trim();
-      
       if (data.selectedClientId) {
         const client = existingClients.find((c) => c.clientId === data.selectedClientId);
         if (client) {
-          requestBody.clientEmail = client.email;
+          requestBody.clientEmail = client.email ?? "";
         }
       } else {
         requestBody.clientEmail = data.clientEmail.trim();
         if (data.isCompany) {
-          requestBody.isVatRegistered = data.isVatRegistered;
+          requestBody.isVatRegistered = Boolean(data.isVatRegistered);
         }
       }
 
-      const { data: responseData } = await apiFetchWithAuth(`${apiUrl}/galleries`, {
+      const response = await apiFetchWithAuth(`${apiUrl}/galleries`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -326,10 +366,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         body: JSON.stringify(requestBody),
       });
 
+      const responseData = response.data as { galleryId: string } | undefined;
+      if (!responseData?.galleryId) {
+        throw new Error("Brak ID galerii w odpowiedzi");
+      }
+
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
       onSuccess(responseData.galleryId);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg = formatApiError(err);
       setError(errorMsg);
       showToast("error", "Błąd", errorMsg);
@@ -344,9 +389,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         return (
           <div className="space-y-8 max-w-4xl mx-auto">
             <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Typ galerii
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Typ galerii</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Wybierz czy klient będzie mógł wybierać zdjęcia czy otrzyma wszystkie
               </p>
@@ -361,17 +404,33 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                 }`}
               >
                 <div className="flex flex-col items-center space-y-4">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                    data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
-                  }`}>
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <div
+                    className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                      data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <svg
+                      className="w-10 h-10 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                   </div>
                   <div className="text-center">
-                    <div className={`text-xl font-semibold mb-2 ${
-                      data.selectionEnabled ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"
-                    }`}>
+                    <div
+                      className={`text-xl font-semibold mb-2 ${
+                        data.selectionEnabled
+                          ? "text-brand-600 dark:text-brand-400"
+                          : "text-gray-900 dark:text-white"
+                      }`}
+                    >
                       Wybór przez klienta
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -383,7 +442,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <div className="absolute top-4 right-4">
                     <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                   </div>
@@ -398,17 +461,33 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                 }`}
               >
                 <div className="flex flex-col items-center space-y-4">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                    !data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
-                  }`}>
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <div
+                    className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                      !data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <svg
+                      className="w-10 h-10 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
                     </svg>
                   </div>
                   <div className="text-center">
-                    <div className={`text-xl font-semibold mb-2 ${
-                      !data.selectionEnabled ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"
-                    }`}>
+                    <div
+                      className={`text-xl font-semibold mb-2 ${
+                        !data.selectionEnabled
+                          ? "text-brand-600 dark:text-brand-400"
+                          : "text-gray-900 dark:text-white"
+                      }`}
+                    >
                       Wszystkie zdjęcia
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -420,7 +499,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <div className="absolute top-4 right-4">
                     <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </div>
                   </div>
@@ -434,9 +517,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         return (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Nazwa galerii
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Nazwa galerii</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Podaj unikalną nazwę dla tej galerii
               </p>
@@ -462,20 +543,18 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
       case 3:
         // Calculate payment status based on package price and payment amount
-        const packagePriceCentsForStatus = data.packagePriceCents || 0;
+        const packagePriceCentsForStatus = data.packagePriceCents ?? 0;
         const paymentStatusForPakiet =
           data.initialPaymentAmountCents === 0
             ? "UNPAID"
             : data.initialPaymentAmountCents >= packagePriceCentsForStatus
-            ? "PAID"
-            : "PARTIALLY_PAID";
+              ? "PAID"
+              : "PARTIALLY_PAID";
 
         return (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Pakiet cenowy
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Pakiet cenowy</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Wybierz pakiet lub wprowadź dane ręcznie
               </p>
@@ -488,11 +567,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   </label>
                   <Select
                     options={existingPackages.map((pkg) => ({
-                        value: pkg.packageId,
-                        label: `${pkg.name} - ${formatPrice(pkg.price)}`,
+                      value: pkg.packageId,
+                      label: `${pkg.name} - ${formatPrice(pkg.price)}`,
                     }))}
                     placeholder="Wybierz pakiet"
-                    value={data.selectedPackageId || ""}
+                    value={data.selectedPackageId ?? ""}
                     onChange={(value) => {
                       if (value) {
                         handlePackageSelect(value);
@@ -537,7 +616,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={extraPriceInput !== null ? extraPriceInput : centsToPlnString(data.extraPriceCents)}
+                    value={
+                      extraPriceInput ?? centsToPlnString(data.extraPriceCents)
+                    }
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setExtraPriceInput(formatted);
@@ -545,7 +626,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     }}
                     onBlur={() => {
                       // Clear input state on blur if empty, let it use cents value
-                      if (!extraPriceInput || extraPriceInput === '') {
+                      if (!extraPriceInput || extraPriceInput === "") {
                         setExtraPriceInput(null);
                       }
                     }}
@@ -558,7 +639,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={packagePriceInput !== null ? packagePriceInput : centsToPlnString(data.packagePriceCents)}
+                    value={
+                      packagePriceInput ?? centsToPlnString(data.packagePriceCents)
+                    }
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setPackagePriceInput(formatted);
@@ -566,7 +649,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     }}
                     onBlur={() => {
                       // Clear input state on blur if empty, let it use cents value
-                      if (!packagePriceInput || packagePriceInput === '') {
+                      if (!packagePriceInput || packagePriceInput === "") {
                         setPackagePriceInput(null);
                       }
                     }}
@@ -579,7 +662,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={paymentAmountInput !== null ? paymentAmountInput : centsToPlnString(data.initialPaymentAmountCents)}
+                    value={
+                      paymentAmountInput ?? centsToPlnString(data.initialPaymentAmountCents)
+                    }
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setPaymentAmountInput(formatted);
@@ -590,7 +675,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     }}
                     onBlur={() => {
                       // Clear input state on blur if empty, let it use cents value
-                      if (!paymentAmountInput || paymentAmountInput === '') {
+                      if (!paymentAmountInput || paymentAmountInput === "") {
                         setPaymentAmountInput(null);
                       }
                     }}
@@ -609,16 +694,16 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                         paymentStatusForPakiet === "PAID"
                           ? "success"
                           : paymentStatusForPakiet === "PARTIALLY_PAID"
-                          ? "warning"
-                          : "error"
+                            ? "warning"
+                            : "error"
                       }
                       variant="light"
                     >
                       {paymentStatusForPakiet === "PAID"
                         ? "Opłacone"
                         : paymentStatusForPakiet === "PARTIALLY_PAID"
-                        ? "Częściowo opłacone"
-                        : "Nieopłacone"}
+                          ? "Częściowo opłacone"
+                          : "Nieopłacone"}
                     </Badge>
                   </div>
                 )}
@@ -631,9 +716,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         return (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Dane klienta
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Dane klienta</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Wybierz istniejącego klienta lub wprowadź nowe dane
               </p>
@@ -646,13 +729,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   </label>
                   <Select
                     options={existingClients.map((client) => ({
-                        value: client.clientId,
-                        label: client.isCompany
-                          ? `${client.companyName} (${client.email})`
-                          : `${client.firstName} ${client.lastName} (${client.email})`,
+                      value: client.clientId,
+                      label: client.isCompany
+                        ? `${client.companyName} (${client.email})`
+                        : `${client.firstName} ${client.lastName} (${client.email})`,
                     }))}
                     placeholder="Wybierz klienta"
-                    value={data.selectedClientId || ""}
+                    value={data.selectedClientId ?? ""}
                     onChange={(value) => {
                       if (value) {
                         handleClientSelect(value);
@@ -675,134 +758,138 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                 </div>
               )}
 
-                <div className="space-y-4 p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email klienta *
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="email@example.com"
-                      value={data.clientEmail}
-                      onChange={(e) => setData({ ...data, clientEmail: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Hasło *
-                    </label>
-                    <div className="flex gap-2 items-stretch">
-                      <div className="flex-1">
-                        <Input
-                          type="password"
-                          placeholder="Hasło"
-                          value={data.clientPassword}
-                          onChange={(e) => setData({ ...data, clientPassword: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          const newPassword = generatePassword();
-                          setData({ ...data, clientPassword: newPassword });
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11 self-stretch"
-                      >
-                        Generuj
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {data.selectionEnabled
-                        ? "Hasło do wyboru zdjęć przez klienta"
-                        : "Hasło do dostępu do finalnej galerii"}
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={data.isCompany}
-                      onChange={(e) => setData({ ...data, isCompany: e.target.checked, isVatRegistered: e.target.checked ? data.isVatRegistered : false })}
-                      className="w-4 h-4 text-brand-500 rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Firma
-                    </span>
+              <div className="space-y-4 p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email klienta *
                   </label>
-                  {data.isCompany ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Nazwa firmy *
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="Nazwa firmy"
-                          value={data.companyName}
-                          onChange={(e) => setData({ ...data, companyName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          NIP *
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="NIP"
-                          value={data.nip}
-                          onChange={(e) => setData({ ...data, nip: e.target.value })}
-                        />
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={data.isVatRegistered}
-                          onChange={(e) => setData({ ...data, isVatRegistered: e.target.checked })}
-                          className="w-4 h-4 text-brand-500 rounded"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                          Firma zarejestrowana jako podatnik VAT
-                        </span>
-                      </label>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Imię *
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="Imię"
-                          value={data.firstName}
-                          onChange={(e) => setData({ ...data, firstName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Nazwisko *
-                        </label>
-                        <Input
-                          type="text"
-                          placeholder="Nazwisko"
-                          value={data.lastName}
-                          onChange={(e) => setData({ ...data, lastName: e.target.value })}
-                        />
-                      </div>
-                    </>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Telefon (opcjonalne)
-                    </label>
-                    <Input
-                      type="tel"
-                      placeholder="Telefon"
-                      value={data.phone}
-                      onChange={(e) => setData({ ...data, phone: e.target.value })}
-                    />
-                  </div>
+                  <Input
+                    type="email"
+                    placeholder="email@example.com"
+                    value={data.clientEmail}
+                    onChange={(e) => setData({ ...data, clientEmail: e.target.value })}
+                  />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Hasło *
+                  </label>
+                  <div className="flex gap-2 items-stretch">
+                    <div className="flex-1">
+                      <Input
+                        type="password"
+                        placeholder="Hasło"
+                        value={data.clientPassword}
+                        onChange={(e) => setData({ ...data, clientPassword: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const newPassword = generatePassword();
+                        setData({ ...data, clientPassword: newPassword });
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11 self-stretch"
+                    >
+                      Generuj
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {data.selectionEnabled
+                      ? "Hasło do wyboru zdjęć przez klienta"
+                      : "Hasło do dostępu do finalnej galerii"}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={data.isCompany}
+                    onChange={(e) =>
+                      setData({
+                        ...data,
+                        isCompany: e.target.checked,
+                        isVatRegistered: e.target.checked ? data.isVatRegistered : false,
+                      })
+                    }
+                    className="w-4 h-4 text-brand-500 rounded"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Firma</span>
+                </label>
+                {data.isCompany ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Nazwa firmy *
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Nazwa firmy"
+                        value={data.companyName}
+                        onChange={(e) => setData({ ...data, companyName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        NIP *
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="NIP"
+                        value={data.nip}
+                        onChange={(e) => setData({ ...data, nip: e.target.value })}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={data.isVatRegistered}
+                        onChange={(e) => setData({ ...data, isVatRegistered: e.target.checked })}
+                        className="w-4 h-4 text-brand-500 rounded"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Firma zarejestrowana jako podatnik VAT
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Imię *
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Imię"
+                        value={data.firstName}
+                        onChange={(e) => setData({ ...data, firstName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Nazwisko *
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Nazwisko"
+                        value={data.lastName}
+                        onChange={(e) => setData({ ...data, lastName: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Telefon (opcjonalne)
+                  </label>
+                  <Input
+                    type="tel"
+                    placeholder="Telefon"
+                    value={data.phone}
+                    onChange={(e) => setData({ ...data, phone: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -811,9 +898,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         return (
           <div className="space-y-6 max-w-3xl mx-auto">
             <div className="text-center">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Podsumowanie
-              </h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Podsumowanie</h3>
             </div>
 
             <div className="space-y-4 p-5 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -826,17 +911,20 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Nazwa galerii:</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{data.galleryName || "Brak"}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.galleryName ?? "Brak"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Klient:</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {data.selectedClientId
-                      ? existingClients.find((c) => c.clientId === data.selectedClientId)?.email || "Nie wybrano"
-                      : data.clientEmail || "Nie podano"}
+                      ? existingClients.find((c) => c.clientId === data.selectedClientId)?.email ??
+                        "Nie wybrano"
+                      : data.clientEmail ?? "Nie podano"}
                   </span>
                 </div>
-                
+
                 <div className="pt-3 space-y-2">
                   <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1.5">
                     Pakiet cenowy:
@@ -844,24 +932,36 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <div className="pl-3 space-y-1.5 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Nazwa:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{data.packageName}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {data.packageName}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Liczba zdjęć:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{data.includedCount}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {data.includedCount}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Cena za dodatkowe:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.extraPriceCents)}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatPrice(data.extraPriceCents)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Cena pakietu:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.packagePriceCents)}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatPrice(data.packagePriceCents)}
+                      </span>
                     </div>
                     {data.initialPaymentAmountCents > 0 && (
                       <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
-                        <span className="text-gray-600 dark:text-gray-400">Kwota wpłacona przez klienta:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{formatPrice(data.initialPaymentAmountCents)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">
+                          Kwota wpłacona przez klienta:
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatPrice(data.initialPaymentAmountCents)}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -882,21 +982,31 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <div className="w-full h-[calc(100vh-140px)] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Utwórz galerię
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Utwórz galerię</h2>
         <button
           onClick={onClose}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
-          <svg className="w-6 h-6 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="w-6 h-6 text-gray-500 dark:text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>
@@ -912,8 +1022,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                     step === currentStep
                       ? "bg-brand-500 text-white shadow-lg scale-110"
                       : step < currentStep
-                      ? "bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-                      : "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        ? "bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
+                        : "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
                   }`}
                 >
                   {step < currentStep ? "✓" : step}
@@ -929,9 +1039,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
               {step < 5 && (
                 <div
                   className={`flex-1 h-1 mx-2 rounded-full transition-all duration-300 ${
-                    step < currentStep
-                      ? "bg-brand-500"
-                      : "bg-gray-200 dark:bg-gray-700"
+                    step < currentStep ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
                   }`}
                 />
               )}
@@ -950,9 +1058,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           </div>
         )}
         <div className="h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-6xl mx-auto">
-            {renderStep()}
-          </div>
+          <div className="w-full max-w-6xl mx-auto">{renderStep()}</div>
         </div>
       </div>
 
@@ -965,18 +1071,46 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           className="flex-1 flex items-center justify-center gap-2"
         >
           {currentStep !== 1 && (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M10 12L6 8L10 4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           )}
           {currentStep === 1 ? "Anuluj" : "Wstecz"}
         </Button>
         <div className="flex gap-3 flex-1 justify-end">
           {currentStep < 5 ? (
-            <Button onClick={handleNext} disabled={loading} className="flex-1 flex items-center justify-center gap-2">
+            <Button
+              onClick={handleNext}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2"
+            >
               Dalej
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M6 12L10 8L6 4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </Button>
           ) : (

@@ -6,7 +6,7 @@ export const PAGINATION_LIMIT = 10;
 
 export const COMPANIES = [
   {
-    name: "PhotoHub",
+    name: "PhotoCloud",
     logo: "/assets/company-01.svg",
   },
 ] as const;
@@ -35,7 +35,7 @@ export const REVIEWS = [
     username: "Fotograf ślubny",
     avatar: "https://randomuser.me/api/portraits/women/1.jpg",
     rating: 5,
-    review: "PhotoHub zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny! costam jescze zeby bylo za dlugo do testu clapa"
+    review: "PhotoCloud zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny! costam jescze zeby bylo za dlugo do testu clapa"
   },
   {
     name: "Marcin Nowak",
@@ -70,7 +70,7 @@ export const REVIEWS = [
     username: "Fotograf komercyjny",
     avatar: "https://randomuser.me/api/portraits/men/3.jpg",
     rating: 5,
-    review: "PhotoHub to game changer. Oszczędzam czas i pieniądze, a klienci są zadowoleni."
+    review: "PhotoCloud to game changer. Oszczędzam czas i pieniądze, a klienci są zadowoleni."
   },
 ] as const;
 

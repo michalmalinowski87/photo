@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { apiFetch, formatApiError } from '../../lib/api';
 import withClientAuth from '../../hocs/withClientAuth';
-import { PurchaseView, ProcessedPhotosView, ImageModal } from '@photohub/gallery-components';
+import { PurchaseView, ProcessedPhotosView, ImageModal } from '@photocloud/gallery-components';
 
 function ClientGallery({ token, clientId, galleryId, galleryName: initialGalleryName, mode }) {
 	const router = useRouter();

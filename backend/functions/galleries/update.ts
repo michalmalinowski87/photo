@@ -59,7 +59,8 @@ export const handler = lambdaLogger(async (event: any) => {
 	
 	// Allow updating plan details (for plan selection/upgrade flow)
 	if (body.plan !== undefined && typeof body.plan === 'string') {
-		setExpressions.push('plan = :plan');
+		setExpressions.push('#plan = :plan');
+		expressionAttributeNames['#plan'] = 'plan';
 		expressionAttributeValues[':plan'] = body.plan;
 	}
 	if (body.priceCents !== undefined && typeof body.priceCents === 'number') {

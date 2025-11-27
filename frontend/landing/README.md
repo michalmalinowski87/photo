@@ -1,10 +1,10 @@
-# PhotoHub Landing Page
+# PhotoCloud Landing Page
 
-Landing page dla PhotoHub - platformy do udostępniania zdjęć klientom przez fotografów.
+Landing page dla PhotoCloud - platformy do udostępniania zdjęć klientom przez fotografów.
 
 ## Przegląd
 
-Landing page to publiczna strona marketingowa PhotoHub, która służy jako punkt wejścia dla fotografów. Zawiera:
+Landing page to publiczna strona marketingowa PhotoCloud, która służy jako punkt wejścia dla fotografów. Zawiera:
 
 - **Stronę główną** z prezentacją produktu, opiniami klientów i przeglądem funkcji
 - **Stronę cennika** z przejrzystą tabelą cenową (3 okresy × 3 rozmiary)
@@ -52,7 +52,7 @@ NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 
 - **NEXT_PUBLIC_COGNITO_USER_POOL_ID**: ID User Pool w AWS Cognito Console
 - **NEXT_PUBLIC_COGNITO_CLIENT_ID**: ID App Client w Cognito User Pool
-- **NEXT_PUBLIC_COGNITO_DOMAIN**: Domain prefix Cognito Hosted UI (np. `photohub-dev`)
+- **NEXT_PUBLIC_COGNITO_DOMAIN**: Domain prefix Cognito Hosted UI (np. `photocloud-dev`)
 - **NEXT_PUBLIC_DASHBOARD_URL**: URL do aplikacji dashboard (domyślnie `http://localhost:3001`)
 
 ## Uruchomienie
@@ -226,7 +226,7 @@ Aplikacja może być wdrożona na dowolnej platformie obsługującej Next.js:
 ## Wsparcie
 
 W razie pytań lub problemów:
-- Email: support@photohub.pl
+- Email: support@photocloud.pl
 - Dokumentacja: `/help` w aplikacji
 
 ## Licencja

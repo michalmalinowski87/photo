@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
+
 import { useSidebar } from "../../context/SidebarContext";
 import { ThemeToggleButton } from "../common/ThemeToggleButton";
 import NotificationDropdown from "../header/NotificationDropdown";
@@ -78,7 +79,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onCreateGallery }) => {
           </button>
 
           <Link href="/" className="lg:hidden">
-            <span className="text-lg font-bold text-brand-500">PhotoHub</span>
+            <span className="text-lg font-bold text-brand-500">PhotoCloud</span>
           </Link>
 
           <button
@@ -158,8 +159,19 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onCreateGallery }) => {
                 variant="primary"
                 size="md"
                 startIcon={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 3.33333V12.6667M3.33333 8H12.6667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M8 3.33333V12.6667M3.33333 8H12.6667"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 }
               >

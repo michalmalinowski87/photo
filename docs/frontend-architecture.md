@@ -1,10 +1,10 @@
 # Frontend Architecture
 
-This document describes the frontend architecture, component structure, and authentication patterns used in PhotoHub.
+This document describes the frontend architecture, component structure, and authentication patterns used in PhotoCloud.
 
 ## Overview
 
-PhotoHub uses a composable component architecture with shared React components for gallery views. Both the photographer dashboard and client gallery applications use the same UI components, configured differently based on authentication mode.
+PhotoCloud uses a composable component architecture with shared React components for gallery views. Both the photographer dashboard and client gallery applications use the same UI components, configured differently based on authentication mode.
 
 ## Architecture Principles
 

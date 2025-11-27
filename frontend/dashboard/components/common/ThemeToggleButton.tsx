@@ -39,4 +39,3 @@ export const ThemeToggleButton: React.FC = () => {
     </button>
   );
 };
-

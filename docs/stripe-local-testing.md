@@ -35,7 +35,7 @@ This will open your browser to authenticate with Stripe. After authentication, t
 
 ### Option A: Forward to Deployed API Gateway (Recommended)
 
-Since PhotoHub's webhook handler is a Lambda function, forward directly to your deployed API:
+Since PhotoCloud's webhook handler is a Lambda function, forward directly to your deployed API:
 
 ```bash
 # Get your API Gateway URL from CDK output (after deploying)
@@ -52,7 +52,7 @@ stripe listen --forward-to https://abc123.execute-api.eu-west-1.amazonaws.com/pa
 
 ### Option B: Forward to Local Server (if you create a local handler)
 
-If you want to test locally without deploying, you can create a local webhook handler. However, PhotoHub's webhook handler uses AWS services (DynamoDB, Lambda), so this requires more setup.
+If you want to test locally without deploying, you can create a local webhook handler. However, PhotoCloud's webhook handler uses AWS services (DynamoDB, Lambda), so this requires more setup.
 
 For quick testing, **Option A is recommended** - just forward to your deployed API.
 
@@ -159,9 +159,9 @@ If you want to replay a webhook event:
 stripe events resend evt_1234567890
 ```
 
-## Integration with PhotoHub
+## Integration with PhotoCloud
 
-For PhotoHub specifically, since the webhook handler is a Lambda function:
+For PhotoCloud specifically, since the webhook handler is a Lambda function:
 
 ### Testing Wallet Top-Up Flow (Recommended: Forward to Deployed API)
 

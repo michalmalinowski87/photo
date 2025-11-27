@@ -12,15 +12,15 @@ interface GalleryContextType {
 
 const GalleryContext = createContext<GalleryContextType | undefined>(undefined);
 
-export function GalleryProvider({ 
-  children, 
-  gallery, 
-  loading, 
-  error, 
+export function GalleryProvider({
+  children,
+  gallery,
+  loading,
+  error,
   galleryId,
   reloadGallery,
-  reloadOrder
-}: { 
+  reloadOrder,
+}: {
   children: ReactNode;
   gallery: any;
   loading: boolean;
@@ -31,7 +31,7 @@ export function GalleryProvider({
 }) {
   // Sync with Zustand store
   const { setCurrentGallery, setLoading, setError } = useGalleryStore();
-  
+
   useEffect(() => {
     if (gallery) {
       setCurrentGallery(gallery);
@@ -51,11 +51,7 @@ export function GalleryProvider({
     [gallery, loading, error, galleryId, reloadGallery, reloadOrder]
   );
 
-  return (
-    <GalleryContext.Provider value={value}>
-      {children}
-    </GalleryContext.Provider>
-  );
+  return <GalleryContext.Provider value={value}>{children}</GalleryContext.Provider>;
 }
 
 export function useGallery() {
@@ -65,4 +61,3 @@ export function useGallery() {
   }
   return context;
 }
-

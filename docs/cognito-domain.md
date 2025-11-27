@@ -6,9 +6,9 @@ The Cognito domain is needed for the frontend to authenticate users via Cognito 
 
 The domain format is: `{prefix}.auth.{region}.amazoncognito.com`
 
-For PhotoHub, the prefix is: `photohub-{stage}`
+For PhotoCloud, the prefix is: `photocloud-{stage}`
 
-So for `dev` stage: `photohub-dev.auth.eu-west-1.amazonaws.com`
+So for `dev` stage: `photocloud-dev.auth.eu-west-1.amazonaws.com`
 
 ## Method 1: From CDK Output (Easiest)
 
@@ -22,7 +22,7 @@ yarn deploy --context stage=dev
 Look for this output:
 ```
 Outputs:
-AppStack.UserPoolDomain = photohub-dev.auth.eu-west-1.amazonaws.com
+AppStack.UserPoolDomain = photocloud-dev.auth.eu-west-1.amazonaws.com
 ```
 
 **Copy this value** - this is your `NEXT_PUBLIC_COGNITO_DOMAIN`
@@ -34,7 +34,7 @@ AppStack.UserPoolDomain = photohub-dev.auth.eu-west-1.amazonaws.com
 3. Click on your user pool (name will include your stack name)
 4. Go to **App integration** tab
 5. Scroll to **Domain** section
-6. You'll see the domain listed (e.g., `photohub-dev.auth.eu-west-1.amazonaws.com`)
+6. You'll see the domain listed (e.g., `photocloud-dev.auth.eu-west-1.amazonaws.com`)
 
 ## Method 3: From AWS CLI
 
@@ -44,7 +44,7 @@ USER_POOL_ID=eu-west-1_XXXXXXXXX
 
 # Get domain information
 aws cognito-idp describe-user-pool-domain \
-  --domain photohub-dev \
+  --domain photocloud-dev \
   --region eu-west-1
 
 # Or list all domains for your account
@@ -58,20 +58,20 @@ If you know your stage and region:
 
 ```bash
 # For dev stage in eu-west-1
-NEXT_PUBLIC_COGNITO_DOMAIN=photohub-dev.auth.eu-west-1.amazonaws.com
+NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazonaws.com
 
 # For prod stage in eu-west-1
-NEXT_PUBLIC_COGNITO_DOMAIN=photohub-prod.auth.eu-west-1.amazonaws.com
+NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-prod.auth.eu-west-1.amazonaws.com
 ```
 
-**Formula:** `photohub-{stage}.auth.{region}.amazonaws.com`
+**Formula:** `photocloud-{stage}.auth.{region}.amazonaws.com`
 
 ## Set in Frontend
 
 Add to `frontend/dashboard/.env.local`:
 
 ```bash
-NEXT_PUBLIC_COGNITO_DOMAIN=photohub-dev.auth.eu-west-1.amazonaws.com
+NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazonaws.com
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id-here
 NEXT_PUBLIC_AWS_REGION=eu-west-1
@@ -81,12 +81,12 @@ NEXT_PUBLIC_AWS_REGION=eu-west-1
 
 1. Check the domain is accessible:
    ```bash
-   curl https://photohub-dev.auth.eu-west-1.amazonaws.com/.well-known/openid-configuration
+   curl https://photocloud-dev.auth.eu-west-1.amazonaws.com/.well-known/openid-configuration
    ```
 
 2. Test login URL:
    ```
-   https://photohub-dev.auth.eu-west-1.amazonaws.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&response_type=code&scope=openid+email+profile&redirect_uri=YOUR_REDIRECT_URI
+   https://photocloud-dev.auth.eu-west-1.amazonaws.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&response_type=code&scope=openid+email+profile&redirect_uri=YOUR_REDIRECT_URI
    ```
 
 ## Troubleshooting
@@ -100,13 +100,13 @@ NEXT_PUBLIC_AWS_REGION=eu-west-1
 ### Domain Already Exists Error
 
 If you see "Domain already exists" error during deployment:
-- The domain prefix `photohub-{stage}` might be taken
+- The domain prefix `photocloud-{stage}` might be taken
 - Try a different stage name
 - Or manually delete the domain in Cognito Console and redeploy
 
 ### Frontend Can't Connect
 
-- Verify the domain is exactly: `photohub-{stage}.auth.{region}.amazonaws.com`
+- Verify the domain is exactly: `photocloud-{stage}.auth.{region}.amazonaws.com`
 - Check `NEXT_PUBLIC_AWS_REGION` matches your deployment region
 - Ensure callback URLs are configured in Cognito User Pool Client
 

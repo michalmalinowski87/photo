@@ -89,21 +89,43 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					return null;
 				}
 				const filename = fullKey.replace(prefix, '');
-				// Skip if empty or contains slashes (subdirectories)
-				if (!filename || filename.includes('/')) {
+				// Skip if empty or contains slashes (subdirectories) - skip processed previews/thumbs
+				if (!filename || filename.includes('/') || filename.startsWith('previews/') || filename.startsWith('thumbs/')) {
 					return null;
 				}
 				
 				const finalKey = `galleries/${galleryId}/final/${orderId}/${filename}`;
 				
-				// Build CloudFront URL - encode path segments
+				// Generate WebP preview/thumb keys (for display)
+				const getWebpKey = (originalKey: string) => {
+					const lastDot = originalKey.lastIndexOf('.');
+					if (lastDot === -1) return `${originalKey}.webp`;
+					return `${originalKey.substring(0, lastDot)}.webp`;
+				};
+				
+				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
+				const previewWebpKey = getWebpKey(previewKey);
+				const thumbWebpKey = getWebpKey(thumbKey);
+				
+				// Build CloudFront URLs - encode path segments
 				const finalUrl = cloudfrontDomain 
 					? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				
+				// Processed WebP URLs for display (preview for full view, thumb for grid)
+				const previewUrl = cloudfrontDomain
+					? `https://${cloudfrontDomain}/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				const thumbUrl = cloudfrontDomain
+					? `https://${cloudfrontDomain}/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 
 				return {
 					key: filename,
-					finalUrl,
+					finalUrl, // Original unprocessed URL (for download)
+					previewUrl, // Processed WebP preview (for display)
+					thumbUrl, // Processed WebP thumbnail (for grid)
 					size: obj.Size || 0,
 					lastModified: obj.LastModified?.toISOString()
 				};

@@ -13,6 +13,7 @@ import * as ordersDenyChangeRequest from '../../../functions/orders/denyChangeRe
 import * as ordersListDelivered from '../../../functions/orders/listDelivered';
 import * as ordersListFinalImages from '../../../functions/orders/listFinalImages';
 import * as ordersUploadFinal from '../../../functions/orders/uploadFinal';
+import * as ordersUploadFinalBatch from '../../../functions/orders/uploadFinalBatch';
 import * as ordersDownloadFinalZip from '../../../functions/orders/downloadFinalZip';
 import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
@@ -39,6 +40,7 @@ router.post('/galleries/:id/orders/:orderId/deny-change', wrapHandler(ordersDeny
 // router.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
 router.delete('/galleries/:id/orders/:orderId/final/images/:filename', wrapHandler(ordersDeleteFinalImage.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload', wrapHandler(ordersUploadFinal.handler));
+router.post('/galleries/:id/orders/:orderId/final/upload-batch', wrapHandler(ordersUploadFinalBatch.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload-complete', wrapHandler(ordersUploadFinalComplete.handler));
 // router.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 router.post('/galleries/:id/orders/:orderId/send-final-link', wrapHandler(ordersSendFinalLink.handler));

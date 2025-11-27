@@ -1,12 +1,12 @@
-import React, { ComponentType, useCallback, useRef } from 'react';
-import { useUploadStore } from '../store/uploadSlice';
-import { apiFetch, apiFetchWithAuth, formatApiError } from '../lib/api';
+import React, { ComponentType, useCallback, useRef } from "react";
+import { useUploadStore } from "../store/uploadSlice";
+import { apiFetchWithAuth, formatApiError } from "../lib/api";
 
 interface UploadConfig {
   apiUrl: string;
   galleryId: string;
   orderId?: string;
-  type: 'original' | 'final' | 'cover';
+  type: "original" | "final" | "cover";
   endpoint: string; // Presigned URL endpoint
   validation?: {
     maxFileSize?: number; // in bytes
@@ -52,7 +52,7 @@ async function retryWithBackoff<T>(
       }
     }
   }
-  throw lastError || new Error('Retry failed');
+  throw lastError || new Error("Retry failed");
 }
 
 /**
@@ -69,7 +69,7 @@ export function withImageUpload<P extends object>(
     const uploadImages = useCallback(
       async (files: File[], config: UploadConfig) => {
         const {
-          apiUrl,
+          apiUrl: _apiUrl,
           galleryId,
           orderId,
           type,
@@ -83,16 +83,14 @@ export function withImageUpload<P extends object>(
         } = config;
 
         if (!files || files.length === 0) {
-          onError?.('Brak plików do przesłania');
+          onError?.("Brak plików do przesłania");
           return;
         }
 
         // Filter image files
-        const imageFiles = Array.from(files).filter((file) =>
-          file.type.startsWith('image/')
-        );
+        const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
         if (imageFiles.length === 0) {
-          onError?.('Wybierz pliki graficzne');
+          onError?.("Wybierz pliki graficzne");
           return;
         }
 
@@ -112,7 +110,10 @@ export function withImageUpload<P extends object>(
             const limitMB = (storageLimitBytes / (1024 * 1024)).toFixed(2);
             const filesMB = (totalFilesSize / (1024 * 1024)).toFixed(2);
             const availableMB = ((storageLimitBytes - currentBytesUsed) / (1024 * 1024)).toFixed(2);
-            const excessMB = ((currentBytesUsed + totalFilesSize - storageLimitBytes) / (1024 * 1024)).toFixed(2);
+            const excessMB = (
+              (currentBytesUsed + totalFilesSize - storageLimitBytes) /
+              (1024 * 1024)
+            ).toFixed(2);
 
             const errorMessage =
               `Przekroczono limit miejsca!\n\n` +
@@ -142,7 +143,7 @@ export function withImageUpload<P extends object>(
             (file) => !validation.allowedTypes!.includes(file.type)
           );
           if (invalidFiles.length > 0) {
-            onError?.(`Nieprawidłowy typ pliku. Dozwolone: ${validation.allowedTypes.join(', ')}`);
+            onError?.(`Nieprawidłowy typ pliku. Dozwolone: ${validation.allowedTypes.join(", ")}`);
             return;
           }
         }
@@ -150,17 +151,17 @@ export function withImageUpload<P extends object>(
         uploadCancelRef.current = false;
 
         // Initialize upload progress
-        const uploadId = `${type}-${galleryId}-${orderId || 'cover'}-${Date.now()}`;
+        const uploadId = `${type}-${galleryId}-${orderId || "cover"}-${Date.now()}`;
         addUpload(uploadId, {
           type,
           galleryId,
           orderId,
           current: 0,
           total: imageFiles.length,
-          currentFileName: '',
+          currentFileName: "",
           errors: [],
           successes: 0,
-          status: 'uploading',
+          status: "uploading",
         });
 
         let uploadSuccesses = 0;
@@ -170,7 +171,7 @@ export function withImageUpload<P extends object>(
           // Upload files sequentially to avoid overwhelming the server
           for (let i = 0; i < imageFiles.length; i++) {
             if (uploadCancelRef.current) {
-              updateUpload(uploadId, { status: 'cancelled' });
+              updateUpload(uploadId, { status: "cancelled" });
               break;
             }
 
@@ -187,15 +188,15 @@ export function withImageUpload<P extends object>(
               // Get presigned URL with retry logic
               const presignResponse = await retryWithBackoff(async () => {
                 return await apiFetchWithAuth(endpoint, {
-                  method: 'POST',
+                  method: "POST",
                   headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                   },
                   body: JSON.stringify({
                     galleryId,
                     orderId,
                     key: file.name,
-                    contentType: file.type || 'image/jpeg',
+                    contentType: file.type || "image/jpeg",
                     fileSize: file.size,
                   }),
                 });
@@ -207,10 +208,10 @@ export function withImageUpload<P extends object>(
 
               try {
                 const uploadResponse = await fetch(presignResponse.data.url, {
-                  method: 'PUT',
+                  method: "PUT",
                   body: file,
                   headers: {
-                    'Content-Type': file.type || 'image/jpeg',
+                    "Content-Type": file.type || "image/jpeg",
                   },
                   signal: uploadController.signal,
                 });
@@ -235,27 +236,29 @@ export function withImageUpload<P extends object>(
           }
 
           if (uploadCancelRef.current) {
-            updateUpload(uploadId, { status: 'cancelled' });
+            updateUpload(uploadId, { status: "cancelled" });
             return;
           }
 
           if (uploadErrors.length > 0 && uploadSuccesses === 0) {
             updateUpload(uploadId, {
-              status: 'error',
+              status: "error",
               errors: uploadErrors,
             });
-            onError?.(uploadErrors.join('\n'));
+            onError?.(uploadErrors.join("\n"));
           } else if (uploadErrors.length > 0) {
             updateUpload(uploadId, {
-              status: 'completed',
+              status: "completed",
               successes: uploadSuccesses,
               errors: uploadErrors,
             });
             onSuccess?.(imageFiles);
-            onError?.(`Przesłano ${uploadSuccesses} z ${imageFiles.length} plików. Błędy: ${uploadErrors.join(', ')}`);
+            onError?.(
+              `Przesłano ${uploadSuccesses} z ${imageFiles.length} plików. Błędy: ${uploadErrors.join(", ")}`
+            );
           } else {
             updateUpload(uploadId, {
-              status: 'completed',
+              status: "completed",
               successes: uploadSuccesses,
             });
             onSuccess?.(imageFiles);
@@ -266,9 +269,9 @@ export function withImageUpload<P extends object>(
             removeUpload(uploadId);
           }, 5000);
         } catch (error) {
-          const errorMsg = formatApiError(error) || 'Nie udało się przesłać plików';
+          const errorMsg = formatApiError(error) || "Nie udało się przesłać plików";
           updateUpload(uploadId, {
-            status: 'error',
+            status: "error",
             errors: [errorMsg],
           });
           onError?.(errorMsg);
@@ -279,9 +282,7 @@ export function withImageUpload<P extends object>(
 
     // Get current upload progress
     const uploads = useUploadStore((state) => state.uploads);
-    const currentUpload = Object.values(uploads).find(
-      (upload) => upload.status === 'uploading'
-    );
+    const currentUpload = Object.values(uploads).find((upload) => upload.status === "uploading");
 
     return (
       <WrappedComponent
@@ -315,7 +316,7 @@ export function useImageUpload() {
     async (files: File[], config: UploadConfig) => {
       // Same implementation as HOC version
       const {
-        apiUrl,
+        apiUrl: _apiUrl,
         galleryId,
         orderId,
         type,
@@ -329,13 +330,13 @@ export function useImageUpload() {
       } = config;
 
       if (!files || files.length === 0) {
-        onError?.('Brak plików do przesłania');
+        onError?.("Brak plików do przesłania");
         return;
       }
 
-      const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+      const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
       if (imageFiles.length === 0) {
-        onError?.('Wybierz pliki graficzne');
+        onError?.("Wybierz pliki graficzne");
         return;
       }
 
@@ -353,7 +354,10 @@ export function useImageUpload() {
           const limitMB = (storageLimitBytes / (1024 * 1024)).toFixed(2);
           const filesMB = (totalFilesSize / (1024 * 1024)).toFixed(2);
           const availableMB = ((storageLimitBytes - currentBytesUsed) / (1024 * 1024)).toFixed(2);
-          const excessMB = ((currentBytesUsed + totalFilesSize - storageLimitBytes) / (1024 * 1024)).toFixed(2);
+          const excessMB = (
+            (currentBytesUsed + totalFilesSize - storageLimitBytes) /
+            (1024 * 1024)
+          ).toFixed(2);
 
           const errorMessage =
             `Przekroczono limit miejsca!\n\n` +
@@ -381,24 +385,24 @@ export function useImageUpload() {
           (file) => !validation.allowedTypes!.includes(file.type)
         );
         if (invalidFiles.length > 0) {
-          onError?.(`Nieprawidłowy typ pliku. Dozwolone: ${validation.allowedTypes.join(', ')}`);
+          onError?.(`Nieprawidłowy typ pliku. Dozwolone: ${validation.allowedTypes.join(", ")}`);
           return;
         }
       }
 
       uploadCancelRef.current = false;
 
-      const uploadId = `${type}-${galleryId}-${orderId || 'cover'}-${Date.now()}`;
+      const uploadId = `${type}-${galleryId}-${orderId || "cover"}-${Date.now()}`;
       addUpload(uploadId, {
         type,
         galleryId,
         orderId,
         current: 0,
         total: imageFiles.length,
-        currentFileName: '',
+        currentFileName: "",
         errors: [],
         successes: 0,
-        status: 'uploading',
+        status: "uploading",
       });
 
       let uploadSuccesses = 0;
@@ -407,7 +411,7 @@ export function useImageUpload() {
       try {
         for (let i = 0; i < imageFiles.length; i++) {
           if (uploadCancelRef.current) {
-            updateUpload(uploadId, { status: 'cancelled' });
+            updateUpload(uploadId, { status: "cancelled" });
             break;
           }
 
@@ -423,15 +427,15 @@ export function useImageUpload() {
           try {
             const presignResponse = await retryWithBackoff(async () => {
               return await apiFetchWithAuth(endpoint, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                  'Content-Type': 'application/json',
+                  "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                   galleryId,
                   orderId,
                   key: file.name,
-                  contentType: file.type || 'image/jpeg',
+                  contentType: file.type || "image/jpeg",
                   fileSize: file.size,
                 }),
               });
@@ -442,10 +446,10 @@ export function useImageUpload() {
 
             try {
               const uploadResponse = await fetch(presignResponse.data.url, {
-                method: 'PUT',
+                method: "PUT",
                 body: file,
                 headers: {
-                  'Content-Type': file.type || 'image/jpeg',
+                  "Content-Type": file.type || "image/jpeg",
                 },
                 signal: uploadController.signal,
               });
@@ -470,27 +474,29 @@ export function useImageUpload() {
         }
 
         if (uploadCancelRef.current) {
-          updateUpload(uploadId, { status: 'cancelled' });
+          updateUpload(uploadId, { status: "cancelled" });
           return;
         }
 
         if (uploadErrors.length > 0 && uploadSuccesses === 0) {
           updateUpload(uploadId, {
-            status: 'error',
+            status: "error",
             errors: uploadErrors,
           });
-          onError?.(uploadErrors.join('\n'));
+          onError?.(uploadErrors.join("\n"));
         } else if (uploadErrors.length > 0) {
           updateUpload(uploadId, {
-            status: 'completed',
+            status: "completed",
             successes: uploadSuccesses,
             errors: uploadErrors,
           });
           onSuccess?.(imageFiles);
-          onError?.(`Przesłano ${uploadSuccesses} z ${imageFiles.length} plików. Błędy: ${uploadErrors.join(', ')}`);
+          onError?.(
+            `Przesłano ${uploadSuccesses} z ${imageFiles.length} plików. Błędy: ${uploadErrors.join(", ")}`
+          );
         } else {
           updateUpload(uploadId, {
-            status: 'completed',
+            status: "completed",
             successes: uploadSuccesses,
           });
           onSuccess?.(imageFiles);
@@ -500,9 +506,9 @@ export function useImageUpload() {
           removeUpload(uploadId);
         }, 5000);
       } catch (error) {
-        const errorMsg = formatApiError(error) || 'Nie udało się przesłać plików';
+        const errorMsg = formatApiError(error) || "Nie udało się przesłać plików";
         updateUpload(uploadId, {
-          status: 'error',
+          status: "error",
           errors: [errorMsg],
         });
         onError?.(errorMsg);
@@ -512,7 +518,7 @@ export function useImageUpload() {
   );
 
   const uploads = useUploadStore((state) => state.uploads);
-  const currentUpload = Object.values(uploads).find((upload) => upload.status === 'uploading');
+  const currentUpload = Object.values(uploads).find((upload) => upload.status === "uploading");
 
   return {
     uploadImages,
@@ -528,4 +534,3 @@ export function useImageUpload() {
     isUploading: !!currentUpload,
   };
 }
-

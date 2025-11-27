@@ -154,7 +154,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Source: sender,
 					Destination: { ToAddresses: [gallery.clientEmail] },
 					Message: {
-						Subject: { Data: `PhotoHub Export: ${galleryDisplayName}` },
+						Subject: { Data: `PhotoCloud Export: ${galleryDisplayName}` },
 						Body: {
 							Text: { 
 								Data: `Your photo export is ready!\n\nGallery: ${galleryDisplayName}\nPhotos: ${urls.length}\n\nManifest (JSON):\n${manifestJson}\n\nAll URLs expire in 24 hours.`
@@ -185,7 +185,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					emailDetails: {
 						from: sender,
 						to: gallery.clientEmail,
-						subject: `PhotoHub Export: ${galleryId}`,
+						subject: `PhotoCloud Export: ${galleryId}`,
 						galleryId,
 						photoCount: urls.length
 					},

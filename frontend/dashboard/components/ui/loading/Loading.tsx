@@ -32,11 +32,7 @@ export const Loading: React.FC<LoadingProps> = ({
   const content = (
     <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
       {spinner}
-      {text && (
-        <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-          {text}
-        </p>
-      )}
+      {text && <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">{text}</p>}
     </div>
   );
 
@@ -56,7 +52,7 @@ export const Loading: React.FC<LoadingProps> = ({
 export const FullPageLoading: React.FC<{ text?: string }> = ({ text }) => {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] -mt-20">
-      <Loading size="xl" text={text || "Ładowanie..."} />
+      <Loading size="xl" text={text ?? "Ładowanie..."} />
     </div>
   );
 };
@@ -65,4 +61,3 @@ export const FullPageLoading: React.FC<{ text?: string }> = ({ text }) => {
 export const InlineLoading: React.FC<{ text?: string }> = ({ text }) => {
   return <Loading size="md" text={text} />;
 };
-

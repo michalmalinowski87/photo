@@ -1,5 +1,5 @@
 {
-  "name": "photohub-monorepo",
+  "name": "photocloud-monorepo",
   "private": true,
   "workspaces": [
     "infra",

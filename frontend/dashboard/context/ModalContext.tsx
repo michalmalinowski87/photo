@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
 interface ModalState {
   modals: Record<string, boolean>;
@@ -36,9 +36,12 @@ export const ModalProvider: React.FC<ModalProviderProps> = ({ children }) => {
     }));
   }, []);
 
-  const isOpen = useCallback((id: string) => {
-    return modals[id] || false;
-  }, [modals]);
+  const isOpen = useCallback(
+    (id: string) => {
+      return modals[id] || false;
+    },
+    [modals]
+  );
 
   const closeAllModals = useCallback(() => {
     setModals({});
@@ -63,8 +66,7 @@ export const ModalProvider: React.FC<ModalProviderProps> = ({ children }) => {
 export const useModalContext = () => {
   const context = useContext(ModalContext);
   if (!context) {
-    throw new Error('useModalContext must be used within ModalProvider');
+    throw new Error("useModalContext must be used within ModalProvider");
   }
   return context;
 };
-

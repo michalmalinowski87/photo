@@ -3,10 +3,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthTokenListener } from "@/components/auth-token-listener";
 import "@/styles/globals.css";
 import { aeonik, cn, generateMetadata, inter } from "@/utils";
+import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
 
 export const metadata = generateMetadata({
-  title: "PhotoHub - Prosty sposób na udostępnianie zdjęć klientom",
-  description: "PhotoHub to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
+  title: "PhotoCloud - Prosty sposób na udostępnianie zdjęć klientom",
+  description: "PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
 });
 
 export default function RootLayout({
@@ -23,11 +24,13 @@ export default function RootLayout({
           inter.variable,
         )}
       >
-        <Providers>
-          <AuthTokenListener />
-          <Toaster richColors theme="dark" position="top-right" />
-          {children}
-        </Providers>
+        <WebPCompatibilityCheck>
+          <Providers>
+            <AuthTokenListener />
+            <Toaster richColors theme="dark" position="top-right" />
+            {children}
+          </Providers>
+        </WebPCompatibilityCheck>
       </body>
     </html>
   );

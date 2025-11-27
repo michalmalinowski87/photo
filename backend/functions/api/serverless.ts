@@ -8,14 +8,30 @@ import { Express, Request, Response } from 'express';
 export function createServerlessHandler(app: Express) {
 	return async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
 		// CORS headers to include in all responses (including errors)
-		const corsHeaders = {
+		// API Gateway HTTP API v2 is case-sensitive, so use exact header names
+		const corsHeaders: Record<string, string> = {
 			'Access-Control-Allow-Origin': '*',
 			'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
 			'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+			'Access-Control-Max-Age': '86400',
 		};
+		
 		// Normalize event format
 		const method = event.requestContext?.http?.method || event.httpMethod || 'GET';
 		const path = event.requestContext?.http?.path || event.path || '/';
+		
+		// Handle OPTIONS preflight requests early - return immediately without Express processing
+		// This is needed because the catch-all route with authorizer might interfere with API Gateway's built-in CORS
+		if (method === 'OPTIONS' || method === 'options') {
+			return {
+				statusCode: 200,
+				headers: corsHeaders,
+				body: '',
+			};
+		}
+		
+		// Log request for debugging (can be removed in production)
+		console.log('Lambda handler invoked:', { method, path, hasBody: !!event.body });
 		const queryString = event.queryStringParameters || {};
 		const headers: Record<string, string> = {};
 		
@@ -49,6 +65,40 @@ export function createServerlessHandler(app: Express) {
 		reqStream.push(null); // End the stream
 		
 		return new Promise((resolve, reject) => {
+			let resolved = false;
+			
+			// Helper to safely resolve the promise only once
+			const safeResolve = (response: APIGatewayProxyResult) => {
+				if (!resolved) {
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(response);
+				}
+			};
+			
+			// Safety timeout - if no response is sent within 25 seconds, return 503
+			// This prevents Lambda from timing out and ensures we always return a response
+			const timeoutId = setTimeout(() => {
+				if (!resolved) {
+					console.error('Lambda handler timeout: No response sent within 25 seconds', { 
+						method, 
+						path,
+						remainingTime: context.getRemainingTimeInMillis ? context.getRemainingTimeInMillis() : 'unknown'
+					});
+					safeResolve({
+						statusCode: 503,
+						headers: {
+							'content-type': 'application/json',
+							...corsHeaders,
+						},
+						body: JSON.stringify({ 
+							error: 'Service Unavailable', 
+							message: 'Request timeout - no response received from handler' 
+						}),
+					});
+				}
+			}, 25000); // 25 seconds (5 seconds before Lambda timeout)
+
 			const req = Object.assign(reqStream, {
 				method,
 				path,
@@ -92,7 +142,7 @@ export function createServerlessHandler(app: Express) {
 					}
 					// Ensure CORS headers are always included
 					const finalHeaders = { ...corsHeaders, ...this.headers };
-					resolve({
+					safeResolve({
 						statusCode: this.statusCode,
 						headers: finalHeaders,
 						body: this.body,
@@ -106,7 +156,7 @@ export function createServerlessHandler(app: Express) {
 						// Mark as base64 encoded so API Gateway knows to decode it
 						// Ensure CORS headers are always included
 						const finalHeaders = { ...corsHeaders, ...this.headers };
-						resolve({
+						safeResolve({
 							statusCode: this.statusCode,
 							headers: finalHeaders,
 							body: this.body,
@@ -123,7 +173,7 @@ export function createServerlessHandler(app: Express) {
 					}
 					// Ensure CORS headers are always included
 					const finalHeaders = { ...corsHeaders, ...this.headers };
-					resolve({
+					safeResolve({
 						statusCode: this.statusCode,
 						headers: finalHeaders,
 						body: this.body,
@@ -145,7 +195,7 @@ export function createServerlessHandler(app: Express) {
 							// Mark as base64 encoded so API Gateway knows to decode it
 							// Ensure CORS headers are always included
 							const finalHeaders = { ...corsHeaders, ...this.headers };
-							resolve({
+							safeResolve({
 								statusCode: this.statusCode,
 								headers: finalHeaders,
 								body: this.body,
@@ -158,7 +208,7 @@ export function createServerlessHandler(app: Express) {
 					}
 					// Ensure CORS headers are always included
 					const finalHeaders = { ...corsHeaders, ...this.headers };
-					resolve({
+					safeResolve({
 						statusCode: this.statusCode,
 						headers: finalHeaders,
 						body: this.body,
@@ -171,7 +221,7 @@ export function createServerlessHandler(app: Express) {
 			const next = (err?: any) => {
 				if (err) {
 					console.error('Express error:', err);
-					resolve({
+					safeResolve({
 						statusCode: 500,
 						headers: {
 							'content-type': 'application/json',
@@ -192,10 +242,27 @@ export function createServerlessHandler(app: Express) {
 
 			// Execute Express app
 			try {
-				app(req as Request, res as Response, next);
+				// Handle both sync and async Express handlers
+				const result = app(req as Request, res as Response, next);
+				
+				// If Express returns a Promise (async handler), wait for it
+				if (result && typeof result.then === 'function') {
+					result.catch((err: any) => {
+						console.error('Unhandled async error:', err);
+						safeResolve({
+							statusCode: 500,
+							headers: {
+								'content-type': 'application/json',
+								...corsHeaders,
+							},
+							body: JSON.stringify({ error: 'Internal server error', message: err.message }),
+						});
+					});
+				}
 			} catch (err: any) {
 				// Ensure CORS headers are included even on unhandled errors
-				resolve({
+				console.error('Express app execution error:', err);
+				safeResolve({
 					statusCode: 500,
 					headers: {
 						'content-type': 'application/json',

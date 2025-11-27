@@ -1,45 +1,51 @@
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/router";
 import Link from "next/link";
-import Button from "../ui/button/Button";
-import api, { formatApiError } from "../../lib/api-service";
-import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
+import { useRouter } from "next/router";
+import { useState, useRef, useEffect } from "react";
+
 import { useToast } from "../../hooks/useToast";
+import api, { formatApiError } from "../../lib/api-service";
+import Button from "../ui/button/Button";
+import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 
 interface RetryableImageProps {
-	src: string;
-	alt: string;
-	className?: string;
-	maxRetries?: number;
-	initialDelay?: number;
+  src: string;
+  alt: string;
+  className?: string;
+  maxRetries?: number;
+  initialDelay?: number;
 }
 
 // Component that retries loading an image until it's available on CloudFront
-const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "", maxRetries = 30, initialDelay = 500 }) => {
+const RetryableImage: React.FC<RetryableImageProps> = ({
+  src,
+  alt,
+  className = "",
+  maxRetries = 30,
+  initialDelay = 500,
+}) => {
   const [imageSrc, setImageSrc] = useState<string>(src);
-  const [retryCount, setRetryCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
+  const retryCountRef = useRef<number>(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     // Reset when src changes
     setImageSrc(src);
-    setRetryCount(0);
+    retryCountRef.current = 0;
     setIsLoading(true);
-    setHasLoaded(false);
-    
+
     // Clear any pending retry
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
     }
-    
+
     // Force image reload by clearing and setting src
     if (imgRef.current && src) {
       // Clear current src to force reload
-      imgRef.current.src = '';
+      imgRef.current.src = "";
       // Use setTimeout to ensure the src is cleared before setting new one
       setTimeout(() => {
         if (imgRef.current && src) {
@@ -50,36 +56,32 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
   }, [src]);
 
   const handleError = (): void => {
-    setRetryCount((currentRetryCount) => {
-      const nextRetryCount = currentRetryCount + 1;
-      
-      if (currentRetryCount < maxRetries) {
-        setIsLoading(true);
-        setHasLoaded(false);
-        
-        // Exponential backoff: start with initialDelay, increase gradually
-        const delay = Math.min(initialDelay * Math.pow(1.2, currentRetryCount), 5000);
-        
-        retryTimeoutRef.current = setTimeout(() => {
-          // Add cache-busting query parameter
-          const separator = src.includes('?') ? '&' : '?';
-          const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${nextRetryCount}`;
-          
-          setImageSrc(retryUrl);
-          
-          // Force reload the image
-          if (imgRef.current) {
-            imgRef.current.src = retryUrl;
-          }
-        }, delay);
-        
-        return nextRetryCount;
-      } else {
-        setIsLoading(false);
-        setHasLoaded(false);
-        return currentRetryCount;
-      }
-    });
+    retryCountRef.current += 1;
+    const currentRetryCount = retryCountRef.current;
+
+    if (currentRetryCount < maxRetries) {
+      setIsLoading(true);
+      setHasLoaded(false);
+
+      // Exponential backoff: start with initialDelay, increase gradually
+      const delay = Math.min(initialDelay * Math.pow(1.2, currentRetryCount - 1), 5000);
+
+      retryTimeoutRef.current = setTimeout(() => {
+        // Add cache-busting query parameter
+        const separator = src.includes("?") ? "&" : "?";
+        const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${currentRetryCount}`;
+
+        setImageSrc(retryUrl);
+
+        // Force reload the image
+        if (imgRef.current) {
+          imgRef.current.src = retryUrl;
+        }
+      }, delay);
+    } else {
+      setIsLoading(false);
+      setHasLoaded(false);
+    }
   };
 
   const handleLoad = (): void => {
@@ -104,11 +106,10 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
     <div className="relative w-full h-full">
       {isLoading && (
         <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            Ładowanie obrazu...
-          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Ładowanie obrazu...</div>
         </div>
       )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
         src={imageSrc}
@@ -116,18 +117,32 @@ const RetryableImage: React.FC<RetryableImageProps> = ({ src, alt, className = "
         className={className}
         onError={handleError}
         onLoad={handleLoad}
-        style={{ 
+        style={{
           opacity: hasLoaded ? 1 : 0,
-          transition: 'opacity 0.3s ease-in-out',
-          display: hasLoaded ? 'block' : 'none'
+          transition: "opacity 0.3s ease-in-out",
+          display: hasLoaded ? "block" : "none",
         }}
       />
     </div>
   );
 };
 
+interface Gallery {
+  galleryId: string;
+  galleryName?: string;
+  name?: string;
+  coverPhotoUrl?: string;
+  [key: string]: unknown;
+}
+
+interface Order {
+  orderId: string;
+  galleryId: string;
+  [key: string]: unknown;
+}
+
 interface GallerySidebarProps {
-  gallery: any;
+  gallery: Gallery;
   isPaid: boolean;
   galleryUrl: string;
   onPay: () => void;
@@ -135,7 +150,7 @@ interface GallerySidebarProps {
   onSendLink: () => void;
   onSettings: () => void;
   onReloadGallery?: () => Promise<void>;
-  order?: any;
+  order?: Order;
   orderId?: string;
   sendLinkLoading?: boolean;
   onDownloadZip?: () => void;
@@ -157,7 +172,7 @@ export default function GallerySidebar({
   onPay,
   onCopyUrl,
   onSendLink,
-  onSettings,
+  onSettings: _onSettings,
   onReloadGallery,
   order,
   orderId,
@@ -175,9 +190,9 @@ export default function GallerySidebar({
 }: GallerySidebarProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [coverPhotoUrl, setCoverPhotoUrl] = useState(gallery?.coverPhotoUrl || null);
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState(gallery?.coverPhotoUrl ?? null);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -185,75 +200,77 @@ export default function GallerySidebar({
 
   // Update cover photo URL when gallery prop changes (backend already converts to CloudFront)
   useEffect(() => {
-    const newUrl = gallery?.coverPhotoUrl || null;
+    const newUrl = gallery?.coverPhotoUrl ?? null;
     // Only update if URL actually changed to avoid unnecessary re-renders
     if (newUrl !== coverPhotoUrl) {
       setCoverPhotoUrl(newUrl);
     }
-  }, [gallery?.coverPhotoUrl]);
+  }, [gallery?.coverPhotoUrl, coverPhotoUrl]);
 
   const handleBack = () => {
     if (typeof window !== "undefined" && gallery?.galleryId) {
       const referrerKey = `gallery_referrer_${gallery.galleryId}`;
       const referrerPath = sessionStorage.getItem(referrerKey);
-      
+
       if (referrerPath) {
-        router.push(referrerPath);
+        void router.push(referrerPath);
       } else {
-        router.push("/");
+        void router.push("/");
       }
     } else {
-      router.push("/");
+      void router.push("/");
     }
   };
 
   const handleCoverPhotoUpload = async (file: File): Promise<void> => {
-    if (!file || !gallery?.galleryId) return;
-    
+    if (!file || !gallery?.galleryId) {
+      return;
+    }
+
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showToast("error", "Błąd", "Plik jest za duży. Maksymalny rozmiar to 5MB.");
       return;
     }
-    
+
     setUploadingCover(true);
-    
+
     try {
       // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
       const timestamp = Date.now();
-      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const fileExtension = file.name.split(".").pop() ?? "jpg";
       const key = `cover_${timestamp}.${fileExtension}`;
       const presignResponse = await api.uploads.getPresignedUrl({
         galleryId: gallery.galleryId,
         key,
-        contentType: file.type || "image/jpeg",
+        contentType: file.type ?? "image/jpeg",
         fileSize: file.size,
       });
-      
+
       // Upload file to S3
       await fetch(presignResponse.url, {
         method: "PUT",
         body: file,
         headers: {
-          "Content-Type": file.type || "image/jpeg",
+          "Content-Type": file.type ?? "image/jpeg",
         },
       });
-      
+
       // Update gallery in backend with S3 URL - backend will convert it to CloudFront
-      const s3Url = presignResponse.url.split('?')[0]; // Remove query params
-      
+      const s3Url = presignResponse.url.split("?")[0]; // Remove query params
+
       await api.galleries.update(gallery.galleryId, {
         coverPhotoUrl: s3Url,
       });
-      
+
       // Reload gallery data to get the CloudFront URL from backend
       if (onReloadGallery) {
         await onReloadGallery();
       }
-      
+
       showToast("success", "Sukces", "Okładka galerii została przesłana");
     } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) || "Nie udało się przesłać okładki");
+      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się przesłać okładki");
     } finally {
       setUploadingCover(false);
     }
@@ -261,25 +278,27 @@ export default function GallerySidebar({
 
   const handleRemoveCoverPhoto = async (e: React.MouseEvent): Promise<void> => {
     e.stopPropagation(); // Prevent triggering the file input
-    
-    if (!gallery?.galleryId) return;
-    
+
+    if (!gallery?.galleryId) {
+      return;
+    }
+
     setUploadingCover(true);
-    
+
     try {
       // Remove cover photo by setting coverPhotoUrl to null
       await api.galleries.update(gallery.galleryId, {
         coverPhotoUrl: null,
       });
-      
+
       // Reload gallery data to ensure consistency
       if (onReloadGallery) {
-       	await onReloadGallery();
+        await onReloadGallery();
       }
-      
+
       showToast("success", "Sukces", "Okładka galerii została usunięta");
     } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) || "Nie udało się usunąć okładki");
+      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się usunąć okładki");
     } finally {
       setUploadingCover(false);
     }
@@ -287,18 +306,18 @@ export default function GallerySidebar({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      handleCoverPhotoUpload(file);
+    if (file?.type.startsWith("image/")) {
+      void handleCoverPhotoUpload(file);
     }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      handleCoverPhotoUpload(file);
+    if (file?.type.startsWith("image/")) {
+      void handleCoverPhotoUpload(file);
     }
   };
 
@@ -317,21 +336,23 @@ export default function GallerySidebar({
   };
 
   const handleDeleteConfirm = async (): Promise<void> => {
-    if (!gallery?.galleryId) return;
-    
+    if (!gallery?.galleryId) {
+      return;
+    }
+
     setDeleteLoading(true);
-    
+
     try {
       await api.galleries.delete(gallery.galleryId);
-      
+
       showToast("success", "Sukces", "Galeria została usunięta");
       setShowDeleteDialog(false);
-      
+
       // Navigate back to galleries list
-      router.push("/");
-    } catch (err: any) {
+      void router.push("/");
+    } catch (err: unknown) {
       const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg || "Nie udało się usunąć galerii");
+      showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
     } finally {
       setDeleteLoading(false);
     }
@@ -371,101 +392,97 @@ export default function GallerySidebar({
             href={`/galleries/${gallery.galleryId}`}
             className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
           >
-            {gallery.galleryName || "Galeria"}
+            {gallery.galleryName ?? "Galeria"}
           </Link>
         </div>
       ) : (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">
-          <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">
-            Ładowanie...
-          </div>
+          <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">Ładowanie...</div>
         </div>
       )}
 
       {/* Cover Photo Section */}
       {!galleryLoading && gallery && (
         <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
-        <div
-          className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
-            isDragging
-              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-              : coverPhotoUrl
-              ? "border-gray-200 dark:border-gray-700"
-              : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
-          }`}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {coverPhotoUrl ? (
-            <>
-              <RetryableImage
-                src={coverPhotoUrl}
-                alt="Okładka galerii"
-                className="w-full h-full object-cover rounded-lg pointer-events-none"
-                maxRetries={30}
-                initialDelay={500}
-              />
-              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
-                  {uploadingCover ? "Przesyłanie..." : "Kliknij na obraz aby zmienić"}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveCoverPhoto(e);
-                  }}
-                  disabled={uploadingCover}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Usuń okładkę"
-                >
-                  Usuń okładkę
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-              {uploadingCover ? (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Przesyłanie...
-                </div>
-              ) : (
-                <>
-                  <svg
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="text-gray-400 dark:text-gray-500 mb-2"
+          <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
+          <div
+            className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
+              isDragging
+                ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
+                : coverPhotoUrl
+                  ? "border-gray-200 dark:border-gray-700"
+                  : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {coverPhotoUrl ? (
+              <>
+                <RetryableImage
+                  src={coverPhotoUrl}
+                  alt="Okładka galerii"
+                  className="w-full h-full object-cover rounded-lg pointer-events-none"
+                  maxRetries={30}
+                  initialDelay={500}
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
+                    {uploadingCover ? "Przesyłanie..." : "Kliknij na obraz aby zmienić"}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleRemoveCoverPhoto(e);
+                    }}
+                    disabled={uploadingCover}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Usuń okładkę"
                   >
-                    <path
-                      d="M12 5V19M5 12H19"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 text-center px-4">
-                    Przeciągnij zdjęcie tutaj lub kliknij aby wybrać
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                    JPG, PNG (max 5MB)
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/jpg"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-        </div>
+                    Usuń okładkę
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                {uploadingCover ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Przesyłanie...</div>
+                ) : (
+                  <>
+                    <svg
+                      width="48"
+                      height="48"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="text-gray-400 dark:text-gray-500 mb-2"
+                    >
+                      <path
+                        d="M12 5V19M5 12H19"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 text-center px-4">
+                      Przeciągnij zdjęcie tutaj lub kliknij aby wybrać
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      JPG, PNG (max 5MB)
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/jpg"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
         </div>
       )}
 
@@ -487,39 +504,53 @@ export default function GallerySidebar({
               }, 2500);
             }}
             className={`w-full transition-all duration-500 ease-in-out ${
-              urlCopied 
-                ? "!bg-green-500 hover:!bg-green-600 !border-green-500 hover:!border-green-600 !text-white shadow-md" 
+              urlCopied
+                ? "!bg-green-500 hover:!bg-green-600 !border-green-500 hover:!border-green-600 !text-white shadow-md"
                 : ""
             }`}
           >
             <span className="relative inline-block min-w-[120px] h-5">
-              <span className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
-                urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"
-              }`}>
+              <span
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
+                  urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"
+                }`}
+              >
                 Kopiuj URL
               </span>
-              <span className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
-                urlCopied ? "opacity-100 scale-100" : "opacity-0 scale-90"
-              }`}>
+              <span
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
+                  urlCopied ? "opacity-100 scale-100" : "opacity-0 scale-90"
+                }`}
+              >
                 Skopiowano URL
               </span>
             </span>
           </Button>
-          
+
           {/* Share Button - moved under Kopiuj URL */}
-          {!galleryLoading && gallery && isPaid && gallery.selectionEnabled && gallery.clientEmail && 
-           order?.deliveryStatus !== "PREPARING_DELIVERY" && 
-           order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
-           order?.deliveryStatus !== "DELIVERED" && (
+          {!galleryLoading &&
+          gallery &&
+          isPaid &&
+          gallery.selectionEnabled &&
+          gallery.clientEmail &&
+          order?.deliveryStatus !== "PREPARING_DELIVERY" &&
+          order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
+          order?.deliveryStatus !== "DELIVERED" ? (
             <>
               {(() => {
                 // Check if gallery has a CLIENT_SELECTING order
-                const hasClientSelectingOrder = gallery.orders && Array.isArray(gallery.orders) && 
-                  gallery.orders.some((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
-                
+                const hasClientSelectingOrder =
+                  gallery.orders &&
+                  Array.isArray(gallery.orders) &&
+                  gallery.orders.some((o: unknown) => {
+                    const order = o as { deliveryStatus?: string };
+                    return order.deliveryStatus === "CLIENT_SELECTING";
+                  });
+
                 // Check if gallery has any existing orders (for determining button text)
-                const hasExistingOrders = gallery.orders && Array.isArray(gallery.orders) && gallery.orders.length > 0;
-                
+                const hasExistingOrders =
+                  gallery.orders && Array.isArray(gallery.orders) && gallery.orders.length > 0;
+
                 if (hasClientSelectingOrder) {
                   // Show disabled "Udostępniono klientowi" button
                   return (
@@ -529,17 +560,30 @@ export default function GallerySidebar({
                       disabled
                       className="w-full mt-2"
                       startIcon={
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M8 2V14M2 8H14"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
                         </svg>
                       }
                     >
                       Udostępniono klientowi
                     </Button>
-                  );
+                  ) as React.ReactNode;
                 } else {
                   // Show enabled button - "Udostępnij klientowi" for new galleries, "Wyślij link do galerii" for existing orders
-                  const buttonText = hasExistingOrders ? "Wyślij link do galerii" : "Udostępnij klientowi";
+                  const buttonText = hasExistingOrders
+                    ? "Wyślij link do galerii"
+                    : "Udostępnij klientowi";
                   return (
                     <Button
                       variant="primary"
@@ -548,38 +592,54 @@ export default function GallerySidebar({
                       disabled={sendLinkLoading}
                       className="w-full mt-2"
                       startIcon={
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M8 2V14M2 8H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M8 2V14M2 8H14"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
                         </svg>
                       }
                     >
                       {sendLinkLoading ? "Wysyłanie..." : buttonText}
                     </Button>
-                  );
+                  ) as React.ReactNode;
                 }
               })()}
             </>
-          )}
+          ) : null}
         </div>
       )}
 
       {/* Creation Date */}
-      {!galleryLoading && gallery && (
-        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
-          <div className="text-sm text-gray-900 dark:text-white">
-            {gallery.createdAt
-              ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "-"}
-          </div>
-        </div>
-      )}
+      {(() => {
+        if (!galleryLoading && gallery) {
+          return (
+            <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
+              <div className="text-sm text-gray-900 dark:text-white">
+                {gallery.createdAt && typeof gallery.createdAt === "string"
+                  ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "-"}
+              </div>
+            </div>
+          ) as React.ReactNode;
+        }
+        return null;
+      })()}
 
       {/* Expiry Date */}
       {!galleryLoading && gallery && (
@@ -587,37 +647,39 @@ export default function GallerySidebar({
           <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Ważna do:</div>
           <div className="text-sm text-gray-900 dark:text-white">
             {(() => {
-              let expiryDate = null;
-              
+              let expiryDate: Date | null = null;
+
               if (!isPaid) {
                 // UNPAID draft: 3 days from creation (TTL expiry)
-                if (gallery.ttlExpiresAt) {
+                if (gallery.ttlExpiresAt && typeof gallery.ttlExpiresAt === "string") {
                   expiryDate = new Date(gallery.ttlExpiresAt);
-                } else if (gallery.ttl) {
+                } else if (gallery.ttl && typeof gallery.ttl === "number") {
                   // TTL is in Unix epoch seconds
                   expiryDate = new Date(gallery.ttl * 1000);
-                } else if (gallery.createdAt) {
+                } else if (gallery.createdAt && typeof gallery.createdAt === "string") {
                   // Fallback: calculate 3 days from creation
-                  expiryDate = new Date(new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000);
+                  expiryDate = new Date(
+                    new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000
+                  );
                 }
               } else {
                 // PAID: use expiresAt from plan
-                if (gallery.expiresAt) {
+                if (gallery.expiresAt && typeof gallery.expiresAt === "string") {
                   expiryDate = new Date(gallery.expiresAt);
                 }
               }
-              
+
               if (expiryDate) {
-              return expiryDate.toLocaleDateString("pl-PL", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-            }
-            
-              return "-";
+                return expiryDate.toLocaleDateString("pl-PL", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) as React.ReactNode;
+              }
+
+              return "-" as React.ReactNode;
             })()}
           </div>
         </div>
@@ -627,24 +689,44 @@ export default function GallerySidebar({
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-1">
           <li>
-            {gallery && gallery.galleryId ? (
+            {gallery?.galleryId ? (
               <Link
                 href={`/galleries/${gallery.galleryId}`}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  router.pathname === `/galleries/[id]` && !router.asPath.includes('/photos') && !router.asPath.includes('/settings')
+                  router.pathname === `/galleries/[id]` &&
+                  !router.asPath.includes("/photos") &&
+                  !router.asPath.includes("/settings")
                     ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
                     : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
                 }`}
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z" fill="currentColor"/>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z"
+                    fill="currentColor"
+                  />
                 </svg>
                 <span>Zlecenia</span>
               </Link>
             ) : (
               <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z" fill="currentColor"/>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M3 4C3 2.89543 3.89543 2 5 2H15C16.1046 2 17 2.89543 17 4V16C17 17.1046 16.1046 18 15 18H5C3.89543 18 3 17.1046 3 16V4ZM5 4V16H15V4H5ZM6 6H14V8H6V6ZM6 10H14V12H6V10ZM6 14H11V16H6V14Z"
+                    fill="currentColor"
+                  />
                 </svg>
                 <span>Zlecenia</span>
               </div>
@@ -661,8 +743,17 @@ export default function GallerySidebar({
                     : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
                 }`}
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 3C2.89543 3 2 3.89543 2 5V15C2 16.1046 2.89543 17 4 17H16C17.1046 17 18 16.1046 18 15V5C18 3.89543 17.1046 3 16 3H4ZM4 5H16V15H4V5ZM6 7C5.44772 7 5 7.44772 5 8C5 8.55228 5.44772 9 6 9C6.55228 9 7 8.55228 7 8C7 7.44772 6.55228 7 6 7ZM8 11L10.5 8.5L13 11L15 9V13H5V9L8 11Z" fill="currentColor"/>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 3C2.89543 3 2 3.89543 2 5V15C2 16.1046 2.89543 17 4 17H16C17.1046 17 18 16.1046 18 15V5C18 3.89543 17.1046 3 16 3H4ZM4 5H16V15H4V5ZM6 7C5.44772 7 5 7.44772 5 8C5 8.55228 5.44772 9 6 9C6.55228 9 7 8.55228 7 8C7 7.44772 6.55228 7 6 7ZM8 11L10.5 8.5L13 11L15 9V13H5V9L8 11Z"
+                    fill="currentColor"
+                  />
                 </svg>
                 <span>Zdjęcia</span>
               </Link>
@@ -675,9 +766,23 @@ export default function GallerySidebar({
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50"
                   title="Ustawienia galerii są zablokowane dla dostarczonych galerii"
                 >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
-                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      fillRule="evenodd"
+                      clipRule="evenodd"
+                      d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z"
+                      fill="currentColor"
+                    />
                   </svg>
                   <span>Ustawienia</span>
                 </div>
@@ -690,9 +795,23 @@ export default function GallerySidebar({
                       : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
                   }`}
                 >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
-                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      fillRule="evenodd"
+                      clipRule="evenodd"
+                      d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z"
+                      fill="currentColor"
+                    />
                   </svg>
                   <span>Ustawienia</span>
                 </Link>
@@ -701,9 +820,23 @@ export default function GallerySidebar({
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50"
                   title="Sprawdzanie statusu galerii..."
                 >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z" fill="currentColor"/>
-                    <path fillRule="evenodd" clipRule="evenodd" d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z" fill="currentColor"/>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M10 12C11.1046 12 12 11.1046 12 10C12 8.89543 11.1046 8 10 8C8.89543 8 8 8.89543 8 10C8 11.1046 8.89543 12 10 12Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      fillRule="evenodd"
+                      clipRule="evenodd"
+                      d="M10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2ZM10 4C13.3137 4 16 6.68629 16 10C16 13.3137 13.3137 16 10 16C6.68629 16 4 13.3137 4 10C4 6.68629 6.68629 4 10 4ZM10 6C8.89543 6 8 6.89543 8 8C8 9.10457 8.89543 10 10 10C11.1046 10 12 9.10457 12 8C12 6.89543 11.1046 6 10 6Z"
+                      fill="currentColor"
+                    />
                   </svg>
                   <span>Ustawienia</span>
                 </div>
@@ -720,28 +853,40 @@ export default function GallerySidebar({
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Zlecenie
             </div>
-            <div className="text-sm font-medium text-gray-900 dark:text-white">
-              {orderId}
-            </div>
+            <div className="text-sm font-medium text-gray-900 dark:text-white">{orderId}</div>
           </div>
-          
+
           <div className="space-y-2 px-3">
             {/* Download Selected Originals ZIP 
                 - Available for CLIENT_APPROVED/AWAITING_FINAL_PHOTOS (before finals upload)
             */}
-            {!galleryLoading && gallery && gallery.selectionEnabled !== false && canDownloadZip && onDownloadZip && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onDownloadZip}
-                className="w-full justify-start"
-              >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                  <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
-                </svg>
-                Pobierz wybrane oryginały (ZIP)
-              </Button>
-            )}
+            {!galleryLoading &&
+              gallery &&
+              gallery.selectionEnabled !== false &&
+              canDownloadZip &&
+              onDownloadZip && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onDownloadZip}
+                  className="w-full justify-start"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="mr-2"
+                  >
+                    <path
+                      d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  Pobierz wybrane oryginały (ZIP)
+                </Button>
+              )}
 
             {/* Download Finals - Only show if finals are uploaded */}
             {onDownloadFinals && hasFinals && (
@@ -751,53 +896,110 @@ export default function GallerySidebar({
                 onClick={onDownloadFinals}
                 className="w-full justify-start"
               >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                  <path d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z" fill="currentColor"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mr-2"
+                >
+                  <path
+                    d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
+                    fill="currentColor"
+                  />
                 </svg>
                 Pobierz finały
               </Button>
             )}
 
             {/* Change Request Actions */}
-            {order?.deliveryStatus === 'CHANGES_REQUESTED' && onApproveChangeRequest && onDenyChangeRequest && (
-              <>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={onApproveChangeRequest}
-                  className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                    <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M7 10L9 12L13 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Zatwierdź prośbę o zmiany
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onDenyChangeRequest}
-                  className="w-full justify-start"
-                >
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                    <path d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M7 7L13 13M13 7L7 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Odrzuć prośbę o zmiany
-                </Button>
-              </>
-            )}
+            {order?.deliveryStatus === "CHANGES_REQUESTED" &&
+              onApproveChangeRequest &&
+              onDenyChangeRequest && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={onApproveChangeRequest}
+                    className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="mr-2"
+                    >
+                      <path
+                        d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M7 10L9 12L13 8"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Zatwierdź prośbę o zmiany
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onDenyChangeRequest}
+                    className="w-full justify-start"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="mr-2"
+                    >
+                      <path
+                        d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M7 7L13 13M13 7L7 13"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Odrzuć prośbę o zmiany
+                  </Button>
+                </>
+              )}
 
             {/* Mark Order as Paid */}
-            {onMarkOrderPaid && order?.paymentStatus !== 'PAID' && (
+            {onMarkOrderPaid && order?.paymentStatus !== "PAID" && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={onMarkOrderPaid}
                 className="w-full justify-start"
               >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                  <path d="M8 13L4 9L5.41 7.59L8 10.17L14.59 3.58L16 5L8 13Z" fill="currentColor"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mr-2"
+                >
+                  <path d="M8 13L4 9L5.41 7.59L8 10.17L14.59 3.58L16 5L8 13Z" fill="currentColor" />
                 </svg>
                 Oznacz jako opłacone
               </Button>
@@ -810,35 +1012,92 @@ export default function GallerySidebar({
                 variant="outline"
                 onClick={onSendFinalsToClient}
                 className="w-full justify-start"
-                disabled={order?.deliveryStatus === 'DELIVERED'}
+                disabled={order?.deliveryStatus === "DELIVERED"}
               >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                  <path d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mr-2"
+                >
+                  <path
+                    d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
-                {order?.deliveryStatus === 'DELIVERED' ? 'Finały wysłane' : 'Wyślij finały do klienta'}
+                {order?.deliveryStatus === "DELIVERED"
+                  ? "Finały wysłane"
+                  : "Wyślij finały do klienta"}
               </Button>
             )}
           </div>
         </div>
       )}
 
-      {/* UNPAID Banner - Only show when gallery is fully loaded and confirmed unpaid */}
-      {!galleryLoading && gallery && gallery.galleryId && !isPaid && (
+      {/* Storage Usage Info - Show only on gallery pages, not on order pages */}
+      {!orderId &&
+        !galleryLoading &&
+        gallery?.galleryId &&
+        (gallery.originalsBytesUsed ?? gallery.finalsBytesUsed) && (
+          <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              Wykorzystane miejsce
+            </div>
+            {gallery.originalsBytesUsed !== undefined && (
+              <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                Oryginały:{" "}
+                {(
+                  (typeof gallery.originalsBytesUsed === "number"
+                    ? gallery.originalsBytesUsed
+                    : 0) /
+                  (1024 * 1024 * 1024)
+                ).toFixed(2)}{" "}
+                GB
+                {gallery.originalsLimitBytes && typeof gallery.originalsLimitBytes === "number" ? (
+                  <span className="text-gray-500">
+                    {" "}
+                    / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {gallery.finalsBytesUsed !== undefined && (
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                Finalne:{" "}
+                {(
+                  (typeof gallery.finalsBytesUsed === "number" ? gallery.finalsBytesUsed : 0) /
+                  (1024 * 1024 * 1024)
+                ).toFixed(2)}{" "}
+                GB
+                {gallery.finalsLimitBytes && typeof gallery.finalsLimitBytes === "number" ? (
+                  <span className="text-gray-500">
+                    {" "}
+                    / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* UNPUBLISHED Banner - Only show when gallery is fully loaded and confirmed unpaid */}
+      {!galleryLoading && gallery?.galleryId && !isPaid && (
         <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-          <div className="p-3 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20">
-            <div className="text-sm font-medium text-error-800 dark:text-error-200 mb-1">
-              Galeria nieopłacona
+          <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+            <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
+              Galeria nieopublikowana
             </div>
-            <div className="text-xs text-error-600 dark:text-error-400 mb-3">
-              Galeria wygaśnie za 3 dni jeśli nie zostanie opłacona.
+            <div className="text-xs text-warning-600 dark:text-warning-400 mb-3">
+              Opublikuj galerię, aby ją aktywować. System automatycznie wybierze najbardziej
+              optymalny plan na podstawie przesłanych zdjęć i poprosi o dokonanie płatności.
             </div>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onPay}
-              className="w-full"
-            >
-              Opłać galerię
+            <Button size="sm" variant="primary" onClick={onPay} className="w-full">
+              Opublikuj galerię
             </Button>
           </div>
         </div>
@@ -867,7 +1126,7 @@ export default function GallerySidebar({
         }}
         onConfirm={handleDeleteConfirm}
         title="Usuń galerię"
-        message={`Czy na pewno chcesz usunąć galerię "${gallery?.galleryName || gallery?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        message={`Czy na pewno chcesz usunąć galerię "${gallery?.galleryName ?? gallery?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
         confirmText="Usuń galerię"
         cancelText="Anuluj"
         variant="danger"
@@ -876,4 +1135,3 @@ export default function GallerySidebar({
     </aside>
   );
 }
-

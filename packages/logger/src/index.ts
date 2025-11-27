@@ -15,7 +15,7 @@ function output(level: LogLevel, base: Record<string, unknown>, msg: string, det
 }
 
 export function createLogger(context: Record<string, unknown> = {}): Logger {
-	const base = { service: 'photohub', ...context };
+	const base = { service: 'photocloud', ...context };
 	return {
 		debug: (msg, d) => output('debug', base, msg, d),
 		info: (msg, d) => output('info', base, msg, d),

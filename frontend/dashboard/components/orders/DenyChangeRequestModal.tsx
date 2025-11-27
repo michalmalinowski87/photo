@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Modal } from "../ui/modal";
+
 import Button from "../ui/button/Button";
+import { Modal } from "../ui/modal";
 
 interface DenyChangeRequestModalProps {
   isOpen: boolean;
@@ -35,14 +36,15 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
           Odrzuć prośbę o zmiany
         </h2>
-        
+
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           Czy na pewno chcesz odrzucić prośbę klienta o zmiany?
         </p>
-        
+
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Powód odrzucenia <span className="text-gray-500 dark:text-gray-400">(opcjonalne, ale zalecane)</span>
+            Powód odrzucenia{" "}
+            <span className="text-gray-500 dark:text-gray-400">(opcjonalne, ale zalecane)</span>
           </label>
           <textarea
             value={reason}
@@ -58,11 +60,7 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
         </div>
 
         <div className="flex gap-3 justify-end">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={loading}
-          >
+          <Button variant="outline" onClick={handleClose} disabled={loading}>
             Anuluj
           </Button>
           <Button
@@ -78,4 +76,3 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
     </Modal>
   );
 };
-

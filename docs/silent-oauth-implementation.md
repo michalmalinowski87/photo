@@ -106,15 +106,15 @@ Add these callback URLs to your Cognito User Pool:
 ### Production URLs
 
 When deploying, add:
-- `https://photohub.com/auth/auth-callback`
-- `https://photohub.com/auth/auth-callback-silent`
-- `https://dashboard.photohub.com/auth/auth-callback`
+- `https://photocloud.com/auth/auth-callback`
+- `https://photocloud.com/auth/auth-callback-silent`
+- `https://dashboard.photocloud.com/auth/auth-callback`
 
 ### Sign-Out URLs
 
 Add logout callback:
 - `http://localhost:3003/auth/logout-callback`
-- `https://photohub.com/auth/logout-callback`
+- `https://photocloud.com/auth/logout-callback`
 
 ## Environment Variables
 

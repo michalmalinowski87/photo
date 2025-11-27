@@ -1,12 +1,12 @@
 # Shared Authentication Architecture
 
-This document describes the cross-domain authentication architecture for PhotoHub.
+This document describes the cross-domain authentication architecture for PhotoCloud.
 
 ## Architecture Overview
 
-- **Auth Domain**: `auth.photohub.com` (or landing page for now)
-- **Website**: `photohub.com` (landing page)
-- **Dashboard**: `dashboard.photohub.com`
+- **Auth Domain**: `auth.photocloud.com` (or landing page for now)
+- **Website**: `photocloud.com` (landing page)
+- **Dashboard**: `dashboard.photocloud.com`
 
 ## Authentication Flow
 
@@ -53,8 +53,8 @@ Each domain needs:
 ## Callback URLs
 
 Each domain must register its callback URL in Cognito:
-- Landing: `https://photohub.com/auth/callback`
-- Dashboard: `https://dashboard.photohub.com/auth/callback`
+- Landing: `https://photocloud.com/auth/callback`
+- Dashboard: `https://dashboard.photocloud.com/auth/callback`
 
 ## Token Storage
 

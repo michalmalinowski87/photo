@@ -1,12 +1,14 @@
 import { useState } from "react";
+
 import { SidebarProvider, useSidebar } from "../../context/SidebarContext";
 import { ThemeProvider } from "../../context/ThemeContext";
 import { ToastProvider } from "../../context/ToastContext";
-import AppHeader from "./AppHeader";
-import Backdrop from "./Backdrop";
-import AppSidebar from "./AppSidebar";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
+
+import AppHeader from "./AppHeader";
+import AppSidebar from "./AppSidebar";
+import Backdrop from "./Backdrop";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,7 +16,7 @@ interface AppLayoutProps {
 }
 
 const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
-  const { isExpanded, isMobileOpen } = useSidebar();
+  const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const handleCreateGallery = () => {
@@ -33,7 +35,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
 
   return (
     <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
-      <WelcomePopupWrapper />
+      <WelcomePopupWrapper onCreateGallery={onCreateGallery ?? handleCreateGallery} />
       <div>
         <AppSidebar />
         <Backdrop />
@@ -43,7 +45,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
           isMobileOpen ? "ml-0" : ""
         }`}
       >
-        <AppHeader onCreateGallery={onCreateGallery || handleCreateGallery} />
+        <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
         <div className="p-4 mx-auto max-w-7xl md:p-6">
           {wizardOpen ? (
             <CreateGalleryWizard

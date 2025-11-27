@@ -30,17 +30,14 @@ import { processedRoutes } from './routes/processed';
 const app = express();
 
 // CORS middleware - set CORS headers on all responses
+// Note: OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
+// This middleware only sets CORS headers for actual API responses (GET, POST, etc.)
 app.use((req: Request, res: Response, next) => {
-	// Set CORS headers
+	// Set CORS headers for all responses
 	res.setHeader('Access-Control-Allow-Origin', '*');
 	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 	res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-	
-	// Handle OPTIONS preflight requests
-	if (req.method === 'OPTIONS') {
-		return res.status(200).end();
-	}
 	
 	next();
 });

@@ -47,20 +47,22 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   const baseClasses = isFullscreen
     ? "w-full h-full"
     : "relative w-full mx-4 rounded-3xl bg-white dark:bg-gray-900 shadow-xl";
-  
+
   // Use default max-w-lg if no className provided, otherwise use className
   // Check if className includes max-h for scrollable modals
-  const hasMaxHeight = className && className.includes("max-h-");
+  const hasMaxHeight = className?.includes("max-h-");
   const contentClasses = isFullscreen
     ? baseClasses
-    : className && className.includes("max-w-")
-    ? `${baseClasses} ${className}${hasMaxHeight ? " flex flex-col" : ""}`
-    : `${baseClasses} max-w-lg`;
+    : className?.includes("max-w-")
+      ? `${baseClasses} ${className}${hasMaxHeight ? " flex flex-col" : ""}`
+      : `${baseClasses} max-w-lg`;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[999999] p-4">

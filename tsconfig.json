@@ -4,9 +4,9 @@
     "baseUrl": ".",
     "types": ["node"],
     "paths": {
-      "@photohub/logger": ["packages/logger/src"],
-      "@photohub/config": ["packages/config/src"],
-      "@photohub/backend-lib/*": ["backend/lib/src/*"]
+      "@photocloud/logger": ["packages/logger/src"],
+      "@photocloud/config": ["packages/config/src"],
+      "@photocloud/backend-lib/*": ["backend/lib/src/*"]
     }
   },
   "references": [

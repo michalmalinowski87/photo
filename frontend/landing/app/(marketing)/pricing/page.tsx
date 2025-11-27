@@ -10,12 +10,12 @@ import MagicBadge from "@/components/ui/magic-badge";
 const FAQ = [
   {
     id: "1",
-    question: "Jak rozpocząć korzystanie z PhotoHub?",
+    question: "Jak rozpocząć korzystanie z PhotoCloud?",
     answer: "Rozpocznij od utworzenia darmowego konta. Każdy nowy użytkownik otrzymuje 1 darmową galerię do przetestowania. Po zalogowaniu możesz od razu utworzyć pierwszą galerię i przesłać zdjęcia."
   },
   {
     id: "2",
-    question: "Ile kosztuje korzystanie z PhotoHub?",
+    question: "Ile kosztuje korzystanie z PhotoCloud?",
     answer: "Ceny zaczynają się od 7 PLN za galerię (1 miesiąc, 1 GB). Masz do wyboru różne pakiety: 1 GB, 3 GB lub 10 GB oraz okresy: 1 miesiąc, 3 miesiące lub 12 miesięcy."
   },
   {

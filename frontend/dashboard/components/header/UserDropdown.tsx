@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { DropdownItem } from "../ui/dropdown/DropdownItem";
+
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import Link from "next/link";
+import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,10 +16,10 @@ export default function UserDropdown() {
 
   const handleLogout = async () => {
     if (typeof window !== "undefined") {
-      const { signOut, getHostedUILogoutUrl } = require("../../lib/auth");
+      const { signOut, getHostedUILogoutUrl } = await import("../../lib/auth");
       signOut();
       const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
-      const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3003";
+      const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002";
       if (userPoolDomain) {
         const logoutUrl = getHostedUILogoutUrl(userPoolDomain, landingUrl);
         window.location.href = logoutUrl;
@@ -36,9 +36,24 @@ export default function UserDropdown() {
         className="flex items-center text-gray-700 dropdown-toggle dark:text-gray-400"
       >
         <span className="mr-3 overflow-hidden rounded-full h-11 w-11 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 10C12.7614 10 15 7.76142 15 5C15 2.23858 12.7614 0 10 0C7.23858 0 5 2.23858 5 5C5 7.76142 7.23858 10 10 10Z" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M0 18.3333C0 14.6519 3.015 11.6667 6.66667 11.6667H13.3333C16.985 11.6667 20 14.6519 20 18.3333" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 10C12.7614 10 15 7.76142 15 5C15 2.23858 12.7614 0 10 0C7.23858 0 5 2.23858 5 5C5 7.76142 7.23858 10 10 10Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <path
+              d="M0 18.3333C0 14.6519 3.015 11.6667 6.66667 11.6667H13.3333C16.985 11.6667 20 14.6519 20 18.3333"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         </span>
 
@@ -154,4 +169,3 @@ export default function UserDropdown() {
     </div>
   );
 }
-

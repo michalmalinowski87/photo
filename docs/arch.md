@@ -1,8 +1,8 @@
-# PhotoHub Architecture
+# PhotoCloud Architecture
 
 ## Overview
 
-PhotoHub is a serverless SaaS platform for photographers to create secure private galleries with client selection and final delivery. Built on AWS using CDK v2 for infrastructure as code.
+PhotoCloud is a serverless SaaS platform for photographers to create secure private galleries with client selection and final delivery. Built on AWS using CDK v2 for infrastructure as code.
 
 ## Architecture Components
 

@@ -1,5 +1,5 @@
 {
-  "name": "@photohub/infra",
+  "name": "@photocloud/infra",
   "version": "0.0.1",
   "private": true,
   "bin": {

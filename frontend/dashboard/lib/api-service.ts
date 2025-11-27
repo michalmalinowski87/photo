@@ -1,8 +1,8 @@
-import { getValidToken } from './api';
+import { getValidToken } from "./api";
 
 /**
  * API Service - Centralized API client with automatic authentication, validation, and error handling
- * 
+ *
  * Usage:
  *   import api, { formatApiError } from './lib/api-service';
  *   const galleries = await api.galleries.list();
@@ -11,820 +11,1063 @@ import { getValidToken } from './api';
  */
 
 interface ApiError extends Error {
-	status?: number;
-	body?: any;
-	refreshFailed?: boolean;
-	originalError?: Error;
+  status?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  body?: any;
+  refreshFailed?: boolean;
+  originalError?: Error;
 }
 
 interface PaginationParams {
-	limit?: string | number;
-	offset?: string | number;
-	lastKey?: string;
-	page?: string | number;
-	itemsPerPage?: string | number;
-	search?: string;
-	excludeDeliveryStatus?: string;
+  limit?: string | number;
+  offset?: string | number;
+  lastKey?: string;
+  page?: string | number;
+  itemsPerPage?: string | number;
+  search?: string;
+  excludeDeliveryStatus?: string;
 }
 
 interface Gallery {
-	galleryId: string;
-	name?: string;
-	clientEmail?: string;
-	pricingPackage?: any;
-	[key: string]: any;
+  galleryId: string;
+  name?: string;
+  clientEmail?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pricingPackage?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 interface Client {
-	clientId: string;
-	email?: string;
-	firstName?: string;
-	lastName?: string;
-	phone?: string;
-	isCompany?: boolean;
-	companyName?: string;
-	nip?: string;
-	[key: string]: any;
+  clientId: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  isCompany?: boolean;
+  companyName?: string;
+  nip?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 interface Package {
-	packageId: string;
-	name?: string;
-	includedPhotos?: number;
-	pricePerExtraPhoto?: number;
-	price?: number;
-	[key: string]: any;
+  packageId: string;
+  name?: string;
+  includedPhotos?: number;
+  pricePerExtraPhoto?: number;
+  price?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 interface Order {
-	orderId: string;
-	galleryId: string;
-	[key: string]: any;
+  orderId: string;
+  galleryId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 interface ListResponse<T> {
-	items: T[];
-	hasMore?: boolean;
-	lastKey?: string | null;
+  items: T[];
+  hasMore?: boolean;
+  lastKey?: string | null;
 }
 
 class ApiService {
-	private baseUrl: string | null = null;
+  private baseUrl: string | null = null;
+  // Request deduplication cache - prevents duplicate requests within a short time window
+  // This helps with React StrictMode double-invocation in development
+  private pendingRequests: Map<string, Promise<unknown>> = new Map();
+  private readonly DEDUP_WINDOW_MS = 100; // 100ms window for deduplication
 
-	constructor() {
-		this.initialize();
-	}
+  constructor() {
+    this.initialize();
+  }
 
-	private initialize(): void {
-		if (typeof window !== 'undefined') {
-			this.baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-		}
-	}
+  private initialize(): void {
+    if (typeof window !== "undefined") {
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+    }
+  }
 
-	/**
-	 * Internal method to make authenticated API requests
-	 * Handles token fetching, error parsing, and response handling
-	 */
-	private async _request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-		if (!this.baseUrl) {
-			throw new Error('API URL not configured');
-		}
+  /**
+   * Generate a cache key for request deduplication
+   */
+  private getRequestKey(endpoint: string, options: RequestInit): string {
+    const method = options.method ?? "GET";
+    const body = options.body ?? "";
+    // Create a simple hash of the request
+    return `${method}:${endpoint}:${typeof body === "string" ? body : JSON.stringify(body)}`;
+  }
 
-		const url = `${this.baseUrl}${endpoint}`;
-		
-		// Get valid token (will refresh if needed)
-		const token = await getValidToken();
-		
-		const defaultHeaders: HeadersInit = {
-			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${token}`,
-		};
+  /**
+   * Internal method to make authenticated API requests
+   * Handles token fetching, error parsing, and response handling
+   * Includes request deduplication to prevent duplicate calls from React StrictMode
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async _request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    if (!this.baseUrl) {
+      throw new Error("API URL not configured");
+    }
 
-		const config: RequestInit = {
-			...options,
-			headers: {
-				...defaultHeaders,
-				...options.headers,
-			},
-		};
+    const url = `${this.baseUrl}${endpoint}`;
+    const requestKey = this.getRequestKey(endpoint, options);
 
-		try {
-			const response = await fetch(url, config);
-			const contentType = response.headers.get('content-type');
-			const isJson = contentType?.includes('application/json') ?? false;
-			
-			let body: any;
-			try {
-				body = isJson ? await response.json() : await response.text();
-			} catch (e) {
-				body = null;
-			}
+    // Check if there's a pending identical request
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const pendingRequest = this.pendingRequests.get(requestKey);
+    if (pendingRequest) {
+      // Return the existing promise instead of making a new request
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return pendingRequest;
+    }
 
-			// Handle 401 - try refresh and retry once
-			if (response.status === 401 && typeof window !== 'undefined') {
-				try {
-					const newToken = await getValidToken();
-					const retryConfig: RequestInit = {
-						...config,
-						headers: {
-							...config.headers,
-							'Authorization': `Bearer ${newToken}`,
-						},
-					};
-					
-					const retryResponse = await fetch(url, retryConfig);
-					const retryContentType = retryResponse.headers.get('content-type');
-					const retryIsJson = retryContentType?.includes('application/json') ?? false;
-					
-					let retryBody: any;
-					try {
-						retryBody = retryIsJson ? await retryResponse.json() : await retryResponse.text();
-					} catch (e) {
-						retryBody = null;
-					}
+    // Create the request promise and cache it for deduplication
+    const requestPromise = (async (): Promise<T> => {
+      // Get valid token (will refresh if needed)
+      const token = await getValidToken();
 
-					if (!retryResponse.ok) {
-						const error: ApiError = new Error(retryBody?.error || retryBody?.message || `HTTP ${retryResponse.status}`);
-						error.status = retryResponse.status;
-						error.body = retryBody;
-						throw error;
-					}
+      const defaultHeaders: HeadersInit = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
 
-					return retryBody;
-				} catch (refreshErr) {
-					// Refresh failed - trigger session expired event
-					if (typeof window !== 'undefined') {
-						window.dispatchEvent(new CustomEvent('session-expired', {
-							detail: { returnUrl: window.location.pathname + window.location.search }
-						}));
-					}
-					
-					const error: ApiError = new Error('Session expired. Please log in again.');
-					error.status = 401;
-					error.body = body;
-					error.refreshFailed = true;
-					throw error;
-				}
-			}
+      const config: RequestInit = {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...options.headers,
+        },
+      };
 
-			if (!response.ok) {
-				const error: ApiError = new Error(body?.error || body?.message || `HTTP ${response.status}: ${response.statusText}`);
-				error.status = response.status;
-				error.body = body;
-				throw error;
-			}
+      // Retry configuration for 503 errors only
+      const MAX_RETRIES = 3;
+      const RETRY_DELAYS = [1000, 2000, 3000]; // Exponential backoff: 1s, 2s, 3s
 
-			return body;
-		} catch (error) {
-			if ((error as ApiError).status) {
-				throw error;
-			}
-			// Network or other errors
-			const networkError: ApiError = new Error(`Network error: ${(error as Error).message}`);
-			networkError.originalError = error as Error;
-			throw networkError;
-		}
-	}
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const response = await fetch(url, config);
+          const contentType = response.headers.get("content-type");
+          const isJson = contentType?.includes("application/json") ?? false;
 
-	/**
-	 * Format error for display
-	 */
-	formatError(error: ApiError | Error): string {
-		const apiError = error as ApiError;
-		if (apiError.status) {
-			const bodyStr = typeof apiError.body === 'string' ? apiError.body : JSON.stringify(apiError.body);
-			return apiError.message || `Error ${apiError.status}${bodyStr ? ` - ${bodyStr}` : ''}`;
-		}
-		return error.message || 'An unexpected error occurred';
-	}
+          let body: unknown;
+          try {
+            body = isJson ? await response.json() : await response.text();
+          } catch (_e) {
+            body = null;
+          }
 
-	// ==================== GALLERIES ====================
+          // Handle 503 Service Unavailable - retry with exponential backoff
+          if (response.status === 503 && attempt < MAX_RETRIES) {
+            const delay = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
+            console.warn(
+              `[ApiService] 503 Service Unavailable, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`,
+              { endpoint, url }
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue; // Retry the request
+          }
 
-	galleries = {
-		/**
-		 * List all galleries
-		 */
-		list: async (): Promise<ListResponse<Gallery> | Gallery[]> => {
-			return await this._request('/galleries');
-		},
+          // Handle 401 - try refresh and retry once
+          if (response.status === 401 && typeof window !== "undefined") {
+            try {
+              const newToken = await getValidToken();
+              const retryConfig: RequestInit = {
+                ...config,
+                headers: {
+                  ...config.headers,
+                  Authorization: `Bearer ${newToken}`,
+                },
+              };
 
-		/**
-		 * Get a specific gallery
-		 */
-		get: async (galleryId: string): Promise<Gallery> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request<Gallery>(`/galleries/${galleryId}`);
-		},
+              const retryResponse = await fetch(url, retryConfig);
+              const retryContentType = retryResponse.headers.get("content-type");
+              const retryIsJson = retryContentType?.includes("application/json") ?? false;
 
-		/**
-		 * Create a new gallery
-		 */
-		create: async (data: Partial<Gallery>): Promise<Gallery> => {
-			if (!data) {
-				throw new Error('Gallery data is required');
-			}
-			return await this._request<Gallery>('/galleries', {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
+              let retryBody: unknown;
+              try {
+                retryBody = retryIsJson ? await retryResponse.json() : await retryResponse.text();
+              } catch (_e) {
+                retryBody = null;
+              }
 
-		/**
-		 * Update a gallery
-		 */
-		update: async (galleryId: string, data: Partial<Gallery>): Promise<Gallery> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!data) {
-				throw new Error('Gallery data is required');
-			}
-			return await this._request<Gallery>(`/galleries/${galleryId}`, {
-				method: 'PATCH',
-				body: JSON.stringify(data),
-			});
-		},
+              if (!retryResponse.ok) {
+                const retryBodyObj = retryBody as { error?: string; message?: string } | null;
+                const error: ApiError = new Error(
+                  retryBodyObj?.error ?? retryBodyObj?.message ?? `HTTP ${retryResponse.status}`
+                );
+                error.status = retryResponse.status;
+                error.body = retryBody;
+                throw error;
+              }
 
-		/**
-		 * Delete a gallery
-		 */
-		delete: async (galleryId: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request<void>(`/galleries/${galleryId}`, {
-				method: 'DELETE',
-			});
-		},
+              return retryBody as T;
+            } catch (_refreshErr) {
+              // Refresh failed - trigger session expired event
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("session-expired", {
+                    detail: { returnUrl: window.location.pathname + window.location.search },
+                  })
+                );
+              }
 
-		/**
-		 * Get gallery images
-		 */
-		getImages: async (galleryId: string): Promise<{ images: any[] }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/images`);
-		},
+              const error: ApiError = new Error("Session expired. Please log in again.");
+              error.status = 401;
+              error.body = body;
+              error.refreshFailed = true;
+              throw error;
+            }
+          }
 
-		/**
-		 * Delete a gallery image
-		 */
-		deleteImage: async (galleryId: string, imageKey: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!imageKey) {
-				throw new Error('Image key is required');
-			}
-			return await this._request(`/galleries/${galleryId}/photos/${encodeURIComponent(imageKey)}`, {
-				method: 'DELETE',
-			});
-		},
+          if (!response.ok) {
+            const bodyObj = body as { error?: string; message?: string } | null;
+            const error: ApiError = new Error(
+              bodyObj?.error ?? bodyObj?.message ?? `HTTP ${response.status}: ${response.statusText}`
+            );
+            error.status = response.status;
+            error.body = body;
+            throw error;
+          }
 
-		/**
-		 * Send gallery link to client
-		 */
-		sendToClient: async (galleryId: string): Promise<{ isReminder?: boolean }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/send-to-client`, {
-				method: 'POST',
-			});
-		},
+          return body as T;
+        } catch (error) {
+          // Don't retry network errors (including CORS) - they won't be fixed by retrying
+          // Only retry 503 errors (handled above in the response.status check)
+          // If we get here and it's not a 503, throw immediately
+          const apiError = error as ApiError;
+          if (apiError.status === 503 && attempt < MAX_RETRIES) {
+            // This should have been caught above, but handle it here as fallback
+            const delay = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
+            console.warn(
+              `[ApiService] 503 error in catch, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`,
+              { endpoint, url }
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
 
-		/**
-		 * Pay for gallery
-		 */
-		pay: async (galleryId: string, options: { dryRun?: boolean; forceStripeOnly?: boolean } = {}): Promise<{ checkoutUrl?: string; paid?: boolean; totalAmountCents?: number; walletAmountCents?: number; stripeAmountCents?: number }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/pay`, {
-				method: 'POST',
-				body: JSON.stringify(options),
-			});
-		},
+          // For all other errors (network, CORS, etc.), throw immediately
+          if (apiError.status) {
+            throw apiError;
+          }
+          // Network or other errors (including CORS)
+          const networkError: ApiError = new Error(`Network error: ${(error as Error).message}`);
+          networkError.originalError = error as Error;
+          throw networkError;
+        }
+      }
 
-		/**
-		 * Update gallery client password
-		 */
-		updateClientPassword: async (galleryId: string, password: string, clientEmail: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!password || !clientEmail) {
-				throw new Error('Password and client email are required');
-			}
-			return await this._request(`/galleries/${galleryId}/client-password`, {
-				method: 'PATCH',
-				body: JSON.stringify({ password, clientEmail }),
-			});
-		},
+      // This should never happen (all paths should throw or return)
+      throw new Error("Request failed after retries");
+    })();
 
-		/**
-		 * Update gallery pricing package
-		 */
-		updatePricingPackage: async (galleryId: string, pricingPackage: any): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!pricingPackage) {
-				throw new Error('Pricing package is required');
-			}
-			return await this._request(`/galleries/${galleryId}/pricing-package`, {
-				method: 'PATCH',
-				body: JSON.stringify({ pricingPackage }),
-			});
-		},
+    // Store the promise in cache for deduplication
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    this.pendingRequests.set(requestKey, requestPromise);
 
-		/**
-		 * Check if gallery has delivered orders
-		 */
-		checkDeliveredOrders: async (galleryId: string): Promise<ListResponse<Order> | { items: Order[] }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/delivered`);
-		},
+    // Clean up the cache after request completes (success or failure)
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    requestPromise.finally(() => {
+      // Use setTimeout to allow other identical requests to join before cleanup
+      setTimeout(() => {
+        this.pendingRequests.delete(requestKey);
+      }, this.DEDUP_WINDOW_MS);
+    });
 
-		/**
-		 * Calculate plan for gallery based on uploaded size
-		 */
-		calculatePlan: async (galleryId: string, duration: string = '1m'): Promise<{
-			suggestedPlan: any;
-			originalsLimitBytes: number;
-			finalsLimitBytes: number;
-			uploadedSizeBytes: number;
-			selectionEnabled: boolean;
-			usagePercentage?: number;
-			isNearCapacity?: boolean;
-			isAtCapacity?: boolean;
-			exceedsLargestPlan?: boolean;
-			nextTierPlan?: { planKey: string; name: string; priceCents: number; storageLimitBytes: number; storage: string };
-		}> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/calculate-plan?duration=${duration}`);
-		},
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return requestPromise;
+  }
 
-		/**
-		 * Validate upload limits after upload completes
-		 */
-		validateUploadLimits: async (galleryId: string): Promise<{ withinLimit: boolean; uploadedSizeBytes: number; originalsLimitBytes?: number; excessBytes?: number; nextTierPlan?: string; nextTierPriceCents?: number; nextTierLimitBytes?: number; isSelectionGallery?: boolean }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
-				method: 'POST',
-			});
-		},
+  /**
+   * Format error for display
+   */
+  formatError(error: ApiError | Error): string {
+    const apiError = error as ApiError;
+    if (apiError.status) {
+      const bodyStr =
+        typeof apiError.body === "string" ? apiError.body : JSON.stringify(apiError.body);
+      return apiError.message || `Error ${apiError.status}${bodyStr ? ` - ${bodyStr}` : ""}`;
+    }
+    return error.message || "An unexpected error occurred";
+  }
 
-		/**
-		 * Upgrade gallery plan (for paid galleries only - pays difference)
-		 */
-		upgradePlan: async (galleryId: string, data: { plan: string; forceStripeOnly?: boolean }): Promise<{
-			paid: boolean;
-			checkoutUrl?: string;
-			transactionId: string;
-			totalAmountCents: number;
-			walletAmountCents: number;
-			stripeAmountCents: number;
-			currentPlan: string;
-			newPlan: string;
-			currentPriceCents: number;
-			newPriceCents: number;
-			priceDifferenceCents: number;
-			message: string;
-		}> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!data || !data.plan) {
-				throw new Error('Plan is required');
-			}
-			return await this._request(`/galleries/${galleryId}/upgrade-plan`, {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
-	};
+  // ==================== GALLERIES ====================
 
-	// ==================== ORDERS ====================
+  galleries = {
+    /**
+     * List all galleries
+     */
+    list: async (): Promise<ListResponse<Gallery> | Gallery[]> => {
+      return await this._request("/galleries");
+    },
 
-	orders = {
-		/**
-		 * List all orders
-		 */
-		list: async (params: PaginationParams = {}): Promise<ListResponse<Order> | Order[]> => {
-			const queryString = new URLSearchParams(params as Record<string, string>).toString();
-			const endpoint = queryString ? `/orders?${queryString}` : '/orders';
-			return await this._request(endpoint);
-		},
+    /**
+     * Get a specific gallery
+     */
+    get: async (galleryId: string): Promise<Gallery> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request<Gallery>(`/galleries/${galleryId}`);
+    },
 
-		/**
-		 * Get orders for a specific gallery
-		 */
-		getByGallery: async (galleryId: string): Promise<ListResponse<Order> | { items: Order[] }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders`);
-		},
+    /**
+     * Create a new gallery
+     */
+    create: async (data: Partial<Gallery>): Promise<Gallery> => {
+      if (!data) {
+        throw new Error("Gallery data is required");
+      }
+      return await this._request<Gallery>("/galleries", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
 
-		/**
-		 * Get a specific order
-		 */
-		get: async (galleryId: string, orderId: string): Promise<Order> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			return await this._request<Order>(`/galleries/${galleryId}/orders/${orderId}`);
-		},
+    /**
+     * Update a gallery
+     */
+    update: async (galleryId: string, data: Partial<Gallery>): Promise<Gallery> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data) {
+        throw new Error("Gallery data is required");
+      }
+      return await this._request<Gallery>(`/galleries/${galleryId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
 
-		/**
-		 * Update an order
-		 */
-		update: async (galleryId: string, orderId: string, data: Partial<Order>): Promise<Order> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			if (!data) {
-				throw new Error('Order data is required');
-			}
-			return await this._request<Order>(`/galleries/${galleryId}/orders/${orderId}`, {
-				method: 'PATCH',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Delete a gallery
+     */
+    delete: async (galleryId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request<void>(`/galleries/${galleryId}`, {
+        method: "DELETE",
+      });
+    },
 
-		/**
-		 * Approve change request
-		 */
-		approveChangeRequest: async (galleryId: string, orderId: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/approve-change`, {
-				method: 'POST',
-			});
-		},
+    /**
+     * Get gallery images
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getImages: async (galleryId: string): Promise<{ images: any[] }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/images`);
+    },
 
-		/**
-		 * Deny change request
-		 */
-		denyChangeRequest: async (galleryId: string, orderId: string, reason?: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/deny-change`, {
-				method: 'POST',
-				body: JSON.stringify({ reason: reason || undefined }),
-			});
-		},
+    /**
+     * Delete a gallery image
+     */
+    deleteImage: async (galleryId: string, imageKey: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!imageKey) {
+        throw new Error("Image key is required");
+      }
+      return await this._request(`/galleries/${galleryId}/photos/${encodeURIComponent(imageKey)}`, {
+        method: "DELETE",
+      });
+    },
 
-		/**
-		 * Get final images for an order
-		 */
-		getFinalImages: async (galleryId: string, orderId: string): Promise<{ images: any[] }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/images`);
-		},
+    /**
+     * Send gallery link to client
+     */
+    sendToClient: async (galleryId: string): Promise<{ isReminder?: boolean }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/send-to-client`, {
+        method: "POST",
+      });
+    },
 
-		/**
-		 * Delete a final image
-		 */
-		deleteFinalImage: async (galleryId: string, orderId: string, imageKey: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			if (!imageKey) {
-				throw new Error('Image key is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/images/${encodeURIComponent(imageKey)}`, {
-				method: 'DELETE',
-			});
-		},
+    /**
+     * Pay for gallery
+     */
+    pay: async (
+      galleryId: string,
+      options: { dryRun?: boolean; forceStripeOnly?: boolean } = {}
+    ): Promise<{
+      checkoutUrl?: string;
+      paid?: boolean;
+      totalAmountCents?: number;
+      walletAmountCents?: number;
+      stripeAmountCents?: number;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/pay`, {
+        method: "POST",
+        body: JSON.stringify(options),
+      });
+    },
 
-		/**
-		 * Download order ZIP (returns URL or handles 202 for async generation)
-		 */
-		downloadZip: async (galleryId: string, orderId: string): Promise<{ status?: number; generating?: boolean; blob?: Blob; url?: string }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			// For ZIP downloads with 202 handling, we need to use fetch directly
-			// but still get token through service
-			const token = await getValidToken();
-			const url = `${this.baseUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
-			const response = await fetch(url, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
-			
-			if (response.status === 202) {
-				return { status: 202, generating: true };
-			}
-			
-			if (!response.ok) {
-				const error: ApiError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-				error.status = response.status;
-				throw error;
-			}
-			
-			const blob = await response.blob();
-			return { blob, url: URL.createObjectURL(blob) };
-		},
-	};
+    /**
+     * Update gallery client password
+     */
+    updateClientPassword: async (
+      galleryId: string,
+      password: string,
+      clientEmail: string
+    ): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!password || !clientEmail) {
+        throw new Error("Password and client email are required");
+      }
+      return await this._request(`/galleries/${galleryId}/client-password`, {
+        method: "PATCH",
+        body: JSON.stringify({ password, clientEmail }),
+      });
+    },
 
-	// ==================== CLIENTS ====================
+    /**
+     * Update gallery pricing package
+     */
+    updatePricingPackage: async (galleryId: string, pricingPackage: string): Promise<{ success: boolean }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!pricingPackage) {
+        throw new Error("Pricing package is required");
+      }
+      const result = await this._request<{ success: boolean }>(`/galleries/${galleryId}/pricing-package`, {
+        method: "PATCH",
+        body: JSON.stringify({ pricingPackage }),
+      });
+      return result;
+    },
 
-	clients = {
-		/**
-		 * List clients
-		 */
-		list: async (params: PaginationParams = {}): Promise<ListResponse<Client>> => {
-			const queryString = new URLSearchParams(params as Record<string, string>).toString();
-			const endpoint = queryString ? `/clients?${queryString}` : '/clients';
-			return await this._request<ListResponse<Client>>(endpoint);
-		},
+    /**
+     * Check if gallery has delivered orders
+     */
+    checkDeliveredOrders: async (
+      galleryId: string
+    ): Promise<ListResponse<Order> | { items: Order[] }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/delivered`);
+    },
 
-		/**
-		 * Get a specific client
-		 */
-		get: async (clientId: string): Promise<Client> => {
-			if (!clientId) {
-				throw new Error('Client ID is required');
-			}
-			return await this._request<Client>(`/clients/${clientId}`);
-		},
+    /**
+     * Calculate plan for gallery based on uploaded size
+     */
+    calculatePlan: async (
+      galleryId: string,
+      duration: string = "1m"
+    ): Promise<{
+      suggestedPlan: unknown;
+      originalsLimitBytes: number;
+      finalsLimitBytes: number;
+      uploadedSizeBytes: number;
+      selectionEnabled: boolean;
+      usagePercentage?: number;
+      isNearCapacity?: boolean;
+      isAtCapacity?: boolean;
+      exceedsLargestPlan?: boolean;
+      nextTierPlan?: {
+        planKey: string;
+        name: string;
+        priceCents: number;
+        storageLimitBytes: number;
+        storage: string;
+      };
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/calculate-plan?duration=${duration}`);
+    },
 
-		/**
-		 * Create a client
-		 */
-		create: async (data: Partial<Client>): Promise<Client> => {
-			if (!data) {
-				throw new Error('Client data is required');
-			}
-			return await this._request<Client>('/clients', {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Validate upload limits after upload completes
+     */
+    validateUploadLimits: async (
+      galleryId: string
+    ): Promise<{
+      withinLimit: boolean;
+      uploadedSizeBytes: number;
+      originalsLimitBytes?: number;
+      excessBytes?: number;
+      nextTierPlan?: string;
+      nextTierPriceCents?: number;
+      nextTierLimitBytes?: number;
+      isSelectionGallery?: boolean;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
+        method: "POST",
+      });
+    },
 
-		/**
-		 * Update a client
-		 */
-		update: async (clientId: string, data: Partial<Client>): Promise<Client> => {
-			if (!clientId) {
-				throw new Error('Client ID is required');
-			}
-			if (!data) {
-				throw new Error('Client data is required');
-			}
-			return await this._request<Client>(`/clients/${clientId}`, {
-				method: 'PUT',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Upgrade gallery plan (for paid galleries only - pays difference)
+     */
+    upgradePlan: async (
+      galleryId: string,
+      data: { plan: string; forceStripeOnly?: boolean }
+    ): Promise<{
+      paid: boolean;
+      checkoutUrl?: string;
+      transactionId: string;
+      totalAmountCents: number;
+      walletAmountCents: number;
+      stripeAmountCents: number;
+      currentPlan: string;
+      newPlan: string;
+      currentPriceCents: number;
+      newPriceCents: number;
+      priceDifferenceCents: number;
+      message: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.plan) {
+        throw new Error("Plan is required");
+      }
+      return await this._request(`/galleries/${galleryId}/upgrade-plan`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+  };
 
-		/**
-		 * Delete a client
-		 */
-		delete: async (clientId: string): Promise<void> => {
-			if (!clientId) {
-				throw new Error('Client ID is required');
-			}
-			return await this._request<void>(`/clients/${clientId}`, {
-				method: 'DELETE',
-			});
-		},
-	};
+  // ==================== ORDERS ====================
 
-	// ==================== PACKAGES ====================
+  orders = {
+    /**
+     * List all orders
+     */
+    list: async (params: PaginationParams = {}): Promise<ListResponse<Order> | Order[]> => {
+      const queryString = new URLSearchParams(params as Record<string, string>).toString();
+      const endpoint = queryString ? `/orders?${queryString}` : "/orders";
+      return await this._request(endpoint);
+    },
 
-	packages = {
-		/**
-		 * List packages
-		 */
-		list: async (): Promise<ListResponse<Package>> => {
-			return await this._request<ListResponse<Package>>('/packages');
-		},
+    /**
+     * Get orders for a specific gallery
+     */
+    getByGallery: async (galleryId: string): Promise<ListResponse<Order> | { items: Order[] }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders`);
+    },
 
-		/**
-		 * Get a specific package
-		 */
-		get: async (packageId: string): Promise<Package> => {
-			if (!packageId) {
-				throw new Error('Package ID is required');
-			}
-			return await this._request<Package>(`/packages/${packageId}`);
-		},
+    /**
+     * Get a specific order
+     */
+    get: async (galleryId: string, orderId: string): Promise<Order> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request<Order>(`/galleries/${galleryId}/orders/${orderId}`);
+    },
 
-		/**
-		 * Create a package
-		 */
-		create: async (data: Partial<Package>): Promise<Package> => {
-			if (!data) {
-				throw new Error('Package data is required');
-			}
-			return await this._request<Package>('/packages', {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Update an order
+     */
+    update: async (galleryId: string, orderId: string, data: Partial<Order>): Promise<Order> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      if (!data) {
+        throw new Error("Order data is required");
+      }
+      return await this._request<Order>(`/galleries/${galleryId}/orders/${orderId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    },
 
-		/**
-		 * Update a package
-		 */
-		update: async (packageId: string, data: Partial<Package>): Promise<Package> => {
-			if (!packageId) {
-				throw new Error('Package ID is required');
-			}
-			if (!data) {
-				throw new Error('Package data is required');
-			}
-			return await this._request<Package>(`/packages/${packageId}`, {
-				method: 'PUT',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Approve change request
+     */
+    approveChangeRequest: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/approve-change`, {
+        method: "POST",
+      });
+    },
 
-		/**
-		 * Delete a package
-		 */
-		delete: async (packageId: string): Promise<void> => {
-			if (!packageId) {
-				throw new Error('Package ID is required');
-			}
-			return await this._request<void>(`/packages/${packageId}`, {
-				method: 'DELETE',
-			});
-		},
-	};
+    /**
+     * Deny change request
+     */
+    denyChangeRequest: async (
+      galleryId: string,
+      orderId: string,
+      reason?: string
+    ): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/deny-change`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason ?? undefined }),
+      });
+    },
 
-	// ==================== WALLET ====================
+    /**
+     * Get final images for an order
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getFinalImages: async (galleryId: string, orderId: string): Promise<{ images: any[] }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/images`);
+    },
 
-	wallet = {
-		/**
-		 * Get wallet balance
-		 */
-		getBalance: async (): Promise<{ balanceCents: number }> => {
-			return await this._request('/wallet/balance');
-		},
+    /**
+     * Delete a final image
+     */
+    deleteFinalImage: async (
+      galleryId: string,
+      orderId: string,
+      imageKey: string
+    ): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      if (!imageKey) {
+        throw new Error("Image key is required");
+      }
+      return await this._request(
+        `/galleries/${galleryId}/orders/${orderId}/final/images/${encodeURIComponent(imageKey)}`,
+        {
+          method: "DELETE",
+        }
+      );
+    },
 
-		/**
-		 * Get wallet transactions
-		 */
-		getTransactions: async (params: PaginationParams = {}): Promise<{ transactions: any[]; hasMore?: boolean; lastKey?: string | null }> => {
-			const queryString = new URLSearchParams(params as Record<string, string>).toString();
-			const endpoint = queryString ? `/wallet/transactions?${queryString}` : '/wallet/transactions';
-			return await this._request(endpoint);
-		},
-	};
+    /**
+     * Download order ZIP (returns URL or handles 202 for async generation)
+     */
+    downloadZip: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{ status?: number; generating?: boolean; blob?: Blob; url?: string }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      // For ZIP downloads with 202 handling, we need to use fetch directly
+      // but still get token through service
+      const token = await getValidToken();
+      const url = `${this.baseUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-	// ==================== PAYMENTS ====================
+      if (response.status === 202) {
+        return { status: 202, generating: true };
+      }
 
-	payments = {
-		/**
-		 * Create checkout session
-		 */
-		createCheckout: async (data: { amountCents: number; type: string; redirectUrl?: string }): Promise<{ checkoutUrl: string }> => {
-			if (!data) {
-				throw new Error('Payment data is required');
-			}
-			return await this._request('/payments/checkout', {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
-	};
+      if (!response.ok) {
+        const error: ApiError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        error.status = response.status;
+        throw error;
+      }
 
-	// ==================== UPLOADS ====================
+      const blob = await response.blob();
+      return { blob, url: URL.createObjectURL(blob) };
+    },
+  };
 
-	uploads = {
-		/**
-		 * Get presigned URL for upload
-		 */
-		getPresignedUrl: async (data: { galleryId: string; orderId?: string; key: string; contentType: string; fileSize: number }): Promise<{ url: string }> => {
-			if (!data) {
-				throw new Error('Upload data is required');
-			}
-			if (!data.galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!data.key) {
-				throw new Error('File key is required');
-			}
-			return await this._request('/uploads/presign', {
-				method: 'POST',
-				body: JSON.stringify(data),
-			});
-		},
+  // ==================== CLIENTS ====================
 
-		/**
-		 * Get presigned URL for final image upload
-		 */
-		getFinalImagePresignedUrl: async (galleryId: string, orderId: string, data: { key: string; contentType: string }): Promise<{ url: string }> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			if (!data) {
-				throw new Error('Upload data is required');
-			}
-			if (!data.key) {
-				throw new Error('File key is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/upload`, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: data.key,
-					contentType: data.contentType || 'image/jpeg',
-				}),
-			});
-		},
+  clients = {
+    /**
+     * List clients
+     */
+    list: async (params: PaginationParams = {}): Promise<ListResponse<Client>> => {
+      const queryString = new URLSearchParams(params as Record<string, string>).toString();
+      const endpoint = queryString ? `/clients?${queryString}` : "/clients";
+      return await this._request<ListResponse<Client>>(endpoint);
+    },
 
-		/**
-		 * Mark final upload as complete (triggers backend processing)
-		 */
-		markFinalUploadComplete: async (galleryId: string, orderId: string): Promise<void> => {
-			if (!galleryId) {
-				throw new Error('Gallery ID is required');
-			}
-			if (!orderId) {
-				throw new Error('Order ID is required');
-			}
-			return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/upload-complete`, {
-				method: 'POST',
-			});
-		},
-	};
+    /**
+     * Get a specific client
+     */
+    get: async (clientId: string): Promise<Client> => {
+      if (!clientId) {
+        throw new Error("Client ID is required");
+      }
+      return await this._request<Client>(`/clients/${clientId}`);
+    },
 
-	// ==================== AUTH ====================
+    /**
+     * Create a client
+     */
+    create: async (data: Partial<Client>): Promise<Client> => {
+      if (!data) {
+        throw new Error("Client data is required");
+      }
+      return await this._request<Client>("/clients", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
 
-	auth = {
-		/**
-		 * Get business info
-		 */
-		getBusinessInfo: async (): Promise<{ businessName?: string; email?: string; phone?: string; address?: string; nip?: string }> => {
-			return await this._request('/auth/business-info');
-		},
+    /**
+     * Update a client
+     */
+    update: async (clientId: string, data: Partial<Client>): Promise<Client> => {
+      if (!clientId) {
+        throw new Error("Client ID is required");
+      }
+      if (!data) {
+        throw new Error("Client data is required");
+      }
+      return await this._request<Client>(`/clients/${clientId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
 
-		/**
-		 * Update business info
-		 */
-		updateBusinessInfo: async (data: { businessName?: string; email?: string; phone?: string; address?: string; nip?: string }): Promise<void> => {
-			if (!data) {
-				throw new Error('Business info data is required');
-			}
-			return await this._request('/auth/business-info', {
-				method: 'PUT',
-				body: JSON.stringify(data),
-			});
-		},
+    /**
+     * Delete a client
+     */
+    delete: async (clientId: string): Promise<void> => {
+      if (!clientId) {
+        throw new Error("Client ID is required");
+      }
+      return await this._request<void>(`/clients/${clientId}`, {
+        method: "DELETE",
+      });
+    },
+  };
 
-		/**
-		 * Change password
-		 */
-		changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
-			if (!currentPassword || !newPassword) {
-				throw new Error('Current password and new password are required');
-			}
-			return await this._request('/auth/change-password', {
-				method: 'POST',
-				body: JSON.stringify({ currentPassword, newPassword }),
-			});
-		},
-	};
+  // ==================== PACKAGES ====================
+
+  packages = {
+    /**
+     * List packages
+     */
+    list: async (): Promise<ListResponse<Package>> => {
+      return await this._request<ListResponse<Package>>("/packages");
+    },
+
+    /**
+     * Get a specific package
+     */
+    get: async (packageId: string): Promise<Package> => {
+      if (!packageId) {
+        throw new Error("Package ID is required");
+      }
+      return await this._request<Package>(`/packages/${packageId}`);
+    },
+
+    /**
+     * Create a package
+     */
+    create: async (data: Partial<Package>): Promise<Package> => {
+      if (!data) {
+        throw new Error("Package data is required");
+      }
+      return await this._request<Package>("/packages", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Update a package
+     */
+    update: async (packageId: string, data: Partial<Package>): Promise<Package> => {
+      if (!packageId) {
+        throw new Error("Package ID is required");
+      }
+      if (!data) {
+        throw new Error("Package data is required");
+      }
+      return await this._request<Package>(`/packages/${packageId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Delete a package
+     */
+    delete: async (packageId: string): Promise<void> => {
+      if (!packageId) {
+        throw new Error("Package ID is required");
+      }
+      return await this._request<void>(`/packages/${packageId}`, {
+        method: "DELETE",
+      });
+    },
+  };
+
+  // ==================== WALLET ====================
+
+  wallet = {
+    /**
+     * Get wallet balance
+     */
+    getBalance: async (): Promise<{ balanceCents: number }> => {
+      return await this._request("/wallet/balance");
+    },
+
+    /**
+     * Get wallet transactions
+     */
+    getTransactions: async (
+      params: PaginationParams = {}
+    ): Promise<{ transactions: unknown[]; hasMore?: boolean; lastKey?: string | null }> => {
+      const queryString = new URLSearchParams(params as Record<string, string>).toString();
+      const endpoint = queryString ? `/wallet/transactions?${queryString}` : "/wallet/transactions";
+      return await this._request(endpoint);
+    },
+  };
+
+  // ==================== PAYMENTS ====================
+
+  payments = {
+    /**
+     * Create checkout session
+     */
+    createCheckout: async (data: {
+      amountCents: number;
+      type: string;
+      redirectUrl?: string;
+    }): Promise<{ checkoutUrl: string }> => {
+      if (!data) {
+        throw new Error("Payment data is required");
+      }
+      return await this._request("/payments/checkout", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+  };
+
+  // ==================== UPLOADS ====================
+
+  uploads = {
+    /**
+     * Get presigned URL for upload
+     */
+    getPresignedUrl: async (data: {
+      galleryId: string;
+      orderId?: string;
+      key: string;
+      contentType: string;
+      fileSize: number;
+    }): Promise<{ url: string }> => {
+      if (!data) {
+        throw new Error("Upload data is required");
+      }
+      if (!data.galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data.key) {
+        throw new Error("File key is required");
+      }
+      return await this._request("/uploads/presign", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Get batch presigned URLs for multiple uploads (optimized to reduce API Gateway load)
+     */
+    getPresignedUrlsBatch: async (data: {
+      galleryId: string;
+      files: Array<{ key: string; contentType?: string; fileSize?: number }>;
+    }): Promise<{
+      urls: Array<{ key: string; url: string; objectKey: string; expiresInSeconds: number }>;
+      count: number;
+    }> => {
+      if (!data) {
+        throw new Error("Upload data is required");
+      }
+      if (!data.galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data.files || !Array.isArray(data.files) || data.files.length === 0) {
+        throw new Error("Files array is required");
+      }
+      if (data.files.length > 50) {
+        throw new Error("Maximum 50 files per batch request");
+      }
+      return await this._request("/uploads/presign-batch", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Get presigned URL for final image upload
+     */
+    getFinalImagePresignedUrl: async (
+      galleryId: string,
+      orderId: string,
+      data: { key: string; contentType: string }
+    ): Promise<{ url: string }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      if (!data) {
+        throw new Error("Upload data is required");
+      }
+      if (!data.key) {
+        throw new Error("File key is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/upload`, {
+        method: "POST",
+        body: JSON.stringify({
+          key: data.key,
+          contentType: data.contentType ?? "image/jpeg",
+        }),
+      });
+    },
+
+    /**
+     * Get batch presigned URLs for multiple final image uploads (optimized to reduce API Gateway load)
+     */
+    getFinalImagePresignedUrlsBatch: async (
+      galleryId: string,
+      orderId: string,
+      data: {
+        files: Array<{ key: string; contentType?: string; fileSize?: number }>;
+      }
+    ): Promise<{
+      urls: Array<{ key: string; url: string; objectKey: string; expiresInSeconds: number }>;
+      count: number;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      if (!data?.files || !Array.isArray(data.files) || data.files.length === 0) {
+        throw new Error("Files array is required");
+      }
+      if (data.files.length > 50) {
+        throw new Error("Maximum 50 files per batch request");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/upload-batch`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Mark final upload as complete (triggers backend processing)
+     */
+    markFinalUploadComplete: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(
+        `/galleries/${galleryId}/orders/${orderId}/final/upload-complete`,
+        {
+          method: "POST",
+        }
+      );
+    },
+  };
+
+  // ==================== AUTH ====================
+
+  auth = {
+    /**
+     * Get business info (includes user settings like welcomePopupShown)
+     */
+    getBusinessInfo: async (): Promise<{
+      businessName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      nip?: string;
+      welcomePopupShown?: boolean;
+    }> => {
+      return await this._request("/auth/business-info");
+    },
+
+    /**
+     * Update business info (can also update welcomePopupShown)
+     */
+    updateBusinessInfo: async (data: {
+      businessName?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+      nip?: string;
+      welcomePopupShown?: boolean;
+    }): Promise<void> => {
+      if (!data) {
+        throw new Error("Business info data is required");
+      }
+      return await this._request("/auth/business-info", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Change password
+     */
+    changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+      if (!currentPassword || !newPassword) {
+        throw new Error("Current password and new password are required");
+      }
+      return await this._request("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+    },
+  };
 }
 
 // Export singleton instance
@@ -832,5 +1075,12 @@ const apiService = new ApiService();
 export default apiService;
 
 // Also export formatError for convenience
-export const formatApiError = (error: ApiError | Error): string => apiService.formatError(error);
-
+export const formatApiError = (error: ApiError | Error): string => {
+  if (error instanceof Error) {
+    return apiService.formatError(error);
+  }
+  if (error && typeof error === "object" && "message" in error) {
+    return apiService.formatError(error as Error);
+  }
+  return apiService.formatError(new Error(String(error)));
+};

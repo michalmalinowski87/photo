@@ -1,5 +1,5 @@
 {
-  "name": "@photohub/tsconfig",
+  "name": "@photocloud/tsconfig",
   "version": "0.0.1",
   "private": true,
   "main": "tsconfig.base.json"

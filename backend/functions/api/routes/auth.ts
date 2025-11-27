@@ -37,7 +37,8 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			email: userData.contactEmail || '',
 			phone: userData.phone || '',
 			address: userData.address || '',
-			nip: userData.nip || ''
+			nip: userData.nip || '',
+			welcomePopupShown: userData.welcomePopupShown || false
 		};
 
 		return res.json(businessInfo);
@@ -66,7 +67,7 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const { businessName, email, phone, address, nip } = req.body;
+	const { businessName, email, phone, address, nip, welcomePopupShown } = req.body;
 
 	// Validate email format if provided
 	if (email !== undefined && email !== '' && email !== null) {
@@ -122,6 +123,12 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		updateData.nip = String(nip).trim() || '';
 	} else if (existingData.nip !== undefined) {
 		updateData.nip = existingData.nip;
+	}
+
+	if (welcomePopupShown !== undefined) {
+		updateData.welcomePopupShown = Boolean(welcomePopupShown);
+	} else if (existingData.welcomePopupShown !== undefined) {
+		updateData.welcomePopupShown = existingData.welcomePopupShown;
 	}
 
 	if (!existingData.createdAt) {

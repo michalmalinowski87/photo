@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Modal } from "../modal";
+
 import Button from "../button/Button";
+import { Modal } from "../modal";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   variant = "danger",
   loading = false,
   suppressKey,
-  onSuppressChange,
+  onSuppressChange: _onSuppressChange,
 }) => {
   const [suppressChecked, setSuppressChecked] = useState(false);
 
@@ -46,28 +47,28 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   const handleClose = () => {
     // Don't allow closing during loading
-    if (loading) return;
+    if (loading) {
+      return;
+    }
     // Reset checkbox state when canceling (suppression is NOT saved)
     setSuppressChecked(false);
     onClose();
   };
 
-  const confirmButtonVariant = variant === "danger" ? "error" : variant === "warning" ? "warning" : "primary";
-
   return (
     <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
       <div className="p-6">
-        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-5">
-          {title}
-        </h2>
-        
+        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-5">{title}</h2>
+
         <p className="text-lg text-gray-600 dark:text-gray-400 mb-6 whitespace-pre-line">
           {message}
         </p>
-        
+
         {suppressKey && (
           <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-            <label className={`flex items-start ${loading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer group'}`}>
+            <label
+              className={`flex items-start ${loading ? "cursor-not-allowed opacity-60" : "cursor-pointer group"}`}
+            >
               <div className="relative flex items-center justify-center flex-shrink-0 mt-0.5">
                 <input
                   type="checkbox"
@@ -76,11 +77,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                   disabled={loading}
                   className="sr-only"
                 />
-                <div className={`w-5 h-5 rounded border-2 transition-all duration-200 flex items-center justify-center ${
-                  suppressChecked
-                    ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                    : "bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-600" + (loading ? "" : " group-hover:border-brand-500 dark:group-hover:border-brand-400")
-                }`}>
+                <div
+                  className={`w-5 h-5 rounded border-2 transition-all duration-200 flex items-center justify-center ${
+                    suppressChecked
+                      ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                      : `bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-brand-500 dark:group-hover:border-brand-400"}`
+                  }`}
+                >
                   {suppressChecked && (
                     <svg
                       className="w-3.5 h-3.5 text-white"
@@ -102,13 +105,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             </label>
           </div>
         )}
-        
+
         <div className="flex justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={loading}
-          >
+          <Button variant="outline" onClick={handleClose} disabled={loading}>
             {cancelText}
           </Button>
           <Button
@@ -119,8 +118,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               variant === "danger"
                 ? "bg-red-600 hover:bg-red-700 text-white"
                 : variant === "warning"
-                ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-                : "bg-green-600 hover:bg-green-700 text-white"
+                  ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                  : "bg-green-600 hover:bg-green-700 text-white"
             }
           >
             {loading ? "Przetwarzanie..." : confirmText}
@@ -130,4 +129,3 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     </Modal>
   );
 };
-

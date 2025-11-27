@@ -25,7 +25,7 @@ const HomePage = async () => {
               </span>
             </h1>
             <p className="mb-12 text-lg tracking-tight text-muted-foreground md:text-xl text-balance">
-              PhotoHub to prosty i opłacalny sposób na udostępnianie zdjęć klientom.
+              PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom.
               <br className="hidden md:block" />
               <span className="hidden md:block">Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.</span>
             </p>
@@ -65,7 +65,7 @@ const HomePage = async () => {
               Co oferujemy
             </h2>
             <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              PhotoHub to potężne narzędzie do zarządzania galeriami, które pomaga udostępniać i organizować wszystkie Twoje zdjęcia w jednym miejscu.
+              PhotoCloud to potężne narzędzie do zarządzania galeriami, które pomaga udostępniać i organizować wszystkie Twoje zdjęcia w jednym miejscu.
             </p>
           </div>
         </AnimationContainer>
@@ -142,7 +142,7 @@ const HomePage = async () => {
               Co mówią nasi użytkownicy
             </h2>
             <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              Oto co niektórzy z naszych użytkowników mówią o PhotoHub.
+              Oto co niektórzy z naszych użytkowników mówią o PhotoCloud.
             </p>
           </div>
         </AnimationContainer>

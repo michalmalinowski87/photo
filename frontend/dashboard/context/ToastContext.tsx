@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+  useEffect,
+} from "react";
 import { createPortal } from "react-dom";
 import Toast from "../components/ui/toast/Toast";
 
@@ -76,9 +83,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (mounted && typeof window !== 'undefined' && toasts.length > 0) {
+    if (mounted && typeof window !== "undefined" && toasts.length > 0) {
       // Force toast container to be last element in body
-      const container = document.querySelector('[data-toast-container]');
+      const container = document.querySelector("[data-toast-container]");
       if (container && container.parentNode) {
         container.parentNode.removeChild(container);
         document.body.appendChild(container);
@@ -90,41 +97,46 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     <ToastContext.Provider value={{ showToast, removeToast }}>
       {children}
       {/* Render toasts via portal directly to body - ensures viewport positioning */}
-      {mounted && typeof window !== 'undefined' && createPortal(
-        <div 
-          data-toast-container
-          className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-dark" 
-          style={{ 
-            position: 'fixed',
-            top: '87px',
-            right: '16px',
-            zIndex: 2147483647,
-            maxWidth: '420px',
-            width: 'auto',
-            pointerEvents: 'none',
-          } as React.CSSProperties}
-        >
-          {toasts.map((toast) => (
-            <div 
-              key={toast.id} 
-              className="pointer-events-auto rounded-xl overflow-hidden"
-              style={{ 
-                position: 'relative'
-              } as React.CSSProperties}
-            >
-              <Toast
-                variant={toast.variant}
-                title={toast.title}
-                message={toast.message}
-                onClose={() => removeToast(toast.id)}
-                duration={toast.duration ?? 2000}
-              />
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+      {mounted &&
+        typeof window !== "undefined" &&
+        createPortal(
+          <div
+            data-toast-container
+            className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-dark"
+            style={
+              {
+                position: "fixed",
+                top: "87px",
+                right: "16px",
+                zIndex: 2147483647,
+                maxWidth: "420px",
+                width: "auto",
+                pointerEvents: "none",
+              } as React.CSSProperties
+            }
+          >
+            {toasts.map((toast) => (
+              <div
+                key={toast.id}
+                className="pointer-events-auto rounded-xl overflow-hidden"
+                style={
+                  {
+                    position: "relative",
+                  } as React.CSSProperties
+                }
+              >
+                <Toast
+                  variant={toast.variant}
+                  title={toast.title}
+                  message={toast.message}
+                  onClose={() => removeToast(toast.id)}
+                  duration={toast.duration ?? 2000}
+                />
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </ToastContext.Provider>
   );
 };
-

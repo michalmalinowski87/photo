@@ -2,7 +2,7 @@
 
 ## Overview
 
-Integrated Linkify's design system and dashboard components into the PhotoHub dashboard application. This provides a modern, consistent UI that matches the landing page design.
+Integrated Linkify's design system and dashboard components into the PhotoCloud dashboard application. This provides a modern, consistent UI that matches the landing page design.
 
 ## What Was Integrated
 

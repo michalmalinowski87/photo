@@ -15,4 +15,3 @@ const GalleryHeader: React.FC = () => {
 };
 
 export default GalleryHeader;
-

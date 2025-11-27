@@ -129,60 +129,57 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}).filter(Boolean)
 		);
 
-		// Build images list from both originals AND previews
+		// Generate WebP filename helper (replace extension with .webp)
+		const getWebpFilename = (fname: string) => {
+			const lastDot = fname.lastIndexOf('.');
+			if (lastDot === -1) return `${fname}.webp`;
+			return `${fname.substring(0, lastDot)}.webp`;
+		};
+
+		// Build images list from originals only (PNG/JPEG files)
+		// For each original, generate WebP preview/thumb URLs from previews/thumbs folders
 		// This allows showing previews even when originals are deleted (after finals upload)
-		// Combine keys from both originals and previews to ensure we show all available images
-		const allImageKeys = new Set([...originalKeys, ...previewKeys]);
-		
-		const images = Array.from(allImageKeys)
+		// But we only list originals as the source of truth
+		const images = Array.from(originalKeys)
 			.map((filename: string) => {
 				if (!filename) return null;
 				
+				// Skip WebP files in originals folder (shouldn't happen, but safety check)
+				if (filename.toLowerCase().endsWith('.webp')) {
+					return null;
+				}
+				
 				const originalObj = originalFiles.get(filename);
-				const previewObj = previewFiles.get(filename);
 				
-				// Build preview and thumb URLs if they exist
-				const previewKey = `galleries/${galleryId}/previews/${filename}`;
-				const thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
-				
-				// Generate WebP filenames (replace extension with .webp)
-				const getWebpFilename = (fname: string) => {
-					const lastDot = fname.lastIndexOf('.');
-					if (lastDot === -1) return `${fname}.webp`;
-					return `${fname.substring(0, lastDot)}.webp`;
-				};
+				// Generate WebP filename for this original (e.g., "image.png" -> "image.webp")
 				const webpFilename = getWebpFilename(filename);
 				const previewWebpKey = `galleries/${galleryId}/previews/${webpFilename}`;
 				const thumbWebpKey = `galleries/${galleryId}/thumbs/${webpFilename}`;
 				
-				// Check if WebP versions exist
+				// Check if WebP versions exist in previews/thumbs folders
 				const hasPreviewWebp = previewFiles.has(webpFilename);
 				const hasThumbWebp = thumbKeys.has(webpFilename);
 				
 				// Build CloudFront URLs - encode path segments
-				// Prefer WebP URLs when available (smaller file size)
-				const previewUrl = previewKeys.has(filename) && cloudfrontDomain
-					? `https://${cloudfrontDomain}/${(hasPreviewWebp ? previewWebpKey : previewKey).split('/').map(encodeURIComponent).join('/')}`
+				// Only return WebP URLs from previews/thumbs folders (no fallback)
+				const previewUrl = hasPreviewWebp && cloudfrontDomain
+					? `https://${cloudfrontDomain}/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
-				const previewUrlFallback = previewKeys.has(filename) && cloudfrontDomain && hasPreviewWebp
-					? `https://${cloudfrontDomain}/${previewKey.split('/').map(encodeURIComponent).join('/')}`
+				const previewUrlFallback = null; // No fallback, WebP only
+				const thumbUrl = hasThumbWebp && cloudfrontDomain
+					? `https://${cloudfrontDomain}/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
-				const thumbUrl = thumbKeys.has(filename) && cloudfrontDomain
-					? `https://${cloudfrontDomain}/${(hasThumbWebp ? thumbWebpKey : thumbKey).split('/').map(encodeURIComponent).join('/')}`
-					: null;
-				const thumbUrlFallback = thumbKeys.has(filename) && cloudfrontDomain && hasThumbWebp
-					? `https://${cloudfrontDomain}/${thumbKey.split('/').map(encodeURIComponent).join('/')}`
-					: null;
+				const thumbUrlFallback = null; // No fallback, WebP only
 
-				// Use original size if available, otherwise use preview size, otherwise 0
-				const size = originalObj?.Size || previewObj?.Size || 0;
-				const lastModified = originalObj?.LastModified?.toISOString() || previewObj?.LastModified?.toISOString();
+				// Use original size (from originals folder)
+				const size = originalObj?.Size || 0;
+				const lastModified = originalObj?.LastModified?.toISOString();
 
 				return {
-					key: filename,
-					previewUrl,
+					key: filename, // Original filename (PNG/JPEG)
+					previewUrl,    // WebP preview URL from previews folder
 					previewUrlFallback,
-					thumbUrl,
+					thumbUrl,      // WebP thumb URL from thumbs folder
 					thumbUrlFallback,
 					size,
 					lastModified

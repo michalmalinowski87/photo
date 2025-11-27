@@ -27,8 +27,8 @@ function calculateStripeFee(amountCents: number): number {
 /**
  * Calculate amount to charge user including Stripe fees
  * User pays: baseAmount + Stripe fees
- * PhotoHub receives: baseAmount (after Stripe deducts fees)
- * @param baseAmountCents Base amount in cents (what PhotoHub should receive)
+ * PhotoCloud receives: baseAmount (after Stripe deducts fees)
+ * @param baseAmountCents Base amount in cents (what PhotoCloud should receive)
  * @returns Amount to charge user in cents (including Stripe fees)
  */
 function calculateAmountWithStripeFee(baseAmountCents: number): number {
@@ -842,7 +842,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`;
 
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
-		// For wallet top-ups, PhotoHub covers fees (handled in checkoutCreate.ts)
+		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)
 		// For gallery payments, user pays fees (we add fees to the amount charged)
 		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(stripeAmountCents) : 0;
 		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
@@ -861,7 +861,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					currency: 'pln',
 					product_data: {
 						name: `Gallery: ${galleryId}`,
-						description: `PhotoHub gallery payment - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
+						description: `PhotoCloud gallery payment - ${plan} plan${walletAmountCents > 0 ? ` (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)` : ''}`
 					},
 					unit_amount: baseAmountForStripe
 				},

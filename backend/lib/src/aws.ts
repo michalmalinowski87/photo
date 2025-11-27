@@ -1,4 +1,4 @@
-import { EnvConfig } from '@photohub/config';
+import { EnvConfig } from '@photocloud/config';
 
 export function getEnv(): EnvConfig {
 	const stage = (process.env.STAGE as 'dev' | 'prod') || 'dev';

@@ -265,7 +265,7 @@ Complete color and theme specification extracted from `pages/login.tsx`, `compon
 - Sign-up link: `text-primary font-bold` → `hsl(0 0% 98%)` / `#fafafa`
 
 **Brand Text:**
-- Logo text ("PhotoHub"): `text-foreground` → `hsl(0 0% 98%)` / `#fafafa`
+- Logo text ("PhotoCloud"): `text-foreground` → `hsl(0 0% 98%)` / `#fafafa`
 - Font size: `text-lg` (18px)
 - Font weight: `font-bold` (700)
 

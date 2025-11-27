@@ -20,13 +20,13 @@ http://localhost:3001/auth/auth-callback
 
 **Allowed callback URLs:**
 ```
-https://photohub.com/auth/auth-callback
-https://dashboard.photohub.com/auth/auth-callback
+https://photocloud.com/auth/auth-callback
+https://dashboard.photocloud.com/auth/auth-callback
 ```
 
 **Or if using custom auth domain:**
 ```
-https://auth.photohub.com/auth/auth-callback
+https://auth.photocloud.com/auth/auth-callback
 ```
 
 ## Required Sign-Out URLs
@@ -40,9 +40,9 @@ http://localhost:3000
 
 **Allowed sign-out URLs (Production):**
 ```
-https://photohub.com
-https://photohub.com/auth/logout-callback
-https://dashboard.photohub.com
+https://photocloud.com
+https://photocloud.com/auth/logout-callback
+https://dashboard.photocloud.com
 ```
 
 ## How to Configure in AWS Console

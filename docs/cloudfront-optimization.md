@@ -1,6 +1,6 @@
 # CloudFront Cost Optimization
 
-This document outlines the CloudFront cost optimizations implemented in PhotoHub and strategies for monitoring and further reducing costs.
+This document outlines the CloudFront cost optimizations implemented in PhotoCloud and strategies for monitoring and further reducing costs.
 
 ## Current Implementation
 

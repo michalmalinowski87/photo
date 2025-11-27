@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 
 export const generateMetadata = ({
-  title = "PhotoHub - Prosty sposób na udostępnianie zdjęć klientom",
-  description = "PhotoHub to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
+  title = "PhotoCloud - Prosty sposób na udostępnianie zdjęć klientom",
+  description = "PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
   image = "/thumbnail.png",
   icons = [
     {

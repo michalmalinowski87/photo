@@ -1,4 +1,4 @@
-import { lambdaLogger } from '@photohub/logger';
+import { lambdaLogger } from '@photocloud/logger';
 
 export const handler = lambdaLogger(async () => {
 	return {

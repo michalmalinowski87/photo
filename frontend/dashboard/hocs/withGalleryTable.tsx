@@ -1,6 +1,6 @@
-import React, { ComponentType, useMemo, useState, useCallback } from 'react';
-import { useUIStore } from '../store/uiSlice';
-import { Table, TableHeader, TableBody, TableRow, TableCell } from '../components/ui/table';
+import React, { ComponentType, useMemo, useState, useCallback } from "react";
+import { useUIStore } from "../store/uiSlice";
+import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 
 interface Column<T> {
   key: string;
@@ -19,7 +19,7 @@ interface TableConfig<T> {
   onRowClick?: (item: T) => void;
   defaultSort?: {
     key: string;
-    order: 'asc' | 'desc';
+    order: "asc" | "desc";
   };
 }
 
@@ -43,7 +43,7 @@ export function withGalleryTable<P extends object, T = any>(
           data,
           columns,
           keyExtractor,
-          emptyMessage = 'Brak danych do wyświetlenia',
+          emptyMessage = "Brak danych do wyświetlenia",
           onRowClick,
           defaultSort,
         } = config;
@@ -51,7 +51,7 @@ export function withGalleryTable<P extends object, T = any>(
         const preferences = tablePreferences[tableId] || {};
         const [localSort, setLocalSort] = useState<{
           key: string;
-          order: 'asc' | 'desc';
+          order: "asc" | "desc";
         } | null>(
           preferences.sortBy && preferences.sortOrder
             ? { key: preferences.sortBy, order: preferences.sortOrder }
@@ -68,8 +68,8 @@ export function withGalleryTable<P extends object, T = any>(
             const aValue = column.render ? String(column.render(a)) : (a as any)[localSort.key];
             const bValue = column.render ? String(column.render(b)) : (b as any)[localSort.key];
 
-            if (aValue < bValue) return localSort.order === 'asc' ? -1 : 1;
-            if (aValue > bValue) return localSort.order === 'asc' ? 1 : -1;
+            if (aValue < bValue) return localSort.order === "asc" ? -1 : 1;
+            if (aValue > bValue) return localSort.order === "asc" ? 1 : -1;
             return 0;
           });
         }, [data, localSort, columns]);
@@ -80,7 +80,7 @@ export function withGalleryTable<P extends object, T = any>(
             if (!column || !column.sortable) return;
 
             const newOrder: "desc" | "asc" =
-              localSort?.key === key && localSort.order === 'asc' ? 'desc' : 'asc';
+              localSort?.key === key && localSort.order === "asc" ? "desc" : "asc";
             const newSort = { key, order: newOrder };
             setLocalSort(newSort);
             setTablePreferences(tableId, {
@@ -102,7 +102,7 @@ export function withGalleryTable<P extends object, T = any>(
                       key={column.key}
                       isHeader
                       className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 ${
-                        column.className || ''
+                        column.className || ""
                       }`}
                     >
                       {column.sortable ? (
@@ -113,7 +113,7 @@ export function withGalleryTable<P extends object, T = any>(
                           {column.header}
                           {localSort?.key === column.key && (
                             <span className="text-gray-400">
-                              {localSort.order === 'asc' ? '↑' : '↓'}
+                              {localSort.order === "asc" ? "↑" : "↓"}
                             </span>
                           )}
                         </button>
@@ -139,12 +139,14 @@ export function withGalleryTable<P extends object, T = any>(
                     <TableRow
                       key={keyExtractor(item)}
                       onClick={() => onRowClick?.(item)}
-                      className={onRowClick ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}
+                      className={
+                        onRowClick ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800" : ""
+                      }
                     >
                       {columns.map((column) => (
                         <TableCell
                           key={column.key}
-                          className={`px-4 py-3 text-sm ${column.className || ''}`}
+                          className={`px-4 py-3 text-sm ${column.className || ""}`}
                         >
                           {column.render ? column.render(item) : (item as any)[column.key]}
                         </TableCell>
@@ -172,7 +174,7 @@ export function useGalleryTable<T>(config: TableConfig<T>) {
   const preferences = tablePreferences[config.tableId] || {};
   const [localSort, setLocalSort] = useState<{
     key: string;
-    order: 'asc' | 'desc';
+    order: "asc" | "desc";
   } | null>(
     preferences.sortBy && preferences.sortOrder
       ? { key: preferences.sortBy, order: preferences.sortOrder }
@@ -189,8 +191,8 @@ export function useGalleryTable<T>(config: TableConfig<T>) {
       const aValue = column.render ? String(column.render(a)) : (a as any)[localSort.key];
       const bValue = column.render ? String(column.render(b)) : (b as any)[localSort.key];
 
-      if (aValue < bValue) return localSort.order === 'asc' ? -1 : 1;
-      if (aValue > bValue) return localSort.order === 'asc' ? 1 : -1;
+      if (aValue < bValue) return localSort.order === "asc" ? -1 : 1;
+      if (aValue > bValue) return localSort.order === "asc" ? 1 : -1;
       return 0;
     });
   }, [config.data, localSort, config.columns]);
@@ -200,9 +202,10 @@ export function useGalleryTable<T>(config: TableConfig<T>) {
       const column = config.columns.find((col) => col.key === key);
       if (!column || !column.sortable) return;
 
-            const newOrder: "desc" | "asc" = localSort?.key === key && localSort.order === 'asc' ? 'desc' : 'asc';
-            const newSort = { key, order: newOrder };
-            setLocalSort(newSort);
+      const newOrder: "desc" | "asc" =
+        localSort?.key === key && localSort.order === "asc" ? "desc" : "asc";
+      const newSort = { key, order: newOrder };
+      setLocalSort(newSort);
       setTablePreferences(config.tableId, {
         ...preferences,
         sortBy: key,
@@ -218,4 +221,3 @@ export function useGalleryTable<T>(config: TableConfig<T>) {
     currentSort: localSort,
   };
 }
-

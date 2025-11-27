@@ -2,7 +2,7 @@
 
 ## Overview
 
-The PhotoHub dashboard is a Next.js application with a complete Polish UI, built using components from the `free-react-tailwind-admin-dashboard-main` template. All user-facing text is in Polish, and the application uses modern React patterns with Context API for state management.
+The PhotoCloud dashboard is a Next.js application with a complete Polish UI, built using components from the `free-react-tailwind-admin-dashboard-main` template. All user-facing text is in Polish, and the application uses modern React patterns with Context API for state management.
 
 ## Architecture
 

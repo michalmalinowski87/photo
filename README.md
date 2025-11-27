@@ -1,6 +1,6 @@
-# PhotoHub Monorepo
+# PhotoCloud Monorepo
 
-PhotoHub is a SaaS for photographers to create secure private galleries with client selection and final delivery. This monorepo contains infrastructure (AWS CDK), backend Lambdas, and frontend apps (dashboard, client gallery).
+PhotoCloud is a SaaS for photographers to create secure private galleries with client selection and final delivery. This monorepo contains infrastructure (AWS CDK), backend Lambdas, and frontend apps (dashboard, client gallery).
 
 ## Tech Stack
 - Infra: AWS CDK v2 (TypeScript), API Gateway (HTTP API), Lambda (Node.js 20), S3, DynamoDB, Cognito

@@ -59,23 +59,47 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		key = rawKey;
 	}
 
-	// Only process files in originals/
-	if (!key.includes('/originals/')) return;
+	// Process files in originals/ or final/
+	const isOriginal = key.includes('/originals/');
+	const isFinal = key.includes('/final/');
+	if (!isOriginal && !isFinal) return;
 
-	// Key format: galleries/{galleryId}/originals/{filename}
+	// Key format: galleries/{galleryId}/originals/{filename} or galleries/{galleryId}/final/{orderId}/{filename}
 	const parts = key.split('/');
 	if (parts.length < 4 || parts[0] !== 'galleries') {
 		logger?.error('Invalid key format', { key, rawKey });
 		return;
 	}
 		
-		const galleryId = parts[1]; // galleries/{galleryId}/originals/{filename}
-		const filename = parts.slice(3).join('/'); // Handle subdirectories if any
+		const galleryId = parts[1];
+		let filename: string;
+		let previewKey: string;
+		let thumbKey: string;
 		
-		const previewKey = `galleries/${galleryId}/previews/${filename}`;
-		const thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
+		if (isOriginal) {
+			// galleries/{galleryId}/originals/{filename}
+			filename = parts.slice(3).join('/');
+			previewKey = `galleries/${galleryId}/previews/${filename}`;
+			thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
+		} else {
+			// galleries/{galleryId}/final/{orderId}/{filename}
+			const orderId = parts[3];
+			filename = parts.slice(4).join('/');
+			previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+			thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
+		}
+		
+		// Generate WebP filenames (replace extension with .webp)
+		const getWebpKey = (originalKey: string) => {
+			const lastDot = originalKey.lastIndexOf('.');
+			if (lastDot === -1) return `${originalKey}.webp`;
+			return `${originalKey.substring(0, lastDot)}.webp`;
+		};
+		
+		const previewWebpKey = getWebpKey(previewKey);
+		const thumbWebpKey = getWebpKey(thumbKey);
 
-		logger?.info('Processing image', { key, rawKey, galleryId, previewKey, thumbKey });
+		logger?.info('Processing image', { key, rawKey, galleryId, previewWebpKey, thumbWebpKey });
 
 		try {
 			// Download original from S3
@@ -141,20 +165,12 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 			original: { width, height }
 		});
 
-		// Generate preview and thumbnail in both JPEG and WebP formats
+		// Generate preview and thumbnail in WebP format only
 		logger?.info('Starting resize operations');
-		const [previewJpegBuffer, previewWebpBuffer, thumbJpegBuffer, thumbWebpBuffer] = await Promise.all([
-			sharp(imageBuffer)
-				.resize(previewDims.width, previewDims.height, { fit: 'inside', withoutEnlargement: true })
-				.jpeg({ quality: 85 })
-				.toBuffer(),
+		const [previewWebpBuffer, thumbWebpBuffer] = await Promise.all([
 			sharp(imageBuffer)
 				.resize(previewDims.width, previewDims.height, { fit: 'inside', withoutEnlargement: true })
 				.webp({ quality: 85 })
-				.toBuffer(),
-			sharp(imageBuffer)
-				.resize(thumbDims.width, thumbDims.height, { fit: 'inside', withoutEnlargement: true })
-				.jpeg({ quality: 80 })
 				.toBuffer(),
 			sharp(imageBuffer)
 				.resize(thumbDims.width, thumbDims.height, { fit: 'inside', withoutEnlargement: true })
@@ -163,41 +179,13 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		]);
 
 		logger?.info('Resize complete', { 
-			previewJpegSize: previewJpegBuffer.length,
 			previewWebpSize: previewWebpBuffer.length,
-			thumbJpegSize: thumbJpegBuffer.length,
 			thumbWebpSize: thumbWebpBuffer.length
 		});
 
-		// Generate WebP filenames (replace extension with .webp)
-		const getWebpKey = (jpegKey: string) => {
-			const lastDot = jpegKey.lastIndexOf('.');
-			if (lastDot === -1) return `${jpegKey}.webp`;
-			return `${jpegKey.substring(0, lastDot)}.webp`;
-		};
-
-		const previewWebpKey = getWebpKey(previewKey);
-		const thumbWebpKey = getWebpKey(thumbKey);
-
-		// Upload preview and thumbnail in both JPEG and WebP formats to S3
-		logger?.info('Uploading to S3', { previewKey, previewWebpKey, thumbKey, thumbWebpKey });
+		// Upload preview and thumbnail in WebP format to S3
+		logger?.info('Uploading to S3', { previewWebpKey, thumbWebpKey });
 		await Promise.all([
-			// JPEG versions (fallback for older browsers)
-			s3.send(new PutObjectCommand({
-				Bucket: bucket,
-				Key: previewKey,
-				Body: previewJpegBuffer,
-				ContentType: 'image/jpeg',
-				CacheControl: 'max-age=31536000'
-			})),
-			s3.send(new PutObjectCommand({
-				Bucket: bucket,
-				Key: thumbKey,
-				Body: thumbJpegBuffer,
-				ContentType: 'image/jpeg',
-				CacheControl: 'max-age=31536000'
-			})),
-			// WebP versions (smaller file size, better compression)
 			s3.send(new PutObjectCommand({
 				Bucket: bucket,
 				Key: previewWebpKey,
@@ -216,35 +204,45 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 
 		logger?.info('Image processed successfully', { 
 			key, 
-			previewKey, 
 			previewWebpKey,
-			thumbKey,
 			thumbWebpKey,
-			previewJpegSizeBytes: previewJpegBuffer.length,
 			previewWebpSizeBytes: previewWebpBuffer.length,
-			thumbJpegSizeBytes: thumbJpegBuffer.length,
 			thumbWebpSizeBytes: thumbWebpBuffer.length,
 			originalSizeBytes: imageBuffer.length
 		});
 
-		// Update gallery originalsBytesUsed with original file size (only count originals)
-		// Also update bytesUsed for backward compatibility
+		// Update gallery bytes used based on type
 		if (galleriesTable && imageBuffer.length > 0) {
 			try {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'ADD originalsBytesUsed :size, bytesUsed :size',
-					ExpressionAttributeValues: {
-						':size': imageBuffer.length
-					}
-				}));
-				logger?.info('Updated gallery originalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+				if (isOriginal) {
+					// Update originalsBytesUsed for originals
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: 'ADD originalsBytesUsed :size, bytesUsed :size',
+						ExpressionAttributeValues: {
+							':size': imageBuffer.length
+						}
+					}));
+					logger?.info('Updated gallery originalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+				} else {
+					// Update finalsBytesUsed for finals
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: 'ADD finalsBytesUsed :size',
+						ExpressionAttributeValues: {
+							':size': imageBuffer.length
+						}
+					}));
+					logger?.info('Updated gallery finalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+				}
 			} catch (updateErr: any) {
-				logger?.warn('Failed to update gallery originalsBytesUsed', {
+				logger?.warn('Failed to update gallery bytes used', {
 					error: updateErr.message,
 					galleryId,
-					size: imageBuffer.length
+					size: imageBuffer.length,
+					type: isOriginal ? 'originals' : 'finals'
 				});
 			}
 		}
@@ -261,29 +259,40 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 				previewKey,
 				thumbKey
 			});
-			// Optionally, fallback to copying original if resize fails
-			try {
-				const fallbackGet = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-				if (fallbackGet.Body) {
-					const fallbackBuffer = await streamToBuffer(fallbackGet.Body as Readable);
-					await s3.send(new PutObjectCommand({
-						Bucket: bucket,
-						Key: previewKey,
-						Body: fallbackBuffer,
-						ContentType: fallbackGet.ContentType || 'image/jpeg'
-					}));
-					logger?.info('Fallback copy succeeded', { key, previewKey });
-				}
-			} catch (fallbackErr: any) {
-				logger?.error('Fallback copy failed', {
-					error: {
-						name: fallbackErr.name,
-						message: fallbackErr.message
-					},
-					key,
-					previewKey
-				});
+		// Optionally, fallback to copying original if resize fails
+		try {
+			const fallbackGet = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+			if (fallbackGet.Body) {
+				const fallbackBuffer = await streamToBuffer(fallbackGet.Body as Readable);
+				// Convert to WebP as fallback
+				const fallbackWebpBuffer = await sharp(fallbackBuffer)
+					.webp({ quality: 85 })
+					.toBuffer();
+				// Generate WebP filename for fallback
+				const getWebpKey = (originalKey: string) => {
+					const lastDot = originalKey.lastIndexOf('.');
+					if (lastDot === -1) return `${originalKey}.webp`;
+					return `${originalKey.substring(0, lastDot)}.webp`;
+				};
+				const fallbackPreviewKey = getWebpKey(previewKey);
+				await s3.send(new PutObjectCommand({
+					Bucket: bucket,
+					Key: fallbackPreviewKey,
+					Body: fallbackWebpBuffer,
+					ContentType: 'image/webp'
+				}));
+				logger?.info('Fallback WebP conversion succeeded', { key, fallbackPreviewKey });
 			}
+		} catch (fallbackErr: any) {
+			logger?.error('Fallback WebP conversion failed', {
+				error: {
+					name: fallbackErr.name,
+					message: fallbackErr.message
+				},
+				key,
+				previewKey
+			});
+		}
 		}
 	}
 

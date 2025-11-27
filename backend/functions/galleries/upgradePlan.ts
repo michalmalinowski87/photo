@@ -230,7 +230,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'SET plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
+					UpdateExpression: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
+					ExpressionAttributeNames: {
+						'#plan': 'plan'
+					},
 					ExpressionAttributeValues: {
 						':plan': newPlanKey,
 						':price': newPriceCents,

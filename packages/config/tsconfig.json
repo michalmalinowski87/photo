@@ -1,5 +1,5 @@
 {
-  "extends": "@photohub/tsconfig/tsconfig.base.json",
+  "extends": "../tsconfig/tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist"

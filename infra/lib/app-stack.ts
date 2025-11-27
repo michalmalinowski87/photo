@@ -200,7 +200,7 @@ export class AppStack extends Stack {
 		// Generate or use existing JWT secret for client gallery authentication
 		const jwtSecret = this.node.tryGetContext('jwtSecret') || 
 			process.env.JWT_SECRET || 
-			`photohub-${props.stage}-jwt-secret-change-in-production`;
+			`photocloud-${props.stage}-jwt-secret-change-in-production`;
 
 		const envVars: Record<string, string> = {
 			STAGE: props.stage,
@@ -297,12 +297,14 @@ export class AppStack extends Stack {
 		// Lambda invoke permissions (for zip generation functions)
 		// Will be granted after zip functions are created
 
-		// OPTIONS route for CORS preflight - no authorizer required
+		// Explicit OPTIONS route for CORS preflight - must come before catch-all route
+		// API Gateway HTTP API v2's built-in CORS may not work correctly with authorizers,
+		// so we handle OPTIONS explicitly to ensure preflight requests succeed
 		httpApi.addRoutes({
 			path: '/{proxy+}',
 			methods: [HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOptionsIntegration', apiFn)
-			// No authorizer for OPTIONS requests
+			// No authorizer - OPTIONS requests must be public for CORS to work
 		});
 
 		// Public routes (no authorizer required)
@@ -366,9 +368,10 @@ export class AppStack extends Stack {
 		});
 
 		// Single catch-all route for all API endpoints
+		// Exclude OPTIONS from catch-all since it's handled separately above
 		httpApi.addRoutes({
 			path: '/{proxy+}',
-			methods: [HttpMethod.ANY],
+			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
 			integration: new HttpLambdaIntegration('ApiIntegration', apiFn),
 			authorizer // Apply authorizer to all routes
 		});
@@ -553,6 +556,10 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 1024,
 			timeout: Duration.minutes(1),
+			// Note: Reserved concurrency not set due to low account limit (10 total)
+			// AWS requires minimum 10 unreserved concurrency, so we can't reserve any
+			// The S3 event prefix filters below are the primary protection against recursive loops
+			// To enable reserved concurrency, request limit increase: aws service-quotas request-service-quota-increase --service-code lambda --quota-code L-B99A9384 --desired-value 100
 			bundling: {
 				externalModules: ['aws-sdk', 'sharp'], // Sharp provided by layer
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
@@ -570,10 +577,25 @@ export class AppStack extends Stack {
 		}
 		galleriesBucket.grantReadWrite(resizeFn);
 		galleries.grantReadWriteData(resizeFn);
+		
+		// CRITICAL FIX: Add prefix filters to prevent recursive loops
+		// Only trigger on originals/ and final/ paths, NOT on previews/ or thumbs/
+		// When Lambda writes previews/thumbs, those PUTs would trigger it again without filters
+		const s3Notifications = require('aws-cdk-lib/aws-s3-notifications');
+		const s3EventType = require('aws-cdk-lib/aws-s3').EventType;
+		
+		// Trigger only on originals/ uploads (excludes previews/ and thumbs/)
 		galleriesBucket.addEventNotification(
-			// @ts-ignore
-			require('aws-cdk-lib/aws-s3').EventType.OBJECT_CREATED_PUT,
-			new (require('aws-cdk-lib/aws-s3-notifications').LambdaDestination)(resizeFn)
+			s3EventType.OBJECT_CREATED_PUT,
+			new s3Notifications.LambdaDestination(resizeFn),
+			{ prefix: 'galleries/', suffix: '/originals/' }
+		);
+		
+		// Trigger only on final/ uploads (excludes previews/ and thumbs/)
+		galleriesBucket.addEventNotification(
+			s3EventType.OBJECT_CREATED_PUT,
+			new s3Notifications.LambdaDestination(resizeFn),
+			{ prefix: 'galleries/', suffix: '/final/' }
 		);
 
 		// CloudFront distribution for previews/* (use OAC for bucket access)
@@ -582,15 +604,15 @@ export class AppStack extends Stack {
 		const dist = new Distribution(this, 'PreviewsDistribution', {
 			defaultBehavior: {
 				origin: S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
-					originAccessControlName: `PhotoHub-${props.stage}-OAC`,
-					description: `Origin Access Control for PhotoHub ${props.stage} galleries bucket`
+					originAccessControlName: `PhotoCloud-${props.stage}-OAC`,
+					description: `Origin Access Control for PhotoCloud ${props.stage} galleries bucket`
 				}),
 				cachePolicy: CachePolicy.CACHING_OPTIMIZED,
 				allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
 				viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
 			},
 			priceClass: PriceClass.PRICE_CLASS_100,
-			comment: `PhotoHub previews ${props.stage}`
+			comment: `PhotoCloud previews ${props.stage}`
 		});
 		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy
 		// No manual policy needed - CDK handles it automatically
@@ -610,8 +632,8 @@ export class AppStack extends Stack {
 		// CloudWatch Monitoring & Alarms for CloudFront cost optimization
 		// Create SNS topic for cost alerts (only in production)
 		const costAlertsTopic = props.stage === 'prod' ? new Topic(this, 'CloudFrontCostAlertsTopic', {
-			displayName: `PhotoHub-${props.stage}-CloudFront-Cost-Alerts`,
-			topicName: `photohub-${props.stage}-cloudfront-cost-alerts`
+			displayName: `PhotoCloud-${props.stage}-CloudFront-Cost-Alerts`,
+			topicName: `photocloud-${props.stage}-cloudfront-cost-alerts`
 		}) : undefined;
 
 		// Subscribe email if provided via environment variable (only in production)
@@ -622,7 +644,7 @@ export class AppStack extends Stack {
 		// Alarm 1: CloudFront data transfer spike (>10GB/day = ~333MB/hour)
 		// This helps detect unexpected traffic spikes that could increase costs
 		const dataTransferAlarm = new Alarm(this, 'CloudFrontDataTransferSpikeAlarm', {
-			alarmName: `PhotoHub-${props.stage}-CloudFront-DataTransfer-Spike`,
+			alarmName: `PhotoCloud-${props.stage}-CloudFront-DataTransfer-Spike`,
 			alarmDescription: 'Alert when CloudFront data transfer exceeds 333MB/hour (10GB/day threshold)',
 			metric: new Metric({
 				namespace: 'AWS/CloudFront',
@@ -645,7 +667,7 @@ export class AppStack extends Stack {
 		// Alarm 2: CloudFront request count spike (>100k requests/day = ~4167 requests/hour)
 		// This helps detect unexpected request spikes
 		const requestCountAlarm = new Alarm(this, 'CloudFrontRequestCountSpikeAlarm', {
-			alarmName: `PhotoHub-${props.stage}-CloudFront-RequestCount-Spike`,
+			alarmName: `PhotoCloud-${props.stage}-CloudFront-RequestCount-Spike`,
 			alarmDescription: 'Alert when CloudFront requests exceed 4167/hour (100k/day threshold)',
 			metric: new Metric({
 				namespace: 'AWS/CloudFront',
@@ -672,7 +694,7 @@ export class AppStack extends Stack {
 		// High origin requests indicate low cache hit ratio (<80% target)
 		// If Requests = 1000 and OriginRequests > 200, cache hit ratio < 80%
 		const originRequestRatioAlarm = new Alarm(this, 'CloudFrontOriginRequestRatioAlarm', {
-			alarmName: `PhotoHub-${props.stage}-CloudFront-OriginRequest-Ratio`,
+			alarmName: `PhotoCloud-${props.stage}-CloudFront-OriginRequest-Ratio`,
 			alarmDescription: 'Alert when origin requests exceed 20% of total requests (cache hit ratio < 80%)',
 			metric: new Metric({
 				namespace: 'AWS/CloudFront',

@@ -383,7 +383,7 @@ export async function establishCognitoSessionSilently(): Promise<void> {
                 return
             }
             
-            if (event.data && event.data.type === 'PHOTOHUB_SILENT_SESSION_ESTABLISHED') {
+            if (event.data && event.data.type === 'PHOTOCLOUD_SILENT_SESSION_ESTABLISHED') {
                 if (!resolved) {
                     resolved = true
                     window.removeEventListener('message', messageHandler)

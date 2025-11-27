@@ -1,41 +1,41 @@
-import React from 'react';
-import Badge from '../components/ui/badge/Badge';
+import React from "react";
+import Badge from "../components/ui/badge/Badge";
 
 export interface StatusBadgeConfig {
   deliveryStatus?: {
-    [key: string]: { color: 'success' | 'error' | 'warning' | 'info' | 'light'; label: string };
+    [key: string]: { color: "success" | "error" | "warning" | "info" | "light"; label: string };
   };
   paymentStatus?: {
-    [key: string]: { color: 'success' | 'error' | 'warning' | 'info' | 'light'; label: string };
+    [key: string]: { color: "success" | "error" | "warning" | "info" | "light"; label: string };
   };
   galleryState?: {
-    [key: string]: { color: 'success' | 'error' | 'warning' | 'info' | 'light'; label: string };
+    [key: string]: { color: "success" | "error" | "warning" | "info" | "light"; label: string };
   };
 }
 
 // Default status mappings
-const defaultDeliveryStatusMap: StatusBadgeConfig['deliveryStatus'] = {
-  CLIENT_SELECTING: { color: 'info', label: 'Wybór przez klienta' },
-  CLIENT_APPROVED: { color: 'success', label: 'Zatwierdzone' },
-  AWAITING_FINAL_PHOTOS: { color: 'warning', label: 'Oczekuje na finały' },
-  CHANGES_REQUESTED: { color: 'warning', label: 'Prośba o zmiany' },
-  PREPARING_FOR_DELIVERY: { color: 'info', label: 'Gotowe do wysyłki' },
-  PREPARING_DELIVERY: { color: 'info', label: 'Oczekuje do wysłania' },
-  DELIVERED: { color: 'success', label: 'Dostarczone' },
-  CANCELLED: { color: 'error', label: 'Anulowane' },
+const defaultDeliveryStatusMap: StatusBadgeConfig["deliveryStatus"] = {
+  CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
+  CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+  AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
+  CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
+  PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+  PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
+  DELIVERED: { color: "success", label: "Dostarczone" },
+  CANCELLED: { color: "error", label: "Anulowane" },
 };
 
-const defaultPaymentStatusMap: StatusBadgeConfig['paymentStatus'] = {
-  UNPAID: { color: 'error', label: 'Nieopłacone' },
-  PARTIALLY_PAID: { color: 'warning', label: 'Częściowo opłacone' },
-  PAID: { color: 'success', label: 'Opłacone' },
-  REFUNDED: { color: 'error', label: 'Zwrócone' },
+const defaultPaymentStatusMap: StatusBadgeConfig["paymentStatus"] = {
+  UNPAID: { color: "error", label: "Nieopłacone" },
+  PARTIALLY_PAID: { color: "warning", label: "Częściowo opłacone" },
+  PAID: { color: "success", label: "Opłacone" },
+  REFUNDED: { color: "error", label: "Zwrócone" },
 };
 
-const defaultGalleryStateMap: StatusBadgeConfig['galleryState'] = {
-  DRAFT: { color: 'warning', label: 'Wersja robocza' },
-  PAID_ACTIVE: { color: 'success', label: 'Aktywna' },
-  EXPIRED: { color: 'error', label: 'Wygasła' },
+const defaultGalleryStateMap: StatusBadgeConfig["galleryState"] = {
+  DRAFT: { color: "warning", label: "Wersja robocza" },
+  PAID_ACTIVE: { color: "success", label: "Aktywna" },
+  EXPIRED: { color: "error", label: "Wygasła" },
 };
 
 /**
@@ -43,9 +43,9 @@ const defaultGalleryStateMap: StatusBadgeConfig['galleryState'] = {
  */
 export const DeliveryStatusBadge: React.FC<{
   status: string;
-  config?: StatusBadgeConfig['deliveryStatus'];
+  config?: StatusBadgeConfig["deliveryStatus"];
 }> = ({ status, config = defaultDeliveryStatusMap }) => {
-  const statusInfo = config[status] || { color: 'light' as const, label: status };
+  const statusInfo = config[status] || { color: "light" as const, label: status };
   return (
     <Badge color={statusInfo.color} variant="light">
       {statusInfo.label}
@@ -58,9 +58,9 @@ export const DeliveryStatusBadge: React.FC<{
  */
 export const PaymentStatusBadge: React.FC<{
   status: string;
-  config?: StatusBadgeConfig['paymentStatus'];
+  config?: StatusBadgeConfig["paymentStatus"];
 }> = ({ status, config = defaultPaymentStatusMap }) => {
-  const statusInfo = config[status] || { color: 'light' as const, label: status };
+  const statusInfo = config[status] || { color: "light" as const, label: status };
   return (
     <Badge color={statusInfo.color} variant="light">
       {statusInfo.label}
@@ -73,9 +73,9 @@ export const PaymentStatusBadge: React.FC<{
  */
 export const GalleryStateBadge: React.FC<{
   state: string;
-  config?: StatusBadgeConfig['galleryState'];
+  config?: StatusBadgeConfig["galleryState"];
 }> = ({ state, config = defaultGalleryStateMap }) => {
-  const statusInfo = config[state] || { color: 'light' as const, label: state };
+  const statusInfo = config[state] || { color: "light" as const, label: state };
   return (
     <Badge color={statusInfo.color} variant="light">
       {statusInfo.label}
@@ -86,9 +86,7 @@ export const GalleryStateBadge: React.FC<{
 /**
  * HOC that provides status badge rendering utilities
  */
-export function withStatusBadges<P extends object>(
-  WrappedComponent: React.ComponentType<P>
-) {
+export function withStatusBadges<P extends object>(WrappedComponent: React.ComponentType<P>) {
   return function StatusBadgesComponent(props: P) {
     return (
       <WrappedComponent
@@ -100,4 +98,3 @@ export function withStatusBadges<P extends object>(
     );
   };
 }
-

@@ -1,99 +1,143 @@
-import { useState, useEffect } from 'react';
-import { WelcomePopup } from './WelcomePopup';
-import api from '../../lib/api-service';
-import { initializeAuth } from '../../lib/auth-init';
+import { useState, useEffect } from "react";
 
-const WELCOME_POPUP_SEEN_KEY = 'photohub_welcome_popup_seen';
+import api from "../../lib/api-service";
+import { initializeAuth } from "../../lib/auth-init";
 
-export const WelcomePopupWrapper: React.FC = () => {
-	const [showPopup, setShowPopup] = useState(false);
-	const [welcomeBonusCents, setWelcomeBonusCents] = useState(900); // Default to 9 PLN (900 cents)
-	const [checking, setChecking] = useState(true);
+import { WelcomePopup } from "./WelcomePopup";
 
-	useEffect(() => {
-		// Only check on client side
-		if (typeof window === 'undefined') {
-			return;
-		}
+interface WelcomePopupWrapperProps {
+  onCreateGallery?: () => void;
+}
 
-		// Check if user has already seen the popup
-		const hasSeenPopup = localStorage.getItem(WELCOME_POPUP_SEEN_KEY);
-		if (hasSeenPopup === 'true') {
-			setChecking(false);
-			return;
-		}
+export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCreateGallery }) => {
+  const [showPopup, setShowPopup] = useState(false);
+  const [welcomeBonusCents, setWelcomeBonusCents] = useState(900); // Default to 9 PLN (900 cents)
+  const [checking, setChecking] = useState(true);
 
-		// Check for welcome bonus on mount
-		const checkWelcomeBonus = () => {
-			// Initialize auth - this is async with callbacks
-			initializeAuth(
-				async () => {
-					// Auth successful, check for welcome bonus
-					try {
-						// Load wallet balance (this triggers welcome bonus if user is new)
-						const balanceData = await api.wallet.getBalance();
-						
-						// Small delay to ensure welcome bonus transaction is created
-						await new Promise(resolve => setTimeout(resolve, 500));
-						
-						// Check if user has welcome bonus transaction
-						try {
-							const transactionsData = await api.wallet.getTransactions({ limit: '10' });
-							const transactions = transactionsData.transactions || [];
-							
-							// Find WELCOME_BONUS transaction
-							const welcomeBonusTransaction = transactions.find(
-								(tx: any) => tx.type === 'WELCOME_BONUS'
-							);
+  useEffect(() => {
+    // Only check on client side
+    if (typeof window === "undefined") {
+      return;
+    }
 
-							if (welcomeBonusTransaction) {
-								// User has welcome bonus, show popup
-								const bonusAmount = welcomeBonusTransaction.amountCents || 
-									(welcomeBonusTransaction.amount ? welcomeBonusTransaction.amount * 100 : 0) || 
-									900;
-								setWelcomeBonusCents(bonusAmount);
-								setShowPopup(true);
-							}
-						} catch (txErr) {
-							// If we can't fetch transactions, don't show popup
-							console.error('Failed to fetch transactions:', txErr);
-						}
-					} catch (err) {
-						// Error fetching wallet - don't show popup
-						console.error('Welcome popup check failed:', err);
-					} finally {
-						setChecking(false);
-					}
-				},
-				() => {
-					// Not authenticated - don't show popup
-					setChecking(false);
-				}
-			);
-		};
+    // Check for welcome bonus on mount
+    const checkWelcomeBonus = () => {
+      // Initialize auth - this is async with callbacks
+      initializeAuth(
+        async () => {
+          // Auth successful, check for welcome bonus
+          try {
+            // Check user settings and transactions in parallel for faster response
+            const [businessInfoResult, transactionsResult] = await Promise.allSettled([
+              api.auth.getBusinessInfo(),
+              api.wallet.getTransactions({ limit: "10" }),
+            ]);
 
-		checkWelcomeBonus();
-	}, []);
+            // Check if popup was already shown
+            if (
+              businessInfoResult.status === "fulfilled" &&
+              businessInfoResult.value.welcomePopupShown === true
+            ) {
+              // User has already seen the popup, don't show again
+              setChecking(false);
+              return;
+            }
 
-	const handleClose = () => {
-		setShowPopup(false);
-		// Mark popup as seen
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(WELCOME_POPUP_SEEN_KEY, 'true');
-		}
-	};
+            // Check transactions immediately
+            interface Transaction {
+              type?: string;
+              amountCents?: number;
+              amount?: number;
+            }
+            let transactions: Transaction[] = [];
+            if (transactionsResult.status === "fulfilled") {
+              const resultValue = transactionsResult.value as { transactions?: Transaction[] };
+              transactions = resultValue.transactions ?? [];
+            }
 
-	// Don't render anything while checking or if popup shouldn't be shown
-	if (checking || !showPopup) {
-		return null;
-	}
+            // Find WELCOME_BONUS transaction
+            const welcomeBonusTransaction = transactions.find(
+              (tx) => tx.type === "WELCOME_BONUS"
+            );
 
-	return (
-		<WelcomePopup
-			isOpen={showPopup}
-			onClose={handleClose}
-			welcomeBonusCents={welcomeBonusCents}
-		/>
-	);
+            // If welcome bonus exists and is the only transaction, show popup immediately
+            if (welcomeBonusTransaction && transactions.length === 1) {
+              const bonusAmount =
+                welcomeBonusTransaction.amountCents ??
+                (welcomeBonusTransaction.amount ? welcomeBonusTransaction.amount * 100 : 0) ??
+                900;
+              setWelcomeBonusCents(bonusAmount);
+              setShowPopup(true);
+              setChecking(false);
+              return;
+            }
+
+            // If no welcome bonus transaction yet, trigger it and check again
+            if (!welcomeBonusTransaction) {
+              // Load wallet balance (this triggers welcome bonus if user is new)
+              await api.wallet.getBalance();
+
+              // Check transactions again after a short delay (transaction creation is fast)
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
+              const retryTransactionsData = await api.wallet.getTransactions({ limit: "10" });
+              const retryTransactionsTyped = retryTransactionsData as { transactions?: Transaction[] };
+              const retryTransactions = retryTransactionsTyped.transactions ?? [];
+
+              const retryWelcomeBonus = retryTransactions.find(
+                (tx) => tx.type === "WELCOME_BONUS"
+              );
+
+              // Check if welcome bonus is the only transaction
+              if (retryWelcomeBonus && retryTransactions.length === 1) {
+                const bonusAmount =
+                  retryWelcomeBonus.amountCents ??
+                  (retryWelcomeBonus.amount ? retryWelcomeBonus.amount * 100 : 0) ??
+                  900;
+                setWelcomeBonusCents(bonusAmount);
+                setShowPopup(true);
+              }
+            }
+          } catch (_err) {
+            // Error fetching wallet/transactions - don't show popup
+            console.error("Welcome popup check failed:", _err);
+          } finally {
+            setChecking(false);
+          }
+        },
+        () => {
+          // Not authenticated - don't show popup
+          setChecking(false);
+        }
+      );
+    };
+
+    checkWelcomeBonus();
+  }, []);
+
+  const handleClose = async () => {
+    setShowPopup(false);
+
+    // Update user settings to mark popup as shown
+    try {
+      await api.auth.updateBusinessInfo({ welcomePopupShown: true });
+    } catch (_err) {
+      // Log error but don't block - settings update is not critical
+      console.error("Failed to update business info:", _err);
+    }
+  };
+
+  // Don't render anything while checking or if popup shouldn't be shown
+  if (checking || !showPopup) {
+    return null;
+  }
+
+  return (
+    <WelcomePopup
+      isOpen={showPopup}
+      onClose={handleClose}
+      welcomeBonusCents={welcomeBonusCents}
+      onCreateGallery={onCreateGallery}
+    />
+  );
 };
-

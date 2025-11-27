@@ -14,12 +14,12 @@ import Link from "next/link";
 const faqItems = [
   {
     id: "1",
-    question: "Jak rozpocząć korzystanie z PhotoHub?",
+    question: "Jak rozpocząć korzystanie z PhotoCloud?",
     answer: "Rozpocznij od utworzenia darmowego konta. Każdy nowy użytkownik otrzymuje 1 darmową galerię do przetestowania. Po zalogowaniu możesz od razu utworzyć pierwszą galerię i przesłać zdjęcia."
   },
   {
     id: "2",
-    question: "Ile kosztuje korzystanie z PhotoHub?",
+    question: "Ile kosztuje korzystanie z PhotoCloud?",
     answer: "Ceny zaczynają się od 7 PLN za galerię (1 miesiąc, 1 GB). Masz do wyboru różne pakiety: 1 GB, 3 GB lub 10 GB oraz okresy: 1 miesiąc, 3 miesiące lub 12 miesięcy. Zobacz pełny cennik na stronie /pricing."
   },
   {
@@ -45,7 +45,7 @@ const faqItems = [
   {
     id: "7",
     question: "Jakie formaty zdjęć są obsługiwane?",
-    answer: "PhotoHub obsługuje wszystkie popularne formaty zdjęć, w tym JPEG, PNG i inne standardowe formaty obrazów. Zdjęcia są automatycznie przetwarzane i optymalizowane do szybkiego wyświetlania."
+    answer: "PhotoCloud obsługuje wszystkie popularne formaty zdjęć, w tym JPEG, PNG i inne standardowe formaty obrazów. Zdjęcia są automatycznie przetwarzane i optymalizowane do szybkiego wyświetlania."
   },
   {
     id: "8",
@@ -87,7 +87,7 @@ const HelpPage = () => {
             Centrum pomocy
           </h1>
           <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
-            Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PhotoHub.
+            Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PhotoCloud.
           </p>
         </div>
       </AnimationContainer>
@@ -117,7 +117,7 @@ const HelpPage = () => {
                 <CardTitle className="text-2xl text-foreground">Jak rozpocząć?</CardTitle>
               </div>
               <CardDescription>
-                Wykonaj te 5 prostych kroków, aby rozpocząć korzystanie z PhotoHub
+                Wykonaj te 5 prostych kroków, aby rozpocząć korzystanie z PhotoCloud
               </CardDescription>
             </CardHeader>
             <CardContent>

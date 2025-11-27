@@ -1,11 +1,24 @@
 import { ThemeProvider } from "../../context/ThemeContext";
 import { ToastProvider } from "../../context/ToastContext";
 import GallerySidebar from "../galleries/GallerySidebar";
+
 import GalleryHeader from "./GalleryHeader";
+
+interface Gallery {
+  galleryId?: string;
+  galleryName?: string;
+  orders?: unknown[];
+  [key: string]: unknown;
+}
+
+interface Order {
+  deliveryStatus?: string;
+  [key: string]: unknown;
+}
 
 interface GalleryLayoutProps {
   children: React.ReactNode;
-  gallery: any;
+  gallery: Gallery | null;
   isPaid: boolean;
   galleryUrl: string;
   onPay: () => void;
@@ -14,7 +27,7 @@ interface GalleryLayoutProps {
   onSettings: () => void;
   onCreateGallery?: () => void;
   onReloadGallery?: () => Promise<void>;
-  order?: any;
+  order?: Order | null;
   orderId?: string;
   sendLinkLoading?: boolean;
   onDownloadZip?: () => void;
@@ -38,7 +51,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onCopyUrl,
   onSendLink,
   onSettings,
-  onCreateGallery,
+  onCreateGallery: _onCreateGallery,
   onReloadGallery,
   order,
   orderId,
@@ -86,9 +99,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
             </div>
             <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
               <GalleryHeader />
-              <div className="p-6">
-                {children}
-              </div>
+              <div className="p-6">{children}</div>
             </div>
           </div>
         </div>
@@ -98,4 +109,3 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
 };
 
 export default GalleryLayout;
-

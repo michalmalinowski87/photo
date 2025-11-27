@@ -1,6 +1,6 @@
-# PhotoHub User Flows
+# PhotoCloud User Flows
 
-This document describes the main user flows for photographers and clients using PhotoHub.
+This document describes the main user flows for photographers and clients using PhotoCloud.
 
 ## Table of Contents
 

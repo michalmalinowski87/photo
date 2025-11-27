@@ -1,10 +1,10 @@
 # Stripe Setup Guide
 
-This guide explains how to configure Stripe for PhotoHub payments.
+This guide explains how to configure Stripe for PhotoCloud payments.
 
 ## Overview
 
-PhotoHub uses **Stripe Checkout** (hosted payment page) for processing payments. This means:
+PhotoCloud uses **Stripe Checkout** (hosted payment page) for processing payments. This means:
 - ✅ No Stripe Publishable Key needed in frontend
 - ✅ Only Secret Key needed server-side
 - ✅ Webhook Secret needed for security verification

@@ -104,19 +104,27 @@
   }
 
   .shadow-theme-sm {
-    box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+    box-shadow:
+      0px 1px 3px 0px rgba(16, 24, 40, 0.1),
+      0px 1px 2px 0px rgba(16, 24, 40, 0.06);
   }
 
   .shadow-theme-md {
-    box-shadow: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+    box-shadow:
+      0px 4px 8px -2px rgba(16, 24, 40, 0.1),
+      0px 2px 4px -2px rgba(16, 24, 40, 0.06);
   }
 
   .shadow-theme-lg {
-    box-shadow: 0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+    box-shadow:
+      0px 12px 16px -4px rgba(16, 24, 40, 0.08),
+      0px 4px 6px -2px rgba(16, 24, 40, 0.03);
   }
 
   .shadow-theme-xl {
-    box-shadow: 0px 20px 24px -4px rgba(16, 24, 40, 0.08), 0px 8px 8px -4px rgba(16, 24, 40, 0.03);
+    box-shadow:
+      0px 20px 24px -4px rgba(16, 24, 40, 0.08),
+      0px 8px 8px -4px rgba(16, 24, 40, 0.03);
   }
 
   @keyframes slide-in {
@@ -188,7 +196,12 @@
 
 [data-toast-container] .dark\:bg-success-500\/15,
 .toast-container .dark\:bg-success-500\/15 {
-  background-color: rgba(18, 183, 106, 0.3) !important; /* success-500 with 30% opacity instead of 15% */
+  background-color: rgba(
+    18,
+    183,
+    106,
+    0.3
+  ) !important; /* success-500 with 30% opacity instead of 15% */
 }
 
 [data-toast-container] .bg-error-50,
@@ -198,7 +211,12 @@
 
 [data-toast-container] .dark\:bg-error-500\/15,
 .toast-container .dark\:bg-error-500\/15 {
-  background-color: rgba(240, 68, 56, 0.3) !important; /* error-500 with 30% opacity instead of 15% */
+  background-color: rgba(
+    240,
+    68,
+    56,
+    0.3
+  ) !important; /* error-500 with 30% opacity instead of 15% */
 }
 
 [data-toast-container] .bg-warning-50,
@@ -208,7 +226,12 @@
 
 [data-toast-container] .dark\:bg-warning-500\/15,
 .toast-container .dark\:bg-warning-500\/15 {
-  background-color: rgba(247, 144, 9, 0.3) !important; /* warning-500 with 30% opacity instead of 15% */
+  background-color: rgba(
+    247,
+    144,
+    9,
+    0.3
+  ) !important; /* warning-500 with 30% opacity instead of 15% */
 }
 
 [data-toast-container] .bg-blue-light-50,
@@ -218,7 +241,12 @@
 
 [data-toast-container] .dark\:bg-blue-light-500\/15,
 .toast-container .dark\:bg-blue-light-500\/15 {
-  background-color: rgba(11, 165, 236, 0.3) !important; /* blue-light-500 with 30% opacity instead of 15% */
+  background-color: rgba(
+    11,
+    165,
+    236,
+    0.3
+  ) !important; /* blue-light-500 with 30% opacity instead of 15% */
 }
 
 /* Remove border from toast Alerts */

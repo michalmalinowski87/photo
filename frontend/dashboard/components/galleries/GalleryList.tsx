@@ -1,18 +1,42 @@
-import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
+
+import { useToast } from "../../hooks/useToast";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
-import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
-import { FullPageLoading } from "../ui/loading/Loading";
-import PaymentConfirmationModal from "./PaymentConfirmationModal";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
-import { useToast } from "../../hooks/useToast";
+import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
+
+import PaymentConfirmationModal from "./PaymentConfirmationModal";
+
+interface Gallery {
+  galleryId: string;
+  galleryName?: string;
+  state?: string;
+  isPaid?: boolean;
+  paymentStatus?: string;
+  plan?: string;
+  priceCents?: number;
+  orderCount?: number;
+  createdAt?: string;
+  originalsLimitBytes?: number;
+  finalsLimitBytes?: number;
+  originalsBytesUsed?: number;
+  finalsBytesUsed?: number;
+  [key: string]: unknown;
+}
 
 interface GalleryListProps {
-  filter?: "unpaid" | "wyslano" | "wybrano" | "prosba-o-zmiany" | "gotowe-do-wysylki" | "dostarczone";
+  filter?:
+    | "unpaid"
+    | "wyslano"
+    | "wybrano"
+    | "prosba-o-zmiany"
+    | "gotowe-do-wysylki"
+    | "dostarczone";
   onLoadingChange?: (loading: boolean, initialLoad: boolean) => void;
 }
 
@@ -22,7 +46,27 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
   const [error, setError] = useState("");
-  const [galleries, setGalleries] = useState<any[]>([]);
+
+  interface WalletBalanceResponse {
+    balanceCents?: number;
+    [key: string]: unknown;
+  }
+
+  interface GalleriesResponse {
+    items?: Gallery[];
+    [key: string]: unknown;
+  }
+
+  interface PaymentResponse {
+    totalAmountCents?: number;
+    walletAmountCents?: number;
+    stripeAmountCents?: number;
+    checkoutUrl?: string;
+    paid?: boolean;
+    [key: string]: unknown;
+  }
+
+  const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -34,18 +78,20 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     balanceAfterPayment: 0,
   });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [galleryToDelete, setGalleryToDelete] = useState<any | null>(null);
+  const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
+    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
     initializeAuth(
       (token) => {
         setIdToken(token);
       },
       () => {
-        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/galleries");
+        redirectToLandingSignIn(
+          typeof window !== "undefined" ? window.location.pathname : "/galleries"
+        );
         if (onLoadingChange) {
           setInitialLoad(false);
           setLoading(false);
@@ -53,30 +99,33 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         }
       }
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoadingChange is a prop callback that shouldn't change
   }, []);
 
   useEffect(() => {
     if (apiUrl && idToken) {
-      loadGalleries();
-      loadWalletBalance();
+      void loadGalleries();
+      void loadWalletBalance();
     }
-  }, [apiUrl, idToken, filter]);
+  }, [apiUrl, idToken, filter, loadGalleries, loadWalletBalance]);
 
-  const loadWalletBalance = async () => {
-    if (!apiUrl || !idToken) return;
-    
+  const loadWalletBalance = useCallback(async () => {
+    if (!apiUrl || !idToken) {
+      return;
+    }
+
     try {
-      const { data } = await apiFetch(`${apiUrl}/wallet/balance`, {
+      const { data } = await apiFetch<WalletBalanceResponse>(`${apiUrl}/wallet/balance`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      setWalletBalance(data.balanceCents || 0);
-    } catch (err) {
+      setWalletBalance(data.balanceCents ?? 0);
+    } catch (_err) {
       // Ignore wallet errors, default to 0
       setWalletBalance(0);
     }
-  };
+  }, [apiUrl, idToken]);
 
-  const loadGalleries = async () => {
+  const loadGalleries = useCallback(async () => {
     if (!apiUrl || !idToken) {
       if (onLoadingChange && initialLoad) {
         setInitialLoad(false);
@@ -85,26 +134,26 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
       }
       return;
     }
-    
+
     setLoading(true);
     setError("");
-    
+
     if (onLoadingChange && initialLoad) {
       onLoadingChange(true, true);
     }
-    
+
     try {
       const url = filter ? `${apiUrl}/galleries?filter=${filter}` : `${apiUrl}/galleries`;
-      const { data } = await apiFetch(url, {
+      const { data } = await apiFetch<GalleriesResponse>(url, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      
-      setGalleries(data.items || []);
-      
+
+      setGalleries(data.items ?? []);
+
       if (initialLoad) {
         setInitialLoad(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(formatApiError(err));
       if (initialLoad) {
         setInitialLoad(false);
@@ -115,7 +164,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         onLoadingChange(false, false);
       }
     }
-  };
+  }, [apiUrl, idToken, filter, initialLoad, onLoadingChange]);
 
   // Notify parent of loading state changes
   useEffect(() => {
@@ -126,54 +175,62 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   }, [loading, initialLoad]);
 
   const handlePayClick = async (galleryId: string) => {
-    if (!apiUrl || !idToken) return;
-    
+    if (!apiUrl || !idToken) {
+      return;
+    }
+
     setSelectedGalleryId(galleryId);
     setPaymentLoading(true);
-    
+
     try {
       // First, get payment details using dry run
-      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/pay`, {
+      const { data } = await apiFetch<PaymentResponse>(`${apiUrl}/galleries/${galleryId}/pay`, {
         method: "POST",
         headers: { Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ dryRun: true }),
       });
 
       setPaymentDetails({
-        totalAmountCents: data.totalAmountCents,
-        walletAmountCents: data.walletAmountCents,
-        stripeAmountCents: data.stripeAmountCents,
-        balanceAfterPayment: walletBalance - data.walletAmountCents,
+        totalAmountCents: data.totalAmountCents ?? 0,
+        walletAmountCents: data.walletAmountCents ?? 0,
+        stripeAmountCents: data.stripeAmountCents ?? 0,
+        balanceAfterPayment: walletBalance - (data.walletAmountCents ?? 0),
       });
       setShowPaymentModal(true);
-    } catch (err: any) {
+    } catch (err) {
       const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg || "Nie udało się przygotować płatności");
+      showToast("error", "Błąd", errorMsg ?? "Nie udało się przygotować płatności");
     } finally {
       setPaymentLoading(false);
     }
   };
 
   const handlePaymentConfirm = async () => {
-    if (!apiUrl || !idToken || !selectedGalleryId || !paymentDetails) return;
-    
+    if (!apiUrl || !idToken || !selectedGalleryId || !paymentDetails) {
+      return;
+    }
+
     setShowPaymentModal(false);
     setPaymentLoading(true);
-    
+
     try {
       // If wallet balance is insufficient (split payment), force full Stripe payment
-      const forceStripeOnly = paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
-      
+      const forceStripeOnly =
+        paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
+
       // Call pay endpoint without dryRun to actually process payment
-      const { data } = await apiFetch(`${apiUrl}/galleries/${selectedGalleryId}/pay`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}` 
-        },
-        body: JSON.stringify({ forceStripeOnly }),
-      });
-      
+      const { data } = await apiFetch<PaymentResponse>(
+        `${apiUrl}/galleries/${selectedGalleryId}/pay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ forceStripeOnly }),
+        }
+      );
+
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else if (data.paid) {
@@ -181,56 +238,74 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         await loadGalleries();
         await loadWalletBalance();
       }
-    } catch (err: any) {
+    } catch (err) {
       const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg || "Nie udało się opłacić galerii");
+      showToast("error", "Błąd", errorMsg ?? "Nie udało się opłacić galerii");
     } finally {
       setPaymentLoading(false);
       setSelectedGalleryId(null);
     }
   };
 
-  const handleDeleteClick = (gallery: any) => {
+  const handleDeleteClick = (gallery: Gallery) => {
     setGalleryToDelete(gallery);
     setShowDeleteDialog(true);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!apiUrl || !idToken || !galleryToDelete) return;
-    
+    if (!apiUrl || !idToken || !galleryToDelete) {
+      return;
+    }
+
     setDeleteLoading(true);
-    
+
     try {
       await apiFetch(`${apiUrl}/galleries/${galleryToDelete.galleryId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      
+
       showToast("success", "Sukces", "Galeria została usunięta");
       setShowDeleteDialog(false);
       setGalleryToDelete(null);
-      
+
       // Reload galleries list
       await loadGalleries();
-    } catch (err: any) {
+    } catch (err) {
       const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg || "Nie udało się usunąć galerii");
+      showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const getStateBadge = (gallery: any) => {
-    if (!gallery.isPaid) {
-      return <Badge color="error" variant="light">Nieopłacone</Badge>;
+  const getStateBadge = (gallery: Gallery) => {
+    if (gallery.isPaid === false) {
+      return (
+        <Badge color="error" variant="light">
+          Nieopłacone
+        </Badge>
+      );
     }
     if (gallery.state === "PAID_ACTIVE") {
-      return <Badge color="success" variant="light">Aktywne</Badge>;
+      return (
+        <Badge color="success" variant="light">
+          Aktywne
+        </Badge>
+      );
     }
     if (gallery.state === "EXPIRED") {
-      return <Badge color="error" variant="light">Wygasłe</Badge>;
+      return (
+        <Badge color="error" variant="light">
+          Wygasłe
+        </Badge>
+      );
     }
-    return <Badge color="light" variant="light">{gallery.state}</Badge>;
+    return (
+      <Badge color="light" variant="light">
+        {gallery.state ?? ""}
+      </Badge>
+    );
   };
 
   return (
@@ -250,22 +325,40 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 dark:bg-gray-900">
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Nazwa galerii
                 </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Plan
                 </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Status
                 </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Zlecenia
                 </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Utworzono
                 </TableCell>
-                <TableCell isHeader className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
                   Akcje
                 </TableCell>
               </TableRow>
@@ -288,7 +381,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                         }
                       }}
                     >
-                      {gallery.galleryName || gallery.galleryId}
+                      {gallery.galleryName ?? gallery.galleryId}
                     </Link>
                     {!gallery.galleryName && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -297,32 +390,35 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                     )}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {gallery.plan || "-"}
+                    {gallery.plan ?? "-"}
                     {gallery.priceCents && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {formatPrice(gallery.priceCents)}
                       </div>
                     )}
-                    {(gallery.originalsLimitBytes || gallery.finalsLimitBytes) && (
+                    {(gallery.originalsLimitBytes ?? gallery.finalsLimitBytes) && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {gallery.originalsLimitBytes && (
                           <div>
-                            Oryginały: {((gallery.originalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                            Oryginały:{" "}
+                            {((gallery.originalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)}{" "}
+                            GB / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)}{" "}
+                            GB
                           </div>
                         )}
                         {gallery.finalsLimitBytes && (
                           <div>
-                            Finalne: {((gallery.finalsBytesUsed || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                            Finalne:{" "}
+                            {((gallery.finalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)} GB
+                            / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
                           </div>
                         )}
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="px-4 py-3">
-                    {getStateBadge(gallery)}
-                  </TableCell>
+                  <TableCell className="px-4 py-3">{getStateBadge(gallery)}</TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {gallery.orderCount || 0}
+                    {gallery.orderCount ?? 0}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                     {gallery.createdAt
@@ -338,10 +434,12 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                           onClick={() => handlePayClick(gallery.galleryId)}
                           disabled={paymentLoading}
                         >
-                          {paymentLoading && selectedGalleryId === gallery.galleryId ? "Przetwarzanie..." : "Opłać galerię"}
+                          {paymentLoading && selectedGalleryId === gallery.galleryId
+                            ? "Przetwarzanie..."
+                            : "Opłać galerię"}
                         </Button>
                       )}
-                      <Link 
+                      <Link
                         href={`/galleries/${gallery.galleryId}`}
                         onClick={() => {
                           // Store current page as referrer when navigating to gallery
@@ -400,7 +498,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         }}
         onConfirm={handleDeleteConfirm}
         title="Usuń galerię"
-        message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName || galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName ?? galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
         confirmText="Usuń galerię"
         cancelText="Anuluj"
         variant="danger"
@@ -411,4 +509,3 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
 };
 
 export default GalleryList;
-

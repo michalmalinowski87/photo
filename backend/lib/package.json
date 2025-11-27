@@ -1,5 +1,5 @@
 {
-  "name": "@photohub/backend-lib",
+  "name": "@photocloud/backend-lib",
   "version": "0.0.1",
   "private": true,
   "types": "dist/index.d.ts",

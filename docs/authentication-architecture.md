@@ -2,11 +2,11 @@
 
 ## Overview
 
-PhotoHub uses **OAuth 2.0 Authorization Code flow with PKCE** for secure, cross-domain authentication. This architecture supports:
+PhotoCloud uses **OAuth 2.0 Authorization Code flow with PKCE** for secure, cross-domain authentication. This architecture supports:
 
 - ✅ Single sign-on across multiple domains
 - ✅ Secure token exchange with PKCE protection
-- ✅ Future-ready for centralized auth domain (`auth.photohub.com`)
+- ✅ Future-ready for centralized auth domain (`auth.photocloud.com`)
 - ✅ Works with current localhost setup and future production domains
 
 ## Architecture
@@ -17,9 +17,9 @@ PhotoHub uses **OAuth 2.0 Authorization Code flow with PKCE** for secure, cross-
 - **Auth**: Cognito Hosted UI (AWS managed)
 
 ### Future Production Setup
-- **Auth Domain**: `auth.photohub.com` (centralized authentication)
-- **Website**: `photohub.com` (landing page)
-- **Dashboard**: `dashboard.photohub.com` (dashboard app)
+- **Auth Domain**: `auth.photocloud.com` (centralized authentication)
+- **Website**: `photocloud.com` (landing page)
+- **Dashboard**: `dashboard.photocloud.com` (dashboard app)
 
 ## Authentication Flow
 
@@ -126,7 +126,7 @@ User is redirected to the original `returnUrl` from the `state` parameter.
 ```bash
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
-NEXT_PUBLIC_COGNITO_DOMAIN=photohub-dev.auth.eu-west-1.amazoncognito.com
+NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
 NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 ```
 
@@ -134,7 +134,7 @@ NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 ```bash
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
-NEXT_PUBLIC_COGNITO_DOMAIN=photohub-dev.auth.eu-west-1.amazoncognito.com
+NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
 NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
 ```
@@ -148,14 +148,14 @@ NEXT_PUBLIC_API_URL=https://your-api-gateway-url
 3. **Allowed Callback URLs**:
    - `http://localhost:3003/auth/auth-callback` (landing - dev)
    - `http://localhost:3001/auth/auth-callback` (dashboard - dev)
-   - `https://photohub.com/auth/auth-callback` (landing - prod)
-   - `https://dashboard.photohub.com/auth/auth-callback` (dashboard - prod)
+   - `https://photocloud.com/auth/auth-callback` (landing - prod)
+   - `https://dashboard.photocloud.com/auth/auth-callback` (dashboard - prod)
 
 4. **Allowed Sign-Out URLs**:
    - `http://localhost:3003` (landing - dev)
    - `http://localhost:3001` (dashboard - dev)
-   - `https://photohub.com` (landing - prod)
-   - `https://dashboard.photohub.com` (dashboard - prod)
+   - `https://photocloud.com` (landing - prod)
+   - `https://dashboard.photocloud.com` (dashboard - prod)
 
 ### PKCE Support
 
@@ -167,11 +167,11 @@ PKCE is automatically handled by the code. The Cognito App Client should be conf
 
 ### Current → Future (Centralized Auth)
 
-When moving to `auth.photohub.com`:
+When moving to `auth.photocloud.com`:
 
 1. **Deploy auth domain** with Cognito Hosted UI customization
 2. **Update callback URLs** in Cognito to point to auth domain
-3. **Update apps** to redirect to `auth.photohub.com` instead of Cognito directly
+3. **Update apps** to redirect to `auth.photocloud.com` instead of Cognito directly
 4. **Auth domain** handles all authentication and redirects back to requesting domain
 
 The code is already structured to support this - just change the redirect target.

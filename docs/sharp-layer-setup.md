@@ -14,8 +14,8 @@ Sharp has native dependencies that are difficult to bundle with CDK. The simples
 2. **Publish the layer to AWS:**
    ```bash
    aws lambda publish-layer-version \
-     --layer-name photohub-sharp \
-     --description "Sharp library for PhotoHub image processing" \
+     --layer-name photocloud-sharp \
+     --description "Sharp library for PhotoCloud image processing" \
      --zip-file fileb://release-x64.zip \
      --compatible-runtimes nodejs20.x \
      --compatible-architectures x86_64
@@ -26,7 +26,7 @@ Sharp has native dependencies that are difficult to bundle with CDK. The simples
 4. **Deploy with the layer ARN:**
    ```bash
    cd infra
-   yarn deploy --context sharpLayerArn=arn:aws:lambda:REGION:ACCOUNT:layer:photohub-sharp:VERSION
+   yarn deploy --context sharpLayerArn=arn:aws:lambda:REGION:ACCOUNT:layer:photocloud-sharp:VERSION
    ```
 
 ## Alternative: Skip WebP (Simplest but loses cost savings)

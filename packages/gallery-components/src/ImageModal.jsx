@@ -32,7 +32,11 @@ export default function ImageModal({
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	}, [onClose, onNavigate]);
 
-	const imageUrl = isProcessed ? image.finalUrl : image.previewUrl;
+	// For processed photos: use previewUrl for display, finalUrl for download
+	// For originals: use previewUrl for display
+	const imageUrl = isProcessed 
+		? (image.previewUrl || image.thumbUrl || image.finalUrl)
+		: image.previewUrl;
 	const isSelected = selectedKeys && selectedKeys.has && selectedKeys.has(image.key);
 
 	return (

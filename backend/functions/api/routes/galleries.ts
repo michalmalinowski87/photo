@@ -26,7 +26,8 @@ const router = Router();
 router.get('/', wrapHandler(galleriesList.handler));
 router.post('/', wrapHandler(galleriesCreate.handler));
 router.get('/:id', wrapHandler(galleriesGet.handler));
-router.put('/:id', wrapHandler(galleriesUpdate.handler));
+router.patch('/:id', wrapHandler(galleriesUpdate.handler));
+router.put('/:id', wrapHandler(galleriesUpdate.handler)); // Keep PUT for backward compatibility
 router.delete('/:id', wrapHandler(galleriesDelete.handler));
 
 // Gallery sub-routes

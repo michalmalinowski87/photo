@@ -5,8 +5,8 @@
  * Uses postMessage API to communicate with dashboard
  */
 
-const AUTH_STATUS_REQUEST = 'PHOTOHUB_AUTH_STATUS_REQUEST';
-const AUTH_STATUS_RESPONSE = 'PHOTOHUB_AUTH_STATUS_RESPONSE';
+const AUTH_STATUS_REQUEST = 'PHOTOCLOUD_AUTH_STATUS_REQUEST';
+const AUTH_STATUS_RESPONSE = 'PHOTOCLOUD_AUTH_STATUS_RESPONSE';
 
 let authStatusListener: ((isAuthenticated: boolean) => void) | null = null;
 let requestId = 0;
@@ -65,7 +65,7 @@ export function checkDashboardAuthStatus(): Promise<boolean> {
 			}
 
 			const data = event.data;
-			if (data && data.type === 'PHOTOHUB_AUTH_CHECK_READY' && !resolved && iframe.contentWindow) {
+			if (data && data.type === 'PHOTOCLOUD_AUTH_CHECK_READY' && !resolved && iframe.contentWindow) {
 				// Iframe is ready, send request immediately
 				try {
 					iframe.contentWindow.postMessage({

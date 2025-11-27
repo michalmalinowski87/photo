@@ -1,7 +1,8 @@
-import { Modal } from "../ui/modal";
-import Button from "../ui/button/Button";
 import Link from "next/link";
+
 import { formatPrice, formatPriceNumber } from "../../lib/format-price";
+import Button from "../ui/button/Button";
+import { Modal } from "../ui/modal";
 
 interface PaymentConfirmationModalProps {
   isOpen: boolean;
@@ -28,7 +29,7 @@ export default function PaymentConfirmationModal({
   const walletBalance = formatPriceNumber(walletBalanceCents);
   const walletAmount = formatPriceNumber(walletAmountCents);
   const stripeAmount = formatPriceNumber(stripeAmountCents);
-  
+
   const isWalletOnly = walletAmountCents === totalAmountCents;
   const isStripeOnly = stripeAmountCents === totalAmountCents;
   const isSplitPayment = walletAmountCents > 0 && stripeAmountCents > 0;
@@ -39,7 +40,7 @@ export default function PaymentConfirmationModal({
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           Potwierdzenie płatności
         </h2>
-        
+
         <div className="space-y-4 mb-6">
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -90,7 +91,8 @@ export default function PaymentConfirmationModal({
                   Masz {walletBalance} PLN w portfelu, ale potrzebujesz {totalAmount} PLN.
                 </div>
                 <div className="text-sm text-info-700 dark:text-white mb-3">
-                  <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych opłat transakcyjnych Stripe.
+                  <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych
+                  opłat transakcyjnych Stripe.
                 </div>
                 <Link href="/wallet">
                   <Button
@@ -107,7 +109,8 @@ export default function PaymentConfirmationModal({
                   Alternatywnie: Płatność przez Stripe
                 </div>
                 <div className="text-xs text-warning-600 dark:text-warning-400">
-                  Jeśli potwierdzisz, zostaniesz przekierowany do Stripe aby zapłacić pełną kwotę {totalAmount} PLN (+ opłaty transakcyjne Stripe)
+                  Jeśli potwierdzisz, zostaniesz przekierowany do Stripe aby zapłacić pełną kwotę{" "}
+                  {totalAmount} PLN (+ opłaty transakcyjne Stripe)
                 </div>
               </div>
             </div>
@@ -119,11 +122,14 @@ export default function PaymentConfirmationModal({
             Anuluj
           </Button>
           <Button variant="primary" onClick={onConfirm} disabled={loading}>
-            {loading ? "Przetwarzanie..." : isStripeOnly ? "Przejdź do płatności" : "Potwierdź płatność"}
+            {loading
+              ? "Przetwarzanie..."
+              : isStripeOnly
+                ? "Przejdź do płatności"
+                : "Potwierdź płatność"}
           </Button>
         </div>
       </div>
     </Modal>
   );
 }
-

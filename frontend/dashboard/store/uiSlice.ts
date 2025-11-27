@@ -1,9 +1,9 @@
-import { create } from 'zustand';
-import { persist, devtools } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist, devtools } from "zustand/middleware";
 
 interface TablePreferences {
   sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: "asc" | "desc";
   page?: number;
   itemsPerPage?: number;
 }
@@ -18,34 +18,33 @@ export const useUIStore = create<UIState>()(
   devtools(
     persist(
       (set) => ({
-      tablePreferences: {},
+        tablePreferences: {},
 
-      setTablePreferences: (tableId: string, preferences: TablePreferences) => {
-        set((state) => ({
-          tablePreferences: {
-            ...state.tablePreferences,
-            [tableId]: preferences,
-          },
-        }));
-      },
+        setTablePreferences: (tableId: string, preferences: TablePreferences) => {
+          set((state) => ({
+            tablePreferences: {
+              ...state.tablePreferences,
+              [tableId]: preferences,
+            },
+          }));
+        },
 
-      clearTablePreferences: (tableId?: string) => {
-        if (tableId) {
-          set((state) => {
-            const { [tableId]: removed, ...rest } = state.tablePreferences;
-            return { tablePreferences: rest };
-          });
-        } else {
-          set({ tablePreferences: {} });
-        }
-      },
-    }),
+        clearTablePreferences: (tableId?: string) => {
+          if (tableId) {
+            set((state) => {
+              const { [tableId]: removed, ...rest } = state.tablePreferences;
+              return { tablePreferences: rest };
+            });
+          } else {
+            set({ tablePreferences: {} });
+          }
+        },
+      }),
       {
-        name: 'ui-preferences-storage',
+        name: "ui-preferences-storage",
         // Only persist UI preferences, not ephemeral data
       }
     ),
-    { name: 'UIStore' }
+    { name: "UIStore" }
   )
 );
-

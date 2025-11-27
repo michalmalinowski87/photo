@@ -1,5 +1,5 @@
-import type React from "react";
 import Link from "next/link";
+import type React from "react";
 
 interface DropdownItemProps {
   tag?: "a" | "button";
@@ -28,11 +28,15 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
     if (tag === "button") {
       event.preventDefault();
     }
-    if (onClick) onClick();
-    if (onItemClick) onItemClick();
+    if (onClick) {
+      onClick();
+    }
+    if (onItemClick) {
+      onItemClick();
+    }
   };
 
-  const linkHref = to || href;
+  const linkHref = to ?? href;
 
   if (tag === "a" && linkHref) {
     return (

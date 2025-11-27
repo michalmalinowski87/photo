@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import Alert from "../alert/Alert";
 
 interface ToastProps {
@@ -9,13 +10,7 @@ interface ToastProps {
   duration?: number;
 }
 
-const Toast: React.FC<ToastProps> = ({
-  variant,
-  title,
-  message,
-  onClose,
-  duration = 2000,
-}) => {
+const Toast: React.FC<ToastProps> = ({ variant, title, message, onClose, duration = 2000 }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -46,15 +41,13 @@ const Toast: React.FC<ToastProps> = ({
   return (
     <div
       className={`max-w-md w-full transform transition-all duration-300 ease-out shadow-2xl ${
-        isVisible
-          ? "translate-x-0 opacity-100"
-          : "translate-x-full opacity-0"
+        isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
       }`}
-      style={{ 
-        willChange: 'transform, opacity',
-        position: 'relative',
-        minWidth: '320px',
-        minHeight: '80px',
+      style={{
+        willChange: "transform, opacity",
+        position: "relative",
+        minWidth: "320px",
+        minHeight: "80px",
       }}
     >
       <Alert variant={variant} title={title} message={message} />
@@ -63,4 +56,3 @@ const Toast: React.FC<ToastProps> = ({
 };
 
 export default Toast;
-

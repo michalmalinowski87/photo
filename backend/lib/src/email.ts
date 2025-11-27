@@ -128,7 +128,7 @@ export function createGalleryReminderEmail(galleryId: string, galleryName: strin
 
 export function createPasswordResetEmail(galleryId: string, galleryName: string, clientEmail: string, password: string, link: string): EmailTemplate {
 	return {
-		subject: `Your PhotoHub gallery password has been reset: ${galleryName || galleryId}`,
+		subject: `Your PhotoCloud gallery password has been reset: ${galleryName || galleryId}`,
 		text: `Hello,\n\nYour gallery password for ${galleryName || galleryId} has been reset by your photographer.\n\nNew password: ${password}\n\nAccess your gallery: ${link}\n\nIf you didn't expect this email, please contact your photographer.`,
 		html: `<h2>Password Reset</h2><p>Your gallery password for <strong>${galleryName || galleryId}</strong> has been reset by your photographer.</p><p style="font-size: 18px; font-weight: bold; padding: 12px; background: #f5f5f5; border-radius: 4px; display: inline-block;">New password: ${password}</p><p><a href="${link}">Access your gallery</a></p><p><small>If you didn't expect this email, please contact your photographer.</small></p>`
 	};
