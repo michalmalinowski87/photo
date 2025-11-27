@@ -7,6 +7,8 @@ import { useModal } from "../../hooks/useModal";
 import { useToast } from "../../hooks/useToast";
 import { apiFetch, apiFetchWithAuth, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
+import { getPricingModalData } from "../../lib/calculate-plan";
+import type { PricingModalData } from "../../lib/plan-types";
 import { useGalleryStore } from "../../store/gallerySlice";
 import { useOrderStore } from "../../store/orderSlice";
 import { useUserStore } from "../../store/userSlice";
@@ -20,27 +22,6 @@ import GalleryLayout from "./GalleryLayout";
 
 interface GalleryLayoutWrapperProps {
   children: React.ReactNode;
-}
-
-interface PricingPlan {
-  planKey?: string;
-  name?: string;
-  priceCents?: number;
-  storage?: string;
-  duration?: string;
-  [key: string]: unknown;
-}
-
-interface PlanOption {
-  name: string;
-  priceCents: number;
-  storage: string;
-  duration: string;
-  planKey: string;
-}
-
-interface NextTierPlan extends PlanOption {
-  storageLimitBytes: number;
 }
 
 interface Order {
@@ -104,18 +85,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     stripeAmountCents: 0,
     balanceAfterPayment: 0,
   });
-  const [pricingModalData, setPricingModalData] = useState<{
-    suggestedPlan: PricingPlan | null;
-    originalsLimitBytes: number;
-    finalsLimitBytes: number;
-    uploadedSizeBytes: number;
-    selectionEnabled: boolean;
-    usagePercentage?: number;
-    isNearCapacity?: boolean;
-    isAtCapacity?: boolean;
-    exceedsLargestPlan?: boolean;
-    nextTierPlan?: PricingPlan | null;
-  } | null>(null);
+  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
   const loadGalleryData = useCallback(
@@ -139,12 +109,16 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
 
       try {
-        const galleryResponse = await apiFetchWithAuth(`${apiUrl}/galleries/${galleryId as string}`);
+        const galleryResponse = await apiFetchWithAuth(
+          `${apiUrl}/galleries/${galleryId as string}`
+        );
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         setCurrentGallery(galleryResponse.data);
         setGalleryUrl(
-          typeof window !== "undefined" ? `${window.location.origin}/gallery/${galleryId as string}` : ""
+          typeof window !== "undefined"
+            ? `${window.location.origin}/gallery/${galleryId as string}`
+            : ""
         );
       } catch (err) {
         if (!silent) {
@@ -187,8 +161,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
 
       try {
-      const { data } = await apiFetchWithAuth<{ items?: unknown[] }>(`${apiUrl}/galleries/${galleryId as string}/orders`);
-      const orders = data?.items ?? [];
+        const { data } = await apiFetchWithAuth<{ items?: unknown[] }>(
+          `${apiUrl}/galleries/${galleryId as string}/orders`
+        );
+        const orders = data?.items ?? [];
         const ordersArray = Array.isArray(orders) ? orders : [];
         setGalleryOrdersLocal(ordersArray);
         // Cache the orders in Zustand store
@@ -205,7 +181,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
     try {
-      const { data } = await apiFetchWithAuth<{ items?: unknown[]; orders?: unknown[] }>(`${apiUrl}/galleries/${galleryId as string}/orders/delivered`);
+      const { data } = await apiFetchWithAuth<{ items?: unknown[]; orders?: unknown[] }>(
+        `${apiUrl}/galleries/${galleryId as string}/orders/delivered`
+      );
       const items = data?.items ?? data?.orders ?? [];
       setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
     } catch (_err) {
@@ -218,9 +196,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
     try {
-      const orderResponse = await apiFetch(`${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const orderResponse = await apiFetch(
+        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}`,
+        {
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
       let orderData = orderResponse.data;
       if (typeof orderData === "string") {
         try {
@@ -325,10 +306,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
 
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/approve-change`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await apiFetch(
+        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/approve-change`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
 
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -366,14 +350,17 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     setDenyLoading(true);
 
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/deny-change`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ reason: reason ?? undefined }),
-      });
+      await apiFetch(
+        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/deny-change`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason: reason ?? undefined }),
+        }
+      );
 
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -411,7 +398,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const handlePayClick = async () => {
-    if (!apiUrl || !idToken || !galleryId) {
+    if (!galleryId) {
       return;
     }
 
@@ -419,36 +406,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
     try {
       // Always calculate plan first - this will determine the best plan based on uploaded photos
-      const { data: planData } = await apiFetch(`${apiUrl}/galleries/${galleryId as string}/calculate-plan`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-
-      // Show pricing modal to let user select plan
-      const planDataTyped = planData as {
-        suggestedPlan: string;
-        originalsLimitBytes: number;
-        finalsLimitBytes: number;
-        uploadedSizeBytes: number;
-        selectionEnabled: boolean;
-        usagePercentage: number;
-        isNearCapacity: boolean;
-        isAtCapacity: boolean;
-        exceedsLargestPlan: boolean;
-        nextTierPlan?: NextTierPlan;
-      };
-      setPricingModalData({
-        suggestedPlan: planDataTyped.suggestedPlan,
-        originalsLimitBytes: planDataTyped.originalsLimitBytes,
-        finalsLimitBytes: planDataTyped.finalsLimitBytes,
-        uploadedSizeBytes: planDataTyped.uploadedSizeBytes,
-        selectionEnabled: planDataTyped.selectionEnabled,
-        usagePercentage: planDataTyped.usagePercentage,
-        isNearCapacity: planDataTyped.isNearCapacity,
-        isAtCapacity: planDataTyped.isAtCapacity,
-        exceedsLargestPlan: planDataTyped.exceedsLargestPlan,
-        nextTierPlan: planDataTyped.nextTierPlan,
-      });
+      const modalData = await getPricingModalData(galleryId as string);
+      setPricingModalData(modalData);
       setPaymentLoading(false);
     } catch (err) {
       const errorMsg = formatApiError(err);
@@ -560,7 +519,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
         // Trigger event to reload orders if we're on the gallery detail page
         if (typeof window !== "undefined") {
-          void window.dispatchEvent(new CustomEvent("galleryOrdersUpdated", { detail: { galleryId } }));
+          void window.dispatchEvent(
+            new CustomEvent("galleryOrdersUpdated", { detail: { galleryId } })
+          );
         }
       }
     } catch (err) {
@@ -580,10 +541,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/mark-paid`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await apiFetch(
+        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/mark-paid`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateOrderCache(orderId as string);
@@ -623,10 +587,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/send-final-link`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await apiFetch(
+        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/send-final-link`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateOrderCache(orderId as string);
@@ -689,11 +656,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   }
 
   // Only calculate isPaid when gallery is fully loaded to prevent flash of unpaid state
-  const isPaid =
-    gallery?.galleryId
-      ? gallery.isPaid !== false &&
-        (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")
-      : false;
+  const isPaid = gallery?.galleryId
+    ? gallery.isPaid !== false &&
+      (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE")
+    : false;
 
   // Calculate canDownloadZip for order
   // Only show ZIP download if selection is enabled (ZIP contains selected photos)
@@ -723,8 +689,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Status is updated automatically by backend when first final is uploaded or last final is deleted
   const hasFinals =
     orderObj?.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-      orderObj?.deliveryStatus === "PREPARING_DELIVERY" ||
-      orderObj?.deliveryStatus === "DELIVERED";
+    orderObj?.deliveryStatus === "PREPARING_DELIVERY" ||
+    orderObj?.deliveryStatus === "DELIVERED";
 
   // ZIP download is available if:
   // 1. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)

@@ -4,6 +4,9 @@ import { useState, useRef, useEffect } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
+import { getPlanRecommendation } from "../../lib/calculate-plan";
+import { formatPrice } from "../../lib/format-price";
+import type { PlanRecommendation } from "../../lib/plan-types";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 
@@ -197,6 +200,8 @@ export default function GallerySidebar({
   const [urlCopied, setUrlCopied] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [planRecommendation, setPlanRecommendation] = useState<PlanRecommendation | null>(null);
+  const [isLoadingPlanRecommendation, setIsLoadingPlanRecommendation] = useState(false);
 
   // Update cover photo URL when gallery prop changes (backend already converts to CloudFront)
   useEffect(() => {
@@ -206,6 +211,54 @@ export default function GallerySidebar({
       setCoverPhotoUrl(newUrl);
     }
   }, [gallery?.coverPhotoUrl, coverPhotoUrl]);
+
+  // Load plan recommendation when gallery is unpaid - refresh more aggressively
+  useEffect(() => {
+    if (galleryLoading || isPaid || !gallery?.galleryId) {
+      return;
+    }
+
+    // Always try to load plan recommendation to get fresh size data
+    setIsLoadingPlanRecommendation(true);
+    getPlanRecommendation(gallery.galleryId)
+      .then((recommendation) => {
+        setPlanRecommendation(recommendation);
+      })
+      .catch((error) => {
+        console.error("Failed to load plan recommendation:", error);
+        setPlanRecommendation(null);
+      })
+      .finally(() => {
+        setIsLoadingPlanRecommendation(false);
+      });
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
+
+  // Listen for gallery updates (e.g., after uploads) to refresh plan recommendation
+  useEffect(() => {
+    if (galleryLoading || isPaid || !gallery?.galleryId) {
+      return;
+    }
+
+    const handleGalleryUpdate = async () => {
+      // Refresh plan recommendation when gallery is updated
+      setIsLoadingPlanRecommendation(true);
+      try {
+        const recommendation = await getPlanRecommendation(gallery.galleryId);
+        setPlanRecommendation(recommendation);
+      } catch (error) {
+        console.error("Failed to refresh plan recommendation:", error);
+      } finally {
+        setIsLoadingPlanRecommendation(false);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("galleryUpdated", handleGalleryUpdate);
+      return () => {
+        window.removeEventListener("galleryUpdated", handleGalleryUpdate);
+      };
+    }
+  }, [gallery?.galleryId, galleryLoading, isPaid]);
 
   const handleBack = () => {
     if (typeof window !== "undefined" && gallery?.galleryId) {
@@ -1043,65 +1096,142 @@ export default function GallerySidebar({
       {!orderId &&
         !galleryLoading &&
         gallery?.galleryId &&
-        (gallery.originalsBytesUsed ?? gallery.finalsBytesUsed) && (
-          <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-              Wykorzystane miejsce
-            </div>
-            {gallery.originalsBytesUsed !== undefined && (
+        (() => {
+          const formatBytes = (bytes: number | undefined | null): string => {
+            if (!bytes || bytes === 0) {
+              return "0.00 MB";
+            }
+            if (bytes < 1024 * 1024) {
+              // Less than 1 MB, show in KB
+              return `${(bytes / 1024).toFixed(2)} KB`;
+            }
+            if (bytes < 1024 * 1024 * 1024) {
+              // Less than 1 GB, show in MB
+              return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+            }
+            return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+          };
+
+          // Use plan recommendation data if available (more up-to-date), otherwise fall back to gallery data
+          const originalsBytes =
+            planRecommendation?.uploadedSizeBytes ??
+            (gallery.originalsBytesUsed as number | undefined) ??
+            0;
+          const finalsBytes = (gallery.finalsBytesUsed as number | undefined) ?? 0;
+          // Only show limits if gallery is paid (has a plan)
+          const originalsLimit =
+            isPaid &&
+            (planRecommendation?.originalsLimitBytes ??
+              (gallery.originalsLimitBytes as number | undefined))
+              ? (planRecommendation?.originalsLimitBytes ??
+                (gallery.originalsLimitBytes as number | undefined))
+              : undefined;
+          const finalsLimit = isPaid ? (gallery.finalsLimitBytes as number | undefined) : undefined;
+
+          // Always show the section if gallery is loaded
+          return (
+            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Wykorzystane miejsce
+              </div>
               <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-                Oryginały:{" "}
-                {(
-                  (typeof gallery.originalsBytesUsed === "number"
-                    ? gallery.originalsBytesUsed
-                    : 0) /
-                  (1024 * 1024 * 1024)
-                ).toFixed(2)}{" "}
-                GB
-                {gallery.originalsLimitBytes && typeof gallery.originalsLimitBytes === "number" ? (
-                  <span className="text-gray-500">
-                    {" "}
-                    / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                  </span>
-                ) : null}
+                Oryginały: {formatBytes(originalsBytes)}
+                {originalsLimit !== undefined && (
+                  <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
+                )}
+                {isLoadingPlanRecommendation && planRecommendation === null && (
+                  <span className="ml-2 text-xs text-gray-400">(aktualizowanie...)</span>
+                )}
               </div>
-            )}
-            {gallery.finalsBytesUsed !== undefined && (
               <div className="text-sm text-gray-700 dark:text-gray-300">
-                Finalne:{" "}
-                {(
-                  (typeof gallery.finalsBytesUsed === "number" ? gallery.finalsBytesUsed : 0) /
-                  (1024 * 1024 * 1024)
-                ).toFixed(2)}{" "}
-                GB
-                {gallery.finalsLimitBytes && typeof gallery.finalsLimitBytes === "number" ? (
-                  <span className="text-gray-500">
-                    {" "}
-                    / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                  </span>
-                ) : null}
+                Finalne: {formatBytes(finalsBytes)}
+                {finalsLimit !== undefined && (
+                  <span className="text-gray-500"> / {formatBytes(finalsLimit)}</span>
+                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
       {/* UNPUBLISHED Banner - Only show when gallery is fully loaded and confirmed unpaid */}
-      {!galleryLoading && gallery?.galleryId && !isPaid && (
-        <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-          <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-            <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-              Galeria nieopublikowana
+      {!galleryLoading &&
+        gallery?.galleryId &&
+        !isPaid &&
+        (() => {
+          const formatBytes = (bytes: number | undefined | null): string => {
+            if (!bytes || bytes === 0) {
+              return "0 GB";
+            }
+            if (bytes < 1024 * 1024 * 1024) {
+              return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+            }
+            return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+          };
+
+          const currentUploadedBytes = (gallery.originalsBytesUsed as number | undefined) ?? 0;
+          const hasUploadedPhotos = currentUploadedBytes > 0;
+
+          return (
+            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="p-3 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+                <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
+                  Galeria nieopublikowana
+                </div>
+
+                {!hasUploadedPhotos ? (
+                  <>
+                    <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
+                      Prześlij zdjęcia, aby system mógł wybrać optymalny plan dla Twojej galerii.
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => router.push(`/galleries/${gallery.galleryId}/photos`)}
+                      className="w-full"
+                    >
+                      Przejdź do zdjęć
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
+                      System zaproponował plan na podstawie przesłanych zdjęć.
+                    </div>
+
+                    {/* Space Usage & Plan - Compact */}
+                    <div className="bg-white dark:bg-gray-800 rounded p-2 mb-2 border border-warning-200 dark:border-warning-500/30">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                          Wykorzystane:
+                        </span>
+                        <span className="text-xs font-semibold text-warning-600 dark:text-warning-400">
+                          {formatBytes(currentUploadedBytes)}
+                        </span>
+                      </div>
+                      {planRecommendation ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Plan:</span>
+                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                            {planRecommendation.suggestedPlan.name} (
+                            {formatPrice(planRecommendation.suggestedPlan.priceCents)})
+                          </span>
+                        </div>
+                      ) : isLoadingPlanRecommendation ? (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                          Obliczanie...
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <Button size="sm" variant="primary" onClick={onPay} className="w-full">
+                      Opublikuj galerię
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="text-xs text-warning-600 dark:text-warning-400 mb-3">
-              Opublikuj galerię, aby ją aktywować. System automatycznie wybierze najbardziej
-              optymalny plan na podstawie przesłanych zdjęć i poprosi o dokonanie płatności.
-            </div>
-            <Button size="sm" variant="primary" onClick={onPay} className="w-full">
-              Opublikuj galerię
-            </Button>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* Delete Gallery Button */}
       <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">

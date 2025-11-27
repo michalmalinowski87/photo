@@ -18,8 +18,10 @@ import { useGallery } from "../../../../context/GalleryContext";
 import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
+import { getPricingModalData } from "../../../../lib/calculate-plan";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../../lib/currency";
 import { formatPrice } from "../../../../lib/format-price";
+import type { PricingModalData } from "../../../../lib/plan-types";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
@@ -75,31 +77,6 @@ interface PaymentDetails {
   walletAmountCents: number;
   stripeAmountCents: number;
   balanceAfterPayment?: number;
-}
-
-interface PlanOption {
-  name: string;
-  priceCents: number;
-  storage: string;
-  duration: string;
-  planKey: string;
-}
-
-interface NextTierPlan extends PlanOption {
-  storageLimitBytes: number;
-}
-
-interface CalculatePlanResponse {
-  suggestedPlan: PlanOption;
-  originalsLimitBytes: number;
-  finalsLimitBytes: number;
-  uploadedSizeBytes: number;
-  selectionEnabled: boolean;
-  usagePercentage?: number;
-  isNearCapacity?: boolean;
-  isAtCapacity?: boolean;
-  exceedsLargestPlan?: boolean;
-  nextTierPlan?: NextTierPlan;
 }
 
 interface ImagesResponse {
@@ -247,18 +224,7 @@ export default function OrderDetail() {
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [pricingModalData, setPricingModalData] = useState<{
-    suggestedPlan: PlanOption;
-    originalsLimitBytes: number;
-    finalsLimitBytes: number;
-    uploadedSizeBytes: number;
-    selectionEnabled: boolean;
-    usagePercentage?: number;
-    isNearCapacity?: boolean;
-    isAtCapacity?: boolean;
-    exceedsLargestPlan?: boolean;
-    nextTierPlan?: NextTierPlan;
-  } | null>(null);
+  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
@@ -570,23 +536,8 @@ export default function OrderDetail() {
 
     try {
       // Always calculate plan first - this will determine the best plan based on uploaded photos
-      const planResult = (await api.galleries.calculatePlan(
-        galleryId as string
-      )) as CalculatePlanResponse;
-
-      // Show pricing modal to let user select plan
-      setPricingModalData({
-        suggestedPlan: planResult.suggestedPlan,
-        originalsLimitBytes: planResult.originalsLimitBytes ?? 0,
-        finalsLimitBytes: planResult.finalsLimitBytes ?? 0,
-        uploadedSizeBytes: planResult.uploadedSizeBytes ?? 0,
-        selectionEnabled: planResult.selectionEnabled ?? false,
-        usagePercentage: planResult.usagePercentage ?? 0,
-        isNearCapacity: planResult.isNearCapacity ?? false,
-        isAtCapacity: planResult.isAtCapacity,
-        exceedsLargestPlan: planResult.exceedsLargestPlan,
-        nextTierPlan: planResult.nextTierPlan,
-      });
+      const modalData = await getPricingModalData(galleryId as string);
+      setPricingModalData(modalData);
       setPaymentLoading(false);
     } catch (err) {
       const errorMsg = formatApiError(err);

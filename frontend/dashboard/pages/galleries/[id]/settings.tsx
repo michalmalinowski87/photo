@@ -425,9 +425,7 @@ export default function GallerySettings() {
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={
-                      extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)
-                    }
+                    value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
                     onChange={(e) => {
                       const formatted = formatCurrencyInput(e.target.value);
                       setExtraPriceInput(formatted);
@@ -452,9 +450,7 @@ export default function GallerySettings() {
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={
-                      packagePriceInput ?? centsToPlnString(settingsForm.packagePriceCents)
-                    }
+                    value={packagePriceInput ?? centsToPlnString(settingsForm.packagePriceCents)}
                     onChange={(e) => {
                       const formatted = formatCurrencyInput(e.target.value);
                       setPackagePriceInput(formatted);

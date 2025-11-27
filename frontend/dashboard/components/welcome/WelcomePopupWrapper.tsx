@@ -56,9 +56,7 @@ export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCrea
             }
 
             // Find WELCOME_BONUS transaction
-            const welcomeBonusTransaction = transactions.find(
-              (tx) => tx.type === "WELCOME_BONUS"
-            );
+            const welcomeBonusTransaction = transactions.find((tx) => tx.type === "WELCOME_BONUS");
 
             // If welcome bonus exists and is the only transaction, show popup immediately
             if (welcomeBonusTransaction && transactions.length === 1) {
@@ -81,12 +79,12 @@ export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCrea
               await new Promise((resolve) => setTimeout(resolve, 500));
 
               const retryTransactionsData = await api.wallet.getTransactions({ limit: "10" });
-              const retryTransactionsTyped = retryTransactionsData as { transactions?: Transaction[] };
+              const retryTransactionsTyped = retryTransactionsData as {
+                transactions?: Transaction[];
+              };
               const retryTransactions = retryTransactionsTyped.transactions ?? [];
 
-              const retryWelcomeBonus = retryTransactions.find(
-                (tx) => tx.type === "WELCOME_BONUS"
-              );
+              const retryWelcomeBonus = retryTransactions.find((tx) => tx.type === "WELCOME_BONUS");
 
               // Check if welcome bonus is the only transaction
               if (retryWelcomeBonus && retryTransactions.length === 1) {

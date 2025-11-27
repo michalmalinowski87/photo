@@ -542,12 +542,14 @@ export function getHostedUILogoutUrl(userPoolDomain: string, redirectUri: string
         domain = `${domain}.auth.${region}.amazoncognito.com`
     }
     
+    // Ensure redirectUri is properly formatted (remove trailing slash if present, as Cognito is strict about URL matching)
+    const cleanRedirectUri = redirectUri.replace(/\/$/, '')
+    
     const baseUrl = `https://${domain}`
     // Cognito logout endpoint uses 'logout_uri' parameter (must match sign-out URLs exactly)
-    // Note: The parameter name is 'logout_uri', not 'redirect_uri'
     const params = new URLSearchParams({
         client_id: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID || '',
-        logout_uri: redirectUri
+        logout_uri: cleanRedirectUri
     })
     return `${baseUrl}/logout?${params.toString()}`
 }

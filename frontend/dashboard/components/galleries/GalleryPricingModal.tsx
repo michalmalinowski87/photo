@@ -3,15 +3,8 @@ import React, { useState } from "react";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import type { PlanOption, NextTierPlan } from "../../lib/plan-types";
 import Button from "../ui/button/Button";
-
-interface PlanOption {
-  name: string;
-  priceCents: number;
-  storage: string;
-  duration: string;
-  planKey: string;
-}
 
 interface GalleryPricingModalProps {
   isOpen: boolean;
@@ -26,7 +19,7 @@ interface GalleryPricingModalProps {
   isNearCapacity?: boolean;
   isAtCapacity?: boolean;
   exceedsLargestPlan?: boolean;
-  nextTierPlan?: PlanOption & { storageLimitBytes: number };
+  nextTierPlan?: NextTierPlan;
   onPlanSelected?: () => void;
 }
 

@@ -45,7 +45,7 @@ const MobileNavbar = () => {
           <div className="flex flex-col items-start w-full py-2 mt-10">
             <div className="flex items-center justify-evenly w-full space-x-2">
               {isLoading ? null : isAuthenticated ? (
-                <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
+                <Link href={`${dashboardUrl}/`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
                   Dashboard
                 </Link>
               ) : (

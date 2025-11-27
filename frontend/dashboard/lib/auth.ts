@@ -133,7 +133,11 @@ export function getIdToken(allowRefresh: boolean = true): Promise<string> {
               .then(resolve)
               .catch((refreshErr) => {
                 // Refresh failed, reject with original error
-                reject(refreshErr instanceof Error ? refreshErr : new Error("Token expired and refresh failed"));
+                reject(
+                  refreshErr instanceof Error
+                    ? refreshErr
+                    : new Error("Token expired and refresh failed")
+                );
               });
             return;
           }
@@ -166,7 +170,11 @@ export function getIdToken(allowRefresh: boolean = true): Promise<string> {
           refreshIdToken()
             .then(resolve)
             .catch((refreshErr) => {
-              reject(refreshErr instanceof Error ? refreshErr : new Error("No user logged in and refresh failed"));
+              reject(
+                refreshErr instanceof Error
+                  ? refreshErr
+                  : new Error("No user logged in and refresh failed")
+              );
             });
           return;
         }
@@ -185,7 +193,13 @@ export function getIdToken(allowRefresh: boolean = true): Promise<string> {
             refreshIdToken()
               .then(resolve)
               .catch((refreshErr) => {
-                reject(refreshErr instanceof Error ? refreshErr : err instanceof Error ? err : new Error("Invalid session"));
+                reject(
+                  refreshErr instanceof Error
+                    ? refreshErr
+                    : err instanceof Error
+                      ? err
+                      : new Error("Invalid session")
+                );
               });
             return;
           }
@@ -892,10 +906,13 @@ export function getHostedUILogoutUrl(userPoolDomain: string, redirectUri: string
     domain = `${domain}.auth.${region}.amazoncognito.com`;
   }
 
+  // Ensure redirectUri is properly formatted (remove trailing slash if present, as Cognito is strict about URL matching)
+  const cleanRedirectUri = redirectUri.replace(/\/$/, "");
+
   const baseUrl = `https://${domain}`;
   const params = new URLSearchParams({
     client_id: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? "",
-    logout_uri: redirectUri,
+    logout_uri: cleanRedirectUri,
   });
   return `${baseUrl}/logout?${params.toString()}`;
 }

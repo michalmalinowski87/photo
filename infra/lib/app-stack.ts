@@ -578,24 +578,20 @@ export class AppStack extends Stack {
 		galleriesBucket.grantReadWrite(resizeFn);
 		galleries.grantReadWriteData(resizeFn);
 		
-		// CRITICAL FIX: Add prefix filters to prevent recursive loops
-		// Only trigger on originals/ and final/ paths, NOT on previews/ or thumbs/
-		// When Lambda writes previews/thumbs, those PUTs would trigger it again without filters
+		// CRITICAL FIX: Add prefix filter to trigger Lambda on all gallery uploads
+		// The Lambda function filters internally for /originals/ and /final/ paths
+		// This prevents recursive loops: when Lambda writes previews/thumbs, those PUTs
+		// will trigger the Lambda but it will return early since they don't match /originals/ or /final/
 		const s3Notifications = require('aws-cdk-lib/aws-s3-notifications');
 		const s3EventType = require('aws-cdk-lib/aws-s3').EventType;
 		
-		// Trigger only on originals/ uploads (excludes previews/ and thumbs/)
+		// Trigger on all gallery uploads - Lambda filters for originals/ and final/ internally
+		// Note: suffix filter was removed because S3 keys end with filenames, not directory paths
+		// Keys are: galleries/{galleryId}/originals/{filename} or galleries/{galleryId}/final/{orderId}/{filename}
 		galleriesBucket.addEventNotification(
 			s3EventType.OBJECT_CREATED_PUT,
 			new s3Notifications.LambdaDestination(resizeFn),
-			{ prefix: 'galleries/', suffix: '/originals/' }
-		);
-		
-		// Trigger only on final/ uploads (excludes previews/ and thumbs/)
-		galleriesBucket.addEventNotification(
-			s3EventType.OBJECT_CREATED_PUT,
-			new s3Notifications.LambdaDestination(resizeFn),
-			{ prefix: 'galleries/', suffix: '/final/' }
+			{ prefix: 'galleries/' }
 		);
 
 		// CloudFront distribution for previews/* (use OAC for bucket access)

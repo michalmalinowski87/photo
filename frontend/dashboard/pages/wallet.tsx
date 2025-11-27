@@ -360,7 +360,9 @@ export default function Wallet() {
                 <TableBody>
                   {transactions.map((tx) => {
                     const isCredit = tx.type === "WALLET_TOPUP";
-                    const amount = tx.amountCents ?? (tx.amount !== null && tx.amount !== undefined ? tx.amount * 100 : 0);
+                    const amount =
+                      tx.amountCents ??
+                      (tx.amount !== null && tx.amount !== undefined ? tx.amount * 100 : 0);
 
                     return (
                       <TableRow

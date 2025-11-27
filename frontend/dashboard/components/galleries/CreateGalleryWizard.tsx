@@ -112,41 +112,47 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     initialPaymentAmountCents: 0,
   });
 
-  const loadExistingPackages = useCallback(async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token ?? idToken;
-    const apiUrlToUse = apiUrlParam ?? apiUrl;
-    if (!apiUrlToUse || !tokenToUse) {
-      return;
-    }
-    try {
-      const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
-      // apiFetch returns { data: body, response }
-      // The API returns { items: [...], count: ... }
-      const responseData = response.data as { items?: Package[] } | undefined;
-      const packages = (responseData?.items ?? []);
-      setExistingPackages(packages);
-    } catch (_err) {
-      setExistingPackages([]);
-    }
-  }, [idToken, apiUrl]);
+  const loadExistingPackages = useCallback(
+    async (token?: string, apiUrlParam?: string) => {
+      const tokenToUse = token ?? idToken;
+      const apiUrlToUse = apiUrlParam ?? apiUrl;
+      if (!apiUrlToUse || !tokenToUse) {
+        return;
+      }
+      try {
+        const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
+        // apiFetch returns { data: body, response }
+        // The API returns { items: [...], count: ... }
+        const responseData = response.data as { items?: Package[] } | undefined;
+        const packages = responseData?.items ?? [];
+        setExistingPackages(packages);
+      } catch (_err) {
+        setExistingPackages([]);
+      }
+    },
+    [idToken, apiUrl]
+  );
 
-  const loadExistingClients = useCallback(async (token?: string, apiUrlParam?: string) => {
-    const tokenToUse = token ?? idToken;
-    const apiUrlToUse = apiUrlParam ?? apiUrl;
-    if (!apiUrlToUse || !tokenToUse) {
-      return;
-    }
-    try {
-      const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
-      // apiFetch returns { data: body, response }
-      // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
-      const responseData = response.data as { items?: Client[] } | undefined;
-      const clients = (responseData?.items ?? []);
-      setExistingClients(clients);
-    } catch (_err) {
-      setExistingClients([]);
-    }
-  }, [idToken, apiUrl]);
+  const loadExistingClients = useCallback(
+    async (token?: string, apiUrlParam?: string) => {
+      const tokenToUse = token ?? idToken;
+      const apiUrlToUse = apiUrlParam ?? apiUrl;
+      if (!apiUrlToUse || !tokenToUse) {
+        return;
+      }
+      try {
+        const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
+        // apiFetch returns { data: body, response }
+        // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
+        const responseData = response.data as { items?: Client[] } | undefined;
+        const clients = responseData?.items ?? [];
+        setExistingClients(clients);
+      } catch (_err) {
+        setExistingClients([]);
+      }
+    },
+    [idToken, apiUrl]
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -616,9 +622,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={
-                      extraPriceInput ?? centsToPlnString(data.extraPriceCents)
-                    }
+                    value={extraPriceInput ?? centsToPlnString(data.extraPriceCents)}
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setExtraPriceInput(formatted);
@@ -639,9 +643,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={
-                      packagePriceInput ?? centsToPlnString(data.packagePriceCents)
-                    }
+                    value={packagePriceInput ?? centsToPlnString(data.packagePriceCents)}
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setPackagePriceInput(formatted);
@@ -662,9 +664,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <Input
                     type="text"
                     placeholder="0.00"
-                    value={
-                      paymentAmountInput ?? centsToPlnString(data.initialPaymentAmountCents)
-                    }
+                    value={paymentAmountInput ?? centsToPlnString(data.initialPaymentAmountCents)}
                     onChange={(e) => {
                       const formatted = formatPriceInput(e.target.value);
                       setPaymentAmountInput(formatted);
@@ -919,9 +919,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   <span className="text-sm text-gray-600 dark:text-gray-400">Klient:</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {data.selectedClientId
-                      ? existingClients.find((c) => c.clientId === data.selectedClientId)?.email ??
-                        "Nie wybrano"
-                      : data.clientEmail ?? "Nie podano"}
+                      ? (existingClients.find((c) => c.clientId === data.selectedClientId)?.email ??
+                        "Nie wybrano")
+                      : (data.clientEmail ?? "Nie podano")}
                   </span>
                 </div>
 

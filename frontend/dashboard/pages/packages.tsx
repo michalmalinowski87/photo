@@ -229,9 +229,7 @@ export default function Packages() {
               <Input
                 type="text"
                 placeholder="5.00"
-                value={
-                  pricePerExtraPhotoInput ?? centsToPlnString(formData.pricePerExtraPhoto)
-                }
+                value={pricePerExtraPhotoInput ?? centsToPlnString(formData.pricePerExtraPhoto)}
                 onChange={(e) => {
                   const formatted = formatCurrencyInput(e.target.value);
                   setPricePerExtraPhotoInput(formatted);

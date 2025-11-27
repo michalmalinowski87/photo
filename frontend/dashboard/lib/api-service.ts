@@ -225,7 +225,9 @@ class ApiService {
           if (!response.ok) {
             const bodyObj = body as { error?: string; message?: string } | null;
             const error: ApiError = new Error(
-              bodyObj?.error ?? bodyObj?.message ?? `HTTP ${response.status}: ${response.statusText}`
+              bodyObj?.error ??
+                bodyObj?.message ??
+                `HTTP ${response.status}: ${response.statusText}`
             );
             error.status = response.status;
             error.body = body;
@@ -438,17 +440,23 @@ class ApiService {
     /**
      * Update gallery pricing package
      */
-    updatePricingPackage: async (galleryId: string, pricingPackage: string): Promise<{ success: boolean }> => {
+    updatePricingPackage: async (
+      galleryId: string,
+      pricingPackage: string
+    ): Promise<{ success: boolean }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
       if (!pricingPackage) {
         throw new Error("Pricing package is required");
       }
-      const result = await this._request<{ success: boolean }>(`/galleries/${galleryId}/pricing-package`, {
-        method: "PATCH",
-        body: JSON.stringify({ pricingPackage }),
-      });
+      const result = await this._request<{ success: boolean }>(
+        `/galleries/${galleryId}/pricing-package`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ pricingPackage }),
+        }
+      );
       return result;
     },
 

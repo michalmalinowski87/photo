@@ -112,7 +112,7 @@ const Navbar = () => {
 
           <div className="hidden lg:flex items-center gap-x-4">
             {isLoading ? null : isAuthenticated ? (
-              <Link href={`${dashboardUrl}/galleries`} className={buttonVariants({ size: "sm" })}>
+              <Link href={`${dashboardUrl}/`} className={buttonVariants({ size: "sm" })}>
                 Dashboard
               </Link>
             ) : (

@@ -120,8 +120,8 @@ export const WelcomePopup: React.FC<WelcomePopupProps> = ({
                   Utwórz swoją pierwszą galerię
                 </h4>
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Kliknij przycisk &quot;Utwórz galerię&quot; w menu. To zajmie tylko chwilę, a już będziesz
-                  mógł rozpocząć pracę z klientami!
+                  Kliknij przycisk &quot;Utwórz galerię&quot; w menu. To zajmie tylko chwilę, a już
+                  będziesz mógł rozpocząć pracę z klientami!
                 </p>
               </div>
             </div>

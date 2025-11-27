@@ -302,10 +302,13 @@ export function getLogoutUrl(redirectUri) {
 		domain = `${domain}.auth.${region}.amazoncognito.com`;
 	}
 	
+	// Ensure redirectUri is properly formatted (remove trailing slash if present, as Cognito is strict about URL matching)
+	const cleanRedirectUri = redirectUri.replace(/\/$/, '');
+	
 	const baseUrl = `https://${domain}`;
 	const params = new URLSearchParams({
 		client_id: clientId,
-		logout_uri: redirectUri
+		logout_uri: cleanRedirectUri
 	});
 	
 	return `${baseUrl}/logout?${params.toString()}`;

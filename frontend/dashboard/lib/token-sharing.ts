@@ -63,7 +63,7 @@ export function requestTokensFromOtherDomains(): void {
   // Also try parent window (if in iframe)
   if (window.parent !== window) {
     try {
-      (window.parent).postMessage(message, landingUrl);
+      window.parent.postMessage(message, landingUrl);
     } catch (_e) {
       // Cross-origin error, ignore
     }
@@ -112,7 +112,7 @@ export function shareTokensWithOtherDomains(): void {
   // Send to parent window
   if (window.parent !== window) {
     try {
-      (window.parent).postMessage(message, landingUrl);
+      window.parent.postMessage(message, landingUrl);
     } catch (_e) {
       // Ignore errors
     }
