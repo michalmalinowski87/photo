@@ -13,7 +13,7 @@ import { useState } from 'react';
 type Tab = "1m" | "3m" | "12m";
 
 const PricingCards = () => {
-  const MotionTabTrigger = motion(TabsTrigger);
+  const MotionTabTrigger = motion.create(TabsTrigger);
   const [activeTab, setActiveTab] = useState<Tab>("1m");
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
 
