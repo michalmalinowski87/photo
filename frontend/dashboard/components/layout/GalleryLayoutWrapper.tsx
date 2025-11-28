@@ -3,9 +3,11 @@ import React, { useState, useEffect, useCallback } from "react";
 
 import { GalleryProvider } from "../../context/GalleryContext";
 import { useZipDownload as useZipDownloadHook } from "../../hocs/withZipDownload";
+import { useGalleryData } from "../../hooks/useGalleryData";
 import { useModal } from "../../hooks/useModal";
+import { useOrderActions } from "../../hooks/useOrderActions";
 import { useToast } from "../../hooks/useToast";
-import { apiFetch, apiFetchWithAuth, formatApiError } from "../../lib/api";
+import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { getPricingModalData } from "../../lib/calculate-plan";
 import type { PricingModalData } from "../../lib/plan-types";
@@ -42,12 +44,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     currentGallery: gallery,
     isLoading: loading,
     error: loadError,
-    setCurrentGallery,
-    setLoading,
-    setError,
     clearCurrentGallery,
-    setGalleryOrders,
-    getGalleryOrders,
     isGalleryStale,
     invalidateGalleryCache,
     invalidateGalleryOrdersCache,
@@ -87,116 +84,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   });
   const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
 
-  // Define functions first (before useEffect hooks that use them)
-  const loadGalleryData = useCallback(
-    async (silent = false, forceRefresh = false) => {
-      if (!apiUrl || !idToken || !galleryId) {
-        return;
-      }
-
-      // Check cache first (unless forcing refresh)
-      if (!forceRefresh && gallery?.galleryId === galleryId && !isGalleryStale(30000)) {
-        // Use cached data, but update URL if needed
-        setGalleryUrl(
-          typeof window !== "undefined" ? `${window.location.origin}/gallery/${galleryId}` : ""
-        );
-        return;
-      }
-
-      if (!silent) {
-        setLoading(true);
-        setError(null);
-      }
-
-      try {
-        const galleryResponse = await apiFetchWithAuth(
-          `${apiUrl}/galleries/${galleryId as string}`
-        );
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-        setCurrentGallery(galleryResponse.data as any);
-        setGalleryUrl(
-          typeof window !== "undefined"
-            ? `${window.location.origin}/gallery/${galleryId as string}`
-            : ""
-        );
-
-        // Dispatch galleryUpdated event to notify components (e.g., PaymentGuidanceBanner, GallerySidebar)
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("galleryUpdated", { detail: { galleryId } })
-          );
-        }
-      } catch (err) {
-        if (!silent) {
-          const errorMsg = formatApiError(err);
-          setError(errorMsg ?? "Nie udało się załadować danych galerii");
-          showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych galerii");
-        }
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [
-      apiUrl,
-      idToken,
-      galleryId,
-      gallery,
-      setLoading,
-      setError,
-      setCurrentGallery,
-      showToast,
-      isGalleryStale,
-    ]
-  );
-
-  const loadGalleryOrders = useCallback(
-    async (forceRefresh = false) => {
-      if (!apiUrl || !galleryId) {
-        return;
-      }
-
-      // Check cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cached = getGalleryOrders(galleryId as string, 30000);
-        if (cached) {
-          setGalleryOrdersLocal(cached);
-          return;
-        }
-      }
-
-      try {
-        const { data } = await apiFetchWithAuth<{ items?: unknown[] }>(
-          `${apiUrl}/galleries/${galleryId as string}/orders`
-        );
-        const orders = data?.items ?? [];
-        const ordersArray = Array.isArray(orders) ? orders : [];
-        setGalleryOrdersLocal(ordersArray as Order[]);
-        // Cache the orders in Zustand store
-        setGalleryOrders(galleryId as string, ordersArray);
-      } catch (_err) {
-        setGalleryOrdersLocal([]);
-      }
-    },
-    [apiUrl, galleryId, getGalleryOrders, setGalleryOrders]
-  );
-
-  const checkDeliveredOrders = useCallback(async () => {
-    if (!apiUrl || !galleryId) {
-      return;
-    }
-    try {
-      const { data } = await apiFetchWithAuth<{ items?: unknown[]; orders?: unknown[] }>(
-        `${apiUrl}/galleries/${galleryId as string}/orders/delivered`
-      );
-      const items = data?.items ?? data?.orders ?? [];
-      setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
-    } catch (_err) {
-      setHasDeliveredOrders(false);
-    }
-  }, [apiUrl, galleryId]);
+  // Use custom hooks for gallery data and order actions
+  const { loadGalleryData, loadGalleryOrders, checkDeliveredOrders } = useGalleryData({
+    apiUrl,
+    idToken,
+    galleryId,
+    setGalleryUrl,
+    setGalleryOrdersLocal,
+    setHasDeliveredOrders,
+  });
 
   const loadOrderData = useCallback(async () => {
     if (!apiUrl || !idToken || !galleryId || !orderId) {
@@ -308,89 +204,29 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     // The orderObj, hasFinals, and canDownloadZip will be recomputed
   }, [deliveryStatus]);
 
-  const handleApproveChangeRequest = async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
-      return;
-    }
+  // Use custom hook for order actions
+  const {
+    handleApproveChangeRequest,
+    handleDenyChangeRequest,
+    handleDenyConfirm: handleDenyConfirmFromHook,
+    handleMarkOrderPaid,
+    handleDownloadFinals,
+    handleSendFinalsToClient,
+  } = useOrderActions({
+    apiUrl,
+    idToken,
+    galleryId,
+    orderId,
+    loadOrderData,
+    loadGalleryOrders,
+    openDenyModal,
+    closeDenyModal,
+    setDenyLoading,
+  });
 
-    try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/approve-change`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderCache(orderId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderStoreGalleryCache(galleryId as string);
-
-      showToast(
-        "success",
-        "Sukces",
-        "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
-      );
-      await loadOrderData();
-      await loadGalleryOrders(true); // Force refresh
-    } catch (err) {
-      showToast(
-        "error",
-        "Błąd",
-        formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
-      );
-    }
-  };
-
-  const handleDenyChangeRequest = () => {
-    openDenyModal();
-  };
-
+  // Wrap handleDenyConfirm to match the expected signature
   const handleDenyConfirm = async (reason?: string) => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
-      return;
-    }
-
-    setDenyLoading(true);
-
-    try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/deny-change`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ reason: reason ?? undefined }),
-        }
-      );
-
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderCache(orderId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderStoreGalleryCache(galleryId as string);
-
-      showToast(
-        "success",
-        "Sukces",
-        "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
-      );
-      closeDenyModal();
-      await loadOrderData();
-      await loadGalleryOrders(true); // Force refresh
-    } catch (err: unknown) {
-      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany");
-    } finally {
-      setDenyLoading(false);
-    }
+    await handleDenyConfirmFromHook(reason);
   };
 
   const handleDownloadZip = async () => {
@@ -540,83 +376,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     void router.push(`/galleries/${galleryId as string}/settings`);
   };
 
-  // Order-specific handlers
-  const handleMarkOrderPaid = async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
-      return;
-    }
-    try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/mark-paid`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderCache(orderId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderStoreGalleryCache(galleryId as string);
-      showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
-      // Reload order data in wrapper to update sidebar (will fetch fresh due to cache invalidation)
-      await loadOrderData();
-      // Trigger a custom event to notify order page to reload
-      // The order page will listen to this event and reload its own order data
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-      }
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
-    }
-  };
-
-  const handleDownloadFinals = async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
-      return;
-    }
-
-    await downloadZip({
-      apiUrl,
-      galleryId: galleryId as string,
-      orderId: orderId as string,
-      endpoint: `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/final/zip`,
-      filename: `order-${orderId as string}-finals.zip`,
-    });
-  };
-
-  const handleSendFinalsToClient = async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
-      return;
-    }
-    try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/send-final-link`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderCache(orderId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderStoreGalleryCache(galleryId as string);
-      showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
-      // Reload order data in wrapper to update sidebar (will fetch fresh due to cache invalidation)
-      await loadOrderData();
-      // Trigger a custom event to notify order page to reload
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-      }
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
-    }
-  };
 
   // Show loading only if we don't have gallery data yet
   if (loading && !gallery) {

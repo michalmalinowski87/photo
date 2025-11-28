@@ -10,10 +10,13 @@ import {
 } from "../../lib/currency";
 import { formatPrice } from "../../lib/format-price";
 import { generatePassword } from "../../lib/password";
-import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
-import Input from "../ui/input/InputField";
-import Select from "../ui/select/Select";
+
+import { ClientStep } from "./wizard/ClientStep";
+import { GalleryNameStep } from "./wizard/GalleryNameStep";
+import { GalleryTypeStep } from "./wizard/GalleryTypeStep";
+import { PackageStep } from "./wizard/PackageStep";
+import { SummaryStep } from "./wizard/SummaryStep";
 
 interface CreateGalleryWizardProps {
   isOpen: boolean;
@@ -393,588 +396,80 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-8 max-w-4xl mx-auto">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Typ galerii</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Wybierz czy klient będzie mógł wybierać zdjęcia czy otrzyma wszystkie
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <button
-                onClick={() => setData({ ...data, selectionEnabled: true })}
-                className={`relative p-8 rounded-2xl border-2 transition-all duration-300 ${
-                  data.selectionEnabled
-                    ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
-                    : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
-              >
-                <div className="flex flex-col items-center space-y-4">
-                  <div
-                    className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                      data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  >
-                    <svg
-                      className="w-10 h-10 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="text-center">
-                    <div
-                      className={`text-xl font-semibold mb-2 ${
-                        data.selectionEnabled
-                          ? "text-brand-600 dark:text-brand-400"
-                          : "text-gray-900 dark:text-white"
-                      }`}
-                    >
-                      Wybór przez klienta
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Klient wybiera zdjęcia, które chce otrzymać
-                    </div>
-                  </div>
-                </div>
-                {data.selectionEnabled && (
-                  <div className="absolute top-4 right-4">
-                    <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </button>
-              <button
-                onClick={() => setData({ ...data, selectionEnabled: false })}
-                className={`relative p-8 rounded-2xl border-2 transition-all duration-300 ${
-                  !data.selectionEnabled
-                    ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
-                    : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
-              >
-                <div className="flex flex-col items-center space-y-4">
-                  <div
-                    className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                      !data.selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  >
-                    <svg
-                      className="w-10 h-10 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="text-center">
-                    <div
-                      className={`text-xl font-semibold mb-2 ${
-                        !data.selectionEnabled
-                          ? "text-brand-600 dark:text-brand-400"
-                          : "text-gray-900 dark:text-white"
-                      }`}
-                    >
-                      Wszystkie zdjęcia
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Klient otrzyma wszystkie zdjęcia bez możliwości wyboru
-                    </div>
-                  </div>
-                </div>
-                {!data.selectionEnabled && (
-                  <div className="absolute top-4 right-4">
-                    <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </button>
-            </div>
-          </div>
+          <GalleryTypeStep
+            selectionEnabled={data.selectionEnabled}
+            onSelectionEnabledChange={(enabled) => setData({ ...data, selectionEnabled: enabled })}
+          />
         );
 
       case 2:
         return (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Nazwa galerii</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Podaj unikalną nazwę dla tej galerii
-              </p>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Nazwa galerii *
-              </label>
-              <Input
-                type="text"
-                placeholder="np. Sesja ślubna - Anna i Jan"
-                value={data.galleryName}
-                onChange={(e) => {
-                  setData({ ...data, galleryName: e.target.value });
-                  setGalleryNameError("");
-                }}
-                error={!!galleryNameError}
-                hint={galleryNameError}
-              />
-            </div>
-          </div>
+          <GalleryNameStep
+            galleryName={data.galleryName}
+            onGalleryNameChange={(name) => {
+              setData({ ...data, galleryName: name });
+              setGalleryNameError("");
+            }}
+            error={galleryNameError}
+            onErrorChange={setGalleryNameError}
+          />
         );
 
       case 3:
-        // Calculate payment status based on package price and payment amount
-        const packagePriceCentsForStatus = data.packagePriceCents ?? 0;
-        const paymentStatusForPakiet =
-          data.initialPaymentAmountCents === 0
-            ? "UNPAID"
-            : data.initialPaymentAmountCents >= packagePriceCentsForStatus
-              ? "PAID"
-              : "PARTIALLY_PAID";
-
         return (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Pakiet cenowy</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Wybierz pakiet lub wprowadź dane ręcznie
-              </p>
-            </div>
-            <div className="space-y-6">
-              {existingPackages.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Wybierz pakiet (opcjonalne)
-                  </label>
-                  <Select
-                    options={existingPackages.map((pkg) => ({
-                      value: pkg.packageId,
-                      label: `${pkg.name} - ${formatPrice(pkg.price)}`,
-                    }))}
-                    placeholder="Wybierz pakiet"
-                    value={data.selectedPackageId ?? ""}
-                    onChange={(value) => {
-                      if (value) {
-                        handlePackageSelect(value);
-                      } else {
-                        setData({ ...data, selectedPackageId: undefined });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-4 p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Nazwa pakietu *
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="Nazwa pakietu"
-                    value={data.packageName}
-                    onChange={(e) => setData({ ...data, packageName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Liczba zdjęć w pakiecie
-                  </label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={data.includedCount}
-                    onChange={(e) =>
-                      setData({ ...data, includedCount: parseInt(e.target.value) || 0 })
-                    }
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cena za dodatkowe zdjęcie (PLN)
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="0.00"
-                    value={extraPriceInput ?? centsToPlnString(data.extraPriceCents)}
-                    onChange={(e) => {
-                      const formatted = formatPriceInput(e.target.value);
-                      setExtraPriceInput(formatted);
-                      setData({ ...data, extraPriceCents: plnToCents(formatted) });
-                    }}
-                    onBlur={() => {
-                      // Clear input state on blur if empty, let it use cents value
-                      if (!extraPriceInput || extraPriceInput === "") {
-                        setExtraPriceInput(null);
-                      }
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cena pakietu (PLN)
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="0.00"
-                    value={packagePriceInput ?? centsToPlnString(data.packagePriceCents)}
-                    onChange={(e) => {
-                      const formatted = formatPriceInput(e.target.value);
-                      setPackagePriceInput(formatted);
-                      setData({ ...data, packagePriceCents: plnToCents(formatted) });
-                    }}
-                    onBlur={() => {
-                      // Clear input state on blur if empty, let it use cents value
-                      if (!packagePriceInput || packagePriceInput === "") {
-                        setPackagePriceInput(null);
-                      }
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Kwota wpłacona przez klienta za pakiet (PLN)
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="0.00"
-                    value={paymentAmountInput ?? centsToPlnString(data.initialPaymentAmountCents)}
-                    onChange={(e) => {
-                      const formatted = formatPriceInput(e.target.value);
-                      setPaymentAmountInput(formatted);
-                      setData({
-                        ...data,
-                        initialPaymentAmountCents: plnToCents(formatted),
-                      });
-                    }}
-                    onBlur={() => {
-                      // Clear input state on blur if empty, let it use cents value
-                      if (!paymentAmountInput || paymentAmountInput === "") {
-                        setPaymentAmountInput(null);
-                      }
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Kwota wpłacona przez klienta za pakiet zakupiony od fotografa
-                  </p>
-                </div>
-                {packagePriceCentsForStatus > 0 && (
-                  <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      Status płatności:
-                    </p>
-                    <Badge
-                      color={
-                        paymentStatusForPakiet === "PAID"
-                          ? "success"
-                          : paymentStatusForPakiet === "PARTIALLY_PAID"
-                            ? "warning"
-                            : "error"
-                      }
-                      variant="light"
-                    >
-                      {paymentStatusForPakiet === "PAID"
-                        ? "Opłacone"
-                        : paymentStatusForPakiet === "PARTIALLY_PAID"
-                          ? "Częściowo opłacone"
-                          : "Nieopłacone"}
-                    </Badge>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <PackageStep
+            existingPackages={existingPackages}
+            selectedPackageId={data.selectedPackageId}
+            packageName={data.packageName}
+            includedCount={data.includedCount}
+            extraPriceCents={data.extraPriceCents}
+            packagePriceCents={data.packagePriceCents}
+            initialPaymentAmountCents={data.initialPaymentAmountCents}
+            onPackageSelect={handlePackageSelect}
+            onDataChange={(updates) => setData({ ...data, ...updates })}
+            extraPriceInput={extraPriceInput}
+            packagePriceInput={packagePriceInput}
+            paymentAmountInput={paymentAmountInput}
+            onExtraPriceInputChange={setExtraPriceInput}
+            onPackagePriceInputChange={setPackagePriceInput}
+            onPaymentAmountInputChange={setPaymentAmountInput}
+          />
         );
 
       case 4:
         return (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Dane klienta</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Wybierz istniejącego klienta lub wprowadź nowe dane
-              </p>
-            </div>
-            <div className="space-y-6">
-              {existingClients.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Wybierz klienta (opcjonalne)
-                  </label>
-                  <Select
-                    options={existingClients.map((client) => ({
-                      value: client.clientId,
-                      label: client.isCompany
-                        ? `${client.companyName} (${client.email})`
-                        : `${client.firstName} ${client.lastName} (${client.email})`,
-                    }))}
-                    placeholder="Wybierz klienta"
-                    value={data.selectedClientId ?? ""}
-                    onChange={(value) => {
-                      if (value) {
-                        handleClientSelect(value);
-                      } else {
-                        setData({
-                          ...data,
-                          selectedClientId: undefined,
-                          clientEmail: "",
-                          firstName: "",
-                          lastName: "",
-                          companyName: "",
-                          nip: "",
-                          phone: "",
-                          isCompany: false,
-                          isVatRegistered: false,
-                        });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-4 p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email klienta *
-                  </label>
-                  <Input
-                    type="email"
-                    placeholder="email@example.com"
-                    value={data.clientEmail}
-                    onChange={(e) => setData({ ...data, clientEmail: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Hasło *
-                  </label>
-                  <div className="flex gap-2 items-stretch">
-                    <div className="flex-1">
-                      <Input
-                        type="password"
-                        placeholder="Hasło"
-                        value={data.clientPassword}
-                        onChange={(e) => setData({ ...data, clientPassword: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        const newPassword = generatePassword();
-                        setData({ ...data, clientPassword: newPassword });
-                      }}
-                      className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11 self-stretch"
-                    >
-                      Generuj
-                    </Button>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {data.selectionEnabled
-                      ? "Hasło do wyboru zdjęć przez klienta"
-                      : "Hasło do dostępu do finalnej galerii"}
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={data.isCompany}
-                    onChange={(e) =>
-                      setData({
-                        ...data,
-                        isCompany: e.target.checked,
-                        isVatRegistered: e.target.checked ? data.isVatRegistered : false,
-                      })
-                    }
-                    className="w-4 h-4 text-brand-500 rounded"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Firma</span>
-                </label>
-                {data.isCompany ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Nazwa firmy *
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="Nazwa firmy"
-                        value={data.companyName}
-                        onChange={(e) => setData({ ...data, companyName: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        NIP *
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="NIP"
-                        value={data.nip}
-                        onChange={(e) => setData({ ...data, nip: e.target.value })}
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={data.isVatRegistered}
-                        onChange={(e) => setData({ ...data, isVatRegistered: e.target.checked })}
-                        className="w-4 h-4 text-brand-500 rounded"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        Firma zarejestrowana jako podatnik VAT
-                      </span>
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Imię *
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="Imię"
-                        value={data.firstName}
-                        onChange={(e) => setData({ ...data, firstName: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Nazwisko *
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="Nazwisko"
-                        value={data.lastName}
-                        onChange={(e) => setData({ ...data, lastName: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Telefon (opcjonalne)
-                  </label>
-                  <Input
-                    type="tel"
-                    placeholder="Telefon"
-                    value={data.phone}
-                    onChange={(e) => setData({ ...data, phone: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <ClientStep
+            existingClients={existingClients}
+            selectedClientId={data.selectedClientId}
+            clientEmail={data.clientEmail}
+            clientPassword={data.clientPassword}
+            isCompany={data.isCompany}
+            isVatRegistered={data.isVatRegistered}
+            firstName={data.firstName}
+            lastName={data.lastName}
+            phone={data.phone}
+            nip={data.nip}
+            companyName={data.companyName}
+            selectionEnabled={data.selectionEnabled}
+            onClientSelect={handleClientSelect}
+            onDataChange={(updates) => setData({ ...data, ...updates })}
+          />
         );
 
       case 5:
         return (
-          <div className="space-y-6 max-w-3xl mx-auto">
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Podsumowanie</h3>
-            </div>
-
-            <div className="space-y-4 p-5 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Typ galerii:</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {data.selectionEnabled ? "Wybór przez klienta" : "Wszystkie zdjęcia"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Nazwa galerii:</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {data.galleryName ?? "Brak"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Klient:</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {data.selectedClientId
-                      ? (existingClients.find((c) => c.clientId === data.selectedClientId)?.email ??
-                        "Nie wybrano")
-                      : (data.clientEmail ?? "Nie podano")}
-                  </span>
-                </div>
-
-                <div className="pt-3 space-y-2">
-                  <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1.5">
-                    Pakiet cenowy:
-                  </div>
-                  <div className="pl-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Nazwa:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {data.packageName}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Liczba zdjęć:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {data.includedCount}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Cena za dodatkowe:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {formatPrice(data.extraPriceCents)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Cena pakietu:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {formatPrice(data.packagePriceCents)}
-                      </span>
-                    </div>
-                    {data.initialPaymentAmountCents > 0 && (
-                      <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Kwota wpłacona przez klienta:
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {formatPrice(data.initialPaymentAmountCents)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Plan galerii zostanie obliczony automatycznie po przesłaniu zdjęć.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <SummaryStep
+            selectionEnabled={data.selectionEnabled}
+            galleryName={data.galleryName}
+            selectedClientId={data.selectedClientId}
+            clientEmail={data.clientEmail}
+            existingClients={existingClients}
+            packageName={data.packageName}
+            includedCount={data.includedCount}
+            extraPriceCents={data.extraPriceCents}
+            packagePriceCents={data.packagePriceCents}
+            initialPaymentAmountCents={data.initialPaymentAmountCents}
+          />
         );
 
       default:

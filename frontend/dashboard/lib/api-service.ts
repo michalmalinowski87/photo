@@ -445,8 +445,8 @@ class ApiService {
      */
     pay: async (
       galleryId: string,
-      options: { 
-        dryRun?: boolean; 
+      options: {
+        dryRun?: boolean;
         plan?: string;
         priceCents?: number;
         redirectUrl?: string;
@@ -457,7 +457,7 @@ class ApiService {
       totalAmountCents?: number;
       walletAmountCents?: number;
       stripeAmountCents?: number;
-      paymentMethod?: 'WALLET' | 'STRIPE';
+      paymentMethod?: "WALLET" | "STRIPE";
       stripeFeeCents?: number;
       dryRun?: boolean;
     }> => {

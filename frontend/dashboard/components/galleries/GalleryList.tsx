@@ -4,14 +4,14 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import { apiFetch, formatApiError } from "../../lib/api";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
+import { getPricingModalData } from "../../lib/calculate-plan";
+import type { PricingModalData } from "../../lib/plan-types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
 import { GalleryPricingModal } from "./GalleryPricingModal";
-import { getPricingModalData } from "../../lib/calculate-plan";
-import type { PricingModalData } from "../../lib/plan-types";
 
 interface Gallery {
   galleryId: string;
@@ -62,7 +62,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     totalAmountCents?: number;
     walletAmountCents?: number;
     stripeAmountCents?: number;
-    paymentMethod?: 'WALLET' | 'STRIPE';
+    paymentMethod?: "WALLET" | "STRIPE";
     stripeFeeCents?: number;
     checkoutUrl?: string;
     paid?: boolean;
@@ -343,7 +343,6 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                     )}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-
                     {(gallery.originalsLimitBytes ?? gallery.finalsLimitBytes) && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {gallery.originalsLimitBytes && (

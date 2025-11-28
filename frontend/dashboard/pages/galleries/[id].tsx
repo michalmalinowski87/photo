@@ -63,7 +63,7 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  
+
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
   const [showSendLinkModal, setShowSendLinkModal] = useState<boolean>(false);
@@ -244,7 +244,6 @@ export default function GalleryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]);
 
-
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {
     if (!galleryId || !orderId) {
       return;
@@ -409,7 +408,7 @@ export default function GalleryDetail() {
   if (galleryLoading) {
     return <FullPageLoading text="Ładowanie zleceń..." />;
   }
-  
+
   if (!gallery) {
     return null; // Error is handled by GalleryLayoutWrapper
   }

@@ -59,4 +59,3 @@ export const StripeRedirectOverlay: React.FC<StripeRedirectOverlayProps> = ({
     </div>
   );
 };
-

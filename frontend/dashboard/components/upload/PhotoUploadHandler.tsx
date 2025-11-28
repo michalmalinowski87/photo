@@ -2,8 +2,9 @@ import { useState, useRef, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
-import { requestThrottler } from "../../lib/requestThrottler";
-import { useGalleryStore } from "../../store/gallerySlice";
+import { usePresignedUrls } from "../../hooks/usePresignedUrls";
+import { useS3Upload } from "../../hooks/useS3Upload";
+import { useImagePolling } from "../../hooks/useImagePolling";
 
 import { PerImageProgress } from "./UploadProgressOverlay";
 
@@ -70,37 +71,81 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
     successes: 0,
   });
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
-  const [isUploadComplete, setIsUploadComplete] = useState(false); // Track when upload phase is done (now processing)
-  const perImageProgressRef = useRef<PerImageProgress[]>([]); // Ref to track progress for closures
+  const [isUploadComplete, setIsUploadComplete] = useState(false);
+  const perImageProgressRef = useRef<PerImageProgress[]>([]);
   const uploadCancelRef = useRef(false);
-  const pollingActiveRef = useRef(false);
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fileToKeyMapRef = useRef<Map<string, string>>(new Map()); // Map filename to API key
+  const fileToKeyMapRef = useRef<Map<string, string>>(new Map());
 
-  // Helper function to retry a request with exponential backoff and jitter
-  const retryWithBackoff = useCallback(
-    async <T,>(
-      fn: () => Promise<T>,
-      maxRetries: number = 5,
-      baseDelay: number = 500
-    ): Promise<T> => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          return await fn();
-        } catch (error) {
-          if (attempt === maxRetries - 1) {
-            throw error;
-          }
-          const exponentialDelay = baseDelay * Math.pow(2, attempt);
-          const jitter = Math.random() * 0.3 * exponentialDelay;
-          const delay = exponentialDelay + jitter;
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-      }
-      throw new Error("Max retries exceeded");
+  // Initialize hooks
+  const { fetchPresignedUrls } = usePresignedUrls({
+    galleryId: config.galleryId,
+    orderId: config.orderId,
+    type: config.type,
+    onError: (file, error) => {
+      setUploadProgress((prev) => ({
+        ...prev,
+        errors: [...prev.errors, { file, error }],
+      }));
     },
-    []
-  );
+  });
+
+  const { uploadFiles } = useS3Upload({
+    galleryId: config.galleryId,
+    type: config.type,
+    updateProgress: (updater) => {
+      setPerImageProgress((prev) => {
+        const updated = updater(prev);
+        perImageProgressRef.current = updated;
+        config.onPerImageProgress?.(updated);
+        return updated;
+      });
+    },
+    onUploadProgress: (current, total, fileName) => {
+      setUploadProgress((prev) => ({
+        ...prev,
+        current,
+        total,
+        currentFileName: fileName,
+      }));
+    },
+    onError: (file, error) => {
+      setUploadProgress((prev) => ({
+        ...prev,
+        errors: [...prev.errors, { file, error }],
+      }));
+    },
+    onSuccess: (file, key, fileSize) => {
+      fileToKeyMapRef.current.set(file, key);
+      setUploadProgress((prev) => ({
+        ...prev,
+        successes: prev.successes + 1,
+      }));
+    },
+  });
+
+  const { startPolling, stopPolling } = useImagePolling({
+    galleryId: config.galleryId,
+    orderId: config.orderId,
+    type: config.type,
+    fileToKeyMap: fileToKeyMapRef.current,
+    updateProgress: (updater) => {
+      setPerImageProgress((prev) => {
+        const updated = updater(prev);
+        perImageProgressRef.current = updated;
+        config.onPerImageProgress?.(updated);
+        return updated;
+      });
+    },
+    getCurrentProgress: () => perImageProgressRef.current,
+    onImagesUpdated: config.onImagesUpdated,
+    onUploadComplete: config.onUploadComplete,
+    onValidationNeeded: config.onValidationNeeded,
+    onOrderUpdated: config.onOrderUpdated,
+    loadOrderData: config.loadOrderData,
+    reloadGallery: config.reloadGallery,
+    deletingImagesRef: config.deletingImagesRef,
+    deletedImageKeysRef: config.deletedImageKeysRef,
+  });
 
   const handleFileSelect = useCallback(
     async (files: FileList | null): Promise<void> => {
@@ -124,7 +169,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
       }
 
       setUploading(true);
-      setIsUploadComplete(false); // Reset upload complete flag
+      setIsUploadComplete(false);
       uploadCancelRef.current = false;
 
       // Initialize upload progress
@@ -146,277 +191,40 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         uploadProgress: 0,
       }));
       setPerImageProgress(initialProgress);
-      perImageProgressRef.current = initialProgress; // Update ref
+      perImageProgressRef.current = initialProgress;
       config.onPerImageProgress?.(initialProgress);
       fileToKeyMapRef.current.clear();
 
       try {
-        // Optimized batch processing: Get presigned URLs in batches to reduce API Gateway load
-        const PRESIGN_BATCH_SIZE = 20; // Get 20 presigned URLs per API call (max 50)
-        const UPLOAD_CONCURRENCY = 5; // Upload 5 files concurrently to S3
+        // Step 1: Get presigned URLs
+        const presignedUrlMap = await fetchPresignedUrls(imageFiles, () => uploadCancelRef.current);
+
+        // Step 2: Upload files to S3
+        const uploadResults = await uploadFiles(
+          imageFiles,
+          presignedUrlMap,
+          () => uploadCancelRef.current
+        );
+
+        // Collect errors and successes
         const uploadErrors: Array<{ file: string; error: string }> = [];
         let uploadSuccesses = 0;
 
-        // Step 1: Get all presigned URLs in batches (reduces API Gateway calls significantly)
-        const presignedUrlMap = new Map<string, { url: string; apiKey: string }>();
-
-        for (let i = 0; i < imageFiles.length; i += PRESIGN_BATCH_SIZE) {
-          if (uploadCancelRef.current) {
-            throw new Error("Upload cancelled by user");
+        uploadResults.forEach((result) => {
+          if (result.success) {
+            uploadSuccesses++;
+          } else {
+            uploadErrors.push({ file: result.file, error: result.error || "Unknown error" });
           }
-
-          const batch = imageFiles.slice(i, i + PRESIGN_BATCH_SIZE);
-
-          try {
-            // Use throttler to rate-limit API requests
-            let batchPresignResponse: {
-              urls: Array<{ key: string; url: string; objectKey: string }>;
-            };
-
-            if (config.type === "finals") {
-              // Finals upload - batch endpoint
-              batchPresignResponse = await requestThrottler.throttle(() =>
-                retryWithBackoff(async () => {
-                  return await api.uploads.getFinalImagePresignedUrlsBatch(
-                    config.galleryId,
-                    config.orderId ?? "",
-                    {
-                      files: batch.map((file) => ({
-                        key: file.name,
-                        contentType: file.type || "image/jpeg",
-                      })),
-                    }
-                  );
-                })
-              );
-            } else {
-              // Originals upload - batch endpoint
-              const timestamp = Date.now();
-              batchPresignResponse = await requestThrottler.throttle(() =>
-                retryWithBackoff(async () => {
-                  return await api.uploads.getPresignedUrlsBatch({
-                    galleryId: config.galleryId,
-                    files: batch.map((file, idx) => {
-                      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-                      // Use microsecond precision to avoid collisions
-                      const uniqueTimestamp = timestamp + idx;
-                      return {
-                        key: `originals/${uniqueTimestamp}_${sanitizedFilename}`,
-                        contentType: file.type || "image/jpeg",
-                        fileSize: file.size,
-                      };
-                    }),
-                  });
-                })
-              );
-            }
-
-            // Map presigned URLs to files
-            batch.forEach((file, idx) => {
-              const presignedUrl = batchPresignResponse.urls[idx];
-              if (presignedUrl) {
-                // Extract API key from objectKey (remove galleries/{galleryId}/ prefix)
-                const apiKey = presignedUrl.objectKey.replace(`galleries/${config.galleryId}/`, "");
-                presignedUrlMap.set(file.name, { url: presignedUrl.url, apiKey });
-                fileToKeyMapRef.current.set(file.name, apiKey);
-              }
-            });
-          } catch (error) {
-            // If batch presign fails, add all files in batch to errors
-            batch.forEach((file) => {
-              const errorMessage = (error as Error).message || "Failed to get presigned URL";
-              uploadErrors.push({ file: file.name, error: errorMessage });
-            });
-          }
-
-          // Small delay between presign batches to avoid overwhelming API Gateway
-          if (i + PRESIGN_BATCH_SIZE < imageFiles.length && !uploadCancelRef.current) {
-            await new Promise((resolve) => setTimeout(resolve, 200)); // 200ms delay between batches
-          }
-        }
-
-        // Step 2: Upload files to S3 in concurrent batches
-        for (let i = 0; i < imageFiles.length; i += UPLOAD_CONCURRENCY) {
-          if (uploadCancelRef.current) {
-            throw new Error("Upload cancelled by user");
-          }
-
-          const batch = imageFiles.slice(i, i + UPLOAD_CONCURRENCY);
-
-          // Process batch with individual error handling
-          await Promise.allSettled(
-            batch.map(async (file, batchIndex) => {
-              const globalIndex = i + batchIndex;
-
-              // Check for cancellation before each file
-              if (uploadCancelRef.current) {
-                throw new Error("Upload cancelled");
-              }
-
-              // Update overall progress
-              setUploadProgress((prev) => ({
-                ...prev,
-                current: globalIndex + 1,
-                currentFileName: file.name,
-              }));
-
-              // Update per-image progress to uploading
-              setPerImageProgress((prev) => {
-                const updated = prev.map((p) =>
-                  p.fileName === file.name
-                    ? { ...p, status: "uploading" as const, uploadProgress: 0 }
-                    : p
-                );
-                config.onPerImageProgress?.(updated);
-                return updated;
-              });
-
-              try {
-                const presignedData = presignedUrlMap.get(file.name);
-                if (!presignedData) {
-                  throw new Error("Presigned URL not found for file");
-                }
-
-                // Upload file to S3 with progress tracking
-                const uploadController = new AbortController();
-                const uploadTimeout = setTimeout(() => uploadController.abort(), 300000); // 5 min timeout
-
-                // Track if upload succeeded (for optimistic update safety)
-                let uploadSucceeded = false;
-
-                try {
-                  // Track upload progress using XMLHttpRequest for progress events
-                  const uploadPromise = new Promise<void>((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-
-                    xhr.upload.addEventListener("progress", (e) => {
-                      if (e.lengthComputable) {
-                        const percentComplete = Math.min((e.loaded / e.total) * 100, 100);
-                        setPerImageProgress((prev) => {
-                          const updated = prev.map((p) =>
-                            p.fileName === file.name ? { ...p, uploadProgress: percentComplete } : p
-                          );
-                          perImageProgressRef.current = updated; // Update ref
-                          config.onPerImageProgress?.(updated);
-                          return updated;
-                        });
-                      }
-                    });
-
-                    xhr.addEventListener("load", () => {
-                      if (xhr.status >= 200 && xhr.status < 300) {
-                        uploadSucceeded = true; // Mark as succeeded before resolving
-                        // Ensure progress is 100% on completion
-                        setPerImageProgress((prev) => {
-                          const updated = prev.map((p) =>
-                            p.fileName === file.name ? { ...p, uploadProgress: 100 } : p
-                          );
-                          perImageProgressRef.current = updated;
-                          config.onPerImageProgress?.(updated);
-                          return updated;
-                        });
-                        resolve();
-                      } else {
-                        reject(
-                          new Error(
-                            `Failed to upload ${file.name}: ${xhr.status} ${xhr.statusText}`
-                          )
-                        );
-                      }
-                    });
-
-                    xhr.addEventListener("error", () => {
-                      reject(new Error(`Network error uploading ${file.name}`));
-                    });
-
-                    xhr.addEventListener("abort", () => {
-                      reject(new Error(`Upload cancelled for ${file.name}`));
-                    });
-
-                    xhr.open("PUT", presignedData.url);
-                    xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
-                    xhr.send(file);
-                  });
-
-                  await uploadPromise;
-                  clearTimeout(uploadTimeout);
-
-                  // Dispatch optimistic update event only if upload actually succeeded
-                  // This updates the sidebar instantly without waiting for API
-                  // Safety: Only dispatch if uploadSucceeded is true (upload was successful)
-                  if (uploadSucceeded && typeof window !== "undefined" && config.galleryId) {
-                    if (config.type === "originals") {
-                      // Update originals bytes via event (handled by sidebar)
-                      window.dispatchEvent(
-                        new CustomEvent("galleryUpdated", {
-                          detail: { galleryId: config.galleryId, sizeDelta: file.size }, // Positive for upload
-                        })
-                      );
-                    } else if (config.type === "finals") {
-                      // Update finals bytes directly in Zustand store
-                      const storeState = useGalleryStore.getState();
-                      // Type-safe call: updateFinalsBytesUsed is defined in GalleryState interface
-                      (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(file.size);
-                    }
-                  }
-
-                  // Update per-image progress to processing
-                  setPerImageProgress((prev) => {
-                    const updated = prev.map((p) =>
-                      p.fileName === file.name
-                        ? { ...p, status: "processing" as const, uploadProgress: 100 }
-                        : p
-                    );
-                    perImageProgressRef.current = updated; // Update ref
-                    config.onPerImageProgress?.(updated);
-                    return updated;
-                  });
-
-                  uploadSuccesses++;
-                  return { success: true, file: file.name, key: presignedData.apiKey };
-                } catch (uploadError) {
-                  clearTimeout(uploadTimeout);
-                  throw uploadError;
-                }
-              } catch (error) {
-                const errorMessage = (error as Error).message || "Unknown error";
-                uploadErrors.push({ file: file.name, error: errorMessage });
-
-                // Update per-image progress to error
-                setPerImageProgress((prev) => {
-                  const updated = prev.map((p) =>
-                    p.fileName === file.name
-                      ? { ...p, status: "error" as const, error: errorMessage }
-                      : p
-                  );
-                  perImageProgressRef.current = updated; // Update ref
-                  config.onPerImageProgress?.(updated);
-                  return updated;
-                });
-
-                return { success: false, file: file.name, error: errorMessage };
-              }
-            })
-          );
-
-          // Update progress with batch results
-          setUploadProgress((prev) => ({
-            ...prev,
-            successes: uploadSuccesses,
-            errors: uploadErrors,
-          }));
-
-          // Small delay between batches to avoid overwhelming the server
-          if (i + UPLOAD_CONCURRENCY < imageFiles.length && !uploadCancelRef.current) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-          }
-        }
+        });
 
         // Final progress update - upload phase complete
         setUploadProgress((prev) => ({
           ...prev,
           current: imageFiles.length,
           currentFileName: "",
+          successes: uploadSuccesses,
+          errors: uploadErrors,
         }));
 
         // Mark upload as complete - now processing phase
@@ -468,261 +276,22 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
                 "Zdjęcia zostały przesłane. Jeśli originals nie zostały usunięte, spróbuj ponownie."
               );
             }
-          } else {
-            // Validate upload limits for originals (but don't reload gallery yet - wait for polling to complete)
-            if (uploadSuccesses > 0) {
-              // Store validation callback to run after polling completes
-              // We'll validate and reload after images appear
-            }
           }
         }
 
-        // Poll for images to appear on CloudFront
-        // Capture variables for closure
-        const expectedNewImageCount = imageFiles.length;
-        const capturedInitialImageCount = initialImageCount;
-        const capturedUploadSuccesses = uploadSuccesses;
-        let attempts = 0;
-        const maxAttempts = 60;
-        const pollInterval = 1000;
-        pollingActiveRef.current = true;
-
-        const pollForImages = async (): Promise<void> => {
-          if (!pollingActiveRef.current || uploadCancelRef.current) {
-            return;
-          }
-
-          attempts++;
-
-          try {
-            let images: GalleryImage[] = [];
-
-            if (config.type === "finals") {
-              const finalResponse = await api.orders.getFinalImages(
-                config.galleryId,
-                config.orderId ?? ""
-              );
-              // Preserve all URL properties (previewUrl, thumbUrl, finalUrl) for finals
-              images = (finalResponse.images ?? []) as GalleryImage[];
-            } else {
-              const photosResponse = await api.galleries.getImages(config.galleryId);
-              images = (photosResponse?.images ?? []) as GalleryImage[];
-            }
-
-            // Filter out deleted images
-            const validApiImages = images.filter((img: GalleryImage) => {
-              const imgKey = img.key ?? img.filename;
-              if (!imgKey) {
-                return false;
-              }
-              if (config.deletingImagesRef?.current.has(imgKey)) {
-                return false;
-              }
-              if (config.deletedImageKeysRef?.current.has(imgKey)) {
-                return false;
-              }
-              return true;
-            });
-
-            // For originals, only consider images with URLs (processed)
-            // For finals, check for previewUrl/thumbUrl (processed) or finalUrl (original)
-            const imagesWithUrls =
-              config.type === "originals"
-                ? validApiImages.filter((img) => !!(img.thumbUrl ?? img.previewUrl ?? img.url))
-                : validApiImages.filter(
-                    (img) => !!(img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url)
-                  );
-
-            // Update per-image progress: mark images as ready when they appear with URLs
-            setPerImageProgress((prev) => {
-              const updated = prev.map((progress) => {
-                // Skip if already ready or error
-                if (progress.status === "ready" || progress.status === "error") {
-                  return progress;
-                }
-
-                // Find matching API image by checking if the uploaded file's key matches
-                const uploadedKey = fileToKeyMapRef.current.get(progress.fileName);
-                const matchingImage = imagesWithUrls.find((img) => {
-                  const imgKey = img.key ?? img.filename;
-                  if (!imgKey) {
-                    return false;
-                  }
-
-                  // For originals: API key format is "originals/{timestamp}_{filename}"
-                  // For finals: API key format is just the filename
-                  if (config.type === "originals") {
-                    // Match by checking if API key ends with filename, or if uploadedKey matches
-                    return (
-                      imgKey === uploadedKey ||
-                      imgKey.endsWith(progress.fileName) ||
-                      (uploadedKey && imgKey.includes(uploadedKey.split("/").pop() ?? ""))
-                    );
-                  } else {
-                    // For finals, match by filename directly
-                    return imgKey === progress.fileName || imgKey === uploadedKey;
-                  }
-                });
-
-                if (matchingImage) {
-                  return { ...progress, status: "ready" as const };
-                }
-                return progress;
-              });
-              perImageProgressRef.current = updated; // Update ref
-              config.onPerImageProgress?.(updated);
-              return updated;
-            });
-
-            // Only notify parent when images are ready (have URLs)
-            if (imagesWithUrls.length > 0) {
-              config.onImagesUpdated(imagesWithUrls);
-            }
-
-            // Check if we have new images
-            let hasNewImages = false;
-
-            // Check if all uploaded images are ready (have URLs)
-            // Use ref to get latest progress (state updates are async)
-            const currentProgress = perImageProgressRef.current;
-            const readyCount = currentProgress.filter((p) => p.status === "ready").length;
-            const errorCount = currentProgress.filter((p) => p.status === "error").length;
-            const allProcessed = readyCount + errorCount === expectedNewImageCount;
-
-            if (config.type === "finals") {
-              // For finals, check if we have enough images with URLs
-              hasNewImages =
-                imagesWithUrls.length >= capturedInitialImageCount + expectedNewImageCount;
-            } else {
-              // For originals, check if all images are processed (have URLs)
-              hasNewImages =
-                allProcessed &&
-                imagesWithUrls.length >= capturedInitialImageCount + expectedNewImageCount;
-            }
-
-            if (hasNewImages || attempts >= maxAttempts) {
-              pollingActiveRef.current = false;
-              if (pollingTimeoutRef.current) {
-                clearTimeout(pollingTimeoutRef.current);
-                pollingTimeoutRef.current = null;
-              }
-
-              // All images processed - no cleanup needed (no placeholders)
-
-              if (attempts < maxAttempts) {
-                const typeLabel = config.type === "finals" ? "zdjęć finalnych" : "zdjęć";
-                showToast(
-                  "success",
-                  "Sukces",
-                  `${imageFiles.length} ${typeLabel} zostało przesłanych`
-                );
-              }
-
-              // For originals, validate limits and reload gallery AFTER polling completes
-              if (
-                config.type === "originals" &&
-                capturedUploadSuccesses > 0 &&
-                config.reloadGallery
-              ) {
-                // Wait a bit for backend to process images and update originalsBytesUsed
-                // Reduced delay for faster UI updates - backend should be quick to update
-                setTimeout(async () => {
-                  try {
-                    const validationResult = await api.galleries.validateUploadLimits(
-                      config.galleryId
-                    );
-
-                    if (
-                      !validationResult.withinLimit &&
-                      validationResult.excessBytes !== undefined
-                    ) {
-                      config.onValidationNeeded?.({
-                        uploadedSizeBytes: validationResult.uploadedSizeBytes,
-                        originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
-                        excessBytes: validationResult.excessBytes,
-                        nextTierPlan: validationResult.nextTierPlan,
-                        nextTierPriceCents: validationResult.nextTierPriceCents,
-                        nextTierLimitBytes: validationResult.nextTierLimitBytes,
-                        isSelectionGallery: validationResult.isSelectionGallery,
-                      });
-                    }
-                  } catch (validationError) {
-                    console.error("Failed to validate upload limits:", validationError);
-                  }
-
-                  // Reload gallery to update byte usage
-                  if (config.reloadGallery) {
-                    await config.reloadGallery();
-                    // Also dispatch event manually to ensure components are notified
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(
-                        new CustomEvent("galleryUpdated", { detail: { galleryId: config.galleryId } })
-                      );
-                    }
-                  }
-                }, 1000); // Reduced from 2000ms to 1000ms - backend should update quickly
-              }
-
-              if (config.onUploadComplete) {
-                config.onUploadComplete();
-              }
-
-              if (config.type === "finals" && config.onOrderUpdated && config.orderId) {
-                window.dispatchEvent(
-                  new CustomEvent("orderUpdated", { detail: { orderId: config.orderId } })
-                );
-              }
-
-              return;
-            }
-
-            if (pollingActiveRef.current) {
-              pollingTimeoutRef.current = setTimeout(pollForImages, pollInterval);
-            }
-          } catch (err: unknown) {
-            const apiErr = err as { status?: number; refreshFailed?: boolean };
-            if (apiErr?.status === 401 || apiErr?.refreshFailed) {
-              pollingActiveRef.current = false;
-              if (pollingTimeoutRef.current) {
-                clearTimeout(pollingTimeoutRef.current);
-                pollingTimeoutRef.current = null;
-              }
-
-              // No placeholders to clean up
-
-              if (config.loadOrderData) {
-                try {
-                  await config.loadOrderData();
-                } catch (_reloadErr) {
-                  // Ignore
-                }
-              }
-
-              return;
-            }
-
-            if (attempts < maxAttempts && pollingActiveRef.current) {
-              pollingTimeoutRef.current = setTimeout(pollForImages, pollInterval);
-            } else {
-              pollingActiveRef.current = false;
-              // No placeholders to clean up
-            }
-          }
-        };
-
-        // Start polling after a short delay
-        pollingTimeoutRef.current = setTimeout(
-          pollForImages,
-          config.type === "finals" ? 500 : 1000
-        );
+        // Step 3: Start polling for processed images
+        if (uploadSuccesses > 0 && !uploadCancelRef.current) {
+          startPolling(
+            {
+              expectedNewImageCount: imageFiles.length,
+              initialImageCount,
+              uploadSuccesses,
+            },
+            () => uploadCancelRef.current
+          );
+        }
       } catch (err) {
-        pollingActiveRef.current = false;
-        if (pollingTimeoutRef.current) {
-          clearTimeout(pollingTimeoutRef.current);
-          pollingTimeoutRef.current = null;
-        }
-
-        // No placeholders to clean up
+        stopPolling();
 
         if (uploadCancelRef.current) {
           const typeLabel = config.type === "finals" ? "zdjęć finalnych" : "zdjęć";
@@ -742,17 +311,13 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         });
       }
     },
-    [config, showToast, retryWithBackoff]
+    [config, showToast, fetchPresignedUrls, uploadFiles, startPolling, stopPolling]
   );
 
   const cancelUpload = useCallback(() => {
     uploadCancelRef.current = true;
-    pollingActiveRef.current = false;
-    if (pollingTimeoutRef.current) {
-      clearTimeout(pollingTimeoutRef.current);
-      pollingTimeoutRef.current = null;
-    }
-  }, []);
+    stopPolling();
+  }, [stopPolling]);
 
   return {
     handleFileSelect,

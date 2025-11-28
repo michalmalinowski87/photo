@@ -3,7 +3,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
-import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
+import { FullPageLoading } from "../../../components/ui/loading/Loading";
+import { RetryableImage } from "../../../components/ui/RetryableImage";
+import { FileUploadZone } from "../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";
 import {
   UploadProgressOverlay,
@@ -13,15 +15,6 @@ import { useGallery } from "../../../context/GalleryContext";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
-
-interface RetryableImageProps {
-  src: string;
-  alt: string;
-  className?: string;
-  maxRetries?: number;
-  initialDelay?: number;
-  fallbackSrc?: string;
-}
 
 interface GalleryImage {
   id?: string;
@@ -104,133 +97,6 @@ const LazyImage: React.FC<{ src: string; children: (src: string | null) => React
   );
 };
 
-// Component that retries loading an image until it's available on CloudFront
-// WebP only (no fallback) - EXACT COPY from order page (it works there!)
-const RetryableImage: React.FC<RetryableImageProps> = ({
-  src,
-  alt,
-  className = "",
-  maxRetries = 30,
-  initialDelay = 500,
-}) => {
-  const [imageSrc, setImageSrc] = useState<string>(src);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const retryCountRef = useRef<number>(0);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    // Reset when src changes
-    setImageSrc(src);
-    retryCountRef.current = 0;
-
-    // Clear any pending retry
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-
-    // Check if image is already cached before showing loading spinner
-    if (src) {
-      const testImg = new Image();
-      testImg.onload = () => {
-        // Image is cached - don't show spinner
-        setIsLoading(false);
-      };
-      testImg.onerror = () => {
-        // Image not cached - show spinner
-        setIsLoading(true);
-      };
-      testImg.src = src;
-
-      // If image doesn't load quickly (100ms), assume it needs loading
-      const timeout = setTimeout(() => {
-        if (!testImg.complete) {
-          setIsLoading(true);
-        }
-      }, 100);
-
-      // Force image reload by clearing and setting src
-      if (imgRef.current) {
-        imgRef.current.src = "";
-        setTimeout(() => {
-          if (imgRef.current && src) {
-            imgRef.current.src = src;
-          }
-        }, 0);
-      }
-
-      return () => clearTimeout(timeout);
-    } else {
-      setIsLoading(true);
-      return undefined;
-    }
-  }, [src]);
-
-  const handleError = (): void => {
-    retryCountRef.current += 1;
-    const currentRetryCount = retryCountRef.current;
-
-    if (currentRetryCount < maxRetries) {
-      setIsLoading(true);
-
-      // Exponential backoff: start with initialDelay, increase gradually
-      const delay = Math.min(initialDelay * Math.pow(1.2, currentRetryCount - 1), 5000);
-
-      retryTimeoutRef.current = setTimeout(() => {
-        // Add cache-busting query parameter
-        const separator = src.includes("?") ? "&" : "?";
-        const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${currentRetryCount}`;
-
-        setImageSrc(retryUrl);
-
-        // Force reload the image
-        if (imgRef.current) {
-          imgRef.current.src = retryUrl;
-        }
-      }, delay);
-    } else {
-      setIsLoading(false);
-    }
-  };
-
-  const handleLoad = (): void => {
-    setIsLoading(false);
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    // Cleanup timeout on unmount
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  return (
-    <div className="relative w-full h-full">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-          <Loading size="sm" />
-        </div>
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={imageSrc}
-        alt={alt}
-        className={`${className} ${isLoading ? "opacity-0" : "opacity-100"} transition-opacity`}
-        onError={handleError}
-        onLoad={handleLoad}
-      />
-    </div>
-  );
-};
-
 export default function GalleryPhotos() {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -244,11 +110,9 @@ export default function GalleryPhotos() {
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track polling timeout
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
-  const [isDragging, setIsDragging] = useState<boolean>(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set()); // Track which images are being deleted
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const deletingImagesRef = useRef<Set<string>>(new Set()); // Ref for closures
   const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref for closures
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
@@ -336,7 +200,7 @@ export default function GalleryPhotos() {
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
 
     // Get image size for optimistic update
-    const imageSize = (image.size) ?? 0;
+    const imageSize = image.size ?? 0;
 
     // Dispatch optimistic update event immediately (before API call)
     // Always dispatch the event, even if size is 0, so components know a deletion happened
@@ -344,8 +208,8 @@ export default function GalleryPhotos() {
     if (typeof window !== "undefined" && galleryId) {
       window.dispatchEvent(
         new CustomEvent("galleryUpdated", {
-          detail: { 
-            galleryId, 
+          detail: {
+            galleryId,
             sizeDelta: imageSize > 0 ? -imageSize : undefined, // Negative for deletion, undefined if size unknown
           },
         })
@@ -366,9 +230,7 @@ export default function GalleryPhotos() {
             await reloadGallery();
             // Also dispatch event manually to ensure components are notified
             if (typeof window !== "undefined" && galleryId) {
-              window.dispatchEvent(
-                new CustomEvent("galleryUpdated", { detail: { galleryId } })
-              );
+              window.dispatchEvent(new CustomEvent("galleryUpdated", { detail: { galleryId } }));
             }
           }, 0);
         }
@@ -521,26 +383,6 @@ export default function GalleryPhotos() {
 
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      void handleFileSelect(files);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
 
@@ -608,7 +450,7 @@ export default function GalleryPhotos() {
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
 
     // Get image size for optimistic update
-    const imageSize = (imageToDelete.size) ?? 0;
+    const imageSize = imageToDelete.size ?? 0;
 
     // Dispatch optimistic update event immediately (before API call)
     // Always dispatch the event, even if size is 0, so components know a deletion happened
@@ -616,8 +458,8 @@ export default function GalleryPhotos() {
     if (typeof window !== "undefined" && galleryId) {
       window.dispatchEvent(
         new CustomEvent("galleryUpdated", {
-          detail: { 
-            galleryId, 
+          detail: {
+            galleryId,
             sizeDelta: imageSize > 0 ? -imageSize : undefined, // Negative for deletion, undefined if size unknown
           },
         })
@@ -771,122 +613,93 @@ export default function GalleryPhotos() {
         )}
 
         {/* Drag and Drop Upload Area */}
-        <div
-          className={`relative w-full rounded-lg border-2 border-dashed transition-colors ${
-            isDragging
-              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-              : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
-          } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => !uploading && fileInputRef.current?.click()}
+        <FileUploadZone
+          onFileSelect={handleFileSelect}
+          uploading={uploading}
+          accept="image/jpeg,image/png,image/jpg"
+          multiple={true}
         >
-          <div className="p-8 text-center cursor-pointer">
-            {uploading ? (
-              <div className="space-y-2">
-                <Loading size="lg" />
-                <p className="text-sm text-gray-600 dark:text-gray-400">Przesyłanie zdjęć...</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
-                  stroke="currentColor"
-                  fill="none"
-                  viewBox="0 0 48 48"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-brand-600 dark:text-brand-400">
-                    Kliknij aby przesłać
-                  </span>{" "}
-                  lub przeciągnij i upuść
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-500">
-                  Obsługiwane formaty: JPEG, PNG
-                </p>
-                {(gallery?.originalsLimitBytes ?? gallery?.finalsLimitBytes) && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                    {gallery?.originalsLimitBytes && (
-                      <div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                          Oryginały:{" "}
-                          {((gallery.originalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)} GB
-                          / {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-                          <div
-                            className={`h-2 rounded-full transition-all ${
-                              (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes > 0.9
-                                ? "bg-error-500"
-                                : (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes >
-                                    0.75
-                                  ? "bg-warning-500"
-                                  : "bg-brand-500"
-                            }`}
-                            style={{
-                              width: `${Math.min(
-                                ((gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes) *
-                                  100,
-                                100
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {gallery?.finalsLimitBytes && (
-                      <div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                          Finalne:{" "}
-                          {((gallery.finalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)} GB /{" "}
-                          {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-                          <div
-                            className={`h-2 rounded-full transition-all ${
-                              (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.9
-                                ? "bg-error-500"
-                                : (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.75
-                                  ? "bg-warning-500"
-                                  : "bg-brand-500"
-                            }`}
-                            style={{
-                              width: `${Math.min(
-                                ((gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes) * 100,
-                                100
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
+          <div className="space-y-2">
+            <svg
+              className="mx-auto h-12 w-12 text-gray-400"
+              stroke="currentColor"
+              fill="none"
+              viewBox="0 0 48 48"
+              aria-hidden="true"
+            >
+              <path
+                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-semibold text-brand-600 dark:text-brand-400">
+                Kliknij aby przesłać
+              </span>{" "}
+              lub przeciągnij i upuść
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-500">
+              Obsługiwane formaty: JPEG, PNG
+            </p>
+            {(gallery?.originalsLimitBytes ?? gallery?.finalsLimitBytes) && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                {gallery?.originalsLimitBytes && (
+                  <div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      Oryginały:{" "}
+                      {((gallery.originalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)} GB /{" "}
+                      {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes > 0.9
+                            ? "bg-error-500"
+                            : (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes > 0.75
+                              ? "bg-warning-500"
+                              : "bg-brand-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            ((gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes) * 100,
+                            100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {gallery?.finalsLimitBytes && (
+                  <div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      Finalne: {((gallery.finalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)}{" "}
+                      GB / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.9
+                            ? "bg-error-500"
+                            : (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.75
+                              ? "bg-warning-500"
+                              : "bg-brand-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            ((gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes) * 100,
+                            100
+                          )}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
             )}
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/jpg"
-            multiple
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                void handleFileSelect(e.target.files);
-              }
-            }}
-            className="hidden"
-          />
-        </div>
+        </FileUploadZone>
 
         {/* Images Grid */}
         {loading ? (

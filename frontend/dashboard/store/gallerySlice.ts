@@ -78,7 +78,8 @@ export const useGalleryStore = create<GalleryState>()(
           if (!state.currentGallery) {
             return state;
           }
-          const currentFinalsBytes = (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
+          const currentFinalsBytes =
+            (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
           const newFinalsBytes = Math.max(0, currentFinalsBytes + sizeDelta);
           return {
             currentGallery: {

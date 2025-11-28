@@ -1,0 +1,232 @@
+import Link from "next/link";
+import React from "react";
+
+import { formatPrice } from "../../lib/format-price";
+import Badge from "../ui/badge/Badge";
+import Button from "../ui/button/Button";
+import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
+
+type BadgeColor = "info" | "success" | "warning" | "error" | "light";
+
+interface Order {
+  orderId?: string;
+  galleryId?: string;
+  galleryName?: string;
+  orderNumber?: string;
+  deliveryStatus?: string;
+  paymentStatus?: string;
+  totalCents?: number;
+  createdAt?: string | number | Date;
+  [key: string]: unknown;
+}
+
+interface ActiveOrdersTableProps {
+  orders: Order[];
+  onApproveChangeRequest?: (galleryId: string, orderId: string) => void;
+  onDenyChangeRequest?: (galleryId: string, orderId: string) => void;
+  onViewAllClick?: () => void;
+}
+
+const getDeliveryStatusBadge = (status: string) => {
+  const statusMap: Record<string, { color: BadgeColor; label: string }> = {
+    CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
+    CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+    AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
+    CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
+    PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+    PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
+    DELIVERED: { color: "success", label: "Dostarczone" },
+    CANCELLED: { color: "error", label: "Anulowane" },
+  };
+
+  const statusInfo = statusMap[status] || { color: "light", label: status };
+  return (
+    <Badge color={statusInfo.color} variant="light">
+      {statusInfo.label}
+    </Badge>
+  );
+};
+
+const getPaymentStatusBadge = (status: string) => {
+  const statusMap: Record<string, { color: BadgeColor; label: string }> = {
+    UNPAID: { color: "error", label: "Nieopłacone" },
+    PARTIALLY_PAID: { color: "warning", label: "Częściowo opłacone" },
+    PAID: { color: "success", label: "Opłacone" },
+    REFUNDED: { color: "error", label: "Zwrócone" },
+  };
+
+  const statusInfo = statusMap[status] || { color: "light", label: status };
+  return (
+    <Badge color={statusInfo.color} variant="light">
+      {statusInfo.label}
+    </Badge>
+  );
+};
+
+export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
+  orders,
+  onApproveChangeRequest,
+  onDenyChangeRequest,
+  onViewAllClick,
+}) => {
+  return (
+    <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Aktywne zlecenia</h2>
+        {onViewAllClick && (
+          <Button variant="outline" size="sm" onClick={onViewAllClick}>
+            Zobacz wszystkie
+          </Button>
+        )}
+      </div>
+
+      {orders.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400">Brak aktywnych zleceń</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50 dark:bg-gray-900">
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Galeria
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Zlecenie
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Status dostawy
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Status płatności
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Kwota
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Data utworzenia
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                >
+                  Akcje
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((order) => {
+                const orderObj: Order = order;
+                const galleryId = typeof orderObj.galleryId === "string" ? orderObj.galleryId : "";
+                const orderId = typeof orderObj.orderId === "string" ? orderObj.orderId : "";
+                const galleryName =
+                  typeof orderObj.galleryName === "string" ? orderObj.galleryName : "";
+                const orderNumber =
+                  typeof orderObj.orderNumber === "string" ? orderObj.orderNumber : "";
+                const deliveryStatus =
+                  typeof orderObj.deliveryStatus === "string" ? orderObj.deliveryStatus : "";
+                const paymentStatus =
+                  typeof orderObj.paymentStatus === "string" ? orderObj.paymentStatus : "";
+                const totalCents =
+                  typeof orderObj.totalCents === "number" ? orderObj.totalCents : null;
+                const createdAt = orderObj.createdAt;
+
+                return (
+                  <TableRow
+                    key={`${galleryId}-${orderId}`}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <Link
+                        href={`/galleries/${galleryId}`}
+                        className="text-brand-500 hover:text-brand-600"
+                        onClick={() => {
+                          // Store current page as referrer when navigating to gallery
+                          if (typeof window !== "undefined" && galleryId) {
+                            const referrerKey = `gallery_referrer_${galleryId}`;
+                            sessionStorage.setItem(referrerKey, window.location.pathname);
+                          }
+                        }}
+                      >
+                        {galleryName}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <Link
+                        href={`/galleries/${galleryId}/orders/${orderId}`}
+                        className="text-brand-500 hover:text-brand-600"
+                      >
+                        #{orderNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm">
+                      {getDeliveryStatusBadge(deliveryStatus)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm">
+                      {getPaymentStatusBadge(paymentStatus)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      {formatPrice(totalCents)}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      {createdAt ? new Date(createdAt).toLocaleDateString("pl-PL") : "-"}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        {deliveryStatus === "CHANGES_REQUESTED" && (
+                          <>
+                            {onApproveChangeRequest && (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => onApproveChangeRequest(galleryId, orderId)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                Zatwierdź
+                              </Button>
+                            )}
+                            {onDenyChangeRequest && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onDenyChangeRequest(galleryId, orderId)}
+                              >
+                                Odrzuć
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        <Link href={`/galleries/${galleryId}/orders/${orderId}`}>
+                          <Button variant="outline" size="sm">
+                            Szczegóły
+                          </Button>
+                        </Link>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+};

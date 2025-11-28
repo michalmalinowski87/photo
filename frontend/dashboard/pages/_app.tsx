@@ -95,7 +95,6 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [isAuthRoute, router.asPath]);
 
-
   // Clear ephemeral state on route changes (but not on initial load)
   useEffect(() => {
     const handleRouteChange = (url: string) => {

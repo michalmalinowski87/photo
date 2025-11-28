@@ -8,7 +8,9 @@ import { DenyChangeRequestModal } from "../../../../components/orders/DenyChange
 import Badge from "../../../../components/ui/badge/Badge";
 import Button from "../../../../components/ui/button/Button";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
-import { FullPageLoading, Loading } from "../../../../components/ui/loading/Loading";
+import { FullPageLoading } from "../../../../components/ui/loading/Loading";
+import { RetryableImage } from "../../../../components/ui/RetryableImage";
+import { FileUploadZone } from "../../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUploadHandler";
 import {
   UploadProgressOverlay,
@@ -25,14 +27,6 @@ import type { PricingModalData } from "../../../../lib/plan-types";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
-
-interface RetryableImageProps {
-  src: string;
-  alt: string;
-  className?: string;
-  maxRetries?: number;
-  initialDelay?: number;
-}
 
 interface GalleryImage {
   id?: string;
@@ -92,109 +86,6 @@ interface OrderUpdateEvent extends CustomEvent<{ orderId?: string; galleryId?: s
 
 type BadgeColor = "primary" | "success" | "error" | "warning" | "info" | "light" | "dark";
 
-// Component that retries loading an image until it's available on CloudFront
-const RetryableImage: React.FC<RetryableImageProps> = ({
-  src,
-  alt,
-  className = "",
-  maxRetries = 30,
-  initialDelay = 500,
-}) => {
-  const [imageSrc, setImageSrc] = useState<string>(src);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const retryCountRef = useRef<number>(0);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    // Reset when src changes
-    setImageSrc(src);
-    retryCountRef.current = 0;
-    setIsLoading(true);
-
-    // Clear any pending retry
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-
-    // Force image reload by clearing and setting src
-    if (imgRef.current && src) {
-      // Clear current src to force reload
-      imgRef.current.src = "";
-      // Use setTimeout to ensure the src is cleared before setting new one
-      setTimeout(() => {
-        if (imgRef.current && src) {
-          imgRef.current.src = src;
-        }
-      }, 0);
-    }
-  }, [src]);
-
-  const handleError = (): void => {
-    retryCountRef.current += 1;
-    const currentRetryCount = retryCountRef.current;
-
-    if (currentRetryCount < maxRetries) {
-      setIsLoading(true);
-
-      // Exponential backoff: start with initialDelay, increase gradually
-      const delay = Math.min(initialDelay * Math.pow(1.2, currentRetryCount - 1), 5000);
-
-      retryTimeoutRef.current = setTimeout(() => {
-        // Add cache-busting query parameter
-        const separator = src.includes("?") ? "&" : "?";
-        const retryUrl = `${src}${separator}_t=${Date.now()}&_r=${currentRetryCount}`;
-
-        setImageSrc(retryUrl);
-
-        // Force reload the image
-        if (imgRef.current) {
-          imgRef.current.src = retryUrl;
-        }
-      }, delay);
-    } else {
-      setIsLoading(false);
-    }
-  };
-
-  const handleLoad = (): void => {
-    setIsLoading(false);
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    // Cleanup timeout on unmount
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  return (
-    <div className="relative w-full h-full">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-          <Loading size="sm" />
-        </div>
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={imageSrc}
-        alt={alt}
-        className={`${className} ${isLoading ? "opacity-0" : "opacity-100"} transition-opacity`}
-        onError={handleError}
-        onLoad={handleLoad}
-      />
-    </div>
-  );
-};
-
 export default function OrderDetail() {
   const { showToast } = useToast();
   const router = useRouter();
@@ -210,7 +101,6 @@ export default function OrderDetail() {
   const [denyLoading, setDenyLoading] = useState<boolean>(false);
   const [originalImages, setOriginalImages] = useState<GalleryImage[]>([]);
   const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set()); // Track which images are being deleted
@@ -225,7 +115,6 @@ export default function OrderDetail() {
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
   const loadWalletBalance = useCallback(async (): Promise<number> => {
@@ -578,26 +467,6 @@ export default function OrderDetail() {
   };
 
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      void handleFileSelect(files);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
 
   const handleDeleteFinalDirect = async (image: GalleryImage): Promise<void> => {
     const imageKey = image.key ?? image.filename;
@@ -1458,63 +1327,35 @@ export default function OrderDetail() {
           )}
 
           {canUploadFinals && (
-            <div
-              className={`relative w-full rounded-lg border-2 border-dashed transition-colors ${
-                isDragging
-                  ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-                  : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
-              } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onClick={() => !uploading && fileInputRef.current?.click()}
+            <FileUploadZone
+              onFileSelect={handleFileSelect}
+              uploading={uploading}
+              accept="image/*"
+              multiple={true}
             >
-              <div className="p-8 text-center cursor-pointer">
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loading size="lg" />
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Przesyłanie zdjęć...</p>
-                  </div>
-                ) : (
-                  <>
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="mt-4">
-                      <p className="text-base font-medium text-gray-900 dark:text-white">
-                        Przeciągnij zdjęcia tutaj lub kliknij, aby wybrać
-                      </p>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Obsługiwane formaty: JPG, PNG, GIF
-                      </p>
-                    </div>
-                  </>
-                )}
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+                aria-hidden="true"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <div className="mt-4">
+                <p className="text-base font-medium text-gray-900 dark:text-white">
+                  Przeciągnij zdjęcia tutaj lub kliknij, aby wybrać
+                </p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Obsługiwane formaty: JPG, PNG, GIF
+                </p>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={(e) => {
-                  if (e.target.files) {
-                    void handleFileSelect(e.target.files);
-                  }
-                }}
-                className="hidden"
-              />
-            </div>
+            </FileUploadZone>
           )}
 
           {finalImages.length === 0 ? (

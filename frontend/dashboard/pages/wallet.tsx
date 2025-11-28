@@ -2,15 +2,13 @@ import { useState, useEffect } from "react";
 
 import Badge from "../components/ui/badge/Badge";
 import Button from "../components/ui/button/Button";
-import Input from "../components/ui/input/InputField";
 import { Loading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
-import { formatCurrencyInput } from "../lib/currency";
 import { formatPrice } from "../lib/format-price";
-import { StripeRedirectOverlay } from "../components/galleries/StripeRedirectOverlay";
 
 interface Transaction {
   transactionId?: string;
@@ -35,13 +33,10 @@ export default function Wallet() {
   const [error, setError] = useState<string>("");
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [topUpAmount, setTopUpAmount] = useState<string>("100");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
-  const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
-  const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
 
   const loadBalance = async (): Promise<void> => {
     setLoading(true);
@@ -104,20 +99,6 @@ export default function Wallet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("payment") === "success") {
-        setError("");
-        showToast("success", "Sukces", "Portfel został doładowany pomyślnie");
-        void loadBalance();
-        void loadTransactions(1, null);
-        window.history.replaceState({}, "", window.location.pathname);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleNextPage = (): void => {
     if (hasMore && paginationCursor) {
       const nextPage = currentPage + 1;
@@ -137,49 +118,9 @@ export default function Wallet() {
     }
   };
 
-  const handleTopUp = async (amountCents?: number): Promise<void> => {
-    const amount = amountCents ?? Math.round(parseFloat(topUpAmount) * 100);
-
-    if (amount < 2000) {
-      const errorMsg = "Minimalna kwota doładowania to 20 PLN";
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-      return;
-    }
-
-    // Show redirect overlay IMMEDIATELY when button is clicked
-    setShowTopUpRedirect(true);
-    setLoading(true);
-    setError("");
-
-    try {
-      // Construct redirect URL back to the current page (wallet page)
-      const redirectUrl =
-        typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?payment=success` : "";
-
-      const data = await api.payments.createCheckout({
-        amountCents: amount,
-        type: "wallet_topup",
-        redirectUrl,
-      });
-
-      if (data.checkoutUrl) {
-        // Update checkout URL once we receive it
-        setTopUpCheckoutUrl(data.checkoutUrl);
-      } else {
-        const errorMsg = "Nie otrzymano URL do płatności";
-        setError(errorMsg);
-        showToast("error", "Błąd", errorMsg);
-        setShowTopUpRedirect(false);
-        setLoading(false);
-      }
-    } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-      setShowTopUpRedirect(false);
-      setLoading(false);
-    }
+  const handleTopUpComplete = (): void => {
+    void loadBalance();
+    void loadTransactions(1, null);
   };
 
   const getTransactionTypeLabel = (type: string): string => {
@@ -235,69 +176,12 @@ export default function Wallet() {
           </Button>
         </div>
 
-        <div className="mb-6">
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Szybkie doładowanie
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => handleTopUp(2000)}
-              disabled={loading}
-            >
-              +20 PLN
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => handleTopUp(5000)}
-              disabled={loading}
-            >
-              +50 PLN
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => handleTopUp(10000)}
-              disabled={loading}
-            >
-              +100 PLN
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => handleTopUp(20000)}
-              disabled={loading}
-            >
-              +200 PLN
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Własna kwota
-          </div>
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="Kwota (min 20 PLN)"
-              value={topUpAmount}
-              onChange={(e) => {
-                const formatted = formatCurrencyInput(e.target.value);
-                setTopUpAmount(formatted);
-              }}
-              className="flex-1"
-            />
-            <Button variant="primary" onClick={() => handleTopUp()} disabled={loading}>
-              Doładuj
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            Minimalna kwota doładowania: 20 PLN
-          </p>
-        </div>
+        <WalletTopUpSection
+          onTopUp={handleTopUpComplete}
+          isLoading={loading}
+          quickAmounts={[2000, 5000, 10000, 20000]}
+          showCustomInput={true}
+        />
       </div>
 
       <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
@@ -409,7 +293,7 @@ export default function Wallet() {
                             ? "Portfel"
                             : tx.paymentMethod === "STRIPE"
                               ? "Stripe"
-                                : (tx.paymentMethod ?? "-")}
+                              : (tx.paymentMethod ?? "-")}
                         </TableCell>
                       </TableRow>
                     );
@@ -457,12 +341,6 @@ export default function Wallet() {
           </div>
         )}
       </div>
-
-      {/* Stripe Redirect Overlay for Wallet Top-up */}
-      <StripeRedirectOverlay
-        isVisible={showTopUpRedirect}
-        checkoutUrl={topUpCheckoutUrl}
-      />
     </div>
   );
 }

@@ -12,7 +12,7 @@ interface PaymentConfirmationModalProps {
   walletBalanceCents: number;
   walletAmountCents: number;
   stripeAmountCents: number;
-  paymentMethod?: 'WALLET' | 'STRIPE';
+  paymentMethod?: "WALLET" | "STRIPE";
   stripeFeeCents?: number;
   loading?: boolean;
 }
@@ -38,8 +38,12 @@ export default function PaymentConfirmationModal({
   const totalWithFeeFormatted = formatPriceNumber(totalWithFee);
 
   // Use paymentMethod from props if available, otherwise calculate from amounts (backward compatibility)
-  const isWalletOnly = paymentMethod === 'WALLET' || (paymentMethod === undefined && walletAmountCents === totalAmountCents);
-  const isStripeOnly = paymentMethod === 'STRIPE' || (paymentMethod === undefined && stripeAmountCents === totalAmountCents);
+  const isWalletOnly =
+    paymentMethod === "WALLET" ||
+    (paymentMethod === undefined && walletAmountCents === totalAmountCents);
+  const isStripeOnly =
+    paymentMethod === "STRIPE" ||
+    (paymentMethod === undefined && stripeAmountCents === totalAmountCents);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -51,9 +55,7 @@ export default function PaymentConfirmationModal({
         <div className="space-y-4 mb-6">
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {isStripeOnly
-                ? "Kwota do zapłaty (z opłatami):"
-                : "Całkowita kwota do zapłaty:"}
+              {isStripeOnly ? "Kwota do zapłaty (z opłatami):" : "Całkowita kwota do zapłaty:"}
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {isStripeOnly ? totalWithFeeFormatted : totalAmount} PLN
@@ -95,7 +97,6 @@ export default function PaymentConfirmationModal({
               )}
             </div>
           )}
-
         </div>
 
         <div className="flex justify-end gap-3">
