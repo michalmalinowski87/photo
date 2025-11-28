@@ -447,9 +447,9 @@ class ApiService {
       galleryId: string,
       options: { 
         dryRun?: boolean; 
-        forceStripeOnly?: boolean;
         plan?: string;
         priceCents?: number;
+        redirectUrl?: string;
       } = {}
     ): Promise<{
       checkoutUrl?: string;
@@ -457,7 +457,7 @@ class ApiService {
       totalAmountCents?: number;
       walletAmountCents?: number;
       stripeAmountCents?: number;
-      paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+      paymentMethod?: 'WALLET' | 'STRIPE';
       stripeFeeCents?: number;
       dryRun?: boolean;
     }> => {
@@ -583,7 +583,7 @@ class ApiService {
      */
     upgradePlan: async (
       galleryId: string,
-      data: { plan: string; forceStripeOnly?: boolean }
+      data: { plan: string; redirectUrl?: string }
     ): Promise<{
       paid: boolean;
       checkoutUrl?: string;

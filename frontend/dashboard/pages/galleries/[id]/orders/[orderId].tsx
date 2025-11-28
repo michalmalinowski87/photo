@@ -555,11 +555,8 @@ export default function OrderDetail() {
     setPaymentLoading(true);
 
     try {
-      // If wallet balance is insufficient (split payment), force full Stripe payment
-      const forceStripeOnly =
-        paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
-
-      const data = await api.galleries.pay(galleryId as string, { forceStripeOnly });
+      // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
+      const data = await api.galleries.pay(galleryId as string, {});
 
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;

@@ -11,8 +11,9 @@ import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers
 import { Runtime, LayerVersion } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
+import { ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
@@ -376,29 +377,8 @@ export class AppStack extends Stack {
 			// No authorizer - uses client JWT token verification
 		});
 
-		// Single catch-all route for all API endpoints
-		// Exclude OPTIONS from catch-all since it's handled separately above
-		httpApi.addRoutes({
-			path: '/{proxy+}',
-			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('ApiIntegration', apiFn),
-			authorizer // Apply authorizer to all routes
-		});
-
-		// Also add root routes (without proxy)
-		httpApi.addRoutes({
-			path: '/health',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
-		});
-
-		// Grant API Lambda permission to invoke zipFn
-		apiFn.addToRolePolicy(new PolicyStatement({
-			actions: ['lambda:InvokeFunction'],
-			resources: [zipFn.functionArn]
-		}));
-
 		// Stripe payment functions - separate Lambda functions for better isolation and scaling
+		// Created BEFORE catch-all route to ensure they're matched first
 		const paymentsCheckoutFn = new NodejsFunction(this, 'PaymentsCheckoutFn', {
 			entry: path.join(__dirname, '../../../backend/functions/payments/checkoutCreate.ts'),
 			handler: 'handler',
@@ -423,19 +403,71 @@ export class AppStack extends Stack {
 			...defaultFnProps,
 			environment: envVars
 		});
+		const paymentsCheckStatusFn = new NodejsFunction(this, 'PaymentsCheckStatusFn', {
+			entry: path.join(__dirname, '../../../backend/functions/payments/checkStatus.ts'),
+			handler: 'handler',
+			...defaultFnProps,
+			environment: envVars
+		});
 
 		// Grant permissions for Stripe payment functions
 		payments.grantReadWriteData(paymentsCheckoutFn);
 		payments.grantReadWriteData(paymentsWebhookFn);
-		transactions.grantReadWriteData(paymentsCheckoutFn); // Needed for fractional payments
+		payments.grantReadData(paymentsCheckStatusFn); // Read-only for status checks
+		transactions.grantReadWriteData(paymentsCheckoutFn);
 		transactions.grantReadWriteData(paymentsWebhookFn); // Needed to update transaction status
 		transactions.grantReadWriteData(paymentsCancelFn); // Needed to mark transaction as CANCELED
+		transactions.grantReadData(paymentsCheckStatusFn); // Read-only for status checks
 		wallet.grantReadWriteData(paymentsWebhookFn);
 		walletLedger.grantReadWriteData(paymentsWebhookFn);
 		galleries.grantReadWriteData(paymentsWebhookFn);
 		orders.grantReadWriteData(paymentsWebhookFn);
 
-		// Add Stripe payment routes
+		// Create EventBridge rule for Stripe partner events
+		// Stripe sends events directly to EventBridge partner event bus, which routes them to Lambda
+		const stripeEventSourceName = 'aws.partner/stripe.com/ed_test_61ThbOqJLCV8JR42e16Tc793AKNJz6JQrPoxvHJd2XxQ';
+		
+		// Reference the partner event bus (created by Stripe when you set up the integration)
+		const stripePartnerEventBus = EventBus.fromEventBusName(
+			this,
+			'StripePartnerEventBus',
+			stripeEventSourceName
+		);
+		
+		// Create rule on the partner event bus (not the default event bus)
+		// For partner event buses, the source field in events is the event bus name
+		// Since all events on this bus are from Stripe, we could omit source filter,
+		// but including it makes the rule more explicit and secure
+		const stripeEventRule = new Rule(this, 'StripeEventRule', {
+			eventBus: stripePartnerEventBus,
+			eventPattern: {
+				// Source is the event bus name for partner event buses
+				// This matches: aws.partner/stripe.com/ed_test_61ThbOqJLCV8JR42e16Tc793AKNJz6JQrPoxvHJd2XxQ
+				source: [stripeEventSourceName],
+				'detail-type': [
+					'checkout.session.completed',
+					'checkout.session.expired',
+					'payment_intent.payment_failed',
+					'payment_intent.canceled',
+					'charge.succeeded',
+					'charge.updated',
+					'payment_intent.succeeded'
+				]
+			},
+			description: 'Route Stripe events from partner event bus to webhook Lambda',
+			enabled: true
+		});
+
+		// Add Lambda as target for EventBridge rule
+		stripeEventRule.addTarget(new LambdaFunction(paymentsWebhookFn));
+
+		// Grant EventBridge permission to invoke Lambda
+		paymentsWebhookFn.addPermission('AllowEventBridgeInvoke', {
+			principal: new ServicePrincipal('events.amazonaws.com'),
+			sourceArn: stripeEventRule.ruleArn
+		});
+
+		// Note: HTTP webhook route removed - we only use EventBridge for Stripe events
 		httpApi.addRoutes({
 			path: '/payments/checkout',
 			methods: [HttpMethod.POST],
@@ -443,20 +475,45 @@ export class AppStack extends Stack {
 			authorizer
 		});
 		httpApi.addRoutes({
-			path: '/payments/webhook',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('PaymentsWebhookIntegration', paymentsWebhookFn)
-		});
-		httpApi.addRoutes({
 			path: '/payments/success',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('PaymentsSuccessIntegration', paymentsSuccessFn)
+			// No authorizer - public redirect endpoint
 		});
 		httpApi.addRoutes({
 			path: '/payments/cancel',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('PaymentsCancelIntegration', paymentsCancelFn)
+			// No authorizer - public redirect endpoint
 		});
+		httpApi.addRoutes({
+			path: '/payments/check-status',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('PaymentsCheckStatusIntegration', paymentsCheckStatusFn)
+			// No authorizer - public status check endpoint
+		});
+
+		// Single catch-all route for all API endpoints
+		// Exclude OPTIONS from catch-all since it's handled separately above
+		httpApi.addRoutes({
+			path: '/{proxy+}',
+			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
+			integration: new HttpLambdaIntegration('ApiIntegration', apiFn),
+			authorizer // Apply authorizer to all routes
+		});
+
+		// Also add root routes (without proxy)
+		httpApi.addRoutes({
+			path: '/health',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
+		});
+
+		// Grant API Lambda permission to invoke zipFn
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['lambda:InvokeFunction'],
+			resources: [zipFn.functionArn]
+		}));
 
 		// Gallery delete helper - used by expiry event handlers
 		const galleriesDeleteHelperFn = new NodejsFunction(this, 'GalleriesDeleteHelperFn', {

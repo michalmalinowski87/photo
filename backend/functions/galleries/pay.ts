@@ -231,11 +231,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// CRITICAL: Check dryRun parameter - must be explicitly true
 	// Only check if body is a non-array object
 	const dryRun = body && typeof body === 'object' && !Array.isArray(body) && body.dryRun === true;
-	const forceStripeOnly = body && typeof body === 'object' && !Array.isArray(body) && body.forceStripeOnly === true;
+	const redirectUrl = body && typeof body === 'object' && !Array.isArray(body) ? body.redirectUrl : undefined;
 	logger.info('Payment request received', { 
 		galleryId, 
 		dryRun,
-		forceStripeOnly,
 		hasBody: !!event.body, 
 		bodyType: typeof body,
 		isArray: Array.isArray(body),
@@ -282,41 +281,39 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 		
-		const totalAmountCents = galleryPriceCents;
+		// At this point, galleryPriceCents is guaranteed to be defined (we return early if not)
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		const totalAmountCents = galleryPriceCents!;
 		
 		// Calculate wallet vs stripe amounts based on current wallet balance (read-only)
-		if (forceStripeOnly) {
-			// User chose to pay full amount via Stripe (ignoring wallet balance)
-			walletAmountCents = 0;
-			stripeAmountCents = totalAmountCents;
-		} else if (walletsTable && ledgerTable) {
+		// Use full wallet if sufficient, otherwise full Stripe (no partial payments)
+		if (walletsTable && ledgerTable) {
 			const walletBalance = await getWalletBalance(ownerId, walletsTable);
 			if (walletBalance >= totalAmountCents) {
 				walletAmountCents = totalAmountCents;
 				stripeAmountCents = 0;
-			} else if (walletBalance > 0) {
-				walletAmountCents = walletBalance;
-				stripeAmountCents = totalAmountCents - walletBalance;
 			} else {
+				// Insufficient wallet balance - use full Stripe payment
 				walletAmountCents = 0;
 				stripeAmountCents = totalAmountCents;
 			}
 		} else {
+			// No wallet tables configured, full Stripe payment
+			walletAmountCents = 0;
 			stripeAmountCents = totalAmountCents;
 		}
 		
-		// Determine payment method
-		let paymentMethod: 'WALLET' | 'STRIPE' | 'MIXED' = 'STRIPE';
-		if (walletAmountCents > 0 && stripeAmountCents > 0) {
-			paymentMethod = 'MIXED';
-		} else if (walletAmountCents > 0) {
+		// Determine payment method (only WALLET or STRIPE, no MIXED)
+		let paymentMethod: 'WALLET' | 'STRIPE' = 'STRIPE';
+		if (walletAmountCents > 0) {
 			paymentMethod = 'WALLET';
 		}
 		
 		// Calculate Stripe fee if Stripe will be used (for warning display)
 		let stripeFeeCents = 0;
 		if (stripeAmountCents > 0) {
-			stripeFeeCents = calculateStripeFee(galleryPriceCents);
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+			stripeFeeCents = calculateStripeFee(galleryPriceCents!);
 		}
 		
 		// Return dry run response - NO DATABASE WRITES
@@ -588,11 +585,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let walletAmountCents = 0;
 	let stripeAmountCents = totalAmountCents;
 	
-	if (forceStripeOnly) {
-		// User chose to pay full amount via Stripe (ignoring wallet balance)
-		walletAmountCents = 0;
-		stripeAmountCents = totalAmountCents;
-	} else if (walletsTable && ledgerTable) {
+	// Check wallet balance - use full wallet if sufficient, otherwise full Stripe (no partial payments)
+	if (walletsTable && ledgerTable) {
 		const walletBalance = await getWalletBalance(ownerId, walletsTable);
 		if (walletBalance >= totalAmountCents) {
 			walletAmountCents = totalAmountCents;
@@ -634,7 +628,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					galleryId,
 					walletAmountCents,
 					stripeAmountCents,
-					paymentMethod: walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE' as any,
+					paymentMethod: walletAmountCents > 0 ? 'WALLET' : 'STRIPE' as any,
 					composites,
 					metadata: {
 						plan,
@@ -704,25 +698,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let checkoutUrl: string | undefined;
 	let walletBalance = 0;
 
-	if (forceStripeOnly) {
-		// User chose to pay full amount via Stripe (ignoring wallet balance)
-		logger.info('Force Stripe only payment - ignoring wallet balance', {
-			galleryId,
-			totalAmountCents
-		});
-		walletAmountCents = 0;
-		stripeAmountCents = totalAmountCents;
-	} else if (walletsTable && ledgerTable) {
+	// Check wallet balance - use full wallet if sufficient, otherwise full Stripe (no partial payments)
+	if (walletsTable && ledgerTable) {
 		walletBalance = await getWalletBalance(ownerId, walletsTable);
 		
-		// Recalculate wallet vs stripe amounts based on current balance
+		// Use full wallet if sufficient, otherwise full Stripe
 		if (walletBalance >= totalAmountCents) {
 			walletAmountCents = totalAmountCents;
 			stripeAmountCents = 0;
-		} else if (walletBalance > 0) {
-			walletAmountCents = walletBalance;
-			stripeAmountCents = totalAmountCents - walletBalance;
 		} else {
+			// Insufficient wallet balance - use full Stripe payment
 			walletAmountCents = 0;
 			stripeAmountCents = totalAmountCents;
 		}
@@ -749,8 +734,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 	
-	// Process wallet payment if balance is sufficient and not forcing Stripe only
-	if (!forceStripeOnly && walletsTable && ledgerTable && walletBalance >= totalAmountCents) {
+	// Process wallet payment if balance is sufficient
+	if (walletsTable && ledgerTable && walletBalance >= totalAmountCents) {
 			logger.info('Processing wallet payment (NOT dry run)', {
 				galleryId,
 				transactionId,
@@ -869,14 +854,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	try {
 		const stripe = new Stripe(stripeSecretKey);
 		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-		const redirectUrl = `${dashboardUrl}/galleries?payment=success&gallery=${galleryId}`;
+		// ALWAYS use redirectUrl from request body if provided (this is the primary method)
+		// Fallback to default only if redirectUrl is not provided
+		let finalRedirectUrl = redirectUrl;
+		if (!finalRedirectUrl) {
+			// Log warning if redirectUrl is missing - this should not happen in normal flow
+			logger.warn('redirectUrl not provided in request, using default', { galleryId });
+			finalRedirectUrl = `${dashboardUrl}/galleries/${galleryId}?payment=success`;
+		}
 		
 		const successUrl = apiUrl 
 			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
 			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		// Cancel URL should also redirect back to gallery view
 		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`
-			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${ownerId}`;
+			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`
+			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`;
 
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
 		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)
@@ -937,7 +930,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId: transactionId,
 				walletAmountCents: walletAmountCents.toString(),
 				stripeAmountCents: stripeAmountCents.toString(),
-				redirectUrl: redirectUrl
+				redirectUrl: finalRedirectUrl
 			}
 		});
 
@@ -947,8 +940,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				await updateTransactionStatus(ownerId, transactionId, 'UNPAID', {
 					stripeSessionId: session.id
 				});
-				// If forceStripeOnly is true, update payment method to STRIPE (not MIXED)
-				if (forceStripeOnly) {
+				// Update payment method to STRIPE (no MIXED payments)
 					await ddb.send(new UpdateCommand({
 						TableName: transactionsTable,
 						Key: { userId: ownerId, transactionId },
@@ -959,12 +951,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							':sa': stripeAmountCents
 						}
 					}));
-					logger.info('Updated transaction payment method to STRIPE (forceStripeOnly)', {
+				logger.info('Updated transaction payment method to STRIPE', {
 						transactionId,
 						galleryId,
 						stripeAmountCents
 					});
-				}
 			} catch (txnErr: any) {
 				logger.warn('Failed to update transaction with Stripe session ID', {
 					error: txnErr.message,

@@ -1,69 +1,58 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
+import { generatePaymentPageHTML } from './payment-page-template';
+
+const getSecurityHeaders = () => ({
+	'Content-Type': 'text/html; charset=utf-8',
+	'X-Content-Type-Options': 'nosniff',
+	'X-Frame-Options': 'DENY',
+	'X-XSS-Protection': '1; mode=block',
+	'Referrer-Policy': 'strict-origin-when-cross-origin',
+	'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const sessionId = event?.queryStringParameters?.session_id;
 	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	
-	// Get dashboard URL from environment - prioritize dashboard-specific env var
-	// PUBLIC_GALLERY_URL is for the client gallery frontend, not the dashboard
 	const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
 	
-	// Default redirect URL
-	let redirectUrl = `${dashboardUrl}/galleries?payment=success`;
-	
-	// If we have a session ID and Stripe is configured, fetch the session to get redirect URL from metadata
+	// Default to root dashboard if no valid session
+	let redirectUrl = `${dashboardUrl}/`;
+
+	// Get redirectUrl from Stripe session metadata
 	if (sessionId && stripeSecretKey) {
 		try {
 			const stripe = new Stripe(stripeSecretKey);
 			const session = await stripe.checkout.sessions.retrieve(sessionId);
-			
-			// Get redirect URL from metadata if available
 			if (session.metadata?.redirectUrl) {
 				redirectUrl = session.metadata.redirectUrl;
-				logger?.info('Using redirect URL from session metadata', { 
-					sessionId, 
-					redirectUrl,
-					type: session.metadata.type 
-				});
-			} else {
-				// Fallback: determine redirect based on payment type
-				const type = session.metadata?.type || 'gallery_payment';
-				const galleryId = session.metadata?.galleryId;
-				
-				if (type === 'wallet_topup') {
-					redirectUrl = `${dashboardUrl}/wallet?payment=success`;
-				} else if (galleryId) {
-					redirectUrl = `${dashboardUrl}/galleries?payment=success&gallery=${galleryId}`;
-				}
-				
-				logger?.info('Using fallback redirect URL', { 
-					sessionId, 
-					redirectUrl,
-					type,
-					galleryId 
-				});
 			}
 		} catch (error: any) {
 			logger?.error('Failed to retrieve Stripe session', {
-				error: {
-					name: error.name,
-					message: error.message
-				},
+				error: error.message,
 				sessionId
 			});
-			// Continue with default redirect URL
+			// On error, keep default root dashboard redirect
 		}
 	}
 
+	const html = generatePaymentPageHTML({
+		title: 'Twoja płatność została zakończona',
+		message: 'Czekamy na zaksięgowanie płatności w naszym systemie. Po zakończeniu przetwarzania zostaniesz automatycznie przekierowany. Może to potrwać do 5 minut.',
+		redirectUrl,
+		redirectDelay: 2000,
+		isSuccess: true,
+		sessionId: sessionId || undefined,
+		apiUrl: apiUrl || undefined
+	});
+
 	return {
-		statusCode: 302,
-		headers: {
-			Location: redirectUrl
-		},
-		body: ''
+		statusCode: 200,
+		headers: getSecurityHeaders(),
+		body: html
 	};
 });

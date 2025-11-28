@@ -11,6 +11,7 @@ import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput } from "../lib/currency";
 import { formatPrice, formatPriceNumber } from "../lib/format-price";
+import { StripeRedirectOverlay } from "../components/galleries/StripeRedirectOverlay";
 
 interface Order {
   orderId?: string;
@@ -50,6 +51,9 @@ export default function Dashboard() {
   // Wallet
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [customTopUpAmount, setCustomTopUpAmount] = useState("");
+  const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
+  const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
+  const [topUpLoading, setTopUpLoading] = useState(false);
 
   // Active orders
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -188,6 +192,19 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle payment success redirect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        void loadWalletBalance();
+        // Clear the payment success parameter from URL
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleApproveChangeRequest = async (galleryId: string, orderId: string) => {
     if (!galleryId || !orderId) {
       return;
@@ -237,12 +254,14 @@ export default function Dashboard() {
       return;
     }
 
-    setLoading(true);
+    // Show redirect overlay IMMEDIATELY when button is clicked
+    setShowTopUpRedirect(true);
+    setTopUpLoading(true);
     setError("");
 
     try {
       const redirectUrl =
-        typeof window !== "undefined" ? `${window.location.origin}/?payment=success` : "";
+        typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?payment=success` : "";
 
       const data = await api.payments.createCheckout({
         amountCents,
@@ -251,14 +270,19 @@ export default function Dashboard() {
       });
 
       if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+        // Update checkout URL once we receive it
+        setTopUpCheckoutUrl(data.checkoutUrl);
       } else {
-        setError("Nie otrzymano URL do płatności");
+        const errorMsg = "Nie otrzymano URL do płatności";
+        setError(errorMsg);
+        setShowTopUpRedirect(false);
+        setTopUpLoading(false);
       }
     } catch (err) {
-      setError(formatApiError(err));
-    } finally {
-      setLoading(false);
+      const errorMsg = formatApiError(err);
+      setError(errorMsg);
+      setShowTopUpRedirect(false);
+      setTopUpLoading(false);
     }
   };
 
@@ -377,7 +401,7 @@ export default function Dashboard() {
               size="sm"
               variant="primary"
               onClick={() => handleTopUp(2000)}
-              disabled={loading}
+              disabled={loading || topUpLoading}
             >
               +20 PLN
             </Button>
@@ -385,7 +409,7 @@ export default function Dashboard() {
               size="sm"
               variant="primary"
               onClick={() => handleTopUp(5000)}
-              disabled={loading}
+              disabled={loading || topUpLoading}
             >
               +50 PLN
             </Button>
@@ -393,7 +417,7 @@ export default function Dashboard() {
               size="sm"
               variant="primary"
               onClick={() => handleTopUp(10000)}
-              disabled={loading}
+              disabled={loading || topUpLoading}
             >
               +100 PLN
             </Button>
@@ -410,7 +434,7 @@ export default function Dashboard() {
             }}
             className="flex-1 h-11 rounded-lg border border-gray-300 px-4 py-2.5 text-sm dark:bg-gray-900 dark:border-gray-700 dark:text-white"
           />
-          <Button variant="outline" onClick={handleCustomTopUp} disabled={loading}>
+          <Button variant="outline" onClick={handleCustomTopUp} disabled={loading || topUpLoading}>
             Doładuj
           </Button>
         </div>
@@ -589,6 +613,12 @@ export default function Dashboard() {
         }}
         onConfirm={handleDenyConfirm}
         loading={denyLoading}
+      />
+
+      {/* Stripe Redirect Overlay for Wallet Top-up */}
+      <StripeRedirectOverlay
+        isVisible={showTopUpRedirect}
+        checkoutUrl={topUpCheckoutUrl}
       />
     </div>
   );

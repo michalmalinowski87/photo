@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
 
@@ -15,6 +14,7 @@ import {
 } from "../../lib/pricing-plans";
 
 import { GalleryPricingModal } from "./GalleryPricingModal";
+import { StripeRedirectOverlay } from "./StripeRedirectOverlay";
 
 interface Gallery {
   state?: string;
@@ -51,7 +51,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
   const [isLoadingPlanRecommendation, setIsLoadingPlanRecommendation] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<Duration | null>(null);
   const [paymentMethodInfo, setPaymentMethodInfo] = useState<{
-    paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+    paymentMethod?: 'WALLET' | 'STRIPE';
     walletAmountCents?: number;
     stripeAmountCents?: number;
     stripeFeeCents?: number;
@@ -60,9 +60,16 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
   const prevSelectedDurationRef = useRef<Duration | null>(null);
   const prevGalleryIdRef = useRef<string | null>(null);
   const lastDryRunParamsRef = useRef<{ planKey: string; priceCents: number } | null>(null);
+  const [isTopUpLoading, setIsTopUpLoading] = useState(false);
+  const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
+  const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
 
   // Check if gallery needs payment
   const needsPayment = gallery.state === "DRAFT" || gallery.paymentStatus === "UNPAID";
+  
+  // Extract stable values from gallery to prevent infinite loops in useEffect dependencies
+  const selectionEnabled = gallery.selectionEnabled !== false;
+  const originalsBytesUsed = gallery.originalsBytesUsed ?? 0;
 
   // Listen for gallery updates (e.g., after uploads) to refresh data
   useEffect(() => {
@@ -105,7 +112,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                   ...prev.suggestedPlan,
                   planKey,
                   name: plan.label,
-                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
                   duration: plan.duration,
                 },
                 originalsLimitBytes: plan.storageLimitBytes,
@@ -119,7 +126,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     }
     
     if (!onlyDurationChanged) {
-      setPlanRecommendation(null);
+    setPlanRecommendation(null);
     }
     
     // Update refs
@@ -138,7 +145,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       // Only show loading if we don't have a recommendation yet (to prevent flicker when only duration changes)
       // When only duration changes, we don't need to reload the recommendation from API
       if (!planRecommendation) {
-        setIsLoadingPlanRecommendation(true);
+      setIsLoadingPlanRecommendation(true);
       }
       try {
         const recommendation = await getPlanRecommendation(galleryId);
@@ -177,11 +184,11 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                 const updated = {
                   ...recommendation,
                   suggestedPlan: {
-                    ...recommendation.suggestedPlan,
-                    planKey,
-                    name: plan.label,
-                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
-                    duration: plan.duration,
+                ...recommendation.suggestedPlan,
+                planKey,
+                name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
+                duration: plan.duration,
                   },
                   originalsLimitBytes: plan.storageLimitBytes,
                   finalsLimitBytes: plan.storageLimitBytes,
@@ -198,7 +205,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
               setPlanRecommendation(recommendation);
             }
           } else {
-            setPlanRecommendation(recommendation);
+          setPlanRecommendation(recommendation);
           }
         } else {
           // No photos uploaded - clear recommendation
@@ -232,7 +239,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     // Note: selectedDuration is NOT in dependencies - we handle duration changes separately
     // to avoid refetching plan recommendation when only duration changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, needsPayment, gallery.selectionEnabled]);
+  }, [galleryId, needsPayment, selectionEnabled]);
 
   // Also refresh when gallery prop changes (in case event didn't fire or was missed)
   // This ensures we update even if the event wasn't dispatched
@@ -276,7 +283,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                   ...prev.suggestedPlan,
                   planKey,
                   name: plan.label,
-                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
                   duration: plan.duration,
                 },
                 originalsLimitBytes: plan.storageLimitBytes,
@@ -290,7 +297,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     }
     
     if (!onlyDurationChanged) {
-      setPlanRecommendation(null);
+    setPlanRecommendation(null);
     }
     
     // Update refs
@@ -316,7 +323,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       // Only show loading if we don't have a recommendation yet
       // If we have one, we're just updating it, so don't show loading
       if (!planRecommendation) {
-        setIsLoadingPlanRecommendation(true);
+      setIsLoadingPlanRecommendation(true);
       }
       try {
         const recommendation = await getPlanRecommendation(galleryId);
@@ -353,11 +360,11 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                 const updated = {
                   ...recommendation,
                   suggestedPlan: {
-                    ...recommendation.suggestedPlan,
-                    planKey,
-                    name: plan.label,
-                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
-                    duration: plan.duration,
+                ...recommendation.suggestedPlan,
+                planKey,
+                name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
+                duration: plan.duration,
                   },
                   originalsLimitBytes: plan.storageLimitBytes,
                   finalsLimitBytes: plan.storageLimitBytes,
@@ -374,7 +381,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
               setPlanRecommendation(recommendation);
             }
           } else {
-            setPlanRecommendation(recommendation);
+          setPlanRecommendation(recommendation);
           }
         } else {
           setPlanRecommendation(null);
@@ -403,7 +410,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     // Note: selectedDuration is NOT in dependencies - we handle duration changes separately
     // to avoid refetching plan recommendation when only duration changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, gallery.originalsBytesUsed, needsPayment, gallery.selectionEnabled]);
+  }, [galleryId, originalsBytesUsed, needsPayment, selectionEnabled]);
 
   // Load uploaded size and plan recommendation if photos are uploaded
   useEffect(() => {
@@ -446,7 +453,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                   ...prev.suggestedPlan,
                   planKey,
                   name: plan.label,
-                  priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
                   duration: plan.duration,
                 },
                 originalsLimitBytes: plan.storageLimitBytes,
@@ -460,7 +467,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     }
     
     if (!onlyDurationChanged) {
-      setPlanRecommendation(null);
+    setPlanRecommendation(null);
     }
     
     // Update refs
@@ -473,7 +480,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       // This ensures we have the most up-to-date information even if gallery prop hasn't updated yet
       // Only show loading if we don't have a recommendation yet (to prevent flicker when only duration changes)
       if (!planRecommendation) {
-        setIsLoadingPlanRecommendation(true);
+      setIsLoadingPlanRecommendation(true);
       }
       try {
         const recommendation = await getPlanRecommendation(galleryId);
@@ -506,11 +513,11 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                 const updated = {
                   ...recommendation,
                   suggestedPlan: {
-                    ...recommendation.suggestedPlan,
-                    planKey,
-                    name: plan.label,
-                    priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
-                    duration: plan.duration,
+                ...recommendation.suggestedPlan,
+                planKey,
+                name: plan.label,
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
+                duration: plan.duration,
                   },
                   originalsLimitBytes: plan.storageLimitBytes,
                   finalsLimitBytes: plan.storageLimitBytes,
@@ -527,7 +534,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
               setPlanRecommendation(recommendation);
             }
           } else {
-            setPlanRecommendation(recommendation);
+          setPlanRecommendation(recommendation);
           }
         } else {
           // No photos uploaded - clear recommendation
@@ -551,15 +558,26 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     galleryId,
     gallery.originalsBytesUsed,
     needsPayment,
-    gallery.selectionEnabled,
+    selectionEnabled,
   ]);
 
   // Separate useEffect to handle duration changes without calling API
   // This prevents flickering when user changes duration
+  // Use ref to track if we're currently updating to prevent infinite loops
+  const isUpdatingDurationRef = useRef(false);
+  
   useEffect(() => {
-    if (!planRecommendation || !selectedDuration) {
+    if (!planRecommendation || !selectedDuration || isUpdatingDurationRef.current) {
       return;
     }
+
+    // Check if duration actually changed
+    if (prevSelectedDurationRef.current === selectedDuration) {
+      return;
+    }
+    
+    isUpdatingDurationRef.current = true;
+    prevSelectedDurationRef.current = selectedDuration;
 
     // Update the recommendation in place with new duration
     const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
@@ -570,6 +588,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
       const plan = getPlan(planKey);
       if (plan) {
         setPlanRecommendation((prev) => {
+          isUpdatingDurationRef.current = false;
           if (!prev) {
             return prev;
           }
@@ -579,16 +598,20 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
               ...prev.suggestedPlan,
               planKey,
               name: plan.label,
-              priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+              priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
               duration: plan.duration,
             },
             originalsLimitBytes: plan.storageLimitBytes,
             finalsLimitBytes: plan.storageLimitBytes,
           };
         });
+      } else {
+        isUpdatingDurationRef.current = false;
       }
+    } else {
+      isUpdatingDurationRef.current = false;
     }
-  }, [selectedDuration, planRecommendation, gallery.selectionEnabled]);
+  }, [selectedDuration, selectionEnabled, planRecommendation?.suggestedPlan.name]); // Only depend on plan name, not entire object
 
   // Call dry run to determine payment method when plan recommendation is available
   useEffect(() => {
@@ -642,7 +665,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
         lastDryRunParamsRef.current = { planKey, priceCents };
 
         setPaymentMethodInfo({
-          paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE") as "WALLET" | "STRIPE" | "MIXED",
+          paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE") as "WALLET" | "STRIPE",
           walletAmountCents: Number(dryRunResult.walletAmountCents) ?? 0,
           stripeAmountCents: Number(dryRunResult.stripeAmountCents) ?? 0,
           stripeFeeCents: Number(dryRunResult.stripeFeeCents) ?? 0,
@@ -666,8 +689,95 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
     planRecommendation?.suggestedPlan?.name,
     planRecommendation?.suggestedPlan?.planKey,
     selectedDuration,
-    gallery.selectionEnabled,
+    selectionEnabled,
   ]);
+
+  const handleTopUp = async (amountCents: number): Promise<void> => {
+    if (amountCents < 2000) {
+      const errorMsg = "Minimalna kwota doładowania to 20 PLN";
+      showToast("error", "Błąd", errorMsg);
+      return;
+    }
+
+    // Show redirect overlay IMMEDIATELY when button is clicked
+    setShowTopUpRedirect(true);
+    setIsTopUpLoading(true);
+
+    try {
+      // Construct redirect URL back to the current page (could be gallery, photos, or settings)
+      const redirectUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}${window.location.pathname}?payment=success`
+          : "";
+
+      const data = await api.payments.createCheckout({
+        amountCents,
+        type: "wallet_topup",
+        redirectUrl,
+      });
+
+      if (data.checkoutUrl) {
+        // Update checkout URL once we receive it
+        setTopUpCheckoutUrl(data.checkoutUrl);
+      } else {
+        const errorMsg = "Nie otrzymano URL do płatności";
+        showToast("error", "Błąd", errorMsg);
+        setShowTopUpRedirect(false);
+        setIsTopUpLoading(false);
+      }
+    } catch (err) {
+      const errorMsg = formatApiError(err as Error);
+      showToast("error", "Błąd", errorMsg);
+      setShowTopUpRedirect(false);
+      setIsTopUpLoading(false);
+    }
+  };
+
+
+  // Handle payment success redirect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        showToast("success", "Sukces", "Portfel został doładowany pomyślnie");
+        // Clear the payment success parameter from URL
+        window.history.replaceState({}, "", window.location.pathname);
+        // Clear the last params ref to force a refresh of payment method info
+        lastDryRunParamsRef.current = null;
+        // Re-trigger the dry run to get updated payment info
+        if (planRecommendation && galleryId && needsPayment && !isLoadingPlanRecommendation) {
+          const storageMatch = planRecommendation.suggestedPlan.name.match(/^(\d+GB)/);
+          const storage = (storageMatch ? storageMatch[1] : "1GB") as "1GB" | "3GB" | "10GB";
+          const currentDuration = selectedDuration ?? "1m";
+          const planKey = getPlanByStorageAndDuration(storage, currentDuration);
+          if (planKey) {
+            const plan = getPlan(planKey);
+            if (plan) {
+              const priceCents = calculatePriceWithDiscount(planKey, selectionEnabled);
+              // Trigger the dry run again to refresh payment info
+              void api.galleries.pay(galleryId, {
+                dryRun: true,
+                plan: planKey,
+                priceCents,
+              }).then((dryRunResult) => {
+                setPaymentMethodInfo({
+                  paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE") as "WALLET" | "STRIPE",
+                  walletAmountCents: Number(dryRunResult.walletAmountCents) ?? 0,
+                  stripeAmountCents: Number(dryRunResult.stripeAmountCents) ?? 0,
+                  stripeFeeCents: Number(dryRunResult.stripeFeeCents) ?? 0,
+                  totalAmountCents: Number(dryRunResult.totalAmountCents) ?? 0,
+                });
+                lastDryRunParamsRef.current = { planKey, priceCents };
+              }).catch((error: unknown) => {
+                console.error("Failed to refresh payment method info after top-up:", error);
+              });
+            }
+          }
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!needsPayment) {
     return null;
@@ -689,7 +799,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
   const currentUploadedBytes: number =
     uploadedSizeBytes ?? 
     (isLoadingPlanRecommendation
-      ? 0 // While loading, assume no photos to prevent flicker
+        ? 0 // While loading, assume no photos to prevent flicker
       : planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0);
   // Only show plan content if we're not loading AND we have a plan recommendation
   const hasUploadedPhotos = !isLoadingPlanRecommendation && currentUploadedBytes > 0 && planRecommendation !== null;
@@ -713,7 +823,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                 ...modalData.suggestedPlan,
                 planKey,
                 name: plan.label,
-                priceCents: calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false),
+                  priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
                 duration: plan.duration,
               };
               modalData.originalsLimitBytes = plan.storageLimitBytes;
@@ -873,16 +983,16 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                           const currentDuration = selectedDuration ?? "1m";
                           const planKey = getPlanByStorageAndDuration(storage, currentDuration);
                           if (planKey) {
-                            return formatPrice(calculatePriceWithDiscount(planKey, gallery.selectionEnabled !== false));
+                            return formatPrice(calculatePriceWithDiscount(planKey, selectionEnabled));
                           }
                           return formatPrice(planRecommendation.suggestedPlan.priceCents);
                         })()}
-                      </div>
-                      {gallery.selectionEnabled === false && (
-                        <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
-                          Zniżka 20%
-                        </span>
-                      )}
+                  </div>
+                  {!selectionEnabled && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
+                      Zniżka 20%
+                    </span>
+                  )}
                 </>
               ) : (
                 <div className="text-3xl font-bold text-gray-400 dark:text-gray-500">-</div>
@@ -999,7 +1109,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
             </div>
           )}
 
-          {(paymentMethodInfo.paymentMethod === 'STRIPE' || paymentMethodInfo.paymentMethod === 'MIXED') && (
+          {paymentMethodInfo.paymentMethod === 'STRIPE' && (
             <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-5 border border-amber-200 dark:border-amber-800/30">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40">
@@ -1019,34 +1129,44 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {paymentMethodInfo.paymentMethod === 'MIXED' 
-                      ? 'Niewystarczające saldo portfela'
-                      : 'Płatność przez Stripe'}
+                    Niewystarczające saldo portfela
                   </p>
-                  {paymentMethodInfo.paymentMethod === 'MIXED' ? (
-                    <>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                        Masz {formatPrice(paymentMethodInfo.walletAmountCents ?? 0)} w portfelu, ale potrzebujesz {formatPrice(paymentMethodInfo.totalAmountCents ?? 0)}.
-                      </p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                        <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć dodatkowych opłat transakcyjnych Stripe ({formatPrice(paymentMethodInfo.stripeFeeCents ?? 0)}).
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                        Płatność zostanie wykonana przez Stripe, co wiąże się z dodatkowymi opłatami transakcyjnymi ({formatPrice(paymentMethodInfo.stripeFeeCents ?? 0)}).
-                      </p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                        <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć opłat transakcyjnych Stripe.
-                      </p>
-                    </>
-                  )}
-                  <Link href="/wallet">
-                    <button className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-sm transition-colors">
-                      Przejdź do portfela
-                    </button>
-                  </Link>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    Płatność zostanie wykonana przez Stripe, co wiąże się z dodatkowymi opłatami transakcyjnymi ({formatPrice(paymentMethodInfo.stripeFeeCents ?? 0)}).
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                    <strong>Tańsze rozwiązanie:</strong> Doładuj portfel, aby uniknąć opłat transakcyjnych Stripe.
+                  </p>
+                  
+                  {/* Wallet Top-up Form */}
+                  <div className="mt-4">
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Szybkie doładowanie:
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        onClick={() => handleTopUp(2000)}
+                        disabled={isTopUpLoading}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        +20 PLN
+                      </button>
+                      <button
+                        onClick={() => handleTopUp(5000)}
+                        disabled={isTopUpLoading}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        +50 PLN
+                      </button>
+                      <button
+                        onClick={() => handleTopUp(10000)}
+                        disabled={isTopUpLoading}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        +100 PLN
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1183,6 +1303,12 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
           }}
         />
       )}
+
+      {/* Stripe Redirect Overlay for Wallet Top-up */}
+      <StripeRedirectOverlay
+        isVisible={showTopUpRedirect}
+        checkoutUrl={topUpCheckoutUrl}
+      />
     </div>
   );
 };

@@ -433,17 +433,14 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     setPaymentLoading(true);
 
     try {
-      // If wallet balance is insufficient (split payment), force full Stripe payment
-      const forceStripeOnly =
-        paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
-
+      // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId as string}/pay`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ forceStripeOnly }),
+        body: JSON.stringify({}),
       });
 
       // Invalidate cache to force fresh data fetch after payment

@@ -196,8 +196,16 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
         finalsLimitBytes: planMetadata.storageLimitBytes,
       });
 
+      // Construct redirect URL back to the current page
+      const redirectUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}${window.location.pathname}?payment=success`
+          : undefined;
+
       // Now proceed to payment
-      const paymentResult = await api.galleries.pay(galleryId, {});
+      const paymentResult = await api.galleries.pay(galleryId, {
+        redirectUrl,
+      });
 
       if (paymentResult.checkoutUrl) {
         // This shouldn't happen if dry run said wallet, but handle it
@@ -222,12 +230,6 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
     }
   };
 
-  const handleRedirectConfirm = () => {
-    if (redirectInfo?.checkoutUrl) {
-      // Redirect to Stripe checkout
-      window.location.href = redirectInfo.checkoutUrl;
-    }
-  };
 
   const uploadedMB = (uploadedSizeBytes / (1024 * 1024)).toFixed(2);
 
@@ -631,13 +633,7 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
       {/* Stripe Redirect Overlay */}
       <StripeRedirectOverlay
         isVisible={showRedirectOverlay}
-        totalAmountCents={redirectInfo?.totalAmountCents ?? 0}
-        stripeFeeCents={redirectInfo?.stripeFeeCents}
-        onCancel={() => {
-          setShowRedirectOverlay(false);
-          setRedirectInfo(null);
-        }}
-        onConfirm={handleRedirectConfirm}
+        checkoutUrl={redirectInfo?.checkoutUrl}
       />
     </div>
   );

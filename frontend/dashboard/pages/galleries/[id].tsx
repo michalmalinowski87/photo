@@ -63,6 +63,7 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
+  
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
   const [showSendLinkModal, setShowSendLinkModal] = useState<boolean>(false);
@@ -243,6 +244,7 @@ export default function GalleryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]);
 
+
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {
     if (!galleryId || !orderId) {
       return;
@@ -305,12 +307,9 @@ export default function GalleryDetail() {
     setPaymentLoading(true);
 
     try {
-      // If wallet balance is insufficient (split payment), force full Stripe payment
-      const forceStripeOnly =
-        paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
-
+      // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
       // Call pay endpoint without dryRun to actually process payment
-      const data = await api.galleries.pay(galleryId as string, { forceStripeOnly });
+      const data = await api.galleries.pay(galleryId as string, {});
 
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
@@ -410,7 +409,7 @@ export default function GalleryDetail() {
   if (galleryLoading) {
     return <FullPageLoading text="Ładowanie zleceń..." />;
   }
-
+  
   if (!gallery) {
     return null; // Error is handled by GalleryLayoutWrapper
   }

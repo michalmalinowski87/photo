@@ -10,6 +10,7 @@ import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput } from "../lib/currency";
 import { formatPrice } from "../lib/format-price";
+import { StripeRedirectOverlay } from "../components/galleries/StripeRedirectOverlay";
 
 interface Transaction {
   transactionId?: string;
@@ -39,6 +40,8 @@ export default function Wallet() {
   const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
+  const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
+  const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
 
   const loadBalance = async (): Promise<void> => {
     setLoading(true);
@@ -144,12 +147,15 @@ export default function Wallet() {
       return;
     }
 
+    // Show redirect overlay IMMEDIATELY when button is clicked
+    setShowTopUpRedirect(true);
     setLoading(true);
     setError("");
 
     try {
+      // Construct redirect URL back to the current page (wallet page)
       const redirectUrl =
-        typeof window !== "undefined" ? `${window.location.origin}/wallet?payment=success` : "";
+        typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?payment=success` : "";
 
       const data = await api.payments.createCheckout({
         amountCents: amount,
@@ -158,17 +164,20 @@ export default function Wallet() {
       });
 
       if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+        // Update checkout URL once we receive it
+        setTopUpCheckoutUrl(data.checkoutUrl);
       } else {
         const errorMsg = "Nie otrzymano URL do płatności";
         setError(errorMsg);
         showToast("error", "Błąd", errorMsg);
+        setShowTopUpRedirect(false);
+        setLoading(false);
       }
     } catch (err) {
       const errorMsg = formatApiError(err as Error);
       setError(errorMsg);
       showToast("error", "Błąd", errorMsg);
-    } finally {
+      setShowTopUpRedirect(false);
       setLoading(false);
     }
   };
@@ -181,7 +190,6 @@ export default function Wallet() {
       REFUND: "Zwrot",
       STRIPE_CHECKOUT: "Płatność kartą",
       WALLET_DEBIT: "Płatność z portfela",
-      MIXED: "Płatność mieszana",
     };
     return typeMap[type] || type;
   };
@@ -401,8 +409,6 @@ export default function Wallet() {
                             ? "Portfel"
                             : tx.paymentMethod === "STRIPE"
                               ? "Stripe"
-                              : tx.paymentMethod === "MIXED"
-                                ? "Mieszana"
                                 : (tx.paymentMethod ?? "-")}
                         </TableCell>
                       </TableRow>
@@ -451,6 +457,12 @@ export default function Wallet() {
           </div>
         )}
       </div>
+
+      {/* Stripe Redirect Overlay for Wallet Top-up */}
+      <StripeRedirectOverlay
+        isVisible={showTopUpRedirect}
+        checkoutUrl={topUpCheckoutUrl}
+      />
     </div>
   );
 }

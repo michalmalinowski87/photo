@@ -44,17 +44,21 @@ export const handler = lambdaLogger(async (event: any) => {
 		const stripe = new Stripe(stripeSecretKey);
 		const galleryId = body?.galleryId || '';
 		
-		// Get dashboard URL for default redirects
+		// Get dashboard URL for fallback redirects (only used if redirectUrl is not provided)
 		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		
-		// Default redirect URLs based on payment type
-		const defaultRedirectUrl = type === 'wallet_topup' 
-			? `${dashboardUrl}/wallet?payment=success`
-			: galleryId 
-				? `${dashboardUrl}/galleries?payment=success&gallery=${galleryId}`
-				: `${dashboardUrl}/galleries?payment=success`;
-		
-		const finalRedirectUrl = redirectUrl || defaultRedirectUrl;
+		// ALWAYS use redirectUrl from request if provided (this is the primary method)
+		// Fallback to default only if redirectUrl is not provided
+		let finalRedirectUrl = redirectUrl;
+		if (!finalRedirectUrl) {
+			// Log warning if redirectUrl is missing - this should not happen in normal flow
+			console.warn('redirectUrl not provided in request, using default', { type, galleryId });
+			finalRedirectUrl = type === 'wallet_topup' 
+				? `${dashboardUrl}/wallet?payment=success`
+				: galleryId 
+					? `${dashboardUrl}/galleries?payment=success&gallery=${galleryId}`
+					: `${dashboardUrl}/galleries?payment=success`;
+		}
 		
 		// Create transaction for wallet top-up BEFORE creating Stripe session
 		let transactionId: string | undefined;

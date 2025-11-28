@@ -50,7 +50,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const newPlanKey = body?.plan;
-	const forceStripeOnly = body?.forceStripeOnly === true;
+	const redirectUrl = body?.redirectUrl;
 
 	if (!newPlanKey || !PRICING_PLANS[newPlanKey]) {
 		return {
@@ -130,21 +130,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Calculate wallet vs stripe amounts
+	// Calculate wallet vs stripe amounts - use full wallet if sufficient, otherwise full Stripe (no partial payments)
 	let walletAmountCents = 0;
 	let stripeAmountCents = priceDifferenceCents;
 
-	if (forceStripeOnly) {
-		walletAmountCents = 0;
-		stripeAmountCents = priceDifferenceCents;
-	} else if (walletsTable && ledgerTable) {
+	if (walletsTable && ledgerTable) {
 		const walletBalance = await getWalletBalance(requester, walletsTable);
 		if (walletBalance >= priceDifferenceCents) {
 			walletAmountCents = priceDifferenceCents;
 			stripeAmountCents = 0;
-		} else if (walletBalance > 0) {
-			walletAmountCents = walletBalance;
-			stripeAmountCents = priceDifferenceCents - walletBalance;
+		} else {
+			// Insufficient wallet balance - use full Stripe payment
+			walletAmountCents = 0;
+			stripeAmountCents = priceDifferenceCents;
 		}
 	}
 
@@ -163,7 +161,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId,
 			walletAmountCents,
 			stripeAmountCents,
-			paymentMethod: walletAmountCents > 0 && stripeAmountCents > 0 ? 'MIXED' : walletAmountCents > 0 ? 'WALLET' : 'STRIPE' as any,
+					paymentMethod: walletAmountCents > 0 ? 'WALLET' : 'STRIPE' as any,
 			composites,
 			metadata: {
 				plan: newPlanKey,
@@ -318,13 +316,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
+		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const successUrl = apiUrl 
+			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
+			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		const cancelUrl = apiUrl
+			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}`
+			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}`;
+
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			line_items: lineItems,
 			mode: 'payment',
-			success_url: `${apiUrl}/dashboard/galleries/${galleryId}?upgrade=success`,
-			cancel_url: `${apiUrl}/dashboard/galleries/${galleryId}?upgrade=cancelled`,
+			success_url: successUrl,
+			cancel_url: cancelUrl,
 			metadata: {
+				userId: requester,
 				galleryId,
 				transactionId,
 				type: 'gallery_plan_upgrade',
@@ -333,6 +340,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				priceDifferenceCents: priceDifferenceCents.toString(),
 				currentPriceCents: currentPriceCents.toString(),
 				newPriceCents: newPriceCents.toString(),
+				// ALWAYS use redirectUrl from request if provided (this is the primary method)
+				// Fallback to default only if redirectUrl is not provided
+				redirectUrl: redirectUrl || `${dashboardUrl}/galleries/${galleryId}?upgrade=success`,
 			},
 		});
 

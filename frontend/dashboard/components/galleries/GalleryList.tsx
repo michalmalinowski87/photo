@@ -9,7 +9,9 @@ import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
-import PaymentConfirmationModal from "./PaymentConfirmationModal";
+import { GalleryPricingModal } from "./GalleryPricingModal";
+import { getPricingModalData } from "../../lib/calculate-plan";
+import type { PricingModalData } from "../../lib/plan-types";
 
 interface Gallery {
   galleryId: string;
@@ -60,7 +62,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     totalAmountCents?: number;
     walletAmountCents?: number;
     stripeAmountCents?: number;
-    paymentMethod?: 'WALLET' | 'STRIPE' | 'MIXED';
+    paymentMethod?: 'WALLET' | 'STRIPE';
     stripeFeeCents?: number;
     checkoutUrl?: string;
     paid?: boolean;
@@ -71,16 +73,9 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
+  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [paymentDetails, setPaymentDetails] = useState({
-    totalAmountCents: 0,
-    walletAmountCents: 0,
-    stripeAmountCents: 0,
-    paymentMethod: 'STRIPE' as 'WALLET' | 'STRIPE' | 'MIXED',
-    stripeFeeCents: 0,
-    balanceAfterPayment: 0,
-  });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -187,28 +182,9 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     setPaymentLoading(true);
 
     try {
-      // First, get payment details using dry run
-      const { data } = await apiFetch<PaymentResponse>(`${apiUrl}/galleries/${galleryId}/pay`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ dryRun: true }),
-      });
-
-      // Use paymentMethod from response, or calculate from amounts for backward compatibility
-      const paymentMethod: 'WALLET' | 'STRIPE' | 'MIXED' = 
-        data.paymentMethod ?? 
-        (data.walletAmountCents === data.totalAmountCents ? 'WALLET' :
-         data.stripeAmountCents === data.totalAmountCents ? 'STRIPE' :
-         (data.walletAmountCents && data.walletAmountCents > 0 && data.stripeAmountCents && data.stripeAmountCents > 0) ? 'MIXED' : 'STRIPE');
-
-      setPaymentDetails({
-        totalAmountCents: data.totalAmountCents ?? 0,
-        walletAmountCents: data.walletAmountCents ?? 0,
-        stripeAmountCents: data.stripeAmountCents ?? 0,
-        paymentMethod,
-        stripeFeeCents: data.stripeFeeCents ?? 0,
-        balanceAfterPayment: walletBalance - (data.walletAmountCents ?? 0),
-      });
+      // Get plan recommendation data (same as PaymentGuidanceBanner)
+      const modalData = await getPricingModalData(galleryId);
+      setPricingModalData(modalData);
       setShowPaymentModal(true);
     } catch (err) {
       const errorMsg = formatApiError(err);
@@ -218,46 +194,10 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     }
   };
 
-  const handlePaymentConfirm = async () => {
-    if (!apiUrl || !idToken || !selectedGalleryId || !paymentDetails) {
-      return;
-    }
-
-    setShowPaymentModal(false);
-    setPaymentLoading(true);
-
-    try {
-      // If wallet balance is insufficient (split payment), force full Stripe payment
-      const forceStripeOnly =
-        paymentDetails.walletAmountCents > 0 && paymentDetails.stripeAmountCents > 0;
-
-      // Call pay endpoint without dryRun to actually process payment
-      const { data } = await apiFetch<PaymentResponse>(
-        `${apiUrl}/galleries/${selectedGalleryId}/pay`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ forceStripeOnly }),
-        }
-      );
-
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      } else if (data.paid) {
-        showToast("success", "Sukces", "Galeria została opłacona z portfela!");
-        await loadGalleries();
-        await loadWalletBalance();
-      }
-    } catch (err) {
-      const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg ?? "Nie udało się opłacić galerii");
-    } finally {
-      setPaymentLoading(false);
-      setSelectedGalleryId(null);
-    }
+  const handlePaymentComplete = async () => {
+    // Reload galleries and wallet balance after payment
+    await loadGalleries();
+    await loadWalletBalance();
   };
 
   const handleDeleteClick = (gallery: Gallery) => {
@@ -480,22 +420,29 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
       )}
 
       {/* Payment Confirmation Modal */}
-      <PaymentConfirmationModal
-        isOpen={showPaymentModal}
-        onClose={() => {
-          setShowPaymentModal(false);
-          setPaymentLoading(false);
-          setSelectedGalleryId(null);
-        }}
-        onConfirm={handlePaymentConfirm}
-        totalAmountCents={paymentDetails.totalAmountCents}
-        walletBalanceCents={walletBalance}
-        walletAmountCents={paymentDetails.walletAmountCents}
-        stripeAmountCents={paymentDetails.stripeAmountCents}
-        paymentMethod={paymentDetails.paymentMethod}
-        stripeFeeCents={paymentDetails.stripeFeeCents}
-        loading={paymentLoading}
-      />
+      {pricingModalData && selectedGalleryId && (
+        <GalleryPricingModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPaymentLoading(false);
+            setSelectedGalleryId(null);
+            setPricingModalData(null);
+          }}
+          galleryId={selectedGalleryId}
+          suggestedPlan={pricingModalData.suggestedPlan}
+          originalsLimitBytes={pricingModalData.originalsLimitBytes}
+          finalsLimitBytes={pricingModalData.finalsLimitBytes}
+          uploadedSizeBytes={pricingModalData.uploadedSizeBytes}
+          selectionEnabled={pricingModalData.selectionEnabled}
+          usagePercentage={pricingModalData.usagePercentage}
+          isNearCapacity={pricingModalData.isNearCapacity}
+          isAtCapacity={pricingModalData.isAtCapacity}
+          exceedsLargestPlan={pricingModalData.exceedsLargestPlan}
+          nextTierPlan={pricingModalData.nextTierPlan}
+          onPlanSelected={handlePaymentComplete}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
