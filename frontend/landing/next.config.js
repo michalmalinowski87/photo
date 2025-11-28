@@ -10,6 +10,11 @@ const nextConfig = {
       path.resolve(__dirname, '../../node_modules'),
       'node_modules',
     ];
+    // Add alias for shared-auth
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@shared-auth': path.resolve(__dirname, '../shared-auth'),
+    };
     return config;
   },
 };

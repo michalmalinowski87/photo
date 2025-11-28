@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthTokenListener } from "@/components/auth-token-listener";
 import "@/styles/globals.css";
 import { aeonik, cn, generateMetadata, inter } from "@/utils";
-import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
+import { WebPCompatibilityCheck } from "@shared-auth/webp-check";
 
 export const metadata = generateMetadata({
   title: "PhotoCloud - Prosty sposób na udostępnianie zdjęć klientom",
