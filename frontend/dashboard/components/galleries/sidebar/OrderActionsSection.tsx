@@ -229,13 +229,10 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
                 strokeLinejoin="round"
               />
             </svg>
-            {order.deliveryStatus === "DELIVERED"
-              ? "Finały wysłane"
-              : "Wyślij finały do klienta"}
+            {order.deliveryStatus === "DELIVERED" ? "Finały wysłane" : "Wyślij finały do klienta"}
           </Button>
         )}
       </div>
     </div>
   );
 };
-

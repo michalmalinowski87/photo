@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { formatPrice, formatPriceNumber } from "../../lib/format-price";
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
@@ -32,7 +30,6 @@ export default function PaymentConfirmationModal({
   const totalAmount = formatPriceNumber(totalAmountCents);
   const walletBalance = formatPriceNumber(walletBalanceCents);
   const walletAmount = formatPriceNumber(walletAmountCents);
-  const stripeAmount = formatPriceNumber(stripeAmountCents);
   const stripeFee = formatPriceNumber(stripeFeeCents);
   const totalWithFee = totalAmountCents + stripeFeeCents;
   const totalWithFeeFormatted = formatPriceNumber(totalWithFee);

@@ -3,13 +3,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import { apiFetchWithAuth, formatApiError } from "../../lib/api";
 import { getIdToken } from "../../lib/auth";
-import {
-  formatCurrencyInput,
-  plnToCents as plnToCentsUtil,
-  centsToPlnString as centsToPlnStringUtil,
-} from "../../lib/currency";
-import { formatPrice } from "../../lib/format-price";
-import { generatePassword } from "../../lib/password";
 import Button from "../ui/button/Button";
 
 import { ClientStep } from "./wizard/ClientStep";
@@ -241,11 +234,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       });
     }
   };
-
-  // Use currency utilities
-  const formatPriceInput = formatCurrencyInput;
-  const plnToCents = plnToCentsUtil;
-  const centsToPlnString = centsToPlnStringUtil;
 
   const validateStep = (step: number): boolean => {
     setError("");

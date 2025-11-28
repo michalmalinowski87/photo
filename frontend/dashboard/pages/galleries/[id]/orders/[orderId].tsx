@@ -8,7 +8,7 @@ import { DenyChangeRequestModal } from "../../../../components/orders/DenyChange
 import Badge from "../../../../components/ui/badge/Badge";
 import Button from "../../../../components/ui/button/Button";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
-import { FullPageLoading } from "../../../../components/ui/loading/Loading";
+import { FullPageLoading, Loading } from "../../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../../components/ui/RetryableImage";
 import { FileUploadZone } from "../../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUploadHandler";

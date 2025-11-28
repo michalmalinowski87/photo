@@ -183,4 +183,3 @@ export const GalleryNavigation: React.FC<GalleryNavigationProps> = ({
     </nav>
   );
 };
-

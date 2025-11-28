@@ -32,11 +32,11 @@ export const PLANS = [
       "12m": 15, // Matches backend: 1500 cents
     },
     features: [
-      { text: "Galeria chroniona hasłem" },
-      { text: "Wybór zdjęć przez klienta" },
-      { text: "Wsparcie techniczne" },
-      { text: "Bezpieczne przechowywanie" },
-      { text: "Szybkie ładowanie zdjęć" },
+      { text: "Galeria chroniona hasłem", tooltip: undefined },
+      { text: "Wybór zdjęć przez klienta", tooltip: undefined },
+      { text: "Wsparcie techniczne", tooltip: undefined },
+      { text: "Bezpieczne przechowywanie", tooltip: undefined },
+      { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",
@@ -54,11 +54,11 @@ export const PLANS = [
       "12m": 21, // Matches backend: 2100 cents
     },
     features: [
-      { text: "Galeria chroniona hasłem" },
-      { text: "Wybór zdjęć przez klienta" },
-      { text: "Wsparcie techniczne" },
-      { text: "Bezpieczne przechowywanie" },
-      { text: "Szybkie ładowanie zdjęć" },
+      { text: "Galeria chroniona hasłem", tooltip: undefined },
+      { text: "Wybór zdjęć przez klienta", tooltip: undefined },
+      { text: "Wsparcie techniczne", tooltip: undefined },
+      { text: "Bezpieczne przechowywanie", tooltip: undefined },
+      { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",
@@ -76,11 +76,11 @@ export const PLANS = [
       "12m": 26, // Matches backend: 2600 cents
     },
     features: [
-      { text: "Galeria chroniona hasłem" },
-      { text: "Wybór zdjęć przez klienta" },
-      { text: "Wsparcie techniczne" },
-      { text: "Bezpieczne przechowywanie" },
-      { text: "Szybkie ładowanie zdjęć" },
+      { text: "Galeria chroniona hasłem", tooltip: undefined },
+      { text: "Wybór zdjęć przez klienta", tooltip: undefined },
+      { text: "Wsparcie techniczne", tooltip: undefined },
+      { text: "Bezpieczne przechowywanie", tooltip: undefined },
+      { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",

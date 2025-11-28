@@ -79,4 +79,3 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
     </>
   );
 };
-

@@ -1,6 +1,7 @@
 import React, { ComponentType, useCallback } from "react";
-import { useDownloadStore } from "../store/downloadSlice";
+
 import { formatApiError } from "../lib/api";
+import { useDownloadStore } from "../store/downloadSlice";
 
 interface ZipDownloadConfig {
   apiUrl: string;

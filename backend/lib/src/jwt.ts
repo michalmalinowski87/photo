@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac } from 'crypto';
 
 // Simple JWT implementation using HMAC-SHA256
 // For production, consider using a library like jsonwebtoken or AWS KMS

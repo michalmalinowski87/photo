@@ -52,21 +52,14 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({
 
   // Use optimistic bytes if available (instant updates), then plan recommendation, then gallery data
   const originalsBytes =
-    optimisticBytesUsed !== null
-      ? optimisticBytesUsed
-      : (planRecommendation?.uploadedSizeBytes ??
-        (gallery.originalsBytesUsed as number | undefined) ??
-        0);
-  const finalsBytes = (gallery.finalsBytesUsed as number | undefined) ?? 0;
+    optimisticBytesUsed ?? planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0;
+  const finalsBytes = gallery.finalsBytesUsed ?? 0;
   // Only show limits if gallery is paid (has a plan)
   const originalsLimit =
-    isPaid &&
-    (planRecommendation?.originalsLimitBytes ??
-      (gallery.originalsLimitBytes as number | undefined))
-      ? (planRecommendation?.originalsLimitBytes ??
-        (gallery.originalsLimitBytes as number | undefined))
+    isPaid && (planRecommendation?.originalsLimitBytes ?? gallery.originalsLimitBytes)
+      ? (planRecommendation?.originalsLimitBytes ?? gallery.originalsLimitBytes)
       : undefined;
-  const finalsLimit = isPaid ? (gallery.finalsLimitBytes as number | undefined) : undefined;
+  const finalsLimit = isPaid ? gallery.finalsLimitBytes : undefined;
 
   return (
     <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
@@ -91,4 +84,3 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({
     </div>
   );
 };
-

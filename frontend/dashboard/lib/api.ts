@@ -146,7 +146,7 @@ export async function apiFetch<T = unknown>(
             throw error;
           }
 
-          return { data: retryBody, response: retryResponse };
+          return { data: retryBody as T, response: retryResponse };
         } catch (_refreshErr) {
           // Refresh failed - trigger session expired event
           if (typeof window !== "undefined") {
@@ -176,7 +176,7 @@ export async function apiFetch<T = unknown>(
       throw error;
     }
 
-    return { data: body, response };
+    return { data: body as T, response };
   } catch (error) {
     const apiError = error as ApiError;
     if (apiError.status) {

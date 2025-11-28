@@ -128,7 +128,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
         lastDryRunParamsRef.current = { planKey, priceCents };
 
         setPaymentMethodInfo({
-          paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE"),
+          paymentMethod: dryRunResult.paymentMethod ?? "STRIPE",
           walletAmountCents: Number(dryRunResult.walletAmountCents) ?? 0,
           stripeAmountCents: Number(dryRunResult.stripeAmountCents) ?? 0,
           stripeFeeCents: Number(dryRunResult.stripeFeeCents) ?? 0,
@@ -178,7 +178,7 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
             })
             .then((dryRunResult) => {
               setPaymentMethodInfo({
-                paymentMethod: (dryRunResult.paymentMethod ?? "STRIPE"),
+                paymentMethod: dryRunResult.paymentMethod ?? "STRIPE",
                 walletAmountCents: Number(dryRunResult.walletAmountCents) ?? 0,
                 stripeAmountCents: Number(dryRunResult.stripeAmountCents) ?? 0,
                 stripeFeeCents: Number(dryRunResult.stripeFeeCents) ?? 0,

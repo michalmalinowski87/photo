@@ -32,7 +32,7 @@ class RequestThrottler {
   async throttle<T>(requestFn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       this.queue.push({
-        resolve,
+        resolve: resolve as (value: unknown) => void,
         reject,
         requestFn,
         timestamp: Date.now(),

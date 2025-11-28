@@ -132,12 +132,10 @@ class ApiService {
     const requestKey = this.getRequestKey(endpoint, options);
 
     // Check if there's a pending identical request
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const pendingRequest = this.pendingRequests.get(requestKey);
     if (pendingRequest) {
       // Return the existing promise instead of making a new request
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return pendingRequest;
+      return pendingRequest as Promise<T>;
     }
 
     // Create the request promise and cache it for deduplication
@@ -318,15 +316,29 @@ class ApiService {
     // Check error body for Stripe configuration errors
     if (apiError.body) {
       try {
-        const bodyObj =
-          typeof apiError.body === "string" ? JSON.parse(apiError.body) : apiError.body;
-        const bodyError = bodyObj?.error || bodyObj?.message || "";
-        const lowerBodyError = bodyError.toLowerCase();
-        if (
-          lowerBodyError.includes("stripe not configured") ||
-          lowerBodyError.includes("stripe nie jest skonfigurowany")
-        ) {
-          return "System płatności nie jest skonfigurowany. Skontaktuj się z administratorem systemu.";
+        let bodyObj: unknown;
+        if (typeof apiError.body === "string") {
+          bodyObj = JSON.parse(apiError.body) as unknown;
+        } else {
+          bodyObj = apiError.body;
+        }
+        if (bodyObj && typeof bodyObj === "object" && bodyObj !== null) {
+          const bodyObjTyped = bodyObj as { error?: unknown; message?: unknown };
+          const bodyError = bodyObjTyped.error ?? bodyObjTyped.message;
+          let bodyErrorStr = "";
+          if (typeof bodyError === "string") {
+            bodyErrorStr = bodyError;
+          } else if (bodyError !== null && bodyError !== undefined) {
+            // Skip non-string, non-null, non-undefined values to avoid base-to-string warning
+            bodyErrorStr = "";
+          }
+          const lowerBodyError = bodyErrorStr.toLowerCase();
+          if (
+            lowerBodyError.includes("stripe not configured") ||
+            lowerBodyError.includes("stripe nie jest skonfigurowany")
+          ) {
+            return "System płatności nie jest skonfigurowany. Skontaktuj się z administratorem systemu.";
+          }
         }
       } catch (_e) {
         // If parsing fails, continue with default handling
@@ -495,7 +507,12 @@ class ApiService {
      */
     updatePricingPackage: async (
       galleryId: string,
-      pricingPackage: string
+      pricingPackage: {
+        packageName: string;
+        includedCount: number;
+        extraPriceCents: number;
+        packagePriceCents: number;
+      }
     ): Promise<{ success: boolean }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -507,7 +524,7 @@ class ApiService {
         `/galleries/${galleryId}/pricing-package`,
         {
           method: "PATCH",
-          body: JSON.stringify({ pricingPackage }),
+          body: JSON.stringify(pricingPackage),
         }
       );
       return result;
@@ -1136,7 +1153,7 @@ const apiService = new ApiService();
 export default apiService;
 
 // Also export formatError for convenience
-export const formatApiError = (error: ApiError | Error): string => {
+export const formatApiError = (error: unknown): string => {
   if (error instanceof Error) {
     return apiService.formatError(error);
   }

@@ -106,7 +106,7 @@ export default function Clients() {
         setInitialLoad(false);
       }
     } catch (err) {
-      setError(formatApiError(err));
+      setError(formatApiError(err as Error));
     } finally {
       setLoading(false);
     }

@@ -58,11 +58,7 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
                   : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               }`}
             >
-              {duration === "1m"
-                ? "1 miesiąc"
-                : duration === "3m"
-                  ? "3 miesiące"
-                  : "12 miesięcy"}
+              {duration === "1m" ? "1 miesiąc" : duration === "3m" ? "3 miesiące" : "12 miesięcy"}
             </button>
           );
         })}
@@ -174,9 +170,7 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
                 {!selectionEnabled && (
-                  <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Zniżka 20%
-                  </div>
+                  <div className="text-xs text-green-600 dark:text-green-400 mt-1">Zniżka 20%</div>
                 )}
               </div>
 
@@ -231,4 +225,3 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
     </div>
   );
 };
-

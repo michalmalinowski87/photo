@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 
 import { usePlanPayment } from "../../hooks/usePlanPayment";
+import { formatPrice } from "../../lib/format-price";
 import type { PlanOption, NextTierPlan } from "../../lib/plan-types";
 import {
   getPlanByStorageAndDuration,
@@ -9,8 +10,8 @@ import {
   type Duration,
   type PlanKey,
 } from "../../lib/pricing-plans";
-import { formatPrice } from "../../lib/format-price";
 import Button from "../ui/button/Button";
+
 import { CapacityWarning } from "./pricing/CapacityWarning";
 import { PlanSelectionGrid } from "./pricing/PlanSelectionGrid";
 import { SuggestedPlanSection } from "./pricing/SuggestedPlanSection";
@@ -47,13 +48,7 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
 
-  const {
-    handleSelectPlan,
-    isProcessing,
-    showRedirectOverlay,
-    redirectInfo,
-    setShowRedirectOverlay,
-  } = usePlanPayment({
+  const { handleSelectPlan, isProcessing, showRedirectOverlay, redirectInfo } = usePlanPayment({
     galleryId,
     onSuccess: onPlanSelected,
     onClose,

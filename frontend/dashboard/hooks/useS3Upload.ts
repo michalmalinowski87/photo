@@ -1,6 +1,8 @@
 import { useCallback } from "react";
-import { useGalleryStore } from "../store/gallerySlice";
+
 import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
+import { useGalleryStore } from "../store/gallerySlice";
+
 import { PresignedUrlData } from "./usePresignedUrls";
 
 export type UploadType = "originals" | "finals";
@@ -18,7 +20,7 @@ interface UseS3UploadConfig {
   updateProgress: (updater: (prev: PerImageProgress[]) => PerImageProgress[]) => void;
   onUploadProgress?: (current: number, total: number, fileName: string) => void;
   onError?: (file: string, error: string) => void;
-  onSuccess?: (file: string, key: string, fileSize: number) => void;
+  onSuccess?: (file: string, key: string) => void;
 }
 
 export function useS3Upload(config: UseS3UploadConfig) {
@@ -31,7 +33,6 @@ export function useS3Upload(config: UseS3UploadConfig) {
       const UPLOAD_CONCURRENCY = 5; // Upload 5 files concurrently to S3
       const uploadErrors: Array<{ file: string; error: string }> = [];
       const uploadResults: UploadResult[] = [];
-      let uploadSuccesses = 0;
 
       // Step 2: Upload files to S3 in concurrent batches
       for (let i = 0; i < files.length; i += UPLOAD_CONCURRENCY) {
@@ -86,9 +87,7 @@ export function useS3Upload(config: UseS3UploadConfig) {
                       const percentComplete = Math.min((e.loaded / e.total) * 100, 100);
                       config.updateProgress((prev) => {
                         return prev.map((p) =>
-                          p.fileName === file.name
-                            ? { ...p, uploadProgress: percentComplete }
-                            : p
+                          p.fileName === file.name ? { ...p, uploadProgress: percentComplete } : p
                         );
                       });
                     }
@@ -106,9 +105,7 @@ export function useS3Upload(config: UseS3UploadConfig) {
                       resolve();
                     } else {
                       reject(
-                        new Error(
-                          `Failed to upload ${file.name}: ${xhr.status} ${xhr.statusText}`
-                        )
+                        new Error(`Failed to upload ${file.name}: ${xhr.status} ${xhr.statusText}`)
                       );
                     }
                   });
@@ -159,13 +156,12 @@ export function useS3Upload(config: UseS3UploadConfig) {
                   );
                 });
 
-                uploadSuccesses++;
                 const result: UploadResult = {
                   success: true,
                   file: file.name,
                   key: presignedData.apiKey,
                 };
-                config.onSuccess?.(file.name, presignedData.apiKey, file.size);
+                config.onSuccess?.(file.name, presignedData.apiKey);
                 return result;
               } catch (uploadError) {
                 clearTimeout(uploadTimeout);
@@ -196,15 +192,31 @@ export function useS3Upload(config: UseS3UploadConfig) {
         );
 
         // Collect results
-        batchResults.forEach((result) => {
+        batchResults.forEach((result, index) => {
           if (result.status === "fulfilled") {
             uploadResults.push(result.value);
           } else {
-            const file = batch[batchResults.indexOf(result)];
+            const file = batch[index];
+            if (!file) {
+              return;
+            }
+            let errorMessage = "Unknown error";
+            if (result.reason) {
+              if (result.reason instanceof Error) {
+                errorMessage = result.reason.message;
+              } else if (typeof result.reason === "object" && "message" in result.reason) {
+                const message = result.reason.message;
+                if (typeof message === "string") {
+                  errorMessage = message;
+                }
+              } else if (typeof result.reason === "string") {
+                errorMessage = result.reason;
+              }
+            }
             uploadResults.push({
               success: false,
               file: file.name,
-              error: result.reason?.message || "Unknown error",
+              error: errorMessage,
             });
           }
         });
@@ -222,4 +234,3 @@ export function useS3Upload(config: UseS3UploadConfig) {
 
   return { uploadFiles };
 }
-

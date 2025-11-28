@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import { useEffect, useState, ComponentType } from "react";
+
 import { initAuth, getIdToken, redirectToCognito } from "../lib/auth";
 
 interface WithOwnerAuthProps {
@@ -20,7 +21,9 @@ export default function withOwnerAuth<P extends object>(
     const [checkingAuth, setCheckingAuth] = useState<boolean>(true);
 
     useEffect(() => {
-      if (!id) return;
+      if (!id) {
+        return;
+      }
 
       // Initialize auth and get Cognito token
       const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -28,13 +31,13 @@ export default function withOwnerAuth<P extends object>(
 
       if (!userPoolId || !clientId) {
         // Redirect directly to Cognito (not via landing)
-        redirectToCognito(router.asPath);
+        void redirectToCognito(router.asPath);
         return;
       }
 
       initAuth(userPoolId, clientId);
 
-      getIdToken()
+      void getIdToken()
         .then((cognitoToken) => {
           // Decode token to get owner ID
           try {
@@ -43,11 +46,11 @@ export default function withOwnerAuth<P extends object>(
               "cognito:username"?: string;
             };
             setToken(cognitoToken);
-            setOwnerId(payload.sub || payload["cognito:username"] || "");
+            setOwnerId(payload.sub ?? payload["cognito:username"] ?? "");
             setCheckingAuth(false);
-          } catch (e) {
+          } catch (_e) {
             // Redirect directly to Cognito (not via landing)
-            redirectToCognito(router.asPath);
+            void redirectToCognito(router.asPath);
           }
         })
         .catch(() => {
@@ -60,15 +63,15 @@ export default function withOwnerAuth<P extends object>(
                 "cognito:username"?: string;
               };
               setToken(stored);
-              setOwnerId(payload.sub || payload["cognito:username"] || "");
+              setOwnerId(payload.sub ?? payload["cognito:username"] ?? "");
               setCheckingAuth(false);
-            } catch (e) {
+            } catch (_e) {
               // Redirect directly to Cognito (not via landing)
-              redirectToCognito(router.asPath);
+              void redirectToCognito(router.asPath);
             }
           } else {
             // Redirect directly to Cognito (not via landing)
-            redirectToCognito(router.asPath);
+            void redirectToCognito(router.asPath);
           }
         });
     }, [id, router]);

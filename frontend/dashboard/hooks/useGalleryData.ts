@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 
-import { useToast } from "./useToast";
 import { apiFetchWithAuth, formatApiError } from "../lib/api";
-import { useGalleryStore } from "../store/gallerySlice";
+import { useGalleryStore, type Gallery } from "../store/gallerySlice";
+import { useToast } from "./useToast";
 
 interface Order {
   orderId?: string;
@@ -64,8 +64,19 @@ export const useGalleryData = ({
           `${apiUrl}/galleries/${galleryId as string}`
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-        setCurrentGallery(galleryResponse.data as any);
+        const galleryData = galleryResponse.data;
+        if (
+          galleryData &&
+          typeof galleryData === "object" &&
+          "galleryId" in galleryData &&
+          "ownerId" in galleryData &&
+          "state" in galleryData &&
+          typeof (galleryData as { galleryId?: unknown }).galleryId === "string" &&
+          typeof (galleryData as { ownerId?: unknown }).ownerId === "string" &&
+          typeof (galleryData as { state?: unknown }).state === "string"
+        ) {
+          setCurrentGallery(galleryData as Gallery);
+        }
         setGalleryUrl(
           typeof window !== "undefined"
             ? `${window.location.origin}/gallery/${galleryId as string}`
@@ -123,9 +134,17 @@ export const useGalleryData = ({
         );
         const orders = data?.items ?? [];
         const ordersArray = Array.isArray(orders) ? orders : [];
-        setGalleryOrdersLocal(ordersArray as Order[]);
+        // Type guard to ensure orders match Order interface
+        const typedOrders: Order[] = ordersArray.filter(
+          (order): order is Order =>
+            typeof order === "object" &&
+            order !== null &&
+            "orderId" in order &&
+            typeof (order as { orderId?: unknown }).orderId === "string"
+        );
+        setGalleryOrdersLocal(typedOrders);
         // Cache the orders in Zustand store
-        setGalleryOrders(galleryId as string, ordersArray);
+        setGalleryOrders(galleryId as string, typedOrders);
       } catch (_err) {
         setGalleryOrdersLocal([]);
       }
@@ -154,4 +173,3 @@ export const useGalleryData = ({
     checkDeliveredOrders,
   };
 };
-

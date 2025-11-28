@@ -314,7 +314,6 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       {viewMode === "purchase" && (
         <div>
           {/* Image Grid - Owner can view but not select, shows client's selection */}
-          {/* @ts-expect-error - GalleryThumbnails is from JS package without types */}
           <GalleryThumbnails
             images={images as unknown as never[]}
             selectedKeys={selectedKeys}
@@ -354,7 +353,6 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
             return null;
           }
 
-          // @ts-expect-error - ImageModal is from JS package without types */}
           return (
             <ImageModal
               image={currentImage as unknown as never}

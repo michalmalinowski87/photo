@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 
 import { getPlanRecommendation } from "../../lib/calculate-plan";
 import type { PlanRecommendation } from "../../lib/plan-types";
+
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";
 import { GalleryMetadata } from "./sidebar/GalleryMetadata";
@@ -115,9 +116,6 @@ export default function GallerySidebar({
     }
   }, [gallery?.coverPhotoUrl, coverPhotoUrl]);
 
-  // Optimistic bytes counter - tracks size changes before API confirms
-  const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
-
   // Load plan recommendation when gallery is unpaid - refresh more aggressively
   // Also refresh when gallery.originalsBytesUsed changes to ensure we have the latest data
   useEffect(() => {
@@ -177,13 +175,12 @@ export default function GallerySidebar({
       if (sizeDelta !== undefined) {
         setOptimisticBytesUsed((prev) => {
           const currentBytes =
-            prev !== null
-              ? prev
-              : (planRecommendation?.uploadedSizeBytes ??
-                (gallery.originalsBytesUsed as number | undefined) ??
-                0);
+            prev ??
+            planRecommendation?.uploadedSizeBytes ??
+            (gallery.originalsBytesUsed as number | undefined) ??
+            0;
           const newOptimisticBytes = Math.max(0, currentBytes + sizeDelta);
-          
+
           // Update plan recommendation optimistically
           if (newOptimisticBytes === 0) {
             setPlanRecommendation(null);
@@ -194,7 +191,7 @@ export default function GallerySidebar({
               uploadedSizeBytes: newOptimisticBytes,
             });
           }
-          
+
           return newOptimisticBytes;
         });
       }
@@ -207,7 +204,7 @@ export default function GallerySidebar({
       setIsLoadingPlanRecommendation(true);
       try {
         const recommendation = await getPlanRecommendation(gallery.galleryId);
-        
+
         // Only update if this is still the latest request (prevent stale data from race conditions)
         if (currentRequest === requestCounter) {
           // If no photos are uploaded, clear the plan recommendation
@@ -264,20 +261,22 @@ export default function GallerySidebar({
     }
 
     // Debounce to avoid too many API calls, but use shorter delay for better UX
-    let timeoutId: NodeJS.Timeout;
     let isCancelled = false;
 
-    timeoutId = setTimeout(() => {
-      if (isCancelled) {return;}
-      
+    const timeoutId = setTimeout(() => {
+      if (isCancelled) {
+        return;
+      }
+
       setIsLoadingPlanRecommendation(true);
-      const requestStartTime = Date.now();
-      
+
       getPlanRecommendation(gallery.galleryId)
         .then((recommendation) => {
           // Only update if this effect hasn't been cancelled and we're still on the same gallery
-          if (isCancelled) {return;}
-          
+          if (isCancelled) {
+            return;
+          }
+
           // If no photos are uploaded, clear the plan recommendation
           if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
             setPlanRecommendation(null);
@@ -286,7 +285,9 @@ export default function GallerySidebar({
           }
         })
         .catch((error) => {
-          if (isCancelled) {return;}
+          if (isCancelled) {
+            return;
+          }
           console.error("Failed to refresh plan recommendation:", error);
           // On error, clear recommendation if gallery shows no photos
           if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
@@ -320,7 +321,6 @@ export default function GallerySidebar({
       void router.push("/");
     }
   };
-
 
   return (
     <aside className="fixed flex flex-col top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 w-[380px]">
@@ -400,8 +400,8 @@ export default function GallerySidebar({
 
       {orderId && order && (
         <OrderActionsSection
-          orderId={orderId as string}
-          order={order as Order}
+          orderId={orderId}
+          order={order}
           gallery={gallery}
           galleryLoading={galleryLoading ?? false}
           isPaid={isPaid}
@@ -419,7 +419,7 @@ export default function GallerySidebar({
       <StorageUsageInfo
         gallery={gallery}
         galleryLoading={galleryLoading ?? false}
-        orderId={orderId as string}
+        orderId={orderId}
         isPaid={isPaid}
         optimisticBytesUsed={optimisticBytesUsed}
         planRecommendation={planRecommendation}
@@ -437,7 +437,10 @@ export default function GallerySidebar({
         onPay={onPay}
       />
 
-      <DeleteGalleryButton galleryId={gallery?.galleryId ?? ""} galleryName={gallery?.galleryName} />
+      <DeleteGalleryButton
+        galleryId={gallery?.galleryId ?? ""}
+        galleryName={gallery?.galleryName}
+      />
     </aside>
   );
 }

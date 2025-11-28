@@ -22,6 +22,8 @@ interface OrdersModalProps {
 interface Order {
   orderId?: string;
   galleryId?: string;
+  galleryName?: string;
+  orderNumber?: string;
   deliveryStatus?: string;
   paymentStatus?: string;
   totalCents?: number;
@@ -258,7 +260,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                             }
                           }}
                         >
-                          {String(order.galleryName ?? "")}
+                          {typeof order.galleryName === "string" ? order.galleryName : ""}
                         </Link>
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
@@ -267,7 +269,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                           className="text-brand-500 hover:text-brand-600"
                           onClick={onClose}
                         >
-                          #{String(order.orderNumber ?? "")}
+                          #{typeof order.orderNumber === "string" ? order.orderNumber : ""}
                         </Link>
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">

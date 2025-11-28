@@ -18,6 +18,7 @@ export const StripeRedirectOverlay: React.FC<StripeRedirectOverlayProps> = ({
 
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [isVisible, checkoutUrl]);
 
   // Show overlay immediately even if checkoutUrl is not yet available

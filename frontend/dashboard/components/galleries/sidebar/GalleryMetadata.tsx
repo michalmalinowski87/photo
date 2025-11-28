@@ -88,4 +88,3 @@ export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
     </>
   );
 };
-

@@ -7,8 +7,9 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useDownloadStore } from "../store/downloadSlice";
+
 import { ZipDownloadProgress } from "../components/ui/zip-download/ZipDownloadProgress";
+import { useDownloadStore } from "../store/downloadSlice";
 
 interface ZipDownloadContextType {
   startZipDownload: (orderId: string, galleryId: string) => string;

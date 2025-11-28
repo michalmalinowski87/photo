@@ -1,8 +1,9 @@
 import { useRef, useCallback } from "react";
-import { useToast } from "./useToast";
+
 import api from "../lib/api-service";
-import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
 import { GalleryImage } from "../components/upload/PhotoUploadHandler";
+import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
+import { useToast } from "./useToast";
 
 export type UploadType = "originals" | "finals";
 
@@ -156,13 +157,11 @@ export function useImagePolling(config: UseImagePollingConfig) {
 
           if (config.type === "finals") {
             // For finals, check if we have enough images with URLs
-            hasNewImages =
-              imagesWithUrls.length >= initialImageCount + expectedNewImageCount;
+            hasNewImages = imagesWithUrls.length >= initialImageCount + expectedNewImageCount;
           } else {
             // For originals, check if all images are processed (have URLs)
             hasNewImages =
-              allProcessed &&
-              imagesWithUrls.length >= initialImageCount + expectedNewImageCount;
+              allProcessed && imagesWithUrls.length >= initialImageCount + expectedNewImageCount;
           }
 
           if (hasNewImages || attempts >= maxAttempts) {
@@ -195,10 +194,7 @@ export function useImagePolling(config: UseImagePollingConfig) {
                     config.galleryId
                   );
 
-                  if (
-                    !validationResult.withinLimit &&
-                    validationResult.excessBytes !== undefined
-                  ) {
+                  if (!validationResult.withinLimit && validationResult.excessBytes !== undefined) {
                     config.onValidationNeeded?.({
                       uploadedSizeBytes: validationResult.uploadedSizeBytes,
                       originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
@@ -273,10 +269,7 @@ export function useImagePolling(config: UseImagePollingConfig) {
       };
 
       // Start polling after a short delay
-      pollingTimeoutRef.current = setTimeout(
-        pollForImages,
-        config.type === "finals" ? 500 : 1000
-      );
+      pollingTimeoutRef.current = setTimeout(pollForImages, config.type === "finals" ? 500 : 1000);
     },
     [config, showToast]
   );
@@ -291,4 +284,3 @@ export function useImagePolling(config: UseImagePollingConfig) {
 
   return { startPolling, stopPolling };
 }
-

@@ -112,22 +112,28 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       {shouldShowShareButton && (
         <>
           {hasClientSelectingOrder ? (
-            <Button variant="outline" size="sm" disabled className="w-full mt-2" startIcon={
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M8 2V14M2 8H14"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            }>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="w-full mt-2"
+              startIcon={
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M8 2V14M2 8H14"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
+            >
               Udostępniono klientowi
             </Button>
           ) : (
@@ -166,4 +172,3 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     </div>
   );
 };
-

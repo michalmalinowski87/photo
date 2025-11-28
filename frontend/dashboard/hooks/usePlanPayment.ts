@@ -132,4 +132,3 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
     setShowRedirectOverlay,
   };
 };
-

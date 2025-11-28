@@ -24,7 +24,7 @@ export const ModalProvider: React.FC<ModalProviderProps> = ({ children }) => {
 
   const closeModal = useCallback((id: string) => {
     setModals((prev) => {
-      const { [id]: removed, ...rest } = prev;
+      const { [id]: _removed, ...rest } = prev;
       return rest;
     });
   }, []);

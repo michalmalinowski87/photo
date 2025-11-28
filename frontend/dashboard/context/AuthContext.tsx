@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+
 import SessionExpiredModal from "../components/auth/SessionExpiredModal";
 
 interface AuthContextType {
@@ -23,8 +24,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for session-expired events from API interceptor
   useEffect(() => {
-    const handleSessionExpired = (event: CustomEvent) => {
-      const url = event.detail?.returnUrl || router.asPath || "/galleries";
+    const handleSessionExpired = (event: Event) => {
+      const customEvent = event as CustomEvent<{ returnUrl?: string }>;
+      const url = customEvent.detail?.returnUrl ?? router.asPath ?? "/galleries";
       setSessionExpired(true, url);
     };
 

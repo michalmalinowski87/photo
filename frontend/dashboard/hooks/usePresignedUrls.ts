@@ -40,10 +40,7 @@ async function retryWithBackoff<T>(
 
 export function usePresignedUrls(config: UsePresignedUrlsConfig) {
   const fetchPresignedUrls = useCallback(
-    async (
-      files: File[],
-      onCancel?: () => boolean
-    ): Promise<Map<string, PresignedUrlData>> => {
+    async (files: File[], onCancel?: () => boolean): Promise<Map<string, PresignedUrlData>> => {
       const PRESIGN_BATCH_SIZE = 20; // Get 20 presigned URLs per API call (max 50)
       const presignedUrlMap = new Map<string, PresignedUrlData>();
 
@@ -103,10 +100,7 @@ export function usePresignedUrls(config: UsePresignedUrlsConfig) {
             const presignedUrl = batchPresignResponse.urls[idx];
             if (presignedUrl) {
               // Extract API key from objectKey (remove galleries/{galleryId}/ prefix)
-              const apiKey = presignedUrl.objectKey.replace(
-                `galleries/${config.galleryId}/`,
-                ""
-              );
+              const apiKey = presignedUrl.objectKey.replace(`galleries/${config.galleryId}/`, "");
               presignedUrlMap.set(file.name, { url: presignedUrl.url, apiKey });
             }
           });
@@ -131,4 +125,3 @@ export function usePresignedUrls(config: UsePresignedUrlsConfig) {
 
   return { fetchPresignedUrls };
 }
-

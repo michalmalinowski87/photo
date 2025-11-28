@@ -52,7 +52,7 @@ export const useUploadStore = create<UploadState>()(
 
       removeUpload: (id: string) => {
         set((state) => {
-          const { [id]: removed, ...rest } = state.uploads;
+          const { [id]: _removed, ...rest } = state.uploads;
           return { uploads: rest };
         });
       },

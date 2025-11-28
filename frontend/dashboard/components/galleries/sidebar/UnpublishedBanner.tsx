@@ -52,13 +52,10 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
   // This ensures we show the correct state immediately on upload/delete
   // IMPORTANT: Don't use gallery.originalsBytesUsed until loading is complete to prevent flicker
   const currentUploadedBytes =
-    optimisticBytesUsed !== null
-      ? optimisticBytesUsed
-      : isLoadingPlanRecommendation
-        ? 0 // While loading, assume no photos to prevent flicker
-        : (planRecommendation?.uploadedSizeBytes ??
-          (gallery.originalsBytesUsed as number | undefined) ??
-          0);
+    optimisticBytesUsed ??
+    (isLoadingPlanRecommendation
+      ? 0 // While loading, assume no photos to prevent flicker
+      : (planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0));
   // Only show plan content if we're not loading AND we have a plan recommendation
   const hasUploadedPhotos =
     !isLoadingPlanRecommendation && currentUploadedBytes > 0 && planRecommendation !== null;
@@ -122,4 +119,3 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
     </div>
   );
 };
-

@@ -52,8 +52,7 @@ export const CapacityWarning: React.FC<CapacityWarningProps> = ({
         <p className="text-sm text-blue-700 dark:text-blue-300">
           ℹ️ Używasz {usedGB} GB z {limitGB} GB ({usagePercentage.toFixed(1)}% pojemności). Po
           opłaceniu będziesz mógł przesłać jeszcze{" "}
-          {((originalsLimitBytes - uploadedSizeBytes) / (1024 * 1024 * 1024)).toFixed(1)} GB
-          zdjęć.
+          {((originalsLimitBytes - uploadedSizeBytes) / (1024 * 1024 * 1024)).toFixed(1)} GB zdjęć.
         </p>
       </div>
     );
@@ -61,4 +60,3 @@ export const CapacityWarning: React.FC<CapacityWarningProps> = ({
 
   return null;
 };
-

@@ -71,9 +71,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
           </div>
         ) : (
           <>
-            {children ? (
-              children
-            ) : (
+            {children ?? (
               <div className="space-y-2">
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"

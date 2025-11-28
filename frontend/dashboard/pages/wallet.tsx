@@ -63,7 +63,7 @@ export default function Wallet() {
       }
 
       const data = await api.wallet.getTransactions(params);
-      setTransactions(data.transactions ?? []);
+      setTransactions((data.transactions ?? []) as Transaction[]);
       setHasMore(data.hasMore ?? false);
       const newCursor = data.lastKey ?? null;
       setPaginationCursor(newCursor);

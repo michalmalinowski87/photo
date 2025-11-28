@@ -12,7 +12,7 @@ import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { getPricingModalData } from "../../lib/calculate-plan";
 import type { PricingModalData } from "../../lib/plan-types";
 import { useGalleryStore } from "../../store/gallerySlice";
-import { useOrderStore } from "../../store/orderSlice";
+import { useOrderStore, type Order as StoreOrder } from "../../store/orderSlice";
 import { useUserStore } from "../../store/userSlice";
 import { GalleryPricingModal } from "../galleries/GalleryPricingModal";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
@@ -26,6 +26,7 @@ interface GalleryLayoutWrapperProps {
   children: React.ReactNode;
 }
 
+// Local Order type for gallery orders list (orderId is optional in API responses)
 interface Order {
   orderId?: string;
   galleryId?: string;
@@ -54,7 +55,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const deliveryStatus = useOrderStore((state) => state.currentOrder?.deliveryStatus);
   const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
   const clearCurrentOrder = useOrderStore((state) => state.clearCurrentOrder);
-  const invalidateOrderCache = useOrderStore((state) => state.invalidateOrderCache);
   const invalidateOrderStoreGalleryCache = useOrderStore(
     (state) => state.invalidateGalleryOrdersCache
   );
@@ -114,8 +114,37 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         }
       }
       // Update the Zustand store - this will trigger re-render of components using useOrderStore
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCurrentOrder(orderData as any);
+      if (
+        orderData &&
+        typeof orderData === "object" &&
+        "orderId" in orderData &&
+        "galleryId" in orderData
+      ) {
+        const orderIdValue = orderData.orderId;
+        const galleryIdValue = orderData.galleryId;
+        if (
+          typeof orderIdValue === "string" &&
+          orderIdValue !== "" &&
+          typeof galleryIdValue === "string"
+        ) {
+          const validOrder: StoreOrder = {
+            orderId: orderIdValue,
+            galleryId: galleryIdValue,
+            ...(typeof orderData === "object" && orderData !== null
+              ? Object.fromEntries(
+                  Object.entries(orderData).filter(
+                    ([key]) => key !== "orderId" && key !== "galleryId"
+                  )
+                )
+              : {}),
+          } as StoreOrder;
+          setCurrentOrder(validOrder);
+        } else {
+          setCurrentOrder(null);
+        }
+      } else {
+        setCurrentOrder(null);
+      }
       await new Promise((resolve) => setTimeout(resolve, 10));
     } catch (_err) {
       setCurrentOrder(null);
@@ -375,7 +404,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const handleSettings = () => {
     void router.push(`/galleries/${galleryId as string}/settings`);
   };
-
 
   // Show loading only if we don't have gallery data yet
   if (loading && !gallery) {

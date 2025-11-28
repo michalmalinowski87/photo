@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
-interface Gallery {
+export interface Gallery {
   galleryId: string;
   galleryName?: string;
   ownerId: string;

@@ -58,23 +58,10 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     [key: string]: unknown;
   }
 
-  interface PaymentResponse {
-    totalAmountCents?: number;
-    walletAmountCents?: number;
-    stripeAmountCents?: number;
-    paymentMethod?: "WALLET" | "STRIPE";
-    stripeFeeCents?: number;
-    checkoutUrl?: string;
-    paid?: boolean;
-    dryRun?: boolean;
-    [key: string]: unknown;
-  }
-
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
   const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
@@ -87,13 +74,11 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     }
 
     try {
-      const { data } = await apiFetch<WalletBalanceResponse>(`${apiUrl}/wallet/balance`, {
+      await apiFetch<WalletBalanceResponse>(`${apiUrl}/wallet/balance`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
-      setWalletBalance(data.balanceCents ?? 0);
     } catch (_err) {
       // Ignore wallet errors, default to 0
-      setWalletBalance(0);
     }
   }, [apiUrl, idToken]);
 

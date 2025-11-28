@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
-import { FullPageLoading } from "../../../components/ui/loading/Loading";
+import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
 import { FileUploadZone } from "../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";

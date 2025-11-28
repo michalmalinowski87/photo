@@ -32,7 +32,7 @@ export const useUIStore = create<UIState>()(
         clearTablePreferences: (tableId?: string) => {
           if (tableId) {
             set((state) => {
-              const { [tableId]: removed, ...rest } = state.tablePreferences;
+              const { [tableId]: _removed, ...rest } = state.tablePreferences;
               return { tablePreferences: rest };
             });
           } else {

@@ -18,4 +18,3 @@ export const UploadedSizeInfo: React.FC<UploadedSizeInfoProps> = ({ uploadedSize
     </div>
   );
 };
-

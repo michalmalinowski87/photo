@@ -7,6 +7,7 @@ import React, {
   useEffect,
 } from "react";
 import { createPortal } from "react-dom";
+
 import Toast from "../components/ui/toast/Toast";
 
 export interface ToastMessage {
@@ -86,7 +87,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     if (mounted && typeof window !== "undefined" && toasts.length > 0) {
       // Force toast container to be last element in body
       const container = document.querySelector("[data-toast-container]");
-      if (container && container.parentNode) {
+      if (container?.parentNode) {
         container.parentNode.removeChild(container);
         document.body.appendChild(container);
       }

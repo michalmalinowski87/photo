@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback } from "react";
 
-import { useToast } from "../../hooks/useToast";
-import api from "../../lib/api-service";
+import { useImagePolling } from "../../hooks/useImagePolling";
 import { usePresignedUrls } from "../../hooks/usePresignedUrls";
 import { useS3Upload } from "../../hooks/useS3Upload";
-import { useImagePolling } from "../../hooks/useImagePolling";
+import { useToast } from "../../hooks/useToast";
+import api from "../../lib/api-service";
 
 import { PerImageProgress } from "./UploadProgressOverlay";
 
@@ -114,7 +114,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         errors: [...prev.errors, { file, error }],
       }));
     },
-    onSuccess: (file, key, fileSize) => {
+    onSuccess: (file, key) => {
       fileToKeyMapRef.current.set(file, key);
       setUploadProgress((prev) => ({
         ...prev,
@@ -214,7 +214,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
           if (result.success) {
             uploadSuccesses++;
           } else {
-            uploadErrors.push({ file: result.file, error: result.error || "Unknown error" });
+            uploadErrors.push({ file: result.file, error: result.error ?? "Unknown error" });
           }
         });
 

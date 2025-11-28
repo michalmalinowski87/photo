@@ -1,6 +1,7 @@
 import React, { ComponentType, useCallback, useRef } from "react";
-import { useUploadStore } from "../store/uploadSlice";
+
 import { apiFetchWithAuth, formatApiError } from "../lib/api";
+import { useUploadStore } from "../store/uploadSlice";
 
 interface UploadConfig {
   apiUrl: string;
@@ -202,12 +203,23 @@ export function withImageUpload<P extends object>(
                 });
               });
 
+              // Type guard for presigned URL response
+              const presignedData = presignResponse.data;
+              if (
+                !presignedData ||
+                typeof presignedData !== "object" ||
+                !("url" in presignedData) ||
+                typeof presignedData.url !== "string"
+              ) {
+                throw new Error(`Invalid presigned URL response for ${file.name}`);
+              }
+
               // Upload file to S3 with timeout
               const uploadController = new AbortController();
               const uploadTimeout = setTimeout(() => uploadController.abort(), 300000); // 5 min timeout
 
               try {
-                const uploadResponse = await fetch(presignResponse.data.url, {
+                const uploadResponse = await fetch(presignedData.url, {
                   method: "PUT",
                   body: file,
                   headers: {
@@ -441,11 +453,22 @@ export function useImageUpload() {
               });
             });
 
+            // Type guard for presigned URL response
+            const presignedData = presignResponse.data;
+            if (
+              !presignedData ||
+              typeof presignedData !== "object" ||
+              !("url" in presignedData) ||
+              typeof presignedData.url !== "string"
+            ) {
+              throw new Error(`Invalid presigned URL response for ${file.name}`);
+            }
+
             const uploadController = new AbortController();
             const uploadTimeout = setTimeout(() => uploadController.abort(), 300000);
 
             try {
-              const uploadResponse = await fetch(presignResponse.data.url, {
+              const uploadResponse = await fetch(presignedData.url, {
                 method: "PUT",
                 body: file,
                 headers: {

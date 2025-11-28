@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 
 import { useZipDownload as useZipDownloadHook } from "../hocs/withZipDownload";
-import { useToast } from "./useToast";
 import { apiFetch, formatApiError } from "../lib/api";
 import { useGalleryStore } from "../store/gallerySlice";
 import { useOrderStore } from "../store/orderSlice";
+
+import { useToast } from "./useToast";
 
 interface UseOrderActionsOptions {
   apiUrl: string;
@@ -31,7 +32,7 @@ export const useOrderActions = ({
 }: UseOrderActionsOptions) => {
   const { showToast } = useToast();
   const { downloadZip } = useZipDownloadHook();
-  const { invalidateGalleryCache, invalidateGalleryOrdersCache } = useGalleryStore();
+  const { invalidateGalleryOrdersCache } = useGalleryStore();
   const { invalidateOrderCache } = useOrderStore();
   const invalidateOrderStoreGalleryCache = useOrderStore(
     (state) => state.invalidateGalleryOrdersCache
@@ -255,4 +256,3 @@ export const useOrderActions = ({
     handleSendFinalsToClient,
   };
 };
-

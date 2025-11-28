@@ -52,8 +52,11 @@ export const useUserStore = create<UserState>()(
           try {
             const { apiFetchWithAuth } = await import("../lib/api");
             const { data } = await apiFetchWithAuth(`${apiUrl}/wallet/balance`);
-            set({ walletBalanceCents: data.balanceCents || 0, isLoading: false });
-          } catch (err) {
+            set({
+              walletBalanceCents: (data as { balanceCents?: number })?.balanceCents || 0,
+              isLoading: false,
+            });
+          } catch (_err) {
             // Silently fail - wallet balance is not critical
             set({ isLoading: false });
           }

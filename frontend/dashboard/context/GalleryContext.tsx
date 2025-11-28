@@ -1,8 +1,9 @@
 import { createContext, useContext, ReactNode, useMemo, useEffect } from "react";
-import { useGalleryStore } from "../store/gallerySlice";
+
+import { useGalleryStore, type Gallery } from "../store/gallerySlice";
 
 interface GalleryContextType {
-  gallery: any;
+  gallery: Gallery | null;
   loading: boolean;
   error: string | null;
   galleryId: string | undefined;
@@ -22,7 +23,7 @@ export function GalleryProvider({
   reloadOrder,
 }: {
   children: ReactNode;
-  gallery: any;
+  gallery: Gallery | null;
   loading: boolean;
   error: string | null;
   galleryId: string | undefined;
@@ -33,8 +34,17 @@ export function GalleryProvider({
   const { setCurrentGallery, setLoading, setError } = useGalleryStore();
 
   useEffect(() => {
-    if (gallery) {
-      setCurrentGallery(gallery);
+    if (
+      gallery &&
+      typeof gallery === "object" &&
+      "galleryId" in gallery &&
+      typeof gallery.galleryId === "string" &&
+      "ownerId" in gallery &&
+      typeof gallery.ownerId === "string" &&
+      "state" in gallery &&
+      typeof gallery.state === "string"
+    ) {
+      setCurrentGallery(gallery as Gallery);
     }
   }, [gallery, setCurrentGallery]);
 

@@ -8,7 +8,6 @@ import {
   type Duration,
   type PlanKey,
 } from "../../../lib/pricing-plans";
-import Button from "../../ui/button/Button";
 
 interface SuggestedPlanSectionProps {
   suggestedStorage: "1GB" | "3GB" | "10GB";
@@ -85,8 +84,7 @@ export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
             {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
               const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
               const isSelected =
-                selectedPlanKey === planKey ||
-                (!selectedPlanKey && selectedDuration === duration);
+                selectedPlanKey === planKey || (!selectedPlanKey && selectedDuration === duration);
               const price = planKey ? calculatePriceWithDiscount(planKey, selectionEnabled) : 0;
 
               return (
@@ -171,4 +169,3 @@ export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
     </div>
   );
 };
-

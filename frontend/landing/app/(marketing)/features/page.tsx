@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import MagicBadge from "@/components/ui/magic-badge";
 import { Lock, DollarSign, Settings, Users } from "lucide-react";
-import { FEATURES } from "@/utils";
 
 const featuresList = [
   {

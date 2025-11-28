@@ -3,12 +3,9 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const lambda = new LambdaClient({});
 
 // Helper function to process a checkout session (used by EventBridge webhook handler)
 async function processCheckoutSession(
@@ -350,7 +347,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const paymentsTable = envProc?.env?.PAYMENTS_TABLE as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
 
 	// CRITICAL: Log raw event structure FIRST to diagnose EventBridge delivery
 	logger.info('Webhook handler invoked - raw event structure', {

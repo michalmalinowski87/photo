@@ -47,7 +47,7 @@ export const useDownloadStore = create<DownloadState>()(
 
       removeDownload: (id: string) => {
         set((state) => {
-          const { [id]: removed, ...rest } = state.downloads;
+          const { [id]: _removed, ...rest } = state.downloads;
           return { downloads: rest };
         });
       },
