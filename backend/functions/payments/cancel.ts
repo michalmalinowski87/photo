@@ -3,6 +3,8 @@ import { getTransaction, updateTransactionStatus } from '../../lib/src/transacti
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 import { generatePaymentPageHTML } from './payment-page-template';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const getSecurityHeaders = () => ({
 	'Content-Type': 'text/html; charset=utf-8',
@@ -27,11 +29,10 @@ const addCancelledParam = (url: string): string => {
 	}
 };
 
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
 const clearPaymentLock = async (galleryId: string, galleriesTable: string, logger: any) => {
 	try {
-		const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
-		const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-		const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 		await ddb.send(new UpdateCommand({
 			TableName: galleriesTable,
 			Key: { galleryId },

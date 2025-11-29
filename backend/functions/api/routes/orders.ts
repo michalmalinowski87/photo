@@ -19,6 +19,7 @@ import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
 import * as ordersUploadFinalComplete from '../../../functions/orders/uploadFinalComplete';
 import * as ordersDeleteFinalImage from '../../../functions/orders/deleteFinalImage';
+import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOriginals';
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.post('/galleries/:id/orders/:orderId/final/upload-batch', wrapHandler(ord
 router.post('/galleries/:id/orders/:orderId/final/upload-complete', wrapHandler(ordersUploadFinalComplete.handler));
 // router.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 router.post('/galleries/:id/orders/:orderId/send-final-link', wrapHandler(ordersSendFinalLink.handler));
+router.post('/galleries/:id/orders/:orderId/cleanup-originals', wrapHandler(ordersCleanupOriginals.handler));
 
 // Global orders
 router.get('/orders', wrapHandler(ordersListAll.handler));

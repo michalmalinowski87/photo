@@ -67,19 +67,12 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Don't allow marking cancelled or delivered orders as paid
+	// Don't allow marking cancelled orders as paid
 	if (order.deliveryStatus === 'CANCELLED') {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Cannot mark cancelled order as paid' })
-		};
-	}
-	if (order.deliveryStatus === 'DELIVERED') {
-		return {
-			statusCode: 400,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Cannot mark delivered order as paid' })
 		};
 	}
 

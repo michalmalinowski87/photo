@@ -757,6 +757,22 @@ class ApiService {
     },
 
     /**
+     * Cleanup originals, previews, and thumbnails for selected photos
+     * Only available for selection galleries
+     */
+    cleanupOriginals: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/cleanup-originals`, {
+        method: "POST",
+      });
+    },
+
+    /**
      * Download order ZIP (returns URL or handles 202 for async generation)
      */
     downloadZip: async (

@@ -242,9 +242,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Mark order as DELIVERED
-	// Note: Originals are already removed when status changed to PREPARING_DELIVERY
-	// Thumbnails and previews are kept for display purposes (showing "Wybrane" previews)
-	// ZIPs are generated before originals are removed (after finals upload)
+	// Note: Originals cleanup is now optional and manual (via cleanup-originals endpoint)
+	// Photographer can choose to clean up originals, previews, and thumbnails when marking as delivered
 	const now = new Date().toISOString();
 	try {
 		await ddb.send(new UpdateCommand({

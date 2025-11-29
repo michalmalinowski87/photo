@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -64,30 +64,147 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Construct S3 key for final image
+	// Helper to convert filename to WebP (previews/thumbs are stored as WebP)
+	const getWebpFilename = (fname: string): string => {
+		const lastDot = fname.lastIndexOf('.');
+		if (lastDot === -1) return `${fname}.webp`;
+		return `${fname.substring(0, lastDot)}.webp`;
+	};
+
+	// Construct S3 keys for final image and its previews/thumbs
 	// Final images are stored at: galleries/{galleryId}/final/{orderId}/{filename}
 	const finalImageKey = `galleries/${galleryId}/final/${orderId}/${decodedFilename}`;
+	const webpFilename = getWebpFilename(decodedFilename);
+	const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${webpFilename}`;
+	const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${webpFilename}`;
 
-	// Delete final image from S3
+	// Get final image file size before deletion (for updating finalsBytesUsed)
+	let fileSize = 0;
 	try {
-		await s3.send(new DeleteObjectCommand({
+		const headResponse = await s3.send(new HeadObjectCommand({
 			Bucket: bucket,
 			Key: finalImageKey
 		}));
-		logger?.info('Deleted final image', { galleryId, orderId, filename: decodedFilename, s3Key: finalImageKey });
+		fileSize = headResponse.ContentLength || 0;
 	} catch (err: any) {
-		logger?.error('Failed to delete final image from S3', {
-			error: err.message,
+		if (err.name !== 'NotFound') {
+			logger?.warn('Failed to get final image file size', { 
+				error: err.message, 
+				finalImageKey,
+				galleryId,
+				orderId
+			});
+		}
+		// If file not found, continue - it might have been deleted already
+	}
+
+	// Delete final image, preview, and thumb from S3
+	const deleteResults = await Promise.allSettled([
+		s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: finalImageKey })),
+		s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: previewKey })),
+		s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: thumbKey }))
+	]);
+
+	const deleteErrors = deleteResults.filter(r => r.status === 'rejected');
+	if (deleteErrors.length > 0) {
+		logger?.warn('Some files failed to delete', {
+			errors: deleteErrors.map(e => (e as PromiseRejectedResult).reason),
 			galleryId,
 			orderId,
-			filename: decodedFilename,
-			s3Key: finalImageKey
+			filename: decodedFilename
 		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to delete final image', message: err.message })
-		};
+		// Check if the main final image deletion failed
+		if (deleteResults[0].status === 'rejected') {
+			const error = (deleteResults[0] as PromiseRejectedResult).reason;
+			logger?.error('Failed to delete final image from S3', {
+				error: error instanceof Error ? error.message : String(error),
+				galleryId,
+				orderId,
+				filename: decodedFilename,
+				s3Key: finalImageKey
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Failed to delete final image', message: error instanceof Error ? error.message : String(error) })
+			};
+		}
+	}
+
+	logger?.info('Deleted final image, preview, and thumb', { 
+		galleryId, 
+		orderId, 
+		filename: decodedFilename, 
+		finalImageKey,
+		previewKey,
+		thumbKey
+	});
+
+	// Update gallery finalsBytesUsed by subtracting deleted final image size
+	// Also update bytesUsed for backward compatibility
+	// Use atomic ADD operation to prevent race conditions with concurrent deletions
+	if (fileSize > 0) {
+		try {
+			const currentFinalsBytesUsed = gallery.finalsBytesUsed || 0;
+			const currentBytesUsed = gallery.bytesUsed || 0;
+			
+			// Use atomic ADD with negative value to handle concurrent deletions safely
+			// This prevents race conditions where multiple deletions overwrite each other
+			await ddb.send(new UpdateCommand({
+				TableName: galleriesTable,
+				Key: { galleryId },
+				UpdateExpression: 'ADD finalsBytesUsed :negativeSize, bytesUsed :negativeSize',
+				ExpressionAttributeValues: {
+					':negativeSize': -fileSize
+				}
+			}));
+			
+			// After atomic update, check if value went negative and correct it if needed
+			const updatedGallery = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			
+			const updatedFinalsBytesUsed = updatedGallery.Item?.finalsBytesUsed || 0;
+			const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
+			
+			// If value went negative (shouldn't happen, but handle edge cases), set to 0
+			if (updatedFinalsBytesUsed < 0 || updatedBytesUsed < 0) {
+				logger?.warn('finalsBytesUsed went negative after atomic update, correcting', {
+					galleryId,
+					orderId,
+					updatedFinalsBytesUsed,
+					updatedBytesUsed,
+					sizeRemoved: fileSize,
+					previousFinalsBytesUsed: currentFinalsBytesUsed
+				});
+				
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET finalsBytesUsed = :zero, bytesUsed = :zero',
+					ExpressionAttributeValues: {
+						':zero': 0
+					}
+				}));
+			}
+			
+			logger?.info('Updated gallery finalsBytesUsed (atomic)', { 
+				galleryId, 
+				orderId,
+				sizeRemoved: fileSize,
+				oldFinalsBytesUsed: currentFinalsBytesUsed,
+				newFinalsBytesUsed: Math.max(0, updatedFinalsBytesUsed)
+			});
+		} catch (updateErr: any) {
+			logger?.warn('Failed to update gallery finalsBytesUsed', {
+				error: updateErr.message,
+				galleryId,
+				orderId,
+				size: fileSize
+			});
+			// Continue even if update fails - files are already deleted
+		}
 	}
 
 	// Check if this was the last final image

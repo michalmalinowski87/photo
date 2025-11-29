@@ -318,13 +318,10 @@ export default function Orders() {
     // Check if selection is enabled from gallery metadata
     const selectionEnabled = gallery?.selectionEnabled !== false;
 
-    // Note: Originals will be deleted after finals upload, but previews remain for display
-    // Show warning if selection is enabled (user might lose access to originals)
+    // Show confirmation before upload
     if (selectionEnabled) {
-      const warning =
-        "Warning: After uploading final photos, originals will be deleted. Previews will remain for display.";
       // eslint-disable-next-line no-alert
-      if (!window.confirm(`${warning}\n\nDo you want to continue with upload?`)) {
+      if (!window.confirm("Do you want to continue with upload?")) {
         return;
       }
     }
@@ -486,17 +483,6 @@ export default function Orders() {
                   <td>
                     {/* Download ZIP - available for CLIENT_APPROVED orders */}
                     {o.deliveryStatus === "CLIENT_APPROVED" && (
-                      <button
-                        onClick={() => downloadZip(o.orderId)}
-                        disabled={downloadingZip[o.orderId]}
-                        className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Download ZIP file (one-time use)"
-                      >
-                        {downloadingZip[o.orderId] ? "Downloading..." : "Download ZIP"}
-                      </button>
-                    )}
-                    {/* Note: ZIP download only available before finals upload (originals are deleted after delivery) */}
-                    {false && o.deliveryStatus === "DELIVERED" && (
                       <button
                         onClick={() => downloadZip(o.orderId)}
                         disabled={downloadingZip[o.orderId]}

@@ -3,6 +3,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTransactionsByUser, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -498,7 +500,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// This prevents paying for stale plan if user uploaded more photos or deleted photos
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	if (bucket) {
-		const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
 		const s3 = new S3Client({});
 		
 		// Calculate current uploaded size from S3 (source of truth)
@@ -556,7 +557,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Ensure gallery has originalsLimitBytes and finalsLimitBytes set
 	// If not set, calculate from plan metadata
 	if (!gallery.originalsLimitBytes || !gallery.finalsLimitBytes) {
-		const { PRICING_PLANS } = await import('../../lib/src/pricing');
 		const planMetadata = PRICING_PLANS[gallery.plan as keyof typeof PRICING_PLANS];
 		if (planMetadata) {
 			// Update gallery with limits if missing
@@ -686,7 +686,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	plan = existingTransaction.metadata?.plan || plan;
 	
 	// Get plan metadata for expiry calculation
-	const { PRICING_PLANS } = await import('../../lib/src/pricing');
 	const planMetadata = PRICING_PLANS[plan as keyof typeof PRICING_PLANS] || PRICING_PLANS['1GB-1m'];
 	const expiryDays = planMetadata.expiryDays;
 	galleryPriceCents = totalAmountCents;

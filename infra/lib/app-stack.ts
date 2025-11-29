@@ -321,7 +321,7 @@ export class AppStack extends Stack {
 		// Client login endpoint - clients authenticate with gallery password, not Cognito
 		httpApi.addRoutes({
 			path: '/galleries/{id}/client-login',
-			methods: [HttpMethod.POST],
+			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiClientLoginIntegration', apiFn)
 			// No authorizer - public endpoint
 		});
@@ -330,49 +330,49 @@ export class AppStack extends Stack {
 		// These endpoints verify client JWT tokens in the Lambda function itself
 		httpApi.addRoutes({
 			path: '/galleries/{id}/images',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiGalleryImagesIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/delivered',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOrdersDeliveredIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/selections',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiSelectionsGetIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/selections/approve',
-			methods: [HttpMethod.POST],
+			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiSelectionsApproveIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/selection-change-request',
-			methods: [HttpMethod.POST],
+			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiSelectionChangeRequestIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/zip',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOrdersZipIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/images',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOrdersFinalImagesIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/zip',
-			methods: [HttpMethod.GET, HttpMethod.POST], // Support both GET (new) and POST (backward compatibility)
+			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS], // Support both GET (new) and POST (backward compatibility)
 			integration: new HttpLambdaIntegration('ApiOrdersFinalZipIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
@@ -616,7 +616,7 @@ export class AppStack extends Stack {
 		// Then: aws lambda publish-layer-version --layer-name sharp --zip-file fileb://release-x64.zip --compatible-runtimes nodejs20.x --compatible-architectures x86_64
 		// Then provide the ARN via: --context sharpLayerArn=arn:aws:lambda:REGION:ACCOUNT:layer:sharp:VERSION
 		const sharpLayerArn = this.node.tryGetContext('sharpLayerArn');
-		const resizeFn = new NodejsFunction(this, 'ImagesOnUploadResizeFn', {
+		const resizeFn = new NodejsFunction(this, 'ImagesOnUploadResizeFnV2', {
 			entry: path.join(__dirname, '../../../backend/functions/images/onUploadResize.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,

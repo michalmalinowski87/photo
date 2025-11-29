@@ -1,6 +1,8 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { listTransactionsByUser } from '../../lib/src/transactions';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -144,8 +146,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Fallback to ledger table if transactions table not available or empty
 		if (transactions.length === 0 && ledgerTable) {
-			const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-			const { DynamoDBDocumentClient, QueryCommand } = await import('@aws-sdk/lib-dynamodb');
 			const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 			
 			const queryParams: any = {

@@ -68,7 +68,8 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - `images/onUploadResize.ts` - Generate previews (1200px) and thumbnails (200px) using Sharp
 
 #### Processing
-- `processed/complete.ts` - Mark order as delivered and clean originals
+- `processed/complete.ts` - Mark order as delivered
+- `orders/cleanupOriginals.ts` - Manually cleanup originals, previews, and thumbnails for selected photos (selection galleries only)
 
 #### Payments
 - `payments/checkout.ts` - Create Stripe checkout session

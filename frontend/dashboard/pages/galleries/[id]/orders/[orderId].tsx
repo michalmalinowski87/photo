@@ -12,6 +12,7 @@ import { FullPageLoading, Loading } from "../../../../components/ui/loading/Load
 import { RetryableImage } from "../../../../components/ui/RetryableImage";
 import { FileUploadZone } from "../../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUploadHandler";
+import { StorageDisplay } from "../../../../components/upload/StorageDisplay";
 import {
   UploadProgressOverlay,
   type PerImageProgress,
@@ -107,6 +108,7 @@ export default function OrderDetail() {
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set()); // Track successfully deleted images to prevent reappearance
   const deletingImagesRef = useRef<Set<string>>(new Set()); // Ref to track deleting images for closures
   const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref to track deleted images for closures
+  const loadingOrderDataRef = useRef<boolean>(false); // Ref to prevent concurrent loadOrderData calls
   const [savingAmount, setSavingAmount] = useState<boolean>(false);
   const [isEditingAmount, setIsEditingAmount] = useState<boolean>(false);
   const [editingAmountValue, setEditingAmountValue] = useState<string>("");
@@ -115,6 +117,7 @@ export default function OrderDetail() {
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
+  const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
   const loadWalletBalance = useCallback(async (): Promise<number> => {
@@ -152,6 +155,13 @@ export default function OrderDetail() {
         return;
       }
 
+      // Prevent concurrent calls
+      if (loadingOrderDataRef.current && !forceRefresh) {
+        console.log("[orderDetail.tsx] loadOrderData already in progress, skipping");
+        return;
+      }
+
+      loadingOrderDataRef.current = true;
       setLoading(true);
       setError("");
 
@@ -225,6 +235,11 @@ export default function OrderDetail() {
         }
         if (galleryData) {
           setGallery(galleryData);
+          // Ensure gallery is in Zustand store for optimistic updates to work
+          const { setCurrentGallery } = useGalleryStore.getState();
+          if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
+            setCurrentGallery(galleryData as Parameters<typeof setCurrentGallery>[0]);
+          }
         }
 
         const images = imagesData.images ?? [];
@@ -267,11 +282,23 @@ export default function OrderDetail() {
           setFinalImages([]);
         }
       } catch (err) {
-        const errorMsg = formatApiError(err);
-        setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
-        showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
+        // Handle CORS and network errors gracefully
+        const error = err as Error & { status?: number; originalError?: Error };
+        const isCorsError = error.message?.includes("CORS") || error.message?.includes("Failed to fetch");
+        const isNetworkError = error.message?.includes("Network error");
+        
+        if (isCorsError || isNetworkError) {
+          // Log but don't show toast for CORS/network errors - they're usually transient
+          console.warn("[orderDetail.tsx] CORS/Network error during loadOrderData:", error.message);
+          // Don't set error state for CORS errors - they're usually temporary
+        } else {
+          const errorMsg = formatApiError(err);
+          setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
+          showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
+        }
       } finally {
         setLoading(false);
+        loadingOrderDataRef.current = false;
       }
     },
     [galleryId, orderId, showToast]
@@ -405,14 +432,187 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, galleryId]); // Removed loadOrderData from deps
 
-  // Auto-set to finals tab only if selection is disabled (non-selection galleries)
-  // Don't auto-switch when originals section is visible (even if originals are deleted, we show previews)
+  // Listen for finals uploads to update gallery's finalsBytesUsed reactively with optimistic updates
   useEffect(() => {
-    if (gallery?.selectionEnabled === false) {
-      setActiveTab("finals");
+    if (!galleryId) {
+      return undefined;
     }
-    // Removed auto-switch for PREPARING_DELIVERY/DELIVERED since we keep the section visible for previews
-  }, [gallery]);
+
+    console.log("[orderDetail.tsx] Setting up finals update listeners, galleryId:", galleryId);
+
+    // Ensure gallery is in store before subscribing (needed for updateFinalsBytesUsed to work)
+    if (gallery && useGalleryStore.getState().currentGallery?.galleryId !== galleryId) {
+      console.log("[orderDetail.tsx] Setting gallery in store");
+      const { setCurrentGallery } = useGalleryStore.getState();
+      // Only set if gallery has required fields
+      if (gallery.galleryId && gallery.ownerId && gallery.state) {
+        setCurrentGallery(gallery as Parameters<typeof setCurrentGallery>[0]);
+      }
+    }
+
+    // Listen for finals update events (fired immediately on upload)
+    const handleFinalsUpdate = (event?: Event) => {
+      const customEvent = event as CustomEvent<{ galleryId?: string; sizeDelta?: number }>;
+      console.log("[orderDetail.tsx] finalsUpdated event received:", {
+        eventGalleryId: customEvent.detail?.galleryId,
+        currentGalleryId: galleryId,
+        sizeDelta: customEvent.detail?.sizeDelta,
+      });
+
+      if (customEvent.detail?.galleryId === galleryId && customEvent.detail?.sizeDelta !== undefined) {
+        const sizeDelta = customEvent.detail.sizeDelta;
+        console.log("[orderDetail.tsx] Updating optimistic finals bytes, sizeDelta:", sizeDelta);
+        
+        // Get current store value (which already has optimistic updates from previous uploads)
+        const storeState = useGalleryStore.getState();
+        const storeFinalsBytes = storeState.currentGallery?.galleryId === galleryId
+          ? (storeState.currentGallery.finalsBytesUsed as number | undefined)
+          : undefined;
+        
+        // Store already has the optimistic update, so use it directly
+        if (storeFinalsBytes !== undefined) {
+          console.log("[orderDetail.tsx] Using store value (already optimistic):", storeFinalsBytes);
+          setOptimisticFinalsBytes(storeFinalsBytes);
+        } else {
+          // Fallback: if store doesn't have it, calculate manually
+          setOptimisticFinalsBytes((prev) => {
+            const currentBytes = prev ?? (gallery?.finalsBytesUsed as number | undefined) ?? 0;
+            const newBytes = Math.max(0, currentBytes + sizeDelta);
+            console.log("[orderDetail.tsx] Fallback calculation:", {
+              prev,
+              currentGalleryBytes: gallery?.finalsBytesUsed,
+              currentBytes,
+              sizeDelta,
+              newBytes,
+            });
+            return newBytes;
+          });
+        }
+      }
+    };
+
+    // Subscribe to Zustand store changes for finals bytes (backup/fallback)
+    let prevFinalsBytes: number | undefined = useGalleryStore.getState().currentGallery?.finalsBytesUsed as number | undefined;
+    const unsubscribe = useGalleryStore.subscribe((state) => {
+      const currentGallery = state.currentGallery;
+      const currentFinalsBytes = currentGallery?.galleryId === galleryId 
+        ? (currentGallery.finalsBytesUsed as number | undefined)
+        : undefined;
+
+      // Only fire if value actually changed and it's our gallery
+      if (currentFinalsBytes !== undefined && currentFinalsBytes !== prevFinalsBytes) {
+        prevFinalsBytes = currentFinalsBytes;
+        
+        console.log("[orderDetail.tsx] Zustand store subscription fired:", {
+          storeGalleryId: currentGallery?.galleryId,
+          currentGalleryId: galleryId,
+          finalsBytesUsed: currentFinalsBytes,
+        });
+
+        const newFinalsBytes = currentFinalsBytes;
+        console.log("[orderDetail.tsx] Store update matches our gallery, newFinalsBytes:", newFinalsBytes);
+        
+        // Update optimistic state to match store (store has the latest optimistic value)
+        // Only update if we don't already have this value (avoid unnecessary re-renders)
+        setOptimisticFinalsBytes((prev) => {
+          if (prev !== newFinalsBytes) {
+            console.log("[orderDetail.tsx] Updating optimistic from store subscription:", { prev, newFinalsBytes });
+            return newFinalsBytes;
+          }
+          return prev;
+        });
+
+        // Update local gallery state
+        setGallery((prevGallery) => {
+          if (!prevGallery || prevGallery.galleryId !== galleryId) {
+            return prevGallery;
+          }
+          return {
+            ...prevGallery,
+            finalsBytesUsed: newFinalsBytes,
+          };
+        });
+      }
+    });
+
+    if (typeof window !== "undefined") {
+      console.log("[orderDetail.tsx] Setting up finalsUpdated event listener");
+      window.addEventListener("finalsUpdated", handleFinalsUpdate);
+    }
+
+    return () => {
+      console.log("[orderDetail.tsx] Cleaning up finals update listeners");
+      unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("finalsUpdated", handleFinalsUpdate);
+      }
+    };
+  }, [galleryId, gallery, optimisticFinalsBytes]);
+
+  // Clear optimistic state when upload completes and data is reloaded
+  useEffect(() => {
+    if (isUploadComplete && optimisticFinalsBytes !== null) {
+      console.log("[orderDetail.tsx] Upload complete, reloading data and clearing optimistic state");
+      // Reload data and clear optimistic state after a delay
+      void loadOrderData(true).then(() => {
+        setTimeout(() => {
+          setOptimisticFinalsBytes((prev) => {
+            if (prev !== null) {
+              console.log("[orderDetail.tsx] Clearing optimistic state after reload");
+              return null;
+            }
+            return prev;
+          });
+        }, 2000);
+      });
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUploadComplete]); // Only depend on isUploadComplete
+
+  // Auto-set to finals tab if:
+  // - Selection is disabled (non-selection galleries)
+  // - Selected section is hidden (photos were cleaned up)
+  useEffect(() => {
+    if (!order || !gallery) return;
+    
+    const isSelectionEnabled = gallery.selectionEnabled !== false;
+    
+    if (gallery.selectionEnabled === false) {
+      setActiveTab("finals");
+      return;
+    }
+    
+    // Get selectedKeys from order
+    let orderSelectedKeys: string[] = [];
+    if (order.selectedKeys !== undefined && order.selectedKeys !== null) {
+      if (Array.isArray(order.selectedKeys)) {
+        orderSelectedKeys = order.selectedKeys;
+      } else if (typeof order.selectedKeys === "string") {
+        try {
+          const parsed: unknown = JSON.parse(order.selectedKeys);
+          orderSelectedKeys = Array.isArray(parsed) ? (parsed as string[]) : [order.selectedKeys];
+        } catch {
+          orderSelectedKeys = [order.selectedKeys];
+        }
+      }
+    }
+    
+    if (isSelectionEnabled && orderSelectedKeys.length > 0) {
+      // Check if selected images exist
+      const hasSelectedImagesCheck = originalImages.length > 0 && 
+        originalImages.some((img) => {
+          const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
+          const normalizedSelectedKeys = orderSelectedKeys.map((k) => k.toString().trim());
+          return normalizedSelectedKeys.includes(imgKey);
+        });
+      
+      // If no selected images found (photos were cleaned up), switch to finals tab
+      if (!hasSelectedImagesCheck) {
+        setActiveTab("finals");
+      }
+    }
+  }, [gallery, order, originalImages]);
 
   // Polling cleanup is handled by usePhotoUploadHandler hook
 
@@ -486,6 +686,39 @@ export default function OrderDetail() {
     setFinalImages((prevImages) =>
       prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
     );
+
+    // Get image size for optimistic update
+    const imageSize = image.size ?? 0;
+    const sizeDelta = imageSize > 0 ? -imageSize : undefined;
+
+    // Dispatch optimistic update event immediately (before API call)
+    if (typeof window !== "undefined" && galleryId && sizeDelta !== undefined) {
+      console.log("[orderDetail.tsx] Dispatching finals deletion event:", {
+        galleryId,
+        imageSize,
+        sizeDelta,
+      });
+      
+      // Update Zustand store optimistically first
+      const storeState = useGalleryStore.getState();
+      if (storeState.currentGallery?.galleryId === galleryId) {
+        (
+          storeState as { updateFinalsBytesUsed?: (delta: number) => void }
+        ).updateFinalsBytesUsed?.(sizeDelta);
+        const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as number | undefined;
+        console.log("[orderDetail.tsx] Updated store for deletion, new value:", newStoreValue);
+        
+        // Update optimistic state to match store
+        setOptimisticFinalsBytes(newStoreValue ?? null);
+      }
+      
+      // Dispatch event (store subscription will also handle this, but event ensures immediate update)
+      window.dispatchEvent(
+        new CustomEvent("finalsUpdated", {
+          detail: { galleryId, sizeDelta },
+        })
+      );
+    }
 
     try {
       await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
@@ -860,9 +1093,18 @@ export default function OrderDetail() {
   // For selection galleries: show only selected images, or "no photos selected" if empty/undefined
   const shouldShowAllImages = !selectionEnabled;
 
-  // Don't hide "Wybrane przez klienta" section - keep it visible for preview purposes
-  // Originals are deleted after finals upload, but previews remain for display
-  const hideSelectedSection = false; // Always show the section for preview purposes
+  // Hide "Wybrane przez klienta" section if:
+  // - Selection is enabled
+  // - User has selected photos (selectedKeys.length > 0)
+  // - But no matching images exist (photos were cleaned up)
+  const hasSelectedImages = selectedKeys.length > 0 && originalImages.length > 0 && 
+    originalImages.some((img) => {
+      const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
+      const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
+      return normalizedSelectedKeys.includes(imgKey);
+    });
+  
+  const hideSelectedSection = selectionEnabled && selectedKeys.length > 0 && !hasSelectedImages;
 
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
@@ -1251,7 +1493,7 @@ export default function OrderDetail() {
 
       {/* Show finals content when:
 			     - Selection is disabled (always show finals)
-			     - Selected section is hidden (finals uploaded, originals deleted - only show finals)
+			     - Selected section is hidden (finals uploaded - only show finals)
 			     - Selection enabled and selected section visible, but user is on finals tab
 			*/}
       {(!(selectionEnabled && !hideSelectedSection) || activeTab === "finals") && (
@@ -1355,6 +1597,20 @@ export default function OrderDetail() {
                   Obsługiwane formaty: JPG, PNG, GIF
                 </p>
               </div>
+              {gallery && (gallery.finalsLimitBytes as number | undefined) && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <StorageDisplay
+                    bytesUsed={
+                      optimisticFinalsBytes ??
+                      (gallery.finalsBytesUsed as number | undefined) ??
+                      0
+                    }
+                    limitBytes={gallery.finalsLimitBytes as number}
+                    label="Finalne"
+                    isLoading={optimisticFinalsBytes !== null && loading}
+                  />
+                </div>
+              )}
             </FileUploadZone>
           )}
 

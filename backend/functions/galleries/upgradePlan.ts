@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { getPaidTransactionForGallery, createTransaction } from '../../lib/src/transactions';
+import { getPaidTransactionForGallery, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 
@@ -219,7 +219,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 
 				// Update transaction status
-				const { updateTransactionStatus } = await import('../../lib/src/transactions');
 				await updateTransactionStatus(requester, transactionId, 'PAID', {});
 
 				// USER-CENTRIC FIX #7: Keep original expiry date, only upgrade storage size

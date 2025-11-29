@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { recalculateStorageInternal } from './recalculateBytesUsed';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -103,29 +104,67 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Update gallery originalsBytesUsed by subtracting deleted file size
 	// Also update bytesUsed for backward compatibility
+	// Use atomic ADD operation to prevent race conditions with concurrent deletions
+	let updatedGallery: any;
 	if (fileSize > 0) {
 		try {
-			// Get current originalsBytesUsed first to check if update would go negative
 			const currentOriginalsBytesUsed = gallery.originalsBytesUsed || 0;
-			const newOriginalsBytesUsed = Math.max(0, currentOriginalsBytesUsed - fileSize);
 			const currentBytesUsed = gallery.bytesUsed || 0;
-			const newBytesUsed = Math.max(0, currentBytesUsed - fileSize);
 			
-			// Use SET instead of ADD to ensure we don't go negative
+			// Use atomic ADD with negative value to handle concurrent deletions safely
+			// This prevents race conditions where multiple deletions overwrite each other
 			await ddb.send(new UpdateCommand({
 				TableName: galleriesTable,
 				Key: { galleryId },
-				UpdateExpression: 'SET originalsBytesUsed = :originalsSize, bytesUsed = :size',
+				UpdateExpression: 'ADD originalsBytesUsed :negativeSize, bytesUsed :negativeSize',
 				ExpressionAttributeValues: {
-					':originalsSize': newOriginalsBytesUsed,
-					':size': newBytesUsed
+					':negativeSize': -fileSize
 				}
 			}));
-			logger.info('Updated gallery originalsBytesUsed', { 
+			
+			// After atomic update, check if value went negative and correct it if needed
+			// This handles edge cases where the field might have been out of sync
+			// Store result for reuse at end of function
+			const galleryGetAfterUpdate = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			updatedGallery = galleryGetAfterUpdate;
+			
+			const updatedOriginalsBytesUsed = updatedGallery.Item?.originalsBytesUsed || 0;
+			const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
+			
+			// If value went negative (shouldn't happen, but handle edge cases), set to 0
+			if (updatedOriginalsBytesUsed < 0 || updatedBytesUsed < 0) {
+				logger.warn('originalsBytesUsed went negative after atomic update, correcting', {
+					galleryId,
+					updatedOriginalsBytesUsed,
+					updatedBytesUsed,
+					sizeRemoved: fileSize,
+					previousOriginalsBytesUsed: currentOriginalsBytesUsed
+				});
+				
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET originalsBytesUsed = :zero, bytesUsed = :zero',
+					ExpressionAttributeValues: {
+						':zero': 0
+					}
+				}));
+				
+				// Update the cached gallery value after correction
+				if (updatedGallery.Item) {
+					updatedGallery.Item.originalsBytesUsed = 0;
+					updatedGallery.Item.bytesUsed = 0;
+				}
+			}
+			
+			logger.info('Updated gallery originalsBytesUsed (atomic)', { 
 				galleryId, 
 				sizeRemoved: fileSize,
 				oldOriginalsBytesUsed: currentOriginalsBytesUsed,
-				newOriginalsBytesUsed
+				newOriginalsBytesUsed: Math.max(0, updatedOriginalsBytesUsed)
 			});
 		} catch (updateErr: any) {
 			logger.warn('Failed to update gallery originalsBytesUsed', {
@@ -147,7 +186,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// The recalculation function has built-in debouncing to prevent excessive calls
 		(async () => {
 			try {
-				const { recalculateBytesUsedInternal } = await import('./recalculateBytesUsed');
 				// Check debounce before calling (5 minute debounce)
 				const now = Date.now();
 				const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
@@ -156,7 +194,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
 				
 				if (now - lastRecalculatedAt >= RECALCULATE_DEBOUNCE_MS) {
-					await recalculateBytesUsedInternal(galleryId, galleriesTable, bucket, gallery, logger);
+					await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger);
 				} else {
 					logger.info('Automatic recalculation skipped (debounced)', {
 						galleryId,
@@ -173,11 +211,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		})();
 	}
 
-	// Get updated gallery to return current storage usage
-	const updatedGallery = await ddb.send(new GetCommand({
-		TableName: galleriesTable,
-		Key: { galleryId }
-	}));
+	// Get updated gallery to return current storage usage (only if not already fetched)
+	if (!updatedGallery) {
+		updatedGallery = await ddb.send(new GetCommand({
+			TableName: galleriesTable,
+			Key: { galleryId }
+		}));
+	}
 
 	const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
 	const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0); // Backward compatibility

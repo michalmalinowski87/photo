@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
 import { FileUploadZone } from "../../../components/upload/FileUploadZone";
+import { StorageDisplay } from "../../../components/upload/StorageDisplay";
 import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";
 import {
   UploadProgressOverlay,
@@ -117,6 +118,7 @@ export default function GalleryPhotos() {
   const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref for closures
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
+  const [optimisticOriginalsBytes, setOptimisticOriginalsBytes] = useState<number | null>(null);
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -206,11 +208,17 @@ export default function GalleryPhotos() {
     // Always dispatch the event, even if size is 0, so components know a deletion happened
     // Components can handle the case where sizeDelta is 0 or undefined
     if (typeof window !== "undefined" && galleryId) {
+      const sizeDelta = imageSize > 0 ? -imageSize : undefined;
+      console.log("[photos.tsx] Dispatching deletion event:", {
+        galleryId,
+        imageSize,
+        sizeDelta,
+      });
       window.dispatchEvent(
         new CustomEvent("galleryUpdated", {
           detail: {
             galleryId,
-            sizeDelta: imageSize > 0 ? -imageSize : undefined, // Negative for deletion, undefined if size unknown
+            sizeDelta, // Negative for deletion, undefined if size unknown
           },
         })
       );
@@ -368,6 +376,82 @@ export default function GalleryPhotos() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
+
+  // Listen for gallery updates to update originalsBytesUsed reactively with optimistic updates
+  useEffect(() => {
+    if (!galleryId) {
+      return undefined;
+    }
+
+    const handleGalleryUpdate = (event?: Event) => {
+      const customEvent = event as CustomEvent<{ galleryId?: string; sizeDelta?: number }>;
+      console.log("[photos.tsx] galleryUpdated event received:", {
+        eventGalleryId: customEvent.detail?.galleryId,
+        currentGalleryId: galleryId,
+        sizeDelta: customEvent.detail?.sizeDelta,
+      });
+
+      // Only handle updates for this gallery
+      if (customEvent.detail?.galleryId !== galleryId) {
+        console.log("[photos.tsx] Event galleryId mismatch, ignoring");
+        return;
+      }
+
+      // If sizeDelta is provided, update optimistically
+      if (customEvent.detail?.sizeDelta !== undefined) {
+        const sizeDelta = customEvent.detail.sizeDelta;
+        console.log("[photos.tsx] Updating optimistic originals bytes, sizeDelta:", sizeDelta);
+        
+        // Optimistic update: immediately adjust bytes using functional update to avoid stale closures
+        setOptimisticOriginalsBytes((prev) => {
+          // Get current gallery state from the latest state
+          const currentGallery = gallery;
+          const currentGalleryBytes = (currentGallery?.originalsBytesUsed as number | undefined) ?? 0;
+          const currentBytes = prev ?? currentGalleryBytes;
+          const newBytes = Math.max(0, currentBytes + sizeDelta);
+          console.log("[photos.tsx] Optimistic update calculation:", {
+            prev,
+            currentGalleryBytes,
+            currentBytes,
+            sizeDelta,
+            newBytes,
+          });
+          return newBytes;
+        });
+
+        // Reload gallery in background to get accurate data (but don't clear optimistic state immediately)
+        // Clear optimistic state after a delay to allow API to catch up
+        void reloadGallery().then(() => {
+          console.log("[photos.tsx] Gallery reloaded, clearing optimistic state in 2s");
+          // Wait a bit before clearing to ensure API has updated
+          setTimeout(() => {
+            setOptimisticOriginalsBytes((prev) => {
+              // Only clear if we still have optimistic state (don't clear if user uploaded more)
+              if (prev !== null) {
+                console.log("[photos.tsx] Clearing optimistic state");
+                return null;
+              }
+              return prev;
+            });
+          }, 2000);
+        });
+      } else {
+        // No sizeDelta, just reload to get fresh data
+        void reloadGallery();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      console.log("[photos.tsx] Setting up galleryUpdated event listener");
+      window.addEventListener("galleryUpdated", handleGalleryUpdate);
+      return () => {
+        console.log("[photos.tsx] Removing galleryUpdated event listener");
+        window.removeEventListener("galleryUpdated", handleGalleryUpdate);
+      };
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId]); // Only depend on galleryId to avoid re-creating listener
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -643,59 +727,18 @@ export default function GalleryPhotos() {
             <p className="text-xs text-gray-500 dark:text-gray-500">
               Obsługiwane formaty: JPEG, PNG
             </p>
-            {(gallery?.originalsLimitBytes ?? gallery?.finalsLimitBytes) && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                {gallery?.originalsLimitBytes && (
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      Oryginały:{" "}
-                      {((gallery.originalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)} GB /{" "}
-                      {(gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes > 0.9
-                            ? "bg-error-500"
-                            : (gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes > 0.75
-                              ? "bg-warning-500"
-                              : "bg-brand-500"
-                        }`}
-                        style={{
-                          width: `${Math.min(
-                            ((gallery.originalsBytesUsed ?? 0) / gallery.originalsLimitBytes) * 100,
-                            100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {gallery?.finalsLimitBytes && (
-                  <div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      Finalne: {((gallery.finalsBytesUsed ?? 0) / (1024 * 1024 * 1024)).toFixed(2)}{" "}
-                      GB / {(gallery.finalsLimitBytes / (1024 * 1024 * 1024)).toFixed(2)} GB
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.9
-                            ? "bg-error-500"
-                            : (gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes > 0.75
-                              ? "bg-warning-500"
-                              : "bg-brand-500"
-                        }`}
-                        style={{
-                          width: `${Math.min(
-                            ((gallery.finalsBytesUsed ?? 0) / gallery.finalsLimitBytes) * 100,
-                            100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+            {gallery?.originalsLimitBytes && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <StorageDisplay
+                  bytesUsed={
+                    optimisticOriginalsBytes ??
+                    (gallery.originalsBytesUsed as number | undefined) ??
+                    0
+                  }
+                  limitBytes={gallery.originalsLimitBytes}
+                  label="Oryginały"
+                  isLoading={optimisticOriginalsBytes !== null && galleryLoading}
+                />
               </div>
             )}
           </div>

@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCom
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+import { PRICING_PLANS } from '../../lib/src/pricing';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -166,7 +167,6 @@ async function processCheckoutSession(
 			} else {
 				const now = new Date().toISOString();
 				const plan = gallery.plan || session.metadata?.plan || '1GB-1m';
-				const { PRICING_PLANS } = await import('../../lib/src/pricing');
 				const planMetadata = PRICING_PLANS[plan as keyof typeof PRICING_PLANS] || PRICING_PLANS['1GB-1m'];
 				const expiryDays = planMetadata.expiryDays;
 				const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
@@ -255,7 +255,6 @@ async function processCheckoutSession(
 				if (!newPlanKey) {
 					logger.error('Missing plan in upgrade metadata', { galleryId, userId, paymentId });
 				} else {
-					const { PRICING_PLANS } = await import('../../lib/src/pricing');
 					const planMetadata = PRICING_PLANS[newPlanKey as keyof typeof PRICING_PLANS];
 					if (planMetadata) {
 						const newPriceCents = parseInt(session.metadata?.newPriceCents || '0');

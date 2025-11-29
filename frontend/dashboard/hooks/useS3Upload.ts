@@ -130,20 +130,48 @@ export function useS3Upload(config: UseS3UploadConfig) {
                 // This updates the sidebar instantly without waiting for API
                 // Safety: Only dispatch if uploadSucceeded is true (upload was successful)
                 if (uploadSucceeded && typeof window !== "undefined" && config.galleryId) {
+                  console.log("[useS3Upload] Upload succeeded, dispatching optimistic update:", {
+                    type: config.type,
+                    galleryId: config.galleryId,
+                    fileSize: file.size,
+                    fileName: file.name,
+                  });
+
                   if (config.type === "originals") {
                     // Update originals bytes via event (handled by sidebar)
-                    window.dispatchEvent(
-                      new CustomEvent("galleryUpdated", {
-                        detail: { galleryId: config.galleryId, sizeDelta: file.size }, // Positive for upload
-                      })
-                    );
+                    const event = new CustomEvent("galleryUpdated", {
+                      detail: { galleryId: config.galleryId, sizeDelta: file.size }, // Positive for upload
+                    });
+                    console.log("[useS3Upload] Dispatching galleryUpdated event:", event.detail);
+                    window.dispatchEvent(event);
                   } else if (config.type === "finals") {
                     // Update finals bytes directly in Zustand store
                     const storeState = useGalleryStore.getState();
+                    const hasCurrentGallery = !!storeState.currentGallery;
+                    console.log("[useS3Upload] Updating finals in store:", {
+                      hasCurrentGallery,
+                      currentGalleryId: storeState.currentGallery?.galleryId,
+                      targetGalleryId: config.galleryId,
+                      fileSize: file.size,
+                    });
+
                     // Type-safe call: updateFinalsBytesUsed is defined in GalleryState interface
                     (
                       storeState as { updateFinalsBytesUsed?: (delta: number) => void }
                     ).updateFinalsBytesUsed?.(file.size);
+                    
+                    // Check if update worked
+                    const afterState = useGalleryStore.getState();
+                    console.log("[useS3Upload] After store update:", {
+                      finalsBytesUsed: afterState.currentGallery?.finalsBytesUsed,
+                    });
+                    
+                    // Also dispatch event for components that might not be subscribed to store
+                    const event = new CustomEvent("finalsUpdated", {
+                      detail: { galleryId: config.galleryId, sizeDelta: file.size },
+                    });
+                    console.log("[useS3Upload] Dispatching finalsUpdated event:", event.detail);
+                    window.dispatchEvent(event);
                   }
                 }
 

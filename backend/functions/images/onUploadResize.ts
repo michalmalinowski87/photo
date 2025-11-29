@@ -59,6 +59,13 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		key = rawKey;
 	}
 
+	// CRITICAL: Skip processing if file is already in previews/ or thumbs/ directories
+	// This prevents infinite loops where creating previews/thumbs triggers the Lambda again
+	if (key.includes('/previews/') || key.includes('/thumbs/')) {
+		logger?.info('Skipping preview/thumb file (already processed)', { key });
+		return;
+	}
+
 	// Process files in originals/ or final/
 	const isOriginal = key.includes('/originals/');
 	const isFinal = key.includes('/final/');
@@ -212,10 +219,12 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		});
 
 		// Update gallery bytes used based on type
+		// Use atomic ADD operation to prevent race conditions with concurrent uploads/deletions
 		if (galleriesTable && imageBuffer.length > 0) {
 			try {
 				if (isOriginal) {
-					// Update originalsBytesUsed for originals
+					// Update originalsBytesUsed for originals (atomic ADD prevents race conditions)
+					// Also update bytesUsed for backward compatibility
 					await ddb.send(new UpdateCommand({
 						TableName: galleriesTable,
 						Key: { galleryId },
@@ -224,18 +233,27 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 							':size': imageBuffer.length
 						}
 					}));
-					logger?.info('Updated gallery originalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+					logger?.info('Updated gallery originalsBytesUsed (atomic)', { 
+						galleryId, 
+						sizeAdded: imageBuffer.length,
+						type: 'originals'
+					});
 				} else {
-					// Update finalsBytesUsed for finals
+					// Update finalsBytesUsed for finals (atomic ADD prevents race conditions)
+					// Also update bytesUsed for backward compatibility
 					await ddb.send(new UpdateCommand({
 						TableName: galleriesTable,
 						Key: { galleryId },
-						UpdateExpression: 'ADD finalsBytesUsed :size',
+						UpdateExpression: 'ADD finalsBytesUsed :size, bytesUsed :size',
 						ExpressionAttributeValues: {
 							':size': imageBuffer.length
 						}
 					}));
-					logger?.info('Updated gallery finalsBytesUsed', { galleryId, sizeAdded: imageBuffer.length });
+					logger?.info('Updated gallery finalsBytesUsed (atomic)', { 
+						galleryId, 
+						sizeAdded: imageBuffer.length,
+						type: 'finals'
+					});
 				}
 			} catch (updateErr: any) {
 				logger?.warn('Failed to update gallery bytes used', {

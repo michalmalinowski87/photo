@@ -8,8 +8,7 @@ import { Readable } from 'stream';
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export const handler = lambdaLogger(async (event: any, context: any) => {
-	const logger = (context as any).logger;
+export const handler = lambdaLogger(async (event: any, _context: any) => {
 	console.log('ZIP generation Lambda invoked', {
 		eventType: typeof event,
 		hasBody: !!event.body,
@@ -106,60 +105,80 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		});
 
-		// Stream each original file from S3 into the ZIP
-		for (const key of keys) {
-			const originalKey = `galleries/${galleryId}/originals/${key}`;
+		// Helper function to validate and add a file to the ZIP
+		const addFileToZip = async (s3Key: string, zipFilename: string): Promise<boolean> => {
 			try {
-				console.log('Fetching file from S3', { originalKey, key });
 				const getObjectResponse = await s3.send(new GetObjectCommand({
 					Bucket: bucket,
-					Key: originalKey
+					Key: s3Key
 				}));
 
+				// Defensive check: file must exist and have a body
 				if (!getObjectResponse.Body) {
-					console.error(`No body in S3 response for ${originalKey}`);
-					continue;
+					console.warn(`Skipping ${s3Key}: no body in S3 response`);
+					return false;
 				}
 
+				// Defensive check: file must have non-zero size
 				const contentLength = getObjectResponse.ContentLength || 0;
-				console.log('Reading file stream', { originalKey, contentLength, contentType: getObjectResponse.ContentType });
+				if (contentLength === 0) {
+					console.warn(`Skipping ${s3Key}: file size is 0`);
+					return false;
+				}
 
+				// Read file into buffer
 				const stream = getObjectResponse.Body as Readable;
-				// Read stream into buffer and append to archive
 				const buffers: Buffer[] = [];
 				for await (const chunk of stream) {
 					buffers.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
 				}
 				const fileBuffer = Buffer.concat(buffers);
-				
-				console.log('File read from S3', {
-					originalKey,
-					expectedSize: contentLength,
-					actualSize: fileBuffer.length,
-					match: contentLength === fileBuffer.length
-				});
 
+				// Defensive check: verify buffer size matches expected size and is not empty
 				if (fileBuffer.length === 0) {
-					console.error(`File ${originalKey} is empty`);
-					continue;
+					console.warn(`Skipping ${s3Key}: file buffer is empty`);
+					return false;
 				}
 
-				// Append file to ZIP with original filename
-				// Use store: false to enable compression (default)
-				archive.append(fileBuffer, { name: key });
+				// Add to ZIP
+				archive.append(fileBuffer, { name: zipFilename });
 				filesAdded++;
 				totalBytesAdded += fileBuffer.length;
-				console.log(`Added ${key} to ZIP (${fileBuffer.length} bytes, total: ${totalBytesAdded} bytes)`);
+				console.log(`Added ${zipFilename} to ZIP (${fileBuffer.length} bytes)`);
+				return true;
 			} catch (err: any) {
-				// Log but continue - some files might not exist
-				console.error(`Failed to add ${originalKey} to ZIP:`, {
-					error: err.message,
-					name: err.name,
-					code: err.code,
-					key,
-					originalKey
-				});
+				// Handle file not found or other errors gracefully
+				if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
+					console.warn(`Skipping ${s3Key}: file not found`);
+				} else {
+					console.error(`Failed to add ${s3Key} to ZIP:`, {
+						error: err.message,
+						name: err.name,
+						code: err.code
+					});
+				}
+				return false;
 			}
+		};
+
+		// Process each original file
+		// CRITICAL: Exclude previews and thumbnails - only include actual original images
+		for (const key of keys) {
+			// Validate key format
+			if (!key || typeof key !== 'string') {
+				console.warn('Skipping invalid key', { key, galleryId, orderId });
+				continue;
+			}
+			
+			// Skip previews/thumbs paths
+			if (key.includes('/previews/') || key.includes('/thumbs/') || key.includes('/')) {
+				console.warn('Skipping preview/thumb/path key', { key, galleryId, orderId });
+				continue;
+			}
+			
+			// Add file to ZIP
+			const s3Key = `galleries/${galleryId}/originals/${key}`;
+			await addFileToZip(s3Key, key);
 		}
 
 		// Ensure at least one file was added
@@ -168,54 +187,39 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Finalize the archive and wait for completion
-		// Remove the error handler we set up earlier (we'll handle it in the promise)
-		archive.removeAllListeners('error');
-		
-		await new Promise<void>((resolve, reject) => {
-			// Set up handlers for finalization
+		const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+			// Set up finalization handlers
 			archive.once('end', () => {
-				console.log('Archive finalization completed');
-				resolve();
+				const buffer = Buffer.concat(chunks);
+				console.log('Archive finalized', {
+					filesAdded,
+					totalBytesAdded,
+					zipSize: buffer.length,
+					compressionRatio: totalBytesAdded > 0 
+						? `${((totalBytesAdded - buffer.length) / totalBytesAdded * 100).toFixed(2)}%` 
+						: 'N/A'
+				});
+				resolve(buffer);
 			});
+			
 			archive.once('error', (err: Error) => {
 				console.error('Archive error during finalization:', err);
 				reject(err);
 			});
 			
-			// Finalize the archive - this triggers processing of all queued files
-			console.log('Finalizing archive...');
+			// Finalize the archive
 			archive.finalize();
 		});
 
-		// Combine chunks into single buffer
-		const zipBuffer = Buffer.concat(chunks);
-		
-		console.log('Archive finalized', {
-			chunksCount: chunks.length,
-			totalSize: zipBuffer.length,
-			chunksSizes: chunks.map(c => c.length),
-			filesAdded,
-			totalBytesAdded,
-			compressionRatio: totalBytesAdded > 0 ? ((totalBytesAdded - zipBuffer.length) / totalBytesAdded * 100).toFixed(2) + '%' : 'N/A'
-		});
-
-		// Validate ZIP buffer - check for ZIP magic bytes (PK header)
+		// Validate ZIP buffer
 		if (zipBuffer.length === 0) {
-			throw new Error('ZIP archive is empty - no files were added');
+			throw new Error('ZIP archive is empty');
 		}
 
-		// Check for ZIP file signature (PK\x03\x04 or PK\x05\x06 for empty ZIP)
+		// Validate ZIP file signature (PK header)
 		const zipSignature = zipBuffer.slice(0, 2).toString('ascii');
 		if (zipSignature !== 'PK') {
-			console.error('Invalid ZIP file signature after creation', {
-				signature: zipSignature,
-				firstBytes: Array.from(zipBuffer.slice(0, 10)),
-				bufferLength: zipBuffer.length,
-				galleryId,
-				orderId,
-				keysCount: keys.length
-			});
-			throw new Error(`Invalid ZIP file signature: ${zipSignature}. ZIP creation may have failed.`);
+			throw new Error(`Invalid ZIP signature: ${zipSignature}. ZIP creation failed.`);
 		}
 
 		console.log('ZIP created successfully', {

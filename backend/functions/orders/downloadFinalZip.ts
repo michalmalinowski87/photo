@@ -103,41 +103,118 @@ export const handler = lambdaLogger(async (event: any) => {
 			chunks.push(chunk);
 		});
 
-		// Stream each final file from S3 into the ZIP
-		for (const obj of listResponse.Contents) {
-			const fullKey = obj.Key || '';
-			const filename = fullKey.replace(prefix, '');
-			if (!filename) continue;
+		archive.on('error', (err: Error) => {
+			console.error('Archive error:', err);
+			throw err;
+		});
 
+		// Helper function to validate and add a file to the ZIP
+		const addFileToZip = async (s3Key: string, zipFilename: string): Promise<boolean> => {
 			try {
 				const getObjectResponse = await s3.send(new GetObjectCommand({
 					Bucket: bucket,
-					Key: fullKey
+					Key: s3Key
 				}));
 
-				if (getObjectResponse.Body) {
-					const stream = getObjectResponse.Body as Readable;
-					const buffers: Buffer[] = [];
-					for await (const chunk of stream) {
-						buffers.push(Buffer.from(chunk));
-					}
-					const fileBuffer = Buffer.concat(buffers);
-					archive.append(fileBuffer, { name: filename });
+				// Defensive check: file must exist and have a body
+				if (!getObjectResponse.Body) {
+					console.warn(`Skipping ${s3Key}: no body in S3 response`);
+					return false;
 				}
+
+				// Defensive check: file must have non-zero size
+				const contentLength = getObjectResponse.ContentLength || 0;
+				if (contentLength === 0) {
+					console.warn(`Skipping ${s3Key}: file size is 0`);
+					return false;
+				}
+
+				// Read file into buffer
+				const stream = getObjectResponse.Body as Readable;
+				const buffers: Buffer[] = [];
+				for await (const chunk of stream) {
+					buffers.push(Buffer.from(chunk));
+				}
+				const fileBuffer = Buffer.concat(buffers);
+
+				// Defensive check: verify buffer size matches expected size and is not empty
+				if (fileBuffer.length === 0) {
+					console.warn(`Skipping ${s3Key}: file buffer is empty`);
+					return false;
+				}
+
+				// Add to ZIP
+				archive.append(fileBuffer, { name: zipFilename });
+				console.log(`Added ${zipFilename} to ZIP (${fileBuffer.length} bytes)`);
+				return true;
 			} catch (err: any) {
-				console.error(`Failed to add ${fullKey} to ZIP:`, err.message);
+				// Handle file not found or other errors gracefully
+				if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
+					console.warn(`Skipping ${s3Key}: file not found`);
+				} else {
+					console.error(`Failed to add ${s3Key} to ZIP:`, {
+						error: err.message,
+						name: err.name,
+						code: err.code
+					});
+				}
+				return false;
+			}
+		};
+
+		// Process each final file
+		// CRITICAL: Exclude previews/ and thumbs/ subdirectories - only include actual final images
+		let filesAdded = 0;
+		for (const obj of listResponse.Contents) {
+			const fullKey = obj.Key || '';
+			const filename = fullKey.replace(prefix, '');
+			
+			// Skip empty filenames
+			if (!filename) continue;
+
+			// Skip previews and thumbnails - only include files directly under final/{orderId}/
+			if (filename.includes('/previews/') || filename.includes('/thumbs/') || filename.includes('/')) {
+				continue;
+			}
+
+			// Add file to ZIP
+			if (await addFileToZip(fullKey, filename)) {
+				filesAdded++;
 			}
 		}
 
+		// Ensure at least one file was added
+		if (filesAdded === 0) {
+			return {
+				statusCode: 404,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'No valid final images found to include in ZIP' })
+			};
+		}
+
 		// Finalize the archive and wait for completion
-		await new Promise<void>((resolve, reject) => {
-			archive.on('end', () => resolve());
-			archive.on('error', reject);
+		const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+			archive.once('end', () => {
+				const buffer = Buffer.concat(chunks);
+				console.log('Final ZIP created', {
+					filesAdded,
+					zipSize: buffer.length
+				});
+				resolve(buffer);
+			});
+			
+			archive.once('error', reject);
 			archive.finalize();
 		});
 
-		// Combine chunks into single buffer
-		const zipBuffer = Buffer.concat(chunks);
+		// Validate ZIP buffer
+		if (zipBuffer.length === 0) {
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'ZIP archive is empty' })
+			};
+		}
 
 		// Return ZIP as binary (base64-encoded for API Gateway)
 		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;

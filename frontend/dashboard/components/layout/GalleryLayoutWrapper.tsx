@@ -16,6 +16,7 @@ import { useOrderStore, type Order as StoreOrder } from "../../store/orderSlice"
 import { useUserStore } from "../../store/userSlice";
 import { GalleryPricingModal } from "../galleries/GalleryPricingModal";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
+import { CleanupOriginalsModal } from "../orders/CleanupOriginalsModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -67,6 +68,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     openModal: openDenyModal,
     closeModal: closeDenyModal,
   } = useModal("deny-change");
+  const {
+    isOpen: cleanupModalOpen,
+    openModal: openCleanupModal,
+    closeModal: closeCleanupModal,
+  } = useModal("cleanup-originals");
 
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
@@ -241,16 +247,22 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     handleMarkOrderPaid,
     handleDownloadFinals,
     handleSendFinalsToClient,
+    handleCleanupConfirm,
+    handleCleanupCancel,
+    handleCleanupClose,
   } = useOrderActions({
     apiUrl,
     idToken,
     galleryId,
     orderId,
+    gallery,
     loadOrderData,
     loadGalleryOrders,
     openDenyModal,
     closeDenyModal,
     setDenyLoading,
+    openCleanupModal,
+    closeCleanupModal,
   });
 
   // Wrap handleDenyConfirm to match the expected signature
@@ -455,7 +467,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Calculate canDownloadZip for order
   // Only show ZIP download if selection is enabled (ZIP contains selected photos)
-  // ZIP is available before finals upload (originals are deleted after finals upload)
+  // ZIP is available before finals upload
   // Parse order if needed - order comes from Zustand store and should be an object
   interface OrderObj {
     deliveryStatus?: string;
@@ -485,10 +497,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     orderObj?.deliveryStatus === "DELIVERED";
 
   // ZIP download is available if:
-  // 1. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
-  // 2. Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
-  //    Note: After finals are uploaded (PREPARING_DELIVERY, DELIVERED), originals are deleted
-  //    but previews remain for display
+  // Order is in CLIENT_APPROVED or AWAITING_FINAL_PHOTOS status (before finals upload)
   const canDownloadZip =
     orderObj && selectionEnabled
       ? orderObj.deliveryStatus === "CLIENT_APPROVED" ||
@@ -539,6 +548,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onClose={closeDenyModal}
         onConfirm={handleDenyConfirm}
         loading={denyLoading}
+      />
+
+      <CleanupOriginalsModal
+        isOpen={cleanupModalOpen}
+        onClose={handleCleanupClose}
+        onConfirm={handleCleanupConfirm}
+        onCancel={handleCleanupCancel}
       />
 
       {/* Pricing Modal - Show when user clicks publish gallery */}

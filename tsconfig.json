@@ -2,7 +2,7 @@
   "files": [],
   "compilerOptions": {
     "baseUrl": ".",
-    "types": ["node"],
+    "types": ["node", "aws-lambda"],
     "paths": {
       "@photocloud/logger": ["packages/logger/src"],
       "@photocloud/config": ["packages/config/src"],

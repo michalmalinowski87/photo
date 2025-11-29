@@ -4,10 +4,18 @@ import React from "react";
 
 interface ErrorProps {
   statusCode?: number;
+  err?: Error;
 }
 
-function Error({ statusCode }: ErrorProps) {
+function Error({ statusCode, err }: ErrorProps) {
   const router = useRouter();
+
+  React.useEffect(() => {
+    // Log the error to an error reporting service
+    if (err) {
+      console.error('Application error:', err);
+    }
+  }, [err]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -34,8 +42,13 @@ function Error({ statusCode }: ErrorProps) {
 }
 
 Error.getInitialProps = ({ res, err }: NextPageContext) => {
-  const statusCode = res ? res.statusCode : err ? err.statusCode : 404;
-  return { statusCode };
+  const statusCode = res?.statusCode ?? err?.statusCode ?? 404;
+  return { 
+    statusCode,
+    err: err ?? undefined,
+  };
 };
+
+Error.displayName = 'ErrorPage';
 
 export default Error;

@@ -606,7 +606,7 @@ Photographers review orders, process photos, and deliver final products to clien
      - Photos stored in original, unprocessed format
      - **First photo upload**: Order status automatically changes from `CLIENT_APPROVED` to `PREPARING_DELIVERY`
      - Subsequent uploads: Order remains `PREPARING_DELIVERY` status
-     - **Note**: Once status changes to `PREPARING_DELIVERY`, ZIP generation is no longer available (originals will be deleted after delivery)
+     - **Note**: Once status changes to `PREPARING_DELIVERY`, ZIP generation is no longer available
    - Client can view photos in `PREPARING_DELIVERY` status (before final delivery)
 
 4. **Mark Payment Status**
@@ -620,17 +620,24 @@ Photographers review orders, process photos, and deliver final products to clien
 5. **Send Final Delivery**
    - Once photos processed and payment confirmed:
      - Click "Send Final Link" button
-     - Calls `POST /galleries/{id}/orders/{orderId}/final/send`
+     - Calls `POST /galleries/{id}/orders/{orderId}/send-final-link`
      - System:
        - Sends email to client with gallery link
        - Marks order as `DELIVERED`
        - Sets `deliveredAt` timestamp
-       - Cleans up storage:
-       - Deletes originals for selected photos
-       - Deletes previews for selected photos
-       - Deletes thumbnails for selected photos
        - Keeps final photos
        - **Note**: ZIPs are one-time use and are deleted after first download (if generated)
+   - **Optional Cleanup (Selection Galleries Only)**:
+     - For selection galleries (user-selecting galleries), photographer is prompted:
+       - Prompt: "Czy chcesz usunąć wybrane oryginały? To działanie jest nieodwracalne i usunie oryginały, podglądy oraz miniatury dla wybranych zdjęć."
+     - If photographer confirms:
+       - Calls `POST /galleries/{id}/orders/{orderId}/cleanup-originals`
+       - System deletes:
+         - Originals for selected photos
+         - Previews for selected photos
+         - Thumbnails for selected photos
+     - If photographer cancels or gallery is non-selection:
+       - Originals, previews, and thumbnails are kept
    - Client receives email notification
 
 6. **Client Downloads Final Photos**
@@ -685,8 +692,8 @@ CLIENT_SELECTING → CLIENT_APPROVED → PREPARING_DELIVERY → DELIVERED
 - **CLIENT_SELECTING**: Client is actively selecting photos
 - **CLIENT_APPROVED**: Client approved selection, order created. ZIP can be generated on-demand by photographer or client (one-time use, deleted after download).
 - **CHANGES_REQUESTED**: Client requested changes, photographer can approve to restore to CLIENT_SELECTING
-- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. **ZIP generation no longer available** (originals will be deleted after delivery).
-- **DELIVERED**: Order delivered, final link sent, originals cleaned up. ZIPs are one-time use and deleted after download (if generated).
+- **PREPARING_DELIVERY**: Photographer has started uploading final photos (first photo triggers this status). **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. **ZIP generation no longer available**.
+- **DELIVERED**: Order delivered, final link sent. Originals cleanup is optional (photographer can choose to clean up originals, previews, and thumbnails when marking as delivered for selection galleries). ZIPs are one-time use and deleted after download (if generated).
 
 ---
 
@@ -891,7 +898,7 @@ Orders progress through the following statuses:
 - **CLIENT_APPROVED**: Client approved selection. Order created with selected photos. ZIP generated. Ready for photographer processing.
 - **CHANGES_REQUESTED**: Client requested changes to approved selection. Photographer can approve to restore to CLIENT_SELECTING.
 - **PREPARING_DELIVERY**: Photographer has started uploading final processed photos. **Selection is locked** (same as CLIENT_APPROVED) because photographer has done the work, but client can still request changes. Client can view photos but order not yet marked as delivered.
-- **DELIVERED**: Order delivered to client. Final link sent. Originals/previews/thumbs cleaned up. Final ZIPs remain available.
+- **DELIVERED**: Order delivered to client. Final link sent. Originals cleanup is optional (photographer can choose to clean up originals, previews, and thumbnails when marking as delivered for selection galleries). Final ZIPs remain available.
 
 ---
 
@@ -946,7 +953,7 @@ galleries/{galleryId}/
 1. **Upload**: Originals uploaded → previews/thumbs generated
 2. **Selection**: Client selects photos → ZIP generated from originals
 3. **Processing**: Photographer uploads final photos → stored in `final/{orderId}/`
-4. **Delivery**: Order marked delivered → originals/previews/thumbs deleted for selected photos
+4. **Delivery**: Order marked delivered → optional cleanup of originals/previews/thumbs for selected photos (photographer chooses)
 5. **Archive**: Final photos and ZIPs remain indefinitely
 
 ---

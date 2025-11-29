@@ -3,6 +3,7 @@ import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { recalculateStorageInternal } from './recalculateBytesUsed';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -202,7 +203,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			// Trigger recalculation asynchronously (fire and forget to avoid blocking response)
 			(async () => {
 				try {
-					const { recalculateBytesUsedInternal } = await import('./recalculateBytesUsed');
 					// Check debounce before calling (5 minute debounce)
 					const now = Date.now();
 					const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
@@ -211,7 +211,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
 					
 					if (now - lastRecalculatedAt >= RECALCULATE_DEBOUNCE_MS) {
-						await recalculateBytesUsedInternal(galleryId, galleriesTable, bucket, gallery, logger);
+						await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger);
 					} else {
 						logger.info('Automatic recalculation skipped (debounced)', {
 							galleryId,
