@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
-import { PaymentGuidanceBanner } from "../../components/galleries/PaymentGuidanceBanner";
+import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
@@ -421,19 +421,12 @@ export default function GalleryDetail() {
 
   return (
     <>
-      {/* Payment Guidance Banner */}
-      {!isPaid && (
-        <PaymentGuidanceBanner
-          galleryId={galleryId as string}
+      {/* Next Steps Overlay */}
+      <NextStepsOverlay
           gallery={gallery}
-          onPaymentComplete={async () => {
-            // Reload gallery after payment
-            await reloadGallery();
-            // Reload orders
-            await loadOrders();
-          }}
+        orders={orders}
+        galleryLoading={galleryLoading}
         />
-      )}
 
       {/* Main Content - Orders */}
       <div>

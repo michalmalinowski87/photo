@@ -61,6 +61,9 @@ interface GalleryState {
   clearCurrentGallery: () => void;
   clearGalleryList: () => void;
   clearAll: () => void;
+  // Next Steps Overlay state (persistent across page navigation)
+  nextStepsOverlayExpanded: boolean;
+  setNextStepsOverlayExpanded: (expanded: boolean) => void;
 }
 
 export const useGalleryStore = create<GalleryState>()(
@@ -321,6 +324,12 @@ export const useGalleryStore = create<GalleryState>()(
           isLoading: false,
           error: null,
         });
+      },
+
+      // Next Steps Overlay state
+      nextStepsOverlayExpanded: true,
+      setNextStepsOverlayExpanded: (expanded: boolean) => {
+        set({ nextStepsOverlayExpanded: expanded });
       },
     }),
     { name: "GalleryStore" }

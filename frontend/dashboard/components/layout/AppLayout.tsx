@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { BottomRightOverlayProvider } from "../../context/BottomRightOverlayContext";
 import { SidebarProvider, useSidebar } from "../../context/SidebarContext";
 import { ThemeProvider } from "../../context/ThemeContext";
 import { ToastProvider } from "../../context/ToastContext";
@@ -67,7 +68,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
     <ThemeProvider>
       <ToastProvider>
         <SidebarProvider>
+          <BottomRightOverlayProvider>
           <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>
+          </BottomRightOverlayProvider>
         </SidebarProvider>
       </ToastProvider>
     </ThemeProvider>

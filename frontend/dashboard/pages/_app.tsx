@@ -11,6 +11,7 @@ import AuthLayout from "../components/auth/AuthLayout";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { AuthProvider } from "../context/AuthContext";
+import { BottomRightOverlayProvider } from "../context/BottomRightOverlayContext";
 import { ModalProvider } from "../context/ModalContext";
 import { ToastProvider } from "../context/ToastContext";
 import { ZipDownloadProvider } from "../context/ZipDownloadContext";
@@ -131,9 +132,11 @@ export default function App({ Component, pageProps }: AppProps) {
           <ToastProvider>
             <ModalProvider>
               <ZipDownloadProvider>
+                <BottomRightOverlayProvider>
                 <GalleryLayoutWrapper>
                   <Component {...pageProps} />
                 </GalleryLayoutWrapper>
+                </BottomRightOverlayProvider>
               </ZipDownloadProvider>
             </ModalProvider>
           </ToastProvider>

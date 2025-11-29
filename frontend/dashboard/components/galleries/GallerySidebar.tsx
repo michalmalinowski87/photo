@@ -165,6 +165,14 @@ export default function GallerySidebar({
     let requestCounter = 0;
     let debounceTimer: NodeJS.Timeout | null = null;
 
+    // Use refs to avoid stale closures
+    const galleryRef = { current: gallery };
+    const planRecommendationRef = { current: planRecommendation };
+    
+    // Update refs when values change
+    galleryRef.current = gallery;
+    planRecommendationRef.current = planRecommendation;
+
     const handleGalleryUpdate = async (event?: Event) => {
       // Check if event has size delta for optimistic update
       const customEvent = event as
@@ -178,24 +186,30 @@ export default function GallerySidebar({
       const sizeDelta = customEvent?.detail?.sizeDelta;
       const isUpload = customEvent?.detail?.isUpload ?? false;
       const refreshAfterUpload = customEvent?.detail?.refreshAfterUpload ?? false;
+      const eventGalleryId = customEvent?.detail?.galleryId;
+      
+      // Only handle events for this gallery (if galleryId is specified in event)
+      if (eventGalleryId && eventGalleryId !== galleryRef.current?.galleryId) {
+        return;
+      }
 
       // Optimistic update: immediately adjust bytes if size delta is provided
       if (sizeDelta !== undefined) {
         setOptimisticBytesUsed((prev) => {
           const currentBytes =
             prev ??
-            planRecommendation?.uploadedSizeBytes ??
-            (gallery.originalsBytesUsed as number | undefined) ??
+            planRecommendationRef.current?.uploadedSizeBytes ??
+            (galleryRef.current?.originalsBytesUsed as number | undefined) ??
             0;
           const newOptimisticBytes = Math.max(0, currentBytes + sizeDelta);
 
           // Update plan recommendation optimistically
           if (newOptimisticBytes === 0) {
             setPlanRecommendation(null);
-          } else if (planRecommendation) {
+          } else if (planRecommendationRef.current) {
             // Update the recommendation with new size
             setPlanRecommendation({
-              ...planRecommendation,
+              ...planRecommendationRef.current,
               uploadedSizeBytes: newOptimisticBytes,
             });
           }
@@ -235,7 +249,11 @@ export default function GallerySidebar({
           // Refresh plan recommendation from API in background (for accuracy)
           setIsLoadingPlanRecommendation(true);
           try {
-            const recommendation = await getPlanRecommendation(gallery.galleryId);
+            const currentGalleryId = galleryRef.current?.galleryId;
+            if (!currentGalleryId) {
+              return;
+            }
+            const recommendation = await getPlanRecommendation(currentGalleryId);
 
             // Only update if this is still the latest request (prevent stale data from race conditions)
             if (currentRequest === requestCounter) {
@@ -253,7 +271,7 @@ export default function GallerySidebar({
             if (currentRequest === requestCounter) {
               console.error("Failed to refresh plan recommendation:", error);
               // On error, clear recommendation if gallery shows no photos
-              if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
+              if ((galleryRef.current?.originalsBytesUsed as number | undefined) ?? 0 === 0) {
                 setPlanRecommendation(null);
                 setOptimisticBytesUsed(0);
               }
@@ -272,7 +290,11 @@ export default function GallerySidebar({
 
         setIsLoadingPlanRecommendation(true);
         try {
-          const recommendation = await getPlanRecommendation(gallery.galleryId);
+          const currentGalleryId = galleryRef.current?.galleryId;
+          if (!currentGalleryId) {
+            return;
+          }
+          const recommendation = await getPlanRecommendation(currentGalleryId);
 
           if (currentRequest === requestCounter) {
             if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
@@ -289,7 +311,7 @@ export default function GallerySidebar({
           if (currentRequest === requestCounter) {
             console.error("Failed to refresh plan recommendation:", error);
             // On error, check gallery state and clear optimistic bytes if empty
-            const galleryBytes = (gallery.originalsBytesUsed as number | undefined) ?? 0;
+              const galleryBytes = (galleryRef.current?.originalsBytesUsed as number | undefined) ?? 0;
             if (galleryBytes === 0) {
               setPlanRecommendation(null);
               setOptimisticBytesUsed(0);

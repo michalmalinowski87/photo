@@ -41,7 +41,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				email: userData.contactEmail || '',
 				phone: userData.phone || '',
 				address: userData.address || '',
-				nip: userData.nip || ''
+				nip: userData.nip || '',
+				tutorialNextStepsDisabled: userData.tutorialNextStepsDisabled === true,
+				tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true
 			};
 
 			return {
@@ -68,7 +70,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Handle PUT request
 	const body = event?.body ? JSON.parse(event.body) : {};
-	const { businessName, email, phone, address, nip } = body;
+	const { businessName, email, phone, address, nip, tutorialNextStepsDisabled, tutorialClientSendDisabled } = body;
 
 	// Validate email format if provided
 	if (email !== undefined && email !== '' && email !== null) {
@@ -129,6 +131,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		updateData.nip = String(nip).trim() || '';
 	} else if (existingData.nip !== undefined) {
 		updateData.nip = existingData.nip;
+	}
+
+	if (tutorialNextStepsDisabled !== undefined) {
+		updateData.tutorialNextStepsDisabled = Boolean(tutorialNextStepsDisabled);
+	} else if (existingData.tutorialNextStepsDisabled !== undefined) {
+		updateData.tutorialNextStepsDisabled = existingData.tutorialNextStepsDisabled;
+	}
+
+	if (tutorialClientSendDisabled !== undefined) {
+		updateData.tutorialClientSendDisabled = Boolean(tutorialClientSendDisabled);
+	} else if (existingData.tutorialClientSendDisabled !== undefined) {
+		updateData.tutorialClientSendDisabled = existingData.tutorialClientSendDisabled;
 	}
 
 	// Set createdAt if this is a new record

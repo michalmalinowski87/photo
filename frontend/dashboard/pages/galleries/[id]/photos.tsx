@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
+import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
@@ -110,6 +111,7 @@ export default function GalleryPhotos() {
   const { getGalleryOrders, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const pollingActiveRef = useRef<boolean>(false); // Track if polling is active
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track polling timeout
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
@@ -330,10 +332,11 @@ export default function GalleryPhotos() {
 
     try {
       // Use store action - checks cache first, fetches if needed
-      const orders = await fetchGalleryOrders(galleryId as string);
+      const ordersData = await fetchGalleryOrders(galleryId as string);
+      setOrders(ordersData);
 
       // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
-      const approvedOrders = orders.filter(
+      const approvedOrders = ordersData.filter(
         (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
       );
 
@@ -352,7 +355,7 @@ export default function GalleryPhotos() {
 
       // Collect all selected keys from ANY order (for "Selected" display)
       const allOrderKeys = new Set<string>();
-      orders.forEach((order) => {
+      ordersData.forEach((order) => {
         const selectedKeys = Array.isArray(order.selectedKeys)
           ? order.selectedKeys
           : typeof order.selectedKeys === "string"
@@ -707,6 +710,13 @@ export default function GalleryPhotos() {
 
   return (
     <>
+      {/* Next Steps Overlay */}
+      <NextStepsOverlay
+        gallery={gallery}
+        orders={orders}
+        galleryLoading={galleryLoading}
+      />
+
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">

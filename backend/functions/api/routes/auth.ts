@@ -38,7 +38,9 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			phone: userData.phone || '',
 			address: userData.address || '',
 			nip: userData.nip || '',
-			welcomePopupShown: userData.welcomePopupShown || false
+			welcomePopupShown: userData.welcomePopupShown === true,
+			tutorialNextStepsDisabled: userData.tutorialNextStepsDisabled === true,
+			tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true
 		};
 
 		return res.json(businessInfo);
@@ -67,7 +69,7 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const { businessName, email, phone, address, nip, welcomePopupShown } = req.body;
+	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled } = req.body;
 
 	// Validate email format if provided
 	if (email !== undefined && email !== '' && email !== null) {
@@ -129,6 +131,18 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		updateData.welcomePopupShown = Boolean(welcomePopupShown);
 	} else if (existingData.welcomePopupShown !== undefined) {
 		updateData.welcomePopupShown = existingData.welcomePopupShown;
+	}
+
+	if (tutorialNextStepsDisabled !== undefined) {
+		updateData.tutorialNextStepsDisabled = Boolean(tutorialNextStepsDisabled);
+	} else if (existingData.tutorialNextStepsDisabled !== undefined) {
+		updateData.tutorialNextStepsDisabled = existingData.tutorialNextStepsDisabled;
+	}
+
+	if (tutorialClientSendDisabled !== undefined) {
+		updateData.tutorialClientSendDisabled = Boolean(tutorialClientSendDisabled);
+	} else if (existingData.tutorialClientSendDisabled !== undefined) {
+		updateData.tutorialClientSendDisabled = existingData.tutorialClientSendDisabled;
 	}
 
 	if (!existingData.createdAt) {

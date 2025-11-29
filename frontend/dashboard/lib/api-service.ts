@@ -1233,7 +1233,7 @@ class ApiService {
 
   auth = {
     /**
-     * Get business info (includes user settings like welcomePopupShown)
+     * Get business info (includes user settings like welcomePopupShown and tutorial preferences)
      */
     getBusinessInfo: async (): Promise<{
       businessName?: string;
@@ -1242,12 +1242,14 @@ class ApiService {
       address?: string;
       nip?: string;
       welcomePopupShown?: boolean;
+      tutorialNextStepsDisabled?: boolean;
+      tutorialClientSendDisabled?: boolean;
     }> => {
       return await this._request("/auth/business-info");
     },
 
     /**
-     * Update business info (can also update welcomePopupShown)
+     * Update business info (can also update welcomePopupShown and tutorial preferences)
      */
     updateBusinessInfo: async (data: {
       businessName?: string;
@@ -1256,6 +1258,8 @@ class ApiService {
       address?: string;
       nip?: string;
       welcomePopupShown?: boolean;
+      tutorialNextStepsDisabled?: boolean;
+      tutorialClientSendDisabled?: boolean;
     }): Promise<void> => {
       if (!data) {
         throw new Error("Business info data is required");

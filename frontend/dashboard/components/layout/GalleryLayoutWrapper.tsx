@@ -9,12 +9,11 @@ import { useOrderActions } from "../../hooks/useOrderActions";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
-import { getPricingModalData } from "../../lib/calculate-plan";
-import type { PricingModalData } from "../../lib/plan-types";
 import { useGalleryStore } from "../../store/gallerySlice";
 import { useOrderStore, type Order as StoreOrder } from "../../store/orderSlice";
 import { useUserStore } from "../../store/userSlice";
-import { GalleryPricingModal } from "../galleries/GalleryPricingModal";
+import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
+import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { CleanupOriginalsModal } from "../orders/CleanupOriginalsModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
@@ -88,7 +87,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     stripeAmountCents: 0,
     balanceAfterPayment: 0,
   });
-  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
+  const [publishWizardOpen, setPublishWizardOpen] = useState(false);
+  const [showClientSendPopup, setShowClientSendPopup] = useState(false);
 
   // Use custom hooks for gallery data and order actions
   const { loadGalleryData, loadGalleryOrders, checkDeliveredOrders } = useGalleryData({
@@ -246,24 +246,48 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     });
   };
 
-  const handlePayClick = async () => {
+  const handlePayClick = () => {
     if (!galleryId) {
       return;
     }
-
-    setPaymentLoading(true);
-
-    try {
-      // Always calculate plan first - this will determine the best plan based on uploaded photos
-      const modalData = await getPricingModalData(galleryId as string);
-      setPricingModalData(modalData);
-      setPaymentLoading(false);
-    } catch (err) {
-      const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg ?? "Nie udało się obliczyć planu. Spróbuj ponownie.");
-      setPaymentLoading(false);
-    }
+    setPublishWizardOpen(true);
   };
+
+  // Check URL params to auto-open wizard
+  useEffect(() => {
+    if (typeof window !== "undefined" && galleryId && router.isReady) {
+      const params = new URLSearchParams(window.location.search);
+      const publishParam = params.get("publish");
+      const galleryParam = params.get("galleryId");
+
+      if (publishParam === "true" && galleryParam === galleryId) {
+        setPublishWizardOpen(true);
+      }
+    }
+  }, [galleryId, router.isReady]);
+
+  // Listen for custom events from NextStepsOverlay
+  useEffect(() => {
+    const handleOpenPublishWizard = (event: CustomEvent) => {
+      if (event.detail?.galleryId === galleryId) {
+        setPublishWizardOpen(true);
+      }
+    };
+
+    const handleSendGalleryLink = (event: CustomEvent) => {
+      if (event.detail?.galleryId === galleryId) {
+        void handleSendLink();
+      }
+    };
+
+    window.addEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
+    window.addEventListener("sendGalleryLink", handleSendGalleryLink as EventListener);
+
+    return () => {
+      window.removeEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
+      window.removeEventListener("sendGalleryLink", handleSendGalleryLink as EventListener);
+    };
+  }, [galleryId]);
 
   const confirmPayment = async () => {
     if (!galleryId || !paymentDetails) {
@@ -351,6 +375,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
             new CustomEvent("galleryOrdersUpdated", { detail: { galleryId } })
           );
         }
+
+        // Show success popup for initial invitations only
+        setShowClientSendPopup(true);
       }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
@@ -486,7 +513,31 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         hasDeliveredOrders={hasDeliveredOrders}
         galleryLoading={loading}
       >
-        {children}
+        {publishWizardOpen ? (
+          <PublishGalleryWizard
+            isOpen={publishWizardOpen}
+            onClose={() => {
+              setPublishWizardOpen(false);
+            }}
+            galleryId={galleryId as string}
+            onSuccess={async () => {
+              // Reload gallery data to update payment status
+              await loadGalleryData();
+              await refreshWalletBalance();
+              // If we're on an order page, reload order data
+              if (orderId) {
+                await loadOrderData();
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(
+                    new CustomEvent("galleryPaymentCompleted", { detail: { galleryId } })
+                  );
+                }
+              }
+            }}
+          />
+        ) : (
+          children
+        )}
       </GalleryLayout>
 
       <DenyChangeRequestModal
@@ -503,41 +554,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onCancel={handleCleanupCancel}
       />
 
-      {/* Pricing Modal - Show when user clicks publish gallery */}
-      {pricingModalData && (
-        <GalleryPricingModal
-          isOpen={!!pricingModalData}
-          onClose={() => {
-            setPricingModalData(null);
-          }}
-          galleryId={galleryId as string}
-          suggestedPlan={pricingModalData.suggestedPlan}
-          originalsLimitBytes={pricingModalData.originalsLimitBytes}
-          finalsLimitBytes={pricingModalData.finalsLimitBytes}
-          uploadedSizeBytes={pricingModalData.uploadedSizeBytes}
-          selectionEnabled={pricingModalData.selectionEnabled}
-          usagePercentage={pricingModalData.usagePercentage}
-          isNearCapacity={pricingModalData.isNearCapacity}
-          isAtCapacity={pricingModalData.isAtCapacity}
-          exceedsLargestPlan={pricingModalData.exceedsLargestPlan}
-          nextTierPlan={pricingModalData.nextTierPlan}
-          onPlanSelected={async () => {
-            setPricingModalData(null);
-            // Reload gallery data to update payment status
-            await loadGalleryData();
-            await refreshWalletBalance();
-            // If we're on an order page, reload order data
-            if (orderId) {
-              await loadOrderData();
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("galleryPaymentCompleted", { detail: { galleryId } })
-                );
-              }
-            }
-          }}
-        />
-      )}
 
       {showPaymentModal && (
         <PaymentConfirmationModal
@@ -551,6 +567,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           loading={paymentLoading}
         />
       )}
+
+      {/* Client Send Success Popup */}
+      <ClientSendSuccessPopup
+        isOpen={showClientSendPopup}
+        onClose={() => setShowClientSendPopup(false)}
+        galleryName={gallery?.galleryName as string | undefined}
+      />
     </GalleryProvider>
   );
 }

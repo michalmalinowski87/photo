@@ -68,7 +68,7 @@ export const useGalleryData = ({
             : ""
         );
 
-        // Dispatch galleryUpdated event to notify components (e.g., PaymentGuidanceBanner, GallerySidebar)
+        // Dispatch galleryUpdated event to notify components (e.g., GallerySidebar, NextStepsOverlay)
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("galleryUpdated", { detail: { galleryId } }));
         }

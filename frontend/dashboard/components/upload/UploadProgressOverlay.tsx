@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 
+import { useBottomRightOverlay } from "../../context/BottomRightOverlayContext";
 import { CompletedItemsSection } from "./CompletedItemsSection";
 import { ProcessingCounter } from "./ProcessingCounter";
 import { UploadErrorsSection } from "./UploadErrorsSection";
@@ -26,6 +27,27 @@ export const UploadProgressOverlay: React.FC<UploadProgressOverlayProps> = ({
   isUploadComplete = false,
 }) => {
   const maxUploadItems = 5; // Show up to 5 items with upload progress bars
+  
+  // Get positioning from context (optional - may not be available)
+  const overlayContext = useBottomRightOverlay();
+  const rightOffset = useMemo(() => {
+    if (!overlayContext || !overlayContext.nextStepsVisible) {
+      return "1rem"; // Default: right-4
+    }
+    
+    // Calculate offset based on NextStepsOverlay state
+    const nextStepsCurrentWidth = overlayContext.nextStepsExpanded
+      ? overlayContext.nextStepsWidth
+      : overlayContext.nextStepsCollapsedWidth;
+    // Add gap (1.5rem = 24px for better spacing) + next steps width
+    const offsetPx = 24 + nextStepsCurrentWidth;
+    return `${offsetPx}px`;
+  }, [
+    overlayContext?.nextStepsVisible,
+    overlayContext?.nextStepsExpanded,
+    overlayContext?.nextStepsWidth,
+    overlayContext?.nextStepsCollapsedWidth,
+  ]);
 
   // Separate images by status - hooks must be called unconditionally
   const uploadingImages = useMemo(() => {
@@ -73,7 +95,10 @@ export const UploadProgressOverlay: React.FC<UploadProgressOverlayProps> = ({
   const overallProgress = isUploadComplete ? 100 : Math.min(uploadProgress, 50);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-2rem)]">
+    <div
+      className="fixed bottom-4 z-50 w-96 max-w-[calc(100vw-2rem)]"
+      style={{ right: rightOffset }}
+    >
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[80vh]">
         <UploadProgressHeader
           allComplete={allComplete}

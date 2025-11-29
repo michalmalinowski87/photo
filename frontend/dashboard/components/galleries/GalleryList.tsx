@@ -161,7 +161,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     setPaymentLoading(true);
 
     try {
-      // Get plan recommendation data (same as PaymentGuidanceBanner)
+      // Get plan recommendation data
       const modalData = await getPricingModalData(galleryId);
       setPricingModalData(modalData);
       setShowPaymentModal(true);

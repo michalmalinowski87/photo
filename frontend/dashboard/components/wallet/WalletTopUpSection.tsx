@@ -57,11 +57,14 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
     setIsTopUpLoading(true);
 
     try {
-      // Construct redirect URL back to the current page
-      const redirectUrl =
-        typeof window !== "undefined"
-          ? `${window.location.origin}${window.location.pathname}?payment=success`
-          : "";
+      // Construct redirect URL back to the current page, preserving existing query parameters
+      let redirectUrl = "";
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        // Preserve existing query parameters (e.g., publish=true&galleryId=xxx)
+        url.searchParams.set("payment", "success");
+        redirectUrl = url.toString();
+      }
 
       const data = await api.payments.createCheckout({
         amountCents,
