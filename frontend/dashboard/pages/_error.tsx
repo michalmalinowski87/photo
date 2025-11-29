@@ -13,7 +13,7 @@ function Error({ statusCode, err }: ErrorProps) {
   React.useEffect(() => {
     // Log the error to an error reporting service
     if (err) {
-      console.error('Application error:', err);
+      console.error("Application error:", err);
     }
   }, [err]);
 
@@ -43,12 +43,12 @@ function Error({ statusCode, err }: ErrorProps) {
 
 Error.getInitialProps = ({ res, err }: NextPageContext) => {
   const statusCode = res?.statusCode ?? err?.statusCode ?? 404;
-  return { 
+  return {
     statusCode,
     err: err ?? undefined,
   };
 };
 
-Error.displayName = 'ErrorPage';
+Error.displayName = "ErrorPage";
 
 export default Error;

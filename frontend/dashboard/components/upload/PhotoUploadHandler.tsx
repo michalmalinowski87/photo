@@ -230,26 +230,23 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         // Mark upload as complete - now processing phase
         setIsUploadComplete(true);
 
-        // Show summary toast
+        // Show summary toast only for errors/warnings
+        // Success notification is shown after polling completes in useImagePolling
         const typeLabel = config.type === "finals" ? "zdjęć finalnych" : "zdjęć";
-        if (uploadErrors.length === 0) {
-          showToast(
-            "success",
-            "Sukces",
-            `Wszystkie ${imageFiles.length} ${typeLabel} zostało przesłanych`
-          );
-        } else if (uploadSuccesses > 0) {
-          showToast(
-            "warning",
-            "Częściowy sukces",
-            `Przesłano ${uploadSuccesses} z ${imageFiles.length} ${typeLabel}. ${uploadErrors.length} nie powiodło się.`
-          );
-        } else {
-          showToast(
-            "error",
-            "Błąd",
-            `Nie udało się przesłać żadnego ${typeLabel}. Sprawdź konsolę.`
-          );
+        if (uploadErrors.length > 0) {
+          if (uploadSuccesses > 0) {
+            showToast(
+              "warning",
+              "Częściowy sukces",
+              `Przesłano ${uploadSuccesses} z ${imageFiles.length} ${typeLabel}. ${uploadErrors.length} nie powiodło się.`
+            );
+          } else {
+            showToast(
+              "error",
+              "Błąd",
+              `Nie udało się przesłać żadnego ${typeLabel}. Sprawdź konsolę.`
+            );
+          }
         }
 
         // Handle completion based on type

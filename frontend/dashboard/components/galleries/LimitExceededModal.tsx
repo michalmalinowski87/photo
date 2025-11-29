@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
@@ -130,7 +131,7 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
     ? (nextTierLimitBytes / (1024 * 1024 * 1024)).toFixed(1)
     : "";
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
@@ -179,4 +180,11 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
       </div>
     </div>
   );
+
+  // Render modal via portal to document.body to ensure it's above all other content
+  if (typeof window !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };

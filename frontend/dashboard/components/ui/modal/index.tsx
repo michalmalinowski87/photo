@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
       ? `${baseClasses} ${className}${hasMaxHeight ? " flex flex-col" : ""}`
       : `${baseClasses} max-w-lg`;
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[999999] p-4">
       {!isFullscreen && (
         <div
@@ -102,4 +103,12 @@ export const Modal: React.FC<ModalProps> = ({
       </div>
     </div>
   );
+
+  // Render modal via portal to document.body to ensure it's above all other content
+  // This bypasses any stacking context issues from parent elements
+  if (typeof window !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };

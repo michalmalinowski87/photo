@@ -24,6 +24,11 @@ import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-in
 import { getPricingModalData } from "../../../../lib/calculate-plan";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../../lib/currency";
 import { formatPrice } from "../../../../lib/format-price";
+import {
+  applyOptimisticUpdate,
+  calculateSizeDelta,
+  revertOptimisticUpdate,
+} from "../../../../lib/optimistic-updates";
 import type { PricingModalData } from "../../../../lib/plan-types";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
@@ -284,9 +289,10 @@ export default function OrderDetail() {
       } catch (err) {
         // Handle CORS and network errors gracefully
         const error = err as Error & { status?: number; originalError?: Error };
-        const isCorsError = error.message?.includes("CORS") || error.message?.includes("Failed to fetch");
+        const isCorsError =
+          error.message?.includes("CORS") || error.message?.includes("Failed to fetch");
         const isNetworkError = error.message?.includes("Network error");
-        
+
         if (isCorsError || isNetworkError) {
           // Log but don't show toast for CORS/network errors - they're usually transient
           console.warn("[orderDetail.tsx] CORS/Network error during loadOrderData:", error.message);
@@ -459,19 +465,26 @@ export default function OrderDetail() {
         sizeDelta: customEvent.detail?.sizeDelta,
       });
 
-      if (customEvent.detail?.galleryId === galleryId && customEvent.detail?.sizeDelta !== undefined) {
+      if (
+        customEvent.detail?.galleryId === galleryId &&
+        customEvent.detail?.sizeDelta !== undefined
+      ) {
         const sizeDelta = customEvent.detail.sizeDelta;
         console.log("[orderDetail.tsx] Updating optimistic finals bytes, sizeDelta:", sizeDelta);
-        
+
         // Get current store value (which already has optimistic updates from previous uploads)
         const storeState = useGalleryStore.getState();
-        const storeFinalsBytes = storeState.currentGallery?.galleryId === galleryId
-          ? (storeState.currentGallery.finalsBytesUsed as number | undefined)
-          : undefined;
-        
+        const storeFinalsBytes =
+          storeState.currentGallery?.galleryId === galleryId
+            ? (storeState.currentGallery.finalsBytesUsed as number | undefined)
+            : undefined;
+
         // Store already has the optimistic update, so use it directly
         if (storeFinalsBytes !== undefined) {
-          console.log("[orderDetail.tsx] Using store value (already optimistic):", storeFinalsBytes);
+          console.log(
+            "[orderDetail.tsx] Using store value (already optimistic):",
+            storeFinalsBytes
+          );
           setOptimisticFinalsBytes(storeFinalsBytes);
         } else {
           // Fallback: if store doesn't have it, calculate manually
@@ -492,17 +505,19 @@ export default function OrderDetail() {
     };
 
     // Subscribe to Zustand store changes for finals bytes (backup/fallback)
-    let prevFinalsBytes: number | undefined = useGalleryStore.getState().currentGallery?.finalsBytesUsed as number | undefined;
+    let prevFinalsBytes: number | undefined = useGalleryStore.getState().currentGallery
+      ?.finalsBytesUsed as number | undefined;
     const unsubscribe = useGalleryStore.subscribe((state) => {
       const currentGallery = state.currentGallery;
-      const currentFinalsBytes = currentGallery?.galleryId === galleryId 
-        ? (currentGallery.finalsBytesUsed as number | undefined)
-        : undefined;
+      const currentFinalsBytes =
+        currentGallery?.galleryId === galleryId
+          ? (currentGallery.finalsBytesUsed as number | undefined)
+          : undefined;
 
       // Only fire if value actually changed and it's our gallery
       if (currentFinalsBytes !== undefined && currentFinalsBytes !== prevFinalsBytes) {
         prevFinalsBytes = currentFinalsBytes;
-        
+
         console.log("[orderDetail.tsx] Zustand store subscription fired:", {
           storeGalleryId: currentGallery?.galleryId,
           currentGalleryId: galleryId,
@@ -510,13 +525,19 @@ export default function OrderDetail() {
         });
 
         const newFinalsBytes = currentFinalsBytes;
-        console.log("[orderDetail.tsx] Store update matches our gallery, newFinalsBytes:", newFinalsBytes);
-        
+        console.log(
+          "[orderDetail.tsx] Store update matches our gallery, newFinalsBytes:",
+          newFinalsBytes
+        );
+
         // Update optimistic state to match store (store has the latest optimistic value)
         // Only update if we don't already have this value (avoid unnecessary re-renders)
         setOptimisticFinalsBytes((prev) => {
           if (prev !== newFinalsBytes) {
-            console.log("[orderDetail.tsx] Updating optimistic from store subscription:", { prev, newFinalsBytes });
+            console.log("[orderDetail.tsx] Updating optimistic from store subscription:", {
+              prev,
+              newFinalsBytes,
+            });
             return newFinalsBytes;
           }
           return prev;
@@ -524,7 +545,7 @@ export default function OrderDetail() {
 
         // Update local gallery state
         setGallery((prevGallery) => {
-          if (!prevGallery || prevGallery.galleryId !== galleryId) {
+          if (prevGallery?.galleryId !== galleryId) {
             return prevGallery;
           }
           return {
@@ -552,7 +573,9 @@ export default function OrderDetail() {
   // Clear optimistic state when upload completes and data is reloaded
   useEffect(() => {
     if (isUploadComplete && optimisticFinalsBytes !== null) {
-      console.log("[orderDetail.tsx] Upload complete, reloading data and clearing optimistic state");
+      console.log(
+        "[orderDetail.tsx] Upload complete, reloading data and clearing optimistic state"
+      );
       // Reload data and clear optimistic state after a delay
       void loadOrderData(true).then(() => {
         setTimeout(() => {
@@ -574,15 +597,17 @@ export default function OrderDetail() {
   // - Selection is disabled (non-selection galleries)
   // - Selected section is hidden (photos were cleaned up)
   useEffect(() => {
-    if (!order || !gallery) return;
-    
+    if (!order || !gallery) {
+      return;
+    }
+
     const isSelectionEnabled = gallery.selectionEnabled !== false;
-    
+
     if (gallery.selectionEnabled === false) {
       setActiveTab("finals");
       return;
     }
-    
+
     // Get selectedKeys from order
     let orderSelectedKeys: string[] = [];
     if (order.selectedKeys !== undefined && order.selectedKeys !== null) {
@@ -597,16 +622,17 @@ export default function OrderDetail() {
         }
       }
     }
-    
+
     if (isSelectionEnabled && orderSelectedKeys.length > 0) {
       // Check if selected images exist
-      const hasSelectedImagesCheck = originalImages.length > 0 && 
+      const hasSelectedImagesCheck =
+        originalImages.length > 0 &&
         originalImages.some((img) => {
           const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
           const normalizedSelectedKeys = orderSelectedKeys.map((k) => k.toString().trim());
           return normalizedSelectedKeys.includes(imgKey);
         });
-      
+
       // If no selected images found (photos were cleaned up), switch to finals tab
       if (!hasSelectedImagesCheck) {
         setActiveTab("finals");
@@ -689,35 +715,17 @@ export default function OrderDetail() {
 
     // Get image size for optimistic update
     const imageSize = image.size ?? 0;
-    const sizeDelta = imageSize > 0 ? -imageSize : undefined;
+    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
 
-    // Dispatch optimistic update event immediately (before API call)
-    if (typeof window !== "undefined" && galleryId && sizeDelta !== undefined) {
-      console.log("[orderDetail.tsx] Dispatching finals deletion event:", {
+    // Apply optimistic update immediately (before API call)
+    if (sizeDelta !== undefined && galleryId) {
+      applyOptimisticUpdate({
+        type: "finals",
         galleryId,
-        imageSize,
         sizeDelta,
+        setOptimisticFinalsBytes,
+        logContext: "orderDetail.tsx handleDeleteFinalDirect",
       });
-      
-      // Update Zustand store optimistically first
-      const storeState = useGalleryStore.getState();
-      if (storeState.currentGallery?.galleryId === galleryId) {
-        (
-          storeState as { updateFinalsBytesUsed?: (delta: number) => void }
-        ).updateFinalsBytesUsed?.(sizeDelta);
-        const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as number | undefined;
-        console.log("[orderDetail.tsx] Updated store for deletion, new value:", newStoreValue);
-        
-        // Update optimistic state to match store
-        setOptimisticFinalsBytes(newStoreValue ?? null);
-      }
-      
-      // Dispatch event (store subscription will also handle this, but event ensures immediate update)
-      window.dispatchEvent(
-        new CustomEvent("finalsUpdated", {
-          detail: { galleryId, sizeDelta },
-        })
-      );
     }
 
     try {
@@ -756,6 +764,17 @@ export default function OrderDetail() {
 
       showToast("success", "Sukces", "Zdjęcie zostało usunięte");
     } catch (err) {
+      // Revert optimistic update on error
+      if (sizeDelta !== undefined && galleryId) {
+        revertOptimisticUpdate({
+          type: "finals",
+          galleryId,
+          sizeDelta,
+          setOptimisticFinalsBytes,
+          logContext: "orderDetail.tsx handleDeleteFinalDirect",
+        });
+      }
+
       // On error, restore the image to the list (only if not in deletedImageKeys)
       if (!deletedImageKeys.has(imageKey)) {
         setFinalImages((prevImages) => {
@@ -830,6 +849,21 @@ export default function OrderDetail() {
       prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
     );
 
+    // Get image size for optimistic update
+    const imageSize = imageToDelete.size ?? 0;
+    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
+
+    // Apply optimistic update immediately (before API call)
+    if (sizeDelta !== undefined && galleryId) {
+      applyOptimisticUpdate({
+        type: "finals",
+        galleryId,
+        sizeDelta,
+        setOptimisticFinalsBytes,
+        logContext: "orderDetail.tsx handleDeleteFinal",
+      });
+    }
+
     try {
       await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
 
@@ -877,6 +911,17 @@ export default function OrderDetail() {
 
       showToast("success", "Sukces", "Zdjęcie zostało usunięte");
     } catch (err) {
+      // Revert optimistic update on error
+      if (sizeDelta !== undefined && galleryId) {
+        revertOptimisticUpdate({
+          type: "finals",
+          galleryId,
+          sizeDelta,
+          setOptimisticFinalsBytes,
+          logContext: "orderDetail.tsx handleDeleteFinal",
+        });
+      }
+
       // On error, restore the image to the list (only if not in deletedImageKeys)
       if (!deletedImageKeys.has(imageKey)) {
         setFinalImages((prevImages) => {
@@ -1097,13 +1142,15 @@ export default function OrderDetail() {
   // - Selection is enabled
   // - User has selected photos (selectedKeys.length > 0)
   // - But no matching images exist (photos were cleaned up)
-  const hasSelectedImages = selectedKeys.length > 0 && originalImages.length > 0 && 
+  const hasSelectedImages =
+    selectedKeys.length > 0 &&
+    originalImages.length > 0 &&
     originalImages.some((img) => {
       const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
       const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
       return normalizedSelectedKeys.includes(imgKey);
     });
-  
+
   const hideSelectedSection = selectionEnabled && selectedKeys.length > 0 && !hasSelectedImages;
 
   // Check if gallery is paid (not DRAFT state)
@@ -1601,9 +1648,7 @@ export default function OrderDetail() {
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <StorageDisplay
                     bytesUsed={
-                      optimisticFinalsBytes ??
-                      (gallery.finalsBytesUsed as number | undefined) ??
-                      0
+                      optimisticFinalsBytes ?? (gallery.finalsBytesUsed as number | undefined) ?? 0
                     }
                     limitBytes={gallery.finalsLimitBytes as number}
                     label="Finalne"

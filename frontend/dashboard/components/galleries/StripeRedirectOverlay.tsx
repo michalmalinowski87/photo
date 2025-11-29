@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface StripeRedirectOverlayProps {
   isVisible: boolean;
@@ -28,7 +29,7 @@ export const StripeRedirectOverlay: React.FC<StripeRedirectOverlayProps> = ({
     return null;
   }
 
-  return (
+  const overlayContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 dark:bg-black/90 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full mx-4 p-8">
         <div className="text-center">
@@ -59,4 +60,11 @@ export const StripeRedirectOverlay: React.FC<StripeRedirectOverlayProps> = ({
       </div>
     </div>
   );
+
+  // Render overlay via portal to document.body to ensure it's above all other content
+  if (typeof window !== "undefined") {
+    return createPortal(overlayContent, document.body);
+  }
+
+  return overlayContent;
 };

@@ -17,4 +17,3 @@ export function formatBytes(bytes: number | undefined | null): string {
   }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
-

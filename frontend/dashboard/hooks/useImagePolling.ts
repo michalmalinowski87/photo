@@ -1,8 +1,9 @@
 import { useRef, useCallback } from "react";
 
-import api from "../lib/api-service";
 import { GalleryImage } from "../components/upload/PhotoUploadHandler";
 import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
+import api from "../lib/api-service";
+
 import { useToast } from "./useToast";
 
 export type UploadType = "originals" | "finals";
@@ -190,6 +191,8 @@ export function useImagePolling(config: UseImagePollingConfig) {
               // Reduced delay for faster UI updates - backend should be quick to update
               setTimeout(async () => {
                 try {
+                  // Only validate limits if we need to check for excess (optimistic updates already handled UI)
+                  // This prevents unnecessary API calls and flicker
                   const validationResult = await api.galleries.validateUploadLimits(
                     config.galleryId
                   );
@@ -209,14 +212,19 @@ export function useImagePolling(config: UseImagePollingConfig) {
                   console.error("Failed to validate upload limits:", validationError);
                 }
 
-                // Reload gallery to update byte usage
+                // Reload gallery to update byte usage (only after all uploads complete)
+                // This is the only place we reload gallery during uploads - optimistic updates handle the rest
                 if (config.reloadGallery) {
                   await config.reloadGallery();
-                  // Also dispatch event manually to ensure components are notified
+                  // Dispatch event to notify components and clear optimistic state if it matches
+                  // Mark as refreshAfterUpload to prevent sidebar from making unnecessary calculate-plan calls
                   if (typeof window !== "undefined") {
                     window.dispatchEvent(
                       new CustomEvent("galleryUpdated", {
-                        detail: { galleryId: config.galleryId },
+                        detail: {
+                          galleryId: config.galleryId,
+                          refreshAfterUpload: true, // Signal that this is a refresh after upload completion
+                        },
                       })
                     );
                   }

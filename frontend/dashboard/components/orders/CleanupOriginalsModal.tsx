@@ -32,7 +32,11 @@ export const CleanupOriginalsModal: React.FC<CleanupOriginalsModalProps> = ({
           <Button variant="outline" onClick={onCancel}>
             Nie
           </Button>
-          <Button variant="primary" onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white">
+          <Button
+            variant="primary"
+            onClick={onConfirm}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
             Tak
           </Button>
         </div>
@@ -40,4 +44,3 @@ export const CleanupOriginalsModal: React.FC<CleanupOriginalsModalProps> = ({
     </Modal>
   );
 };
-

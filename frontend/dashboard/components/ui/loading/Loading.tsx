@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 
 interface LoadingProps {
   size?: "sm" | "md" | "lg" | "xl";
@@ -37,24 +38,48 @@ export const Loading: React.FC<LoadingProps> = ({
   );
 
   if (fullScreen) {
-    return (
+    const loadingOverlay = (
       <div className="fixed inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50">
         {content}
       </div>
     );
+
+    // Render full-screen loading via portal to document.body to ensure it's above all other content
+    if (typeof window !== "undefined") {
+      return createPortal(loadingOverlay, document.body);
+    }
+
+    return loadingOverlay;
   }
 
   return content;
 };
 
 // Full page loading component
-// Accounts for header height and padding to center properly
+// Fixed overlay that covers the entire screen including header
 export const FullPageLoading: React.FC<{ text?: string }> = ({ text }) => {
-  return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-80px)] -mt-20">
-      <Loading size="xl" text={text ?? "Ładowanie..."} />
+  const content = (
+    <div className="flex flex-col items-center justify-center gap-4">
+      <div className="w-16 h-16 relative">
+        <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+        <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
+      </div>
+      {text && <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">{text}</p>}
     </div>
   );
+
+  const loadingOverlay = (
+    <div className="fixed inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50">
+      {content}
+    </div>
+  );
+
+  // Render full-page loading via portal to document.body to ensure it's above all other content
+  if (typeof window !== "undefined") {
+    return createPortal(loadingOverlay, document.body);
+  }
+
+  return loadingOverlay;
 };
 
 // Inline loading component

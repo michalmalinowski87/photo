@@ -1,0 +1,188 @@
+import { useGalleryStore } from "../store/gallerySlice";
+
+export type OptimisticUpdateType = "originals" | "finals";
+
+export interface ApplyOriginalsOptimisticUpdateParams {
+  type: "originals";
+  galleryId: string;
+  sizeDelta: number;
+  isUpload?: boolean; // Whether this is an upload (true) or deletion (false/undefined)
+  logContext?: string;
+}
+
+export interface ApplyFinalsOptimisticUpdateParams {
+  type: "finals";
+  galleryId: string;
+  sizeDelta: number;
+  setOptimisticFinalsBytes: (value: number | null) => void;
+  isUpload?: boolean; // Whether this is an upload (true) or deletion (false/undefined)
+  logContext?: string;
+}
+
+export type ApplyOptimisticUpdateParams =
+  | ApplyOriginalsOptimisticUpdateParams
+  | ApplyFinalsOptimisticUpdateParams;
+
+export interface RevertOriginalsOptimisticUpdateParams {
+  type: "originals";
+  galleryId: string;
+  sizeDelta: number;
+  logContext?: string;
+}
+
+export interface RevertFinalsOptimisticUpdateParams {
+  type: "finals";
+  galleryId: string;
+  sizeDelta: number;
+  setOptimisticFinalsBytes: (value: number | null) => void;
+  logContext?: string;
+}
+
+export type RevertOptimisticUpdateParams =
+  | RevertOriginalsOptimisticUpdateParams
+  | RevertFinalsOptimisticUpdateParams;
+
+/**
+ * Applies an optimistic update for gallery storage bytes.
+ * For originals: dispatches galleryUpdated event
+ * For finals: updates Zustand store, local state, and dispatches finalsUpdated event
+ */
+export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const { galleryId, sizeDelta, logContext } = params;
+
+  if (params.type === "originals") {
+    // For originals, just dispatch the event
+    const isUpload = params.isUpload ?? sizeDelta > 0; // Positive delta = upload, negative = deletion
+    console.log(`[${logContext ?? "optimistic-updates"}] Applying originals optimistic update:`, {
+      galleryId,
+      sizeDelta,
+      isUpload,
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("galleryUpdated", {
+        detail: {
+          galleryId,
+          sizeDelta,
+          isUpload,
+        },
+      })
+    );
+  } else {
+    // For finals, update store, local state, and dispatch event
+    const { setOptimisticFinalsBytes } = params;
+
+    console.log(`[${logContext ?? "optimistic-updates"}] Applying finals optimistic update:`, {
+      galleryId,
+      sizeDelta,
+    });
+
+    // Update Zustand store optimistically
+    const storeState = useGalleryStore.getState();
+    if (storeState.currentGallery?.galleryId === galleryId) {
+      (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(
+        sizeDelta
+      );
+      const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as
+        | number
+        | undefined;
+      console.log(
+        `[${logContext ?? "optimistic-updates"}] Updated store, new value:`,
+        newStoreValue
+      );
+
+      // Update optimistic state to match store
+      setOptimisticFinalsBytes(newStoreValue ?? null);
+    }
+
+    // Dispatch event (store subscription will also handle this, but event ensures immediate update)
+    window.dispatchEvent(
+      new CustomEvent("finalsUpdated", {
+        detail: { galleryId, sizeDelta },
+      })
+    );
+  }
+}
+
+/**
+ * Reverts an optimistic update for gallery storage bytes.
+ * This should be called when an operation fails after applying an optimistic update.
+ */
+export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const { galleryId, sizeDelta, logContext } = params;
+  const revertDelta = -sizeDelta; // Opposite of original delta
+
+  if (params.type === "originals") {
+    // For originals, just dispatch the revert event
+    console.log(`[${logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`, {
+      galleryId,
+      originalSizeDelta: sizeDelta,
+      revertDelta,
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("galleryUpdated", {
+        detail: {
+          galleryId,
+          sizeDelta: revertDelta, // Revert by adding back
+        },
+      })
+    );
+  } else {
+    // For finals, revert store, local state, and dispatch event
+    const { setOptimisticFinalsBytes } = params;
+
+    console.log(`[${logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`, {
+      galleryId,
+      originalSizeDelta: sizeDelta,
+      revertDelta,
+    });
+
+    // Revert store update (add back the size)
+    const storeState = useGalleryStore.getState();
+    if (storeState.currentGallery?.galleryId === galleryId) {
+      (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(
+        revertDelta
+      ); // Revert by adding back
+      const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as
+        | number
+        | undefined;
+      console.log(
+        `[${logContext ?? "optimistic-updates"}] Reverted store, new value:`,
+        newStoreValue
+      );
+
+      // Revert optimistic state
+      setOptimisticFinalsBytes(newStoreValue ?? null);
+    }
+
+    // Dispatch revert event
+    window.dispatchEvent(
+      new CustomEvent("finalsUpdated", {
+        detail: { galleryId, sizeDelta: revertDelta }, // Revert by adding back
+      })
+    );
+  }
+}
+
+/**
+ * Helper to calculate sizeDelta from image size.
+ * Returns undefined if size is 0 or unknown (for deletions where size might not be available).
+ */
+export function calculateSizeDelta(
+  imageSize: number | undefined,
+  isDeletion: boolean = false
+): number | undefined {
+  if (imageSize === undefined || imageSize === 0) {
+    return undefined;
+  }
+  return isDeletion ? -imageSize : imageSize;
+}

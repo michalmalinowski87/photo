@@ -163,13 +163,21 @@ export default function GallerySidebar({
     }
 
     let requestCounter = 0;
+    let debounceTimer: NodeJS.Timeout | null = null;
 
     const handleGalleryUpdate = async (event?: Event) => {
       // Check if event has size delta for optimistic update
       const customEvent = event as
-        | CustomEvent<{ galleryId?: string; sizeDelta?: number }>
+        | CustomEvent<{
+            galleryId?: string;
+            sizeDelta?: number;
+            isUpload?: boolean;
+            refreshAfterUpload?: boolean;
+          }>
         | undefined;
       const sizeDelta = customEvent?.detail?.sizeDelta;
+      const isUpload = customEvent?.detail?.isUpload ?? false;
+      const refreshAfterUpload = customEvent?.detail?.refreshAfterUpload ?? false;
 
       // Optimistic update: immediately adjust bytes if size delta is provided
       if (sizeDelta !== undefined) {
@@ -196,40 +204,101 @@ export default function GallerySidebar({
         });
       }
 
-      // Increment counter to track the latest request
-      requestCounter += 1;
-      const currentRequest = requestCounter;
-
-      // Refresh plan recommendation from API in background (for accuracy)
-      setIsLoadingPlanRecommendation(true);
-      try {
-        const recommendation = await getPlanRecommendation(gallery.galleryId);
-
-        // Only update if this is still the latest request (prevent stale data from race conditions)
-        if (currentRequest === requestCounter) {
-          // If no photos are uploaded, clear the plan recommendation
-          if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
-            setPlanRecommendation(null);
-            setOptimisticBytesUsed(0);
-          } else {
-            setPlanRecommendation(recommendation);
-            setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
-          }
+      // Skip API call if this is a refresh after upload completion
+      // The optimistic updates already handled the UI, and we don't want to cause flicker
+      // by calling calculate-plan immediately after uploads complete
+      if (refreshAfterUpload) {
+        // Just clear any pending debounce timers - don't make API calls
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
         }
-      } catch (error) {
-        // Only update on error if this is still the latest request
-        if (currentRequest === requestCounter) {
-          console.error("Failed to refresh plan recommendation:", error);
-          // On error, clear recommendation if gallery shows no photos
-          if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
-            setPlanRecommendation(null);
-            setOptimisticBytesUsed(0);
+        return;
+      }
+
+      // Clear any existing debounce timer
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+
+      // For uploads, debounce the API call to avoid multiple calls during rapid uploads
+      // For deletions, call immediately (deletions are typically single operations)
+      if (isUpload) {
+        // Debounce: wait 2 seconds after last upload event before calling API
+        // This ensures we only calculate plan once when uploads are complete
+        debounceTimer = setTimeout(async () => {
+          // Increment counter to track the latest request
+          requestCounter += 1;
+          const currentRequest = requestCounter;
+
+          // Refresh plan recommendation from API in background (for accuracy)
+          setIsLoadingPlanRecommendation(true);
+          try {
+            const recommendation = await getPlanRecommendation(gallery.galleryId);
+
+            // Only update if this is still the latest request (prevent stale data from race conditions)
+            if (currentRequest === requestCounter) {
+              // If no photos are uploaded, clear the plan recommendation
+              if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+                setPlanRecommendation(null);
+                setOptimisticBytesUsed(0);
+              } else {
+                setPlanRecommendation(recommendation);
+                setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
+              }
+            }
+          } catch (error) {
+            // Only update on error if this is still the latest request
+            if (currentRequest === requestCounter) {
+              console.error("Failed to refresh plan recommendation:", error);
+              // On error, clear recommendation if gallery shows no photos
+              if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
+                setPlanRecommendation(null);
+                setOptimisticBytesUsed(0);
+              }
+            }
+          } finally {
+            // Only update loading state if this is still the latest request
+            if (currentRequest === requestCounter) {
+              setIsLoadingPlanRecommendation(false);
+            }
           }
-        }
-      } finally {
-        // Only update loading state if this is still the latest request
-        if (currentRequest === requestCounter) {
-          setIsLoadingPlanRecommendation(false);
+        }, 2000); // Wait 2 seconds after last upload event
+      } else {
+        // For deletions or refresh events (no sizeDelta), call immediately (no debounce needed)
+        requestCounter += 1;
+        const currentRequest = requestCounter;
+
+        setIsLoadingPlanRecommendation(true);
+        try {
+          const recommendation = await getPlanRecommendation(gallery.galleryId);
+
+          if (currentRequest === requestCounter) {
+            if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+              setPlanRecommendation(null);
+              // Clear optimistic bytes when gallery is empty
+              setOptimisticBytesUsed(0);
+            } else {
+              setPlanRecommendation(recommendation);
+              // Use API value to clear any stale optimistic state
+              setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
+            }
+          }
+        } catch (error) {
+          if (currentRequest === requestCounter) {
+            console.error("Failed to refresh plan recommendation:", error);
+            // On error, check gallery state and clear optimistic bytes if empty
+            const galleryBytes = (gallery.originalsBytesUsed as number | undefined) ?? 0;
+            if (galleryBytes === 0) {
+              setPlanRecommendation(null);
+              setOptimisticBytesUsed(0);
+            }
+          }
+        } finally {
+          if (currentRequest === requestCounter) {
+            setIsLoadingPlanRecommendation(false);
+          }
         }
       }
     };
@@ -238,7 +307,10 @@ export default function GallerySidebar({
       window.addEventListener("galleryUpdated", handleGalleryUpdate);
       return () => {
         window.removeEventListener("galleryUpdated", handleGalleryUpdate);
-        // Invalidate any pending requests
+        // Clear debounce timer and invalidate any pending requests
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
         requestCounter += 1;
       };
     }
@@ -247,16 +319,28 @@ export default function GallerySidebar({
 
   // Also refresh when gallery.originalsBytesUsed changes (in case event didn't fire or was missed)
   // This ensures we update even if the event wasn't dispatched
+  // BUT: Skip if we have optimistic bytes (means we're in the middle of uploads/deletions)
+  // This prevents flicker during uploads when gallery prop updates
   useEffect(() => {
     if (galleryLoading || isPaid || !gallery?.galleryId) {
       return;
     }
 
-    // If gallery shows 0 bytes, immediately clear recommendation (optimistic update)
+    // If gallery shows 0 bytes, immediately clear recommendation and optimistic bytes
+    // This handles the case where all photos are deleted (especially when suppression is active)
     const currentBytes = gallery.originalsBytesUsed as number | undefined;
     if (currentBytes === 0 || currentBytes === undefined) {
       setPlanRecommendation(null);
+      setOptimisticBytesUsed(0); // Clear optimistic bytes when gallery is empty
       setIsLoadingPlanRecommendation(false);
+      return;
+    }
+
+    // Skip API call if we have optimistic bytes - this means we're in the middle of uploads/deletions
+    // The event handler will handle the refresh when operations complete
+    // This prevents flicker by avoiding unnecessary calculate-plan calls during uploads
+    if (optimisticBytesUsed !== null) {
+      // We have optimistic state, skip this refresh - event handler will update when ready
       return;
     }
 
@@ -305,7 +389,7 @@ export default function GallerySidebar({
       isCancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, optimisticBytesUsed]);
 
   const handleBack = () => {
     if (typeof window !== "undefined" && gallery?.galleryId) {

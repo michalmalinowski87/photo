@@ -237,10 +237,7 @@ export const useOrderActions = ({
         if (shouldCleanup) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            await apiService.orders.cleanupOriginals(
-              galleryId as string,
-              orderId as string
-            );
+            await apiService.orders.cleanupOriginals(galleryId as string, orderId as string);
             showToast(
               "success",
               "Sukces",

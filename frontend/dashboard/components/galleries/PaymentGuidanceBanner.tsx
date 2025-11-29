@@ -1,4 +1,3 @@
-import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
 
 import { usePlanRecommendation } from "../../hooks/usePlanRecommendation";
@@ -41,7 +40,6 @@ export const PaymentGuidanceBanner: React.FC<PaymentGuidanceBannerProps> = ({
   gallery,
   onPaymentComplete,
 }) => {
-  const router = useRouter();
   const { showToast } = useToast();
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);

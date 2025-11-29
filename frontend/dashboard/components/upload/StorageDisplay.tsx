@@ -1,4 +1,5 @@
 import React from "react";
+
 import { formatBytes } from "../../utils/format-bytes";
 
 interface StorageDisplayProps {
@@ -50,4 +51,3 @@ export const StorageDisplay: React.FC<StorageDisplayProps> = ({
     </div>
   );
 };
-

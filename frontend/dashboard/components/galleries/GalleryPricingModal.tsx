@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { formatPrice } from "../../lib/format-price";
@@ -116,7 +117,7 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
     void handleSelectPlan(selectedPlan);
   };
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <div className="p-6">
@@ -176,4 +177,11 @@ export const GalleryPricingModal: React.FC<GalleryPricingModalProps> = ({
       />
     </div>
   );
+
+  // Render modal via portal to document.body to ensure it's above all other content
+  if (typeof window !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };
