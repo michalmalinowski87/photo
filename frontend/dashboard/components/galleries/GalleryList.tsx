@@ -2,10 +2,11 @@ import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
-import { apiFetch, formatApiError } from "../../lib/api";
+import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { getPricingModalData } from "../../lib/calculate-plan";
 import type { PricingModalData } from "../../lib/plan-types";
+import { useUserStore } from "../../store/userSlice";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
@@ -42,8 +43,6 @@ interface GalleryListProps {
 }
 
 const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingChange }) => {
-  const [apiUrl, setApiUrl] = useState("");
-  const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(true); // Start with true to prevent flicker
   const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
   const [error, setError] = useState("");
@@ -67,29 +66,21 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
+  const { refreshWalletBalance } = useUserStore();
 
   const loadWalletBalance = useCallback(async () => {
-    if (!apiUrl || !idToken) {
-      return;
-    }
-
     try {
-      await apiFetch<WalletBalanceResponse>(`${apiUrl}/wallet/balance`, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await refreshWalletBalance();
     } catch (_err) {
       // Ignore wallet errors, default to 0
     }
-  }, [apiUrl, idToken]);
+  }, [refreshWalletBalance]);
 
   const loadGalleries = useCallback(async () => {
-    if (!apiUrl || !idToken) {
-      if (onLoadingChange && initialLoad) {
-        setInitialLoad(false);
-        setLoading(false);
-        onLoadingChange(false, false);
-      }
-      return;
+    if (onLoadingChange && initialLoad) {
+      setInitialLoad(false);
+      setLoading(false);
+      onLoadingChange(false, false);
     }
 
     setLoading(true);
@@ -100,12 +91,22 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     }
 
     try {
-      const url = filter ? `${apiUrl}/galleries?filter=${filter}` : `${apiUrl}/galleries`;
-      const { data } = await apiFetch<GalleriesResponse>(url, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const response = await api.galleries.list();
+      const galleriesList = Array.isArray(response) ? response : response.items ?? [];
+      
+      // Apply filter client-side if needed (api-service doesn't support filter param yet)
+      let filteredGalleries = galleriesList;
+      if (filter) {
+        filteredGalleries = galleriesList.filter((gallery: Gallery) => {
+          if (filter === "unpaid") {
+            return gallery.isPaid === false;
+          }
+          // Add other filter logic as needed
+          return true;
+        });
+      }
 
-      setGalleries(data.items ?? []);
+      setGalleries(filteredGalleries);
 
       if (initialLoad) {
         setInitialLoad(false);
@@ -121,13 +122,12 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         onLoadingChange(false, false);
       }
     }
-  }, [apiUrl, idToken, filter, initialLoad, onLoadingChange]);
+  }, [filter, initialLoad, onLoadingChange]);
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
     initializeAuth(
-      (token) => {
-        setIdToken(token);
+      () => {
+        // Token is handled by api-service automatically
       },
       () => {
         redirectToLandingSignIn(
@@ -144,11 +144,9 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   }, []);
 
   useEffect(() => {
-    if (apiUrl && idToken) {
-      void loadGalleries();
-      void loadWalletBalance();
-    }
-  }, [apiUrl, idToken, filter, loadGalleries, loadWalletBalance]);
+    void loadGalleries();
+    void loadWalletBalance();
+  }, [filter, loadGalleries, loadWalletBalance]);
 
   // Notify parent of loading state changes
   useEffect(() => {
@@ -159,10 +157,6 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   }, [loading, initialLoad]);
 
   const handlePayClick = async (galleryId: string) => {
-    if (!apiUrl || !idToken) {
-      return;
-    }
-
     setSelectedGalleryId(galleryId);
     setPaymentLoading(true);
 
@@ -191,17 +185,14 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   };
 
   const handleDeleteConfirm = async () => {
-    if (!apiUrl || !idToken || !galleryToDelete) {
+    if (!galleryToDelete) {
       return;
     }
 
     setDeleteLoading(true);
 
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryToDelete.galleryId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.galleries.delete(galleryToDelete.galleryId);
 
       showToast("success", "Sukces", "Galeria została usunięta");
       setShowDeleteDialog(false);

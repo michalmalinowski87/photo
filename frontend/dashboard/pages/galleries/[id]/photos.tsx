@@ -107,7 +107,7 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { getGalleryOrders } = useGalleryStore();
+  const { getGalleryOrders, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
   const pollingActiveRef = useRef<boolean>(false); // Track if polling is active
@@ -281,7 +281,7 @@ export default function GalleryPhotos() {
   };
 
   // Define functions first (before useEffect hooks that use them)
-  // Simple: Load images directly from API - no placeholders, no merging
+  // Load images from store (checks cache first, fetches if needed)
   const loadPhotos = useCallback(
     async (silent: boolean = false): Promise<void> => {
       if (!galleryId) {
@@ -293,11 +293,11 @@ export default function GalleryPhotos() {
       }
 
       try {
-        const photosResponse = await api.galleries.getImages(galleryId as string);
-        const apiImages = (photosResponse.images ?? []) as ApiImage[];
+        // Use store action - checks cache first, fetches if needed
+        const apiImages = await fetchGalleryImages(galleryId as string);
 
-        // API response is single source of truth - just set it directly
-        const mappedImages: GalleryImage[] = apiImages.map((img) => ({
+        // Map images to GalleryImage format
+        const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
           key: img.key,
           filename: img.filename,
           thumbUrl: img.thumbUrl,
@@ -320,7 +320,7 @@ export default function GalleryPhotos() {
         }
       }
     },
-    [galleryId, showToast]
+    [galleryId, showToast, fetchGalleryImages]
   );
 
   const loadApprovedSelections = useCallback(async (): Promise<void> => {
@@ -329,19 +329,8 @@ export default function GalleryPhotos() {
     }
 
     try {
-      // First try to get orders from cache (GalleryLayoutWrapper already loads them)
-      // This prevents duplicate API calls
-      const cachedOrders = getGalleryOrders(galleryId as string, 30000);
-      let orders: Order[] = [];
-
-      if (cachedOrders && Array.isArray(cachedOrders)) {
-        // Use cached orders if available
-        orders = cachedOrders as Order[];
-      } else {
-        // Fallback to API call if cache is not available
-        const ordersResponse = await api.orders.getByGallery(galleryId as string);
-        orders = (ordersResponse?.items ?? []) as Order[];
-      }
+      // Use store action - checks cache first, fetches if needed
+      const orders = await fetchGalleryOrders(galleryId as string);
 
       // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
       const approvedOrders = orders.filter(
@@ -376,7 +365,7 @@ export default function GalleryPhotos() {
     } catch (_err) {
       // Don't show error toast - this is not critical
     }
-  }, [galleryId, getGalleryOrders]);
+  }, [galleryId, fetchGalleryOrders]);
 
   // Initialize auth and load data
   useEffect(() => {

@@ -1,14 +1,14 @@
 import React, { ComponentType, useCallback, useRef } from "react";
 
-import { apiFetchWithAuth, formatApiError } from "../lib/api";
+import api, { formatApiError } from "../lib/api-service";
 import { useUploadStore } from "../store/uploadSlice";
 
 interface UploadConfig {
-  apiUrl: string;
+  apiUrl?: string; // Deprecated - kept for backward compatibility but not used
   galleryId: string;
   orderId?: string;
   type: "original" | "final" | "cover";
-  endpoint: string; // Presigned URL endpoint
+  endpoint?: string; // Deprecated - kept for backward compatibility but not used (api-service handles endpoints)
   validation?: {
     maxFileSize?: number; // in bytes
     allowedTypes?: string[]; // MIME types
@@ -70,11 +70,9 @@ export function withImageUpload<P extends object>(
     const uploadImages = useCallback(
       async (files: File[], config: UploadConfig) => {
         const {
-          apiUrl: _apiUrl,
           galleryId,
           orderId,
           type,
-          endpoint,
           validation = {},
           storageLimitBytes,
           currentBytesUsed = 0,
@@ -187,24 +185,23 @@ export function withImageUpload<P extends object>(
 
             try {
               // Get presigned URL with retry logic
-              const presignResponse = await retryWithBackoff(async () => {
-                return await apiFetchWithAuth(endpoint, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
+              const presignedData = await retryWithBackoff(async () => {
+                // Use appropriate api-service method based on type
+                if (type === "final" && orderId) {
+                  return await api.uploads.getFinalImagePresignedUrl(galleryId, orderId, {
+                    key: file.name,
+                    contentType: file.type || "image/jpeg",
+                  });
+                } else {
+                  return await api.uploads.getPresignedUrl({
                     galleryId,
                     orderId,
                     key: file.name,
                     contentType: file.type || "image/jpeg",
                     fileSize: file.size,
-                  }),
-                });
+                  });
+                }
               });
-
-              // Type guard for presigned URL response
-              const presignedData = presignResponse.data;
               if (
                 !presignedData ||
                 typeof presignedData !== "object" ||
@@ -328,11 +325,9 @@ export function useImageUpload() {
     async (files: File[], config: UploadConfig) => {
       // Same implementation as HOC version
       const {
-        apiUrl: _apiUrl,
         galleryId,
         orderId,
         type,
-        endpoint,
         validation = {},
         storageLimitBytes,
         currentBytesUsed = 0,
@@ -437,24 +432,24 @@ export function useImageUpload() {
           onProgress?.(i, imageFiles.length);
 
           try {
-            const presignResponse = await retryWithBackoff(async () => {
-              return await apiFetchWithAuth(endpoint, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
+            // Get presigned URL with retry logic
+            const presignedData = await retryWithBackoff(async () => {
+              // Use appropriate api-service method based on type
+              if (type === "final" && orderId) {
+                return await api.uploads.getFinalImagePresignedUrl(galleryId, orderId, {
+                  key: file.name,
+                  contentType: file.type || "image/jpeg",
+                });
+              } else {
+                return await api.uploads.getPresignedUrl({
                   galleryId,
                   orderId,
                   key: file.name,
                   contentType: file.type || "image/jpeg",
                   fileSize: file.size,
-                }),
-              });
+                });
+              }
             });
-
-            // Type guard for presigned URL response
-            const presignedData = presignResponse.data;
             if (
               !presignedData ||
               typeof presignedData !== "object" ||

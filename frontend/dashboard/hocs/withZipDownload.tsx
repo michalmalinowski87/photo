@@ -1,6 +1,6 @@
 import React, { ComponentType, useCallback } from "react";
 
-import { formatApiError } from "../lib/api";
+import { formatApiError } from "../lib/api-service";
 import { useDownloadStore } from "../store/downloadSlice";
 
 interface ZipDownloadConfig {
@@ -54,7 +54,7 @@ export function withZipDownload<P extends object>(
         const pollForZip = async (): Promise<void> => {
           try {
             // Get valid token (will refresh if needed) - using getValidToken for special 202 handling
-            const { getValidToken } = await import("../lib/api");
+            const { getValidToken } = await import("../lib/api-service");
             const idToken = await getValidToken();
 
             const response = await fetch(endpoint, {
@@ -185,7 +185,7 @@ export function useZipDownload() {
       const pollForZip = async (): Promise<void> => {
         try {
           // Get valid token (will refresh if needed)
-          const { getValidToken } = await import("../lib/api");
+          const { getValidToken } = await import("../lib/api-service");
           const idToken = await getValidToken();
 
           const response = await fetch(endpoint, {

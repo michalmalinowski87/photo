@@ -3,6 +3,7 @@ import { useRef, useCallback } from "react";
 import { GalleryImage } from "../components/upload/PhotoUploadHandler";
 import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
 import api from "../lib/api-service";
+import { useGalleryStore } from "../store/gallerySlice";
 
 import { useToast } from "./useToast";
 
@@ -75,8 +76,16 @@ export function useImagePolling(config: UseImagePollingConfig) {
             // Preserve all URL properties (previewUrl, thumbUrl, finalUrl) for finals
             images = (finalResponse.images ?? []) as GalleryImage[];
           } else {
-            const photosResponse = await api.galleries.getImages(config.galleryId);
-            images = (photosResponse?.images ?? []) as GalleryImage[];
+            // Use store action - checks cache first, fetches if needed
+            const { fetchGalleryImages: fetchImages } = useGalleryStore.getState();
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+            const apiImagesResult = await fetchImages(config.galleryId, true); // Force refresh for polling
+            if (Array.isArray(apiImagesResult)) {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              images = apiImagesResult as GalleryImage[];
+            } else {
+              images = [];
+            }
           }
 
           // Filter out deleted images

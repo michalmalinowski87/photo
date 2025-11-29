@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
-import { apiFetchWithAuth, formatApiError } from "../../lib/api";
-import { getIdToken } from "../../lib/auth";
+import api, { formatApiError } from "../../lib/api-service";
+import { initializeAuth } from "../../lib/auth-init";
 import Button from "../ui/button/Button";
 
 import { ClientStep } from "./wizard/ClientStep";
@@ -77,8 +77,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [apiUrl, setApiUrl] = useState("");
-  const [idToken, setIdToken] = useState("");
   const [existingPackages, setExistingPackages] = useState<Package[]>([]);
   const [existingClients, setExistingClients] = useState<Client[]>([]);
   const [galleryNameError, setGalleryNameError] = useState("");
@@ -108,66 +106,42 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     initialPaymentAmountCents: 0,
   });
 
-  const loadExistingPackages = useCallback(
-    async (token?: string, apiUrlParam?: string) => {
-      const tokenToUse = token ?? idToken;
-      const apiUrlToUse = apiUrlParam ?? apiUrl;
-      if (!apiUrlToUse || !tokenToUse) {
-        return;
-      }
-      try {
-        const response = await apiFetchWithAuth(`${apiUrlToUse}/packages`);
-        // apiFetch returns { data: body, response }
-        // The API returns { items: [...], count: ... }
-        const responseData = response.data as { items?: Package[] } | undefined;
-        const packages = responseData?.items ?? [];
-        setExistingPackages(packages);
-      } catch (_err) {
-        setExistingPackages([]);
-      }
-    },
-    [idToken, apiUrl]
-  );
+  const loadExistingPackages = useCallback(async () => {
+    try {
+      const response = await api.packages.list();
+      const packages = Array.isArray(response) ? response : response.items ?? [];
+      setExistingPackages(packages);
+    } catch (_err) {
+      setExistingPackages([]);
+    }
+  }, []);
 
-  const loadExistingClients = useCallback(
-    async (token?: string, apiUrlParam?: string) => {
-      const tokenToUse = token ?? idToken;
-      const apiUrlToUse = apiUrlParam ?? apiUrl;
-      if (!apiUrlToUse || !tokenToUse) {
-        return;
-      }
-      try {
-        const response = await apiFetchWithAuth(`${apiUrlToUse}/clients`);
-        // apiFetch returns { data: body, response }
-        // The API returns { items: [...], count: ..., hasMore: ..., lastKey: ... }
-        const responseData = response.data as { items?: Client[] } | undefined;
-        const clients = responseData?.items ?? [];
-        setExistingClients(clients);
-      } catch (_err) {
-        setExistingClients([]);
-      }
-    },
-    [idToken, apiUrl]
-  );
+  const loadExistingClients = useCallback(async () => {
+    try {
+      const response = await api.clients.list();
+      const clients = response.items ?? [];
+      setExistingClients(clients);
+    } catch (_err) {
+      setExistingClients([]);
+    }
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       if (!dataLoadedRef.current) {
-        const apiUrlValue = process.env.NEXT_PUBLIC_API_URL ?? "";
-        setApiUrl(apiUrlValue);
         dataLoadedRef.current = true;
-        getIdToken()
-          .then((token) => {
-            setIdToken(token);
-            // Pass apiUrl directly to avoid race condition with state update
-            void loadExistingPackages(token, apiUrlValue);
-            void loadExistingClients(token, apiUrlValue);
-          })
-          .catch(() => {
+        initializeAuth(
+          () => {
+            // Token is handled by api-service automatically
+            void loadExistingPackages();
+            void loadExistingClients();
+          },
+          () => {
             if (typeof window !== "undefined") {
               window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
             }
-          });
+          }
+        );
       }
       setCurrentStep(1);
       setError("");
@@ -355,21 +329,14 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       }
 
-      const response = await apiFetchWithAuth(`${apiUrl}/galleries`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const response = await api.galleries.create(requestBody);
 
-      const responseData = response.data as { galleryId: string } | undefined;
-      if (!responseData?.galleryId) {
+      if (!response?.galleryId) {
         throw new Error("Brak ID galerii w odpowiedzi");
       }
 
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
-      onSuccess(responseData.galleryId);
+      onSuccess(response.galleryId);
       onClose();
     } catch (err: unknown) {
       const errorMsg = formatApiError(err);

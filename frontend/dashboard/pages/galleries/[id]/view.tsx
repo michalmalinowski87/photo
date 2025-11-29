@@ -3,7 +3,8 @@ import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
-import { apiFetchWithAuth, formatApiError } from "../../../lib/api";
+import api, { formatApiError } from "../../../lib/api-service";
+import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface OwnerGalleryViewProps {
   token: string;
@@ -42,7 +43,7 @@ interface GalleryResponse {
 
 function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const router = useRouter();
-  const [apiUrl, setApiUrl] = useState<string>("");
+  const { fetchGallery, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
   const [galleryName, setGalleryName] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -60,69 +61,49 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     }
   }, [hasDeliveredOrders, loading, viewMode]);
 
-  useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
-  }, []);
-
   // Load gallery on mount
   useEffect(() => {
-    if (apiUrl && galleryId && token) {
+    if (galleryId) {
       void loadGallery();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiUrl, galleryId, token]);
+  }, [galleryId]);
 
   async function loadGallery(): Promise<void> {
     setMessage("");
     setLoading(true);
-    if (!apiUrl || !galleryId || !token) {
+    if (!galleryId) {
       setLoading(false);
       return;
     }
     const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
     try {
-      const [imagesResponse, deliveredOrdersResponse, ordersResponse] = await Promise.allSettled([
-        apiFetchWithAuth<ImagesResponse>(`${apiUrl}/galleries/${galleryIdStr}/images`, {}, token),
-        apiFetchWithAuth<OrdersResponse>(
-          `${apiUrl}/galleries/${galleryIdStr}/orders/delivered`,
-          {},
-          token
-        ),
-        apiFetchWithAuth<OrdersResponse>(`${apiUrl}/galleries/${galleryIdStr}/orders`, {}, token),
+      // Use store actions - checks cache first, fetches if needed
+      const [apiImages, deliveredOrdersResponse, orders] = await Promise.allSettled([
+        fetchGalleryImages(galleryIdStr),
+        api.galleries.checkDeliveredOrders(galleryIdStr),
+        fetchGalleryOrders(galleryIdStr),
       ]);
 
-      if (imagesResponse.status === "fulfilled") {
-        const imagesData = imagesResponse.value.data;
-        if (imagesData && typeof imagesData === "object" && "images" in imagesData) {
-          setImages(Array.isArray(imagesData.images) ? imagesData.images : []);
-        }
+      if (apiImages.status === "fulfilled") {
+        setImages(apiImages.value);
       }
 
-      // Check if there are delivered or preparing_delivery orders
+      // Check if there are delivered orders
       if (deliveredOrdersResponse.status === "fulfilled") {
-        const ordersData = deliveredOrdersResponse.value.data;
-        if (ordersData && typeof ordersData === "object" && "items" in ordersData) {
-          const hasOrders = (Array.isArray(ordersData.items) ? ordersData.items.length : 0) > 0;
-          setHasDeliveredOrders(hasOrders);
-        } else {
-          setHasDeliveredOrders(false);
-        }
+        const ordersData = deliveredOrdersResponse.value;
+        const hasOrders = (ordersData.items?.length ?? 0) > 0;
+        setHasDeliveredOrders(hasOrders);
       } else {
         setHasDeliveredOrders(false);
       }
 
       // Get selected keys from active order (CLIENT_APPROVED, PREPARING_DELIVERY, or CHANGES_REQUESTED)
-      if (ordersResponse.status === "fulfilled") {
-        const ordersData = ordersResponse.value.data;
-        if (!ordersData || typeof ordersData !== "object" || !("items" in ordersData)) {
-          setSelectedKeys(new Set());
-          setLoading(false);
-          return;
-        }
-        const orders = Array.isArray(ordersData.items) ? ordersData.items : [];
+      if (orders.status === "fulfilled") {
+        const ordersList = orders.value;
 
         // Find active order (approved, preparing delivery, or changes requested)
-        const activeOrder = orders.find((o): o is Order => {
+        const activeOrder = ordersList.find((o): o is Order => {
           if (!o || typeof o !== "object" || !("deliveryStatus" in o)) {
             return false;
           }
@@ -145,13 +126,8 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
 
       // Try to get gallery name from gallery info
       try {
-        const galleryResponse = await apiFetchWithAuth<GalleryResponse>(
-          `${apiUrl}/galleries/${galleryIdStr}`,
-          {},
-          token
-        );
-        const gallery = galleryResponse.data;
-        setGalleryName(gallery.galleryName ?? galleryIdStr);
+        const gallery = await fetchGallery(galleryIdStr);
+        setGalleryName((gallery?.galleryName as string | undefined) ?? galleryIdStr);
       } catch (_e) {
         // Gallery info not available, that's OK
         setGalleryName(galleryIdStr);
@@ -173,34 +149,14 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       return;
     }
     setMessage("");
-    if (!apiUrl || !galleryId || !token) {
-      setMessage("Not authenticated");
+    if (!galleryId) {
+      setMessage("Gallery ID required");
       return;
     }
     const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
     try {
-      const response = await apiFetchWithAuth(
-        `${apiUrl}/galleries/${String(galleryIdStr)}/photos/${encodeURIComponent(filename)}`,
-        {
-          method: "DELETE",
-        },
-        token
-      );
-      const responseData: unknown = response.data;
-      if (
-        responseData &&
-        typeof responseData === "object" &&
-        "storageUsedMB" in responseData &&
-        "storageLimitMB" in responseData &&
-        typeof (responseData as { storageUsedMB?: unknown }).storageUsedMB === "number" &&
-        typeof (responseData as { storageLimitMB?: unknown }).storageLimitMB === "number"
-      ) {
-        const storageUsedMB = (responseData as { storageUsedMB: number }).storageUsedMB;
-        const storageLimitMB = (responseData as { storageLimitMB: number }).storageLimitMB;
-        setMessage(`Photo deleted. Storage: ${storageUsedMB} MB / ${storageLimitMB} MB`);
-      } else {
-        setMessage("Photo deleted.");
-      }
+      await api.galleries.deleteImage(galleryIdStr, filename);
+      setMessage("Photo deleted.");
       // Reload gallery to refresh images and storage
       void loadGallery();
     } catch (error) {
@@ -299,14 +255,31 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
         <ProcessedPhotosView
           galleryId={typeof galleryId === "string" ? galleryId : ""}
           token={token}
-          apiUrl={apiUrl}
+          apiUrl={process.env.NEXT_PUBLIC_API_URL ?? ""}
           onImageClick={(index: number) => {
             setModalImageIndex(index);
           }}
           onFinalImagesChange={(images: GalleryImage[]) => {
             setFinalImages(images);
           }}
-          apiFetch={(url: string, options: RequestInit) => apiFetchWithAuth(url, options, token)}
+          apiFetch={async (url: string, options: RequestInit) => {
+            // ProcessedPhotosView expects apiFetchWithAuth signature - compatibility wrapper
+            const { getValidToken } = await import("../../../lib/api-service");
+            const token = await getValidToken();
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+            const fullUrl = url.startsWith("http") ? url : `${apiUrl}${url}`;
+            const response = await fetch(fullUrl, {
+              ...options,
+              headers: {
+                ...options.headers,
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            const contentType = response.headers.get("content-type");
+            const isJson = contentType?.includes("application/json") ?? false;
+            const body = isJson ? await response.json() : await response.text();
+            return { data: body, response };
+          }}
         />
       )}
 
@@ -324,7 +297,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
             showDeleteButton={true}
           />
 
-          {images.length === 0 && !loading && apiUrl && galleryId && token && (
+          {images.length === 0 && !loading && galleryId && (
             <p className="text-gray-500 dark:text-gray-400 mt-6">
               No images found. Make sure the gallery has uploaded photos.
             </p>

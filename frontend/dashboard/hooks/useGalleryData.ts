@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
-import { apiFetchWithAuth, formatApiError } from "../lib/api";
-import { useGalleryStore, type Gallery } from "../store/gallerySlice";
+import api, { formatApiError } from "../lib/api-service";
+import { useGalleryStore } from "../store/gallerySlice";
 import { useToast } from "./useToast";
 
 interface Order {
@@ -12,8 +12,8 @@ interface Order {
 }
 
 interface UseGalleryDataOptions {
-  apiUrl: string;
-  idToken: string;
+  apiUrl?: string; // Deprecated - kept for backward compatibility but not used
+  idToken?: string; // Deprecated - kept for backward compatibility but not used
   galleryId: string | string[] | undefined;
   setGalleryUrl: (url: string) => void;
   setGalleryOrdersLocal: (orders: Order[]) => void;
@@ -33,15 +33,14 @@ export const useGalleryData = ({
     currentGallery: gallery,
     setLoading,
     setError,
-    setCurrentGallery,
-    setGalleryOrders,
-    getGalleryOrders,
+    fetchGallery,
+    fetchGalleryOrders,
     isGalleryStale,
   } = useGalleryStore();
 
   const loadGalleryData = useCallback(
     async (silent = false, forceRefresh = false) => {
-      if (!apiUrl || !idToken || !galleryId) {
+      if (!galleryId) {
         return;
       }
 
@@ -60,23 +59,9 @@ export const useGalleryData = ({
       }
 
       try {
-        const galleryResponse = await apiFetchWithAuth(
-          `${apiUrl}/galleries/${galleryId as string}`
-        );
-
-        const galleryData = galleryResponse.data;
-        if (
-          galleryData &&
-          typeof galleryData === "object" &&
-          "galleryId" in galleryData &&
-          "ownerId" in galleryData &&
-          "state" in galleryData &&
-          typeof (galleryData as { galleryId?: unknown }).galleryId === "string" &&
-          typeof (galleryData as { ownerId?: unknown }).ownerId === "string" &&
-          typeof (galleryData as { state?: unknown }).state === "string"
-        ) {
-          setCurrentGallery(galleryData as Gallery);
-        }
+        // Use store action - checks cache first, fetches if needed
+        await fetchGallery(galleryId as string, forceRefresh);
+        
         setGalleryUrl(
           typeof window !== "undefined"
             ? `${window.location.origin}/gallery/${galleryId as string}`
@@ -100,13 +85,11 @@ export const useGalleryData = ({
       }
     },
     [
-      apiUrl,
-      idToken,
       galleryId,
       gallery,
       setLoading,
       setError,
-      setCurrentGallery,
+      fetchGallery,
       showToast,
       isGalleryStale,
       setGalleryUrl,
@@ -115,27 +98,16 @@ export const useGalleryData = ({
 
   const loadGalleryOrders = useCallback(
     async (forceRefresh = false) => {
-      if (!apiUrl || !galleryId) {
+      if (!galleryId) {
         return;
       }
 
-      // Check cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cached = getGalleryOrders(galleryId as string, 30000);
-        if (cached) {
-          setGalleryOrdersLocal(cached);
-          return;
-        }
-      }
-
       try {
-        const { data } = await apiFetchWithAuth<{ items?: unknown[] }>(
-          `${apiUrl}/galleries/${galleryId as string}/orders`
-        );
-        const orders = data?.items ?? [];
-        const ordersArray = Array.isArray(orders) ? orders : [];
+        // Use store action - checks cache first, fetches if needed
+        const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
+        
         // Type guard to ensure orders match Order interface
-        const typedOrders: Order[] = ordersArray.filter(
+        const typedOrders: Order[] = orders.filter(
           (order): order is Order =>
             typeof order === "object" &&
             order !== null &&
@@ -143,29 +115,25 @@ export const useGalleryData = ({
             typeof (order as { orderId?: unknown }).orderId === "string"
         );
         setGalleryOrdersLocal(typedOrders);
-        // Cache the orders in Zustand store
-        setGalleryOrders(galleryId as string, typedOrders);
       } catch (_err) {
         setGalleryOrdersLocal([]);
       }
     },
-    [apiUrl, galleryId, getGalleryOrders, setGalleryOrders, setGalleryOrdersLocal]
+    [galleryId, fetchGalleryOrders, setGalleryOrdersLocal]
   );
 
   const checkDeliveredOrders = useCallback(async () => {
-    if (!apiUrl || !galleryId) {
+    if (!galleryId) {
       return;
     }
     try {
-      const { data } = await apiFetchWithAuth<{ items?: unknown[]; orders?: unknown[] }>(
-        `${apiUrl}/galleries/${galleryId as string}/orders/delivered`
-      );
-      const items = data?.items ?? data?.orders ?? [];
+      const response = await api.galleries.checkDeliveredOrders(galleryId as string);
+      const items = response.items ?? [];
       setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
     } catch (_err) {
       setHasDeliveredOrders(false);
     }
-  }, [apiUrl, galleryId, setHasDeliveredOrders]);
+  }, [galleryId, setHasDeliveredOrders]);
 
   return {
     loadGalleryData,

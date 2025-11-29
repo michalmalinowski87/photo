@@ -7,7 +7,7 @@ import { useGalleryData } from "../../hooks/useGalleryData";
 import { useModal } from "../../hooks/useModal";
 import { useOrderActions } from "../../hooks/useOrderActions";
 import { useToast } from "../../hooks/useToast";
-import { apiFetch, formatApiError } from "../../lib/api";
+import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { getPricingModalData } from "../../lib/calculate-plan";
 import type { PricingModalData } from "../../lib/plan-types";
@@ -101,53 +101,17 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   });
 
   const loadOrderData = useCallback(async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
+    if (!galleryId || !orderId) {
       return;
     }
     try {
-      const orderResponse = await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}`,
-        {
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-      let orderData = orderResponse.data;
-      if (typeof orderData === "string") {
-        try {
-          orderData = JSON.parse(orderData);
-        } catch {
-          orderData = null;
-        }
-      }
-      // Update the Zustand store - this will trigger re-render of components using useOrderStore
-      if (
-        orderData &&
-        typeof orderData === "object" &&
-        "orderId" in orderData &&
-        "galleryId" in orderData
-      ) {
-        const orderIdValue = orderData.orderId;
-        const galleryIdValue = orderData.galleryId;
-        if (
-          typeof orderIdValue === "string" &&
-          orderIdValue !== "" &&
-          typeof galleryIdValue === "string"
-        ) {
-          const validOrder: StoreOrder = {
-            orderId: orderIdValue,
-            galleryId: galleryIdValue,
-            ...(typeof orderData === "object" && orderData !== null
-              ? Object.fromEntries(
-                  Object.entries(orderData).filter(
-                    ([key]) => key !== "orderId" && key !== "galleryId"
-                  )
-                )
-              : {}),
-          } as StoreOrder;
-          setCurrentOrder(validOrder);
-        } else {
-          setCurrentOrder(null);
-        }
+      // Use store action - checks cache first, fetches if needed
+      const { fetchOrder } = useOrderStore.getState();
+      const orderData = await fetchOrder(galleryId as string, orderId as string);
+      
+      // Store action already updates the store, but ensure currentOrder is set
+      if (orderData) {
+        setCurrentOrder(orderData);
       } else {
         setCurrentOrder(null);
       }
@@ -155,7 +119,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     } catch (_err) {
       setCurrentOrder(null);
     }
-  }, [apiUrl, idToken, galleryId, orderId, setCurrentOrder]);
+  }, [galleryId, orderId, setCurrentOrder]);
 
   // Clear state when navigating away
   useEffect(() => {
@@ -302,7 +266,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const confirmPayment = async () => {
-    if (!apiUrl || !idToken || !galleryId || !paymentDetails) {
+    if (!galleryId || !paymentDetails) {
       return;
     }
 
@@ -311,25 +275,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
     try {
       // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
-      const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId as string}/pay`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({}),
-      });
+      const paymentResponse = await api.galleries.pay(galleryId as string, {});
 
       // Invalidate cache to force fresh data fetch after payment
       invalidateGalleryCache(galleryId as string);
       invalidateGalleryOrdersCache(galleryId as string);
       invalidateOrderStoreGalleryCache(galleryId as string);
-
-      interface PaymentResponse {
-        checkoutUrl?: string;
-        paid?: boolean;
-      }
-      const paymentResponse = data as PaymentResponse;
       if (paymentResponse.checkoutUrl) {
         window.location.href = paymentResponse.checkoutUrl;
       } else if (paymentResponse.paid) {
@@ -367,7 +318,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   };
 
   const handleSendLink = async () => {
-    if (!apiUrl || !idToken || !galleryId || sendLinkLoading) {
+    if (!galleryId || sendLinkLoading) {
       return;
     }
 
@@ -377,13 +328,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     setSendLinkLoading(true);
 
     try {
-      const response = await apiFetch(`${apiUrl}/galleries/${galleryId as string}/send-to-client`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-
-      const responseData = (response.data as { isReminder?: boolean }) ?? {};
-      const isReminderResponse = responseData.isReminder ?? isReminder;
+      const response = await api.galleries.sendToClient(galleryId as string);
+      const isReminderResponse = response.isReminder ?? isReminder;
 
       showToast(
         "success",

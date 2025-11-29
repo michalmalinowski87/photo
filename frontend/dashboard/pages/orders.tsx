@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
-import { apiFetch, formatApiError } from "../lib/api";
+import api, { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatPrice } from "../lib/format-price";
@@ -54,12 +54,10 @@ export default function Orders() {
   const [finalFiles, setFinalFiles] = useState<Record<string, File[]>>({});
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
-
     // Initialize auth with token sharing
     initializeAuth(
-      (token: string) => {
-        setIdToken(token);
+      (_token: string) => {
+        // Token is handled by api-service automatically
       },
       () => {
         // No token found, redirect to landing sign-in
@@ -70,32 +68,15 @@ export default function Orders() {
 
   async function loadOrders(): Promise<void> {
     setMessage("");
-    if (!apiUrl || !galleryId || !idToken) {
-      setMessage("Need API URL, Gallery ID and ID Token");
+    if (!galleryId) {
+      setMessage("Need Gallery ID");
       return;
     }
     try {
-      const response = await apiFetch<OrdersResponse | string>(
-        `${apiUrl}/galleries/${galleryId}/orders`,
-        {
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-
-      // Handle case where response.data might be a JSON string
-      let parsedData: OrdersResponse;
-      if (typeof response.data === "string") {
-        try {
-          parsedData = JSON.parse(response.data) as OrdersResponse;
-        } catch (e) {
-          const error = e as Error;
-          setMessage(`Failed to parse response: ${error.message}`);
-          setOrders([]);
-          return;
-        }
-      } else {
-        parsedData = response.data;
-      }
+      const response = await api.orders.getByGallery(galleryId);
+      const parsedData: OrdersResponse = {
+        items: Array.isArray(response.items) ? response.items : [],
+      };
 
       // Extract items array and gallery metadata
       const ordersData = parsedData?.items;
@@ -121,15 +102,12 @@ export default function Orders() {
 
   async function approveChange(orderId: string): Promise<void> {
     setMessage("");
-    if (!orderId) {
-      setMessage("Order ID required");
+    if (!orderId || !galleryId) {
+      setMessage("Order ID and Gallery ID required");
       return;
     }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/approve-change`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.approveChangeRequest(galleryId, orderId);
       setMessage("Change request approved - selection unlocked");
       await loadOrders();
     } catch (error) {
@@ -139,15 +117,12 @@ export default function Orders() {
 
   async function denyChange(orderId: string): Promise<void> {
     setMessage("");
-    if (!orderId) {
-      setMessage("Order ID required");
+    if (!orderId || !galleryId) {
+      setMessage("Order ID and Gallery ID required");
       return;
     }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/deny-change`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.denyChangeRequest(galleryId, orderId);
       setMessage("Change request denied - order reverted to previous status");
       await loadOrders();
     } catch (error) {
@@ -158,10 +133,19 @@ export default function Orders() {
   async function downloadZip(orderId: string): Promise<void> {
     setMessage("");
     setDownloadingZip({ [orderId]: true });
+    if (!galleryId) {
+      setMessage("Gallery ID required");
+      setDownloadingZip({});
+      return;
+    }
     try {
+      // Use api-service for token, but fetch directly for blob handling
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const { getValidToken } = await import("../lib/api");
+      const token = await getValidToken();
       const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`, {
         method: "GET",
-        headers: { Authorization: `Bearer ${idToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.headers.get("content-type")?.includes("application/zip")) {
@@ -206,11 +190,12 @@ export default function Orders() {
     ) {
       return;
     }
+    if (!galleryId) {
+      setMessage("Gallery ID required");
+      return;
+    }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-paid`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.markPaid(galleryId, orderId);
       setMessage("Order marked as paid");
       await loadOrders();
     } catch (error) {
@@ -225,11 +210,12 @@ export default function Orders() {
     if (!window.confirm("Oznaczyć to zlecenie jako anulowane? Ta akcja nie może być cofnięta.")) {
       return;
     }
+    if (!galleryId) {
+      setMessage("Gallery ID required");
+      return;
+    }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-canceled`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.markCanceled(galleryId, orderId);
       setMessage("Zlecenie oznaczone jako anulowane");
       await loadOrders();
     } catch (error) {
@@ -248,11 +234,12 @@ export default function Orders() {
     ) {
       return;
     }
+    if (!galleryId) {
+      setMessage("Gallery ID required");
+      return;
+    }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-refunded`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.markRefunded(galleryId, orderId);
       setMessage("Zlecenie oznaczone jako zwrócone");
       await loadOrders();
     } catch (error) {
@@ -271,11 +258,12 @@ export default function Orders() {
     ) {
       return;
     }
+    if (!galleryId) {
+      setMessage("Gallery ID required");
+      return;
+    }
     try {
-      await apiFetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/mark-partially-paid`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      await api.orders.markPartiallyPaid(galleryId, orderId);
       setMessage("Zlecenie oznaczone jako częściowo opłacone");
       await loadOrders();
     } catch (error) {
@@ -285,24 +273,13 @@ export default function Orders() {
 
   async function sendFinalLink(orderId: string): Promise<void> {
     setMessage("");
-    if (!orderId) {
-      setMessage("Order ID required");
+    if (!orderId || !galleryId) {
+      setMessage("Order ID and Gallery ID required");
       return;
     }
     try {
-      const response = await apiFetch<SendFinalLinkResponse>(
-        `${apiUrl}/galleries/${galleryId}/orders/${orderId}/send-final-link`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
-      const data = response.data;
-      if (data?.deliveryStatus === "DELIVERED") {
-        setMessage(`Final link sent to client. Order marked as DELIVERED.`);
-      } else {
-        setMessage("Final link sent to client");
-      }
+      await api.orders.sendFinalLink(galleryId, orderId);
+      setMessage("Final link sent to client");
       await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
@@ -333,18 +310,10 @@ export default function Orders() {
       for (const file of files) {
         const fileName = file.name;
         // Get presigned URL
-        const prResponse = await apiFetch<PresignedUrlResponse>(
-          `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/upload`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-            body: JSON.stringify({
-              key: fileName,
-              contentType: file.type ?? "application/octet-stream",
-            }),
-          }
-        );
-        const pr = prResponse.data;
+        const pr = await api.uploads.getFinalImagePresignedUrl(galleryId, orderId, {
+          key: fileName,
+          contentType: file.type ?? "application/octet-stream",
+        });
         // Upload file
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();

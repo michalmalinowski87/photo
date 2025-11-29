@@ -148,11 +148,11 @@ export default function OrderDetail() {
 
   /**
    * Load order data with intelligent caching:
-   * - Checks Zustand cache first (30s TTL)
+   * - Uses store actions that check cache first (30s TTL)
    * - Only fetches missing/stale data
    * - GalleryLayoutWrapper is the single source of truth for gallery data
    * - Order data is cached per orderId
-   * - Images are always fetched (order-specific, not cached)
+   * - Images are cached per galleryId
    */
   const loadOrderData = useCallback(
     async (forceRefresh = false): Promise<void> => {
@@ -171,84 +171,34 @@ export default function OrderDetail() {
       setError("");
 
       try {
-        // Check cache first for order and gallery data
-        const { getCachedOrder, setCurrentOrder, isOrderStale } = useOrderStore.getState();
-        const { currentGallery, isGalleryStale } = useGalleryStore.getState();
+        // Use store actions - they check cache first and fetch if needed
+        const { fetchOrder } = useOrderStore.getState();
+        const { fetchGallery, fetchGalleryImages } = useGalleryStore.getState();
 
-        // Get cached order if available and fresh
-        let orderData: Order | null = null;
-        if (!forceRefresh && !isOrderStale(orderId as string, 30000)) {
-          orderData = getCachedOrder(orderId as string, 30000);
-        }
-
-        // Get cached gallery if available and fresh
-        let galleryData: Gallery | null = null;
-        if (!forceRefresh && currentGallery?.galleryId === galleryId && !isGalleryStale(30000)) {
-          galleryData = currentGallery;
-        }
-
-        // Fetch missing data
-        const fetchPromises: Promise<Order | Gallery | ImagesResponse>[] = [];
-
-        if (!orderData) {
-          fetchPromises.push(
-            api.orders.get(galleryId as string, orderId as string).then((data) => {
-              orderData = data as Order;
-              setCurrentOrder(orderData);
-              return data as Order;
-            })
-          );
-        }
-
-        if (!galleryData) {
-          fetchPromises.push(
-            api.galleries.get(galleryId as string).then((data) => {
-              galleryData = data as Gallery;
-              const { setCurrentGallery } = useGalleryStore.getState();
-              // Only set gallery if it has required fields (ownerId and state)
-              if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
-                setCurrentGallery(galleryData as Parameters<typeof setCurrentGallery>[0]);
-              }
-              return data as Gallery;
-            })
-          );
-        }
-
-        // Always fetch images (not cached, order-specific)
-        fetchPromises.push(
-          api.galleries.getImages(galleryId as string).catch((err): ImagesResponse => {
-            // Log error but don't fail the entire load
+        // Fetch order, gallery, and images in parallel
+        const [orderData, galleryData, apiImages] = await Promise.all([
+          fetchOrder(galleryId as string, orderId as string, forceRefresh).catch((err) => {
+            console.error("Failed to load order:", err);
+            return null;
+          }),
+          fetchGallery(galleryId as string, forceRefresh).catch((err) => {
+            console.error("Failed to load gallery:", err);
+            return null;
+          }),
+          fetchGalleryImages(galleryId as string, forceRefresh).catch((err) => {
             console.error("Failed to load gallery images:", err);
-            return { images: [] };
-          })
-        );
-
-        // Wait for all fetches to complete
-        const results = await Promise.all(fetchPromises);
-        const imagesData = results[results.length - 1] as ImagesResponse; // Last result is always images
-
-        // Use cached or fetched data
-        if (!orderData && results.length > 0) {
-          orderData = results[0] as Order;
-        }
-        if (!galleryData && results.length > 1) {
-          galleryData = results[results.length - 2] as Gallery;
-        }
+            return [];
+          }),
+        ]);
 
         if (orderData) {
           setOrder(orderData);
         }
         if (galleryData) {
           setGallery(galleryData);
-          // Ensure gallery is in Zustand store for optimistic updates to work
-          const { setCurrentGallery } = useGalleryStore.getState();
-          if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
-            setCurrentGallery(galleryData as Parameters<typeof setCurrentGallery>[0]);
-          }
         }
 
-        const images = imagesData.images ?? [];
-        setOriginalImages(images);
+        setOriginalImages(apiImages);
 
         // Always try to load final images (for viewing) - upload restrictions are handled separately
         try {

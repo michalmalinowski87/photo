@@ -1,8 +1,7 @@
 import { useCallback } from "react";
 
 import { useZipDownload as useZipDownloadHook } from "../hocs/withZipDownload";
-import { apiFetch, formatApiError } from "../lib/api";
-import apiService from "../lib/api-service";
+import api, { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store/gallerySlice";
 import { useOrderStore } from "../store/orderSlice";
 
@@ -14,8 +13,8 @@ interface Gallery {
 }
 
 interface UseOrderActionsOptions {
-  apiUrl: string;
-  idToken: string;
+  apiUrl?: string; // Deprecated - kept for backward compatibility but not used
+  idToken?: string; // Deprecated - kept for backward compatibility but not used
   galleryId: string | string[] | undefined;
   orderId: string | string[] | undefined;
   gallery?: Gallery | null;
@@ -51,18 +50,12 @@ export const useOrderActions = ({
   );
 
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
+    if (!galleryId || !orderId) {
       return;
     }
 
     try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/approve-change`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
+      await api.orders.approveChangeRequest(galleryId as string, orderId as string);
 
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -87,8 +80,6 @@ export const useOrderActions = ({
       );
     }
   }, [
-    apiUrl,
-    idToken,
     galleryId,
     orderId,
     invalidateOrderCache,
@@ -105,24 +96,14 @@ export const useOrderActions = ({
 
   const handleDenyConfirm = useCallback(
     async (reason?: string) => {
-      if (!apiUrl || !idToken || !galleryId || !orderId) {
+      if (!galleryId || !orderId) {
         return;
       }
 
       setDenyLoading(true);
 
       try {
-        await apiFetch(
-          `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/deny-change`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ reason: reason ?? undefined }),
-          }
-        );
+        await api.orders.denyChangeRequest(galleryId as string, orderId as string, reason);
 
         // Invalidate cache to force fresh data fetch
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
@@ -147,8 +128,6 @@ export const useOrderActions = ({
       }
     },
     [
-      apiUrl,
-      idToken,
       galleryId,
       orderId,
       invalidateOrderCache,
@@ -163,17 +142,11 @@ export const useOrderActions = ({
   );
 
   const handleMarkOrderPaid = useCallback(async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
+    if (!galleryId || !orderId) {
       return;
     }
     try {
-      await apiFetch(
-        `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/mark-paid`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        }
-      );
+      await api.orders.markPaid(galleryId as string, orderId as string);
       // Invalidate cache to force fresh data fetch
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateOrderCache(orderId as string);
@@ -193,8 +166,6 @@ export const useOrderActions = ({
       showToast("error", "Błąd", formatApiError(err));
     }
   }, [
-    apiUrl,
-    idToken,
     galleryId,
     orderId,
     invalidateOrderCache,
@@ -205,10 +176,11 @@ export const useOrderActions = ({
   ]);
 
   const handleDownloadFinals = useCallback(async () => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
+    if (!galleryId || !orderId) {
       return;
     }
 
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
     await downloadZip({
       apiUrl,
       galleryId: galleryId as string,
@@ -216,28 +188,21 @@ export const useOrderActions = ({
       endpoint: `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/final/zip`,
       filename: `order-${orderId as string}-finals.zip`,
     });
-  }, [apiUrl, galleryId, orderId, downloadZip]);
+  }, [galleryId, orderId, downloadZip]);
 
   const sendFinalLinkWithCleanup = useCallback(
     async (shouldCleanup: boolean) => {
-      if (!apiUrl || !idToken || !galleryId || !orderId) {
+      if (!galleryId || !orderId) {
         return;
       }
 
       try {
-        await apiFetch(
-          `${apiUrl}/galleries/${galleryId as string}/orders/${orderId as string}/send-final-link`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${idToken}` },
-          }
-        );
+        await api.orders.sendFinalLink(galleryId as string, orderId as string);
 
         // If user confirmed cleanup, call cleanup endpoint
         if (shouldCleanup) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            await apiService.orders.cleanupOriginals(galleryId as string, orderId as string);
+            await api.orders.cleanupOriginals(galleryId as string, orderId as string);
             showToast(
               "success",
               "Sukces",
@@ -274,8 +239,6 @@ export const useOrderActions = ({
       }
     },
     [
-      apiUrl,
-      idToken,
       galleryId,
       orderId,
       invalidateOrderCache,
@@ -287,7 +250,7 @@ export const useOrderActions = ({
   );
 
   const handleSendFinalsToClient = useCallback(() => {
-    if (!apiUrl || !idToken || !galleryId || !orderId) {
+    if (!galleryId || !orderId) {
       return;
     }
 
@@ -301,7 +264,7 @@ export const useOrderActions = ({
       // For non-selection galleries, send link directly without cleanup option
       void sendFinalLinkWithCleanup(false);
     }
-  }, [apiUrl, idToken, galleryId, orderId, gallery, openCleanupModal, sendFinalLinkWithCleanup]);
+  }, [galleryId, orderId, gallery, openCleanupModal, sendFinalLinkWithCleanup]);
 
   const handleCleanupConfirm = useCallback(() => {
     closeCleanupModal();

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import api from "../lib/api-service";
 
 export interface Gallery {
   galleryId: string;
@@ -24,6 +25,8 @@ interface GalleryState {
   currentGalleryId: string | null;
   // Cache for gallery orders list (keyed by galleryId)
   galleryOrdersCache: Record<string, { orders: any[]; timestamp: number }>;
+  // Cache for gallery images (keyed by galleryId)
+  galleryImagesCache: Record<string, { images: any[]; timestamp: number }>;
   // Cache timestamp for current gallery
   galleryCacheTimestamp: number | null;
   filters: {
@@ -41,9 +44,16 @@ interface GalleryState {
   setCurrentGalleryId: (galleryId: string | null) => void;
   setGalleryOrders: (galleryId: string, orders: any[]) => void;
   getGalleryOrders: (galleryId: string, maxAge?: number) => any[] | null;
+  setGalleryImages: (galleryId: string, images: any[]) => void;
+  getGalleryImages: (galleryId: string, maxAge?: number) => any[] | null;
   isGalleryStale: (maxAge?: number) => boolean;
   invalidateGalleryCache: (galleryId?: string) => void;
   invalidateGalleryOrdersCache: (galleryId: string) => void;
+  invalidateGalleryImagesCache: (galleryId: string) => void;
+  // Fetch actions that check cache and call API if needed
+  fetchGallery: (galleryId: string, forceRefresh?: boolean) => Promise<Gallery | null>;
+  fetchGalleryImages: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
+  fetchGalleryOrders: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
   setFilter: (filter: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -60,6 +70,7 @@ export const useGalleryStore = create<GalleryState>()(
       galleryList: [],
       currentGalleryId: null,
       galleryOrdersCache: {},
+      galleryImagesCache: {},
       galleryCacheTimestamp: null,
       filters: {},
       isLoading: false,
@@ -121,6 +132,29 @@ export const useGalleryStore = create<GalleryState>()(
         return cached.orders;
       },
 
+      setGalleryImages: (galleryId: string, images: any[]) => {
+        set((state) => ({
+          galleryImagesCache: {
+            ...state.galleryImagesCache,
+            [galleryId]: {
+              images,
+              timestamp: Date.now(),
+            },
+          },
+        }));
+      },
+
+      getGalleryImages: (galleryId: string, maxAge: number = 30000) => {
+        const state = get();
+        const cached = state.galleryImagesCache[galleryId];
+        if (!cached) return null;
+
+        const age = Date.now() - cached.timestamp;
+        if (age > maxAge) return null; // Cache expired
+
+        return cached.images;
+      },
+
       isGalleryStale: (maxAge: number = 30000) => {
         const state = get();
         if (!state.galleryCacheTimestamp) return true;
@@ -148,6 +182,105 @@ export const useGalleryStore = create<GalleryState>()(
             galleryOrdersCache: newCache,
           };
         });
+      },
+
+      invalidateGalleryImagesCache: (galleryId: string) => {
+        set((state) => {
+          const newCache = { ...state.galleryImagesCache };
+          delete newCache[galleryId];
+          return {
+            galleryImagesCache: newCache,
+          };
+        });
+      },
+
+      fetchGallery: async (galleryId: string, forceRefresh = false) => {
+        const state = get();
+        
+        // Check cache first if not forcing refresh
+        if (!forceRefresh) {
+          if (state.currentGallery?.galleryId === galleryId && !state.isGalleryStale(30000)) {
+            return state.currentGallery;
+          }
+        }
+
+        // Fetch from API
+        set({ isLoading: true, error: null });
+        try {
+          const galleryData = await api.galleries.get(galleryId);
+          
+          // Only set gallery if it has required fields
+          if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
+            set({
+              currentGallery: galleryData as Gallery,
+              currentGalleryId: galleryData.galleryId,
+              galleryCacheTimestamp: Date.now(),
+              isLoading: false,
+            });
+            return galleryData as Gallery;
+          }
+          
+          set({ isLoading: false });
+          return null;
+        } catch (err) {
+          const error = err instanceof Error ? err.message : "Failed to fetch gallery";
+          set({ error, isLoading: false });
+          throw err;
+        }
+      },
+
+      fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
+        const state = get();
+        
+        // Check cache first if not forcing refresh
+        if (!forceRefresh) {
+          const cached = state.getGalleryImages(galleryId, 30000);
+          if (cached) {
+            return cached;
+          }
+        }
+
+        // Fetch from API
+        try {
+          const response = await api.galleries.getImages(galleryId);
+          const images = response.images ?? [];
+          
+          // Update cache
+          state.setGalleryImages(galleryId, images);
+          
+          return images;
+        } catch (err) {
+          // Return empty array on error instead of throwing
+          console.error("[GalleryStore] Failed to fetch gallery images:", err);
+          return [];
+        }
+      },
+
+      fetchGalleryOrders: async (galleryId: string, forceRefresh = false) => {
+        const state = get();
+        
+        // Check cache first if not forcing refresh
+        if (!forceRefresh) {
+          const cached = state.getGalleryOrders(galleryId, 30000);
+          if (cached) {
+            return cached;
+          }
+        }
+
+        // Fetch from API
+        try {
+          const response = await api.orders.getByGallery(galleryId);
+          const orders = (response.items ?? []) as any[];
+          
+          // Update cache
+          state.setGalleryOrders(galleryId, orders);
+          
+          return orders;
+        } catch (err) {
+          // Return empty array on error instead of throwing
+          console.error("[GalleryStore] Failed to fetch gallery orders:", err);
+          return [];
+        }
       },
 
       setFilter: (filter: string) => {
@@ -182,6 +315,7 @@ export const useGalleryStore = create<GalleryState>()(
           galleryList: [],
           currentGalleryId: null,
           galleryOrdersCache: {},
+          galleryImagesCache: {},
           galleryCacheTimestamp: null,
           filters: {},
           isLoading: false,

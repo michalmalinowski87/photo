@@ -1,4 +1,46 @@
-import { getValidToken } from "./api";
+// Token management - moved from api.ts
+let isRefreshing = false;
+let refreshPromise: Promise<string> | null = null;
+
+/**
+ * Get a valid ID token, refreshing if necessary
+ * Exported for special cases where you need a token but can't use the api-service methods
+ */
+export async function getValidToken(): Promise<string> {
+  if (typeof window === "undefined") {
+    throw new Error("Cannot get token on server side");
+  }
+
+  try {
+    const { getIdToken } = await import("./auth");
+    // getIdToken will automatically try to refresh if needed
+    return await getIdToken(true);
+  } catch (_err) {
+    // getIdToken failed, try explicit refresh
+    if (isRefreshing && refreshPromise) {
+      // Wait for ongoing refresh
+      return await refreshPromise;
+    }
+
+    isRefreshing = true;
+    refreshPromise = (async () => {
+      try {
+        const { refreshIdToken } = await import("./auth");
+        const newToken = await refreshIdToken();
+        isRefreshing = false;
+        refreshPromise = null;
+        return newToken;
+      } catch (refreshErr) {
+        isRefreshing = false;
+        refreshPromise = null;
+        // Re-throw to trigger session expired
+        throw refreshErr;
+      }
+    })();
+
+    return await refreshPromise;
+  }
+}
 
 /**
  * API Service - Centralized API client with automatic authentication, validation, and error handling
@@ -768,6 +810,81 @@ class ApiService {
         throw new Error("Order ID is required");
       }
       return await this._request(`/galleries/${galleryId}/orders/${orderId}/cleanup-originals`, {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Mark order as paid
+     */
+    markPaid: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/mark-paid`, {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Send final link to client
+     */
+    sendFinalLink: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/send-final-link`, {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Mark order as canceled
+     */
+    markCanceled: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/mark-canceled`, {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Mark order as refunded
+     */
+    markRefunded: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/mark-refunded`, {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Mark order as partially paid
+     */
+    markPartiallyPaid: async (galleryId: string, orderId: string): Promise<void> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/mark-partially-paid`, {
         method: "POST",
       });
     },

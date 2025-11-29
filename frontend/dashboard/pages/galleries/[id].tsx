@@ -15,6 +15,7 @@ import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
+import { useGalleryStore } from "../../store/gallerySlice";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -63,6 +64,7 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
+  const { fetchGalleryOrders, fetchGallery } = useGalleryStore();
 
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
@@ -87,9 +89,9 @@ export default function GalleryDetail() {
     setLoading(true);
 
     try {
-      const ordersResponse = await api.orders.getByGallery(galleryId as string);
-
-      setOrders(ordersResponse.items ?? []);
+      // Use store action - checks cache first, fetches if needed
+      const orders = await fetchGalleryOrders(galleryId as string);
+      setOrders(orders);
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
     } finally {
@@ -168,9 +170,9 @@ export default function GalleryDetail() {
 
         const pollPaymentStatus = async () => {
           try {
-            // Reload gallery from API to get latest state
+            // Reload gallery from store (checks cache, fetches if needed)
             try {
-              const updatedGallery = (await api.galleries.get(galleryIdStr)) as Gallery;
+              const updatedGallery = await fetchGallery(galleryIdStr, true); // Force refresh
 
               // Check if gallery state changed from DRAFT to PAID_ACTIVE
               if (updatedGallery.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {

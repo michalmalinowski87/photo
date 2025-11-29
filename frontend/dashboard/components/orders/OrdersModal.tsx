@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
-import { apiFetch, formatApiError } from "../../lib/api";
+import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
@@ -39,8 +39,6 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   title,
   excludeDeliveryStatus,
 }) => {
-  const [apiUrl, setApiUrl] = useState("");
-  const [idToken, setIdToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
@@ -55,22 +53,19 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
 
   const loadOrders = async () => {
-    if (!apiUrl || !idToken) {
-      return;
-    }
-
     setLoading(true);
     setError("");
 
     try {
-      let url = `${apiUrl}/orders?page=${page}&itemsPerPage=${itemsPerPage}`;
+      const params: Record<string, string> = {
+        page: page.toString(),
+        itemsPerPage: itemsPerPage.toString(),
+      };
       if (excludeDeliveryStatus) {
-        url += `&excludeDeliveryStatus=${excludeDeliveryStatus}`;
+        params.excludeDeliveryStatus = excludeDeliveryStatus;
       }
 
-      const { data: ordersData } = await apiFetch(url, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const response = await api.orders.list(params);
 
       interface OrdersResponse {
         items?: Order[];
@@ -79,10 +74,10 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
         hasPreviousPage?: boolean;
       }
       let allOrders: Order[] = [];
-      if (Array.isArray(ordersData)) {
-        allOrders = ordersData as Order[];
+      if (Array.isArray(response)) {
+        allOrders = response as Order[];
       } else {
-        const typedData = ordersData as OrdersResponse;
+        const typedData = response as OrdersResponse;
         if (typedData && Array.isArray(typedData.items)) {
           allOrders = typedData.items;
           setTotalPages(typedData.totalPages ?? 1);
@@ -103,10 +98,9 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   };
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
     initializeAuth(
-      (token) => {
-        setIdToken(token);
+      () => {
+        // Token is handled by api-service automatically
       },
       () => {
         redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/");
@@ -115,11 +109,11 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen && apiUrl && idToken) {
+    if (isOpen) {
       void loadOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, apiUrl, idToken, page, excludeDeliveryStatus]);
+  }, [isOpen, page, excludeDeliveryStatus]);
 
   const getDeliveryStatusBadge = (status: string) => {
     const statusMap: Record<string, { color: BadgeColor; label: string }> = {
@@ -294,13 +288,13 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                                 size="sm"
                                 variant="primary"
                                 onClick={async () => {
+                                  if (!order.galleryId || !order.orderId) {
+                                    return;
+                                  }
                                   try {
-                                    await apiFetch(
-                                      `${apiUrl}/galleries/${order.galleryId}/orders/${order.orderId}/approve-change`,
-                                      {
-                                        method: "POST",
-                                        headers: { Authorization: `Bearer ${idToken}` },
-                                      }
+                                    await api.orders.approveChangeRequest(
+                                      order.galleryId,
+                                      order.orderId
                                     );
                                     await loadOrders();
                                   } catch (err) {
@@ -374,24 +368,14 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
           setDenyOrderId(null);
         }}
         onConfirm={async (reason?: string) => {
-          if (!apiUrl || !idToken || !denyGalleryId || !denyOrderId) {
+          if (!denyGalleryId || !denyOrderId) {
             return;
           }
 
           setDenyLoading(true);
 
           try {
-            await apiFetch(
-              `${apiUrl}/galleries/${denyGalleryId}/orders/${denyOrderId}/deny-change`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${idToken}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ reason: reason ?? undefined }),
-              }
-            );
+            await api.orders.denyChangeRequest(denyGalleryId, denyOrderId, reason);
             setDenyModalOpen(false);
             setDenyGalleryId(null);
             setDenyOrderId(null);
