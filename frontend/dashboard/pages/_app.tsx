@@ -40,7 +40,7 @@ const GALLERY_ROUTES = [
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  
+
   // Check if current route is an auth route
   const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
 

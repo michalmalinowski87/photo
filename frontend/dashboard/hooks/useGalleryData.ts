@@ -68,7 +68,7 @@ export const useGalleryData = ({
       try {
         // Use store action - checks cache first, fetches if needed
         await fetchGallery(galleryId as string, forceRefresh);
-        
+
         setGalleryUrl(
           typeof window !== "undefined"
             ? `${window.location.origin}/gallery/${galleryId as string}`
@@ -112,7 +112,7 @@ export const useGalleryData = ({
       try {
         // Use store action - checks cache first, fetches if needed
         const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
-        
+
         // Type guard to ensure orders match Order interface
         const typedOrders: Order[] = orders.filter(
           (order): order is Order =>

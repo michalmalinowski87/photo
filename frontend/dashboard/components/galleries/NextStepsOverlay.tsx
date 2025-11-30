@@ -44,21 +44,24 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const overlayContext = useBottomRightOverlay();
   const galleryStore = useGalleryStore();
   // Use type assertions to fix Zustand type inference issues
-  const nextStepsOverlayExpanded = (galleryStore as { nextStepsOverlayExpanded: boolean }).nextStepsOverlayExpanded;
-  const setNextStepsOverlayExpanded = (galleryStore as { setNextStepsOverlayExpanded: (expanded: boolean) => void }).setNextStepsOverlayExpanded;
-  
+  const nextStepsOverlayExpanded = (galleryStore as { nextStepsOverlayExpanded: boolean })
+    .nextStepsOverlayExpanded;
+  const setNextStepsOverlayExpanded = (
+    galleryStore as { setNextStepsOverlayExpanded: (expanded: boolean) => void }
+  ).setNextStepsOverlayExpanded;
+
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
   const [widthReached13rem, setWidthReached13rem] = useState(false);
   const galleryRef = useRef(gallery);
-  
+
   // Keep ref in sync with gallery prop
   useEffect(() => {
     galleryRef.current = gallery;
   }, [gallery]);
-  
+
   // Check if we should hide the overlay (settings or publish view)
   const shouldHide = Boolean(
     router.pathname?.includes("/settings") ||
@@ -103,10 +106,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     // Otherwise use gallery.originalsBytesUsed
     const currentBytes = optimisticBytesUsed ?? gallery.originalsBytesUsed ?? 0;
     const uploadCompleted = currentBytes > 0;
-    const publishCompleted =
-      gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
-    const sendCompleted =
-      gallery.selectionEnabled !== false ? orders.length > 0 : null;
+    const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
+    const sendCompleted = gallery.selectionEnabled !== false ? orders.length > 0 : null;
 
     return [
       {
@@ -149,12 +150,12 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     }
 
     const handleGalleryUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ 
-        galleryId?: string; 
-        sizeDelta?: number; 
+      const customEvent = event as CustomEvent<{
+        galleryId?: string;
+        sizeDelta?: number;
         isUpload?: boolean;
       }>;
-      
+
       // Only react to updates for this gallery
       if (customEvent.detail?.galleryId !== gallery.galleryId && customEvent.detail?.galleryId) {
         return;
@@ -163,7 +164,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       // If sizeDelta is provided, update optimistically (instant UI update)
       if (customEvent.detail?.sizeDelta !== undefined) {
         const sizeDelta = customEvent.detail.sizeDelta;
-        
+
         // Optimistic update: immediately adjust bytes
         setOptimisticBytesUsed((prev) => {
           const currentGalleryBytes = galleryRef.current?.originalsBytesUsed ?? 0;
@@ -172,7 +173,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
           const newBytes = Math.max(0, currentBytes + sizeDelta);
           return newBytes;
         });
-        
+
         // Recalculate steps immediately with optimistic value
         setSteps(calculateSteps());
       } else {
@@ -195,7 +196,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
           // Keep optimistic value if it doesn't match
           return prev;
         });
-        
+
         // Recalculate steps with confirmed gallery data
         setSteps(calculateSteps());
       }
@@ -221,8 +222,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
 
   // Check if all applicable steps are completed (calculate before early return)
   const applicableSteps = steps.filter((step) => step.completed !== null);
-  const allCompleted = applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
-
+  const allCompleted =
+    applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
 
   // Measure and report width to context (if available)
   useEffect(() => {
@@ -235,14 +236,14 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       for (const entry of entries) {
         const width = entry.contentRect.width;
         const widthInRem = width / 16; // Convert px to rem (assuming 16px base)
-        
+
         // Check if width has reached 13rem (208px)
         if (widthInRem >= 13) {
           setWidthReached13rem(true);
         } else if (!nextStepsOverlayExpanded) {
           setWidthReached13rem(false);
         }
-        
+
         if (nextStepsOverlayExpanded) {
           overlayContext.setNextStepsWidth(width);
         } else {
@@ -265,11 +266,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     }
 
     const shouldBeVisible =
-      !shouldHide &&
-      tutorialDisabled !== true && 
-      !!gallery && 
-      !galleryLoading && 
-      steps.length > 0;
+      !shouldHide && tutorialDisabled !== true && !!gallery && !galleryLoading && steps.length > 0;
     overlayContext.setNextStepsVisible(Boolean(shouldBeVisible));
     overlayContext.setNextStepsExpanded(Boolean(nextStepsOverlayExpanded));
   }, [
@@ -289,26 +286,26 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     if (!gallery || galleryLoading) {
       return;
     }
-    
+
     // If we have optimistic bytes, skip this update - the event handler will update when ready
     if (optimisticBytesUsed !== null) {
       return;
     }
-    
+
     // Recalculate steps when key gallery properties change
     const newSteps = calculateSteps();
     setSteps(newSteps);
   }, [
-    gallery?.originalsBytesUsed, 
-    gallery?.paymentStatus, 
-    gallery?.state, 
-    orders.length, 
-    calculateSteps, 
-    gallery, 
+    gallery?.originalsBytesUsed,
+    gallery?.paymentStatus,
+    gallery?.state,
+    orders.length,
+    calculateSteps,
+    gallery,
     galleryLoading,
-    optimisticBytesUsed
+    optimisticBytesUsed,
   ]);
-  
+
   // Reset optimistic bytes when gallery changes
   useEffect(() => {
     setOptimisticBytesUsed(null);
@@ -316,7 +313,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
 
   // Auto-collapse if all steps are completed (must be before early return)
   useEffect(() => {
-    if (allCompleted && nextStepsOverlayExpanded && gallery && !galleryLoading && steps.length > 0) {
+    if (
+      allCompleted &&
+      nextStepsOverlayExpanded &&
+      gallery &&
+      !galleryLoading &&
+      steps.length > 0
+    ) {
       const timeoutId = setTimeout(() => {
         setNextStepsOverlayExpanded(false);
       }, 3000); // Auto-collapse after 3 seconds if all completed
@@ -326,7 +329,14 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       };
     }
     return undefined;
-  }, [allCompleted, nextStepsOverlayExpanded, gallery, galleryLoading, steps.length, setNextStepsOverlayExpanded]);
+  }, [
+    allCompleted,
+    nextStepsOverlayExpanded,
+    gallery,
+    galleryLoading,
+    steps.length,
+    setNextStepsOverlayExpanded,
+  ]);
 
   const handleDontShowAgain = async (): Promise<void> => {
     // Load preference first if not loaded (needed for update)
@@ -340,11 +350,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         tutorialNextStepsDisabled: true,
       });
       setTutorialDisabled(true);
-      showToast(
-        "info",
-        "Ukryto",
-        "Ten panel nie będzie już wyświetlany"
-      );
+      showToast("info", "Ukryto", "Ten panel nie będzie już wyświetlany");
     } catch (error) {
       console.error("Failed to save tutorial preference:", error);
       showToast("error", "Błąd", "Nie udało się zapisać preferencji");
@@ -354,20 +360,21 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   };
 
   // Calculate visibility (but keep component mounted to prevent flickering)
-  const isVisible = !shouldHide && 
-                    tutorialDisabled !== true && 
-                    !!gallery && 
-                    !galleryLoading && 
-                    steps.length > 0;
+  const isVisible =
+    !shouldHide && tutorialDisabled !== true && !!gallery && !galleryLoading && steps.length > 0;
 
   // Check if gallery is paid for send step (only if gallery exists)
-  const isPaid = gallery ? (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE") : false;
+  const isPaid = gallery
+    ? gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE"
+    : false;
 
   const handlePublishClick = () => {
     if (gallery?.galleryId) {
       // Trigger publish wizard via custom event (same as sidebar button)
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("openPublishWizard", { detail: { galleryId: gallery.galleryId } }));
+        window.dispatchEvent(
+          new CustomEvent("openPublishWizard", { detail: { galleryId: gallery.galleryId } })
+        );
       }
     }
   };
@@ -382,7 +389,9 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     if (gallery?.galleryId && isPaid) {
       // Trigger send link via custom event (same as sidebar button)
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("sendGalleryLink", { detail: { galleryId: gallery.galleryId } }));
+        window.dispatchEvent(
+          new CustomEvent("sendGalleryLink", { detail: { galleryId: gallery.galleryId } })
+        );
       }
     }
   };
@@ -420,7 +429,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         >
           {nextStepsOverlayExpanded ? (
             <>
-              <h3 
+              <h3
                 className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
                 style={{
                   transition: "opacity 200ms ease-out",
@@ -436,11 +445,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                 viewBox="0 0 24 24"
                 strokeWidth={2.5}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 5l7 7-7 7"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </>
           ) : (
@@ -451,11 +456,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
               viewBox="0 0 24 24"
               strokeWidth={2.5}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           )}
         </button>
@@ -513,18 +514,16 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                         viewBox="0 0 24 24"
                         strokeWidth={3}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M5 13l4 4L19 7"
-                        />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <div className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                        isDisabled 
-                          ? "bg-gray-400 dark:bg-gray-500" 
-                          : "bg-gray-400 dark:bg-gray-500 group-hover:bg-brand-500"
-                      }`} />
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                          isDisabled
+                            ? "bg-gray-400 dark:bg-gray-500"
+                            : "bg-gray-400 dark:bg-gray-500 group-hover:bg-brand-500"
+                        }`}
+                      />
                     )}
                   </div>
 
@@ -558,10 +557,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
           {/* Footer with refined styling - Always reserves space for text */}
           <div className="relative px-5 py-3.5 border-t border-gray-100 dark:border-gray-800/50 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-900/30 h-[52px] flex items-center justify-center">
             {/* Invisible spacer to maintain height when collapsed */}
-            <div 
-              className="absolute inset-0 flex items-center justify-center"
-              aria-hidden="true"
-            >
+            <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
               <span className="text-[12px] text-transparent text-center py-1.5">
                 Zamknij i nie pokazuj tego ponownie
               </span>
@@ -606,9 +602,18 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                 e.currentTarget.style.background = "transparent";
               }}
               role="button"
-              tabIndex={nextStepsOverlayExpanded && !isSavingPreference && tutorialDisabled !== null ? 0 : -1}
+              tabIndex={
+                nextStepsOverlayExpanded && !isSavingPreference && tutorialDisabled !== null
+                  ? 0
+                  : -1
+              }
               onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && !isSavingPreference && tutorialDisabled !== null && nextStepsOverlayExpanded) {
+                if (
+                  (e.key === "Enter" || e.key === " ") &&
+                  !isSavingPreference &&
+                  tutorialDisabled !== null &&
+                  nextStepsOverlayExpanded
+                ) {
                   e.preventDefault();
                   void handleDontShowAgain();
                 }
@@ -622,4 +627,3 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     </div>
   );
 };
-

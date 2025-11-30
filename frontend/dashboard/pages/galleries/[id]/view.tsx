@@ -127,7 +127,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       // Try to get gallery name from gallery info
       try {
         const gallery = await fetchGallery(galleryIdStr);
-        setGalleryName((gallery?.galleryName) ?? galleryIdStr);
+        setGalleryName(gallery?.galleryName ?? galleryIdStr);
       } catch (_e) {
         // Gallery info not available, that's OK
         setGalleryName(galleryIdStr);

@@ -28,14 +28,14 @@ export const UploadProgressOverlay: React.FC<UploadProgressOverlayProps> = ({
   isUploadComplete = false,
 }) => {
   const maxUploadItems = 5; // Show up to 5 items with upload progress bars
-  
+
   // Get positioning from context (optional - may not be available)
   const overlayContext = useBottomRightOverlay();
   const rightOffset = useMemo(() => {
     if (!overlayContext?.nextStepsVisible) {
       return "1rem"; // Default: right-4
     }
-    
+
     // Calculate offset based on NextStepsOverlay state
     const nextStepsCurrentWidth = overlayContext.nextStepsExpanded
       ? overlayContext.nextStepsWidth

@@ -149,7 +149,10 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
           : pricingData.suggestedPlan?.name?.includes("3")
             ? "3m"
             : "1m";
-        const planKey = getPlanByStorageAndDuration(suggestedStorage, suggestedDuration as Duration);
+        const planKey = getPlanByStorageAndDuration(
+          suggestedStorage,
+          suggestedDuration as Duration
+        );
         if (planKey) {
           setSelectedPlanKey(planKey);
           setSelectedDuration(suggestedDuration as Duration);
@@ -161,9 +164,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   // Check if wallet balance is sufficient
   const walletBalance = walletBalanceCents ?? 0;
   const isBalanceSufficient = selectedPlan ? walletBalance >= selectedPlan.priceCents : false;
-  const balanceShortfall = selectedPlan
-    ? Math.max(0, selectedPlan.priceCents - walletBalance)
-    : 0;
+  const balanceShortfall = selectedPlan ? Math.max(0, selectedPlan.priceCents - walletBalance) : 0;
 
   const handlePublish = () => {
     if (!selectedPlan) {
@@ -212,9 +213,10 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     [galleryId, selectedDuration, selectedPlanKey, showToast]
   );
 
-
   const wizardContent = !isOpen ? null : (
-    <div className={`${renderAsModal ? 'w-full max-w-7xl h-[calc(100vh-2rem)]' : 'w-full max-h-[calc(100vh-200px)]'} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
+    <div
+      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-200px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Opublikuj galerię</h1>
@@ -223,12 +225,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
           className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           aria-label="Zamknij"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -307,7 +304,8 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
                       </div>
                     </div>
                     <p className="text-sm text-blue-600 dark:text-blue-400">
-                      Doładowanie portfela jest tańsze niż płatność przez Stripe (brak opłat przetwarzania).
+                      Doładowanie portfela jest tańsze niż płatność przez Stripe (brak opłat
+                      przetwarzania).
                     </p>
                   </div>
                 )}
@@ -345,7 +343,12 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
                   } else {
                     // Check if current selected plan matches the new duration
                     const currentPlan = getPlan(selectedPlanKey);
-                    const currentPlanDuration = currentPlan?.duration === "1 miesiąc" ? "1m" : currentPlan?.duration === "3 miesiące" ? "3m" : "12m";
+                    const currentPlanDuration =
+                      currentPlan?.duration === "1 miesiąc"
+                        ? "1m"
+                        : currentPlan?.duration === "3 miesiące"
+                          ? "3m"
+                          : "12m";
                     if (currentPlanDuration !== duration) {
                       // Selected plan doesn't match new duration, reset to suggested
                       const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
@@ -418,4 +421,3 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   // Otherwise, render inline (like in gallery view)
   return wizardContent;
 };
-

@@ -69,7 +69,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
       <ToastProvider>
         <SidebarProvider>
           <BottomRightOverlayProvider>
-          <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>
+            <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>
           </BottomRightOverlayProvider>
         </SidebarProvider>
       </ToastProvider>

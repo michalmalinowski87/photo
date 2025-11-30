@@ -108,7 +108,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       // Use store action - checks cache first, fetches if needed
       const { fetchOrder } = useOrderStore.getState();
       const orderData = await fetchOrder(galleryId as string, orderId as string);
-      
+
       // Store action already updates the store, but ensure currentOrder is set
       if (orderData) {
         setCurrentOrder(orderData);
@@ -553,7 +553,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onConfirm={handleCleanupConfirm}
         onCancel={handleCleanupCancel}
       />
-
 
       {showPaymentModal && (
         <PaymentConfirmationModal

@@ -109,7 +109,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const loadExistingPackages = useCallback(async () => {
     try {
       const response = await api.packages.list();
-      const packages = Array.isArray(response) ? response : response.items ?? [];
+      const packages = Array.isArray(response) ? response : (response.items ?? []);
       setExistingPackages(packages);
     } catch (_err) {
       setExistingPackages([]);

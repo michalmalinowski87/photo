@@ -182,7 +182,13 @@ export default function GallerySidebar({
     } finally {
       setIsLoadingPlanRecommendation(false);
     }
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, isLoadingPlanRecommendation]);
+  }, [
+    gallery?.galleryId,
+    gallery?.originalsBytesUsed,
+    galleryLoading,
+    isPaid,
+    isLoadingPlanRecommendation,
+  ]);
 
   // Listen for gallery updates (e.g., after uploads/deletions) with optimistic updates only
   // Defer plan calculation until user actually needs it (e.g., opens pricing modal)
@@ -194,7 +200,7 @@ export default function GallerySidebar({
     // Use refs to avoid stale closures
     const galleryRef = { current: gallery };
     const planRecommendationRef = { current: planRecommendation };
-    
+
     // Update refs when values change
     galleryRef.current = gallery;
     planRecommendationRef.current = planRecommendation;
@@ -212,7 +218,7 @@ export default function GallerySidebar({
       const sizeDelta = customEvent?.detail?.sizeDelta;
       const refreshAfterUpload = customEvent?.detail?.refreshAfterUpload ?? false;
       const eventGalleryId = customEvent?.detail?.galleryId;
-      
+
       // Only handle events for this gallery (if galleryId is specified in event)
       if (eventGalleryId && eventGalleryId !== galleryRef.current?.galleryId) {
         return;
@@ -252,7 +258,7 @@ export default function GallerySidebar({
       // For deletions, clear plan recommendation if gallery is empty
       // But don't recalculate - let it be calculated lazily when needed
       if (sizeDelta !== undefined && sizeDelta < 0) {
-        const currentBytes = 
+        const currentBytes =
           optimisticBytesUsed ??
           planRecommendationRef.current?.uploadedSizeBytes ??
           (galleryRef.current?.originalsBytesUsed as number | undefined) ??
@@ -270,7 +276,14 @@ export default function GallerySidebar({
       };
     }
     return undefined;
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation, optimisticBytesUsed]);
+  }, [
+    gallery?.galleryId,
+    gallery?.originalsBytesUsed,
+    galleryLoading,
+    isPaid,
+    planRecommendation,
+    optimisticBytesUsed,
+  ]);
 
   // Calculate plan on initial mount if gallery has photos and is not paid
   // This ensures plan is available when sidebar components render
@@ -284,7 +297,15 @@ export default function GallerySidebar({
     if (hasPhotos && !planRecommendation && !isLoadingPlanRecommendation) {
       void calculatePlanRecommendation();
     }
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation, isLoadingPlanRecommendation, calculatePlanRecommendation]);
+  }, [
+    gallery?.galleryId,
+    gallery?.originalsBytesUsed,
+    galleryLoading,
+    isPaid,
+    planRecommendation,
+    isLoadingPlanRecommendation,
+    calculatePlanRecommendation,
+  ]);
 
   // Listen for publish wizard open event to calculate plan when user needs it
   useEffect(() => {

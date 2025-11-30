@@ -422,11 +422,7 @@ export default function GalleryDetail() {
   return (
     <>
       {/* Next Steps Overlay */}
-      <NextStepsOverlay
-          gallery={gallery}
-        orders={orders}
-        galleryLoading={galleryLoading}
-        />
+      <NextStepsOverlay gallery={gallery} orders={orders} galleryLoading={galleryLoading} />
 
       {/* Main Content - Orders */}
       <div>

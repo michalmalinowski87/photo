@@ -72,7 +72,11 @@ interface GalleryState {
     duration?: string;
     planKey?: string;
   } | null;
-  setPublishWizardOpen: (open: boolean, galleryId?: string | null, state?: { duration?: string; planKey?: string } | null) => void;
+  setPublishWizardOpen: (
+    open: boolean,
+    galleryId?: string | null,
+    state?: { duration?: string; planKey?: string } | null
+  ) => void;
 }
 
 export const useGalleryStore = create<GalleryState>()(
@@ -208,7 +212,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGallery: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first if not forcing refresh
         if (!forceRefresh) {
           if (state.currentGallery?.galleryId === galleryId && !state.isGalleryStale(30000)) {
@@ -220,7 +224,7 @@ export const useGalleryStore = create<GalleryState>()(
         set({ isLoading: true, error: null });
         try {
           const galleryData = await api.galleries.get(galleryId);
-          
+
           // Only set gallery if it has required fields
           if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
             set({
@@ -231,7 +235,7 @@ export const useGalleryStore = create<GalleryState>()(
             });
             return galleryData as Gallery;
           }
-          
+
           set({ isLoading: false });
           return null;
         } catch (err) {
@@ -243,7 +247,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first if not forcing refresh
         if (!forceRefresh) {
           const cached = state.getGalleryImages(galleryId, 30000);
@@ -256,10 +260,10 @@ export const useGalleryStore = create<GalleryState>()(
         try {
           const response = await api.galleries.getImages(galleryId);
           const images = response.images ?? [];
-          
+
           // Update cache
           state.setGalleryImages(galleryId, images);
-          
+
           return images;
         } catch (err) {
           // Return empty array on error instead of throwing
@@ -270,7 +274,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGalleryOrders: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first if not forcing refresh
         if (!forceRefresh) {
           const cached = state.getGalleryOrders(galleryId, 30000);
@@ -283,10 +287,10 @@ export const useGalleryStore = create<GalleryState>()(
         try {
           const response = await api.orders.getByGallery(galleryId);
           const orders = (response.items ?? []) as any[];
-          
+
           // Update cache
           state.setGalleryOrders(galleryId, orders);
-          
+
           return orders;
         } catch (err) {
           // Return empty array on error instead of throwing
@@ -297,7 +301,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       refreshGalleryBytesOnly: async (galleryId: string) => {
         const state = get();
-        
+
         // Only refresh if this is the current gallery
         if (state.currentGalleryId !== galleryId) {
           return;
@@ -306,14 +310,14 @@ export const useGalleryStore = create<GalleryState>()(
         // Silent refresh: fetch gallery but only update bytes fields without triggering loading state
         try {
           const galleryData = await api.galleries.get(galleryId);
-          
+
           // Only update bytes fields if gallery data is valid
           if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
             set((currentState) => {
               if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
                 return currentState; // Don't update if gallery changed
               }
-              
+
               // Only update bytes fields, keep everything else
               return {
                 currentGallery: {
@@ -392,7 +396,11 @@ export const useGalleryStore = create<GalleryState>()(
       publishWizardOpen: false,
       publishWizardGalleryId: null,
       publishWizardState: null,
-      setPublishWizardOpen: (open: boolean, galleryId?: string | null, state?: { duration?: string; planKey?: string } | null) => {
+      setPublishWizardOpen: (
+        open: boolean,
+        galleryId?: string | null,
+        state?: { duration?: string; planKey?: string } | null
+      ) => {
         set({
           publishWizardOpen: open,
           publishWizardGalleryId: open ? (galleryId ?? null) : null,

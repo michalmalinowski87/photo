@@ -711,11 +711,7 @@ export default function GalleryPhotos() {
   return (
     <>
       {/* Next Steps Overlay */}
-      <NextStepsOverlay
-        gallery={gallery}
-        orders={orders}
-        galleryLoading={galleryLoading}
-      />
+      <NextStepsOverlay gallery={gallery} orders={orders} galleryLoading={galleryLoading} />
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">

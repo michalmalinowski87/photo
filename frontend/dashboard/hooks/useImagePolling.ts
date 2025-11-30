@@ -191,10 +191,7 @@ export function useImagePolling(config: UseImagePollingConfig) {
             }
 
             // For originals, validate limits and silently refresh gallery bytes AFTER polling completes
-            if (
-              config.type === "originals" &&
-              capturedUploadSuccesses > 0
-            ) {
+            if (config.type === "originals" && capturedUploadSuccesses > 0) {
               // Wait a bit for backend to process images and update originalsBytesUsed
               // Reduced delay for faster UI updates - backend should be quick to update
               setTimeout(async () => {

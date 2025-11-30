@@ -46,7 +46,7 @@ export default function GalleryFilterPage({
       const galleryParam = params.get("galleryId");
       const durationParam = params.get("duration");
       const planKeyParam = params.get("planKey");
-      
+
       if (galleryParam) {
         setPublishWizardOpen(
           true,
@@ -83,8 +83,9 @@ export default function GalleryFilterPage({
   }, []);
 
   // Don't show FullPageLoading if wizard should open from URL (prevents layout issues)
-  const showFullPageLoading = loading && initialLoad && !publishWizardOpen && !shouldOpenWizardFromUrl;
-  
+  const showFullPageLoading =
+    loading && initialLoad && !publishWizardOpen && !shouldOpenWizardFromUrl;
+
   return (
     <>
       {showFullPageLoading && <FullPageLoading text={loadingText} />}

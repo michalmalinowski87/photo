@@ -135,7 +135,7 @@ export const useOrderStore = create<OrderState>()(
 
       fetchOrder: async (galleryId: string, orderId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first if not forcing refresh
         if (!forceRefresh) {
           if (!state.isOrderStale(orderId, 30000)) {
@@ -154,10 +154,10 @@ export const useOrderStore = create<OrderState>()(
         set({ isLoading: true, error: null });
         try {
           const orderData = await api.orders.get(galleryId, orderId);
-          
+
           // Update store
           state.setCurrentOrder(orderData as Order);
-          
+
           set({ isLoading: false });
           return orderData as Order;
         } catch (err) {
