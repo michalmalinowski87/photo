@@ -32,7 +32,6 @@ interface ErrorResponse {
   message?: string;
 }
 
-
 export default function Orders() {
   const router = useRouter();
   const [apiUrl, setApiUrl] = useState<string>("");
@@ -188,11 +187,11 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markPaid(galleryId, orderId);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryId);
-      
+
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -220,11 +219,11 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markCanceled(galleryId, orderId);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryId);
-      
+
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -260,11 +259,11 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markRefunded(galleryId, orderId);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryId);
-      
+
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -300,11 +299,11 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markPartiallyPaid(galleryId, orderId);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryId);
-      
+
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -331,11 +330,11 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.sendFinalLink(galleryId, orderId);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryId);
-      
+
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>

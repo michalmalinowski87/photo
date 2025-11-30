@@ -23,4 +23,3 @@ export const useAuthStore = create<AuthState>()(
     { name: "AuthStore" }
   )
 );
-

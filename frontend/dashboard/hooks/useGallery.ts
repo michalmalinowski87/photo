@@ -41,4 +41,3 @@ export const useGallery = () => {
     reloadOrder: orderId ? reloadOrder : undefined,
   };
 };
-

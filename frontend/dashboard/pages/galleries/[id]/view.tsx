@@ -141,11 +141,11 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
     try {
       await api.galleries.deleteImage(galleryIdStr, filename);
-      
+
       // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateAllGalleryCaches(galleryIdStr);
-      
+
       setMessage("Photo deleted.");
       // Reload gallery to refresh images and storage
       void loadGallery();

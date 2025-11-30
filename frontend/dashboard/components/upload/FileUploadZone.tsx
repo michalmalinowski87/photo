@@ -92,7 +92,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         // Don't prevent default or stop propagation for sidebar drag events
         return;
       }
-      
+
       e.preventDefault();
       e.stopPropagation();
       if (!uploading && isDraggingFilesRef.current) {
@@ -125,7 +125,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         isDraggingFilesRef.current = false;
         return;
       }
-      
+
       e.preventDefault();
       e.stopPropagation();
       setIsFullPageDragging(false);

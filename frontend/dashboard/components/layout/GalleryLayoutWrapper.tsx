@@ -55,7 +55,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Use selector to ensure re-render when order changes - watch deliveryStatus specifically
   const order = useOrderStore((state) => state.currentOrder);
   const deliveryStatus = useOrderStore((state) => state.currentOrder?.deliveryStatus);
-  const orderCache = useOrderStore((state) => orderId ? state.orderCache[orderId as string] : null);
+  const orderCache = useOrderStore((state) =>
+    orderId ? state.orderCache[orderId as string] : null
+  );
   const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
   const clearCurrentOrder = useOrderStore((state) => state.clearCurrentOrder);
   const invalidateOrderStoreGalleryCache = useOrderStore(
@@ -250,11 +252,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       const galleryParam = params.get("galleryId");
 
       if (publishParam === "true" && galleryParam === galleryId) {
-        setPublishWizardOpenStore(true, galleryId as string);
+        setPublishWizardOpenStore(true, galleryId);
       }
     }
   }, [galleryId, router.isReady]);
-
 
   const confirmPayment = async () => {
     if (!galleryId || !paymentDetails) {
@@ -346,8 +347,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
         hasDeliveredOrders={undefined}
-        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
-        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId)}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId)}
       >
         <FullPageLoading text="Ładowanie galerii..." />
       </GalleryLayout>
@@ -366,8 +367,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
         hasDeliveredOrders={undefined}
-        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
-        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId)}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId)}
       >
         <div className="p-6">
           <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -439,8 +440,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           await loadGalleryOrders();
         }}
         order={orderObj}
-        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
-        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId)}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId)}
         onDownloadZip={orderId ? handleDownloadZip : undefined}
         canDownloadZip={canDownloadZip}
         onMarkOrderPaid={orderId ? handleMarkOrderPaid : undefined}
@@ -458,7 +459,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
             onClose={() => {
               setPublishWizardOpenStore(false);
             }}
-            galleryId={galleryId as string}
+            galleryId={galleryId}
             onSuccess={async () => {
               // Reload gallery data to update payment status
               await loadGalleryData();

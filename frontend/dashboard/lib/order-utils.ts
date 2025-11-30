@@ -42,4 +42,3 @@ export const filterDeletedImages = <T extends { key?: string; filename?: string 
     return true;
   });
 };
-

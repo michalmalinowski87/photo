@@ -35,4 +35,3 @@ export function ChangeRequestBanner({ onApprove, onDeny }: ChangeRequestBannerPr
     </div>
   );
 }
-

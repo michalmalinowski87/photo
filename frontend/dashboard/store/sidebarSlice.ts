@@ -70,4 +70,3 @@ if (typeof window !== "undefined") {
   handleResize();
   window.addEventListener("resize", handleResize);
 }
-

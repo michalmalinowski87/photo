@@ -6,4 +6,3 @@ import { useBottomRightOverlay } from "./useBottomRightOverlay";
  * This is an alias for useBottomRightOverlay for backward compatibility
  */
 export const useBottomRightOverlayRequired = useBottomRightOverlay;
-

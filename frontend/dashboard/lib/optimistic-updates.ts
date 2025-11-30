@@ -57,18 +57,21 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
   if (params.type === "originals") {
     // For originals, update store optimistically (like finals)
     const isUpload = params.isUpload ?? sizeDelta > 0; // Positive delta = upload, negative = deletion
-    console.log(`[${params.logContext ?? "optimistic-updates"}] Applying originals optimistic update:`, {
-      galleryId,
-      sizeDelta,
-      isUpload,
-    });
+    console.log(
+      `[${params.logContext ?? "optimistic-updates"}] Applying originals optimistic update:`,
+      {
+        galleryId,
+        sizeDelta,
+        isUpload,
+      }
+    );
 
     // Update Zustand store optimistically
     const storeState = useGalleryStore.getState();
     if (storeState.currentGallery?.galleryId === galleryId) {
-      (storeState as { updateOriginalsBytesUsed?: (delta: number) => void }).updateOriginalsBytesUsed?.(
-        sizeDelta
-      );
+      (
+        storeState as { updateOriginalsBytesUsed?: (delta: number) => void }
+      ).updateOriginalsBytesUsed?.(sizeDelta);
     }
   } else {
     // For finals, update store, local state, and dispatch event
@@ -77,14 +80,17 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
     // Update Zustand store optimistically
     const storeState = useGalleryStore.getState();
     const beforeFinalsBytes = storeState.currentGallery?.finalsBytesUsed as number | undefined;
-    
+
     // eslint-disable-next-line no-console
-    console.log(`[${params.logContext ?? "optimistic-updates"}] Applying finals optimistic update:`, {
-      galleryId,
-      sizeDelta,
-      beforeFinalsBytes: beforeFinalsBytes ?? 0,
-      expectedNewValue: (beforeFinalsBytes ?? 0) + sizeDelta,
-    });
+    console.log(
+      `[${params.logContext ?? "optimistic-updates"}] Applying finals optimistic update:`,
+      {
+        galleryId,
+        sizeDelta,
+        beforeFinalsBytes: beforeFinalsBytes ?? 0,
+        expectedNewValue: (beforeFinalsBytes ?? 0) + sizeDelta,
+      }
+    );
 
     if (storeState.currentGallery?.galleryId === galleryId) {
       (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(
@@ -122,28 +128,34 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
 
   if (params.type === "originals") {
     // For originals, revert store update
-    console.log(`[${params.logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`, {
-      galleryId,
-      originalSizeDelta: sizeDelta,
-      revertDelta,
-    });
+    console.log(
+      `[${params.logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`,
+      {
+        galleryId,
+        originalSizeDelta: sizeDelta,
+        revertDelta,
+      }
+    );
 
     // Revert store update (add back the size)
     const storeState = useGalleryStore.getState();
     if (storeState.currentGallery?.galleryId === galleryId) {
-      (storeState as { updateOriginalsBytesUsed?: (delta: number) => void }).updateOriginalsBytesUsed?.(
-        revertDelta
-      ); // Revert by adding back
+      (
+        storeState as { updateOriginalsBytesUsed?: (delta: number) => void }
+      ).updateOriginalsBytesUsed?.(revertDelta); // Revert by adding back
     }
   } else {
     // For finals, revert store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
 
-    console.log(`[${params.logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`, {
-      galleryId,
-      originalSizeDelta: sizeDelta,
-      revertDelta,
-    });
+    console.log(
+      `[${params.logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`,
+      {
+        galleryId,
+        originalSizeDelta: sizeDelta,
+        revertDelta,
+      }
+    );
 
     // Revert store update (add back the size)
     const storeState = useGalleryStore.getState();

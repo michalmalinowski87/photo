@@ -119,7 +119,7 @@ export default function GallerySettings() {
           settingsForm.clientPassword,
           settingsForm.clientEmail
         );
-        
+
         // Invalidate all caches to ensure fresh data on next fetch
         const { invalidateAllGalleryCaches } = useGalleryStore.getState();
         invalidateAllGalleryCaches(galleryId as string);
@@ -139,7 +139,7 @@ export default function GallerySettings() {
           extraPriceCents: settingsForm.extraPriceCents,
           packagePriceCents: settingsForm.packagePriceCents,
         });
-        
+
         // Invalidate all caches to ensure fresh data on next fetch
         const { invalidateAllGalleryCaches } = useGalleryStore.getState();
         invalidateAllGalleryCaches(galleryId as string);

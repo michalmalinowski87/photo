@@ -1,6 +1,6 @@
-import { Loading } from "../ui/loading/Loading";
-import { formatPrice } from "../../lib/format-price";
 import { formatCurrencyInput, centsToPlnString } from "../../lib/currency";
+import { formatPrice } from "../../lib/format-price";
+import { Loading } from "../ui/loading/Loading";
 
 interface OrderInfoCardProps {
   totalCents: number;
@@ -124,4 +124,3 @@ export function OrderInfoCard({
     </div>
   );
 }
-

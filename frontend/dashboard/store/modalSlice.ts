@@ -48,4 +48,3 @@ export const useModalStore = create<ModalState>()(
     { name: "ModalStore" }
   )
 );
-

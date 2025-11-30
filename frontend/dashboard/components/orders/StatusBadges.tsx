@@ -59,4 +59,3 @@ export function StatusBadges({ deliveryStatus, paymentStatus }: StatusBadgesProp
     </div>
   );
 }
-

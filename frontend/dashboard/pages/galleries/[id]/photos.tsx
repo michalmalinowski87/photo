@@ -57,7 +57,6 @@ interface ApiImage {
   [key: string]: unknown;
 }
 
-
 // UploadProgress interface is imported from PhotoUploadHandler
 
 // Lazy loading wrapper component using Intersection Observer
@@ -102,8 +101,7 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { fetchGalleryImages, fetchGalleryOrders, currentGallery } =
-    useGalleryStore();
+  const { fetchGalleryImages, fetchGalleryOrders, currentGallery } = useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
   interface GalleryOrder {
@@ -119,7 +117,7 @@ export default function GalleryPhotos() {
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  
+
   // Use hook for deletion logic
   const {
     deleteImage,
@@ -157,7 +155,6 @@ export default function GalleryPhotos() {
       if (progress.length > 0 && progress.some((p) => p.status === "uploading")) {
         setIsOverlayDismissed(false);
       }
-
     },
     onUploadSuccess: (_fileName, _file, _uploadedKey) => {
       // Optimistic update is already handled by useS3Upload.ts
@@ -253,9 +250,7 @@ export default function GalleryPhotos() {
           });
 
           // Create a map of valid API images by key for deduplication
-          const apiImagesMap = new Map(
-            mappedImages.map((img) => [img.key ?? img.filename, img])
-          );
+          const apiImagesMap = new Map(mappedImages.map((img) => [img.key ?? img.filename, img]));
 
           // Add deleting images that aren't already in API response
           currentDeletingImages.forEach((img) => {
@@ -358,7 +353,6 @@ export default function GalleryPhotos() {
       }
     };
   }, []);
-
 
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
@@ -475,16 +469,22 @@ export default function GalleryPhotos() {
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <StorageDisplay
                   bytesUsed={
-                    (currentGallery?.originalsBytesUsed !== null && currentGallery?.originalsBytesUsed !== undefined && typeof currentGallery.originalsBytesUsed === "number"
+                    (currentGallery?.originalsBytesUsed !== null &&
+                    currentGallery?.originalsBytesUsed !== undefined &&
+                    typeof currentGallery.originalsBytesUsed === "number"
                       ? currentGallery.originalsBytesUsed
                       : null) ??
-                    (gallery?.originalsBytesUsed !== null && gallery?.originalsBytesUsed !== undefined && typeof gallery?.originalsBytesUsed === "number"
+                    (gallery?.originalsBytesUsed !== null &&
+                    gallery?.originalsBytesUsed !== undefined &&
+                    typeof gallery?.originalsBytesUsed === "number"
                       ? gallery.originalsBytesUsed
                       : null) ??
                     0
                   }
                   limitBytes={
-                    gallery?.originalsLimitBytes !== null && gallery?.originalsLimitBytes !== undefined && typeof gallery.originalsLimitBytes === "number"
+                    gallery?.originalsLimitBytes !== null &&
+                    gallery?.originalsLimitBytes !== undefined &&
+                    typeof gallery.originalsLimitBytes === "number"
                       ? gallery.originalsLimitBytes
                       : undefined
                   }
@@ -520,9 +520,7 @@ export default function GalleryPhotos() {
                 <div
                   key={imageKey ?? idx}
                   className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
-                    deletingImages.has(imageKey)
-                      ? "opacity-60"
-                      : ""
+                    deletingImages.has(imageKey) ? "opacity-60" : ""
                   }`}
                 >
                   <div className="aspect-square relative">
@@ -569,7 +567,7 @@ export default function GalleryPhotos() {
                             </div>
                           </div>
                         )}
-                        {/* Delete button - only show when not deleting */}
+                        {/* Delete button - show always, disable when any deletion is in progress */}
                         {!deletingImages.has(imageKey) && (
                           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
                             {isInAnyOrder ? (
@@ -582,16 +580,18 @@ export default function GalleryPhotos() {
                                   e.stopPropagation();
                                   handleDeletePhotoClick(img);
                                 }}
-                                disabled={isApproved}
+                                disabled={isApproved || deletingImages.size > 0}
                                 className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                                  isApproved
+                                  isApproved || deletingImages.size > 0
                                     ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                                     : "bg-error-500 text-white hover:bg-error-600"
                                 }`}
                                 title={
-                                  isApproved
-                                    ? "Nie można usunąć zdjęcia z zatwierdzonej selekcji"
-                                    : "Usuń zdjęcie"
+                                  deletingImages.size > 0
+                                    ? "Musisz poczekać, aż bieżące usuwanie się zakończy"
+                                    : isApproved
+                                      ? "Nie można usunąć zdjęcia z zatwierdzonej selekcji"
+                                      : "Usuń zdjęcie"
                                 }
                               >
                                 Usuń

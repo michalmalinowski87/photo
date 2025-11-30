@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 
-import {
-  UploadProgressOverlay,
-  type PerImageProgress,
-} from "../upload/UploadProgressOverlay";
+import { UploadProgressOverlay, type PerImageProgress } from "../upload/UploadProgressOverlay";
 
 interface UploadProgressWrapperProps {
   handlerPerImageProgress: PerImageProgress[];
@@ -45,4 +42,3 @@ export const UploadProgressWrapper = ({
     />
   );
 };
-

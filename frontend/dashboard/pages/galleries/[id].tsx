@@ -50,7 +50,6 @@ interface PaymentDetails {
   balanceAfterPayment?: number;
 }
 
-
 export default function GalleryDetail() {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -61,7 +60,7 @@ export default function GalleryDetail() {
   const reloadGallery = galleryContext.reloadGallery;
   const { fetchGalleryOrders, refreshGalleryStatusOnly } = useGalleryStore();
   // Subscribe to gallery orders cache to trigger re-render when orders are updated
-  const galleryOrdersCacheEntry = useGalleryStore((state) => 
+  const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryId ? state.galleryOrdersCache[galleryId as string] : null
   );
 
@@ -172,10 +171,10 @@ export default function GalleryDetail() {
             // Use micro endpoint to check payment status (lightweight)
             try {
               await refreshGalleryStatusOnly(galleryIdStr);
-              
+
               // Get updated gallery from store to check state
               const updatedGallery = useGalleryStore.getState().currentGallery;
-              
+
               // Check if gallery state changed from DRAFT to PAID_ACTIVE
               if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
                 // Payment confirmed! Stop polling

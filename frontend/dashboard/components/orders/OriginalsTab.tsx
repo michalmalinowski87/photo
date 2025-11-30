@@ -44,17 +44,9 @@ export function OriginalsTab({
               className="w-full h-48 object-cover"
               onError={(e) => {
                 // Fallback to thumbUrl if previewUrl fails
-                if (
-                  img.previewUrl &&
-                  img.thumbUrl &&
-                  e.currentTarget.src === img.previewUrl
-                ) {
+                if (img.previewUrl && img.thumbUrl && e.currentTarget.src === img.previewUrl) {
                   e.currentTarget.src = img.thumbUrl;
-                } else if (
-                  img.thumbUrl &&
-                  img.url &&
-                  e.currentTarget.src === img.thumbUrl
-                ) {
+                } else if (img.thumbUrl && img.url && e.currentTarget.src === img.thumbUrl) {
                   e.currentTarget.src = img.url;
                 }
               }}
@@ -92,8 +84,7 @@ export function OriginalsTab({
         <div className="space-y-2">
           <div className="p-2 bg-info-50 border border-info-200 rounded-lg dark:bg-info-500/10 dark:border-info-500/20">
             <p className="text-xs text-info-800 dark:text-info-200">
-              Uwaga: Zlecenie nie ma zapisanych wybranych kluczy. Wyświetlane są wszystkie
-              zdjęcia.
+              Uwaga: Zlecenie nie ma zapisanych wybranych kluczy. Wyświetlane są wszystkie zdjęcia.
             </p>
           </div>
           {renderImageGrid(images)}
@@ -143,4 +134,3 @@ export function OriginalsTab({
 
   return <div className="space-y-4">{renderImageGrid(filteredImages, true)}</div>;
 }
-

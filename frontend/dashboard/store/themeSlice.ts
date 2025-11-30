@@ -95,4 +95,3 @@ if (typeof window !== "undefined") {
   // Run on next tick to ensure store is ready
   setTimeout(initializeTheme, 0);
 }
-

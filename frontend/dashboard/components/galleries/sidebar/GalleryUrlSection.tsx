@@ -17,19 +17,19 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const router = useRouter();
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  
+
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
   // Subscribe to galleryOrdersCache to trigger re-render when orders are updated
-  const galleryOrdersCacheEntry = useGalleryStore((state) => 
+  const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryIdStr ? state.galleryOrdersCache[galleryIdStr] : null
   );
-  
+
   const order = useOrderStore((state) => state.currentOrder);
   const { showToast } = useToast();
-  
+
   const [urlCopied, setUrlCopied] = useState(false);
   const [sendLinkLoading, setSendLinkLoading] = useState(false);
 
@@ -91,10 +91,12 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   };
 
   // Get gallery orders from store (use cache entry directly to trigger re-render)
-  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry 
-    ? (Date.now() - galleryOrdersCacheEntry.timestamp < 30000 ? (galleryOrdersCacheEntry.orders as unknown[]) : null)
+  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry
+    ? Date.now() - galleryOrdersCacheEntry.timestamp < 30000
+      ? (galleryOrdersCacheEntry.orders as unknown[])
+      : null
     : null;
-  
+
   // Check if gallery has a CLIENT_SELECTING order
   const hasClientSelectingOrder =
     galleryOrders &&
@@ -105,12 +107,14 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     });
 
   // Check if gallery has any existing orders (for determining button text)
-  const hasExistingOrders = galleryOrders && Array.isArray(galleryOrders) && galleryOrders.length > 0;
+  const hasExistingOrders =
+    galleryOrders && Array.isArray(galleryOrders) && galleryOrders.length > 0;
 
-  const orderDeliveryStatus = order && typeof order === "object" && "deliveryStatus" in order
-    ? (order as { deliveryStatus?: string }).deliveryStatus
-    : undefined;
-  
+  const orderDeliveryStatus =
+    order && typeof order === "object" && "deliveryStatus" in order
+      ? (order as { deliveryStatus?: string }).deliveryStatus
+      : undefined;
+
   const shouldShowShareButton =
     !isLoading &&
     gallery &&

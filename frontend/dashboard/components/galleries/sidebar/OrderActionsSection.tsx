@@ -32,7 +32,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
-  
+
   const isPaid = gallery?.isPaid ?? false;
 
   if (!orderId || !order || !isPaid) {

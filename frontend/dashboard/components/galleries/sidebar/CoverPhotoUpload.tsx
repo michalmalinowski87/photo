@@ -10,13 +10,13 @@ export const CoverPhotoUpload: React.FC = () => {
   const router = useRouter();
   const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const galleryId = typeof galleryIdParam === "string" ? galleryIdParam : undefined;
-  
+
   // Subscribe directly to store
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return
   const updateCoverPhotoUrl = useGalleryStore((state) => state.updateCoverPhotoUrl);
-  
+
   const coverPhotoUrl = gallery?.coverPhotoUrl ?? null;
   const { showToast } = useToast();
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -80,15 +80,20 @@ export const CoverPhotoUpload: React.FC = () => {
 
       while (attempts < maxAttempts) {
         attempts++;
-        
+
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
           const response = await api.galleries.getCoverPhoto(galleryId);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           const fetchedUrl = response.coverPhotoUrl;
-          
+
           // Check if we have a CloudFront URL (not S3, not null)
-          if (fetchedUrl && typeof fetchedUrl === "string" && !fetchedUrl.includes(".s3.") && !fetchedUrl.includes("s3.amazonaws.com")) {
+          if (
+            fetchedUrl &&
+            typeof fetchedUrl === "string" &&
+            !fetchedUrl.includes(".s3.") &&
+            !fetchedUrl.includes("s3.amazonaws.com")
+          ) {
             // Update store directly - no full gallery reload needed
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             updateCoverPhotoUrl(fetchedUrl);
@@ -96,7 +101,7 @@ export const CoverPhotoUpload: React.FC = () => {
             showToast("success", "Sukces", "Okładka galerii została przesłana");
             return;
           }
-          
+
           // Wait before next poll
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
         } catch (pollErr) {
@@ -105,10 +110,14 @@ export const CoverPhotoUpload: React.FC = () => {
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
         }
       }
-      
+
       // Max attempts reached
       setProcessingCover(false);
-      showToast("warning", "Ostrzeżenie", "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle");
+      showToast(
+        "warning",
+        "Ostrzeżenie",
+        "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle"
+      );
     } catch (err: unknown) {
       setUploadingCover(false);
       setProcessingCover(false);
@@ -209,7 +218,11 @@ export const CoverPhotoUpload: React.FC = () => {
             )}
             <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
               <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
-                {uploadingCover ? "Przesyłanie..." : processingCover ? "Przetwarzanie..." : "Kliknij na obraz aby zmienić"}
+                {uploadingCover
+                  ? "Przesyłanie..."
+                  : processingCover
+                    ? "Przetwarzanie..."
+                    : "Kliknij na obraz aby zmienić"}
               </div>
               <button
                 onClick={(e) => {

@@ -45,8 +45,8 @@ export const useFinalImageDelete = ({
         return;
       }
 
-      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId);
-      const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId);
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+      const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
 
       if (!galleryIdStr || !orderIdStr) {
         return;
@@ -102,12 +102,14 @@ export const useFinalImageDelete = ({
               if (!imageStillExists) {
                 // Image is gone from S3! Deletion is complete
                 // eslint-disable-next-line no-console
-                console.log(`[useFinalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`);
-                
+                console.log(
+                  `[useFinalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`
+                );
+
                 // Don't apply optimistic update here - we refresh immediately after
                 // This prevents conflicts with concurrent deletions and ensures accuracy
                 // The refresh will update bytes with the correct server-side value
-                
+
                 break;
               }
             } catch (pollErr) {
@@ -148,7 +150,7 @@ export const useFinalImageDelete = ({
           // Now that deletion is complete and bytes/status are refreshed, remove from UI
           // Mark as successfully deleted to prevent reappearance
           setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-          
+
           // Remove from deleting set
           setDeletingImages((prev) => {
             const updated = new Set(prev);
@@ -245,4 +247,3 @@ export const useFinalImageDelete = ({
     deletedImageKeysRef,
   };
 };
-

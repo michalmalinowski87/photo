@@ -38,11 +38,7 @@ export const ZipDownloadContainer: React.FC = () => {
       }
     >
       {downloadItems.map((download) => (
-        <div
-          key={download.id}
-          className="pointer-events-auto"
-          style={{ pointerEvents: "auto" }}
-        >
+        <div key={download.id} className="pointer-events-auto" style={{ pointerEvents: "auto" }}>
           <ZipDownloadProgress
             orderId={download.orderId}
             galleryId={download.galleryId}
@@ -56,4 +52,3 @@ export const ZipDownloadContainer: React.FC = () => {
     document.body
   );
 };
-

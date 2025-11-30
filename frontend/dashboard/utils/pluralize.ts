@@ -18,4 +18,3 @@ export function pluralizeZdjęcie(count: number): string {
   // 5 and above
   return "zdjęć";
 }
-

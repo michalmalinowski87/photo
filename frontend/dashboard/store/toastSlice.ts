@@ -53,4 +53,3 @@ export const useToastStore = create<ToastState>()(
     { name: "ToastStore" }
   )
 );
-

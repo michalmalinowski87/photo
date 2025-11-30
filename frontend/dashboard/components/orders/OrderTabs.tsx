@@ -5,12 +5,7 @@ interface OrderTabsProps {
   finalsCount: number;
 }
 
-export function OrderTabs({
-  activeTab,
-  onTabChange,
-  originalsCount,
-  finalsCount,
-}: OrderTabsProps) {
+export function OrderTabs({ activeTab, onTabChange, originalsCount, finalsCount }: OrderTabsProps) {
   return (
     <div className="border-b border-gray-200 dark:border-gray-700">
       <div className="flex gap-4">
@@ -38,4 +33,3 @@ export function OrderTabs({
     </div>
   );
 }
-

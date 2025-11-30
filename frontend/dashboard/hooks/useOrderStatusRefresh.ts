@@ -10,10 +10,7 @@ import { useOrderStore } from "../store/orderSlice";
 export const useOrderStatusRefresh = () => {
   const statusLastUpdatedRef = useRef<number>(0);
 
-  const refreshOrderStatus = async (
-    galleryId: string,
-    orderId: string
-  ): Promise<void> => {
+  const refreshOrderStatus = async (galleryId: string, orderId: string): Promise<void> => {
     // eslint-disable-next-line no-console
     console.log("[STATUS_UPDATE] Starting status refresh", {
       galleryId,
@@ -88,4 +85,3 @@ export const useOrderStatusRefresh = () => {
     statusLastUpdatedRef,
   };
 };
-

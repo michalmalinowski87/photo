@@ -38,13 +38,14 @@ export default function GallerySidebar({
   const router = useRouter();
   const { orderId: orderIdFromQuery } = router.query;
   // Use prop if provided, otherwise fall back to query param
-  const orderId: string | undefined = orderIdProp ?? (Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : (orderIdFromQuery));
-  
+  const orderId: string | undefined =
+    orderIdProp ?? (Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : orderIdFromQuery);
+
   // Subscribe directly to store - no props needed
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
-  
+
   const [viewportHeight, setViewportHeight] = useState<number>(
     typeof window !== "undefined" ? window.innerHeight : 1024
   );

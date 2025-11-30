@@ -4,8 +4,8 @@ import { useImagePolling } from "../../hooks/useImagePolling";
 import { usePresignedUrls } from "../../hooks/usePresignedUrls";
 import { useS3Upload } from "../../hooks/useS3Upload";
 import { useToast } from "../../hooks/useToast";
-import { useGalleryStore } from "../../store/gallerySlice";
 import api from "../../lib/api-service";
+import { useGalleryStore } from "../../store/gallerySlice";
 
 import { PerImageProgress } from "./UploadProgressOverlay";
 
@@ -124,7 +124,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         ...prev,
         successes: prev.successes + 1,
       }));
-      
+
       // Call onUploadSuccess with File object if available
       const file = fileNameToFileMapRef.current.get(fileName);
       if (file && config.onUploadSuccess) {
@@ -206,7 +206,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
       fileToKeyMapRef.current.clear();
       fileNameToFileMapRef.current.clear();
       hasTriggeredRecalculationRef.current = false; // Reset guard for new upload batch
-      
+
       // Store File objects for later use
       imageFiles.forEach((file) => {
         fileNameToFileMapRef.current.set(file.name, file);
@@ -267,12 +267,16 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         }
 
         // Handle completion based on type
-        if (uploadSuccesses > 0 && !uploadCancelRef.current && !hasTriggeredRecalculationRef.current) {
+        if (
+          uploadSuccesses > 0 &&
+          !uploadCancelRef.current &&
+          !hasTriggeredRecalculationRef.current
+        ) {
           // TRIGGER 1: Silent recalculation immediately after ALL uploads complete (before processing)
           // This updates storage values as soon as files are in S3, without UI notification
           // Guard ensures this is only called once per upload batch
           hasTriggeredRecalculationRef.current = true;
-          
+
           // eslint-disable-next-line no-console
           console.log("[PhotoUploadHandler] All uploads complete, triggering recalculation", {
             type: config.type,
@@ -282,25 +286,31 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
             currentOriginalsBytes: useGalleryStore.getState().currentGallery?.originalsBytesUsed,
             currentFinalsBytes: useGalleryStore.getState().currentGallery?.finalsBytesUsed,
           });
-          
+
           const { refreshGalleryBytesOnly } = useGalleryStore.getState();
           void refreshGalleryBytesOnly(config.galleryId, true); // forceRecalc = true, silent (no loading state)
 
           if (config.type === "finals") {
             // eslint-disable-next-line no-console
-            console.log("[PhotoUploadHandler] Finals upload complete, marking upload-complete endpoint", {
-              galleryId: config.galleryId,
-              orderId: config.orderId,
-            });
+            console.log(
+              "[PhotoUploadHandler] Finals upload complete, marking upload-complete endpoint",
+              {
+                galleryId: config.galleryId,
+                orderId: config.orderId,
+              }
+            );
             // Mark final upload complete (also triggers recalculation on backend and updates order status)
             try {
               const orderId = config.orderId ?? "";
               await api.uploads.markFinalUploadComplete(config.galleryId, orderId);
               // eslint-disable-next-line no-console
-              console.log("[PhotoUploadHandler] Finals upload-complete endpoint called successfully", {
-                galleryId: config.galleryId,
-                orderId,
-              });
+              console.log(
+                "[PhotoUploadHandler] Finals upload-complete endpoint called successfully",
+                {
+                  galleryId: config.galleryId,
+                  orderId,
+                }
+              );
               // Don't call loadOrderData here - it would fetch stale gallery data and overwrite the correct bytes
               // The refreshGalleryBytesOnly call above already updates the bytes correctly
               // Order status will be refreshed when processing completes (via onUploadComplete callback)

@@ -1,5 +1,5 @@
-import { useRouter } from "next/router";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 import { ThemeToggleButton } from "../common/ThemeToggleButton";
 import { StorageUsageInfo } from "../galleries/sidebar/StorageUsageInfo";
@@ -7,7 +7,9 @@ import { StorageUsageInfo } from "../galleries/sidebar/StorageUsageInfo";
 const GalleryHeader: React.FC = () => {
   const router = useRouter();
   const { orderId: orderIdFromQuery } = router.query;
-  const orderId: string | undefined = Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : (orderIdFromQuery as string | undefined);
+  const orderId: string | undefined = Array.isArray(orderIdFromQuery)
+    ? orderIdFromQuery[0]
+    : (orderIdFromQuery);
 
   return (
     <header className="top-0 flex w-full bg-white border-gray-200 dark:border-gray-800 dark:bg-gray-900 lg:border-b">

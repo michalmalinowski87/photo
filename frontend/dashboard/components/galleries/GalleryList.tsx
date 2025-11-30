@@ -57,7 +57,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState("");
 
-
   interface GalleriesResponse {
     items?: Gallery[];
     [key: string]: unknown;

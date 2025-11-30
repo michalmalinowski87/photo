@@ -1,3 +1,4 @@
+import { useGalleryStore } from "../../store/gallerySlice";
 import GallerySidebar from "../galleries/GallerySidebar";
 
 import GalleryHeader from "./GalleryHeader";
@@ -60,17 +61,24 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   onApproveChangeRequest,
   onDenyChangeRequest,
   hasFinals,
-  hasDeliveredOrders,
+  hasDeliveredOrders: _hasDeliveredOrders,
   galleryLoading,
-  sendLinkLoading,
+  sendLinkLoading: _sendLinkLoading,
   galleryId,
 }) => {
-  // Show sidebar if:
-  // 1. Gallery is loaded, OR
-  // 2. Gallery is loading (to show loading states), OR
-  // 3. We have galleryId from URL (gallery should be loading)
-  const shouldShowSidebar = gallery?.galleryId || galleryLoading || (galleryId && (galleryLoading !== false));
-  
+  // Get loading state and gallery directly from store (sidebar subscribes to store)
+  const storeIsLoading = useGalleryStore((state) => state.isLoading);
+  const storeGallery = useGalleryStore((state) => state.currentGallery);
+
+  // Show sidebar when:
+  // 1. Gallery is loaded (has data), OR
+  // 2. Gallery is loading (shows loading states), OR
+  // 3. We have galleryId from URL (gallery should be loading/loaded, sidebar will show loading states)
+  // The sidebar subscribes to store directly and handles loading states automatically
+  const isLoading = galleryLoading ?? storeIsLoading ?? false;
+  const hasGallery = Boolean(gallery?.galleryId ?? storeGallery?.galleryId);
+  const shouldShowSidebar = hasGallery || isLoading || Boolean(galleryId);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
       <div className="flex">

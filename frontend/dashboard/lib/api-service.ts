@@ -430,14 +430,17 @@ class ApiService {
     /**
      * Get only the bytes used for a gallery (lightweight endpoint)
      */
-    getBytesUsed: async (galleryId: string, forceRecalc = false): Promise<{
+    getBytesUsed: async (
+      galleryId: string,
+      forceRecalc = false
+    ): Promise<{
       originalsBytesUsed: number;
       finalsBytesUsed: number;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      const url = forceRecalc 
+      const url = forceRecalc
         ? `/galleries/${galleryId}/bytes-used?force=true`
         : `/galleries/${galleryId}/bytes-used`;
       return await this._request<{ originalsBytesUsed: number; finalsBytesUsed: number }>(url);
@@ -446,7 +449,9 @@ class ApiService {
     /**
      * Get only the status for a gallery (lightweight endpoint)
      */
-    getStatus: async (galleryId: string): Promise<{
+    getStatus: async (
+      galleryId: string
+    ): Promise<{
       state: string;
       paymentStatus: string;
       isPaid: boolean;
@@ -529,7 +534,10 @@ class ApiService {
     /**
      * Delete multiple gallery images in batch
      */
-    deleteImagesBatch: async (galleryId: string, imageKeys: string[]): Promise<{
+    deleteImagesBatch: async (
+      galleryId: string,
+      imageKeys: string[]
+    ): Promise<{
       message: string;
       count: number;
       originalsBytesUsed: number;
@@ -896,10 +904,10 @@ class ApiService {
       // Use batch endpoint for final images
       return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
         method: "POST",
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           filenames: [imageKey],
           orderId,
-          type: 'final'
+          type: "final",
         }),
       });
     },

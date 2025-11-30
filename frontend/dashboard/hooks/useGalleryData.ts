@@ -80,15 +80,7 @@ export const useGalleryData = ({
         }
       }
     },
-    [
-      galleryId,
-      gallery,
-      setLoading,
-      setError,
-      fetchGallery,
-      showToast,
-      setGalleryUrl,
-    ]
+    [galleryId, gallery, setLoading, setError, fetchGallery, showToast, setGalleryUrl]
   );
 
   const loadGalleryOrders = useCallback(

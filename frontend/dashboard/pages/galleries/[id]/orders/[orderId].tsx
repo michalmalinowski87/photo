@@ -164,11 +164,13 @@ export default function OrderDetail() {
           const currentOrderInStore = useOrderStore.getState().currentOrder;
           const fiveSecondsAgo = Date.now() - 5000;
           const statusRecentlyUpdated = statusLastUpdatedRef.current > fiveSecondsAgo;
-          
-          if (statusRecentlyUpdated && 
-              currentOrderInStore?.deliveryStatus && 
-              (currentOrderInStore.deliveryStatus !== orderData.deliveryStatus || 
-               currentOrderInStore.paymentStatus !== orderData.paymentStatus)) {
+
+          if (
+            statusRecentlyUpdated &&
+            currentOrderInStore?.deliveryStatus &&
+            (currentOrderInStore.deliveryStatus !== orderData.deliveryStatus ||
+              currentOrderInStore.paymentStatus !== orderData.paymentStatus)
+          ) {
             // Status was recently updated, preserve it
             setCurrentOrder({
               ...orderData,
@@ -181,7 +183,7 @@ export default function OrderDetail() {
             setCurrentOrder(orderData);
           }
         }
-        
+
         // Preserve current gallery state - don't overwrite with stale data
         // Only update if we don't have gallery data yet
         if (!gallery && currentGallery?.galleryId === galleryId) {
@@ -377,14 +379,17 @@ export default function OrderDetail() {
       // Refresh order status when order is updated (e.g., after upload-complete endpoint)
       if (galleryId && updatedOrderId) {
         try {
-          const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId);
+          const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
           const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId as string);
           if (galleryIdStr && orderIdStr && updatedOrderId === orderIdStr) {
             await refreshOrderStatus(galleryIdStr, orderIdStr);
           }
         } catch (statusErr) {
           // eslint-disable-next-line no-console
-          console.error("[STATUS_UPDATE] onOrderUpdated - Failed to refresh order status", statusErr);
+          console.error(
+            "[STATUS_UPDATE] onOrderUpdated - Failed to refresh order status",
+            statusErr
+          );
         }
       }
     },
@@ -392,7 +397,6 @@ export default function OrderDetail() {
     deletingImagesRef,
     deletedImageKeysRef,
   });
-
 
   useEffect(() => {
     initializeAuth(
@@ -412,9 +416,11 @@ export default function OrderDetail() {
   }, [galleryId, orderId]); // Removed loadOrderData and loadWalletBalance from deps to avoid infinite loops
 
   // Watch order and gallery state for updates (Zustand subscriptions)
-  const orderCache = useOrderStore((state) => orderId ? state.orderCache[orderId as string] : null);
+  const orderCache = useOrderStore((state) =>
+    orderId ? state.orderCache[orderId as string] : null
+  );
   const currentGallery = useGalleryStore((state) => state.currentGallery);
-  
+
   useEffect(() => {
     if (orderId && orderCache) {
       // Order was updated in store, reload to get latest data
@@ -606,7 +612,6 @@ export default function OrderDetail() {
     }
   };
 
-
   const {
     handleApproveChangeRequest,
     handleDenyChangeRequest: handleDenyChangeRequestAction,
@@ -636,7 +641,6 @@ export default function OrderDetail() {
     await handleDenyConfirmAction(reason);
   };
 
-
   if (loading && !order) {
     return <FullPageLoading text="Ładowanie zlecenia..." />;
   }
@@ -655,7 +659,6 @@ export default function OrderDetail() {
   // For non-selection galleries, empty/undefined selectedKeys means "all photos"
   const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
-
 
   // Hide "Wybrane przez klienta" section if:
   // - Selection is enabled

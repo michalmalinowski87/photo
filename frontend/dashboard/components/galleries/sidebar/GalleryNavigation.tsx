@@ -8,7 +8,7 @@ export const GalleryNavigation: React.FC = () => {
   const router = useRouter();
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
-  
+
   // Check if there are delivered orders - we can compute this from store
   const hasDeliveredOrders = useGalleryStore((state) => {
     const orders = state.getGalleryOrders(gallery?.galleryId ?? "", 30000);

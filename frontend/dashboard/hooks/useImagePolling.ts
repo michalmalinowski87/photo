@@ -239,7 +239,10 @@ export function useImagePolling(config: UseImagePollingConfig) {
                   }
                 } catch (validationError) {
                   // eslint-disable-next-line no-console
-                  console.error("[useImagePolling] Failed to validate upload limits:", validationError);
+                  console.error(
+                    "[useImagePolling] Failed to validate upload limits:",
+                    validationError
+                  );
                 }
               }, 1000); // Wait for backend to finish processing
             }
@@ -265,7 +268,11 @@ export function useImagePolling(config: UseImagePollingConfig) {
         } catch (err: unknown) {
           const apiErr = err as { status?: number; refreshFailed?: boolean };
           // Stop polling on auth errors (401) or client errors (4xx) like 404 (gallery not found)
-          if (apiErr?.status === 401 || apiErr?.refreshFailed || (apiErr?.status && apiErr.status >= 400 && apiErr.status < 500)) {
+          if (
+            apiErr?.status === 401 ||
+            apiErr?.refreshFailed ||
+            (apiErr?.status && apiErr.status >= 400 && apiErr.status < 500)
+          ) {
             pollingActiveRef.current = false;
             if (pollingTimeoutRef.current) {
               clearTimeout(pollingTimeoutRef.current);

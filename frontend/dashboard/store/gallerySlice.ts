@@ -189,10 +189,14 @@ export const useGalleryStore = create<GalleryState>()(
       getGalleryOrders: (galleryId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.galleryOrdersCache[galleryId];
-        if (!cached) {return null;}
+        if (!cached) {
+          return null;
+        }
 
         const age = Date.now() - cached.timestamp;
-        if (age > maxAge) {return null;} // Cache expired
+        if (age > maxAge) {
+          return null;
+        } // Cache expired
 
         return cached.orders;
       },
@@ -212,10 +216,14 @@ export const useGalleryStore = create<GalleryState>()(
       getGalleryImages: (galleryId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.galleryImagesCache[galleryId];
-        if (!cached) {return null;}
+        if (!cached) {
+          return null;
+        }
 
         const age = Date.now() - cached.timestamp;
-        if (age > maxAge) {return null;} // Cache expired
+        if (age > maxAge) {
+          return null;
+        } // Cache expired
 
         return cached.images;
       },
@@ -279,7 +287,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGallery: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Request deduplication: if there's already an in-flight request for this gallery, return it
         if (galleryId in state.inFlightRequests && !forceRefresh) {
           return state.inFlightRequests[galleryId];
@@ -309,7 +317,7 @@ export const useGalleryStore = create<GalleryState>()(
             // Only set gallery if it has required fields
             if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
               const gallery = galleryData as Gallery;
-              
+
               // Update cache
               set((currentState) => ({
                 galleryCache: {
@@ -323,7 +331,7 @@ export const useGalleryStore = create<GalleryState>()(
                 currentGalleryId: galleryId,
                 isLoading: false,
               }));
-              
+
               return gallery;
             }
 
@@ -356,7 +364,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first (unless force refresh)
         if (!forceRefresh) {
           const cached = state.getGalleryImages(galleryId);
@@ -364,7 +372,7 @@ export const useGalleryStore = create<GalleryState>()(
             return cached;
           }
         }
-        
+
         try {
           const response = await api.galleries.getImages(galleryId);
           const images = response.images ?? [];
@@ -379,7 +387,7 @@ export const useGalleryStore = create<GalleryState>()(
 
       fetchGalleryOrders: async (galleryId: string, forceRefresh = false) => {
         const state = get();
-        
+
         // Check cache first (unless force refresh)
         if (!forceRefresh) {
           const cached = state.getGalleryOrders(galleryId);
@@ -387,7 +395,7 @@ export const useGalleryStore = create<GalleryState>()(
             return cached;
           }
         }
-        
+
         try {
           const response = await api.orders.getByGallery(galleryId);
           const orders = (response.items ?? []) as any[];
@@ -410,7 +418,7 @@ export const useGalleryStore = create<GalleryState>()(
 
           // Always reload orders to get updated status (for both initial and reminders)
           await get().fetchGalleryOrders(galleryId, true);
-          
+
           // Only reload gallery data if it's an initial invitation (creates order), not for reminders
           if (!isReminder) {
             await get().fetchGallery(galleryId, true);
@@ -424,81 +432,83 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       refreshGalleryBytesOnly: async (galleryId: string, forceRecalc = false) => {
-          const state = get();
+        const state = get();
 
-          console.log("[gallerySlice] refreshGalleryBytesOnly - Starting", {
-            galleryId,
-            forceRecalc,
+        console.log("[gallerySlice] refreshGalleryBytesOnly - Starting", {
+          galleryId,
+          forceRecalc,
+          currentGalleryId: state.currentGalleryId,
+          currentFinalsBytes: state.currentGallery?.finalsBytesUsed,
+          currentOriginalsBytes: state.currentGallery?.originalsBytesUsed,
+        });
+
+        // Only refresh if this is the current gallery
+        if (state.currentGalleryId !== galleryId) {
+          console.log("[gallerySlice] refreshGalleryBytesOnly - Skipping (different gallery)", {
+            requestedGalleryId: galleryId,
             currentGalleryId: state.currentGalleryId,
-            currentFinalsBytes: state.currentGallery?.finalsBytesUsed,
-            currentOriginalsBytes: state.currentGallery?.originalsBytesUsed,
           });
+          return;
+        }
 
-          // Only refresh if this is the current gallery
-          if (state.currentGalleryId !== galleryId) {
-            console.log("[gallerySlice] refreshGalleryBytesOnly - Skipping (different gallery)", {
-              requestedGalleryId: galleryId,
-              currentGalleryId: state.currentGalleryId,
-            });
-            return;
-          }
-
-          // Silent refresh: use lightweight endpoint to only fetch bytes fields
+        // Silent refresh: use lightweight endpoint to only fetch bytes fields
         // Debouncing removed - called explicitly when needed (image removed or all photos uploaded)
         // forceRecalc: if true, forces recalculation from S3 (bypasses cache)
-          try {
-            console.log("[gallerySlice] refreshGalleryBytesOnly - Calling API", {
-              galleryId,
-              forceRecalc,
-            });
-            const bytesData = await api.galleries.getBytesUsed(galleryId, forceRecalc);
-            console.log("[gallerySlice] refreshGalleryBytesOnly - API response", {
-              bytesData,
-              originalsBytesUsed: bytesData.originalsBytesUsed,
-              finalsBytesUsed: bytesData.finalsBytesUsed,
-            });
+        try {
+          console.log("[gallerySlice] refreshGalleryBytesOnly - Calling API", {
+            galleryId,
+            forceRecalc,
+          });
+          const bytesData = await api.galleries.getBytesUsed(galleryId, forceRecalc);
+          console.log("[gallerySlice] refreshGalleryBytesOnly - API response", {
+            bytesData,
+            originalsBytesUsed: bytesData.originalsBytesUsed,
+            finalsBytesUsed: bytesData.finalsBytesUsed,
+          });
 
-            // Only update bytes fields - lightweight update without full gallery fetch
-            if (bytesData) {
-              set((currentState) => {
-                if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
-                  console.log("[gallerySlice] refreshGalleryBytesOnly - Skipping update (gallery changed)");
-                  return currentState; // Don't update if gallery changed
-                }
+          // Only update bytes fields - lightweight update without full gallery fetch
+          if (bytesData) {
+            set((currentState) => {
+              if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
+                console.log(
+                  "[gallerySlice] refreshGalleryBytesOnly - Skipping update (gallery changed)"
+                );
+                return currentState; // Don't update if gallery changed
+              }
 
-                const beforeUpdate = {
-                  originalsBytesUsed: currentState.currentGallery.originalsBytesUsed,
-                  finalsBytesUsed: currentState.currentGallery.finalsBytesUsed,
-                };
+              const beforeUpdate = {
+                originalsBytesUsed: currentState.currentGallery.originalsBytesUsed,
+                finalsBytesUsed: currentState.currentGallery.finalsBytesUsed,
+              };
 
-                // Only update bytes fields, keep everything else
-                const updatedGallery = {
-                  ...currentState.currentGallery,
-                  originalsBytesUsed: bytesData.originalsBytesUsed ?? 0,
-                  finalsBytesUsed: bytesData.finalsBytesUsed ?? 0,
-                };
+              // Only update bytes fields, keep everything else
+              const updatedGallery = {
+                ...currentState.currentGallery,
+                originalsBytesUsed: bytesData.originalsBytesUsed ?? 0,
+                finalsBytesUsed: bytesData.finalsBytesUsed ?? 0,
+              };
 
-                // eslint-disable-next-line no-console
-                console.log("[gallerySlice] refreshGalleryBytesOnly - Updating store", {
-                  before: beforeUpdate,
-                  after: {
-                    originalsBytesUsed: updatedGallery.originalsBytesUsed,
-                    finalsBytesUsed: updatedGallery.finalsBytesUsed,
-                  },
-                });
-
-                return {
-                  ...currentState,
-                  currentGallery: updatedGallery,
-                };
+              // eslint-disable-next-line no-console
+              console.log("[gallerySlice] refreshGalleryBytesOnly - Updating store", {
+                before: beforeUpdate,
+                after: {
+                  originalsBytesUsed: updatedGallery.originalsBytesUsed,
+                  finalsBytesUsed: updatedGallery.finalsBytesUsed,
+                },
               });
 
-              // Zustand state update will trigger re-renders automatically via subscriptions
-            }
-          } catch (err) {
-            // Silently fail - don't show error or trigger loading state
-            console.error("[GalleryStore] Failed to refresh gallery bytes (silent):", err);
+              return {
+                ...currentState,
+                currentGallery: updatedGallery,
+              };
+            });
+
+            // Zustand state update will trigger re-renders automatically via subscriptions
           }
+        } catch (err) {
+          // Silently fail - don't show error or trigger loading state
+          console.error("[GalleryStore] Failed to refresh gallery bytes (silent):", err);
+        }
       },
 
       refreshGalleryStatusOnly: async (galleryId: string) => {

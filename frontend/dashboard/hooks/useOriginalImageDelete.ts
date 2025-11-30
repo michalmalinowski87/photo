@@ -17,10 +17,7 @@ interface UseOriginalImageDeleteOptions {
   setImages: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
 }
 
-export const useOriginalImageDelete = ({
-  galleryId,
-  setImages,
-}: UseOriginalImageDeleteOptions) => {
+export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImageDeleteOptions) => {
   const { showToast } = useToast();
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
@@ -38,7 +35,7 @@ export const useOriginalImageDelete = ({
         return;
       }
 
-      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId);
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
 
       if (!galleryIdStr) {
         return;
@@ -94,12 +91,14 @@ export const useOriginalImageDelete = ({
               if (!imageStillExists) {
                 // Image is gone from S3! Deletion is complete
                 // eslint-disable-next-line no-console
-                console.log(`[useOriginalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`);
-                
+                console.log(
+                  `[useOriginalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`
+                );
+
                 // Don't apply optimistic update here - we refresh immediately after
                 // This prevents conflicts with concurrent deletions and ensures accuracy
                 // The refresh will update bytes with the correct server-side value
-                
+
                 break;
               }
             } catch (pollErr) {
@@ -126,7 +125,7 @@ export const useOriginalImageDelete = ({
           // Now that deletion is complete and bytes are refreshed, remove from UI
           // Mark as successfully deleted to prevent reappearance
           setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-          
+
           // Remove from deleting set
           setDeletingImages((prev) => {
             const updated = new Set(prev);
@@ -168,12 +167,7 @@ export const useOriginalImageDelete = ({
         throw err;
       }
     },
-    [
-      galleryId,
-      setImages,
-      deletingImages,
-      showToast,
-    ]
+    [galleryId, setImages, deletingImages, showToast]
   );
 
   const handleDeleteImageClick = useCallback(
@@ -219,4 +213,3 @@ export const useOriginalImageDelete = ({
     deletedImageKeysRef,
   };
 };
-

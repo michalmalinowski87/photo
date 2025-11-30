@@ -134,7 +134,7 @@ export function useS3Upload(config: UseS3UploadConfig) {
                   const beforeOptimistic = useGalleryStore.getState().currentGallery;
                   const beforeOriginals = beforeOptimistic?.originalsBytesUsed;
                   const beforeFinals = beforeOptimistic?.finalsBytesUsed;
-                  
+
                   // eslint-disable-next-line no-console
                   console.log("[useS3Upload] Upload succeeded, dispatching optimistic update:", {
                     type: config.type,
@@ -143,8 +143,12 @@ export function useS3Upload(config: UseS3UploadConfig) {
                     fileName: file.name,
                     beforeOriginals,
                     beforeFinals,
-                    expectedOriginals: config.type === "originals" ? (beforeOriginals ?? 0) + file.size : beforeOriginals,
-                    expectedFinals: config.type === "finals" ? (beforeFinals ?? 0) + file.size : beforeFinals,
+                    expectedOriginals:
+                      config.type === "originals"
+                        ? (beforeOriginals ?? 0) + file.size
+                        : beforeOriginals,
+                    expectedFinals:
+                      config.type === "finals" ? (beforeFinals ?? 0) + file.size : beforeFinals,
                   });
 
                   // Apply optimistic update using utility function
@@ -159,7 +163,7 @@ export function useS3Upload(config: UseS3UploadConfig) {
                     },
                     logContext: "useS3Upload",
                   });
-                  
+
                   const afterOptimistic = useGalleryStore.getState().currentGallery;
                   // eslint-disable-next-line no-console
                   console.log("[useS3Upload] After optimistic update:", {

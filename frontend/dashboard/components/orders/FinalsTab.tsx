@@ -66,12 +66,7 @@ export function FinalsTab({
                 Opublikuj galerię aby kontynuować.
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onPayClick}
-              disabled={paymentLoading}
-            >
+            <Button size="sm" variant="primary" onClick={onPayClick} disabled={paymentLoading}>
               {paymentLoading ? "Przetwarzanie..." : "Opublikuj galerię"}
             </Button>
           </div>
@@ -121,9 +116,7 @@ export function FinalsTab({
       )}
 
       {images.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-          Brak zdjęć finalnych
-        </div>
+        <div className="p-8 text-center text-gray-500 dark:text-gray-400">Brak zdjęć finalnych</div>
       ) : (
         <div className="grid grid-cols-4 gap-4">
           {images.map((img, idx) => {
@@ -153,7 +146,7 @@ export function FinalsTab({
                       </div>
                     </div>
                   )}
-                  {/* Delete button - only show when not deleting */}
+                  {/* Delete button - show always when canUpload, disable when any deletion is in progress */}
                   {canUpload && !deletingImages.has(imageKey) && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
                       <button
@@ -161,8 +154,17 @@ export function FinalsTab({
                           e.stopPropagation();
                           onDeleteImage(img);
                         }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-error-500 text-white hover:bg-error-600"
-                        title="Usuń zdjęcie"
+                        disabled={deletingImages.size > 0}
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                          deletingImages.size > 0
+                            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                            : "bg-error-500 text-white hover:bg-error-600"
+                        }`}
+                        title={
+                          deletingImages.size > 0
+                            ? "Musisz poczekać, aż bieżące usuwanie się zakończy"
+                            : "Usuń zdjęcie"
+                        }
                       >
                         Usuń
                       </button>
@@ -180,4 +182,3 @@ export function FinalsTab({
     </div>
   );
 }
-

@@ -115,12 +115,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const uploadCompleted = currentBytes > 0;
     const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
     // Send step is completed when there's a CLIENT_SELECTING order (gallery has been sent to client)
-    const sendCompleted = gallery.selectionEnabled !== false 
-      ? orders.some((o: unknown) => {
-          const orderObj = o as { deliveryStatus?: string };
-          return orderObj.deliveryStatus === "CLIENT_SELECTING";
-        })
-      : null;
+    const sendCompleted =
+      gallery.selectionEnabled !== false
+        ? orders.some((o: unknown) => {
+            const orderObj = o as { deliveryStatus?: string };
+            return orderObj.deliveryStatus === "CLIENT_SELECTING";
+          })
+        : null;
 
     return [
       {
@@ -291,12 +292,12 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     ) {
       // Mark that we're updating to prevent duplicate calls
       isUpdatingCompletionRef.current = true;
-      
+
       // First collapse if expanded
       if (nextStepsOverlayExpanded) {
         setNextStepsOverlayExpanded(false);
       }
-      
+
       // Then hide completely and mark as completed in database after 3 seconds
       const timeoutId = setTimeout(async () => {
         try {
@@ -304,11 +305,11 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
           await api.galleries.update(gallery.galleryId, {
             nextStepsCompleted: true,
           });
-          
+
           // Invalidate all caches to ensure fresh data on next fetch
           const { invalidateAllGalleryCaches } = useGalleryStore.getState();
           invalidateAllGalleryCaches(gallery.galleryId);
-          
+
           // Manually update the gallery in the store to avoid triggering full fetch and events
           // This prevents infinite loops while still updating the UI immediately
           const { setCurrentGallery, currentGallery } = useGalleryStore.getState();
@@ -341,7 +342,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     setNextStepsOverlayExpanded,
     galleryCompletedSetup,
   ]);
-  
+
   // Reset update flag when gallery changes
   useEffect(() => {
     isUpdatingCompletionRef.current = false;
@@ -372,10 +373,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   // Hide if: gallery setup already completed, tutorial disabled, no gallery, loading, no steps, or in settings/publish view
   const isVisible =
     !galleryCompletedSetup &&
-    !shouldHide && 
-    tutorialDisabled !== true && 
-    !!gallery && 
-    !galleryLoading && 
+    !shouldHide &&
+    tutorialDisabled !== true &&
+    !!gallery &&
+    !galleryLoading &&
     steps.length > 0;
 
   // Check if gallery is paid for send step (only if gallery exists)
@@ -400,11 +401,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     if (gallery?.galleryId && isPaid) {
       try {
         await sendGalleryLinkToClient(gallery.galleryId);
-        showToast(
-          "success",
-          "Sukces",
-          "Link do galerii został wysłany do klienta"
-        );
+        showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
       } catch (err) {
         showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");
       }

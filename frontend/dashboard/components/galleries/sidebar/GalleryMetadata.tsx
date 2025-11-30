@@ -12,7 +12,7 @@ export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const isPaid = gallery?.isPaid ?? false;
-  
+
   if (isLoading || !gallery || shouldHideSecondaryElements) {
     return null;
   }

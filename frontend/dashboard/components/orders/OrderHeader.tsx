@@ -1,5 +1,7 @@
 import Link from "next/link";
+
 import Button from "../ui/button/Button";
+
 import { StatusBadges } from "./StatusBadges";
 
 interface OrderHeaderProps {
@@ -22,7 +24,9 @@ export function OrderHeader({
     orderNumber ??
     (orderIdFallback
       ? orderIdFallback.slice(-8)
-      : Array.isArray(galleryId) && galleryId[0] ? galleryId[0].slice(-8) : "");
+      : Array.isArray(galleryId) && galleryId[0]
+        ? galleryId[0].slice(-8)
+        : "");
 
   return (
     <div className="flex items-center justify-between">
@@ -42,4 +46,3 @@ export function OrderHeader({
     </div>
   );
 }
-
