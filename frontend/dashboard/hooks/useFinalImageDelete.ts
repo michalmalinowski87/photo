@@ -4,7 +4,6 @@ import api, { formatApiError } from "../lib/api-service";
 import {
   applyOptimisticUpdate,
   calculateSizeDelta,
-  revertOptimisticUpdate,
 } from "../lib/optimistic-updates";
 import { useGalleryStore } from "../store/gallerySlice";
 import { useOrderStore } from "../store/orderSlice";
@@ -61,35 +60,15 @@ export const useFinalImageDelete = ({
         return;
       }
 
-      // Mark image as being deleted
+      // Mark image as being deleted (keep it visible with deleting state)
       setDeletingImages((prev) => new Set(prev).add(imageKey));
 
-      // Optimistically remove image from local state immediately
-      setFinalImages((prevImages) =>
-        prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
-      );
+      // Don't remove image from list yet - keep it visible with "deleting" overlay
+      // Image will be removed after deletion completes and status/bytes are refreshed
 
-      // Get image size for optimistic update
+      // Get image size for optimistic update (will be applied after deletion succeeds)
       const imageSize = image.size ?? 0;
       const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
-
-      // Apply optimistic update immediately (before API call)
-      if (sizeDelta !== undefined && galleryIdStr) {
-        const currentFinalsBytes = useGalleryStore.getState().currentGallery?.finalsBytesUsed;
-        // eslint-disable-next-line no-console
-        console.log("[orderDetail.tsx] deleteImage - Before optimistic update", {
-          currentFinalsBytes,
-          sizeDelta,
-          expectedNewValue: (currentFinalsBytes ?? 0) + sizeDelta,
-        });
-        applyOptimisticUpdate({
-          type: "finals",
-          galleryId: galleryIdStr,
-          sizeDelta,
-          setOptimisticFinalsBytes,
-          logContext: "useFinalImageDelete deleteImage",
-        });
-      }
 
       try {
         await api.orders.deleteFinalImage(galleryIdStr, orderIdStr, imageKey);
@@ -105,67 +84,121 @@ export const useFinalImageDelete = ({
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
 
-        // Mark as successfully deleted to prevent reappearance
-        setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
+        // Poll for deletion completion - check when image is actually deleted from S3
+        // No optimistic update here - bytes will update only after S3 deletion is confirmed
+        // The "deleting" overlay provides user feedback during deletion
+        const pollForDeletion = async (): Promise<void> => {
+          // Small initial delay to give Lambda a moment to start processing
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Clear deleted key after 30 seconds to allow eventual consistency
-        setTimeout(() => {
-          setDeletedImageKeys((prev) => {
+          const maxAttempts = 30; // Max 30 seconds (1 second intervals)
+          const pollInterval = 1000; // Poll every 1 second
+          let attempts = 0;
+
+          while (attempts < maxAttempts) {
+            attempts++;
+
+            try {
+              // Check if image still exists in the API
+              const finalResponse = await api.orders.getFinalImages(galleryIdStr, orderIdStr);
+              const images = finalResponse.images ?? [];
+              const imageStillExists = images.some(
+                (img: GalleryImage) => (img.key ?? img.filename) === imageKey
+              );
+
+              if (!imageStillExists) {
+                // Image is gone from S3! Deletion is complete
+                // eslint-disable-next-line no-console
+                console.log(`[useFinalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`);
+                
+                // Now apply optimistic update since image is actually deleted from S3
+                if (sizeDelta !== undefined && galleryIdStr) {
+                  const currentFinalsBytes = useGalleryStore.getState().currentGallery?.finalsBytesUsed;
+                  // eslint-disable-next-line no-console
+                  console.log("[useFinalImageDelete] Applying optimistic update after S3 deletion confirmed", {
+                    currentFinalsBytes,
+                    sizeDelta,
+                    expectedNewValue: (currentFinalsBytes ?? 0) + sizeDelta,
+                  });
+                  applyOptimisticUpdate({
+                    type: "finals",
+                    galleryId: galleryIdStr,
+                    sizeDelta,
+                    setOptimisticFinalsBytes,
+                    logContext: "useFinalImageDelete deleteImage - after S3 deletion",
+                  });
+                }
+                
+                break;
+              }
+            } catch (pollErr) {
+              // If polling fails, log but continue (might be temporary network issue)
+              // eslint-disable-next-line no-console
+              console.warn("[useFinalImageDelete] Poll check failed, retrying...", pollErr);
+            }
+
+            // Wait before next poll attempt
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          }
+
+          if (attempts >= maxAttempts) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[useFinalImageDelete] Polling timed out after ${maxAttempts} attempts for ${imageKey}`
+            );
+          }
+
+          // Now that deletion is confirmed (or timed out), refresh bytes and status
+          const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+          await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
+
+          // Clear optimistic state after bytes are refreshed with actual values
+          setOptimisticFinalsBytes(null);
+
+          // Refresh order status to update delivery status
+          try {
+            await refreshOrderStatus(galleryIdStr, orderIdStr);
+          } catch (statusErr) {
+            // eslint-disable-next-line no-console
+            console.error(
+              "[STATUS_UPDATE] deleteImage - Failed to refresh order status",
+              statusErr
+            );
+          }
+
+          // Now that deletion is complete and bytes/status are refreshed, remove from UI
+          // Mark as successfully deleted to prevent reappearance
+          setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
+          
+          // Remove from deleting set
+          setDeletingImages((prev) => {
             const updated = new Set(prev);
             updated.delete(imageKey);
             return updated;
           });
-        }, 30000);
 
-        // Remove from deleting set and refresh bytes after async delete completes
-        setDeletingImages((prev) => {
-          const updated = new Set(prev);
-          updated.delete(imageKey);
-          // Refresh after every deletion (not just the last one) to catch status changes
-          if (prev.size > 0 && updated.size < prev.size) {
-            // Wait a bit for batch delete Lambda to process (async deletion)
-            setTimeout(async () => {
-              const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-              // Wait 2 seconds for batch delete Lambda to finish processing
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-              await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
+          // Remove image from list now that deletion is complete
+          setFinalImages((prevImages) =>
+            prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
+          );
 
-              // Refresh order status to update delivery status
-              try {
-                await refreshOrderStatus(galleryIdStr, orderIdStr);
-              } catch (statusErr) {
-                // eslint-disable-next-line no-console
-                console.error(
-                  "[STATUS_UPDATE] deleteImage - Failed to refresh order status",
-                  statusErr
-                );
-              }
-            }, 0);
-          }
-          return updated;
-        });
+          // Clear deleted key after 30 seconds to allow eventual consistency
+          setTimeout(() => {
+            setDeletedImageKeys((prev) => {
+              const updated = new Set(prev);
+              updated.delete(imageKey);
+              return updated;
+            });
+          }, 30000);
+        };
+
+        // Start polling for deletion completion (non-blocking)
+        void pollForDeletion();
 
         showToast("success", "Sukces", "Zdjęcie zostało usunięte");
       } catch (err) {
-        // Revert optimistic update on error
-        if (sizeDelta !== undefined && galleryIdStr) {
-          revertOptimisticUpdate({
-            type: "finals",
-            galleryId: galleryIdStr,
-            sizeDelta,
-            setOptimisticFinalsBytes,
-            logContext: "useFinalImageDelete deleteImage",
-          });
-        }
-
-        // On error, restore the image to the list (only if not in deletedImageKeys)
-        if (!deletedImageKeys.has(imageKey)) {
-          setFinalImages((prevImages) => {
-            const restored = [...prevImages];
-            restored.push(image);
-            return restored;
-          });
-        }
+        // On error, image is already in the list (we didn't remove it), just remove deleting state
+        // No optimistic update was applied yet, so no need to revert
 
         // Remove from deleting set
         setDeletingImages((prev) => {

@@ -21,6 +21,8 @@ export const normalizeSelectedKeys = (selectedKeys: unknown): string[] => {
 
 /**
  * Filter out deleted images from an array
+ * Note: Images in deletingImages are kept visible (to show deleting state),
+ * only images in deletedImageKeys (after successful deletion) are filtered out
  */
 export const filterDeletedImages = <T extends { key?: string; filename?: string }>(
   images: T[],
@@ -32,11 +34,8 @@ export const filterDeletedImages = <T extends { key?: string; filename?: string 
     if (!imgKey) {
       return false;
     }
-    // Skip if currently being deleted
-    if (deletingImages.has(imgKey)) {
-      return false;
-    }
-    // Skip if successfully deleted
+    // Keep images that are being deleted (they'll show a deleting overlay)
+    // Skip only if successfully deleted and removed from UI
     if (deletedImageKeys.has(imgKey)) {
       return false;
     }

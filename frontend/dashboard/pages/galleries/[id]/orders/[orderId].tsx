@@ -210,8 +210,31 @@ export default function OrderDetail() {
             deletedImageKeysRefForLoad.current
           );
 
-          // Set images directly - no placeholders
-          setFinalImages(validApiImages);
+          // Preserve images that are currently being deleted (they may not be in API response yet)
+          // Merge deleting images from current state to show deleting overlay
+          setFinalImages((currentImages) => {
+            const deletingImageKeys = Array.from(deletingImagesRefForLoad.current);
+            const currentDeletingImages = currentImages.filter((img) => {
+              const imgKey = img.key ?? img.filename;
+              return imgKey && deletingImageKeys.includes(imgKey);
+            });
+
+            // Create a map of valid API images by key for deduplication
+            const apiImagesMap = new Map(
+              validApiImages.map((img) => [img.key ?? img.filename, img])
+            );
+
+            // Add deleting images that aren't already in API response
+            currentDeletingImages.forEach((img) => {
+              const imgKey = img.key ?? img.filename;
+              if (imgKey && !apiImagesMap.has(imgKey)) {
+                apiImagesMap.set(imgKey, img);
+              }
+            });
+
+            // Return merged array (API images + preserved deleting images)
+            return Array.from(apiImagesMap.values());
+          });
         } catch (_err) {
           // Final images might not exist yet - set empty array
           setFinalImages([]);
@@ -285,10 +308,8 @@ export default function OrderDetail() {
   const {
     handleFileSelect,
     uploading,
-    uploadProgress,
     perImageProgress: handlerPerImageProgress,
     isUploadComplete,
-    cancelUpload,
   } = usePhotoUploadHandler({
     galleryId: galleryId as string,
     orderId: orderId as string,
@@ -316,10 +337,32 @@ export default function OrderDetail() {
         deletedImageKeysRef.current
       );
 
-      // Only update if we have valid images with URLs
-      if (validApiImages.length > 0) {
-        setFinalImages(validApiImages);
-      }
+      // Preserve images that are currently being deleted (they may not be in updated images yet)
+      setFinalImages((currentImages) => {
+        const deletingImageKeys = Array.from(deletingImagesRef.current);
+        const currentDeletingImages = currentImages.filter((img) => {
+          const imgKey = img.key ?? img.filename;
+          return imgKey && deletingImageKeys.includes(imgKey);
+        });
+
+        // Create a map of valid updated images by key for deduplication
+        const updatedImagesMap = new Map(
+          validApiImages.map((img) => [img.key ?? img.filename, img])
+        );
+
+        // Add deleting images that aren't already in updated images
+        currentDeletingImages.forEach((img) => {
+          const imgKey = img.key ?? img.filename;
+          if (imgKey && !updatedImagesMap.has(imgKey)) {
+            updatedImagesMap.set(imgKey, img);
+          }
+        });
+
+        // Return merged array (updated images + preserved deleting images)
+        const mergedImages = Array.from(updatedImagesMap.values());
+        // Only update if we have valid images
+        return mergedImages.length > 0 ? mergedImages : currentImages;
+      });
     },
     onUploadComplete: () => {
       // Reload final images from API after upload completes to ensure we have the latest data
@@ -711,12 +754,10 @@ export default function OrderDetail() {
           canUpload={canUploadFinals}
           isGalleryPaid={isGalleryPaid}
           uploading={uploading}
-          uploadProgress={uploadProgress}
           optimisticFinalsBytes={optimisticFinalsBytes}
           deletingImages={deletingImages}
           loading={loading}
           onFileSelect={handleFileSelect}
-          onCancelUpload={cancelUpload}
           onDeleteImage={handleDeleteFinalImageClick}
           onPayClick={handlePayClick}
           paymentLoading={paymentLoading}
