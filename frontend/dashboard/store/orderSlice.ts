@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import api from "../lib/api-service";
+import api, { formatApiError } from "../lib/api-service";
 
 export interface Order {
   orderId: string;
@@ -21,6 +21,9 @@ interface OrderState {
   orderCache: Record<string, { order: Order; timestamp: number }>;
   isLoading: boolean;
   error: string | null;
+  // Loading states for order actions
+  denyLoading: boolean;
+  cleanupLoading: boolean;
   setCurrentOrder: (order: Order | null) => void;
   setOrderList: (orders: Order[]) => void;
   setCurrentOrderId: (orderId: string | null) => void;
@@ -37,6 +40,16 @@ interface OrderState {
   clearCurrentOrder: () => void;
   clearOrderList: () => void;
   clearAll: () => void;
+  // Order action methods (moved from useOrderActions hook)
+  approveChangeRequest: (galleryId: string, orderId: string) => Promise<void>;
+  denyChangeRequest: (galleryId: string, orderId: string, reason?: string) => Promise<void>;
+  markOrderPaid: (galleryId: string, orderId: string) => Promise<void>;
+  downloadFinals: (galleryId: string, orderId: string) => Promise<void>;
+  sendFinalsToClient: (galleryId: string, orderId: string, shouldCleanup: boolean) => Promise<void>;
+  downloadZip: (galleryId: string, orderId: string) => Promise<void>;
+  // Computed selectors
+  hasFinals: (orderId: string) => boolean;
+  canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => boolean;
 }
 
 export const useOrderStore = create<OrderState>()(
@@ -49,6 +62,8 @@ export const useOrderStore = create<OrderState>()(
       orderCache: {},
       isLoading: false,
       error: null,
+      denyLoading: false,
+      cleanupLoading: false,
 
       setCurrentOrder: (order: Order | null) => {
         if (order) {
@@ -235,7 +250,421 @@ export const useOrderStore = create<OrderState>()(
           orderCache: {},
           isLoading: false,
           error: null,
+          denyLoading: false,
+          cleanupLoading: false,
         });
+      },
+
+      // Order action methods
+      approveChangeRequest: async (galleryId: string, orderId: string) => {
+        const state = get();
+        try {
+          await api.orders.approveChangeRequest(galleryId, orderId);
+
+          // Invalidate all caches to ensure fresh data on next fetch
+          state.invalidateOrderCache(orderId);
+          const { useGalleryStore } = await import("./gallerySlice");
+          useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
+          state.invalidateGalleryOrdersCache(galleryId);
+
+          // Show toast
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast(
+            "success",
+            "Sukces",
+            "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
+          );
+
+          // Reload order and gallery orders
+          await state.fetchOrder(galleryId, orderId, true);
+          const galleryStore = useGalleryStore.getState();
+          await galleryStore.fetchGalleryOrders(galleryId, true);
+        } catch (err) {
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast(
+            "error",
+            "Błąd",
+            formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
+          );
+        }
+      },
+
+      denyChangeRequest: async (galleryId: string, orderId: string, reason?: string) => {
+        const state = get();
+        set({ denyLoading: true });
+
+        try {
+          await api.orders.denyChangeRequest(galleryId, orderId, reason);
+
+          // Invalidate all caches to ensure fresh data on next fetch
+          state.invalidateOrderCache(orderId);
+          const { useGalleryStore } = await import("./gallerySlice");
+          useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
+          state.invalidateGalleryOrdersCache(galleryId);
+
+          // Show toast
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast(
+            "success",
+            "Sukces",
+            "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
+          );
+
+          // Reload order and gallery orders
+          await state.fetchOrder(galleryId, orderId, true);
+          const galleryStore = useGalleryStore.getState();
+          await galleryStore.fetchGalleryOrders(galleryId, true);
+        } catch (err) {
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast(
+            "error",
+            "Błąd",
+            formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany"
+          );
+        } finally {
+          set({ denyLoading: false });
+        }
+      },
+
+      markOrderPaid: async (galleryId: string, orderId: string) => {
+        const state = get();
+        try {
+          const response = await api.orders.markPaid(galleryId, orderId);
+          // Merge lightweight response into cached order instead of refetching
+          state.updateOrderFields(orderId, {
+            paymentStatus: response.paymentStatus,
+            paidAt: response.paidAt,
+          });
+          // Invalidate all caches to ensure fresh data on next fetch
+          const { useGalleryStore } = await import("./gallerySlice");
+          useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
+          state.invalidateGalleryOrdersCache(galleryId);
+
+          // Show toast
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
+        } catch (err) {
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
+        }
+      },
+
+      downloadFinals: async (galleryId: string, orderId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+        const { useDownloadStore } = await import("./downloadSlice");
+        const { addDownload, updateDownload, removeDownload } = useDownloadStore.getState();
+
+        // Start download progress indicator
+        const downloadId = `${galleryId}-${orderId}-${Date.now()}`;
+        addDownload(downloadId, {
+          orderId,
+          galleryId,
+          status: "generating",
+        });
+
+        const pollForZip = async (): Promise<void> => {
+          try {
+            // Get valid token (will refresh if needed)
+            const { getValidToken } = await import("../lib/api-service");
+            const idToken = await getValidToken();
+
+            const endpoint = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`;
+            const response = await fetch(endpoint, {
+              headers: { Authorization: `Bearer ${idToken}` },
+            });
+
+            // Handle 202 - ZIP is being generated
+            if (response.status === 202) {
+              updateDownload(downloadId, { status: "generating" });
+              setTimeout(() => {
+                pollForZip();
+              }, 2000);
+              return;
+            }
+
+            // Handle 200 - ZIP is ready
+            if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
+              updateDownload(downloadId, { status: "downloading" });
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+
+              const contentDisposition = response.headers.get("content-disposition");
+              let finalFilename = `order-${orderId}-finals.zip`;
+              if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(
+                  /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+                );
+                if (filenameMatch && filenameMatch[1]) {
+                  finalFilename = filenameMatch[1].replace(/['"]/g, "");
+                }
+              }
+
+              a.download = finalFilename;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+
+              updateDownload(downloadId, { status: "success" });
+              setTimeout(() => {
+                removeDownload(downloadId);
+              }, 3000);
+            } else if (response.ok) {
+              const data = await response.json();
+              if (data.zip) {
+                updateDownload(downloadId, { status: "downloading" });
+                const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
+                const blob = new Blob([zipBlob], { type: "application/zip" });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = data.filename || `order-${orderId}-finals.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                updateDownload(downloadId, { status: "success" });
+                setTimeout(() => {
+                  removeDownload(downloadId);
+                }, 3000);
+              } else {
+                const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
+                updateDownload(downloadId, { status: "error", error: errorMsg });
+              }
+            } else {
+              const errorData = await response.json().catch(() => ({
+                error: "Nie udało się pobrać pliku ZIP",
+              }));
+              updateDownload(downloadId, {
+                status: "error",
+                error: errorData.error || "Nie udało się pobrać pliku ZIP",
+              });
+            }
+          } catch (err) {
+            const errorMsg = formatApiError(err);
+            updateDownload(downloadId, { status: "error", error: errorMsg });
+          }
+        };
+
+        pollForZip();
+      },
+
+      sendFinalsToClient: async (galleryId: string, orderId: string, shouldCleanup: boolean) => {
+        const state = get();
+        set({ cleanupLoading: true });
+
+        try {
+          const response = await api.orders.sendFinalLink(galleryId, orderId);
+
+          // If user confirmed cleanup, call cleanup endpoint
+          if (shouldCleanup) {
+            try {
+              await api.orders.cleanupOriginals(galleryId, orderId);
+              // Invalidate all caches after cleanup (deletes originals)
+              const { useGalleryStore } = await import("./gallerySlice");
+              useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
+
+              const { useToastStore } = await import("./toastSlice");
+              useToastStore.getState().showToast(
+                "success",
+                "Sukces",
+                "Link do zdjęć finalnych został wysłany do klienta. Oryginały zostały usunięte."
+              );
+            } catch (cleanupErr: unknown) {
+              // If cleanup fails, still show success for sending link, but warn about cleanup
+              const { useToastStore } = await import("./toastSlice");
+              useToastStore.getState().showToast(
+                "success",
+                "Sukces",
+                "Link do zdjęć finalnych został wysłany do klienta. Nie udało się usunąć oryginałów."
+              );
+              console.error("Failed to cleanup originals after sending final link", cleanupErr);
+            }
+          } else {
+            const { useToastStore } = await import("./toastSlice");
+            useToastStore.getState().showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
+          }
+
+          // Merge lightweight response into cached order instead of refetching
+          state.updateOrderFields(orderId, {
+            deliveryStatus: "DELIVERED",
+            deliveredAt: response.deliveredAt,
+          });
+          // Invalidate all caches to ensure fresh data on next fetch
+          const { useGalleryStore } = await import("./gallerySlice");
+          useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
+          state.invalidateGalleryOrdersCache(galleryId);
+        } catch (err) {
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
+        } finally {
+          set({ cleanupLoading: false });
+        }
+      },
+
+      downloadZip: async (galleryId: string, orderId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+        const { useDownloadStore } = await import("./downloadSlice");
+        const { addDownload, updateDownload, removeDownload } = useDownloadStore.getState();
+
+        // Start download progress indicator
+        const downloadId = `${galleryId}-${orderId}-${Date.now()}`;
+        addDownload(downloadId, {
+          orderId,
+          galleryId,
+          status: "generating",
+        });
+
+        const pollForZip = async (): Promise<void> => {
+          try {
+            // Get valid token (will refresh if needed)
+            const { getValidToken } = await import("../lib/api-service");
+            const idToken = await getValidToken();
+
+            const endpoint = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
+            const response = await fetch(endpoint, {
+              headers: { Authorization: `Bearer ${idToken}` },
+            });
+
+            // Handle 202 - ZIP is being generated
+            if (response.status === 202) {
+              updateDownload(downloadId, { status: "generating" });
+              setTimeout(() => {
+                pollForZip();
+              }, 2000);
+              return;
+            }
+
+            // Handle 200 - ZIP is ready
+            if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
+              updateDownload(downloadId, { status: "downloading" });
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+
+              const contentDisposition = response.headers.get("content-disposition");
+              let finalFilename = `${orderId}.zip`;
+              if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(
+                  /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+                );
+                if (filenameMatch && filenameMatch[1]) {
+                  finalFilename = filenameMatch[1].replace(/['"]/g, "");
+                }
+              }
+
+              a.download = finalFilename;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+
+              updateDownload(downloadId, { status: "success" });
+              setTimeout(() => {
+                removeDownload(downloadId);
+              }, 3000);
+            } else if (response.ok) {
+              const data = await response.json();
+              if (data.zip) {
+                updateDownload(downloadId, { status: "downloading" });
+                const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
+                const blob = new Blob([zipBlob], { type: "application/zip" });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = data.filename || `${orderId}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                updateDownload(downloadId, { status: "success" });
+                setTimeout(() => {
+                  removeDownload(downloadId);
+                }, 3000);
+              } else {
+                const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
+                updateDownload(downloadId, { status: "error", error: errorMsg });
+              }
+            } else {
+              const errorData = await response.json().catch(() => ({
+                error: "Nie udało się pobrać pliku ZIP",
+              }));
+              updateDownload(downloadId, {
+                status: "error",
+                error: errorData.error || "Nie udało się pobrać pliku ZIP",
+              });
+            }
+          } catch (err) {
+            const errorMsg = formatApiError(err);
+            updateDownload(downloadId, { status: "error", error: errorMsg });
+          }
+        };
+
+        pollForZip();
+      },
+
+      // Computed selectors
+      hasFinals: (orderId: string) => {
+        const state = get();
+        // Check if this is the current order
+        if (state.currentOrderId !== orderId) {
+          // Try cache
+          const cached = state.orderCache[orderId];
+          if (!cached) {
+            return false;
+          }
+          const order = cached.order;
+          return (
+            order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+            order.deliveryStatus === "PREPARING_DELIVERY" ||
+            order.deliveryStatus === "DELIVERED"
+          );
+        }
+        // Use current order
+        const order = state.currentOrder;
+        if (!order) {
+          return false;
+        }
+        return (
+          order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+          order.deliveryStatus === "PREPARING_DELIVERY" ||
+          order.deliveryStatus === "DELIVERED"
+        );
+      },
+
+      canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => {
+        const state = get();
+        const selectionEnabled = gallerySelectionEnabled !== false;
+        
+        // Check if this is the current order
+        if (state.currentOrderId !== orderId) {
+          // Try cache
+          const cached = state.orderCache[orderId];
+          if (!cached) {
+            return false;
+          }
+          const order = cached.order;
+          return (
+            selectionEnabled &&
+            (order.deliveryStatus === "CLIENT_APPROVED" ||
+              order.deliveryStatus === "AWAITING_FINAL_PHOTOS")
+          );
+        }
+        // Use current order
+        const order = state.currentOrder;
+        if (!order) {
+          return false;
+        }
+        return (
+          selectionEnabled &&
+          (order.deliveryStatus === "CLIENT_APPROVED" ||
+            order.deliveryStatus === "AWAITING_FINAL_PHOTOS")
+        );
       },
     }),
     { name: "OrderStore" }

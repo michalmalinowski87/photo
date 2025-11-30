@@ -9,13 +9,16 @@ interface GalleryMetadataProps {
 export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
   shouldHideSecondaryElements,
 }) => {
+  // Defensive check: subscribe to store and check if data is loaded
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
-  const isPaid = gallery?.isPaid ?? false;
-
+  
+  // Don't render until gallery data is loaded
   if (isLoading || !gallery || shouldHideSecondaryElements) {
     return null;
   }
+
+  const isPaid = gallery?.isPaid ?? false;
 
   // Calculate expiry date
   const getExpiryDate = (): Date | null => {

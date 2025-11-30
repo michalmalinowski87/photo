@@ -17,7 +17,6 @@ import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUpload
 import type { PerImageProgress } from "../../../../components/upload/UploadProgressOverlay";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
-import { useOrderActions } from "../../../../hooks/useOrderActions";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
 import { useOrderStatusRefresh } from "../../../../hooks/useOrderStatusRefresh";
 import { useToast } from "../../../../hooks/useToast";
@@ -77,7 +76,6 @@ export default function OrderDetail() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
-  const [denyLoading, setDenyLoading] = useState<boolean>(false);
   const [originalImages, setOriginalImages] = useState<GalleryImage[]>([]);
   const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
   const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
@@ -184,9 +182,19 @@ export default function OrderDetail() {
           }
         }
 
-        // Preserve current gallery state - don't overwrite with stale data
-        // Only update if we don't have gallery data yet
-        if (!gallery && currentGallery?.galleryId === galleryId) {
+        // Ensure gallery is in store for sidebar to display correctly
+        // Update store if gallery is missing or galleryId changed
+        if (currentGallery?.galleryId !== galleryId) {
+          // Gallery not in store or wrong gallery - try to fetch it
+          const { fetchGallery } = useGalleryStore.getState();
+          void fetchGallery(galleryId as string, false).then((fetchedGallery) => {
+            if (fetchedGallery) {
+              // Update local state for this component
+              setGallery(fetchedGallery);
+            }
+          });
+        } else if (!gallery) {
+          // Gallery is in store but not in local state - use store value
           setGallery(currentGallery);
         }
 
@@ -612,34 +620,40 @@ export default function OrderDetail() {
     }
   };
 
-  const {
-    handleApproveChangeRequest,
-    handleDenyChangeRequest: handleDenyChangeRequestAction,
-    handleDenyConfirm: handleDenyConfirmAction,
-  } = useOrderActions({
-    galleryId,
-    orderId,
-    gallery,
-    loadOrderData: () => loadOrderData(true),
-    loadGalleryOrders: async () => {
+  // Use store actions directly
+  const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
+  const denyChangeRequest = useOrderStore((state) => state.denyChangeRequest);
+  const denyLoading = useOrderStore((state) => state.denyLoading);
+
+  const handleApproveChangeRequest = useCallback(async () => {
+    if (!galleryId || !orderId) {
+      return;
+    }
+    await approveChangeRequest(galleryId as string, orderId as string);
+    await loadOrderData(true);
+    if (reloadGallery) {
+      await reloadGallery();
+    }
+  }, [galleryId, orderId, approveChangeRequest, loadOrderData, reloadGallery]);
+
+  const handleDenyChangeRequest = useCallback(() => {
+    setDenyModalOpen(true);
+  }, []);
+
+  const handleDenyConfirm = useCallback(
+    async (reason?: string) => {
+      if (!galleryId || !orderId) {
+        return;
+      }
+      await denyChangeRequest(galleryId as string, orderId as string, reason);
+      setDenyModalOpen(false);
+      await loadOrderData(true);
       if (reloadGallery) {
         await reloadGallery();
       }
     },
-    openDenyModal: () => setDenyModalOpen(true),
-    closeDenyModal: () => setDenyModalOpen(false),
-    setDenyLoading,
-    openCleanupModal: () => {}, // Not used in this component
-    closeCleanupModal: () => {}, // Not used in this component
-  });
-
-  const handleDenyChangeRequest = (): void => {
-    handleDenyChangeRequestAction();
-  };
-
-  const handleDenyConfirm = async (reason?: string): Promise<void> => {
-    await handleDenyConfirmAction(reason);
-  };
+    [galleryId, orderId, denyChangeRequest, loadOrderData, reloadGallery]
+  );
 
   if (loading && !order) {
     return <FullPageLoading text="Ładowanie zlecenia..." />;
@@ -696,14 +710,7 @@ export default function OrderDetail() {
 
   return (
     <div className="space-y-6">
-      <OrderHeader
-        galleryId={galleryId}
-        orderId={orderId}
-        orderNumber={order.orderNumber}
-        orderIdFallback={order.orderId}
-        deliveryStatus={order.deliveryStatus}
-        paymentStatus={order.paymentStatus}
-      />
+      <OrderHeader />
 
       {error && (
         <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -719,10 +726,6 @@ export default function OrderDetail() {
       )}
 
       <OrderInfoCard
-        totalCents={order.totalCents ?? 0}
-        createdAt={order.createdAt}
-        selectedKeysCount={selectedKeys.length}
-        selectionEnabled={selectionEnabled}
         isEditingAmount={isEditingAmount}
         editingAmountValue={editingAmountValue}
         savingAmount={savingAmount}
@@ -736,7 +739,6 @@ export default function OrderDetail() {
         <OrderTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          originalsCount={selectedKeys.length}
           finalsCount={finalImages.length}
         />
       )}

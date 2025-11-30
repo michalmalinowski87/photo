@@ -20,6 +20,13 @@ export interface Gallery {
   [key: string]: any;
 }
 
+export interface GalleryOrder {
+  orderId?: string;
+  galleryId?: string;
+  deliveryStatus?: string;
+  [key: string]: unknown;
+}
+
 interface GalleryState {
   currentGallery: Gallery | null;
   galleryList: Gallery[];
@@ -42,6 +49,11 @@ interface GalleryState {
   };
   isLoading: boolean;
   error: string | null;
+  // Additional state moved from local component state
+  galleryOrders: GalleryOrder[]; // Current gallery's orders list
+  hasDeliveredOrders: boolean | undefined;
+  galleryUrl: string;
+  sendLinkLoading: boolean;
   setCurrentGallery: (gallery: Gallery | null) => void;
   setGalleryList: (galleries: Gallery[]) => void;
   setCurrentGalleryId: (galleryId: string | null) => void;
@@ -86,6 +98,14 @@ interface GalleryState {
     galleryId?: string | null,
     state?: { duration?: string; planKey?: string } | null
   ) => void;
+  // Additional actions moved from hooks/components
+  setGalleryOrders: (orders: GalleryOrder[]) => void;
+  setHasDeliveredOrders: (has: boolean | undefined) => void;
+  setGalleryUrl: (url: string) => void;
+  setSendLinkLoading: (loading: boolean) => void;
+  checkDeliveredOrders: (galleryId: string) => Promise<void>;
+  copyGalleryUrl: (galleryId: string) => void;
+  reloadGallery: (galleryId: string, forceRefresh?: boolean) => Promise<void>;
 }
 
 // Debouncing removed - refreshGalleryBytesOnly is now called explicitly when needed
@@ -103,6 +123,10 @@ export const useGalleryStore = create<GalleryState>()(
       filters: {},
       isLoading: false,
       error: null,
+      galleryOrders: [],
+      hasDeliveredOrders: undefined,
+      galleryUrl: "",
+      sendLinkLoading: false,
 
       setCurrentGallery: (gallery: Gallery | null) => {
         set({
@@ -392,6 +416,15 @@ export const useGalleryStore = create<GalleryState>()(
         if (!forceRefresh) {
           const cached = state.getGalleryOrders(galleryId);
           if (cached) {
+            // Update galleryOrders state from cache
+            const typedOrders: GalleryOrder[] = cached.filter(
+              (order): order is GalleryOrder =>
+                typeof order === "object" &&
+                order !== null &&
+                "orderId" in order &&
+                typeof (order as { orderId?: unknown }).orderId === "string"
+            );
+            set({ galleryOrders: typedOrders });
             return cached;
           }
         }
@@ -400,32 +433,51 @@ export const useGalleryStore = create<GalleryState>()(
           const response = await api.orders.getByGallery(galleryId);
           const orders = (response.items ?? []) as any[];
           state.setGalleryOrders(galleryId, orders);
+          // Update galleryOrders state
+          const typedOrders: GalleryOrder[] = orders.filter(
+            (order): order is GalleryOrder =>
+              typeof order === "object" &&
+              order !== null &&
+              "orderId" in order &&
+              typeof (order as { orderId?: unknown }).orderId === "string"
+          );
+          set({ galleryOrders: typedOrders });
           return orders;
         } catch (err) {
           // Return empty array on error instead of throwing
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
+          set({ galleryOrders: [] });
           return [];
         }
       },
 
       sendGalleryLinkToClient: async (galleryId: string) => {
+        set({ sendLinkLoading: true });
         try {
           const response = await api.galleries.sendToClient(galleryId);
           const isReminder = response.isReminder ?? false;
 
-          // Invalidate all caches to ensure fresh data on next fetch
-          get().invalidateAllGalleryCaches(galleryId);
-
-          // Always reload orders to get updated status (for both initial and reminders)
-          await get().fetchGalleryOrders(galleryId, true);
-
-          // Only reload gallery data if it's an initial invitation (creates order), not for reminders
-          if (!isReminder) {
-            await get().fetchGallery(galleryId, true);
+          // Optimize cache invalidation: only invalidate what actually changed
+          if (isReminder) {
+            // For reminders: nothing changed (just sent an email), so no cache invalidation or fetching needed
+            // The orders list is still valid - no new order was created, no data changed
+            // UI will update via the isReminder response to show appropriate message
+          } else {
+            // For initial invitations: a new order was created, so invalidate orders cache
+            const { useOrderStore } = await import("./orderSlice");
+            useOrderStore.getState().invalidateGalleryOrdersCache(galleryId);
+            get().invalidateGalleryOrdersCache(galleryId);
+            
+            // Fetch fresh orders (will fetch since cache was invalidated)
+            await get().fetchGalleryOrders(galleryId, false);
+            
+            // Gallery data hasn't changed (just order creation), so no need to invalidate/fetch gallery cache
           }
 
+          set({ sendLinkLoading: false });
           return { isReminder };
         } catch (err) {
+          set({ sendLinkLoading: false });
           console.error("[GalleryStore] Failed to send gallery link:", err);
           throw err;
         }
@@ -584,6 +636,10 @@ export const useGalleryStore = create<GalleryState>()(
           filters: {},
           isLoading: false,
           error: null,
+          galleryOrders: [],
+          hasDeliveredOrders: undefined,
+          galleryUrl: "",
+          sendLinkLoading: false,
         });
       },
 
@@ -606,6 +662,54 @@ export const useGalleryStore = create<GalleryState>()(
           publishWizardGalleryId: open ? (galleryId ?? null) : null,
           publishWizardState: open ? (state ?? null) : null,
         });
+      },
+
+      // Additional actions
+      setGalleryOrders: (orders: GalleryOrder[]) => {
+        set({ galleryOrders: orders });
+      },
+
+      setHasDeliveredOrders: (has: boolean | undefined) => {
+        set({ hasDeliveredOrders: has });
+      },
+
+      setGalleryUrl: (url: string) => {
+        set({ galleryUrl: url });
+      },
+
+      setSendLinkLoading: (loading: boolean) => {
+        set({ sendLinkLoading: loading });
+      },
+
+      checkDeliveredOrders: async (galleryId: string) => {
+        try {
+          const response = await api.galleries.checkDeliveredOrders(galleryId);
+          const items = response.items ?? [];
+          set({ hasDeliveredOrders: Array.isArray(items) && items.length > 0 });
+        } catch (_err) {
+          set({ hasDeliveredOrders: false });
+        }
+      },
+
+      copyGalleryUrl: (galleryId: string) => {
+        const state = get();
+        const url =
+          state.galleryUrl ||
+          (typeof window !== "undefined"
+            ? `${window.location.origin}/gallery/${galleryId}`
+            : "");
+        if (typeof window !== "undefined" && url) {
+          void navigator.clipboard.writeText(url).catch(() => {
+            // Ignore clipboard errors
+          });
+        }
+      },
+
+      reloadGallery: async (galleryId: string, forceRefresh = false) => {
+        const state = get();
+        await state.fetchGallery(galleryId, forceRefresh);
+        await state.fetchGalleryOrders(galleryId, forceRefresh);
+        await state.checkDeliveredOrders(galleryId);
       },
     }),
     { name: "GalleryStore" }

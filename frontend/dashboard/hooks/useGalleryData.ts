@@ -1,40 +1,26 @@
 import { useCallback } from "react";
 
-import api, { formatApiError } from "../lib/api-service";
+import { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store/gallerySlice";
 import { useToast } from "./useToast";
 
-interface Order {
-  orderId?: string;
-  galleryId?: string;
-  deliveryStatus?: string;
-  [key: string]: unknown;
-}
-
 interface UseGalleryDataOptions {
-  apiUrl?: string; // Deprecated - kept for backward compatibility but not used
-  idToken?: string; // Deprecated - kept for backward compatibility but not used
   galleryId: string | string[] | undefined;
-  setGalleryUrl: (url: string) => void;
-  setGalleryOrdersLocal: (orders: Order[]) => void;
-  setHasDeliveredOrders: (hasDelivered: boolean) => void;
 }
 
-export const useGalleryData = ({
-  apiUrl,
-  idToken,
-  galleryId,
-  setGalleryUrl,
-  setGalleryOrdersLocal,
-  setHasDeliveredOrders,
-}: UseGalleryDataOptions) => {
+/**
+ * Simplified hook that calls store actions directly
+ * All state is managed in the store, no local state setters needed
+ */
+export const useGalleryData = ({ galleryId }: UseGalleryDataOptions) => {
   const { showToast } = useToast();
   const {
-    currentGallery: gallery,
     setLoading,
     setError,
     fetchGallery,
     fetchGalleryOrders,
+    checkDeliveredOrders: checkDeliveredOrdersAction,
+    setGalleryUrl,
   } = useGalleryStore();
 
   const loadGalleryData = useCallback(
@@ -50,8 +36,6 @@ export const useGalleryData = ({
         return;
       }
 
-      // Always fetch fresh - no cache
-
       if (!silent) {
         setLoading(true);
         setError(null);
@@ -61,6 +45,7 @@ export const useGalleryData = ({
         // Use store action - checks cache first, fetches if needed
         await fetchGallery(galleryId as string, forceRefresh);
 
+        // Update gallery URL in store
         setGalleryUrl(
           typeof window !== "undefined"
             ? `${window.location.origin}/gallery/${galleryId as string}`
@@ -80,7 +65,7 @@ export const useGalleryData = ({
         }
       }
     },
-    [galleryId, gallery, setLoading, setError, fetchGallery, showToast, setGalleryUrl]
+    [galleryId, setLoading, setError, fetchGallery, showToast, setGalleryUrl]
   );
 
   const loadGalleryOrders = useCallback(
@@ -91,36 +76,22 @@ export const useGalleryData = ({
 
       try {
         // Use store action - checks cache first, fetches if needed
-        const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
-
-        // Type guard to ensure orders match Order interface
-        const typedOrders: Order[] = orders.filter(
-          (order): order is Order =>
-            typeof order === "object" &&
-            order !== null &&
-            "orderId" in order &&
-            typeof (order as { orderId?: unknown }).orderId === "string"
-        );
-        setGalleryOrdersLocal(typedOrders);
+        // Store action automatically updates galleryOrders state
+        await fetchGalleryOrders(galleryId as string, forceRefresh);
       } catch (_err) {
-        setGalleryOrdersLocal([]);
+        // Store action handles errors internally
       }
     },
-    [galleryId, fetchGalleryOrders, setGalleryOrdersLocal]
+    [galleryId, fetchGalleryOrders]
   );
 
   const checkDeliveredOrders = useCallback(async () => {
     if (!galleryId) {
       return;
     }
-    try {
-      const response = await api.galleries.checkDeliveredOrders(galleryId as string);
-      const items = response.items ?? [];
-      setHasDeliveredOrders(Array.isArray(items) && items.length > 0);
-    } catch (_err) {
-      setHasDeliveredOrders(false);
-    }
-  }, [galleryId, setHasDeliveredOrders]);
+    // Use store action - updates hasDeliveredOrders state automatically
+    await checkDeliveredOrdersAction(galleryId as string);
+  }, [galleryId, checkDeliveredOrdersAction]);
 
   return {
     loadGalleryData,

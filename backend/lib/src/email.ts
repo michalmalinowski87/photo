@@ -120,9 +120,9 @@ export function createGalleryPasswordEmail(galleryId: string, galleryName: strin
 
 export function createGalleryReminderEmail(galleryId: string, galleryName: string, clientEmail: string, link: string): EmailTemplate {
 	return {
-		subject: `Reminder: Access your gallery - ${galleryName || galleryId}`,
-		text: `Hello,\n\nThis is a reminder that your gallery ${galleryName || galleryId} is still available for viewing.\n\nAccess your gallery: ${link}\n\nYour gallery password will be sent to you in a separate email for security reasons.\n\nIf you have any questions, please contact your photographer.`,
-		html: `<h2>Gallery Reminder</h2><p>This is a reminder that your gallery <strong>${galleryName || galleryId}</strong> is still available for viewing.</p><p><a href="${link}">Access your gallery</a></p><p><strong>Important:</strong> Your gallery password will be sent to you in a separate email for security reasons.</p><p>If you have any questions, please contact your photographer.</p>`
+		subject: `Przypomnienie: Dostęp do Twojej galerii - ${galleryName || galleryId}`,
+		text: `Witaj,\n\nTo przypomnienie, że Twoja galeria ${galleryName || galleryId} jest nadal dostępna do przeglądania.\n\nDostęp do galerii: ${link}\n\nHasło do galerii zostanie wysłane w osobnej wiadomości e-mail ze względów bezpieczeństwa.\n\nJeśli masz pytania, skontaktuj się ze swoim fotografem.`,
+		html: `<h2>Przypomnienie o galerii</h2><p>To przypomnienie, że Twoja galeria <strong>${galleryName || galleryId}</strong> jest nadal dostępna do przeglądania.</p><p><a href="${link}">Dostęp do galerii</a></p><p><strong>Ważne:</strong> Hasło do galerii zostanie wysłane w osobnej wiadomości e-mail ze względów bezpieczeństwa.</p><p>Jeśli masz pytania, skontaktuj się ze swoim fotografem.</p>`
 	};
 }
 

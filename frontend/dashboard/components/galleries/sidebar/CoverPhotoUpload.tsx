@@ -182,27 +182,34 @@ export const CoverPhotoUpload: React.FC = () => {
     setIsDragging(false);
   };
 
-  if (isLoading || !gallery) {
-    return null;
-  }
-
   return (
     <div className="py-4 border-b border-gray-200 dark:border-gray-800">
       <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
       <div
-        className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
-          isDragging
-            ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-            : coverPhotoUrl
-              ? "border-gray-200 dark:border-gray-700"
-              : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+        className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors ${
+          isLoading || !gallery
+            ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
+            : `cursor-pointer ${
+                isDragging
+                  ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
+                  : coverPhotoUrl
+                    ? "border-gray-200 dark:border-gray-700"
+                    : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+              }`
         }`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
+        onDrop={isLoading || !gallery ? undefined : handleDrop}
+        onDragOver={isLoading || !gallery ? undefined : handleDragOver}
+        onDragLeave={isLoading || !gallery ? undefined : handleDragLeave}
+        onClick={isLoading || !gallery ? undefined : () => fileInputRef.current?.click()}
       >
-        {coverPhotoUrl ? (
+        {isLoading || !gallery ? (
+          <div className="w-full h-full flex flex-col items-center justify-center">
+            <div className="animate-pulse">
+              <div className="w-12 h-12 bg-gray-300 dark:bg-gray-600 rounded-lg mb-2"></div>
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Ładowanie...</div>
+          </div>
+        ) : coverPhotoUrl ? (
           <>
             <RetryableImage
               src={coverPhotoUrl}

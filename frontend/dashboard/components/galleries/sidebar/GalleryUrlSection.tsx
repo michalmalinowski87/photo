@@ -22,7 +22,12 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const isLoading = useGalleryStore((state) => state.isLoading);
   const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
-  // Subscribe to galleryOrdersCache to trigger re-render when orders are updated
+  const sendLinkLoading = useGalleryStore((state) => state.sendLinkLoading);
+  const galleryUrl = useGalleryStore((state) => state.galleryUrl);
+  const copyGalleryUrl = useGalleryStore((state) => state.copyGalleryUrl);
+  // Subscribe to galleryOrders state (always current for the current gallery)
+  const galleryOrdersState = useGalleryStore((state) => state.galleryOrders);
+  // Also subscribe to cache entry to trigger re-render when cache is updated
   const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryIdStr ? state.galleryOrdersCache[galleryIdStr] : null
   );
@@ -31,27 +36,26 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
-  const [sendLinkLoading, setSendLinkLoading] = useState(false);
 
-  // Compute gallery URL from galleryId
-  const galleryUrl =
-    typeof window !== "undefined" && galleryIdStr
+  // Use galleryUrl from store, fallback to computed if not set
+  const displayGalleryUrl =
+    galleryUrl ||
+    (typeof window !== "undefined" && galleryIdStr
       ? `${window.location.origin}/gallery/${galleryIdStr}`
-      : "";
+      : "");
 
   const isPaid = gallery?.isPaid ?? false;
   const hasPhotos = (gallery?.originalsBytesUsed ?? 0) > 0;
   const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
 
-  if (!galleryUrl || shouldHideSecondaryElements) {
+  // Defensive check: don't render if no gallery URL or should hide
+  if (!displayGalleryUrl || shouldHideSecondaryElements) {
     return null;
   }
 
   const handleCopyClick = () => {
-    if (typeof window !== "undefined" && galleryUrl) {
-      void navigator.clipboard.writeText(galleryUrl).catch(() => {
-        // Ignore clipboard errors
-      });
+    if (galleryIdStr) {
+      copyGalleryUrl(galleryIdStr);
       setUrlCopied(true);
       setTimeout(() => {
         setUrlCopied(false);
@@ -71,8 +75,6 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       return;
     }
 
-    setSendLinkLoading(true);
-
     try {
       const result = await sendGalleryLinkToClient(galleryIdStr);
 
@@ -85,17 +87,18 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       );
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
-    } finally {
-      setSendLinkLoading(false);
     }
   };
 
-  // Get gallery orders from store (use cache entry directly to trigger re-render)
-  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry
-    ? Date.now() - galleryOrdersCacheEntry.timestamp < 30000
+  // Get gallery orders - use cache entry if available (it's kept fresh by fetchGalleryOrders)
+  // The cache is invalidated and refetched when sendGalleryLinkToClient is called, so it should be current
+  // We check both the cache entry (for reactivity) and the state (as fallback)
+  const galleryOrders: unknown[] | null =
+    galleryOrdersCacheEntry
       ? (galleryOrdersCacheEntry.orders as unknown[])
-      : null
-    : null;
+      : galleryOrdersState && Array.isArray(galleryOrdersState) && galleryOrdersState.length > 0
+        ? (galleryOrdersState as unknown[])
+        : null;
 
   // Check if gallery has a CLIENT_SELECTING order
   const hasClientSelectingOrder =
@@ -130,7 +133,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     <div className="py-4 border-b border-gray-200 dark:border-gray-800">
       <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Adres www galerii:</div>
       <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs break-all text-blue-600 dark:text-blue-400 mb-2">
-        {galleryUrl}
+        {displayGalleryUrl}
       </div>
       <Button
         variant="outline"

@@ -233,11 +233,18 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       return;
     }
 
+    // Match the same visibility logic as isVisible to ensure consistency
     const shouldBeVisible =
-      !shouldHide && tutorialDisabled !== true && !!gallery && !galleryLoading && steps.length > 0;
+      !galleryCompletedSetup &&
+      !shouldHide &&
+      tutorialDisabled !== true &&
+      !!gallery &&
+      !galleryLoading &&
+      steps.length > 0;
     overlayContext.setNextStepsVisible(Boolean(shouldBeVisible));
     overlayContext.setNextStepsExpanded(Boolean(nextStepsOverlayExpanded));
   }, [
+    galleryCompletedSetup,
     tutorialDisabled,
     gallery,
     galleryLoading,

@@ -1,11 +1,25 @@
+import { useOrderStore } from "../../store/orderSlice";
+import { normalizeSelectedKeys } from "../../lib/order-utils";
+
 interface OrderTabsProps {
   activeTab: "originals" | "finals";
   onTabChange: (tab: "originals" | "finals") => void;
-  originalsCount: number;
-  finalsCount: number;
+  finalsCount: number; // Page-specific state, keep as prop
 }
 
-export function OrderTabs({ activeTab, onTabChange, originalsCount, finalsCount }: OrderTabsProps) {
+export function OrderTabs({ activeTab, onTabChange, finalsCount }: OrderTabsProps) {
+  // Get order from store to calculate originals count
+  const order = useOrderStore((state) => state.currentOrder);
+  
+  // Defensive check: don't render until order is loaded
+  if (!order) {
+    return null;
+  }
+
+  // Calculate originals count from order.selectedKeys
+  const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
+  const originalsCount = selectedKeys.length;
+
   return (
     <div className="border-b border-gray-200 dark:border-gray-700">
       <div className="flex gap-4">

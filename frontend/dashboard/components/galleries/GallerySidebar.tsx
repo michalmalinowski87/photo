@@ -12,34 +12,13 @@ import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
 
-interface GallerySidebarProps {
-  orderId?: string;
-  onDownloadZip?: () => void;
-  canDownloadZip?: boolean;
-  onMarkOrderPaid?: () => void;
-  onDownloadFinals?: () => void;
-  onSendFinalsToClient?: () => void;
-  onApproveChangeRequest?: () => void;
-  onDenyChangeRequest?: () => void;
-  hasFinals?: boolean;
-}
-
-export default function GallerySidebar({
-  orderId: orderIdProp,
-  onDownloadZip,
-  canDownloadZip,
-  onMarkOrderPaid,
-  onDownloadFinals,
-  onSendFinalsToClient,
-  onApproveChangeRequest,
-  onDenyChangeRequest,
-  hasFinals,
-}: GallerySidebarProps) {
+export default function GallerySidebar() {
   const router = useRouter();
   const { orderId: orderIdFromQuery } = router.query;
-  // Use prop if provided, otherwise fall back to query param
-  const orderId: string | undefined =
-    orderIdProp ?? (Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : orderIdFromQuery);
+  // Get orderId from query param
+  const orderId: string | undefined = Array.isArray(orderIdFromQuery)
+    ? orderIdFromQuery[0]
+    : orderIdFromQuery;
 
   // Subscribe directly to store - no props needed
   const gallery = useGalleryStore((state) => state.currentGallery);
@@ -139,19 +118,7 @@ export default function GallerySidebar({
 
       <GalleryNavigation />
 
-      {orderId && order && (
-        <OrderActionsSection
-          orderId={orderId}
-          onDownloadZip={onDownloadZip}
-          canDownloadZip={canDownloadZip}
-          onMarkOrderPaid={onMarkOrderPaid}
-          onDownloadFinals={onDownloadFinals}
-          onSendFinalsToClient={onSendFinalsToClient}
-          onApproveChangeRequest={onApproveChangeRequest}
-          onDenyChangeRequest={onDenyChangeRequest}
-          hasFinals={hasFinals}
-        />
-      )}
+      {orderId && order && <OrderActionsSection orderId={orderId} />}
 
       <DeleteGalleryButton
         galleryId={gallery?.galleryId ?? ""}

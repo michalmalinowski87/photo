@@ -1,12 +1,11 @@
 import { formatCurrencyInput, centsToPlnString } from "../../lib/currency";
 import { formatPrice } from "../../lib/format-price";
+import { normalizeSelectedKeys } from "../../lib/order-utils";
+import { useGalleryStore } from "../../store/gallerySlice";
+import { useOrderStore } from "../../store/orderSlice";
 import { Loading } from "../ui/loading/Loading";
 
 interface OrderInfoCardProps {
-  totalCents: number;
-  createdAt?: string | number | Date;
-  selectedKeysCount?: number;
-  selectionEnabled?: boolean;
   isEditingAmount: boolean;
   editingAmountValue: string;
   savingAmount: boolean;
@@ -17,10 +16,6 @@ interface OrderInfoCardProps {
 }
 
 export function OrderInfoCard({
-  totalCents,
-  createdAt,
-  selectedKeysCount,
-  selectionEnabled,
   isEditingAmount,
   editingAmountValue,
   savingAmount,
@@ -29,6 +24,21 @@ export function OrderInfoCard({
   onSave,
   onAmountChange,
 }: OrderInfoCardProps) {
+  // Subscribe to stores for order and gallery data
+  const order = useOrderStore((state) => state.currentOrder);
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  
+  // Defensive check: don't render until order is loaded
+  if (!order) {
+    return null;
+  }
+
+  // Get data from order
+  const totalCents = order.totalCents ?? 0;
+  const createdAt = order.createdAt;
+  const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
+  const selectedKeysCount = selectedKeys.length;
+  const selectionEnabled = gallery?.selectionEnabled !== false;
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
       <div className="flex justify-between items-start">

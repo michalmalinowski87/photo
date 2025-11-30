@@ -1,46 +1,88 @@
-import { useRouter } from "next/router";
-import React from "react";
+import React, { useCallback } from "react";
 
+import { useModal } from "../../../hooks/useModal";
 import { useGalleryStore } from "../../../store/gallerySlice";
 import { useOrderStore } from "../../../store/orderSlice";
 import Button from "../../ui/button/Button";
 
 interface OrderActionsSectionProps {
   orderId: string;
-  onDownloadZip?: () => void;
-  onDownloadFinals?: () => void;
-  onApproveChangeRequest?: () => void;
-  onDenyChangeRequest?: () => void;
-  onMarkOrderPaid?: () => void;
-  onSendFinalsToClient?: () => void;
-  canDownloadZip?: boolean;
-  hasFinals?: boolean;
 }
 
-export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
-  orderId,
-  onDownloadZip,
-  onDownloadFinals,
-  onApproveChangeRequest,
-  onDenyChangeRequest,
-  onMarkOrderPaid,
-  onSendFinalsToClient,
-  canDownloadZip,
-  hasFinals,
-}) => {
+export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderId }) => {
   // Subscribe directly to store
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
+  const currentOrderId = useOrderStore((state) => state.currentOrderId);
+  
+  // Get store actions
+  const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
+  const denyChangeRequest = useOrderStore((state) => state.denyChangeRequest);
+  const markOrderPaid = useOrderStore((state) => state.markOrderPaid);
+  const downloadFinals = useOrderStore((state) => state.downloadFinals);
+  const sendFinalsToClient = useOrderStore((state) => state.sendFinalsToClient);
+  const downloadZip = useOrderStore((state) => state.downloadZip);
+  const hasFinals = useOrderStore((state) => state.hasFinals);
+  const canDownloadZip = useOrderStore((state) => state.canDownloadZip);
 
-  const isPaid = gallery?.isPaid ?? false;
+  // Modal hooks
+  const { openModal: openDenyModal } = useModal("deny-change");
+  const { openModal: openCleanupModal } = useModal("cleanup-originals");
 
-  if (!orderId || !order || !isPaid) {
+  // Get computed values from store (before conditional returns)
+  const orderHasFinals = hasFinals(orderId);
+  const canDownloadZipValue = canDownloadZip(orderId, gallery?.selectionEnabled);
+  const galleryId = gallery?.galleryId;
+
+  // Action handlers - must be defined before any conditional returns
+  const handleApproveChangeRequest = useCallback(async () => {
+    if (!galleryId) return;
+    await approveChangeRequest(galleryId, orderId);
+  }, [galleryId, orderId, approveChangeRequest]);
+
+  const handleDenyChangeRequest = useCallback(() => {
+    openDenyModal();
+  }, [openDenyModal]);
+
+  const handleMarkOrderPaid = useCallback(async () => {
+    if (!galleryId) return;
+    await markOrderPaid(galleryId, orderId);
+  }, [galleryId, orderId, markOrderPaid]);
+
+  const handleDownloadFinals = useCallback(async () => {
+    if (!galleryId) return;
+    await downloadFinals(galleryId, orderId);
+  }, [galleryId, orderId, downloadFinals]);
+
+  const handleSendFinalsToClient = useCallback(() => {
+    if (!galleryId) return;
+    // Check if this is a selection gallery (user-selecting gallery)
+    const isSelectionGallery = gallery?.selectionEnabled !== false;
+
+    // Show cleanup modal only for selection galleries
+    if (isSelectionGallery) {
+      openCleanupModal();
+    } else {
+      // For non-selection galleries, send link directly without cleanup option
+      void sendFinalsToClient(galleryId, orderId, false);
+    }
+  }, [galleryId, orderId, gallery, openCleanupModal, sendFinalsToClient]);
+
+  const handleDownloadZip = useCallback(async () => {
+    if (!galleryId) return;
+    await downloadZip(galleryId, orderId);
+  }, [galleryId, orderId, downloadZip]);
+
+  // Defensive check: don't render until required data is loaded
+  if (!orderId || !order || currentOrderId !== orderId) {
     return null;
   }
 
-  // Check if order has finals - check order.finalImages or similar
-  const orderHasFinals = hasFinals ?? false;
+  const isPaid = gallery?.isPaid ?? false;
+  if (!isPaid) {
+    return null;
+  }
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
@@ -56,12 +98,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         {!isLoading &&
           gallery &&
           gallery.selectionEnabled !== false &&
-          canDownloadZip &&
-          onDownloadZip && (
+          canDownloadZipValue && (
             <Button
               size="sm"
               variant="outline"
-              onClick={onDownloadZip}
+              onClick={handleDownloadZip}
               className="w-full justify-start"
             >
               <svg
@@ -82,11 +123,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
           )}
 
         {/* Download Finals - Only show if finals are uploaded */}
-        {onDownloadFinals && orderHasFinals && (
+        {orderHasFinals && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onDownloadFinals}
+            onClick={handleDownloadFinals}
             className="w-full justify-start"
           >
             <svg
@@ -107,81 +148,79 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Change Request Actions */}
-        {order.deliveryStatus === "CHANGES_REQUESTED" &&
-          onApproveChangeRequest &&
-          onDenyChangeRequest && (
-            <>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={onApproveChangeRequest}
-                className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+        {order.deliveryStatus === "CHANGES_REQUESTED" && (
+          <>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleApproveChangeRequest}
+              className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="mr-2"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="mr-2"
-                >
-                  <path
-                    d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M7 10L9 12L13 8"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Zatwierdź prośbę o zmiany
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onDenyChangeRequest}
-                className="w-full justify-start"
+                <path
+                  d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 10L9 12L13 8"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Zatwierdź prośbę o zmiany
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDenyChangeRequest}
+              className="w-full justify-start"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="mr-2"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="mr-2"
-                >
-                  <path
-                    d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M7 7L13 13M13 7L7 13"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Odrzuć prośbę o zmiany
-              </Button>
-            </>
-          )}
+                <path
+                  d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 7L13 13M13 7L7 13"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Odrzuć prośbę o zmiany
+            </Button>
+          </>
+        )}
 
         {/* Mark Order as Paid */}
-        {onMarkOrderPaid && order.paymentStatus !== "PAID" && (
+        {order.paymentStatus !== "PAID" && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onMarkOrderPaid}
+            onClick={handleMarkOrderPaid}
             className="w-full justify-start"
           >
             <svg
@@ -199,11 +238,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Send Finals to Client - Only show if finals are uploaded */}
-        {onSendFinalsToClient && orderHasFinals && (
+        {orderHasFinals && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onSendFinalsToClient}
+            onClick={handleSendFinalsToClient}
             className="w-full justify-start"
             disabled={order.deliveryStatus === "DELIVERED"}
           >
