@@ -30,6 +30,8 @@ interface OrderState {
   invalidateOrderCache: (orderId: string) => void;
   invalidateGalleryOrdersCache: (galleryId: string) => void;
   fetchOrder: (galleryId: string, orderId: string, forceRefresh?: boolean) => Promise<Order | null>;
+  updateOrderFields: (orderId: string, fields: Partial<Order>) => void;
+  updateOrderInList: (orderId: string, fields: Partial<Order>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearCurrentOrder: () => void;
@@ -165,6 +167,47 @@ export const useOrderStore = create<OrderState>()(
           set({ error, isLoading: false });
           throw err;
         }
+      },
+
+      updateOrderFields: (orderId: string, fields: Partial<Order>) => {
+        set((state) => {
+          // Update cache if order exists in cache
+          const cached = state.orderCache[orderId];
+          if (cached) {
+            const updatedOrder = { ...cached.order, ...fields };
+            const newCache = {
+              ...state.orderCache,
+              [orderId]: {
+                order: updatedOrder,
+                timestamp: Date.now(), // Update timestamp to keep cache fresh
+              },
+            };
+
+            // Update current order if it matches
+            const newCurrentOrder =
+              state.currentOrderId === orderId ? updatedOrder : state.currentOrder;
+
+            return {
+              orderCache: newCache,
+              currentOrder: newCurrentOrder,
+            };
+          }
+
+          // If not in cache, just return state as-is
+          return state;
+        });
+      },
+
+      updateOrderInList: (orderId: string, fields: Partial<Order>) => {
+        set((state) => {
+          const updatedList = state.orderList.map((order) =>
+            order.orderId === orderId ? { ...order, ...fields } : order
+          );
+
+          return {
+            orderList: updatedList,
+          };
+        });
       },
 
       setLoading: (loading: boolean) => {

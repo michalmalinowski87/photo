@@ -57,10 +57,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState("");
 
-  interface WalletBalanceResponse {
-    balanceCents?: number;
-    [key: string]: unknown;
-  }
 
   interface GalleriesResponse {
     items?: Gallery[];

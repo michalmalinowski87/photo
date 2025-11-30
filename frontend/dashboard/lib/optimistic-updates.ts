@@ -52,12 +52,12 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
     return;
   }
 
-  const { galleryId, sizeDelta, logContext } = params;
+  const { galleryId, sizeDelta } = params;
 
   if (params.type === "originals") {
     // For originals, just dispatch the event
     const isUpload = params.isUpload ?? sizeDelta > 0; // Positive delta = upload, negative = deletion
-    console.log(`[${logContext ?? "optimistic-updates"}] Applying originals optimistic update:`, {
+    console.log(`[${params.logContext ?? "optimistic-updates"}] Applying originals optimistic update:`, {
       galleryId,
       sizeDelta,
       isUpload,
@@ -76,7 +76,7 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
     // For finals, update store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
 
-    console.log(`[${logContext ?? "optimistic-updates"}] Applying finals optimistic update:`, {
+    console.log(`[${params.logContext ?? "optimistic-updates"}] Applying finals optimistic update:`, {
       galleryId,
       sizeDelta,
     });
@@ -91,7 +91,7 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
         | number
         | undefined;
       console.log(
-        `[${logContext ?? "optimistic-updates"}] Updated store, new value:`,
+        `[${params.logContext ?? "optimistic-updates"}] Updated store, new value:`,
         newStoreValue
       );
 
@@ -117,12 +117,12 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
     return;
   }
 
-  const { galleryId, sizeDelta, logContext } = params;
+  const { galleryId, sizeDelta } = params;
   const revertDelta = -sizeDelta; // Opposite of original delta
 
   if (params.type === "originals") {
     // For originals, just dispatch the revert event
-    console.log(`[${logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`, {
+    console.log(`[${params.logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`, {
       galleryId,
       originalSizeDelta: sizeDelta,
       revertDelta,
@@ -140,7 +140,7 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
     // For finals, revert store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
 
-    console.log(`[${logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`, {
+    console.log(`[${params.logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`, {
       galleryId,
       originalSizeDelta: sizeDelta,
       revertDelta,
@@ -156,7 +156,7 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
         | number
         | undefined;
       console.log(
-        `[${logContext ?? "optimistic-updates"}] Reverted store, new value:`,
+        `[${params.logContext ?? "optimistic-updates"}] Reverted store, new value:`,
         newStoreValue
       );
 

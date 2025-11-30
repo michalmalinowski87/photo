@@ -1,9 +1,6 @@
 import { useState } from "react";
 
-import { BottomRightOverlayProvider } from "../../context/BottomRightOverlayContext";
-import { SidebarProvider, useSidebar } from "../../context/SidebarContext";
-import { ThemeProvider } from "../../context/ThemeContext";
-import { ToastProvider } from "../../context/ToastContext";
+import { useSidebar } from "../../hooks/useSidebar";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
 
@@ -64,17 +61,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
 };
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
-  return (
-    <ThemeProvider>
-      <ToastProvider>
-        <SidebarProvider>
-          <BottomRightOverlayProvider>
-            <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>
-          </BottomRightOverlayProvider>
-        </SidebarProvider>
-      </ToastProvider>
-    </ThemeProvider>
-  );
+  return <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>;
 };
 
 export default AppLayout;

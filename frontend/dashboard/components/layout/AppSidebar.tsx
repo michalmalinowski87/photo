@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useSidebar } from "../../context/SidebarContext";
+import { useSidebar } from "../../hooks/useSidebar";
 
 import SidebarWidget from "./SidebarWidget";
 

@@ -1,4 +1,5 @@
 import React from "react";
+
 import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface StorageUsageInfoProps {
@@ -30,11 +31,11 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
     return null;
   }
 
-  const originalsBytes = currentGallery.originalsBytesUsed ?? 0;
-  const finalsBytes = currentGallery.finalsBytesUsed ?? 0;
+  const originalsBytes = typeof currentGallery.originalsBytesUsed === "number" ? currentGallery.originalsBytesUsed : 0;
+  const finalsBytes = typeof currentGallery.finalsBytesUsed === "number" ? currentGallery.finalsBytesUsed : 0;
   // Only show limits if gallery is paid (has a plan)
-  const originalsLimit = isPaid ? currentGallery.originalsLimitBytes : undefined;
-  const finalsLimit = isPaid ? currentGallery.finalsLimitBytes : undefined;
+  const originalsLimit = isPaid && typeof currentGallery.originalsLimitBytes === "number" ? currentGallery.originalsLimitBytes : undefined;
+  const finalsLimit = isPaid && typeof currentGallery.finalsLimitBytes === "number" ? currentGallery.finalsLimitBytes : undefined;
 
   return (
     <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">

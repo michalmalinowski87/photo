@@ -1,5 +1,3 @@
-import { ThemeProvider } from "../../context/ThemeContext";
-import { ToastProvider } from "../../context/ToastContext";
 import GallerySidebar from "../galleries/GallerySidebar";
 
 import GalleryHeader from "./GalleryHeader";
@@ -44,14 +42,14 @@ interface GalleryLayoutProps {
 const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   children,
   gallery,
-  isPaid,
-  galleryUrl,
-  onCopyUrl,
-  onSendLink,
-  onSettings,
+  isPaid: _isPaid,
+  galleryUrl: _galleryUrl,
+  onCopyUrl: _onCopyUrl,
+  onSendLink: _onSendLink,
+  onSettings: _onSettings,
   onCreateGallery: _onCreateGallery,
-  onReloadGallery,
-  order,
+  onReloadGallery: _onReloadGallery,
+  order: _order,
   orderId,
   onDownloadZip,
   canDownloadZip,
@@ -66,21 +64,17 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   sendLinkLoading,
 }) => {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
-          <div className="flex">
-            <div>
-              {gallery?.galleryId && <GallerySidebar />}
-            </div>
-            <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
-              <GalleryHeader />
-              <div className="p-6">{children}</div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
+      <div className="flex">
+        <div>
+          {gallery?.galleryId && <GallerySidebar />}
         </div>
-      </ToastProvider>
-    </ThemeProvider>
+        <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
+          <GalleryHeader />
+          <div className="p-6">{children}</div>
+        </div>
+      </div>
+    </div>
   );
 };
 

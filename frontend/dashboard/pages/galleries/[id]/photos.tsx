@@ -13,7 +13,7 @@ import {
   UploadProgressOverlay,
   type PerImageProgress,
 } from "../../../components/upload/UploadProgressOverlay";
-import { useGallery } from "../../../context/GalleryContext";
+import { useGallery } from "../../../hooks/useGallery";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
@@ -56,12 +56,6 @@ interface ApiImage {
   [key: string]: unknown;
 }
 
-interface Order {
-  orderId: string;
-  deliveryStatus?: string;
-  selectedKeys?: string[] | string;
-  [key: string]: unknown;
-}
 
 // UploadProgress interface is imported from PhotoUploadHandler
 
@@ -107,11 +101,17 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { getGalleryOrders, fetchGalleryImages, fetchGalleryOrders, updateOriginalsBytesUsed, currentGallery, refreshGalleryBytesOnly } =
+  const { fetchGalleryImages, fetchGalleryOrders, updateOriginalsBytesUsed, currentGallery, refreshGalleryBytesOnly } =
     useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
+  interface GalleryOrder {
+    orderId?: string;
+    deliveryStatus?: string;
+    selectedKeys?: string[] | string;
+    [key: string]: unknown;
+  }
+  const [orders, setOrders] = useState<GalleryOrder[]>([]);
   const pollingActiveRef = useRef<boolean>(false); // Track if polling is active
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track polling timeout
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
@@ -149,7 +149,7 @@ export default function GalleryPhotos() {
       }
 
     },
-    onUploadSuccess: (fileName, file, uploadedKey) => {
+    onUploadSuccess: (fileName, file, _uploadedKey) => {
       // Optimistically update bytes used immediately after S3 upload succeeds
       // Images will appear when processing completes via onImagesUpdated
       if (file.size > 0) {
@@ -316,7 +316,7 @@ export default function GalleryPhotos() {
       setOrders(ordersData);
 
       // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
-      const approvedOrders = ordersData.filter(
+      const approvedOrders = (ordersData as GalleryOrder[]).filter(
         (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
       );
 
@@ -335,7 +335,7 @@ export default function GalleryPhotos() {
 
       // Collect all selected keys from ANY order (for "Selected" display)
       const allOrderKeys = new Set<string>();
-      ordersData.forEach((order) => {
+      (ordersData as GalleryOrder[]).forEach((order) => {
         const selectedKeys = Array.isArray(order.selectedKeys)
           ? order.selectedKeys
           : typeof order.selectedKeys === "string"
@@ -586,8 +586,20 @@ export default function GalleryPhotos() {
             {gallery?.originalsLimitBytes && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <StorageDisplay
-                  bytesUsed={currentGallery?.originalsBytesUsed ?? gallery?.originalsBytesUsed ?? 0}
-                  limitBytes={gallery?.originalsLimitBytes}
+                  bytesUsed={
+                    (currentGallery?.originalsBytesUsed != null && typeof currentGallery.originalsBytesUsed === "number"
+                      ? currentGallery.originalsBytesUsed
+                      : null) ??
+                    (gallery?.originalsBytesUsed != null && typeof gallery?.originalsBytesUsed === "number"
+                      ? gallery.originalsBytesUsed
+                      : null) ??
+                    0
+                  }
+                  limitBytes={
+                    gallery?.originalsLimitBytes != null && typeof gallery.originalsLimitBytes === "number"
+                      ? gallery.originalsLimitBytes
+                      : undefined
+                  }
                   label="Oryginały"
                   isLoading={galleryLoading}
                 />

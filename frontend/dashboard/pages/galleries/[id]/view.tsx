@@ -26,21 +26,6 @@ interface Order {
   [key: string]: unknown;
 }
 
-interface ImagesResponse {
-  images?: GalleryImage[];
-  [key: string]: unknown;
-}
-
-interface OrdersResponse {
-  items?: Order[];
-  [key: string]: unknown;
-}
-
-interface GalleryResponse {
-  galleryName?: string;
-  [key: string]: unknown;
-}
-
 function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const router = useRouter();
   const { fetchGallery, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
@@ -107,7 +92,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           if (!o || typeof o !== "object" || !("deliveryStatus" in o)) {
             return false;
           }
-          const status = o.deliveryStatus;
+          const status = (o as { deliveryStatus?: unknown }).deliveryStatus;
           return (
             status === "CLIENT_APPROVED" ||
             status === "PREPARING_DELIVERY" ||
@@ -277,7 +262,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
             });
             const contentType = response.headers.get("content-type");
             const isJson = contentType?.includes("application/json") ?? false;
-            const body = isJson ? await response.json() : await response.text();
+            const body: unknown = isJson ? await response.json() : await response.text();
             return { data: body, response };
           }}
         />

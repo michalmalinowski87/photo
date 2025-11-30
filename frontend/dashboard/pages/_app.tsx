@@ -8,13 +8,10 @@ import "../styles/globals.css";
 import "../styles/auth.css";
 import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
 import AuthLayout from "../components/auth/AuthLayout";
+import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
-import { AuthProvider } from "../context/AuthContext";
-import { BottomRightOverlayProvider } from "../context/BottomRightOverlayContext";
-import { ModalProvider } from "../context/ModalContext";
-import { ToastProvider } from "../context/ToastContext";
-import { ZipDownloadProvider } from "../context/ZipDownloadContext";
+import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { clearEphemeralState } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -128,19 +125,11 @@ export default function App({ Component, pageProps }: AppProps) {
   if (isGalleryRoute) {
     return (
       <WebPCompatibilityCheck>
-        <AuthProvider>
-          <ToastProvider>
-            <ModalProvider>
-              <ZipDownloadProvider>
-                <BottomRightOverlayProvider>
-                  <GalleryLayoutWrapper>
-                    <Component {...pageProps} />
-                  </GalleryLayoutWrapper>
-                </BottomRightOverlayProvider>
-              </ZipDownloadProvider>
-            </ModalProvider>
-          </ToastProvider>
-        </AuthProvider>
+        <SessionExpiredModalWrapper />
+        <ToastContainer />
+        <GalleryLayoutWrapper>
+          <Component {...pageProps} />
+        </GalleryLayoutWrapper>
       </WebPCompatibilityCheck>
     );
   }
@@ -148,17 +137,11 @@ export default function App({ Component, pageProps }: AppProps) {
   // Other dashboard pages use AppLayout
   return (
     <WebPCompatibilityCheck>
-      <AuthProvider>
-        <ToastProvider>
-          <ModalProvider>
-            <ZipDownloadProvider>
-              <AppLayout>
-                <Component {...pageProps} />
-              </AppLayout>
-            </ZipDownloadProvider>
-          </ModalProvider>
-        </ToastProvider>
-      </AuthProvider>
+      <SessionExpiredModalWrapper />
+      <ToastContainer />
+      <AppLayout>
+        <Component {...pageProps} />
+      </AppLayout>
     </WebPCompatibilityCheck>
   );
 }

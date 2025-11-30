@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 
-import { useBottomRightOverlay } from "../../context/BottomRightOverlayContext";
+import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 
 import { CompletedItemsSection } from "./CompletedItemsSection";
 import { ProcessingCounter } from "./ProcessingCounter";

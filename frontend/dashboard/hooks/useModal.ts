@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 
-import { useModalContext } from "../context/ModalContext";
+import { useModalStore } from "../store/modalSlice";
 
 /**
  * Hook for managing modal state
- * Uses ModalContext to prevent prop drilling and reduce re-renders
+ * Uses Zustand store to prevent prop drilling and reduce re-renders
  *
  * @param modalId - Unique identifier for the modal
  * @returns Object with isOpen, openModal, closeModal, toggleModal
@@ -17,9 +17,10 @@ import { useModalContext } from "../context/ModalContext";
  * </Modal>
  */
 export const useModal = (modalId: string) => {
-  const { isOpen: checkIsOpen, openModal, closeModal, toggleModal } = useModalContext();
-
-  const isOpen = checkIsOpen(modalId);
+  const isOpen = useModalStore((state) => state.isOpen(modalId));
+  const openModal = useModalStore((state) => state.openModal);
+  const closeModal = useModalStore((state) => state.closeModal);
+  const toggleModal = useModalStore((state) => state.toggleModal);
 
   const handleOpen = useCallback(() => {
     openModal(modalId);

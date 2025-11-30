@@ -844,7 +844,10 @@ class ApiService {
     /**
      * Mark order as paid
      */
-    markPaid: async (galleryId: string, orderId: string): Promise<void> => {
+    markPaid: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{ orderId: string; galleryId: string; paymentStatus: string; paidAt: string }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -859,7 +862,17 @@ class ApiService {
     /**
      * Send final link to client
      */
-    sendFinalLink: async (galleryId: string, orderId: string): Promise<void> => {
+    sendFinalLink: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      galleryId: string;
+      orderId: string;
+      sent: boolean;
+      link: string;
+      deliveryStatus: string;
+      deliveredAt: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -874,7 +887,15 @@ class ApiService {
     /**
      * Mark order as canceled
      */
-    markCanceled: async (galleryId: string, orderId: string): Promise<void> => {
+    markCanceled: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      galleryId: string;
+      orderId: string;
+      deliveryStatus: string;
+      canceledAt: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -889,7 +910,15 @@ class ApiService {
     /**
      * Mark order as refunded
      */
-    markRefunded: async (galleryId: string, orderId: string): Promise<void> => {
+    markRefunded: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      galleryId: string;
+      orderId: string;
+      paymentStatus: string;
+      refundedAt: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -904,7 +933,15 @@ class ApiService {
     /**
      * Mark order as partially paid
      */
-    markPartiallyPaid: async (galleryId: string, orderId: string): Promise<void> => {
+    markPartiallyPaid: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      orderId: string;
+      galleryId: string;
+      paymentStatus: string;
+      partiallyPaidAt: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }

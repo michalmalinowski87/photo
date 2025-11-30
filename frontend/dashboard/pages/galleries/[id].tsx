@@ -10,7 +10,7 @@ import Button from "../../components/ui/button/Button";
 import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
-import { useGallery } from "../../context/GalleryContext";
+import { useGallery } from "../../hooks/useGallery";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
@@ -414,10 +414,6 @@ export default function GalleryDetail() {
   if (!gallery) {
     return null; // Error is handled by GalleryLayoutWrapper
   }
-
-  const isPaid =
-    gallery.isPaid !== false &&
-    (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE");
 
   return (
     <>

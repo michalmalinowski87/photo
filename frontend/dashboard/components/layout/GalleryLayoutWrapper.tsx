@@ -1,7 +1,6 @@
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback } from "react";
 
-import { GalleryProvider } from "../../context/GalleryContext";
 import { useZipDownload as useZipDownloadHook } from "../../hocs/withZipDownload";
 import { useGalleryData } from "../../hooks/useGalleryData";
 import { useModal } from "../../hooks/useModal";
@@ -476,14 +475,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       : false;
 
   return (
-    <GalleryProvider
-      gallery={gallery}
-      loading={loading}
-      error={loadError}
-      galleryId={galleryId as string}
-      reloadGallery={() => loadGalleryData(true)}
-      reloadOrder={orderId ? () => loadOrderData() : undefined}
-    >
+    <>
       <WelcomePopupWrapper />
       <GalleryLayout
         gallery={gallery ? { ...gallery, orders: galleryOrders } : null}
@@ -570,6 +562,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onClose={() => setShowClientSendPopup(false)}
         galleryName={gallery?.galleryName}
       />
-    </GalleryProvider>
+    </>
   );
 }

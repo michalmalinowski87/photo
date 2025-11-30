@@ -81,7 +81,7 @@ export const CoverPhotoUpload: React.FC = () => {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
           const response = await api.galleries.getCoverPhoto(galleryId);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const fetchedUrl = response.coverPhotoUrl as string | null;
+          const fetchedUrl = response.coverPhotoUrl;
           
           // Check if we have a CloudFront URL (not S3, not null)
           if (fetchedUrl && typeof fetchedUrl === "string" && !fetchedUrl.includes(".s3.") && !fetchedUrl.includes("s3.amazonaws.com")) {

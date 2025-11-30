@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 
 import Button from "../../../components/ui/button/Button";
 import Input from "../../../components/ui/input/InputField";
-import { useGallery } from "../../../context/GalleryContext";
+import { useGallery } from "../../../hooks/useGallery";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";

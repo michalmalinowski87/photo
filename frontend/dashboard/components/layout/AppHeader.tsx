@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 
-import { useSidebar } from "../../context/SidebarContext";
+import { useSidebar } from "../../hooks/useSidebar";
 import { ThemeToggleButton } from "../common/ThemeToggleButton";
 import NotificationDropdown from "../header/NotificationDropdown";
 import Button from "../ui/button/Button";

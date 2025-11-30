@@ -28,9 +28,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   canDownloadZip,
   hasFinals,
 }) => {
-  const router = useRouter();
-  const { id: galleryId } = router.query;
-  
   // Subscribe directly to store
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);

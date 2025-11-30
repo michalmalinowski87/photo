@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import React from "react";
 
 import { useGalleryStore } from "../../../store/gallerySlice";
-import { useOrderStore } from "../../../store/orderSlice";
 
 export const GalleryNavigation: React.FC = () => {
   const router = useRouter();
@@ -13,8 +12,8 @@ export const GalleryNavigation: React.FC = () => {
   // Check if there are delivered orders - we can compute this from store
   const hasDeliveredOrders = useGalleryStore((state) => {
     const orders = state.getGalleryOrders(gallery?.galleryId ?? "", 30000);
-    if (!orders || orders.length === 0) return undefined;
-    return orders.some((o: any) => o.deliveryStatus === "DELIVERED");
+    if (!orders || orders.length === 0) {return undefined;}
+    return orders.some((o: { deliveryStatus?: string }) => o.deliveryStatus === "DELIVERED");
   });
 
   return (

@@ -112,15 +112,19 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   // Check if gallery has any existing orders (for determining button text)
   const hasExistingOrders = galleryOrders && Array.isArray(galleryOrders) && galleryOrders.length > 0;
 
+  const orderDeliveryStatus = order && typeof order === "object" && "deliveryStatus" in order
+    ? (order as { deliveryStatus?: string }).deliveryStatus
+    : undefined;
+  
   const shouldShowShareButton =
     !isLoading &&
     gallery &&
     isPaid &&
     gallery.selectionEnabled &&
     gallery.clientEmail &&
-    order?.deliveryStatus !== "PREPARING_DELIVERY" &&
-    order?.deliveryStatus !== "PREPARING_FOR_DELIVERY" &&
-    order?.deliveryStatus !== "DELIVERED";
+    orderDeliveryStatus !== "PREPARING_DELIVERY" &&
+    orderDeliveryStatus !== "PREPARING_FOR_DELIVERY" &&
+    orderDeliveryStatus !== "DELIVERED";
 
   return (
     <div className="py-4 border-b border-gray-200 dark:border-gray-800">

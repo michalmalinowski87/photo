@@ -17,7 +17,7 @@ import {
   UploadProgressOverlay,
   type PerImageProgress,
 } from "../../../../components/upload/UploadProgressOverlay";
-import { useGallery } from "../../../../context/GalleryContext";
+import { useGallery } from "../../../../hooks/useGallery";
 import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
@@ -77,9 +77,6 @@ interface PaymentDetails {
   balanceAfterPayment?: number;
 }
 
-interface ImagesResponse {
-  images: GalleryImage[];
-}
 
 interface OrderUpdateEvent extends CustomEvent<{ orderId?: string; galleryId?: string }> {
   detail: {

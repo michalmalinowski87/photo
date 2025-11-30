@@ -31,15 +31,6 @@ interface ErrorResponse {
   message?: string;
 }
 
-interface PresignedUrlResponse {
-  url: string;
-  [key: string]: unknown;
-}
-
-interface SendFinalLinkResponse {
-  deliveryStatus?: string;
-  [key: string]: unknown;
-}
 
 export default function Orders() {
   const router = useRouter();
@@ -142,7 +133,7 @@ export default function Orders() {
       // Use api-service for token, but fetch directly for blob handling
       const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
       const { getValidToken } = await import("../lib/api");
-      const token = await getValidToken();
+      const token: string = await getValidToken();
       const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
@@ -195,9 +186,16 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.markPaid(galleryId, orderId);
+      const response = await api.orders.markPaid(galleryId, orderId);
+      // Merge lightweight response into orders array instead of refetching
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? { ...order, paymentStatus: response.paymentStatus, paidAt: response.paidAt }
+            : order
+        )
+      );
       setMessage("Order marked as paid");
-      await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -215,9 +213,20 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.markCanceled(galleryId, orderId);
+      const response = await api.orders.markCanceled(galleryId, orderId);
+      // Merge lightweight response into orders array instead of refetching
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                deliveryStatus: response.deliveryStatus,
+                canceledAt: response.canceledAt,
+              }
+            : order
+        )
+      );
       setMessage("Zlecenie oznaczone jako anulowane");
-      await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -239,9 +248,20 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.markRefunded(galleryId, orderId);
+      const response = await api.orders.markRefunded(galleryId, orderId);
+      // Merge lightweight response into orders array instead of refetching
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                paymentStatus: response.paymentStatus,
+                refundedAt: response.refundedAt,
+              }
+            : order
+        )
+      );
       setMessage("Zlecenie oznaczone jako zwrócone");
-      await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -263,9 +283,20 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.markPartiallyPaid(galleryId, orderId);
+      const response = await api.orders.markPartiallyPaid(galleryId, orderId);
+      // Merge lightweight response into orders array instead of refetching
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                paymentStatus: response.paymentStatus,
+                partiallyPaidAt: response.partiallyPaidAt,
+              }
+            : order
+        )
+      );
       setMessage("Zlecenie oznaczone jako częściowo opłacone");
-      await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -278,9 +309,20 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.sendFinalLink(galleryId, orderId);
+      const response = await api.orders.sendFinalLink(galleryId, orderId);
+      // Merge lightweight response into orders array instead of refetching
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                deliveryStatus: response.deliveryStatus,
+                deliveredAt: response.deliveredAt,
+              }
+            : order
+        )
+      );
       setMessage("Final link sent to client");
-      await loadOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }

@@ -48,6 +48,7 @@ export const useOrderActions = ({
   const invalidateOrderStoreGalleryCache = useOrderStore(
     (state) => state.invalidateGalleryOrdersCache
   );
+  const updateOrderFields = useOrderStore((state) => state.updateOrderFields);
 
   const handleApproveChangeRequest = useCallback(async () => {
     if (!galleryId || !orderId) {
@@ -146,19 +147,19 @@ export const useOrderActions = ({
       return;
     }
     try {
-      await api.orders.markPaid(galleryId as string, orderId as string);
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateOrderCache(orderId as string);
+      const response = await api.orders.markPaid(galleryId as string, orderId as string);
+      // Merge lightweight response into cached order instead of refetching
+      updateOrderFields(orderId as string, {
+        paymentStatus: response.paymentStatus,
+        paidAt: response.paidAt,
+      });
+      // Invalidate gallery orders cache to refresh list view
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateGalleryOrdersCache(galleryId as string);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateOrderStoreGalleryCache(galleryId as string);
       showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
-      // Reload order data in wrapper to update sidebar (will fetch fresh due to cache invalidation)
-      await loadOrderData();
-      // Trigger a custom event to notify order page to reload
-      // The order page will listen to this event and reload its own order data
+      // Trigger a custom event to notify order page to merge updates
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
       }
@@ -168,11 +169,10 @@ export const useOrderActions = ({
   }, [
     galleryId,
     orderId,
-    invalidateOrderCache,
+    updateOrderFields,
     invalidateGalleryOrdersCache,
     invalidateOrderStoreGalleryCache,
     showToast,
-    loadOrderData,
   ]);
 
   const handleDownloadFinals = useCallback(async () => {
@@ -197,7 +197,7 @@ export const useOrderActions = ({
       }
 
       try {
-        await api.orders.sendFinalLink(galleryId as string, orderId as string);
+        const response = await api.orders.sendFinalLink(galleryId as string, orderId as string);
 
         // If user confirmed cleanup, call cleanup endpoint
         if (shouldCleanup) {
@@ -221,16 +221,17 @@ export const useOrderActions = ({
           showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
         }
 
-        // Invalidate cache to force fresh data fetch
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        invalidateOrderCache(orderId as string);
+        // Merge lightweight response into cached order instead of refetching
+        updateOrderFields(orderId as string, {
+          deliveryStatus: "DELIVERED",
+          deliveredAt: response.deliveredAt,
+        });
+        // Invalidate gallery orders cache to refresh list view
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         invalidateGalleryOrdersCache(galleryId as string);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         invalidateOrderStoreGalleryCache(galleryId as string);
-        // Reload order data in wrapper to update sidebar (will fetch fresh due to cache invalidation)
-        await loadOrderData();
-        // Trigger a custom event to notify order page to reload
+        // Trigger a custom event to notify order page to merge updates
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
         }
@@ -241,11 +242,10 @@ export const useOrderActions = ({
     [
       galleryId,
       orderId,
-      invalidateOrderCache,
+      updateOrderFields,
       invalidateGalleryOrdersCache,
       invalidateOrderStoreGalleryCache,
       showToast,
-      loadOrderData,
     ]
   );
 

@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 
-import { useBottomRightOverlay } from "../../context/BottomRightOverlayContext";
+import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 import { useGalleryStore } from "../../store/gallerySlice";
