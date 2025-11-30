@@ -2,24 +2,20 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React from "react";
 
-interface Gallery {
-  galleryId: string;
-  selectionEnabled?: boolean;
-  [key: string]: unknown;
-}
+import { useGalleryStore } from "../../../store/gallerySlice";
+import { useOrderStore } from "../../../store/orderSlice";
 
-interface GalleryNavigationProps {
-  gallery: Gallery | null;
-  galleryLoading: boolean;
-  hasDeliveredOrders: boolean | undefined;
-}
-
-export const GalleryNavigation: React.FC<GalleryNavigationProps> = ({
-  gallery,
-  galleryLoading,
-  hasDeliveredOrders,
-}) => {
+export const GalleryNavigation: React.FC = () => {
   const router = useRouter();
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  const isLoading = useGalleryStore((state) => state.isLoading);
+  
+  // Check if there are delivered orders - we can compute this from store
+  const hasDeliveredOrders = useGalleryStore((state) => {
+    const orders = state.getGalleryOrders(gallery?.galleryId ?? "", 30000);
+    if (!orders || orders.length === 0) return undefined;
+    return orders.some((o: any) => o.deliveryStatus === "DELIVERED");
+  });
 
   return (
     <nav className="flex-1 overflow-y-auto py-4">
@@ -69,7 +65,7 @@ export const GalleryNavigation: React.FC<GalleryNavigationProps> = ({
           )}
         </li>
         {/* Only show "Zdjęcia" if gallery is loaded AND selection is enabled */}
-        {!galleryLoading && gallery && gallery.selectionEnabled !== false && (
+        {!isLoading && gallery && gallery.selectionEnabled !== false && (
           <li>
             <Link
               href={`/galleries/${gallery.galleryId}/photos`}
@@ -96,7 +92,7 @@ export const GalleryNavigation: React.FC<GalleryNavigationProps> = ({
           </li>
         )}
         <li>
-          {!galleryLoading && gallery ? (
+          {!isLoading && gallery ? (
             hasDeliveredOrders === true ? (
               <div
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50"

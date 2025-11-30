@@ -17,7 +17,6 @@ import { useGallery } from "../../../context/GalleryContext";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
-import { applyOptimisticUpdate, calculateSizeDelta } from "../../../lib/optimistic-updates";
 import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface GalleryImage {
@@ -108,7 +107,8 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { getGalleryOrders, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
+  const { getGalleryOrders, fetchGalleryImages, fetchGalleryOrders, updateOriginalsBytesUsed, currentGallery, refreshGalleryBytesOnly } =
+    useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -123,9 +123,6 @@ export default function GalleryPhotos() {
   const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref for closures
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
-  const [optimisticOriginalsBytes, setOptimisticOriginalsBytes] = useState<number | null>(null);
-  const clearOptimisticStateTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track timeout to cancel if needed
-  const galleryRef = useRef(gallery); // Track latest gallery value to avoid stale closures
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -138,10 +135,8 @@ export default function GalleryPhotos() {
   const {
     handleFileSelect,
     uploading,
-    uploadProgress,
     perImageProgress: handlerPerImageProgress,
     isUploadComplete,
-    cancelUpload,
   } = usePhotoUploadHandler({
     galleryId: galleryId as string,
     type: "originals",
@@ -152,9 +147,17 @@ export default function GalleryPhotos() {
       if (progress.length > 0 && progress.some((p) => p.status === "uploading")) {
         setIsOverlayDismissed(false);
       }
+
+    },
+    onUploadSuccess: (fileName, file, uploadedKey) => {
+      // Optimistically update bytes used immediately after S3 upload succeeds
+      // Images will appear when processing completes via onImagesUpdated
+      if (file.size > 0) {
+        updateOriginalsBytesUsed(file.size);
+      }
     },
     onImagesUpdated: (updatedImages) => {
-      // Simple: just set images - handler only calls this when images are ready (have URLs)
+      // Simply set images when they're ready (have URLs from processing)
       const validApiImages = updatedImages.filter((img: GalleryImage) => {
         const imgKey = img.key ?? img.filename;
         if (!imgKey) {
@@ -178,9 +181,8 @@ export default function GalleryPhotos() {
       setLimitExceededData(data);
     },
     reloadGallery: async () => {
-      // Only reload gallery metadata (not images) - images are already updated via onImagesUpdated
-      // This is just to refresh gallery byte usage, not to reload images
-      await reloadGallery();
+      // Bytes are updated optimistically and via refreshGalleryBytesOnly in useImagePolling
+      // No need to reload entire gallery - images already updated via onImagesUpdated
     },
     deletingImagesRef,
     deletedImageKeysRef,
@@ -208,58 +210,30 @@ export default function GalleryPhotos() {
     // Optimistically remove image from local state immediately
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
 
-    // Get image size for optimistic update
+    // Get image size for optimistic update in Redux
     const imageSize = image.size ?? 0;
-    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
-
-    // Apply optimistic update immediately (before API call)
-    if (sizeDelta !== undefined && galleryId) {
-      applyOptimisticUpdate({
-        type: "originals",
-        galleryId: galleryId as string,
-        sizeDelta,
-        isUpload: false, // This is a deletion
-        logContext: "photos.tsx handleDeleteConfirmDirect",
-      });
+    if (imageSize > 0) {
+      // Optimistically update Redux store immediately (deduct file size)
+      updateOriginalsBytesUsed(-imageSize);
     }
 
     try {
       await api.galleries.deleteImage(galleryId as string, imageKey);
 
-      // Only reload if no other deletions are in progress (to avoid race conditions)
+      // Remove from deleting set and reload gallery if this was the last deletion
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, reload gallery data
-        if (updated.size === 0) {
-          // Cancel any pending clear timeout - we're about to reload and clear explicitly
-          if (clearOptimisticStateTimeoutRef.current) {
-            clearTimeout(clearOptimisticStateTimeoutRef.current);
-            clearOptimisticStateTimeoutRef.current = null;
-          }
-
-          // Use setTimeout to ensure state update completes before reload
-          setTimeout(async () => {
-            await reloadGallery();
-            // Clear optimistic bytes explicitly when all deletions are complete
-            // This ensures the sidebar shows 0 bytes even if suppression was active
-            setOptimisticOriginalsBytes(0);
-            // Dispatch event to trigger sidebar update
-            if (typeof window !== "undefined" && galleryId) {
-              window.dispatchEvent(
-                new CustomEvent("galleryUpdated", {
-                  detail: { galleryId }, // Refresh event - sidebar will clear optimistic bytes when it sees gallery has 0 bytes
-                })
-              );
-            }
-          }, 0);
+        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        if (updated.size === 0 && galleryId) {
+          void refreshGalleryBytesOnly(galleryId as string);
         }
         return updated;
       });
 
       showToast("success", "Sukces", "Zdjęcie zostało usunięte");
     } catch (err) {
-      // On error, restore the image to the list
+      // On error, restore the image to the list and revert optimistic update
       setImages((prevImages) => {
         const restored = [...prevImages];
         // Insert image back at its original position
@@ -270,6 +244,12 @@ export default function GalleryPhotos() {
         }
         return restored;
       });
+
+      // Revert optimistic update in Redux (add back the file size)
+      const imageSize = image.size ?? 0;
+      if (imageSize > 0) {
+        updateOriginalsBytesUsed(imageSize);
+      }
 
       // Remove from deleting set
       setDeletingImages((prev) => {
@@ -389,113 +369,7 @@ export default function GalleryPhotos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
-  // Listen for gallery updates to update originalsBytesUsed reactively with optimistic updates
-  useEffect(() => {
-    if (!galleryId) {
-      return undefined;
-    }
-
-    const handleGalleryUpdate = (event?: Event) => {
-      const customEvent = event as
-        | CustomEvent<{ galleryId?: string; sizeDelta?: number; isUpload?: boolean }>
-        | undefined;
-      console.log("[photos.tsx] galleryUpdated event received:", {
-        eventGalleryId: customEvent?.detail?.galleryId,
-        currentGalleryId: galleryId,
-        sizeDelta: customEvent?.detail?.sizeDelta,
-        isUpload: customEvent?.detail?.isUpload,
-      });
-
-      // Only handle updates for this gallery
-      if (customEvent?.detail?.galleryId !== galleryId) {
-        console.log("[photos.tsx] Event galleryId mismatch, ignoring");
-        return;
-      }
-
-      // If sizeDelta is provided, update optimistically
-      if (customEvent.detail?.sizeDelta !== undefined) {
-        const sizeDelta = customEvent.detail.sizeDelta;
-        console.log("[photos.tsx] Updating optimistic originals bytes, sizeDelta:", sizeDelta);
-
-        // Cancel any pending clear timeout - we're still making changes
-        if (clearOptimisticStateTimeoutRef.current) {
-          clearTimeout(clearOptimisticStateTimeoutRef.current);
-          clearOptimisticStateTimeoutRef.current = null;
-        }
-
-        // Optimistic update: immediately adjust bytes using functional update to avoid stale closures
-        // This calculation works mathematically: newBytes = currentBytes + sizeDelta
-        // We track optimistic value as a running total and only clear it when gallery reload confirms it matches
-        setOptimisticOriginalsBytes((prev) => {
-          // Always use prev (optimistic value) if available, otherwise fall back to gallery
-          // This ensures we build on top of previous optimistic updates during rapid operations
-          const currentGallery = galleryRef.current; // Use ref to get latest value
-          const currentGalleryBytes = currentGallery?.originalsBytesUsed ?? 0;
-          // CRITICAL: Use prev if available (even if it's 0), only fall back to gallery if prev is null
-          // This prevents using stale gallery bytes during rapid operations
-          const currentBytes = prev ?? currentGalleryBytes;
-          const newBytes = Math.max(0, currentBytes + sizeDelta);
-          console.log("[photos.tsx] Optimistic update calculation:", {
-            prev,
-            currentGalleryBytes,
-            currentBytes,
-            sizeDelta,
-            newBytes,
-          });
-          return newBytes;
-        });
-
-        // For uploads, don't reload gallery here - useImagePolling will reload after all uploads complete
-        // This prevents unnecessary API calls during rapid uploads (we have optimistic updates)
-        // For deletions, don't reload here - the deletion handler will reload when all deletions are complete
-        // Only clear optimistic state when operations are complete (handled by polling/deletion handlers)
-      } else {
-        // No sizeDelta - this is a refresh event (e.g., after polling completes or all deletions complete)
-        // Clear optimistic state if it matches the gallery value (confirmed by reload)
-        setOptimisticOriginalsBytes((prev) => {
-          if (prev === null) {
-            return null; // Already cleared
-          }
-          const currentGalleryBytes = galleryRef.current?.originalsBytesUsed ?? 0; // Use ref to get latest value
-          // If gallery shows 0, clear optimistic state
-          if (currentGalleryBytes === 0) {
-            console.log(
-              "[photos.tsx] Gallery shows 0 bytes after refresh, clearing optimistic state"
-            );
-            return null;
-          }
-          // If optimistic value matches gallery value (within small tolerance), clear it
-          if (Math.abs(prev - currentGalleryBytes) < 1000) {
-            // Close enough (within 1KB tolerance for rounding), clear optimistic state
-            console.log(
-              "[photos.tsx] Optimistic value matches gallery after refresh, clearing optimistic state",
-              { prev, currentGalleryBytes }
-            );
-            return null;
-          }
-          // Keep optimistic value if it doesn't match (shouldn't happen after reload, but be safe)
-          console.log(
-            "[photos.tsx] Optimistic value doesn't match gallery after refresh, keeping optimistic state",
-            { prev, currentGalleryBytes }
-          );
-          return prev;
-        });
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      console.log("[photos.tsx] Setting up galleryUpdated event listener");
-      window.addEventListener("galleryUpdated", handleGalleryUpdate);
-      return () => {
-        console.log("[photos.tsx] Removing galleryUpdated event listener");
-        window.removeEventListener("galleryUpdated", handleGalleryUpdate);
-      };
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId]); // Only depend on galleryId to avoid re-creating listener
-
-  // Cleanup polling and timeouts on unmount
+  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       // Stop polling when component unmounts
@@ -504,13 +378,9 @@ export default function GalleryPhotos() {
         clearTimeout(pollingTimeoutRef.current);
         pollingTimeoutRef.current = null;
       }
-      // Clear optimistic state timeout
-      if (clearOptimisticStateTimeoutRef.current) {
-        clearTimeout(clearOptimisticStateTimeoutRef.current);
-        clearOptimisticStateTimeoutRef.current = null;
-      }
     };
   }, []);
+
 
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
@@ -580,19 +450,11 @@ export default function GalleryPhotos() {
     // Optimistically remove image from local state immediately
     setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
 
-    // Get image size for optimistic update
+    // Get image size for optimistic update in Redux
     const imageSize = imageToDelete.size ?? 0;
-    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
-
-    // Apply optimistic update immediately (before API call)
-    if (sizeDelta !== undefined && galleryId) {
-      applyOptimisticUpdate({
-        type: "originals",
-        galleryId: galleryId as string,
-        sizeDelta,
-        isUpload: false, // This is a deletion
-        logContext: "photos.tsx handleDeleteConfirm",
-      });
+    if (imageSize > 0) {
+      // Optimistically update Redux store immediately (deduct file size)
+      updateOriginalsBytesUsed(-imageSize);
     }
 
     try {
@@ -608,65 +470,20 @@ export default function GalleryPhotos() {
       setDeleteConfirmOpen(false);
       setImageToDelete(null);
 
-      // Only reload if no other deletions are in progress (to avoid race conditions)
+      // Remove from deleting set and reload gallery if this was the last deletion
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, reload gallery data
-        if (updated.size === 0) {
-          // Cancel any pending clear timeout - we're about to reload
-          if (clearOptimisticStateTimeoutRef.current) {
-            clearTimeout(clearOptimisticStateTimeoutRef.current);
-            clearOptimisticStateTimeoutRef.current = null;
-          }
-
-          // Use setTimeout to ensure state update completes before reload
-          setTimeout(async () => {
-            await reloadGallery();
-            // After reload, clear optimistic state only if gallery value matches (or is 0)
-            // This ensures we only clear when the calculation is confirmed correct
-            // Note: gallery state will be updated by reloadGallery(), so we check after a brief delay
-            setTimeout(() => {
-              setOptimisticOriginalsBytes((prev) => {
-                const currentGalleryBytes = galleryRef.current?.originalsBytesUsed ?? 0; // Use ref to get latest value
-                // If gallery shows 0, clear optimistic state
-                // Otherwise, only clear if optimistic value matches gallery value (within small tolerance for rounding)
-                if (currentGalleryBytes === 0) {
-                  console.log("[photos.tsx] Gallery shows 0 bytes, clearing optimistic state");
-                  return null;
-                }
-                if (prev !== null && Math.abs(prev - currentGalleryBytes) < 1000) {
-                  // Close enough (within 1KB tolerance for rounding), clear optimistic state
-                  console.log(
-                    "[photos.tsx] Optimistic value matches gallery, clearing optimistic state",
-                    { prev, currentGalleryBytes }
-                  );
-                  return null;
-                }
-                // Keep optimistic value if it doesn't match (shouldn't happen, but be safe)
-                console.log(
-                  "[photos.tsx] Optimistic value doesn't match gallery, keeping optimistic state",
-                  { prev, currentGalleryBytes }
-                );
-                return prev;
-              });
-            }, 50); // Small delay to ensure gallery state is updated after reload
-            // Dispatch event to trigger sidebar update
-            if (typeof window !== "undefined" && galleryId) {
-              window.dispatchEvent(
-                new CustomEvent("galleryUpdated", {
-                  detail: { galleryId }, // Refresh event
-                })
-              );
-            }
-          }, 0);
+        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        if (updated.size === 0 && galleryId) {
+          void refreshGalleryBytesOnly(galleryId as string);
         }
         return updated;
       });
 
       showToast("success", "Sukces", "Zdjęcie zostało usunięte");
     } catch (err) {
-      // On error, restore the image to the list
+      // On error, restore the image to the list and revert optimistic update
       setImages((prevImages) => {
         const restored = [...prevImages];
         // Insert image back at its original position
@@ -677,6 +494,12 @@ export default function GalleryPhotos() {
         }
         return restored;
       });
+
+      // Revert optimistic update in Redux (add back the file size)
+      const imageSize = imageToDelete.size ?? 0;
+      if (imageSize > 0) {
+        updateOriginalsBytesUsed(imageSize);
+      }
 
       // Remove from deleting set
       setDeletingImages((prev) => {
@@ -729,63 +552,6 @@ export default function GalleryPhotos() {
             )}
           </div>
         </div>
-
-        {/* Upload Progress Bar */}
-        {uploading && uploadProgress.total > 0 && (
-          <div className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-3 flex-1">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      Przesyłanie zdjęć...
-                    </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {uploadProgress.current} / {uploadProgress.total}
-                    </span>
-                  </div>
-                  {uploadProgress.currentFileName && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {uploadProgress.currentFileName}
-                    </p>
-                  )}
-                  {/* UX IMPROVEMENT #4: Show upload speed and estimated time */}
-                  {uploadProgress.uploadSpeed !== undefined && uploadProgress.uploadSpeed > 0 && (
-                    <div className="flex items-center justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      <span>{uploadProgress.uploadSpeed.toFixed(1)} zdj./s</span>
-                      {uploadProgress.estimatedTimeRemaining !== undefined &&
-                        uploadProgress.estimatedTimeRemaining > 0 && (
-                          <span>
-                            Pozostało: {Math.ceil(uploadProgress.estimatedTimeRemaining)}s
-                          </span>
-                        )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={cancelUpload}
-                className="ml-4 px-3 py-1.5 text-sm font-medium text-error-600 dark:text-error-400 hover:text-error-700 dark:hover:text-error-300 border border-error-300 dark:border-error-700 rounded-md hover:bg-error-50 dark:hover:bg-error-900/20 transition-colors"
-              >
-                Anuluj
-              </button>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-brand-500 h-2 rounded-full transition-all duration-300"
-                style={{
-                  width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
-                }}
-              />
-            </div>
-            {uploadProgress.errors.length > 0 && (
-              <div className="mt-2 text-xs text-error-600 dark:text-error-400">
-                Błędy: {uploadProgress.errors.length} | Sukcesy: {uploadProgress.successes}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Drag and Drop Upload Area */}
         <FileUploadZone
           onFileSelect={handleFileSelect}
@@ -820,10 +586,10 @@ export default function GalleryPhotos() {
             {gallery?.originalsLimitBytes && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <StorageDisplay
-                  bytesUsed={optimisticOriginalsBytes ?? gallery.originalsBytesUsed ?? 0}
-                  limitBytes={gallery.originalsLimitBytes}
+                  bytesUsed={currentGallery?.originalsBytesUsed ?? gallery?.originalsBytesUsed ?? 0}
+                  limitBytes={gallery?.originalsLimitBytes}
                   label="Oryginały"
-                  isLoading={optimisticOriginalsBytes !== null && galleryLoading}
+                  isLoading={galleryLoading}
                 />
               </div>
             )}
@@ -1030,7 +796,6 @@ export default function GalleryPhotos() {
           <button
             onClick={() => {
               localStorage.removeItem("photo_delete_confirm_suppress");
-              showToast("success", "Cleared", "Suppression flag cleared");
             }}
             className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
           >

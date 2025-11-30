@@ -416,6 +416,33 @@ class ApiService {
     },
 
     /**
+     * Get only the cover photo URL for a gallery (lightweight endpoint)
+     */
+    getCoverPhoto: async (galleryId: string): Promise<{ coverPhotoUrl: string | null }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request<{ coverPhotoUrl: string | null }>(
+        `/galleries/${galleryId}/cover-photo`
+      );
+    },
+
+    /**
+     * Get only the bytes used for a gallery (lightweight endpoint)
+     */
+    getBytesUsed: async (galleryId: string): Promise<{
+      originalsBytesUsed: number;
+      finalsBytesUsed: number;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request<{ originalsBytesUsed: number; finalsBytesUsed: number }>(
+        `/galleries/${galleryId}/bytes-used`
+      );
+    },
+
+    /**
      * Create a new gallery
      */
     create: async (data: Partial<Gallery>): Promise<Gallery> => {

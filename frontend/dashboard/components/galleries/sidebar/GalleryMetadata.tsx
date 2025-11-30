@@ -1,27 +1,19 @@
 import React from "react";
 
-interface Gallery {
-  createdAt?: string;
-  ttlExpiresAt?: string;
-  ttl?: number;
-  expiresAt?: string;
-  [key: string]: unknown;
-}
+import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface GalleryMetadataProps {
-  gallery: Gallery | null;
-  isPaid: boolean;
   shouldHideSecondaryElements: boolean;
-  galleryLoading: boolean;
 }
 
 export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
-  gallery,
-  isPaid,
   shouldHideSecondaryElements,
-  galleryLoading,
 }) => {
-  if (galleryLoading || !gallery || shouldHideSecondaryElements) {
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  const isLoading = useGalleryStore((state) => state.isLoading);
+  const isPaid = gallery?.isPaid ?? false;
+  
+  if (isLoading || !gallery || shouldHideSecondaryElements) {
     return null;
   }
 

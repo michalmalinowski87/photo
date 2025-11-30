@@ -58,6 +58,7 @@ export interface PhotoUploadHandlerConfig {
   reloadGallery?: () => Promise<void>;
   deletingImagesRef?: React.MutableRefObject<Set<string>>;
   deletedImageKeysRef?: React.MutableRefObject<Set<string>>;
+  onUploadSuccess?: (fileName: string, file: File, key: string) => void; // Called when S3 upload succeeds (before processing)
 }
 
 export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
@@ -75,6 +76,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
   const perImageProgressRef = useRef<PerImageProgress[]>([]);
   const uploadCancelRef = useRef(false);
   const fileToKeyMapRef = useRef<Map<string, string>>(new Map());
+  const fileNameToFileMapRef = useRef<Map<string, File>>(new Map()); // Track File objects by filename
 
   // Initialize hooks
   const { fetchPresignedUrls } = usePresignedUrls({
@@ -114,12 +116,18 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         errors: [...prev.errors, { file, error }],
       }));
     },
-    onSuccess: (file, key) => {
-      fileToKeyMapRef.current.set(file, key);
+    onSuccess: (fileName, key) => {
+      fileToKeyMapRef.current.set(fileName, key);
       setUploadProgress((prev) => ({
         ...prev,
         successes: prev.successes + 1,
       }));
+      
+      // Call onUploadSuccess with File object if available
+      const file = fileNameToFileMapRef.current.get(fileName);
+      if (file && config.onUploadSuccess) {
+        config.onUploadSuccess(fileName, file, key);
+      }
     },
   });
 
@@ -194,6 +202,12 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
       perImageProgressRef.current = initialProgress;
       config.onPerImageProgress?.(initialProgress);
       fileToKeyMapRef.current.clear();
+      fileNameToFileMapRef.current.clear();
+      
+      // Store File objects for later use
+      imageFiles.forEach((file) => {
+        fileNameToFileMapRef.current.set(file.name, file);
+      });
 
       try {
         // Step 1: Get presigned URLs

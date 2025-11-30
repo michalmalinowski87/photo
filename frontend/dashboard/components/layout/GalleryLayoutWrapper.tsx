@@ -10,7 +10,7 @@ import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { useGalleryStore } from "../../store/gallerySlice";
-import { useOrderStore, type Order as StoreOrder } from "../../store/orderSlice";
+import { useOrderStore } from "../../store/orderSlice";
 import { useUserStore } from "../../store/userSlice";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
@@ -397,7 +397,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         gallery={null}
         isPaid={false}
         galleryUrl=""
-        onPay={() => {}}
         onCopyUrl={() => {}}
         onSendLink={() => {}}
         onSettings={() => {}}
@@ -416,7 +415,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         gallery={null}
         isPaid={false}
         galleryUrl=""
-        onPay={() => {}}
         onCopyUrl={() => {}}
         onSendLink={() => {}}
         onSettings={() => {}}
@@ -491,7 +489,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         gallery={gallery ? { ...gallery, orders: galleryOrders } : null}
         isPaid={isPaid}
         galleryUrl={galleryUrl}
-        onPay={handlePayClick}
         onCopyUrl={handleCopyUrl}
         onSendLink={handleSendLink}
         sendLinkLoading={sendLinkLoading}

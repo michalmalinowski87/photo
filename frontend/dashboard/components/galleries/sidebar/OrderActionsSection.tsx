@@ -1,52 +1,49 @@
+import { useRouter } from "next/router";
 import React from "react";
 
+import { useGalleryStore } from "../../../store/gallerySlice";
+import { useOrderStore } from "../../../store/orderSlice";
 import Button from "../../ui/button/Button";
-
-interface Gallery {
-  selectionEnabled?: boolean;
-  [key: string]: unknown;
-}
-
-interface Order {
-  deliveryStatus?: string;
-  paymentStatus?: string;
-  [key: string]: unknown;
-}
 
 interface OrderActionsSectionProps {
   orderId: string;
-  order: Order;
-  gallery: Gallery | null;
-  galleryLoading: boolean;
-  isPaid: boolean;
-  canDownloadZip?: boolean;
-  hasFinals?: boolean;
   onDownloadZip?: () => void;
   onDownloadFinals?: () => void;
   onApproveChangeRequest?: () => void;
   onDenyChangeRequest?: () => void;
   onMarkOrderPaid?: () => void;
   onSendFinalsToClient?: () => void;
+  canDownloadZip?: boolean;
+  hasFinals?: boolean;
 }
 
 export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   orderId,
-  order,
-  gallery,
-  galleryLoading,
-  isPaid,
-  canDownloadZip,
-  hasFinals,
   onDownloadZip,
   onDownloadFinals,
   onApproveChangeRequest,
   onDenyChangeRequest,
   onMarkOrderPaid,
   onSendFinalsToClient,
+  canDownloadZip,
+  hasFinals,
 }) => {
+  const router = useRouter();
+  const { id: galleryId } = router.query;
+  
+  // Subscribe directly to store
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  const isLoading = useGalleryStore((state) => state.isLoading);
+  const order = useOrderStore((state) => state.currentOrder);
+  
+  const isPaid = gallery?.isPaid ?? false;
+
   if (!orderId || !order || !isPaid) {
     return null;
   }
+
+  // Check if order has finals - check order.finalImages or similar
+  const orderHasFinals = hasFinals ?? false;
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
@@ -59,7 +56,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
 
       <div className="space-y-2 px-3">
         {/* Download Selected Originals ZIP */}
-        {!galleryLoading &&
+        {!isLoading &&
           gallery &&
           gallery.selectionEnabled !== false &&
           canDownloadZip &&
@@ -88,7 +85,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
           )}
 
         {/* Download Finals - Only show if finals are uploaded */}
-        {onDownloadFinals && hasFinals && (
+        {onDownloadFinals && orderHasFinals && (
           <Button
             size="sm"
             variant="outline"
@@ -205,7 +202,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Send Finals to Client - Only show if finals are uploaded */}
-        {onSendFinalsToClient && hasFinals && (
+        {onSendFinalsToClient && orderHasFinals && (
           <Button
             size="sm"
             variant="outline"

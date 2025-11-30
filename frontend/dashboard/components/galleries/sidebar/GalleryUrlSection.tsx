@@ -1,71 +1,119 @@
+import { useRouter } from "next/router";
 import React, { useState } from "react";
 
+import { useToast } from "../../../hooks/useToast";
+import api, { formatApiError } from "../../../lib/api-service";
+import { useGalleryStore } from "../../../store/gallerySlice";
+import { useOrderStore } from "../../../store/orderSlice";
 import Button from "../../ui/button/Button";
 
-interface Gallery {
-  selectionEnabled?: boolean;
-  clientEmail?: string;
-  orders?: unknown[];
-  [key: string]: unknown;
-}
-
-interface Order {
-  deliveryStatus?: string;
-  [key: string]: unknown;
-}
-
 interface GalleryUrlSectionProps {
-  galleryUrl: string;
-  gallery: Gallery | null;
-  galleryLoading: boolean;
-  isPaid: boolean;
-  order?: Order;
-  sendLinkLoading: boolean;
   shouldHideSecondaryElements: boolean;
-  onCopyUrl: () => void;
-  onSendLink: () => void;
 }
 
 export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
-  galleryUrl,
-  gallery,
-  galleryLoading,
-  isPaid,
-  order,
-  sendLinkLoading,
   shouldHideSecondaryElements,
-  onCopyUrl,
-  onSendLink,
 }) => {
+  const router = useRouter();
+  const { id: galleryId } = router.query;
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  const isLoading = useGalleryStore((state) => state.isLoading);
+  const fetchGallery = useGalleryStore((state) => state.fetchGallery);
+  const fetchGalleryOrders = useGalleryStore((state) => state.fetchGalleryOrders);
+  const getGalleryOrders = useGalleryStore((state) => state.getGalleryOrders);
+  
+  const order = useOrderStore((state) => state.currentOrder);
+  const { showToast } = useToast();
+  
   const [urlCopied, setUrlCopied] = useState(false);
+  const [sendLinkLoading, setSendLinkLoading] = useState(false);
+
+  // Compute gallery URL from galleryId
+  const galleryUrl =
+    typeof window !== "undefined" && galleryIdStr
+      ? `${window.location.origin}/gallery/${galleryIdStr}`
+      : "";
+
+  const isPaid = gallery?.isPaid ?? false;
 
   if (!galleryUrl || shouldHideSecondaryElements) {
     return null;
   }
 
   const handleCopyClick = () => {
-    onCopyUrl();
-    setUrlCopied(true);
-    setTimeout(() => {
-      setUrlCopied(false);
-    }, 2500);
+    if (typeof window !== "undefined" && galleryUrl) {
+      void navigator.clipboard.writeText(galleryUrl).catch(() => {
+        // Ignore clipboard errors
+      });
+      setUrlCopied(true);
+      setTimeout(() => {
+        setUrlCopied(false);
+      }, 2500);
+    }
   };
 
+  const handleSendLink = async () => {
+    if (!galleryIdStr || sendLinkLoading) {
+      return;
+    }
+
+    // Check if this is a reminder (has existing orders) or initial invitation
+    const galleryOrders = galleryIdStr ? getGalleryOrders(galleryIdStr, 30000) : null;
+    const isReminder = galleryOrders && galleryOrders.length > 0;
+
+    setSendLinkLoading(true);
+
+    try {
+      const response = await api.galleries.sendToClient(galleryIdStr);
+      const isReminderResponse = response.isReminder ?? isReminder;
+
+      showToast(
+        "success",
+        "Sukces",
+        isReminderResponse
+          ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
+          : "Link do galerii został wysłany do klienta"
+      );
+
+      // Only reload if it's an initial invitation (creates order), not for reminders
+      if (!isReminderResponse) {
+        // Reload gallery data and orders to get the newly created CLIENT_SELECTING order
+        await fetchGallery(galleryIdStr, true);
+        await fetchGalleryOrders(galleryIdStr, true);
+
+        // Trigger event to reload orders if we're on the gallery detail page
+        if (typeof window !== "undefined") {
+          void window.dispatchEvent(
+            new CustomEvent("galleryOrdersUpdated", { detail: { galleryId: galleryIdStr } })
+          );
+        }
+      }
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
+    } finally {
+      setSendLinkLoading(false);
+    }
+  };
+
+  // Get gallery orders from store
+  const galleryOrders = galleryIdStr ? getGalleryOrders(galleryIdStr, 30000) : null;
+  
   // Check if gallery has a CLIENT_SELECTING order
   const hasClientSelectingOrder =
-    gallery?.orders &&
-    Array.isArray(gallery.orders) &&
-    gallery.orders.some((o: unknown) => {
+    galleryOrders &&
+    Array.isArray(galleryOrders) &&
+    galleryOrders.some((o: unknown) => {
       const orderObj = o as { deliveryStatus?: string };
       return orderObj.deliveryStatus === "CLIENT_SELECTING";
     });
 
   // Check if gallery has any existing orders (for determining button text)
-  const hasExistingOrders =
-    gallery?.orders && Array.isArray(gallery.orders) && gallery.orders.length > 0;
+  const hasExistingOrders = galleryOrders && Array.isArray(galleryOrders) && galleryOrders.length > 0;
 
   const shouldShowShareButton =
-    !galleryLoading &&
+    !isLoading &&
     gallery &&
     isPaid &&
     gallery.selectionEnabled &&
@@ -140,7 +188,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
             <Button
               variant="primary"
               size="sm"
-              onClick={onSendLink}
+              onClick={handleSendLink}
               disabled={sendLinkLoading}
               className="w-full mt-2"
               startIcon={

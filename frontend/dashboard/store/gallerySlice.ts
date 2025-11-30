@@ -59,6 +59,8 @@ interface GalleryState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   updateFinalsBytesUsed: (sizeDelta: number) => void; // Optimistic update for finals bytes
+  updateOriginalsBytesUsed: (sizeDelta: number) => void; // Optimistic update for originals bytes
+  updateCoverPhotoUrl: (coverPhotoUrl: string | null) => void; // Update only cover photo URL
   clearCurrentGallery: () => void;
   clearGalleryList: () => void;
   clearAll: () => void;
@@ -78,6 +80,9 @@ interface GalleryState {
     state?: { duration?: string; planKey?: string } | null
   ) => void;
 }
+
+// Debounce timers for refreshGalleryBytesOnly (keyed by galleryId)
+const bytesRefreshTimers = new Map<string, NodeJS.Timeout>();
 
 export const useGalleryStore = create<GalleryState>()(
   devtools(
@@ -112,6 +117,37 @@ export const useGalleryStore = create<GalleryState>()(
             currentGallery: {
               ...state.currentGallery,
               finalsBytesUsed: newFinalsBytes,
+            },
+          };
+        });
+      },
+
+      updateOriginalsBytesUsed: (sizeDelta: number) => {
+        set((state) => {
+          if (!state.currentGallery) {
+            return state;
+          }
+          const currentOriginalsBytes =
+            (state.currentGallery.originalsBytesUsed as number | undefined) ?? 0;
+          const newOriginalsBytes = Math.max(0, currentOriginalsBytes + sizeDelta);
+          return {
+            currentGallery: {
+              ...state.currentGallery,
+              originalsBytesUsed: newOriginalsBytes,
+            },
+          };
+        });
+      },
+
+      updateCoverPhotoUrl: (coverPhotoUrl: string | null) => {
+        set((state) => {
+          if (!state.currentGallery) {
+            return state;
+          }
+          return {
+            currentGallery: {
+              ...state.currentGallery,
+              coverPhotoUrl,
             },
           };
         });
@@ -300,51 +336,65 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       refreshGalleryBytesOnly: async (galleryId: string) => {
-        const state = get();
-
-        // Only refresh if this is the current gallery
-        if (state.currentGalleryId !== galleryId) {
-          return;
+        // If a timeout already exists for this galleryId, don't create another one
+        // This ensures multiple rapid calls result in only one API call
+        const existingTimer = bytesRefreshTimers.get(galleryId);
+        if (existingTimer) {
+          return; // Already have a pending request, skip this call
         }
 
-        // Silent refresh: fetch gallery but only update bytes fields without triggering loading state
-        try {
-          const galleryData = await api.galleries.get(galleryId);
+        // Set new timeout to debounce the API call by 2 seconds
+        const timer = setTimeout(async () => {
+          bytesRefreshTimers.delete(galleryId);
+          
+          const state = get();
 
-          // Only update bytes fields if gallery data is valid
-          if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
-            set((currentState) => {
-              if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
-                return currentState; // Don't update if gallery changed
-              }
-
-              // Only update bytes fields, keep everything else
-              return {
-                currentGallery: {
-                  ...currentState.currentGallery,
-                  originalsBytesUsed: galleryData.originalsBytesUsed,
-                  finalsBytesUsed: galleryData.finalsBytesUsed,
-                },
-                galleryCacheTimestamp: Date.now(), // Update cache timestamp
-              };
-            });
-
-            // Dispatch event with refreshAfterUpload flag to prevent cascading API calls
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("galleryUpdated", {
-                  detail: {
-                    galleryId,
-                    refreshAfterUpload: true, // Signal that this is a refresh after upload completion
-                  },
-                })
-              );
-            }
+          // Only refresh if this is the current gallery
+          if (state.currentGalleryId !== galleryId) {
+            return;
           }
-        } catch (err) {
-          // Silently fail - don't show error or trigger loading state
-          console.error("[GalleryStore] Failed to refresh gallery bytes (silent):", err);
-        }
+
+          // Silent refresh: use lightweight endpoint to only fetch bytes fields
+          try {
+            const bytesData = await api.galleries.getBytesUsed(galleryId);
+
+            // Only update bytes fields - lightweight update without full gallery fetch
+            if (bytesData) {
+              set((currentState) => {
+                if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
+                  return currentState; // Don't update if gallery changed
+                }
+
+                // Only update bytes fields, keep everything else
+                return {
+                  currentGallery: {
+                    ...currentState.currentGallery,
+                    originalsBytesUsed: bytesData.originalsBytesUsed ?? 0,
+                    finalsBytesUsed: bytesData.finalsBytesUsed ?? 0,
+                  },
+                  galleryCacheTimestamp: Date.now(), // Update cache timestamp
+                };
+              });
+
+              // Dispatch event with refreshAfterUpload flag to prevent cascading API calls
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("galleryUpdated", {
+                    detail: {
+                      galleryId,
+                      refreshAfterUpload: true, // Signal that this is a refresh after upload completion
+                    },
+                  })
+                );
+              }
+            }
+          } catch (err) {
+            // Silently fail - don't show error or trigger loading state
+            console.error("[GalleryStore] Failed to refresh gallery bytes (silent):", err);
+          }
+        }, 2000); // 2 second debounce
+
+        bytesRefreshTimers.set(galleryId, timer);
       },
 
       setFilter: (filter: string) => {

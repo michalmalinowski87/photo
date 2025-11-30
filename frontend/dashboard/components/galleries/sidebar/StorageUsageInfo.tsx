@@ -1,35 +1,15 @@
 import React from "react";
-
-import type { PlanRecommendation } from "../../../lib/plan-types";
-
-interface Gallery {
-  galleryId: string;
-  originalsBytesUsed?: number;
-  finalsBytesUsed?: number;
-  originalsLimitBytes?: number;
-  finalsLimitBytes?: number;
-  [key: string]: unknown;
-}
+import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface StorageUsageInfoProps {
-  gallery: Gallery | null;
-  galleryLoading: boolean;
   orderId?: string;
-  isPaid: boolean;
-  optimisticBytesUsed: number | null;
-  planRecommendation: PlanRecommendation | null;
-  isLoadingPlanRecommendation: boolean;
 }
 
-export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({
-  gallery,
-  galleryLoading,
-  orderId,
-  isPaid,
-  optimisticBytesUsed,
-  planRecommendation,
-  isLoadingPlanRecommendation,
-}) => {
+export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) => {
+  const currentGallery = useGalleryStore((state) => state.currentGallery);
+  const galleryLoading = useGalleryStore((state) => state.isLoading);
+
+  const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {
     if (!bytes || bytes === 0) {
       return "0.00 MB";
@@ -45,21 +25,16 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  // Don't show on order pages
-  if (orderId || galleryLoading || !gallery?.galleryId) {
+  // Don't show on order pages or if no gallery
+  if (orderId || galleryLoading || !currentGallery?.galleryId) {
     return null;
   }
 
-  // Use optimistic bytes if available (instant updates), then plan recommendation, then gallery data
-  const originalsBytes =
-    optimisticBytesUsed ?? planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0;
-  const finalsBytes = gallery.finalsBytesUsed ?? 0;
+  const originalsBytes = currentGallery.originalsBytesUsed ?? 0;
+  const finalsBytes = currentGallery.finalsBytesUsed ?? 0;
   // Only show limits if gallery is paid (has a plan)
-  const originalsLimit =
-    isPaid && (planRecommendation?.originalsLimitBytes ?? gallery.originalsLimitBytes)
-      ? (planRecommendation?.originalsLimitBytes ?? gallery.originalsLimitBytes)
-      : undefined;
-  const finalsLimit = isPaid ? gallery.finalsLimitBytes : undefined;
+  const originalsLimit = isPaid ? currentGallery.originalsLimitBytes : undefined;
+  const finalsLimit = isPaid ? currentGallery.finalsLimitBytes : undefined;
 
   return (
     <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
@@ -70,9 +45,6 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({
         Oryginały: {formatBytes(originalsBytes)}
         {originalsLimit !== undefined && (
           <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
-        )}
-        {isLoadingPlanRecommendation && planRecommendation === null && (
-          <span className="ml-2 text-xs text-gray-400">(aktualizowanie...)</span>
         )}
       </div>
       <div className="text-sm text-gray-700 dark:text-gray-300">

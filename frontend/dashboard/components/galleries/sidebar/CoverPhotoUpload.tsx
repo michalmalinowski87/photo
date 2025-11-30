@@ -1,37 +1,31 @@
+import { useRouter } from "next/router";
 import React, { useState, useRef } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
+import { useGalleryStore } from "../../../store/gallerySlice";
 import { RetryableImage } from "../../ui/RetryableImage";
 
-interface Gallery {
-  galleryId: string;
-  coverPhotoUrl?: string;
-  [key: string]: unknown;
-}
-
-interface CoverPhotoUploadProps {
-  gallery: Gallery | null;
-  galleryLoading: boolean;
-  coverPhotoUrl: string | null;
-  onCoverPhotoChange: (url: string | null) => void;
-  onReloadGallery?: () => Promise<void>;
-}
-
-export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
-  gallery,
-  galleryLoading,
-  coverPhotoUrl,
-  onCoverPhotoChange,
-  onReloadGallery,
-}) => {
+export const CoverPhotoUpload: React.FC = () => {
+  const router = useRouter();
+  const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
+  const galleryId = typeof galleryIdParam === "string" ? galleryIdParam : undefined;
+  
+  // Subscribe directly to store
+  const gallery = useGalleryStore((state) => state.currentGallery);
+  const isLoading = useGalleryStore((state) => state.isLoading);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return
+  const updateCoverPhotoUrl = useGalleryStore((state) => state.updateCoverPhotoUrl);
+  
+  const coverPhotoUrl = gallery?.coverPhotoUrl ?? null;
   const { showToast } = useToast();
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [processingCover, setProcessingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleCoverPhotoUpload = async (file: File): Promise<void> => {
-    if (!file || !gallery?.galleryId) {
+    if (!file || !galleryId || typeof galleryId !== "string") {
       return;
     }
 
@@ -49,7 +43,7 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
       const fileExtension = file.name.split(".").pop() ?? "jpg";
       const key = `cover_${timestamp}.${fileExtension}`;
       const presignResponse = await api.uploads.getPresignedUrl({
-        galleryId: gallery.galleryId,
+        galleryId,
         key,
         contentType: file.type ?? "image/jpeg",
         fileSize: file.size,
@@ -67,27 +61,61 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
       // Update gallery in backend with S3 URL - backend will convert it to CloudFront
       const s3Url = presignResponse.url.split("?")[0]; // Remove query params
 
-      await api.galleries.update(gallery.galleryId, {
+      await api.galleries.update(galleryId, {
         coverPhotoUrl: s3Url,
       });
 
-      // Reload gallery data to get the CloudFront URL from backend
-      if (onReloadGallery) {
-        await onReloadGallery();
-      }
-
-      showToast("success", "Sukces", "Okładka galerii została przesłana");
-    } catch (err: unknown) {
-      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
-    } finally {
+      // Switch to processing state and poll for processed CloudFront URL
       setUploadingCover(false);
+      setProcessingCover(true);
+
+      // Poll the lightweight cover photo endpoint until we get a CloudFront URL
+      let attempts = 0;
+      const maxAttempts = 30;
+      const pollInterval = 1000;
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+          const response = await api.galleries.getCoverPhoto(galleryId);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+          const fetchedUrl = response.coverPhotoUrl as string | null;
+          
+          // Check if we have a CloudFront URL (not S3, not null)
+          if (fetchedUrl && typeof fetchedUrl === "string" && !fetchedUrl.includes(".s3.") && !fetchedUrl.includes("s3.amazonaws.com")) {
+            // Update store directly - no full gallery reload needed
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            updateCoverPhotoUrl(fetchedUrl);
+            setProcessingCover(false);
+            showToast("success", "Sukces", "Okładka galerii została przesłana");
+            return;
+          }
+          
+          // Wait before next poll
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        } catch (pollErr) {
+          console.error("Failed to poll for cover photo URL:", pollErr);
+          // Continue polling on error
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        }
+      }
+      
+      // Max attempts reached
+      setProcessingCover(false);
+      showToast("warning", "Ostrzeżenie", "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle");
+    } catch (err: unknown) {
+      setUploadingCover(false);
+      setProcessingCover(false);
+      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
     }
   };
 
   const handleRemoveCoverPhoto = async (e: React.MouseEvent): Promise<void> => {
     e.stopPropagation(); // Prevent triggering the file input
 
-    if (!gallery?.galleryId) {
+    if (!galleryId || typeof galleryId !== "string") {
       return;
     }
 
@@ -95,16 +123,13 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
 
     try {
       // Remove cover photo by setting coverPhotoUrl to null
-      await api.galleries.update(gallery.galleryId, {
+      await api.galleries.update(galleryId, {
         coverPhotoUrl: null,
       });
 
-      // Reload gallery data to ensure consistency
-      if (onReloadGallery) {
-        await onReloadGallery();
-      }
-
-      onCoverPhotoChange(null);
+      // Update store directly - no full gallery reload needed
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      updateCoverPhotoUrl(null);
       showToast("success", "Sukces", "Okładka galerii została usunięta");
     } catch (err: unknown) {
       showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");
@@ -140,7 +165,7 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
     setIsDragging(false);
   };
 
-  if (galleryLoading || !gallery) {
+  if (isLoading || !gallery) {
     return null;
   }
 
@@ -169,16 +194,21 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
               maxRetries={30}
               initialDelay={500}
             />
+            {processingCover && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                <div className="text-white text-sm font-medium">Przetwarzanie...</div>
+              </div>
+            )}
             <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
               <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
-                {uploadingCover ? "Przesyłanie..." : "Kliknij na obraz aby zmienić"}
+                {uploadingCover ? "Przesyłanie..." : processingCover ? "Przetwarzanie..." : "Kliknij na obraz aby zmienić"}
               </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleRemoveCoverPhoto(e);
                 }}
-                disabled={uploadingCover}
+                disabled={uploadingCover || processingCover}
                 className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Usuń okładkę"
               >
@@ -188,8 +218,10 @@ export const CoverPhotoUpload: React.FC<CoverPhotoUploadProps> = ({
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-            {uploadingCover ? (
-              <div className="text-sm text-gray-600 dark:text-gray-400">Przesyłanie...</div>
+            {uploadingCover || processingCover ? (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {uploadingCover ? "Przesyłanie..." : "Przetwarzanie..."}
+              </div>
             ) : (
               <>
                 <svg
