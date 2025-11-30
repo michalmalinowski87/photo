@@ -160,11 +160,6 @@ export function FinalsTab({
                             ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                             : "bg-error-500 text-white hover:bg-error-600"
                         }`}
-                        title={
-                          deletingImages.size > 0
-                            ? "Musisz poczekać, aż bieżące usuwanie się zakończy"
-                            : "Usuń zdjęcie"
-                        }
                       >
                         Usuń
                       </button>

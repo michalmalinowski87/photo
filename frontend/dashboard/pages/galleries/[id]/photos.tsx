@@ -586,13 +586,6 @@ export default function GalleryPhotos() {
                                     ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                                     : "bg-error-500 text-white hover:bg-error-600"
                                 }`}
-                                title={
-                                  deletingImages.size > 0
-                                    ? "Musisz poczekać, aż bieżące usuwanie się zakończy"
-                                    : isApproved
-                                      ? "Nie można usunąć zdjęcia z zatwierdzonej selekcji"
-                                      : "Usuń zdjęcie"
-                                }
                               >
                                 Usuń
                               </button>
