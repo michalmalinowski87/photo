@@ -23,8 +23,6 @@ interface UseOrderActionsOptions {
   openDenyModal: () => void;
   closeDenyModal: () => void;
   setDenyLoading: (loading: boolean) => void;
-  openCleanupModal: () => void;
-  closeCleanupModal: () => void;
 }
 
 export const useOrderActions = ({
@@ -38,8 +36,6 @@ export const useOrderActions = ({
   openDenyModal,
   closeDenyModal,
   setDenyLoading,
-  openCleanupModal,
-  closeCleanupModal,
 }: UseOrderActionsOptions) => {
   const { showToast } = useToast();
   const { downloadZip } = useZipDownloadHook();
@@ -179,93 +175,36 @@ export const useOrderActions = ({
     });
   }, [galleryId, orderId, downloadZip]);
 
-  const sendFinalLinkWithCleanup = useCallback(
-    async (shouldCleanup: boolean) => {
-      if (!galleryId || !orderId) {
-        return;
-      }
-
-      try {
-        const response = await api.orders.sendFinalLink(galleryId as string, orderId as string);
-
-        // If user confirmed cleanup, call cleanup endpoint
-        if (shouldCleanup) {
-          try {
-            await api.orders.cleanupOriginals(galleryId as string, orderId as string);
-            // Invalidate all caches after cleanup (deletes originals)
-            invalidateAllGalleryCaches(galleryId as string);
-            showToast(
-              "success",
-              "Sukces",
-              "Link do zdjęć finalnych został wysłany do klienta. Oryginały zostały usunięte."
-            );
-          } catch (cleanupErr: unknown) {
-            // If cleanup fails, still show success for sending link, but warn about cleanup
-            showToast(
-              "success",
-              "Sukces",
-              "Link do zdjęć finalnych został wysłany do klienta. Nie udało się usunąć oryginałów."
-            );
-            console.error("Failed to cleanup originals after sending final link", cleanupErr);
-          }
-        } else {
-          showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
-        }
-
-        // Merge lightweight response into cached order instead of refetching
-        updateOrderFields(orderId as string, {
-          deliveryStatus: "DELIVERED",
-          deliveredAt: response.deliveredAt,
-        });
-        // Invalidate all caches to ensure fresh data on next fetch
-        invalidateAllGalleryCaches(galleryId as string);
-        invalidateOrderStoreGalleryCache(galleryId as string);
-        // Store update will trigger re-renders automatically via Zustand subscriptions
-      } catch (err) {
-        showToast("error", "Błąd", formatApiError(err));
-      }
-    },
-    [
-      galleryId,
-      orderId,
-      updateOrderFields,
-      invalidateGalleryOrdersCache,
-      invalidateOrderStoreGalleryCache,
-      showToast,
-    ]
-  );
-
-  const handleSendFinalsToClient = useCallback(() => {
+  const handleSendFinalsToClient = useCallback(async () => {
     if (!galleryId || !orderId) {
       return;
     }
 
-    // Check if this is a selection gallery (user-selecting gallery)
-    const isSelectionGallery = gallery?.selectionEnabled !== false;
+    try {
+      const response = await api.orders.sendFinalLink(galleryId as string, orderId as string);
 
-    // Show cleanup modal only for selection galleries
-    if (isSelectionGallery) {
-      openCleanupModal();
-    } else {
-      // For non-selection galleries, send link directly without cleanup option
-      void sendFinalLinkWithCleanup(false);
+      showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
+
+      // Merge lightweight response into cached order instead of refetching
+      updateOrderFields(orderId as string, {
+        deliveryStatus: "DELIVERED",
+        deliveredAt: response.deliveredAt,
+      });
+      // Invalidate all caches to ensure fresh data on next fetch
+      invalidateAllGalleryCaches(galleryId as string);
+      invalidateOrderStoreGalleryCache(galleryId as string);
+      // Store update will trigger re-renders automatically via Zustand subscriptions
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err));
     }
-  }, [galleryId, orderId, gallery, openCleanupModal, sendFinalLinkWithCleanup]);
-
-  const handleCleanupConfirm = useCallback(() => {
-    closeCleanupModal();
-    void sendFinalLinkWithCleanup(true);
-  }, [closeCleanupModal, sendFinalLinkWithCleanup]);
-
-  const handleCleanupCancel = useCallback(() => {
-    closeCleanupModal();
-    void sendFinalLinkWithCleanup(false);
-  }, [closeCleanupModal, sendFinalLinkWithCleanup]);
-
-  const handleCleanupClose = useCallback(() => {
-    closeCleanupModal();
-    // Close icon cancels the entire action - don't send the link
-  }, [closeCleanupModal]);
+  }, [
+    galleryId,
+    orderId,
+    updateOrderFields,
+    invalidateGalleryOrdersCache,
+    invalidateOrderStoreGalleryCache,
+    showToast,
+  ]);
 
   return {
     handleApproveChangeRequest,
@@ -274,8 +213,5 @@ export const useOrderActions = ({
     handleMarkOrderPaid,
     handleDownloadFinals,
     handleSendFinalsToClient,
-    handleCleanupConfirm,
-    handleCleanupCancel,
-    handleCleanupClose,
   };
 };

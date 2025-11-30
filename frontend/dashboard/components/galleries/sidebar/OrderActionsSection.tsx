@@ -28,7 +28,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
-  const { openModal: openCleanupModal } = useModal("cleanup-originals");
 
   // Get computed values from store (before conditional returns)
   const orderHasFinals = hasFinals(orderId);
@@ -57,17 +56,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
   const handleSendFinalsToClient = useCallback(() => {
     if (!galleryId) return;
-    // Check if this is a selection gallery (user-selecting gallery)
-    const isSelectionGallery = gallery?.selectionEnabled !== false;
-
-    // Show cleanup modal only for selection galleries
-    if (isSelectionGallery) {
-      openCleanupModal();
-    } else {
-      // For non-selection galleries, send link directly without cleanup option
-      void sendFinalsToClient(galleryId, orderId, false);
-    }
-  }, [galleryId, orderId, gallery, openCleanupModal, sendFinalsToClient]);
+    void sendFinalsToClient(galleryId, orderId);
+  }, [galleryId, orderId, sendFinalsToClient]);
 
   const handleDownloadZip = useCallback(async () => {
     if (!galleryId) return;

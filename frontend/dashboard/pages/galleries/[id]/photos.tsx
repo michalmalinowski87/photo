@@ -6,6 +6,7 @@ import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
+import Badge from "../../../components/ui/badge/Badge";
 import { FileUploadZone } from "../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";
 import { StorageDisplay } from "../../../components/upload/StorageDisplay";
@@ -106,8 +107,11 @@ export default function GalleryPhotos() {
   const [images, setImages] = useState<GalleryImage[]>([]);
   interface GalleryOrder {
     orderId?: string;
+    orderNumber?: string | number;
     deliveryStatus?: string;
     selectedKeys?: string[] | string;
+    createdAt?: string;
+    deliveredAt?: string;
     [key: string]: unknown;
   }
   const [orders, setOrders] = useState<GalleryOrder[]>([]);
@@ -115,8 +119,10 @@ export default function GalleryPhotos() {
   const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track polling timeout
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
+  const [imageOrderStatus, setImageOrderStatus] = useState<Map<string, string>>(new Map()); // Map image key to order delivery status
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set()); // Track expanded order sections
 
   // Use hook for deletion logic
   const {
@@ -307,17 +313,44 @@ export default function GalleryPhotos() {
       setApprovedSelectionKeys(approvedKeys);
 
       // Collect all selected keys from ANY order (for "Selected" display)
+      // Also track order delivery status for each image
       const allOrderKeys = new Set<string>();
+      const imageStatusMap = new Map<string, string>();
+      
       (ordersData as GalleryOrder[]).forEach((order) => {
         const selectedKeys = Array.isArray(order.selectedKeys)
           ? order.selectedKeys
           : typeof order.selectedKeys === "string"
             ? (JSON.parse(order.selectedKeys) as string[])
             : [];
-        selectedKeys.forEach((key: string) => allOrderKeys.add(key));
+        const orderStatus = order.deliveryStatus || "";
+        
+        selectedKeys.forEach((key: string) => {
+          allOrderKeys.add(key);
+          // Track the highest priority status for each image
+          // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
+          const currentStatus = imageStatusMap.get(key);
+          if (!currentStatus) {
+            imageStatusMap.set(key, orderStatus);
+          } else if (orderStatus === "DELIVERED") {
+            imageStatusMap.set(key, "DELIVERED");
+          } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
+            imageStatusMap.set(key, "PREPARING_DELIVERY");
+          } else if (orderStatus === "PREPARING_FOR_DELIVERY" && 
+                     currentStatus !== "DELIVERED" && 
+                     currentStatus !== "PREPARING_DELIVERY") {
+            imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
+          } else if (orderStatus === "CLIENT_APPROVED" && 
+                     currentStatus !== "DELIVERED" && 
+                     currentStatus !== "PREPARING_DELIVERY" &&
+                     currentStatus !== "PREPARING_FOR_DELIVERY") {
+            imageStatusMap.set(key, "CLIENT_APPROVED");
+          }
+        });
       });
 
       setAllOrderSelectionKeys(allOrderKeys);
+      setImageOrderStatus(imageStatusMap);
     } catch (_err) {
       // Don't show error toast - this is not critical
     }
@@ -413,6 +446,203 @@ export default function GalleryPhotos() {
     return imageKey ? allOrderSelectionKeys.has(imageKey) : false;
   };
 
+  // Get order delivery status for an image
+  const getImageOrderStatus = (image: GalleryImage): string | null => {
+    const imageKey = image.key ?? image.filename;
+    return imageKey ? (imageOrderStatus.get(imageKey) || null) : null;
+  };
+
+  // Helper to normalize selectedKeys from order
+  const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
+    if (!selectedKeys) return [];
+    if (Array.isArray(selectedKeys)) return selectedKeys.map((k) => k.toString().trim());
+    if (typeof selectedKeys === "string") {
+      try {
+        const parsed = JSON.parse(selectedKeys);
+        return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  // Format date for display
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("pl-PL", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Get delivered orders (DELIVERED or PREPARING_DELIVERY)
+  const deliveredOrders = (orders as GalleryOrder[]).filter(
+    (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+  );
+
+  // Group images by order
+  const imagesByOrder = new Map<string, GalleryImage[]>();
+  const imagesInOrders = new Set<string>();
+
+  deliveredOrders.forEach((order) => {
+    const orderId = order.orderId;
+    if (!orderId) return;
+
+    const selectedKeys = normalizeOrderSelectedKeys(order.selectedKeys);
+    const orderImages: GalleryImage[] = [];
+
+    images.forEach((img) => {
+      const imgKey = (img.key ?? img.filename ?? "").toString().trim();
+      if (imgKey && selectedKeys.includes(imgKey)) {
+        orderImages.push(img);
+        imagesInOrders.add(imgKey);
+      }
+    });
+
+    if (orderImages.length > 0) {
+      imagesByOrder.set(orderId, orderImages);
+    }
+  });
+
+  // Get unselected images (not in any delivered order)
+  const unselectedImages = images.filter((img) => {
+    const imgKey = (img.key ?? img.filename ?? "").toString().trim();
+    return imgKey && !imagesInOrders.has(imgKey);
+  });
+
+  // Toggle section expansion
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
+  // Render image grid
+  const renderImageGrid = (imagesToRender: GalleryImage[]) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      {imagesToRender.map((img, idx) => {
+        const isApproved = isImageInApprovedSelection(img);
+        const isInAnyOrder = isImageInAnyOrder(img);
+        const orderStatus = getImageOrderStatus(img);
+        const imageKey = img.key ?? img.filename ?? "";
+        const imageSrc = img.thumbUrl ?? img.previewUrl ?? img.url ?? "";
+        const isProcessing = !imageSrc;
+
+        return (
+          <div
+            key={imageKey ?? idx}
+            className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
+              deletingImages.has(imageKey) ? "opacity-60" : ""
+            }`}
+          >
+            <div className="aspect-square relative">
+              {isProcessing ? (
+                <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+                  <div className="text-center space-y-2">
+                    <Loading size="sm" />
+                    <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
+                      Przetwarzanie...
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <LazyImage src={imageSrc}>
+                    {(lazySrc) =>
+                      lazySrc ? (
+                        <RetryableImage
+                          src={lazySrc}
+                          alt={imageKey}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Ładowanie...</div>
+                        </div>
+                      )
+                    }
+                  </LazyImage>
+                        {orderStatus && (() => {
+                          // Map order status to badge color and label (matching StatusBadges component)
+                          const statusMap: Record<string, { color: "success" | "info" | "warning" | "error" | "light" | "dark" | "primary"; label: string }> = {
+                            CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+                            PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
+                            PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+                            DELIVERED: { color: "success", label: "Dostarczone" },
+                          };
+                          
+                          const statusInfo = statusMap[orderStatus] ?? {
+                            color: "light" as const,
+                            label: orderStatus,
+                          };
+                          
+                          return (
+                            <div className="absolute top-2 right-2 z-20">
+                              <Badge color={statusInfo.color} variant="light" size="sm">
+                                {statusInfo.label}
+                              </Badge>
+                            </div>
+                          );
+                        })()}
+                  {deletingImages.has(imageKey) && (
+                    <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
+                      <div className="flex flex-col items-center space-y-2">
+                        <Loading size="sm" />
+                        <span className="text-white text-sm font-medium">Usuwanie...</span>
+                      </div>
+                    </div>
+                  )}
+                  {!deletingImages.has(imageKey) && (
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                      {isInAnyOrder ? (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
+                          Wybrane
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePhotoClick(img);
+                          }}
+                          disabled={isApproved || deletingImages.size > 0}
+                          className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                            isApproved || deletingImages.size > 0
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                              : "bg-error-500 text-white hover:bg-error-600"
+                          }`}
+                        >
+                          Usuń
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="p-2">
+              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{imageKey}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
       {/* Next Steps Overlay */}
@@ -496,7 +726,7 @@ export default function GalleryPhotos() {
           </div>
         </FileUploadZone>
 
-        {/* Images Grid */}
+        {/* Images Grid - Grouped by Orders */}
         {loading ? (
           <div className="p-12 text-center bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <Loading size="lg" text="Ładowanie zdjęć..." />
@@ -507,101 +737,127 @@ export default function GalleryPhotos() {
               Brak zdjęć w galerii. Prześlij zdjęcia aby rozpocząć.
             </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {images.map((img, idx) => {
-              const isApproved = isImageInApprovedSelection(img);
-              const isInAnyOrder = isImageInAnyOrder(img);
-              const imageKey = img.key ?? img.filename ?? "";
-              const imageSrc = img.thumbUrl ?? img.previewUrl ?? img.url ?? "";
-              const isProcessing = !imageSrc; // No URL = still processing
+        ) : deliveredOrders.length > 0 ? (
+          <div className="space-y-4">
+            {/* Order Sections */}
+            {deliveredOrders.map((order) => {
+              const orderId = order.orderId;
+              if (!orderId) return null;
+
+              const orderImages = imagesByOrder.get(orderId) || [];
+              if (orderImages.length === 0) return null;
+
+              const sectionId = `order-${orderId}`;
+              const isExpanded = expandedSections.has(sectionId);
+              const orderDisplayNumber =
+                order.orderNumber !== undefined && order.orderNumber !== null
+                  ? String(order.orderNumber)
+                  : orderId.slice(-8);
 
               return (
                 <div
-                  key={imageKey ?? idx}
-                  className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
-                    deletingImages.has(imageKey) ? "opacity-60" : ""
-                  }`}
+                  key={orderId}
+                  className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700"
                 >
-                  <div className="aspect-square relative">
-                    {isProcessing ? (
-                      // Show "Processing..." if image has no URL yet
-                      <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-                        <div className="text-center space-y-2">
-                          <Loading size="sm" />
-                          <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
-                            Przetwarzanie...
-                          </div>
-                        </div>
+                  <button
+                    onClick={() => toggleSection(sectionId)}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        Zlecenie #{orderDisplayNumber}
                       </div>
-                    ) : (
-                      <>
-                        <LazyImage src={imageSrc}>
-                          {(lazySrc) =>
-                            lazySrc ? (
-                              <RetryableImage
-                                src={lazySrc}
-                                alt={imageKey}
-                                className="w-full h-full object-cover rounded-lg"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  Ładowanie...
-                                </div>
-                              </div>
-                            )
-                          }
-                        </LazyImage>
-                        {isApproved && (
-                          <div className="absolute top-2 right-2 bg-success-500 text-white text-xs px-2 py-1 rounded z-20">
-                            Zatwierdzone
-                          </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {order.createdAt && (
+                          <span>Utworzono: {formatDate(order.createdAt)}</span>
                         )}
-                        {/* Deleting overlay - always visible when deleting */}
-                        {deletingImages.has(imageKey) && (
-                          <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
-                            <div className="flex flex-col items-center space-y-2">
-                              <Loading size="sm" />
-                              <span className="text-white text-sm font-medium">Usuwanie...</span>
-                            </div>
-                          </div>
+                        {order.createdAt && order.deliveredAt && <span className="mx-2">•</span>}
+                        {order.deliveredAt && (
+                          <span>Dostarczono: {formatDate(order.deliveredAt)}</span>
                         )}
-                        {/* Delete button - show always, disable when any deletion is in progress */}
-                        {!deletingImages.has(imageKey) && (
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                            {isInAnyOrder ? (
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
-                                Wybrane
-                              </div>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeletePhotoClick(img);
-                                }}
-                                disabled={isApproved || deletingImages.size > 0}
-                                className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                                  isApproved || deletingImages.size > 0
-                                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                    : "bg-error-500 text-white hover:bg-error-600"
-                                }`}
-                              >
-                                Usuń
-                              </button>
-                            )}
-                          </div>
+                        {!order.createdAt && !order.deliveredAt && (
+                          <span className="text-gray-400">Brak dat</span>
                         )}
-                      </>
-                    )}
-                  </div>
-                  <div className="p-2">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{imageKey}</p>
-                  </div>
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        {orderImages.length}{" "}
+                        {orderImages.length === 1
+                          ? "zdjęcie"
+                          : orderImages.length < 5
+                            ? "zdjęcia"
+                            : "zdjęć"}
+                      </div>
+                    </div>
+                    <svg
+                      className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                        isExpanded ? "transform rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      {renderImageGrid(orderImages)}
+                    </div>
+                  )}
                 </div>
               );
             })}
+
+            {/* Unselected Section */}
+            {unselectedImages.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <button
+                  onClick={() => toggleSection("unselected")}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-gray-900 dark:text-white">Niewybrane</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      {unselectedImages.length}{" "}
+                      {unselectedImages.length === 1
+                        ? "zdjęcie"
+                        : unselectedImages.length < 5
+                          ? "zdjęcia"
+                          : "zdjęć"}
+                    </div>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                      expandedSections.has("unselected") ? "transform rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                {expandedSections.has("unselected") && (
+                  <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    {renderImageGrid(unselectedImages)}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+        ) : (
+          // Fallback: show all images if no delivered orders
+          renderImageGrid(images)
         )}
       </div>
 

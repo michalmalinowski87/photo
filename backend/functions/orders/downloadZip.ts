@@ -83,21 +83,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Don't allow download if originals have been deleted (after finals upload)
-	// Originals are deleted when status changes to PREPARING_DELIVERY or DELIVERED
-	// After originals are deleted, ZIP download is no longer available
-	if (order.deliveryStatus === 'PREPARING_DELIVERY' || order.deliveryStatus === 'PREPARING_FOR_DELIVERY' || order.deliveryStatus === 'DELIVERED') {
-		return {
-			statusCode: 400,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: 'Cannot download ZIP - originals have been deleted',
-				message: 'Original photos have been removed after final photos were uploaded. ZIP download is no longer available.',
-				deliveryStatus: order.deliveryStatus
-			})
-		};
-	}
-
 	// Always generate ZIP on-demand - check if generation is in progress or start new generation
 	const expectedZipKey = `galleries/${galleryId}/zips/${orderId}.zip`;
 	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;

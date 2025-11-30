@@ -147,24 +147,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Continue with deletion even if transaction cancellation fails
 			}
 		}
-		// Delete all S3 objects for this gallery
-		const s3Prefixes = [
-			`galleries/${galleryId}/originals/`,
-			`galleries/${galleryId}/previews/`,
-			`galleries/${galleryId}/thumbs/`,
-			`galleries/${galleryId}/final/`,
-			`galleries/${galleryId}/zips/`,
-			`galleries/${galleryId}/archive/`
-		];
-
-		const s3DeleteResults = await Promise.allSettled(
-			s3Prefixes.map(prefix => deleteS3Prefix(bucket, prefix, logger))
-		);
-		
-		const totalS3Deleted = s3DeleteResults.reduce((sum, result) => {
-			if (result.status === 'fulfilled') return sum + result.value;
-			return sum;
-		}, 0);
+		// Delete all S3 objects for this gallery (everything under galleries/${galleryId}/)
+		// This includes all subdirectories (originals, previews, thumbs, final, zips, archive)
+		// as well as any files directly under the gallery directory (e.g., cover photos)
+		const galleryPrefix = `galleries/${galleryId}/`;
+		const totalS3Deleted = await deleteS3Prefix(bucket, galleryPrefix, logger);
 
 		// Delete all orders for this gallery
 		if (ordersTable) {
@@ -193,8 +180,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		logger.info('Gallery deletion completed', {
 			galleryId,
-			s3ObjectsDeleted: totalS3Deleted,
-			prefixesDeleted: s3Prefixes.length
+			s3ObjectsDeleted: totalS3Deleted
 		});
 
 		// Send confirmation emails

@@ -12,7 +12,6 @@ import { useUserStore } from "../../store/userSlice";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
-import { CleanupOriginalsModal } from "../orders/CleanupOriginalsModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -69,11 +68,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     openModal: openDenyModal,
     closeModal: closeDenyModal,
   } = useModal("deny-change");
-  const {
-    isOpen: cleanupModalOpen,
-    openModal: openCleanupModal,
-    closeModal: closeCleanupModal,
-  } = useModal("cleanup-originals");
 
   const [apiUrl, setApiUrl] = useState("");
   const [idToken, setIdToken] = useState("");
@@ -235,36 +229,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     if (!galleryId || !orderId) {
       return;
     }
-    // Check if this is a selection gallery (user-selecting gallery)
-    const isSelectionGallery = gallery?.selectionEnabled !== false;
-
-    // Show cleanup modal only for selection galleries
-    if (isSelectionGallery) {
-      openCleanupModal();
-    } else {
-      // For non-selection galleries, send link directly without cleanup option
-      await sendFinalsToClient(galleryId as string, orderId as string, false);
-    }
-  }, [galleryId, orderId, gallery, openCleanupModal, sendFinalsToClient]);
-
-  const handleCleanupConfirm = useCallback(() => {
-    closeCleanupModal();
-    if (galleryId && orderId) {
-      void sendFinalsToClient(galleryId as string, orderId as string, true);
-    }
-  }, [closeCleanupModal, galleryId, orderId, sendFinalsToClient]);
-
-  const handleCleanupCancel = useCallback(() => {
-    closeCleanupModal();
-    if (galleryId && orderId) {
-      void sendFinalsToClient(galleryId as string, orderId as string, false);
-    }
-  }, [closeCleanupModal, galleryId, orderId, sendFinalsToClient]);
-
-  const handleCleanupClose = useCallback(() => {
-    closeCleanupModal();
-    // Close icon cancels the entire action - don't send the link
-  }, [closeCleanupModal]);
+    await sendFinalsToClient(galleryId as string, orderId as string);
+  }, [galleryId, orderId, sendFinalsToClient]);
 
   const handleDownloadZip = useCallback(async () => {
     if (!galleryId || !orderId) {
@@ -424,12 +390,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         loading={denyLoading}
       />
 
-      <CleanupOriginalsModal
-        isOpen={cleanupModalOpen}
-        onClose={handleCleanupClose}
-        onConfirm={handleCleanupConfirm}
-        onCancel={handleCleanupCancel}
-      />
 
       {showPaymentModal && (
         <PaymentConfirmationModal

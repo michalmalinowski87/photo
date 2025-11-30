@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
@@ -52,17 +52,16 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   ).setNextStepsOverlayExpanded;
   const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
+  // Use galleryOrders from store instead of orders prop
+  const galleryOrders = useGalleryStore((state) => state.galleryOrders);
+
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
-  const [steps, setSteps] = useState<Step[]>([]);
   const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
   const [widthReached13rem, setWidthReached13rem] = useState(false);
   const galleryRef = useRef(gallery);
   const isUpdatingCompletionRef = useRef(false); // Track if we're already updating completion status
-
-  // Check if gallery has completed setup from gallery object
-  const galleryCompletedSetup = gallery?.nextStepsCompleted === true;
 
   // Keep ref in sync with gallery prop
   useEffect(() => {
@@ -102,9 +101,9 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     }
   }, [nextStepsOverlayExpanded, tutorialDisabled, loadTutorialPreference]);
 
-  // Calculate steps with debouncing to prevent flickering
+  // Calculate steps using useMemo to prevent excessive re-renders
   // Use optimistic bytes if available for immediate updates
-  const calculateSteps = useCallback((): Step[] => {
+  const steps = useMemo((): Step[] => {
     if (!gallery || galleryLoading) {
       return [];
     }
@@ -114,13 +113,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const currentBytes = optimisticBytesUsed ?? gallery.originalsBytesUsed ?? 0;
     const uploadCompleted = currentBytes > 0;
     const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
-    // Send step is completed when there's a CLIENT_SELECTING order (gallery has been sent to client)
+    // Send step is completed when there's any order (gallery has been sent to client)
+    // Use galleryOrders from store instead of orders prop
+    const ordersToCheck = galleryOrders.length > 0 ? galleryOrders : orders;
+    // If there's any order, the gallery has been sent to the client
     const sendCompleted =
       gallery.selectionEnabled !== false
-        ? orders.some((o: unknown) => {
-            const orderObj = o as { deliveryStatus?: string };
-            return orderObj.deliveryStatus === "CLIENT_SELECTING";
-          })
+        ? ordersToCheck.length > 0
         : null;
 
     return [
@@ -140,28 +139,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         completed: sendCompleted,
       },
     ];
-  }, [gallery, galleryLoading, orders, optimisticBytesUsed]);
-
-  // Update steps with debouncing
-  useEffect(() => {
-    if (!gallery || galleryLoading) {
-      setSteps([]);
-      return;
-    }
-
-    // Debounce updates to prevent flickering
-    const timeoutId = setTimeout(() => {
-      setSteps(calculateSteps());
-    }, 200);
-
-    return () => clearTimeout(timeoutId);
-  }, [gallery, galleryLoading, orders, calculateSteps]);
-
-  // Listen for gallery updates with optimistic updates (when photos are added/removed)
-  // Recalculate steps when gallery or orders change (Zustand subscriptions handle state updates)
-  useEffect(() => {
-    setSteps(calculateSteps());
-  }, [gallery, orders, calculateSteps]);
+  }, [gallery, galleryLoading, galleryOrders, orders, optimisticBytesUsed]);
 
   // Clear optimistic bytes when gallery bytes update (after store confirms)
   useEffect(() => {
@@ -192,6 +170,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const applicableSteps = steps.filter((step) => step.completed !== null);
   const allCompleted =
     applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
+
+  // Check if gallery has completed setup from gallery object OR if all steps are completed
+  // This prevents the overlay from showing when orders exist but nextStepsCompleted flag isn't set yet
+  const galleryCompletedSetup = gallery?.nextStepsCompleted === true || allCompleted;
 
   // Measure and report width to context (if available)
   useEffect(() => {
@@ -254,32 +236,6 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     shouldHide,
   ]);
 
-  // Also watch for changes in gallery.originalsBytesUsed and orders to update steps immediately
-  // This ensures steps update when photos are added/removed even if the gallery object reference doesn't change
-  // Skip if we have optimistic bytes (means we're in the middle of uploads/deletions)
-  useEffect(() => {
-    if (!gallery || galleryLoading) {
-      return;
-    }
-
-    // If we have optimistic bytes, skip this update - the event handler will update when ready
-    if (optimisticBytesUsed !== null) {
-      return;
-    }
-
-    // Recalculate steps when key gallery properties change
-    const newSteps = calculateSteps();
-    setSteps(newSteps);
-  }, [
-    gallery?.originalsBytesUsed,
-    gallery?.paymentStatus,
-    gallery?.state,
-    orders,
-    calculateSteps,
-    gallery,
-    galleryLoading,
-    optimisticBytesUsed,
-  ]);
 
   // Reset optimistic bytes when gallery changes
   useEffect(() => {

@@ -45,7 +45,7 @@ interface OrderState {
   denyChangeRequest: (galleryId: string, orderId: string, reason?: string) => Promise<void>;
   markOrderPaid: (galleryId: string, orderId: string) => Promise<void>;
   downloadFinals: (galleryId: string, orderId: string) => Promise<void>;
-  sendFinalsToClient: (galleryId: string, orderId: string, shouldCleanup: boolean) => Promise<void>;
+  sendFinalsToClient: (galleryId: string, orderId: string) => Promise<void>;
   downloadZip: (galleryId: string, orderId: string) => Promise<void>;
   // Computed selectors
   hasFinals: (orderId: string) => boolean;
@@ -452,41 +452,15 @@ export const useOrderStore = create<OrderState>()(
         pollForZip();
       },
 
-      sendFinalsToClient: async (galleryId: string, orderId: string, shouldCleanup: boolean) => {
+      sendFinalsToClient: async (galleryId: string, orderId: string) => {
         const state = get();
         set({ cleanupLoading: true });
 
         try {
           const response = await api.orders.sendFinalLink(galleryId, orderId);
 
-          // If user confirmed cleanup, call cleanup endpoint
-          if (shouldCleanup) {
-            try {
-              await api.orders.cleanupOriginals(galleryId, orderId);
-              // Invalidate all caches after cleanup (deletes originals)
-              const { useGalleryStore } = await import("./gallerySlice");
-              useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
-
-              const { useToastStore } = await import("./toastSlice");
-              useToastStore.getState().showToast(
-                "success",
-                "Sukces",
-                "Link do zdjęć finalnych został wysłany do klienta. Oryginały zostały usunięte."
-              );
-            } catch (cleanupErr: unknown) {
-              // If cleanup fails, still show success for sending link, but warn about cleanup
-              const { useToastStore } = await import("./toastSlice");
-              useToastStore.getState().showToast(
-                "success",
-                "Sukces",
-                "Link do zdjęć finalnych został wysłany do klienta. Nie udało się usunąć oryginałów."
-              );
-              console.error("Failed to cleanup originals after sending final link", cleanupErr);
-            }
-          } else {
-            const { useToastStore } = await import("./toastSlice");
-            useToastStore.getState().showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
-          }
+          const { useToastStore } = await import("./toastSlice");
+          useToastStore.getState().showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
 
           // Merge lightweight response into cached order instead of refetching
           state.updateOrderFields(orderId, {
@@ -649,10 +623,12 @@ export const useOrderStore = create<OrderState>()(
             return false;
           }
           const order = cached.order;
+          // Allow downloads for selection galleries with valid statuses (not CANCELLED)
           return (
             selectionEnabled &&
-            (order.deliveryStatus === "CLIENT_APPROVED" ||
-              order.deliveryStatus === "AWAITING_FINAL_PHOTOS")
+            order.deliveryStatus !== "CANCELLED" &&
+            order.selectedKeys &&
+            (Array.isArray(order.selectedKeys) ? order.selectedKeys.length > 0 : true)
           );
         }
         // Use current order
@@ -660,10 +636,12 @@ export const useOrderStore = create<OrderState>()(
         if (!order) {
           return false;
         }
+        // Allow downloads for selection galleries with valid statuses (not CANCELLED)
         return (
           selectionEnabled &&
-          (order.deliveryStatus === "CLIENT_APPROVED" ||
-            order.deliveryStatus === "AWAITING_FINAL_PHOTOS")
+          order.deliveryStatus !== "CANCELLED" &&
+          order.selectedKeys &&
+          (Array.isArray(order.selectedKeys) ? order.selectedKeys.length > 0 : true)
         );
       },
     }),

@@ -522,40 +522,16 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUploadComplete]); // Only depend on isUploadComplete
 
-  // Auto-set to finals tab if:
-  // - Selection is disabled (non-selection galleries)
-  // - Selected section is hidden (photos were cleaned up)
+  // Auto-set to finals tab if selection is disabled (non-selection galleries)
   useEffect(() => {
     if (!order || !gallery) {
       return;
     }
 
-    const isSelectionEnabled = gallery.selectionEnabled !== false;
-
     if (gallery.selectionEnabled === false) {
       setActiveTab("finals");
-      return;
     }
-
-    // Get selectedKeys from order
-    const orderSelectedKeys = normalizeSelectedKeys(order.selectedKeys);
-
-    if (isSelectionEnabled && orderSelectedKeys.length > 0) {
-      // Check if selected images exist
-      const hasSelectedImagesCheck =
-        originalImages.length > 0 &&
-        originalImages.some((img) => {
-          const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
-          const normalizedSelectedKeys = orderSelectedKeys.map((k) => k.toString().trim());
-          return normalizedSelectedKeys.includes(imgKey);
-        });
-
-      // If no selected images found (photos were cleaned up), switch to finals tab
-      if (!hasSelectedImagesCheck) {
-        setActiveTab("finals");
-      }
-    }
-  }, [gallery, order, originalImages]);
+  }, [gallery, order]);
 
   // Polling cleanup is handled by usePhotoUploadHandler hook
 
@@ -674,21 +650,6 @@ export default function OrderDetail() {
   const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
 
-  // Hide "Wybrane przez klienta" section if:
-  // - Selection is enabled
-  // - User has selected photos (selectedKeys.length > 0)
-  // - But no matching images exist (photos were cleaned up)
-  const hasSelectedImages =
-    selectedKeys.length > 0 &&
-    originalImages.length > 0 &&
-    originalImages.some((img) => {
-      const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
-      const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
-      return normalizedSelectedKeys.includes(imgKey);
-    });
-
-  const hideSelectedSection = selectionEnabled && selectedKeys.length > 0 && !hasSelectedImages;
-
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
 
@@ -735,7 +696,7 @@ export default function OrderDetail() {
         onAmountChange={setEditingAmountValue}
       />
 
-      {selectionEnabled && !hideSelectedSection && (
+      {selectionEnabled && (
         <OrderTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -743,7 +704,7 @@ export default function OrderDetail() {
         />
       )}
 
-      {selectionEnabled && !hideSelectedSection && activeTab === "originals" && (
+      {selectionEnabled && activeTab === "originals" && (
         <OriginalsTab
           images={originalImages}
           selectedKeys={selectedKeys}
@@ -752,7 +713,7 @@ export default function OrderDetail() {
         />
       )}
 
-      {(!(selectionEnabled && !hideSelectedSection) || activeTab === "finals") && (
+      {(!selectionEnabled || activeTab === "finals") && (
         <FinalsTab
           images={finalImages}
           gallery={gallery}
