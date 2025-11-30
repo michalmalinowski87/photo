@@ -3,6 +3,7 @@ import { wrapHandler } from './handlerWrapper';
 import * as galleriesGet from '../../../functions/galleries/get';
 import * as galleriesGetCoverPhoto from '../../../functions/galleries/getCoverPhoto';
 import * as galleriesGetBytesUsed from '../../../functions/galleries/getBytesUsed';
+import * as galleriesGetStatus from '../../../functions/galleries/getStatus';
 import * as galleriesList from '../../../functions/galleries/list';
 import * as galleriesCreate from '../../../functions/galleries/create';
 import * as galleriesUpdate from '../../../functions/galleries/update';
@@ -30,6 +31,7 @@ router.post('/', wrapHandler(galleriesCreate.handler));
 router.get('/:id', wrapHandler(galleriesGet.handler));
 router.get('/:id/cover-photo', wrapHandler(galleriesGetCoverPhoto.handler));
 router.get('/:id/bytes-used', wrapHandler(galleriesGetBytesUsed.handler));
+router.get('/:id/status', wrapHandler(galleriesGetStatus.handler));
 router.patch('/:id', wrapHandler(galleriesUpdate.handler));
 router.put('/:id', wrapHandler(galleriesUpdate.handler)); // Keep PUT for backward compatibility
 router.delete('/:id', wrapHandler(galleriesDelete.handler));

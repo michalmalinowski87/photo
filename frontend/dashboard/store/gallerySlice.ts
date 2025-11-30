@@ -55,6 +55,7 @@ interface GalleryState {
   fetchGalleryImages: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
   fetchGalleryOrders: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
   refreshGalleryBytesOnly: (galleryId: string) => Promise<void>; // Silent refresh that only updates bytes used
+  refreshGalleryStatusOnly: (galleryId: string) => Promise<void>; // Silent refresh that only updates status fields
   setFilter: (filter: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -395,6 +396,55 @@ export const useGalleryStore = create<GalleryState>()(
         }, 2000); // 2 second debounce
 
         bytesRefreshTimers.set(galleryId, timer);
+      },
+
+      refreshGalleryStatusOnly: async (galleryId: string) => {
+        const state = get();
+
+        // Only refresh if this is the current gallery
+        if (state.currentGalleryId !== galleryId) {
+          return;
+        }
+
+        // Silent refresh: use lightweight endpoint to only fetch status fields
+        try {
+          const statusData = await api.galleries.getStatus(galleryId);
+
+          // Only update status fields - lightweight update without full gallery fetch
+          if (statusData) {
+            set((currentState) => {
+              if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
+                return currentState; // Don't update if gallery changed
+              }
+
+              // Only update status fields, keep everything else
+              return {
+                currentGallery: {
+                  ...currentState.currentGallery,
+                  state: statusData.state,
+                  paymentStatus: statusData.paymentStatus,
+                  isPaid: statusData.isPaid,
+                },
+                galleryCacheTimestamp: Date.now(), // Update cache timestamp
+              };
+            });
+
+            // Dispatch event to notify components of status update
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("galleryUpdated", {
+                  detail: {
+                    galleryId,
+                    refreshAfterStatusUpdate: true, // Signal that this is a status refresh
+                  },
+                })
+              );
+            }
+          }
+        } catch (err) {
+          // Silently fail - don't show error or trigger loading state
+          console.error("[GalleryStore] Failed to refresh gallery status (silent):", err);
+        }
       },
 
       setFilter: (filter: string) => {

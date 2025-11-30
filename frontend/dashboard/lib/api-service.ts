@@ -443,6 +443,22 @@ class ApiService {
     },
 
     /**
+     * Get only the status for a gallery (lightweight endpoint)
+     */
+    getStatus: async (galleryId: string): Promise<{
+      state: string;
+      paymentStatus: string;
+      isPaid: boolean;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request<{ state: string; paymentStatus: string; isPaid: boolean }>(
+        `/galleries/${galleryId}/status`
+      );
+    },
+
+    /**
      * Create a new gallery
      */
     create: async (data: Partial<Gallery>): Promise<Gallery> => {

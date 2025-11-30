@@ -64,7 +64,7 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders, fetchGallery } = useGalleryStore();
+  const { fetchGalleryOrders, fetchGallery, refreshGalleryStatusOnly } = useGalleryStore();
 
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
@@ -170,12 +170,15 @@ export default function GalleryDetail() {
 
         const pollPaymentStatus = async () => {
           try {
-            // Reload gallery from store (checks cache, fetches if needed)
+            // Use micro endpoint to check payment status (lightweight)
             try {
-              const updatedGallery = await fetchGallery(galleryIdStr, true); // Force refresh
-
+              await refreshGalleryStatusOnly(galleryIdStr);
+              
+              // Get updated gallery from store to check state
+              const updatedGallery = useGalleryStore.getState().currentGallery;
+              
               // Check if gallery state changed from DRAFT to PAID_ACTIVE
-              if (updatedGallery.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
+              if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
                 // Payment confirmed! Stop polling
                 if (reloadGallery) {
                   void reloadGallery();
@@ -316,6 +319,12 @@ export default function GalleryDetail() {
         window.location.href = data.checkoutUrl;
       } else if (data.paid) {
         showToast("success", "Sukces", "Galeria została opłacona z portfela!");
+        // Refresh gallery status using micro endpoint (lightweight)
+        if (galleryId) {
+          void refreshGalleryStatusOnly(galleryId as string);
+        }
+        // Reload orders to ensure UI is up to date
+        void loadOrders();
         // Gallery data will be reloaded by GalleryLayoutWrapper
         // Wallet balance will be reloaded by parent component
       }
