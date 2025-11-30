@@ -2,9 +2,7 @@ import { useState, useRef, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store/gallerySlice";
-import { useOrderStore } from "../store/orderSlice";
 
-import { useOrderStatusRefresh } from "./useOrderStatusRefresh";
 import { useToast } from "./useToast";
 
 interface GalleryImage {
@@ -14,21 +12,16 @@ interface GalleryImage {
   [key: string]: unknown;
 }
 
-interface UseFinalImageDeleteOptions {
+interface UseOriginalImageDeleteOptions {
   galleryId: string | string[] | undefined;
-  orderId: string | string[] | undefined;
-  setFinalImages: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
-  setOptimisticFinalsBytes: React.Dispatch<React.SetStateAction<number | null>>;
+  setImages: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
 }
 
-export const useFinalImageDelete = ({
+export const useOriginalImageDelete = ({
   galleryId,
-  orderId,
-  setFinalImages,
-  setOptimisticFinalsBytes,
-}: UseFinalImageDeleteOptions) => {
+  setImages,
+}: UseOriginalImageDeleteOptions) => {
   const { showToast } = useToast();
-  const { refreshOrderStatus } = useOrderStatusRefresh();
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -41,14 +34,13 @@ export const useFinalImageDelete = ({
   const deleteImage = useCallback(
     async (image: GalleryImage, suppressChecked?: boolean): Promise<void> => {
       const imageKey = image.key ?? image.filename;
-      if (!imageKey || !galleryId || !orderId) {
+      if (!imageKey || !galleryId) {
         return;
       }
 
       const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId);
-      const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId);
 
-      if (!galleryIdStr || !orderIdStr) {
+      if (!galleryIdStr) {
         return;
       }
 
@@ -64,7 +56,7 @@ export const useFinalImageDelete = ({
       // Image will be removed after deletion completes and status/bytes are refreshed
 
       try {
-        await api.orders.deleteFinalImage(galleryIdStr, orderIdStr, imageKey);
+        await api.galleries.deleteImage(galleryIdStr, imageKey);
 
         // Invalidate all caches to ensure fresh data on next fetch
         const { invalidateAllGalleryCaches } = useGalleryStore.getState();
@@ -72,7 +64,7 @@ export const useFinalImageDelete = ({
 
         // Save suppression only after successful deletion
         if (suppressChecked) {
-          const suppressKey = "final_image_delete_confirm_suppress";
+          const suppressKey = "original_image_delete_confirm_suppress";
           const suppressUntil = Date.now() + 15 * 60 * 1000;
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
@@ -93,8 +85,8 @@ export const useFinalImageDelete = ({
 
             try {
               // Check if image still exists in the API
-              const finalResponse = await api.orders.getFinalImages(galleryIdStr, orderIdStr);
-              const images = finalResponse.images ?? [];
+              const response = await api.galleries.getImages(galleryIdStr);
+              const images = response.images ?? [];
               const imageStillExists = images.some(
                 (img: GalleryImage) => (img.key ?? img.filename) === imageKey
               );
@@ -102,7 +94,7 @@ export const useFinalImageDelete = ({
               if (!imageStillExists) {
                 // Image is gone from S3! Deletion is complete
                 // eslint-disable-next-line no-console
-                console.log(`[useFinalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`);
+                console.log(`[useOriginalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`);
                 
                 // Don't apply optimistic update here - we refresh immediately after
                 // This prevents conflicts with concurrent deletions and ensures accuracy
@@ -113,7 +105,7 @@ export const useFinalImageDelete = ({
             } catch (pollErr) {
               // If polling fails, log but continue (might be temporary network issue)
               // eslint-disable-next-line no-console
-              console.warn("[useFinalImageDelete] Poll check failed, retrying...", pollErr);
+              console.warn("[useOriginalImageDelete] Poll check failed, retrying...", pollErr);
             }
 
             // Wait before next poll attempt
@@ -123,7 +115,7 @@ export const useFinalImageDelete = ({
           if (attempts >= maxAttempts) {
             // eslint-disable-next-line no-console
             console.warn(
-              `[useFinalImageDelete] Polling timed out after ${maxAttempts} attempts for ${imageKey}`
+              `[useOriginalImageDelete] Polling timed out after ${maxAttempts} attempts for ${imageKey}`
             );
           }
 
@@ -131,21 +123,7 @@ export const useFinalImageDelete = ({
           const { refreshGalleryBytesOnly } = useGalleryStore.getState();
           await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
 
-          // Clear optimistic state after bytes are refreshed with actual values
-          setOptimisticFinalsBytes(null);
-
-          // Refresh order status to update delivery status
-          try {
-            await refreshOrderStatus(galleryIdStr, orderIdStr);
-          } catch (statusErr) {
-            // eslint-disable-next-line no-console
-            console.error(
-              "[STATUS_UPDATE] deleteImage - Failed to refresh order status",
-              statusErr
-            );
-          }
-
-          // Now that deletion is complete and bytes/status are refreshed, remove from UI
+          // Now that deletion is complete and bytes are refreshed, remove from UI
           // Mark as successfully deleted to prevent reappearance
           setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
           
@@ -157,7 +135,7 @@ export const useFinalImageDelete = ({
           });
 
           // Remove image from list now that deletion is complete
-          setFinalImages((prevImages) =>
+          setImages((prevImages) =>
             prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
           );
 
@@ -192,12 +170,8 @@ export const useFinalImageDelete = ({
     },
     [
       galleryId,
-      orderId,
-      setFinalImages,
-      setOptimisticFinalsBytes,
+      setImages,
       deletingImages,
-      deletedImageKeys,
-      refreshOrderStatus,
       showToast,
     ]
   );
@@ -216,7 +190,7 @@ export const useFinalImageDelete = ({
       }
 
       // Check if deletion confirmation is suppressed
-      const suppressKey = "final_image_delete_confirm_suppress";
+      const suppressKey = "original_image_delete_confirm_suppress";
       const suppressUntil = localStorage.getItem(suppressKey);
       if (suppressUntil) {
         const suppressUntilTime = parseInt(suppressUntil, 10);

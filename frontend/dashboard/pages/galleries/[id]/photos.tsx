@@ -14,8 +14,9 @@ import {
   type PerImageProgress,
 } from "../../../components/upload/UploadProgressOverlay";
 import { useGallery } from "../../../hooks/useGallery";
+import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { useToast } from "../../../hooks/useToast";
-import api, { formatApiError } from "../../../lib/api-service";
+import { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
 import { useGalleryStore } from "../../../store/gallerySlice";
 
@@ -101,7 +102,7 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { fetchGalleryImages, fetchGalleryOrders, updateOriginalsBytesUsed, currentGallery, refreshGalleryBytesOnly } =
+  const { fetchGalleryImages, fetchGalleryOrders, currentGallery } =
     useGalleryStore();
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -118,9 +119,18 @@ export default function GalleryPhotos() {
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set()); // Track which images are being deleted
-  const deletingImagesRef = useRef<Set<string>>(new Set()); // Ref for closures
-  const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref for closures
+  
+  // Use hook for deletion logic
+  const {
+    deleteImage,
+    handleDeleteImageClick,
+    deletingImages,
+    deletingImagesRef,
+    deletedImageKeysRef,
+  } = useOriginalImageDelete({
+    galleryId,
+    setImages,
+  });
   const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
   const [limitExceededData, setLimitExceededData] = useState<{
@@ -160,19 +170,39 @@ export default function GalleryPhotos() {
         if (!imgKey) {
           return false;
         }
-        if (deletingImagesRef.current.has(imgKey)) {
-          return false;
-        }
+        // Keep deleting images visible - only filter out successfully deleted ones
         if (deletedImageKeysRef.current.has(imgKey)) {
           return false;
         }
         return true;
       });
 
-      // Only update if we have valid images with URLs
-      if (validApiImages.length > 0) {
-        setImages(validApiImages);
-      }
+      // Preserve images that are currently being deleted (they may not be in updated images yet)
+      setImages((currentImages) => {
+        const deletingImageKeys = Array.from(deletingImagesRef.current);
+        const currentDeletingImages = currentImages.filter((img) => {
+          const imgKey = img.key ?? img.filename;
+          return imgKey && deletingImageKeys.includes(imgKey);
+        });
+
+        // Create a map of valid updated images by key for deduplication
+        const updatedImagesMap = new Map(
+          validApiImages.map((img) => [img.key ?? img.filename, img])
+        );
+
+        // Add deleting images that aren't already in updated images
+        currentDeletingImages.forEach((img) => {
+          const imgKey = img.key ?? img.filename;
+          if (imgKey && !updatedImagesMap.has(imgKey)) {
+            updatedImagesMap.set(imgKey, img);
+          }
+        });
+
+        // Return merged array (updated images + preserved deleting images)
+        const mergedImages = Array.from(updatedImagesMap.values());
+        // Only update if we have valid images
+        return mergedImages.length > 0 ? mergedImages : currentImages;
+      });
     },
     onValidationNeeded: (data) => {
       setLimitExceededData(data);
@@ -184,84 +214,6 @@ export default function GalleryPhotos() {
     deletingImagesRef,
     deletedImageKeysRef,
   });
-
-  // Define functions first (before useEffect hooks that use them)
-  const handleDeleteConfirmDirect = async (image: GalleryImage): Promise<void> => {
-    const imageKey = image.key ?? image.filename;
-
-    if (!imageKey || !galleryId) {
-      return;
-    }
-
-    // Prevent duplicate deletions
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Mark image as being deleted
-    setDeletingImages((prev) => new Set(prev).add(imageKey));
-
-    // Find image index before removing it (for error recovery)
-    const imageIndex = images.findIndex((img) => (img.key ?? img.filename) === imageKey);
-
-    // Optimistically remove image from local state immediately
-    setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
-
-    // Get image size for optimistic update in Redux
-    const imageSize = image.size ?? 0;
-    if (imageSize > 0) {
-      // Optimistically update Redux store immediately (deduct file size)
-      updateOriginalsBytesUsed(-imageSize);
-    }
-
-    try {
-      await api.galleries.deleteImage(galleryId as string, imageKey);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
-
-      // Remove from deleting set and reload gallery if this was the last deletion
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        // If this was the last deletion, force recalculation to get accurate values (bypasses cache)
-        if (updated.size === 0 && galleryId) {
-          void refreshGalleryBytesOnly(galleryId as string, true); // forceRecalc = true
-        }
-        return updated;
-      });
-
-      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-    } catch (err) {
-      // On error, restore the image to the list and revert optimistic update
-      setImages((prevImages) => {
-        const restored = [...prevImages];
-        // Insert image back at its original position
-        if (imageIndex >= 0 && imageIndex < restored.length) {
-          restored.splice(imageIndex, 0, image);
-        } else {
-          restored.push(image);
-        }
-        return restored;
-      });
-
-      // Revert optimistic update in Redux (add back the file size)
-      const imageSize = image.size ?? 0;
-      if (imageSize > 0) {
-        updateOriginalsBytesUsed(imageSize);
-      }
-
-      // Remove from deleting set
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        return updated;
-      });
-
-      showToast("error", "Błąd", formatApiError(err));
-    }
-  };
 
   // Define functions first (before useEffect hooks that use them)
   // Load images from store (checks cache first, fetches if needed)
@@ -290,7 +242,32 @@ export default function GalleryPhotos() {
           lastModified: img.lastModified,
           isPlaceholder: false,
         }));
-        setImages(mappedImages);
+
+        // Preserve images that are currently being deleted (they may not be in API response yet)
+        // Merge deleting images from current state to show deleting overlay
+        setImages((currentImages) => {
+          const deletingImageKeys = Array.from(deletingImagesRef.current);
+          const currentDeletingImages = currentImages.filter((img) => {
+            const imgKey = img.key ?? img.filename;
+            return imgKey && deletingImageKeys.includes(imgKey);
+          });
+
+          // Create a map of valid API images by key for deduplication
+          const apiImagesMap = new Map(
+            mappedImages.map((img) => [img.key ?? img.filename, img])
+          );
+
+          // Add deleting images that aren't already in API response
+          currentDeletingImages.forEach((img) => {
+            const imgKey = img.key ?? img.filename;
+            if (imgKey && !apiImagesMap.has(imgKey)) {
+              apiImagesMap.set(imgKey, img);
+            }
+          });
+
+          // Return merged array (API images + preserved deleting images)
+          return Array.from(apiImagesMap.values());
+        });
       } catch (err) {
         if (!silent) {
           const errorMsg = formatApiError(err);
@@ -303,7 +280,7 @@ export default function GalleryPhotos() {
         }
       }
     },
-    [galleryId, showToast, fetchGalleryImages]
+    [galleryId, showToast, fetchGalleryImages, deletingImagesRef]
   );
 
   const loadApprovedSelections = useCallback(async (): Promise<void> => {
@@ -392,11 +369,6 @@ export default function GalleryPhotos() {
       return;
     }
 
-    // Prevent deletion if already being deleted
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
     // Check if image is in approved selection
     if (approvedSelectionKeys.has(imageKey)) {
       showToast(
@@ -407,113 +379,24 @@ export default function GalleryPhotos() {
       return;
     }
 
-    // Check if deletion confirmation is suppressed
-    const suppressKey = "photo_delete_confirm_suppress";
-    const suppressUntil = localStorage.getItem(suppressKey);
-    if (suppressUntil) {
-      const suppressUntilTime = parseInt(suppressUntil, 10);
-      if (Date.now() < suppressUntilTime) {
-        // Suppression is still active, proceed directly with deletion
-        void handleDeleteConfirmDirect(image);
-        return;
-      } else {
-        // Suppression expired, remove it
-        localStorage.removeItem(suppressKey);
-      }
+    // Use hook's handler which handles suppression check and confirmation dialog
+    const imageToDeleteResult = handleDeleteImageClick(image);
+    if (imageToDeleteResult) {
+      setImageToDelete(imageToDeleteResult);
+      setDeleteConfirmOpen(true);
     }
-
-    setImageToDelete(image);
-    setDeleteConfirmOpen(true);
   };
 
   const handleDeleteConfirm = async (suppressChecked?: boolean): Promise<void> => {
     if (!imageToDelete) {
       return;
     }
-
-    const imageKey = imageToDelete.key ?? imageToDelete.filename;
-
-    if (!imageKey || !galleryId) {
-      return;
-    }
-
-    // Prevent duplicate deletions
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Mark image as being deleted
-    setDeletingImages((prev) => new Set(prev).add(imageKey));
-
-    // Find image index before removing it (for error recovery)
-    const imageIndex = images.findIndex((img) => (img.key ?? img.filename) === imageKey);
-
-    // Optimistically remove image from local state immediately
-    setImages((prevImages) => prevImages.filter((img) => (img.key ?? img.filename) !== imageKey));
-
-    // Get image size for optimistic update in Redux
-    const imageSize = imageToDelete.size ?? 0;
-    if (imageSize > 0) {
-      // Optimistically update Redux store immediately (deduct file size)
-      updateOriginalsBytesUsed(-imageSize);
-    }
-
     try {
-      await api.galleries.deleteImage(galleryId as string, imageKey);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
-
-      // Save suppression only after successful deletion
-      if (suppressChecked) {
-        const suppressKey = "photo_delete_confirm_suppress";
-        const suppressUntil = Date.now() + 15 * 60 * 1000;
-        localStorage.setItem(suppressKey, suppressUntil.toString());
-      }
-
+      await deleteImage(imageToDelete, suppressChecked);
       setDeleteConfirmOpen(false);
       setImageToDelete(null);
-
-      // Remove from deleting set and reload gallery if this was the last deletion
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        // If this was the last deletion, force recalculation to get accurate values (bypasses cache)
-        if (updated.size === 0 && galleryId) {
-          void refreshGalleryBytesOnly(galleryId as string, true); // forceRecalc = true
-        }
-        return updated;
-      });
-
-      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-    } catch (err) {
-      // On error, restore the image to the list and revert optimistic update
-      setImages((prevImages) => {
-        const restored = [...prevImages];
-        // Insert image back at its original position
-        if (imageIndex >= 0 && imageIndex < restored.length) {
-          restored.splice(imageIndex, 0, imageToDelete);
-        } else {
-          restored.push(imageToDelete);
-        }
-        return restored;
-      });
-
-      // Revert optimistic update in Redux (add back the file size)
-      const imageSize = imageToDelete.size ?? 0;
-      if (imageSize > 0) {
-        updateOriginalsBytesUsed(imageSize);
-      }
-
-      // Remove from deleting set
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        return updated;
-      });
-
-      showToast("error", "Błąd", formatApiError(err));
+    } catch {
+      // Error already handled in deleteImage, keep modal open
     }
   };
 
@@ -592,16 +475,16 @@ export default function GalleryPhotos() {
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <StorageDisplay
                   bytesUsed={
-                    (currentGallery?.originalsBytesUsed != null && typeof currentGallery.originalsBytesUsed === "number"
+                    (currentGallery?.originalsBytesUsed !== null && currentGallery?.originalsBytesUsed !== undefined && typeof currentGallery.originalsBytesUsed === "number"
                       ? currentGallery.originalsBytesUsed
                       : null) ??
-                    (gallery?.originalsBytesUsed != null && typeof gallery?.originalsBytesUsed === "number"
+                    (gallery?.originalsBytesUsed !== null && gallery?.originalsBytesUsed !== undefined && typeof gallery?.originalsBytesUsed === "number"
                       ? gallery.originalsBytesUsed
                       : null) ??
                     0
                   }
                   limitBytes={
-                    gallery?.originalsLimitBytes != null && typeof gallery.originalsLimitBytes === "number"
+                    gallery?.originalsLimitBytes !== null && gallery?.originalsLimitBytes !== undefined && typeof gallery.originalsLimitBytes === "number"
                       ? gallery.originalsLimitBytes
                       : undefined
                   }
@@ -636,7 +519,11 @@ export default function GalleryPhotos() {
               return (
                 <div
                   key={imageKey ?? idx}
-                  className="relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700"
+                  className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
+                    deletingImages.has(imageKey)
+                      ? "opacity-60"
+                      : ""
+                  }`}
                 >
                   <div className="aspect-square relative">
                     {isProcessing ? (
@@ -673,35 +560,45 @@ export default function GalleryPhotos() {
                             Zatwierdzone
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                          {isInAnyOrder ? (
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
-                              Wybrane
+                        {/* Deleting overlay - always visible when deleting */}
+                        {deletingImages.has(imageKey) && (
+                          <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
+                            <div className="flex flex-col items-center space-y-2">
+                              <Loading size="sm" />
+                              <span className="text-white text-sm font-medium">Usuwanie...</span>
                             </div>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePhotoClick(img);
-                              }}
-                              disabled={isApproved || deletingImages.has(imageKey)}
-                              className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                                isApproved || deletingImages.has(imageKey)
-                                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                  : "bg-error-500 text-white hover:bg-error-600"
-                              }`}
-                              title={
-                                isApproved
-                                  ? "Nie można usunąć zdjęcia z zatwierdzonej selekcji"
-                                  : deletingImages.has(imageKey)
-                                    ? "Usuwanie..."
+                          </div>
+                        )}
+                        {/* Delete button - only show when not deleting */}
+                        {!deletingImages.has(imageKey) && (
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                            {isInAnyOrder ? (
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
+                                Wybrane
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePhotoClick(img);
+                                }}
+                                disabled={isApproved}
+                                className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                                  isApproved
+                                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                                    : "bg-error-500 text-white hover:bg-error-600"
+                                }`}
+                                title={
+                                  isApproved
+                                    ? "Nie można usunąć zdjęcia z zatwierdzonej selekcji"
                                     : "Usuń zdjęcie"
-                              }
-                            >
-                              {deletingImages.has(imageKey) ? "Usuwanie..." : "Usuń"}
-                            </button>
-                          )}
-                        </div>
+                                }
+                              >
+                                Usuń
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -788,7 +685,7 @@ export default function GalleryPhotos() {
             ? deletingImages.has(imageToDelete.key ?? imageToDelete.filename ?? "")
             : false
         }
-        suppressKey="photo_delete_confirm_suppress"
+        suppressKey="original_image_delete_confirm_suppress"
       />
 
       {/* Debug: Show suppression status and allow manual clearing (only in development) */}

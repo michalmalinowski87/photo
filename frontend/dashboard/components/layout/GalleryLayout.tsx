@@ -37,6 +37,7 @@ interface GalleryLayoutProps {
   hasFinals?: boolean;
   hasDeliveredOrders?: boolean | undefined;
   galleryLoading?: boolean;
+  galleryId?: string;
 }
 
 const GalleryLayout: React.FC<GalleryLayoutProps> = ({
@@ -62,12 +63,19 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   hasDeliveredOrders,
   galleryLoading,
   sendLinkLoading,
+  galleryId,
 }) => {
+  // Show sidebar if:
+  // 1. Gallery is loaded, OR
+  // 2. Gallery is loading (to show loading states), OR
+  // 3. We have galleryId from URL (gallery should be loading)
+  const shouldShowSidebar = gallery?.galleryId || galleryLoading || (galleryId && (galleryLoading !== false));
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
       <div className="flex">
         <div>
-          {gallery?.galleryId && (
+          {shouldShowSidebar && (
             <GallerySidebar
               orderId={orderId}
               onDownloadZip={onDownloadZip}

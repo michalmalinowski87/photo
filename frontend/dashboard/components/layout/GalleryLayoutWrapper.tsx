@@ -346,6 +346,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
         hasDeliveredOrders={undefined}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
       >
         <FullPageLoading text="Ładowanie galerii..." />
       </GalleryLayout>
@@ -364,6 +366,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onSettings={() => {}}
         onReloadGallery={loadGalleryData}
         hasDeliveredOrders={undefined}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
       >
         <div className="p-6">
           <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -436,6 +440,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         }}
         order={orderObj}
         orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
+        galleryId={Array.isArray(galleryId) ? galleryId[0] : (galleryId as string | undefined)}
         onDownloadZip={orderId ? handleDownloadZip : undefined}
         canDownloadZip={canDownloadZip}
         onMarkOrderPaid={orderId ? handleMarkOrderPaid : undefined}
