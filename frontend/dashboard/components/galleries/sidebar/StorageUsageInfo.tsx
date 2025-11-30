@@ -26,8 +26,8 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  // Don't show on order pages or if no gallery
-  if (orderId || galleryLoading || !currentGallery?.galleryId) {
+  // Don't show if gallery is loading or not available
+  if (galleryLoading || !currentGallery?.galleryId) {
     return null;
   }
 
@@ -37,19 +37,27 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
   const originalsLimit = isPaid && typeof currentGallery.originalsLimitBytes === "number" ? currentGallery.originalsLimitBytes : undefined;
   const finalsLimit = isPaid && typeof currentGallery.finalsLimitBytes === "number" ? currentGallery.finalsLimitBytes : undefined;
 
+  // On order pages, only show finals
+  const isOrderPage = !!orderId;
+
   return (
-    <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
-      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-        Wykorzystane miejsce
-      </div>
-      <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-        Oryginały: {formatBytes(originalsBytes)}
-        {originalsLimit !== undefined && (
-          <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
-        )}
-      </div>
+    <div className="flex items-center gap-4">
+      {!isOrderPage && (
+        <div className="text-sm text-gray-700 dark:text-gray-300">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
+            Oryginały:
+          </span>
+          {formatBytes(originalsBytes)}
+          {originalsLimit !== undefined && (
+            <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
+          )}
+        </div>
+      )}
       <div className="text-sm text-gray-700 dark:text-gray-300">
-        Finalne: {formatBytes(finalsBytes)}
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
+          Finalne:
+        </span>
+        {formatBytes(finalsBytes)}
         {finalsLimit !== undefined && (
           <span className="text-gray-500"> / {formatBytes(finalsLimit)}</span>
         )}

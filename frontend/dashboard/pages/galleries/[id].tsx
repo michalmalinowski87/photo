@@ -50,11 +50,6 @@ interface PaymentDetails {
   balanceAfterPayment?: number;
 }
 
-interface GalleryOrdersUpdateEvent extends CustomEvent<{ galleryId?: string }> {
-  detail: {
-    galleryId?: string;
-  };
-}
 
 export default function GalleryDetail() {
   const router = useRouter();
@@ -64,7 +59,11 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders, fetchGallery, refreshGalleryStatusOnly } = useGalleryStore();
+  const { fetchGalleryOrders, refreshGalleryStatusOnly } = useGalleryStore();
+  // Subscribe to gallery orders cache to trigger re-render when orders are updated
+  const galleryOrdersCacheEntry = useGalleryStore((state) => 
+    galleryId ? state.galleryOrdersCache[galleryId as string] : null
+  );
 
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
@@ -225,29 +224,14 @@ export default function GalleryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, router.isReady, router.query, gallery]);
 
-  // Listen for gallery orders update event (e.g., after sending link from sidebar)
+  // Watch gallery orders cache and update local state when it changes (Zustand subscriptions)
   useEffect(() => {
-    if (!galleryId) {
-      return undefined;
+    if (galleryId && galleryOrdersCacheEntry) {
+      const cachedOrders = galleryOrdersCacheEntry.orders as Order[];
+      setOrders(cachedOrders);
+      setLoading(false);
     }
-
-    const handleGalleryOrdersUpdate = (event: Event) => {
-      const customEvent = event as GalleryOrdersUpdateEvent;
-      // Only reload if this is the same gallery
-      if (customEvent.detail?.galleryId === galleryId) {
-        void loadOrders();
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("galleryOrdersUpdated", handleGalleryOrdersUpdate);
-      return () => {
-        window.removeEventListener("galleryOrdersUpdated", handleGalleryOrdersUpdate);
-      };
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId]);
+  }, [galleryId, galleryOrdersCacheEntry]);
 
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {
     if (!galleryId || !orderId) {
@@ -319,14 +303,10 @@ export default function GalleryDetail() {
         window.location.href = data.checkoutUrl;
       } else if (data.paid) {
         showToast("success", "Sukces", "Galeria została opłacona z portfela!");
-        // Refresh gallery status using micro endpoint (lightweight)
+        // Refresh gallery status using micro endpoint (lightweight, synchronous)
         if (galleryId) {
           void refreshGalleryStatusOnly(galleryId as string);
         }
-        // Reload orders to ensure UI is up to date
-        void loadOrders();
-        // Gallery data will be reloaded by GalleryLayoutWrapper
-        // Wallet balance will be reloaded by parent component
       }
     } catch (err) {
       const errorMsg = formatApiError(err);

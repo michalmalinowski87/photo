@@ -27,7 +27,8 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       // Store dashboard as referrer when creating a new gallery
       const referrerKey = `gallery_referrer_${galleryId}`;
       sessionStorage.setItem(referrerKey, window.location.pathname);
-      window.location.href = `/galleries/${galleryId}`;
+      // Redirect to photos page as the first action is uploading photos
+      window.location.href = `/galleries/${galleryId}/photos`;
     }
   };
 

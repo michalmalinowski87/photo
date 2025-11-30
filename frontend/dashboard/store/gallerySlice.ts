@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+
 import api from "../lib/api-service";
 
 export interface Gallery {
@@ -27,8 +28,6 @@ interface GalleryState {
   galleryOrdersCache: Record<string, { orders: any[]; timestamp: number }>;
   // Cache for gallery images (keyed by galleryId)
   galleryImagesCache: Record<string, { images: any[]; timestamp: number }>;
-  // Cache timestamp for current gallery
-  galleryCacheTimestamp: number | null;
   filters: {
     unpaid?: boolean;
     wyslano?: boolean;
@@ -46,7 +45,6 @@ interface GalleryState {
   getGalleryOrders: (galleryId: string, maxAge?: number) => any[] | null;
   setGalleryImages: (galleryId: string, images: any[]) => void;
   getGalleryImages: (galleryId: string, maxAge?: number) => any[] | null;
-  isGalleryStale: (maxAge?: number) => boolean;
   invalidateGalleryCache: (galleryId?: string) => void;
   invalidateGalleryOrdersCache: (galleryId: string) => void;
   invalidateGalleryImagesCache: (galleryId: string) => void;
@@ -54,6 +52,7 @@ interface GalleryState {
   fetchGallery: (galleryId: string, forceRefresh?: boolean) => Promise<Gallery | null>;
   fetchGalleryImages: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
   fetchGalleryOrders: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
+  sendGalleryLinkToClient: (galleryId: string) => Promise<{ isReminder: boolean }>;
   refreshGalleryBytesOnly: (galleryId: string) => Promise<void>; // Silent refresh that only updates bytes used
   refreshGalleryStatusOnly: (galleryId: string) => Promise<void>; // Silent refresh that only updates status fields
   setFilter: (filter: string) => void;
@@ -93,7 +92,6 @@ export const useGalleryStore = create<GalleryState>()(
       currentGalleryId: null,
       galleryOrdersCache: {},
       galleryImagesCache: {},
-      galleryCacheTimestamp: null,
       filters: {},
       isLoading: false,
       error: null,
@@ -102,7 +100,6 @@ export const useGalleryStore = create<GalleryState>()(
         set({
           currentGallery: gallery,
           currentGalleryId: gallery?.galleryId || null,
-          galleryCacheTimestamp: gallery ? Date.now() : null,
         });
       },
 
@@ -177,10 +174,10 @@ export const useGalleryStore = create<GalleryState>()(
       getGalleryOrders: (galleryId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.galleryOrdersCache[galleryId];
-        if (!cached) return null;
+        if (!cached) {return null;}
 
         const age = Date.now() - cached.timestamp;
-        if (age > maxAge) return null; // Cache expired
+        if (age > maxAge) {return null;} // Cache expired
 
         return cached.orders;
       },
@@ -200,31 +197,16 @@ export const useGalleryStore = create<GalleryState>()(
       getGalleryImages: (galleryId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.galleryImagesCache[galleryId];
-        if (!cached) return null;
+        if (!cached) {return null;}
 
         const age = Date.now() - cached.timestamp;
-        if (age > maxAge) return null; // Cache expired
+        if (age > maxAge) {return null;} // Cache expired
 
         return cached.images;
       },
 
-      isGalleryStale: (maxAge: number = 30000) => {
-        const state = get();
-        if (!state.galleryCacheTimestamp) return true;
-        const age = Date.now() - state.galleryCacheTimestamp;
-        return age > maxAge;
-      },
-
-      invalidateGalleryCache: (galleryId?: string) => {
-        set((state) => {
-          // If galleryId provided, only invalidate if it matches current gallery
-          if (galleryId && state.currentGalleryId !== galleryId) {
-            return state; // Don't invalidate if different gallery
-          }
-          return {
-            galleryCacheTimestamp: null, // Force refresh on next load
-          };
-        });
+      invalidateGalleryCache: (_galleryId?: string) => {
+        // No-op: cache removed, always fetch fresh
       },
 
       invalidateGalleryOrdersCache: (galleryId: string) => {
@@ -247,17 +229,8 @@ export const useGalleryStore = create<GalleryState>()(
         });
       },
 
-      fetchGallery: async (galleryId: string, forceRefresh = false) => {
-        const state = get();
-
-        // Check cache first if not forcing refresh
-        if (!forceRefresh) {
-          if (state.currentGallery?.galleryId === galleryId && !state.isGalleryStale(30000)) {
-            return state.currentGallery;
-          }
-        }
-
-        // Fetch from API
+      fetchGallery: async (galleryId: string, _forceRefresh = false) => {
+        // Always fetch fresh - no cache
         set({ isLoading: true, error: null });
         try {
           const galleryData = await api.galleries.get(galleryId);
@@ -267,7 +240,6 @@ export const useGalleryStore = create<GalleryState>()(
             set({
               currentGallery: galleryData as Gallery,
               currentGalleryId: galleryData.galleryId,
-              galleryCacheTimestamp: Date.now(),
               isLoading: false,
             });
             return galleryData as Gallery;
@@ -282,23 +254,14 @@ export const useGalleryStore = create<GalleryState>()(
         }
       },
 
-      fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
+      fetchGalleryImages: async (galleryId: string, _forceRefresh = false) => {
+        // Always fetch fresh - no cache
         const state = get();
-
-        // Check cache first if not forcing refresh
-        if (!forceRefresh) {
-          const cached = state.getGalleryImages(galleryId, 30000);
-          if (cached) {
-            return cached;
-          }
-        }
-
-        // Fetch from API
         try {
           const response = await api.galleries.getImages(galleryId);
           const images = response.images ?? [];
 
-          // Update cache
+          // Update cache for optimistic updates only
           state.setGalleryImages(galleryId, images);
 
           return images;
@@ -309,23 +272,14 @@ export const useGalleryStore = create<GalleryState>()(
         }
       },
 
-      fetchGalleryOrders: async (galleryId: string, forceRefresh = false) => {
+      fetchGalleryOrders: async (galleryId: string, _forceRefresh = false) => {
+        // Always fetch fresh - no cache
         const state = get();
-
-        // Check cache first if not forcing refresh
-        if (!forceRefresh) {
-          const cached = state.getGalleryOrders(galleryId, 30000);
-          if (cached) {
-            return cached;
-          }
-        }
-
-        // Fetch from API
         try {
           const response = await api.orders.getByGallery(galleryId);
           const orders = (response.items ?? []) as any[];
 
-          // Update cache
+          // Update cache for optimistic updates only
           state.setGalleryOrders(galleryId, orders);
 
           return orders;
@@ -333,6 +287,26 @@ export const useGalleryStore = create<GalleryState>()(
           // Return empty array on error instead of throwing
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
           return [];
+        }
+      },
+
+      sendGalleryLinkToClient: async (galleryId: string) => {
+        try {
+          const response = await api.galleries.sendToClient(galleryId);
+          const isReminder = response.isReminder ?? false;
+
+          // Always reload orders to get updated status (for both initial and reminders)
+          await get().fetchGalleryOrders(galleryId, true);
+          
+          // Only reload gallery data if it's an initial invitation (creates order), not for reminders
+          if (!isReminder) {
+            await get().fetchGallery(galleryId, true);
+          }
+
+          return { isReminder };
+        } catch (err) {
+          console.error("[GalleryStore] Failed to send gallery link:", err);
+          throw err;
         }
       },
 
@@ -373,21 +347,10 @@ export const useGalleryStore = create<GalleryState>()(
                     originalsBytesUsed: bytesData.originalsBytesUsed ?? 0,
                     finalsBytesUsed: bytesData.finalsBytesUsed ?? 0,
                   },
-                  galleryCacheTimestamp: Date.now(), // Update cache timestamp
                 };
               });
 
-              // Dispatch event with refreshAfterUpload flag to prevent cascading API calls
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("galleryUpdated", {
-                    detail: {
-                      galleryId,
-                      refreshAfterUpload: true, // Signal that this is a refresh after upload completion
-                    },
-                  })
-                );
-              }
+              // Zustand state update will trigger re-renders automatically via subscriptions
             }
           } catch (err) {
             // Silently fail - don't show error or trigger loading state
@@ -425,21 +388,10 @@ export const useGalleryStore = create<GalleryState>()(
                   paymentStatus: statusData.paymentStatus,
                   isPaid: statusData.isPaid,
                 },
-                galleryCacheTimestamp: Date.now(), // Update cache timestamp
               };
             });
 
-            // Dispatch event to notify components of status update
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("galleryUpdated", {
-                  detail: {
-                    galleryId,
-                    refreshAfterStatusUpdate: true, // Signal that this is a status refresh
-                  },
-                })
-              );
-            }
+            // Zustand state update will trigger re-renders automatically via subscriptions
           }
         } catch (err) {
           // Silently fail - don't show error or trigger loading state
@@ -465,7 +417,6 @@ export const useGalleryStore = create<GalleryState>()(
         set({
           currentGallery: null,
           currentGalleryId: null,
-          galleryCacheTimestamp: null,
         });
       },
 
@@ -480,7 +431,6 @@ export const useGalleryStore = create<GalleryState>()(
           currentGalleryId: null,
           galleryOrdersCache: {},
           galleryImagesCache: {},
-          galleryCacheTimestamp: null,
           filters: {},
           isLoading: false,
           error: null,

@@ -45,7 +45,7 @@ export type RevertOptimisticUpdateParams =
 /**
  * Applies an optimistic update for gallery storage bytes.
  * For originals: dispatches galleryUpdated event
- * For finals: updates Zustand store, local state, and dispatches finalsUpdated event
+ * For finals: updates Zustand store and local state
  */
 export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void {
   if (typeof window === "undefined") {
@@ -55,7 +55,7 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
   const { galleryId, sizeDelta } = params;
 
   if (params.type === "originals") {
-    // For originals, just dispatch the event
+    // For originals, update store optimistically (like finals)
     const isUpload = params.isUpload ?? sizeDelta > 0; // Positive delta = upload, negative = deletion
     console.log(`[${params.logContext ?? "optimistic-updates"}] Applying originals optimistic update:`, {
       galleryId,
@@ -63,15 +63,13 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
       isUpload,
     });
 
-    window.dispatchEvent(
-      new CustomEvent("galleryUpdated", {
-        detail: {
-          galleryId,
-          sizeDelta,
-          isUpload,
-        },
-      })
-    );
+    // Update Zustand store optimistically
+    const storeState = useGalleryStore.getState();
+    if (storeState.currentGallery?.galleryId === galleryId) {
+      (storeState as { updateOriginalsBytesUsed?: (delta: number) => void }).updateOriginalsBytesUsed?.(
+        sizeDelta
+      );
+    }
   } else {
     // For finals, update store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
@@ -99,12 +97,7 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
       setOptimisticFinalsBytes(newStoreValue ?? null);
     }
 
-    // Dispatch event (store subscription will also handle this, but event ensures immediate update)
-    window.dispatchEvent(
-      new CustomEvent("finalsUpdated", {
-        detail: { galleryId, sizeDelta },
-      })
-    );
+    // Store update will trigger re-renders automatically via Zustand subscriptions
   }
 }
 
@@ -121,21 +114,20 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
   const revertDelta = -sizeDelta; // Opposite of original delta
 
   if (params.type === "originals") {
-    // For originals, just dispatch the revert event
+    // For originals, revert store update
     console.log(`[${params.logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`, {
       galleryId,
       originalSizeDelta: sizeDelta,
       revertDelta,
     });
 
-    window.dispatchEvent(
-      new CustomEvent("galleryUpdated", {
-        detail: {
-          galleryId,
-          sizeDelta: revertDelta, // Revert by adding back
-        },
-      })
-    );
+    // Revert store update (add back the size)
+    const storeState = useGalleryStore.getState();
+    if (storeState.currentGallery?.galleryId === galleryId) {
+      (storeState as { updateOriginalsBytesUsed?: (delta: number) => void }).updateOriginalsBytesUsed?.(
+        revertDelta
+      ); // Revert by adding back
+    }
   } else {
     // For finals, revert store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
@@ -164,12 +156,7 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
       setOptimisticFinalsBytes(newStoreValue ?? null);
     }
 
-    // Dispatch revert event
-    window.dispatchEvent(
-      new CustomEvent("finalsUpdated", {
-        detail: { galleryId, sizeDelta: revertDelta }, // Revert by adding back
-      })
-    );
+    // Store update will trigger re-renders automatically via Zustand subscriptions
   }
 }
 

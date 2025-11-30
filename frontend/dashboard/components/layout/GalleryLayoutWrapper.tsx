@@ -45,13 +45,17 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     isLoading: loading,
     error: loadError,
     clearCurrentGallery,
-    isGalleryStale,
     invalidateGalleryCache,
     invalidateGalleryOrdersCache,
+    publishWizardOpen,
+    publishWizardGalleryId,
+    setPublishWizardOpen: setPublishWizardOpenStore,
+    sendGalleryLinkToClient,
   } = useGalleryStore();
   // Use selector to ensure re-render when order changes - watch deliveryStatus specifically
   const order = useOrderStore((state) => state.currentOrder);
   const deliveryStatus = useOrderStore((state) => state.currentOrder?.deliveryStatus);
+  const orderCache = useOrderStore((state) => orderId ? state.orderCache[orderId as string] : null);
   const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
   const clearCurrentOrder = useOrderStore((state) => state.clearCurrentOrder);
   const invalidateOrderStoreGalleryCache = useOrderStore(
@@ -86,7 +90,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     stripeAmountCents: 0,
     balanceAfterPayment: 0,
   });
-  const [publishWizardOpen, setPublishWizardOpen] = useState(false);
+  // Use Zustand store for publish wizard state instead of local state
+  // Check if wizard should be open for this specific gallery
+  const isPublishWizardOpenForThisGallery =
+    publishWizardOpen && publishWizardGalleryId === galleryId;
   const [showClientSendPopup, setShowClientSendPopup] = useState(false);
 
   // Use custom hooks for gallery data and order actions
@@ -146,16 +153,16 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   useEffect(() => {
     if (router.isReady && apiUrl && idToken && galleryId) {
-      // Only reload if galleryId changed or we don't have gallery data yet or cache is stale
-      if (gallery?.galleryId !== galleryId || isGalleryStale(30000)) {
-        void loadGalleryData(false, false); // Use cache if fresh
+      // Always fetch fresh - no cache
+      if (gallery?.galleryId !== galleryId) {
+        void loadGalleryData(false, true); // Force refresh
       }
       // Refresh wallet balance only when we have a valid token (userSlice handles its own caching)
       if (idToken && idToken.trim() !== "") {
         void refreshWalletBalance();
       }
       void checkDeliveredOrders();
-      void loadGalleryOrders(false); // Use cache if fresh
+      void loadGalleryOrders(true); // Force refresh
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, apiUrl, idToken, galleryId]);
@@ -168,32 +175,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   }, [router.isReady, apiUrl, idToken, galleryId, orderId, setCurrentOrder, loadOrderData]);
 
-  // Listen for order updates from order page (e.g., after final upload)
+  // Watch order cache and reload when order updates (Zustand subscriptions)
   useEffect(() => {
-    if (!orderId) {
-      return undefined;
+    if (orderId && orderCache) {
+      // Order was updated in store, reload to get latest data
+      void loadOrderData();
+      void checkDeliveredOrders();
     }
-
-    const handleOrderUpdate = async (event: Event) => {
-      const customEvent = event as CustomEvent<{ orderId?: string }>;
-      // Only reload if this is the same order
-      if (customEvent.detail?.orderId === orderId) {
-        // Reload order data immediately to update sidebar
-        await loadOrderData();
-        // Also refresh delivered orders check in case status changed to DELIVERED
-        await checkDeliveredOrders();
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("orderUpdated", handleOrderUpdate);
-      return () => {
-        window.removeEventListener("orderUpdated", handleOrderUpdate);
-      };
-    }
-    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [orderId, orderCache?.timestamp]);
 
   // Force re-render when order deliveryStatus changes - this ensures sidebar buttons update
   // MUST be before any early returns to follow Rules of Hooks
@@ -249,7 +239,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     if (!galleryId) {
       return;
     }
-    setPublishWizardOpen(true);
+    setPublishWizardOpenStore(true, galleryId as string);
   };
 
   // Check URL params to auto-open wizard
@@ -260,33 +250,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       const galleryParam = params.get("galleryId");
 
       if (publishParam === "true" && galleryParam === galleryId) {
-        setPublishWizardOpen(true);
+        setPublishWizardOpenStore(true, galleryId as string);
       }
     }
   }, [galleryId, router.isReady]);
 
-  // Listen for custom events from NextStepsOverlay
-  useEffect(() => {
-    const handleOpenPublishWizard = (event: CustomEvent) => {
-      if (event.detail?.galleryId === galleryId) {
-        setPublishWizardOpen(true);
-      }
-    };
-
-    const handleSendGalleryLink = (event: CustomEvent) => {
-      if (event.detail?.galleryId === galleryId) {
-        void handleSendLink();
-      }
-    };
-
-    window.addEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
-    window.addEventListener("sendGalleryLink", handleSendGalleryLink as EventListener);
-
-    return () => {
-      window.removeEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
-      window.removeEventListener("sendGalleryLink", handleSendGalleryLink as EventListener);
-    };
-  }, [galleryId]);
 
   const confirmPayment = async () => {
     if (!galleryId || !paymentDetails) {
@@ -314,14 +282,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         // If we're on an order page, reload order data and notify the order page
         if (orderId) {
           await loadOrderData();
-          // Dispatch event to notify order page to refresh
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-            // Also dispatch a gallery payment event to ensure order page refreshes
-            window.dispatchEvent(
-              new CustomEvent("galleryPaymentCompleted", { detail: { galleryId } })
-            );
-          }
+          // Store updates will trigger re-renders automatically via Zustand subscriptions
         }
       }
     } catch (err) {
@@ -345,37 +306,21 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
 
-    // Check if this is a reminder (has existing orders) or initial invitation
-    const isReminder = galleryOrders && galleryOrders.length > 0;
-
     setSendLinkLoading(true);
 
     try {
-      const response = await api.galleries.sendToClient(galleryId as string);
-      const isReminderResponse = response.isReminder ?? isReminder;
+      const result = await sendGalleryLinkToClient(galleryId as string);
 
       showToast(
         "success",
         "Sukces",
-        isReminderResponse
+        result.isReminder
           ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
           : "Link do galerii został wysłany do klienta"
       );
 
-      // Only reload if it's an initial invitation (creates order), not for reminders
-      if (!isReminderResponse) {
-        // Reload gallery data and orders to get the newly created CLIENT_SELECTING order
-        await loadGalleryData();
-        await loadGalleryOrders();
-
-        // Trigger event to reload orders if we're on the gallery detail page
-        if (typeof window !== "undefined") {
-          void window.dispatchEvent(
-            new CustomEvent("galleryOrdersUpdated", { detail: { galleryId } })
-          );
-        }
-
-        // Show success popup for initial invitations only
+      // Show success popup for initial invitations only
+      if (!result.isReminder) {
         setShowClientSendPopup(true);
       }
     } catch (err) {
@@ -490,7 +435,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           await loadGalleryOrders();
         }}
         order={orderObj}
-        orderId={orderId as string}
+        orderId={Array.isArray(orderId) ? orderId[0] : (orderId as string | undefined)}
         onDownloadZip={orderId ? handleDownloadZip : undefined}
         canDownloadZip={canDownloadZip}
         onMarkOrderPaid={orderId ? handleMarkOrderPaid : undefined}
@@ -502,11 +447,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         hasDeliveredOrders={hasDeliveredOrders}
         galleryLoading={loading}
       >
-        {publishWizardOpen ? (
+        {isPublishWizardOpenForThisGallery ? (
           <PublishGalleryWizard
-            isOpen={publishWizardOpen}
+            isOpen={isPublishWizardOpenForThisGallery}
             onClose={() => {
-              setPublishWizardOpen(false);
+              setPublishWizardOpenStore(false);
             }}
             galleryId={galleryId as string}
             onSuccess={async () => {
@@ -514,13 +459,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
               await loadGalleryData();
               await refreshWalletBalance();
               // If we're on an order page, reload order data
+              // Store updates will trigger re-renders automatically via Zustand subscriptions
               if (orderId) {
                 await loadOrderData();
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(
-                    new CustomEvent("galleryPaymentCompleted", { detail: { galleryId } })
-                  );
-                }
               }
             }}
           />

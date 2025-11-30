@@ -159,10 +159,7 @@ export const useOrderActions = ({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       invalidateOrderStoreGalleryCache(galleryId as string);
       showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
-      // Trigger a custom event to notify order page to merge updates
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-      }
+      // Store update will trigger re-renders automatically via Zustand subscriptions
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
@@ -231,10 +228,7 @@ export const useOrderActions = ({
         invalidateGalleryOrdersCache(galleryId as string);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         invalidateOrderStoreGalleryCache(galleryId as string);
-        // Trigger a custom event to notify order page to merge updates
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-        }
+        // Store update will trigger re-renders automatically via Zustand subscriptions
       } catch (err) {
         showToast("error", "Błąd", formatApiError(err));
       }

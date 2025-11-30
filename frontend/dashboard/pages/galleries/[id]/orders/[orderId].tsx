@@ -78,12 +78,6 @@ interface PaymentDetails {
 }
 
 
-interface OrderUpdateEvent extends CustomEvent<{ orderId?: string; galleryId?: string }> {
-  detail: {
-    orderId?: string;
-    galleryId?: string;
-  };
-}
 
 type BadgeColor = "primary" | "success" | "error" | "warning" | "info" | "light" | "dark";
 
@@ -311,10 +305,8 @@ export default function OrderDetail() {
         void loadOrderData();
       }
     },
-    onOrderUpdated: (orderId) => {
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
-      }
+    onOrderUpdated: (_orderId) => {
+      // Store updates will trigger re-renders automatically via Zustand subscriptions
     },
     loadOrderData,
     deletingImagesRef,
@@ -347,40 +339,25 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, orderId]); // Removed loadOrderData and loadWalletBalance from deps to avoid infinite loops
 
-  // Listen for order updates from sidebar actions (e.g., mark as paid, send finals)
+  // Watch order and gallery state for updates (Zustand subscriptions)
+  const orderCache = useOrderStore((state) => orderId ? state.orderCache[orderId as string] : null);
+  const currentGallery = useGalleryStore((state) => state.currentGallery);
+  
   useEffect(() => {
-    if (!galleryId || !orderId) {
-      return undefined;
+    if (orderId && orderCache) {
+      // Order was updated in store, reload to get latest data
+      void loadOrderData();
     }
-
-    const handleOrderUpdate = (event: Event) => {
-      const customEvent = event as OrderUpdateEvent;
-      // Only reload if this is the same order
-      if (customEvent.detail?.orderId === orderId) {
-        void loadOrderData();
-      }
-    };
-
-    const handleGalleryPaymentCompleted = (event: Event) => {
-      const customEvent = event as OrderUpdateEvent;
-      // Reload order data when gallery payment is completed
-      // This ensures the order view updates when gallery is paid via sidebar
-      if (customEvent.detail?.galleryId === galleryId) {
-        void loadOrderData();
-      }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("orderUpdated", handleOrderUpdate);
-      window.addEventListener("galleryPaymentCompleted", handleGalleryPaymentCompleted);
-      return () => {
-        window.removeEventListener("orderUpdated", handleOrderUpdate);
-        window.removeEventListener("galleryPaymentCompleted", handleGalleryPaymentCompleted);
-      };
-    }
-    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, galleryId]); // Removed loadOrderData from deps
+  }, [orderId, orderCache?.timestamp]);
+
+  useEffect(() => {
+    if (galleryId && currentGallery?.galleryId === galleryId) {
+      // Gallery was updated (e.g., payment completed), reload order data
+      void loadOrderData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, currentGallery?.isPaid, currentGallery?.state]);
 
   // Listen for finals uploads to update gallery's finalsBytesUsed reactively with optimistic updates
   useEffect(() => {
@@ -400,55 +377,7 @@ export default function OrderDetail() {
       }
     }
 
-    // Listen for finals update events (fired immediately on upload)
-    const handleFinalsUpdate = (event?: Event) => {
-      const customEvent = event as CustomEvent<{ galleryId?: string; sizeDelta?: number }>;
-      console.log("[orderDetail.tsx] finalsUpdated event received:", {
-        eventGalleryId: customEvent.detail?.galleryId,
-        currentGalleryId: galleryId,
-        sizeDelta: customEvent.detail?.sizeDelta,
-      });
-
-      if (
-        customEvent.detail?.galleryId === galleryId &&
-        customEvent.detail?.sizeDelta !== undefined
-      ) {
-        const sizeDelta = customEvent.detail.sizeDelta;
-        console.log("[orderDetail.tsx] Updating optimistic finals bytes, sizeDelta:", sizeDelta);
-
-        // Get current store value (which already has optimistic updates from previous uploads)
-        const storeState = useGalleryStore.getState();
-        const storeFinalsBytes =
-          storeState.currentGallery?.galleryId === galleryId
-            ? (storeState.currentGallery.finalsBytesUsed as number | undefined)
-            : undefined;
-
-        // Store already has the optimistic update, so use it directly
-        if (storeFinalsBytes !== undefined) {
-          console.log(
-            "[orderDetail.tsx] Using store value (already optimistic):",
-            storeFinalsBytes
-          );
-          setOptimisticFinalsBytes(storeFinalsBytes);
-        } else {
-          // Fallback: if store doesn't have it, calculate manually
-          setOptimisticFinalsBytes((prev) => {
-            const currentBytes = prev ?? (gallery?.finalsBytesUsed as number | undefined) ?? 0;
-            const newBytes = Math.max(0, currentBytes + sizeDelta);
-            console.log("[orderDetail.tsx] Fallback calculation:", {
-              prev,
-              currentGalleryBytes: gallery?.finalsBytesUsed,
-              currentBytes,
-              sizeDelta,
-              newBytes,
-            });
-            return newBytes;
-          });
-        }
-      }
-    };
-
-    // Subscribe to Zustand store changes for finals bytes (backup/fallback)
+    // Subscribe to Zustand store changes for finals bytes (handles optimistic updates)
     let prevFinalsBytes: number | undefined = useGalleryStore.getState().currentGallery
       ?.finalsBytesUsed as number | undefined;
     const unsubscribe = useGalleryStore.subscribe((state) => {
@@ -500,17 +429,9 @@ export default function OrderDetail() {
       }
     });
 
-    if (typeof window !== "undefined") {
-      console.log("[orderDetail.tsx] Setting up finalsUpdated event listener");
-      window.addEventListener("finalsUpdated", handleFinalsUpdate);
-    }
-
     return () => {
       console.log("[orderDetail.tsx] Cleaning up finals update listeners");
       unsubscribe();
-      if (typeof window !== "undefined") {
-        window.removeEventListener("finalsUpdated", handleFinalsUpdate);
-      }
     };
   }, [galleryId, gallery, optimisticFinalsBytes]);
 
@@ -651,13 +572,16 @@ export default function OrderDetail() {
 
     // Apply optimistic update immediately (before API call)
     if (sizeDelta !== undefined && galleryId) {
-      applyOptimisticUpdate({
-        type: "finals",
-        galleryId,
-        sizeDelta,
-        setOptimisticFinalsBytes,
-        logContext: "orderDetail.tsx handleDeleteFinalDirect",
-      });
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+      if (galleryIdStr) {
+        applyOptimisticUpdate({
+          type: "finals",
+          galleryId: galleryIdStr,
+          sizeDelta,
+          setOptimisticFinalsBytes,
+          logContext: "orderDetail.tsx handleDeleteFinalDirect",
+        });
+      }
     }
 
     try {
@@ -680,15 +604,17 @@ export default function OrderDetail() {
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, reload data (will filter out deleted images)
-        if (updated.size === 0) {
-          // Use setTimeout to ensure state update completes before reload
+        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        if (updated.size === 0 && galleryId) {
+          // Use setTimeout to ensure state update completes before refresh
           setTimeout(async () => {
-            await loadOrderData();
-            // Notify GalleryLayoutWrapper to reload order data and check for finals
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
+            const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+            const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+            if (galleryIdStr) {
+              await refreshGalleryBytesOnly(galleryIdStr);
             }
+            await loadOrderData();
+            // Store update will trigger re-renders automatically via Zustand subscriptions
           }, 0);
         }
         return updated;
@@ -698,13 +624,16 @@ export default function OrderDetail() {
     } catch (err) {
       // Revert optimistic update on error
       if (sizeDelta !== undefined && galleryId) {
-        revertOptimisticUpdate({
-          type: "finals",
-          galleryId,
-          sizeDelta,
-          setOptimisticFinalsBytes,
-          logContext: "orderDetail.tsx handleDeleteFinalDirect",
-        });
+        const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+        if (galleryIdStr) {
+          revertOptimisticUpdate({
+            type: "finals",
+            galleryId: galleryIdStr,
+            sizeDelta,
+            setOptimisticFinalsBytes,
+            logContext: "orderDetail.tsx handleDeleteFinalDirect",
+          });
+        }
       }
 
       // On error, restore the image to the list (only if not in deletedImageKeys)
@@ -787,13 +716,16 @@ export default function OrderDetail() {
 
     // Apply optimistic update immediately (before API call)
     if (sizeDelta !== undefined && galleryId) {
-      applyOptimisticUpdate({
-        type: "finals",
-        galleryId,
-        sizeDelta,
-        setOptimisticFinalsBytes,
-        logContext: "orderDetail.tsx handleDeleteFinal",
-      });
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+      if (galleryIdStr) {
+        applyOptimisticUpdate({
+          type: "finals",
+          galleryId: galleryIdStr,
+          sizeDelta,
+          setOptimisticFinalsBytes,
+          logContext: "orderDetail.tsx handleDeleteFinal",
+        });
+      }
     }
 
     try {
@@ -827,15 +759,17 @@ export default function OrderDetail() {
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, reload data (will filter out deleted images)
-        if (updated.size === 0) {
-          // Use setTimeout to ensure state update completes before reload
+        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        if (updated.size === 0 && galleryId) {
+          // Use setTimeout to ensure state update completes before refresh
           setTimeout(async () => {
-            await loadOrderData();
-            // Notify GalleryLayoutWrapper to reload order data and check for finals
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("orderUpdated", { detail: { orderId } }));
+            const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+            const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+            if (galleryIdStr) {
+              await refreshGalleryBytesOnly(galleryIdStr);
             }
+            await loadOrderData();
+            // Store update will trigger re-renders automatically via Zustand subscriptions
           }, 0);
         }
         return updated;
@@ -845,13 +779,16 @@ export default function OrderDetail() {
     } catch (err) {
       // Revert optimistic update on error
       if (sizeDelta !== undefined && galleryId) {
-        revertOptimisticUpdate({
-          type: "finals",
-          galleryId,
-          sizeDelta,
-          setOptimisticFinalsBytes,
-          logContext: "orderDetail.tsx handleDeleteFinal",
-        });
+        const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
+        if (galleryIdStr) {
+          revertOptimisticUpdate({
+            type: "finals",
+            galleryId: galleryIdStr,
+            sizeDelta,
+            setOptimisticFinalsBytes,
+            logContext: "orderDetail.tsx handleDeleteFinal",
+          });
+        }
       }
 
       // On error, restore the image to the list (only if not in deletedImageKeys)

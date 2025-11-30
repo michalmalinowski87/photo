@@ -35,7 +35,6 @@ export const useGalleryData = ({
     setError,
     fetchGallery,
     fetchGalleryOrders,
-    isGalleryStale,
   } = useGalleryStore();
 
   const loadGalleryData = useCallback(
@@ -51,14 +50,7 @@ export const useGalleryData = ({
         return;
       }
 
-      // Check cache first (unless forcing refresh)
-      if (!forceRefresh && gallery?.galleryId === galleryId && !isGalleryStale(30000)) {
-        // Use cached data, but update URL if needed
-        setGalleryUrl(
-          typeof window !== "undefined" ? `${window.location.origin}/gallery/${galleryId}` : ""
-        );
-        return;
-      }
+      // Always fetch fresh - no cache
 
       if (!silent) {
         setLoading(true);
@@ -75,10 +67,7 @@ export const useGalleryData = ({
             : ""
         );
 
-        // Dispatch galleryUpdated event to notify components (e.g., GallerySidebar, NextStepsOverlay)
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("galleryUpdated", { detail: { galleryId } }));
-        }
+        // Zustand state update will trigger re-renders automatically via subscriptions
       } catch (err) {
         if (!silent) {
           const errorMsg = formatApiError(err);
@@ -98,7 +87,6 @@ export const useGalleryData = ({
       setError,
       fetchGallery,
       showToast,
-      isGalleryStale,
       setGalleryUrl,
     ]
   );

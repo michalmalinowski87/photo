@@ -103,7 +103,8 @@ export function usePlanRecommendation({
 
     let requestCounter = 0;
 
-    const handleGalleryUpdate = async () => {
+    // Refresh recommendation when gallery bytes change (Zustand subscriptions handle state updates)
+    const refreshRecommendation = async () => {
       requestCounter += 1;
       const currentRequest = requestCounter;
 
@@ -151,16 +152,9 @@ export function usePlanRecommendation({
       }
     };
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("galleryUpdated", handleGalleryUpdate);
-      return () => {
-        window.removeEventListener("galleryUpdated", handleGalleryUpdate);
-        requestCounter += 1;
-      };
-    }
-    return undefined;
+    void refreshRecommendation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, needsPayment, selectionEnabled]);
+  }, [galleryId, needsPayment, selectionEnabled, originalsBytesUsed]);
 
   // Also refresh when gallery prop changes
   useEffect(() => {

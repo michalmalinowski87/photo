@@ -67,7 +67,19 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
       <div className="flex">
         <div>
-          {gallery?.galleryId && <GallerySidebar />}
+          {gallery?.galleryId && (
+            <GallerySidebar
+              orderId={orderId}
+              onDownloadZip={onDownloadZip}
+              canDownloadZip={canDownloadZip}
+              onMarkOrderPaid={onMarkOrderPaid}
+              onDownloadFinals={onDownloadFinals}
+              onSendFinalsToClient={onSendFinalsToClient}
+              onApproveChangeRequest={onApproveChangeRequest}
+              onDenyChangeRequest={onDenyChangeRequest}
+              hasFinals={hasFinals}
+            />
+          )}
         </div>
         <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
           <GalleryHeader />

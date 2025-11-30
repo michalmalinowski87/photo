@@ -45,7 +45,20 @@ export async function calculateFinalsSize(bucket: string, galleryId: string): Pr
 		}));
 
 		if (listResponse.Contents) {
-			totalSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+			// Only count final images directly under order directories, exclude previews/thumbs in subdirectories
+			// Structure: galleries/{galleryId}/final/{orderId}/{filename}
+			// We want to exclude: galleries/{galleryId}/final/{orderId}/previews/... and .../thumbs/...
+			totalSize += listResponse.Contents
+				.filter(obj => {
+					const key = obj.Key || '';
+					const relativePath = key.replace(prefix, '');
+					// Count only files directly under order directories (not in previews/ or thumbs/ subdirectories)
+					// A valid path should be: {orderId}/{filename} with no additional slashes
+					const pathParts = relativePath.split('/');
+					// Should have exactly 2 parts: orderId and filename
+					return pathParts.length === 2 && pathParts[0] && pathParts[1];
+				})
+				.reduce((sum, obj) => sum + (obj.Size || 0), 0);
 		}
 
 		continuationToken = listResponse.NextContinuationToken;

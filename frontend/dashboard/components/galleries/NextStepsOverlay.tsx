@@ -12,6 +12,7 @@ interface Gallery {
   paymentStatus?: string;
   state?: string;
   selectionEnabled?: boolean;
+  nextStepsCompleted?: boolean;
   [key: string]: unknown;
 }
 
@@ -49,6 +50,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const setNextStepsOverlayExpanded = (
     galleryStore as { setNextStepsOverlayExpanded: (expanded: boolean) => void }
   ).setNextStepsOverlayExpanded;
+  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
+  const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
@@ -56,6 +59,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
   const [widthReached13rem, setWidthReached13rem] = useState(false);
   const galleryRef = useRef(gallery);
+  const isUpdatingCompletionRef = useRef(false); // Track if we're already updating completion status
+
+  // Check if gallery has completed setup from gallery object
+  const galleryCompletedSetup = gallery?.nextStepsCompleted === true;
 
   // Keep ref in sync with gallery prop
   useEffect(() => {
@@ -107,7 +114,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const currentBytes = optimisticBytesUsed ?? gallery.originalsBytesUsed ?? 0;
     const uploadCompleted = currentBytes > 0;
     const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
-    const sendCompleted = gallery.selectionEnabled !== false ? orders.length > 0 : null;
+    // Send step is completed when there's a CLIENT_SELECTING order (gallery has been sent to client)
+    const sendCompleted = gallery.selectionEnabled !== false 
+      ? orders.some((o: unknown) => {
+          const orderObj = o as { deliveryStatus?: string };
+          return orderObj.deliveryStatus === "CLIENT_SELECTING";
+        })
+      : null;
 
     return [
       {
@@ -126,7 +139,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         completed: sendCompleted,
       },
     ];
-  }, [gallery, galleryLoading, orders.length, optimisticBytesUsed]);
+  }, [gallery, galleryLoading, orders, optimisticBytesUsed]);
 
   // Update steps with debouncing
   useEffect(() => {
@@ -141,84 +154,38 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     }, 200);
 
     return () => clearTimeout(timeoutId);
-  }, [gallery, galleryLoading, orders.length, calculateSteps]);
+  }, [gallery, galleryLoading, orders, calculateSteps]);
 
   // Listen for gallery updates with optimistic updates (when photos are added/removed)
+  // Recalculate steps when gallery or orders change (Zustand subscriptions handle state updates)
   useEffect(() => {
-    if (!gallery?.galleryId) {
+    setSteps(calculateSteps());
+  }, [gallery, orders, calculateSteps]);
+
+  // Clear optimistic bytes when gallery bytes update (after store confirms)
+  useEffect(() => {
+    if (!gallery?.originalsBytesUsed) {
       return;
     }
 
-    const handleGalleryUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        galleryId?: string;
-        sizeDelta?: number;
-        isUpload?: boolean;
-      }>;
-
-      // Only react to updates for this gallery
-      if (customEvent.detail?.galleryId !== gallery.galleryId && customEvent.detail?.galleryId) {
-        return;
+    setOptimisticBytesUsed((prev) => {
+      if (prev === null) {
+        return null; // Already cleared
       }
-
-      // If sizeDelta is provided, update optimistically (instant UI update)
-      if (customEvent.detail?.sizeDelta !== undefined) {
-        const sizeDelta = customEvent.detail.sizeDelta;
-
-        // Optimistic update: immediately adjust bytes
-        setOptimisticBytesUsed((prev) => {
-          const currentGalleryBytes = galleryRef.current?.originalsBytesUsed ?? 0;
-          // Use prev if available (even if it's 0), only fall back to gallery if prev is null
-          const currentBytes = prev ?? currentGalleryBytes;
-          const newBytes = Math.max(0, currentBytes + sizeDelta);
-          return newBytes;
-        });
-
-        // Recalculate steps immediately with optimistic value
-        setSteps(calculateSteps());
-      } else {
-        // No sizeDelta - this is a refresh event (e.g., after polling completes)
-        // Clear optimistic state if it matches the gallery value (confirmed by reload)
-        setOptimisticBytesUsed((prev) => {
-          if (prev === null) {
-            return null; // Already cleared
-          }
-          const currentGalleryBytes = galleryRef.current?.originalsBytesUsed ?? 0;
-          // If gallery shows 0, clear optimistic state
-          if (currentGalleryBytes === 0) {
-            return null;
-          }
-          // If optimistic value matches gallery value (within small tolerance), clear it
-          if (Math.abs(prev - currentGalleryBytes) < 1000) {
-            // Close enough (within 1KB tolerance for rounding), clear optimistic state
-            return null;
-          }
-          // Keep optimistic value if it doesn't match
-          return prev;
-        });
-
-        // Recalculate steps with confirmed gallery data
-        setSteps(calculateSteps());
+      const currentGalleryBytes = gallery.originalsBytesUsed ?? 0;
+      // If gallery shows 0, clear optimistic state
+      if (currentGalleryBytes === 0) {
+        return null;
       }
-    };
-
-    const handleOrdersUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ galleryId?: string }>;
-      // Only react to updates for this gallery
-      if (customEvent.detail?.galleryId === gallery.galleryId || !customEvent.detail?.galleryId) {
-        // Recalculate steps when orders change
-        setSteps(calculateSteps());
+      // If optimistic value matches gallery value (within small tolerance), clear it
+      if (Math.abs(prev - currentGalleryBytes) < 1000) {
+        // Close enough (within 1KB tolerance for rounding), clear optimistic state
+        return null;
       }
-    };
-
-    window.addEventListener("galleryUpdated", handleGalleryUpdate);
-    window.addEventListener("galleryOrdersUpdated", handleOrdersUpdate);
-
-    return () => {
-      window.removeEventListener("galleryUpdated", handleGalleryUpdate);
-      window.removeEventListener("galleryOrdersUpdated", handleOrdersUpdate);
-    };
-  }, [gallery?.galleryId, calculateSteps]);
+      // Keep optimistic value if it doesn't match
+      return prev;
+    });
+  }, [gallery?.originalsBytesUsed]);
 
   // Check if all applicable steps are completed (calculate before early return)
   const applicableSteps = steps.filter((step) => step.completed !== null);
@@ -299,7 +266,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     gallery?.originalsBytesUsed,
     gallery?.paymentStatus,
     gallery?.state,
-    orders.length,
+    orders,
     calculateSteps,
     gallery,
     galleryLoading,
@@ -311,32 +278,70 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     setOptimisticBytesUsed(null);
   }, [gallery?.galleryId]);
 
-  // Auto-collapse if all steps are completed (must be before early return)
+  // Auto-hide and mark as completed if all steps are completed (must be before early return)
+  // Hide after 3 seconds when all steps are done (not immediately), then mark as completed permanently in database
   useEffect(() => {
     if (
       allCompleted &&
-      nextStepsOverlayExpanded &&
-      gallery &&
+      gallery?.galleryId &&
       !galleryLoading &&
-      steps.length > 0
+      steps.length > 0 &&
+      !galleryCompletedSetup &&
+      !isUpdatingCompletionRef.current // Prevent multiple updates
     ) {
-      const timeoutId = setTimeout(() => {
+      // Mark that we're updating to prevent duplicate calls
+      isUpdatingCompletionRef.current = true;
+      
+      // First collapse if expanded
+      if (nextStepsOverlayExpanded) {
         setNextStepsOverlayExpanded(false);
-      }, 3000); // Auto-collapse after 3 seconds if all completed
+      }
+      
+      // Then hide completely and mark as completed in database after 3 seconds
+      const timeoutId = setTimeout(async () => {
+        try {
+          // Update gallery in database to mark setup as completed
+          await api.galleries.update(gallery.galleryId, {
+            nextStepsCompleted: true,
+          });
+          
+          // Manually update the gallery in the store to avoid triggering full fetch and events
+          // This prevents infinite loops while still updating the UI immediately
+          const { setCurrentGallery, currentGallery } = useGalleryStore.getState();
+          if (currentGallery?.galleryId === gallery.galleryId) {
+            setCurrentGallery({
+              ...currentGallery,
+              nextStepsCompleted: true,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to mark gallery setup as completed:", error);
+          // Reset flag on error so user can retry
+          isUpdatingCompletionRef.current = false;
+        }
+      }, 3000); // Hide after 3 seconds if all completed
 
       return () => {
         clearTimeout(timeoutId);
+        // Reset flag if effect is cleaned up before timeout completes
+        isUpdatingCompletionRef.current = false;
       };
     }
     return undefined;
   }, [
     allCompleted,
     nextStepsOverlayExpanded,
-    gallery,
+    gallery?.galleryId, // Only depend on galleryId, not entire gallery object
     galleryLoading,
     steps.length,
     setNextStepsOverlayExpanded,
+    galleryCompletedSetup,
   ]);
+  
+  // Reset update flag when gallery changes
+  useEffect(() => {
+    isUpdatingCompletionRef.current = false;
+  }, [gallery?.galleryId]);
 
   const handleDontShowAgain = async (): Promise<void> => {
     // Load preference first if not loaded (needed for update)
@@ -360,8 +365,14 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   };
 
   // Calculate visibility (but keep component mounted to prevent flickering)
+  // Hide if: gallery setup already completed, tutorial disabled, no gallery, loading, no steps, or in settings/publish view
   const isVisible =
-    !shouldHide && tutorialDisabled !== true && !!gallery && !galleryLoading && steps.length > 0;
+    !galleryCompletedSetup &&
+    !shouldHide && 
+    tutorialDisabled !== true && 
+    !!gallery && 
+    !galleryLoading && 
+    steps.length > 0;
 
   // Check if gallery is paid for send step (only if gallery exists)
   const isPaid = gallery
@@ -370,12 +381,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
 
   const handlePublishClick = () => {
     if (gallery?.galleryId) {
-      // Trigger publish wizard via custom event (same as sidebar button)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("openPublishWizard", { detail: { galleryId: gallery.galleryId } })
-        );
-      }
+      // Open publish wizard directly via Zustand store
+      setPublishWizardOpen(true, gallery.galleryId);
     }
   };
 
@@ -385,13 +392,17 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     }
   };
 
-  const handleSendClick = () => {
+  const handleSendClick = async () => {
     if (gallery?.galleryId && isPaid) {
-      // Trigger send link via custom event (same as sidebar button)
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("sendGalleryLink", { detail: { galleryId: gallery.galleryId } })
+      try {
+        await sendGalleryLinkToClient(gallery.galleryId);
+        showToast(
+          "success",
+          "Sukces",
+          "Link do galerii został wysłany do klienta"
         );
+      } catch (err) {
+        showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");
       }
     }
   };
@@ -481,7 +492,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                       } else if (step.id === "publish") {
                         handlePublishClick();
                       } else if (step.id === "send") {
-                        handleSendClick();
+                        void handleSendClick();
                       }
                     }
                   }}

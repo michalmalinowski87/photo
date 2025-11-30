@@ -76,6 +76,12 @@ export const handler = lambdaLogger(async (event: any) => {
 		expressionAttributeValues[':finalsLimitBytes'] = body.finalsLimitBytes;
 	}
 	
+	// Allow updating nextStepsCompleted (boolean flag for setup completion)
+	if (body.nextStepsCompleted !== undefined && typeof body.nextStepsCompleted === 'boolean') {
+		setExpressions.push('nextStepsCompleted = :nextStepsCompleted');
+		expressionAttributeValues[':nextStepsCompleted'] = body.nextStepsCompleted;
+	}
+	
 	// Allow updating or removing coverPhotoUrl
 	if (body.coverPhotoUrl !== undefined) {
 		if (body.coverPhotoUrl === null || body.coverPhotoUrl === '') {

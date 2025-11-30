@@ -101,32 +101,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return fullKey.replace(prefix, '');
 	}).filter((key): key is string => Boolean(key) && !key.includes('/'));
 
-	// Calculate total size of final files and update finalsBytesUsed
-	// Use atomic ADD operation to prevent race conditions with concurrent uploads/deletions
-	const totalFinalsSize = (finalFilesResponse.Contents || []).reduce((sum, obj) => sum + (obj.Size || 0), 0);
-	if (totalFinalsSize > 0) {
-		try {
-			await ddb.send(new UpdateCommand({
-				TableName: galleriesTable,
-				Key: { galleryId },
-				UpdateExpression: 'ADD finalsBytesUsed :size, bytesUsed :size',
-				ExpressionAttributeValues: {
-					':size': totalFinalsSize
-				}
-			}));
-			logger?.info('Updated gallery finalsBytesUsed (atomic)', { 
-				galleryId, 
-				sizeAdded: totalFinalsSize,
-				type: 'finals'
-			});
-		} catch (updateErr: any) {
-			logger?.warn('Failed to update gallery finalsBytesUsed', {
-				error: updateErr.message,
-				galleryId,
-				size: totalFinalsSize
-			});
-		}
-	}
+	// Note: finalsBytesUsed is already tracked in onUploadResize.ts when each image is processed
+	// (same as originalsBytesUsed for originals). No need to recalculate here to avoid double-counting.
 
 	// If no final photos exist, nothing to process
 	if (finalFiles.length === 0) {

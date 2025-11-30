@@ -11,11 +11,34 @@ import { GalleryMetadata } from "./sidebar/GalleryMetadata";
 import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
-import { StorageUsageInfo } from "./sidebar/StorageUsageInfo";
 
-export default function GallerySidebar() {
+interface GallerySidebarProps {
+  orderId?: string;
+  onDownloadZip?: () => void;
+  canDownloadZip?: boolean;
+  onMarkOrderPaid?: () => void;
+  onDownloadFinals?: () => void;
+  onSendFinalsToClient?: () => void;
+  onApproveChangeRequest?: () => void;
+  onDenyChangeRequest?: () => void;
+  hasFinals?: boolean;
+}
+
+export default function GallerySidebar({
+  orderId: orderIdProp,
+  onDownloadZip,
+  canDownloadZip,
+  onMarkOrderPaid,
+  onDownloadFinals,
+  onSendFinalsToClient,
+  onApproveChangeRequest,
+  onDenyChangeRequest,
+  hasFinals,
+}: GallerySidebarProps) {
   const router = useRouter();
-  const { orderId } = router.query;
+  const { orderId: orderIdFromQuery } = router.query;
+  // Use prop if provided, otherwise fall back to query param
+  const orderId: string | undefined = orderIdProp ?? (Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : (orderIdFromQuery));
   
   // Subscribe directly to store - no props needed
   const gallery = useGalleryStore((state) => state.currentGallery);
@@ -116,10 +139,18 @@ export default function GallerySidebar() {
       <GalleryNavigation />
 
       {orderId && order && (
-        <OrderActionsSection orderId={Array.isArray(orderId) ? orderId[0] : orderId} />
+        <OrderActionsSection
+          orderId={orderId}
+          onDownloadZip={onDownloadZip}
+          canDownloadZip={canDownloadZip}
+          onMarkOrderPaid={onMarkOrderPaid}
+          onDownloadFinals={onDownloadFinals}
+          onSendFinalsToClient={onSendFinalsToClient}
+          onApproveChangeRequest={onApproveChangeRequest}
+          onDenyChangeRequest={onDenyChangeRequest}
+          hasFinals={hasFinals}
+        />
       )}
-
-      <StorageUsageInfo orderId={Array.isArray(orderId) ? orderId[0] : orderId} />
 
       <DeleteGalleryButton
         galleryId={gallery?.galleryId ?? ""}

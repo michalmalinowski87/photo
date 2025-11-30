@@ -229,11 +229,7 @@ export function useImagePolling(config: UseImagePollingConfig) {
               config.onUploadComplete();
             }
 
-            if (config.type === "finals" && config.onOrderUpdated && config.orderId) {
-              window.dispatchEvent(
-                new CustomEvent("orderUpdated", { detail: { orderId: config.orderId } })
-              );
-            }
+            // Store updates will trigger re-renders automatically via Zustand subscriptions
 
             return;
           }
@@ -243,7 +239,8 @@ export function useImagePolling(config: UseImagePollingConfig) {
           }
         } catch (err: unknown) {
           const apiErr = err as { status?: number; refreshFailed?: boolean };
-          if (apiErr?.status === 401 || apiErr?.refreshFailed) {
+          // Stop polling on auth errors (401) or client errors (4xx) like 404 (gallery not found)
+          if (apiErr?.status === 401 || apiErr?.refreshFailed || (apiErr?.status && apiErr.status >= 400 && apiErr.status < 500)) {
             pollingActiveRef.current = false;
             if (pollingTimeoutRef.current) {
               clearTimeout(pollingTimeoutRef.current);

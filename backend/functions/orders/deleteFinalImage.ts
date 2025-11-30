@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { recalculateStorageInternal } from '../galleries/recalculateBytesUsed';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -79,6 +80,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${webpFilename}`;
 
 	// Get final image file size before deletion (for updating finalsBytesUsed)
+	// IMPORTANT: Get size BEFORE deleting to ensure accurate size tracking
 	let fileSize = 0;
 	try {
 		const headResponse = await s3.send(new HeadObjectCommand({
@@ -86,16 +88,34 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			Key: finalImageKey
 		}));
 		fileSize = headResponse.ContentLength || 0;
+		logger?.info('Retrieved final image file size before deletion', {
+			galleryId,
+			orderId,
+			filename: decodedFilename,
+			fileSize,
+			finalImageKey
+		});
 	} catch (err: any) {
-		if (err.name !== 'NotFound') {
+		if (err.name === 'NotFound') {
+			logger?.warn('Final image file not found in S3 before deletion', { 
+				finalImageKey,
+				galleryId,
+				orderId,
+				filename: decodedFilename
+			});
+			// File not found - might have been deleted already or never existed
+			// Continue with deletion attempt but don't update bytes (file might not have been tracked)
+		} else {
 			logger?.warn('Failed to get final image file size', { 
 				error: err.message, 
 				finalImageKey,
 				galleryId,
-				orderId
+				orderId,
+				filename: decodedFilename
 			});
+			// On error, we can't determine the size, so we can't safely subtract
+			// The bytes might be out of sync - could trigger recalculation if needed
 		}
-		// If file not found, continue - it might have been deleted already
 	}
 
 	// Delete final image, preview, and thumb from S3
@@ -201,10 +221,55 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				error: updateErr.message,
 				galleryId,
 				orderId,
-				size: fileSize
+				size: fileSize,
+				filename: decodedFilename
 			});
 			// Continue even if update fails - files are already deleted
+			// Note: Bytes might be out of sync - could trigger recalculation if needed
 		}
+	} else {
+		// File size could not be determined (file not found or error)
+		// This might indicate bytes are out of sync - trigger recalculation similar to originals
+		logger?.warn('Could not determine final image file size for deletion, triggering recalculation', {
+			galleryId,
+			orderId,
+			filename: decodedFilename,
+			finalImageKey,
+			currentFinalsBytesUsed: gallery.finalsBytesUsed || 0
+		});
+		
+		// Trigger recalculation asynchronously (fire and forget to avoid blocking deletion)
+		// The recalculation function has built-in debouncing to prevent excessive calls
+		(async () => {
+			try {
+				// Check debounce before calling (5 minute debounce)
+				const now = Date.now();
+				const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
+					? new Date(gallery.lastBytesUsedRecalculatedAt).getTime() 
+					: 0;
+				const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+				
+				if (now - lastRecalculatedAt < RECALCULATE_DEBOUNCE_MS) {
+					logger?.info('Skipping recalculation - too soon since last recalculation', {
+						galleryId,
+						timeSinceLastRecalc: now - lastRecalculatedAt
+					});
+					return;
+				}
+				
+				await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger);
+				logger?.info('Triggered automatic storage recalculation after final deletion', {
+					galleryId,
+					orderId
+				});
+			} catch (recalcErr: any) {
+				logger?.warn('Failed to trigger storage recalculation', {
+					error: recalcErr.message,
+					galleryId,
+					orderId
+				});
+			}
+		})();
 	}
 
 	// Check if this was the last final image

@@ -2,7 +2,7 @@ import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 import { useToast } from "../../../hooks/useToast";
-import api, { formatApiError } from "../../../lib/api-service";
+import { formatApiError } from "../../../lib/api-service";
 import { useGalleryStore } from "../../../store/gallerySlice";
 import { useOrderStore } from "../../../store/orderSlice";
 import Button from "../../ui/button/Button";
@@ -20,9 +20,12 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
-  const fetchGallery = useGalleryStore((state) => state.fetchGallery);
-  const fetchGalleryOrders = useGalleryStore((state) => state.fetchGalleryOrders);
-  const getGalleryOrders = useGalleryStore((state) => state.getGalleryOrders);
+  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
+  const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
+  // Subscribe to galleryOrdersCache to trigger re-render when orders are updated
+  const galleryOrdersCacheEntry = useGalleryStore((state) => 
+    galleryIdStr ? state.galleryOrdersCache[galleryIdStr] : null
+  );
   
   const order = useOrderStore((state) => state.currentOrder);
   const { showToast } = useToast();
@@ -37,6 +40,8 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       : "";
 
   const isPaid = gallery?.isPaid ?? false;
+  const hasPhotos = (gallery?.originalsBytesUsed ?? 0) > 0;
+  const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
 
   if (!galleryUrl || shouldHideSecondaryElements) {
     return null;
@@ -54,42 +59,30 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     }
   };
 
+  const handlePublishClick = () => {
+    if (galleryIdStr) {
+      // Open publish wizard directly via Zustand store
+      setPublishWizardOpen(true, galleryIdStr);
+    }
+  };
+
   const handleSendLink = async () => {
     if (!galleryIdStr || sendLinkLoading) {
       return;
     }
 
-    // Check if this is a reminder (has existing orders) or initial invitation
-    const galleryOrders = galleryIdStr ? getGalleryOrders(galleryIdStr, 30000) : null;
-    const isReminder = galleryOrders && galleryOrders.length > 0;
-
     setSendLinkLoading(true);
 
     try {
-      const response = await api.galleries.sendToClient(galleryIdStr);
-      const isReminderResponse = response.isReminder ?? isReminder;
+      const result = await sendGalleryLinkToClient(galleryIdStr);
 
       showToast(
         "success",
         "Sukces",
-        isReminderResponse
+        result.isReminder
           ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
           : "Link do galerii został wysłany do klienta"
       );
-
-      // Only reload if it's an initial invitation (creates order), not for reminders
-      if (!isReminderResponse) {
-        // Reload gallery data and orders to get the newly created CLIENT_SELECTING order
-        await fetchGallery(galleryIdStr, true);
-        await fetchGalleryOrders(galleryIdStr, true);
-
-        // Trigger event to reload orders if we're on the gallery detail page
-        if (typeof window !== "undefined") {
-          void window.dispatchEvent(
-            new CustomEvent("galleryOrdersUpdated", { detail: { galleryId: galleryIdStr } })
-          );
-        }
-      }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     } finally {
@@ -97,8 +90,10 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     }
   };
 
-  // Get gallery orders from store
-  const galleryOrders = galleryIdStr ? getGalleryOrders(galleryIdStr, 30000) : null;
+  // Get gallery orders from store (use cache entry directly to trigger re-render)
+  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry 
+    ? (Date.now() - galleryOrdersCacheEntry.timestamp < 30000 ? (galleryOrdersCacheEntry.orders as unknown[]) : null)
+    : null;
   
   // Check if gallery has a CLIENT_SELECTING order
   const hasClientSelectingOrder =
@@ -120,8 +115,9 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     !isLoading &&
     gallery &&
     isPaid &&
-    gallery.selectionEnabled &&
-    gallery.clientEmail &&
+    Boolean(gallery.selectionEnabled) &&
+    typeof gallery.clientEmail === "string" &&
+    gallery.clientEmail.length > 0 &&
     orderDeliveryStatus !== "PREPARING_DELIVERY" &&
     orderDeliveryStatus !== "PREPARING_FOR_DELIVERY" &&
     orderDeliveryStatus !== "DELIVERED";
@@ -160,7 +156,35 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
         </span>
       </Button>
 
-      {/* Share Button */}
+      {/* Publish Gallery Button - Show when photos uploaded but not published */}
+      {shouldShowPublishButton && (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handlePublishClick}
+          className="w-full mt-2"
+          startIcon={
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M8 2V14M2 8H14"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          }
+        >
+          Opublikuj galerię
+        </Button>
+      )}
+
+      {/* Share Button - Show when published and ready to send */}
       {shouldShowShareButton && (
         <>
           {hasClientSelectingOrder ? (
