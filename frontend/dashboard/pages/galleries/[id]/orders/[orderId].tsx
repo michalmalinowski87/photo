@@ -587,6 +587,10 @@ export default function OrderDetail() {
     try {
       await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
+
       // Mark as successfully deleted to prevent reappearance
       setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
 
@@ -611,7 +615,8 @@ export default function OrderDetail() {
             const { refreshGalleryBytesOnly } = useGalleryStore.getState();
             const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
             if (galleryIdStr) {
-              await refreshGalleryBytesOnly(galleryIdStr);
+              // Force recalculation after delete to get accurate values (bypasses cache)
+              await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
             }
             await loadOrderData();
             // Store update will trigger re-renders automatically via Zustand subscriptions
@@ -731,6 +736,10 @@ export default function OrderDetail() {
     try {
       await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
+
       // Save suppression only after successful deletion
       if (suppressChecked) {
         const suppressKey = "final_image_delete_confirm_suppress";
@@ -766,7 +775,8 @@ export default function OrderDetail() {
             const { refreshGalleryBytesOnly } = useGalleryStore.getState();
             const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
             if (galleryIdStr) {
-              await refreshGalleryBytesOnly(galleryIdStr);
+              // Force recalculation after delete to get accurate values (bypasses cache)
+              await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
             }
             await loadOrderData();
             // Store update will trigger re-renders automatically via Zustand subscriptions
@@ -838,9 +848,11 @@ export default function OrderDetail() {
         totalCents: newTotalCents,
       });
 
-      // Invalidate cache to force fresh data fetch
+      // Invalidate all caches to ensure fresh data on next fetch
       const { invalidateOrderCache } = useOrderStore.getState();
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
       invalidateOrderCache(orderId as string);
+      invalidateAllGalleryCaches(galleryId as string);
 
       await loadOrderData(true); // Force refresh
       setIsEditingAmount(false);

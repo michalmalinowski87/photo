@@ -430,16 +430,17 @@ class ApiService {
     /**
      * Get only the bytes used for a gallery (lightweight endpoint)
      */
-    getBytesUsed: async (galleryId: string): Promise<{
+    getBytesUsed: async (galleryId: string, forceRecalc = false): Promise<{
       originalsBytesUsed: number;
       finalsBytesUsed: number;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      return await this._request<{ originalsBytesUsed: number; finalsBytesUsed: number }>(
-        `/galleries/${galleryId}/bytes-used`
-      );
+      const url = forceRecalc 
+        ? `/galleries/${galleryId}/bytes-used?force=true`
+        : `/galleries/${galleryId}/bytes-used`;
+      return await this._request<{ originalsBytesUsed: number; finalsBytesUsed: number }>(url);
     },
 
     /**
@@ -522,6 +523,30 @@ class ApiService {
       }
       return await this._request(`/galleries/${galleryId}/photos/${encodeURIComponent(imageKey)}`, {
         method: "DELETE",
+      });
+    },
+
+    /**
+     * Delete multiple gallery images in batch
+     */
+    deleteImagesBatch: async (galleryId: string, imageKeys: string[]): Promise<{
+      message: string;
+      count: number;
+      originalsBytesUsed: number;
+      bytesUsed: number;
+      originalsLimitBytes: number;
+      originalsUsedMB: string;
+      originalsLimitMB: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!Array.isArray(imageKeys) || imageKeys.length === 0) {
+        throw new Error("Image keys array is required and must not be empty");
+      }
+      return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
+        method: "POST",
+        body: JSON.stringify({ filenames: imageKeys }),
       });
     },
 
@@ -817,13 +842,23 @@ class ApiService {
     },
 
     /**
-     * Delete a final image
+     * Delete a final image (uses batch endpoint)
      */
     deleteFinalImage: async (
       galleryId: string,
       orderId: string,
       imageKey: string
-    ): Promise<void> => {
+    ): Promise<{
+      message: string;
+      galleryId: string;
+      orderId: string;
+      count: number;
+      finalsBytesUsed: number;
+      bytesUsed: number;
+      finalsLimitBytes: number;
+      finalsUsedMB: string;
+      finalsLimitMB: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -833,12 +868,15 @@ class ApiService {
       if (!imageKey) {
         throw new Error("Image key is required");
       }
-      return await this._request(
-        `/galleries/${galleryId}/orders/${orderId}/final/images/${encodeURIComponent(imageKey)}`,
-        {
-          method: "DELETE",
-        }
-      );
+      // Use batch endpoint for final images
+      return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
+        method: "POST",
+        body: JSON.stringify({ 
+          filenames: [imageKey],
+          orderId,
+          type: 'final'
+        }),
+      });
     },
 
     /**

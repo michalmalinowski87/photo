@@ -43,7 +43,7 @@ export const useOrderActions = ({
 }: UseOrderActionsOptions) => {
   const { showToast } = useToast();
   const { downloadZip } = useZipDownloadHook();
-  const { invalidateGalleryOrdersCache } = useGalleryStore();
+  const { invalidateGalleryOrdersCache, invalidateAllGalleryCaches } = useGalleryStore();
   const { invalidateOrderCache } = useOrderStore();
   const invalidateOrderStoreGalleryCache = useOrderStore(
     (state) => state.invalidateGalleryOrdersCache
@@ -58,12 +58,9 @@ export const useOrderActions = ({
     try {
       await api.orders.approveChangeRequest(galleryId as string, orderId as string);
 
-      // Invalidate cache to force fresh data fetch
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      // Invalidate all caches to ensure fresh data on next fetch
       invalidateOrderCache(orderId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      invalidateAllGalleryCaches(galleryId as string);
       invalidateOrderStoreGalleryCache(galleryId as string);
 
       showToast(
@@ -106,12 +103,9 @@ export const useOrderActions = ({
       try {
         await api.orders.denyChangeRequest(galleryId as string, orderId as string, reason);
 
-        // Invalidate cache to force fresh data fetch
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        // Invalidate all caches to ensure fresh data on next fetch
         invalidateOrderCache(orderId as string);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        invalidateGalleryOrdersCache(galleryId as string);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        invalidateAllGalleryCaches(galleryId as string);
         invalidateOrderStoreGalleryCache(galleryId as string);
 
         showToast(
@@ -153,10 +147,8 @@ export const useOrderActions = ({
         paymentStatus: response.paymentStatus,
         paidAt: response.paidAt,
       });
-      // Invalidate gallery orders cache to refresh list view
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      invalidateGalleryOrdersCache(galleryId as string);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      // Invalidate all caches to ensure fresh data on next fetch
+      invalidateAllGalleryCaches(galleryId as string);
       invalidateOrderStoreGalleryCache(galleryId as string);
       showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
       // Store update will trigger re-renders automatically via Zustand subscriptions
@@ -200,6 +192,8 @@ export const useOrderActions = ({
         if (shouldCleanup) {
           try {
             await api.orders.cleanupOriginals(galleryId as string, orderId as string);
+            // Invalidate all caches after cleanup (deletes originals)
+            invalidateAllGalleryCaches(galleryId as string);
             showToast(
               "success",
               "Sukces",
@@ -223,10 +217,8 @@ export const useOrderActions = ({
           deliveryStatus: "DELIVERED",
           deliveredAt: response.deliveredAt,
         });
-        // Invalidate gallery orders cache to refresh list view
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        invalidateGalleryOrdersCache(galleryId as string);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        // Invalidate all caches to ensure fresh data on next fetch
+        invalidateAllGalleryCaches(galleryId as string);
         invalidateOrderStoreGalleryCache(galleryId as string);
         // Store update will trigger re-renders automatically via Zustand subscriptions
       } catch (err) {

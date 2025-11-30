@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { recalculateStorageInternal } from '../galleries/recalculateBytesUsed';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -193,6 +194,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		finalFilesCount: finalFiles.length,
 		statusUpdated: order.deliveryStatus === 'CLIENT_APPROVED' || order.deliveryStatus === 'AWAITING_FINAL_PHOTOS'
 	});
+	
+	// Trigger storage recalculation after final uploads complete
+	// This ensures accurate storage values immediately after upload (bypasses 5-minute cache)
+	try {
+		await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		logger?.info('Triggered storage recalculation after final upload completion', { galleryId, orderId });
+	} catch (recalcErr: any) {
+		logger?.warn('Failed to trigger storage recalculation after final upload', {
+			error: recalcErr.message,
+			galleryId,
+			orderId
+		});
+		// Don't fail the request - recalculation will happen on next read (cache will expire)
+	}
 
 	return {
 		statusCode: 200,

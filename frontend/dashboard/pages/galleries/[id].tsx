@@ -299,6 +299,10 @@ export default function GalleryDetail() {
       // Call pay endpoint without dryRun to actually process payment
       const data = await api.galleries.pay(galleryId as string, {});
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
+
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else if (data.paid) {
@@ -327,6 +331,10 @@ export default function GalleryDetail() {
     try {
       const responseData = await api.galleries.sendToClient(galleryId as string);
       const isReminderResponse = responseData.isReminder ?? isReminder;
+
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
 
       showToast(
         "success",

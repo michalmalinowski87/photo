@@ -132,12 +132,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Send invitation or reminder email based on whether orders exist
+	const emailType = hasExistingOrders ? 'Gallery Reminder' : 'Gallery Invitation';
+	
 	try {
 		const emailTemplate = hasExistingOrders 
 			? createGalleryReminderEmail(galleryId, galleryName, clientEmail, galleryLink)
 			: createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
-		
-		const emailType = hasExistingOrders ? 'Gallery Reminder' : 'Gallery Invitation';
 		
 		logger.info(`Sending SES email - ${emailType}`, {
 			from: sender,
@@ -260,7 +260,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// For selection galleries, payment status is typically UNPAID until client approves selection
 				// However, if this is the first order and there was an initial payment, we could check it
 				// For now, set to UNPAID since we don't know the order total yet (client hasn't selected)
-				let orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
+				const orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
 				
 				// If this is the first order, check if there's any initial payment logic to apply
 				// Note: For selection galleries, the order total depends on what client selects,

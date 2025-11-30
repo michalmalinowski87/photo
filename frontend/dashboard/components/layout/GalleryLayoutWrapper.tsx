@@ -268,9 +268,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
       const paymentResponse = await api.galleries.pay(galleryId as string, {});
 
-      // Invalidate cache to force fresh data fetch after payment
-      invalidateGalleryCache(galleryId as string);
-      invalidateGalleryOrdersCache(galleryId as string);
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
       invalidateOrderStoreGalleryCache(galleryId as string);
       if (paymentResponse.checkoutUrl) {
         window.location.href = paymentResponse.checkoutUrl;

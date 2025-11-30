@@ -305,6 +305,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
             nextStepsCompleted: true,
           });
           
+          // Invalidate all caches to ensure fresh data on next fetch
+          const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+          invalidateAllGalleryCaches(gallery.galleryId);
+          
           // Manually update the gallery in the store to avoid triggering full fetch and events
           // This prevents infinite loops while still updating the UI immediately
           const { setCurrentGallery, currentGallery } = useGalleryStore.getState();

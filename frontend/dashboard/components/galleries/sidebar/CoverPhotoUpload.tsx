@@ -65,6 +65,10 @@ export const CoverPhotoUpload: React.FC = () => {
         coverPhotoUrl: s3Url,
       });
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId);
+
       // Switch to processing state and poll for processed CloudFront URL
       setUploadingCover(false);
       setProcessingCover(true);
@@ -126,6 +130,10 @@ export const CoverPhotoUpload: React.FC = () => {
       await api.galleries.update(galleryId, {
         coverPhotoUrl: null,
       });
+
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId);
 
       // Update store directly - no full gallery reload needed
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call

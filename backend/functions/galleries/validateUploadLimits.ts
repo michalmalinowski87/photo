@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { PRICING_PLANS, getPlanKeysSortedByStorage, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
+import { recalculateStorageInternal } from './recalculateBytesUsed';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -93,7 +94,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Enforce owner-only access
 	const requester = getUserIdFromEvent(event);
 	const galleryGet = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
-	const gallery = galleryGet.Item as any;
+	let gallery = galleryGet.Item as any;
 	if (!gallery) {
 		return {
 			statusCode: 404,
@@ -103,8 +104,58 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	requireOwnerOr403(gallery.ownerId, requester);
 
-	// Calculate actual gallery size from S3
-	const uploadedSizeBytes = await calculateOriginalsSize(bucket, galleryId);
+	// Trigger on-demand recalculation to ensure DB is accurate before validation
+	// This is critical - user may have uploaded/deleted images just before checking limits
+	// Then use the recalculated value (which comes from S3) to avoid duplicate S3 calls
+	let uploadedSizeBytes = gallery.originalsBytesUsed || 0;
+	
+	try {
+		// Force immediate recalculation (bypasses cache) - critical for upload validation accuracy
+		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		logger?.info('Triggered on-demand storage recalculation before validation', { galleryId });
+		
+		// Extract recalculated value from result
+		if (recalcResult?.body) {
+			try {
+				const body = JSON.parse(recalcResult.body);
+				if (body.originalsBytesUsed !== undefined) {
+					uploadedSizeBytes = body.originalsBytesUsed;
+					logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
+						galleryId,
+						originalsBytesUsed: uploadedSizeBytes
+					});
+				}
+			} catch {
+				// If parsing fails, re-fetch gallery to get updated bytes
+				const updatedGalleryGet = await ddb.send(new GetCommand({
+					TableName: galleriesTable,
+					Key: { galleryId }
+				}));
+				if (updatedGalleryGet.Item) {
+					gallery = updatedGalleryGet.Item;
+					uploadedSizeBytes = updatedGalleryGet.Item.originalsBytesUsed || 0;
+				}
+			}
+		} else {
+			// Re-fetch gallery to get updated bytes
+			const updatedGalleryGet = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			if (updatedGalleryGet.Item) {
+				gallery = updatedGalleryGet.Item;
+				uploadedSizeBytes = updatedGalleryGet.Item.originalsBytesUsed || 0;
+			}
+		}
+	} catch (recalcErr: any) {
+		logger?.warn('Failed to recalculate storage before validation, falling back to S3 direct calculation', {
+			error: recalcErr.message,
+			galleryId
+		});
+		// Fallback: Calculate directly from S3 if recalculation fails
+		uploadedSizeBytes = await calculateOriginalsSize(bucket, galleryId);
+	}
+	
 	logger?.info('Validated upload limits', { galleryId, uploadedSizeBytes });
 
 	// Check if gallery has plan and limits

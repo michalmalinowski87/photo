@@ -3,7 +3,6 @@ import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
-import { recalculateStorageInternal } from './recalculateBytesUsed';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -193,39 +192,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 
 		// Check for sync issue: no images but originalsBytesUsed > 0
-		// Trigger automatic recalculation if detected (debounced internally)
+		// Note: Storage recalculation is now handled automatically by S3 events (onS3StorageChange Lambda)
 		if (images.length === 0 && (gallery.originalsBytesUsed || 0) > 0) {
-			logger.info('Detected sync issue: no images but originalsBytesUsed > 0, triggering automatic recalculation', {
+			logger.info('Detected sync issue: no images but originalsBytesUsed > 0, S3 events will handle recalculation', {
 				galleryId,
 				originalsBytesUsed: gallery.originalsBytesUsed || 0
 			});
-			
-			// Trigger recalculation asynchronously (fire and forget to avoid blocking response)
-			(async () => {
-				try {
-					// Check debounce before calling (5 minute debounce)
-					const now = Date.now();
-					const lastRecalculatedAt = gallery.lastBytesUsedRecalculatedAt 
-						? new Date(gallery.lastBytesUsedRecalculatedAt).getTime() 
-						: 0;
-					const RECALCULATE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
-					
-					if (now - lastRecalculatedAt >= RECALCULATE_DEBOUNCE_MS) {
-						await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger);
-					} else {
-						logger.info('Automatic recalculation skipped (debounced)', {
-							galleryId,
-							timeSinceLastRecalculation: now - lastRecalculatedAt
-						});
-					}
-				} catch (recalcErr: any) {
-					// Log but don't fail image listing if recalculation fails
-					logger.warn('Automatic recalculation failed', {
-						error: recalcErr?.message,
-						galleryId
-					});
-				}
-			})();
+			// No action needed - S3 events will trigger recalculation automatically
 		}
 
 		return {

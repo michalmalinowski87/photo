@@ -5,6 +5,7 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTransactionsByUser, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { recalculateStorageInternal } from './recalculateBytesUsed';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -178,7 +179,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Key: { galleryId }
 	}));
 
-	const gallery = galleryGet.Item as any;
+	let gallery = galleryGet.Item as any;
 	if (!gallery) {
 		return {
 			statusCode: 404,
@@ -498,50 +499,100 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// USER-CENTRIC FIX #4 & #5: Recalculate plan before payment to ensure it still fits
 	// This prevents paying for stale plan if user uploaded more photos or deleted photos
+	// Trigger on-demand recalculation to ensure DB is accurate before payment
+	// This is critical - user may have uploaded/deleted images just before clicking pay
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+	let currentUploadedSize = gallery.originalsBytesUsed || 0;
+	
 	if (bucket) {
-		const s3 = new S3Client({});
-		
-		// Calculate current uploaded size from S3 (source of truth)
-		let currentUploadedSize = 0;
-		let continuationToken: string | undefined;
-		const prefix = `galleries/${galleryId}/originals/`;
-		
-		do {
-			const listResponse = await s3.send(new ListObjectsV2Command({
-				Bucket: bucket,
-				Prefix: prefix,
-				ContinuationToken: continuationToken
-			}));
+		// Trigger on-demand recalculation to get accurate bytes from S3
+		// Direct call bypasses debounce for immediate recalculation
+	try {
+		// Force immediate recalculation (bypasses cache) - critical for payment accuracy
+		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+			logger?.info('Triggered on-demand storage recalculation before payment', { galleryId });
 			
-			if (listResponse.Contents) {
-				currentUploadedSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+			// Extract recalculated value from result
+			if (recalcResult?.body) {
+				try {
+					const body = JSON.parse(recalcResult.body);
+					if (body.originalsBytesUsed !== undefined) {
+						currentUploadedSize = body.originalsBytesUsed;
+						logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
+							galleryId,
+							originalsBytesUsed: currentUploadedSize
+						});
+					}
+				} catch {
+					// If parsing fails, re-fetch gallery to get updated bytes
+					const updatedGalleryGet = await ddb.send(new GetCommand({
+						TableName: galleriesTable,
+						Key: { galleryId }
+					}));
+					if (updatedGalleryGet.Item) {
+						gallery = updatedGalleryGet.Item;
+						currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
+					}
+				}
+			} else {
+				// Re-fetch gallery to get updated bytes
+				const updatedGalleryGet = await ddb.send(new GetCommand({
+					TableName: galleriesTable,
+					Key: { galleryId }
+				}));
+				if (updatedGalleryGet.Item) {
+					gallery = updatedGalleryGet.Item;
+					currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
+				}
 			}
+		} catch (recalcErr: any) {
+			logger?.warn('Failed to recalculate storage before payment, falling back to S3 direct calculation', {
+				error: recalcErr.message,
+				galleryId
+			});
+			// Fallback: Calculate directly from S3 if recalculation fails
+			const s3 = new S3Client({});
+			let continuationToken: string | undefined;
+			const prefix = `galleries/${galleryId}/originals/`;
 			
-			continuationToken = listResponse.NextContinuationToken;
-		} while (continuationToken);
-
-		// Check if uploaded size exceeds plan limit
-		if (currentUploadedSize > gallery.originalsLimitBytes) {
-			const usedGB = (currentUploadedSize / (1024 * 1024 * 1024)).toFixed(2);
-			const limitGB = (gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(0);
-			const excessGB = ((currentUploadedSize - gallery.originalsLimitBytes) / (1024 * 1024 * 1024)).toFixed(2);
-			
-			return {
-				statusCode: 400,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ 
-					error: 'Uploaded size exceeds plan limit',
-					message: `Cannot proceed with payment. Current uploads (${usedGB} GB) exceed selected plan limit (${limitGB} GB) by ${excessGB} GB. Please recalculate plan or delete excess files.`,
-					uploadedSizeBytes: currentUploadedSize,
-					planLimitBytes: gallery.originalsLimitBytes,
-					excessBytes: currentUploadedSize - gallery.originalsLimitBytes,
-					requiresRecalculation: true
-				})
-			};
+			do {
+				const listResponse = await s3.send(new ListObjectsV2Command({
+					Bucket: bucket,
+					Prefix: prefix,
+					ContinuationToken: continuationToken
+				}));
+				
+				if (listResponse.Contents) {
+					currentUploadedSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+				}
+				
+				continuationToken = listResponse.NextContinuationToken;
+			} while (continuationToken);
 		}
+	}
 
-		// Check if user is at/near capacity (95%+) - warn but allow payment
+	// Check if uploaded size exceeds plan limit
+	if (currentUploadedSize > gallery.originalsLimitBytes) {
+		const usedGB = (currentUploadedSize / (1024 * 1024 * 1024)).toFixed(2);
+		const limitGB = (gallery.originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(0);
+		const excessGB = ((currentUploadedSize - gallery.originalsLimitBytes) / (1024 * 1024 * 1024)).toFixed(2);
+		
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Uploaded size exceeds plan limit',
+				message: `Cannot proceed with payment. Current uploads (${usedGB} GB) exceed selected plan limit (${limitGB} GB) by ${excessGB} GB. Please recalculate plan or delete excess files.`,
+				uploadedSizeBytes: currentUploadedSize,
+				planLimitBytes: gallery.originalsLimitBytes,
+				excessBytes: currentUploadedSize - gallery.originalsLimitBytes,
+				requiresRecalculation: true
+			})
+		};
+	}
+
+	// Check if user is at/near capacity (95%+) - warn but allow payment
+	if (bucket && gallery.originalsLimitBytes) {
 		const usagePercentage = (currentUploadedSize / gallery.originalsLimitBytes) * 100;
 		if (usagePercentage >= 95) {
 			logger.warn('User paying for gallery at/near capacity', {

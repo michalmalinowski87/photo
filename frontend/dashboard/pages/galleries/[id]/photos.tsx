@@ -149,12 +149,9 @@ export default function GalleryPhotos() {
       }
 
     },
-    onUploadSuccess: (fileName, file, _uploadedKey) => {
-      // Optimistically update bytes used immediately after S3 upload succeeds
-      // Images will appear when processing completes via onImagesUpdated
-      if (file.size > 0) {
-        updateOriginalsBytesUsed(file.size);
-      }
+    onUploadSuccess: (_fileName, _file, _uploadedKey) => {
+      // Optimistic update is already handled by useS3Upload.ts
+      // No need to update here to avoid double-counting
     },
     onImagesUpdated: (updatedImages) => {
       // Simply set images when they're ready (have URLs from processing)
@@ -220,13 +217,17 @@ export default function GalleryPhotos() {
     try {
       await api.galleries.deleteImage(galleryId as string, imageKey);
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
+
       // Remove from deleting set and reload gallery if this was the last deletion
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        // If this was the last deletion, force recalculation to get accurate values (bypasses cache)
         if (updated.size === 0 && galleryId) {
-          void refreshGalleryBytesOnly(galleryId as string);
+          void refreshGalleryBytesOnly(galleryId as string, true); // forceRecalc = true
         }
         return updated;
       });
@@ -460,6 +461,10 @@ export default function GalleryPhotos() {
     try {
       await api.galleries.deleteImage(galleryId as string, imageKey);
 
+      // Invalidate all caches to ensure fresh data on next fetch
+      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
+      invalidateAllGalleryCaches(galleryId as string);
+
       // Save suppression only after successful deletion
       if (suppressChecked) {
         const suppressKey = "photo_delete_confirm_suppress";
@@ -474,9 +479,9 @@ export default function GalleryPhotos() {
       setDeletingImages((prev) => {
         const updated = new Set(prev);
         updated.delete(imageKey);
-        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
+        // If this was the last deletion, force recalculation to get accurate values (bypasses cache)
         if (updated.size === 0 && galleryId) {
-          void refreshGalleryBytesOnly(galleryId as string);
+          void refreshGalleryBytesOnly(galleryId as string, true); // forceRecalc = true
         }
         return updated;
       });

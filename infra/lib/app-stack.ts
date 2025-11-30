@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Bucket, BlockPublicAccess, HttpMethods } from 'aws-cdk-lib/aws-s3';
+import { Bucket, BlockPublicAccess, HttpMethods, EventType } from 'aws-cdk-lib/aws-s3';
+import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { AttributeType, BillingMode, Table, StreamViewType, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
@@ -20,6 +21,8 @@ import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from '
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as path from 'path';
 
 interface AppStackProps extends StackProps {
@@ -267,7 +270,7 @@ export class AppStack extends Stack {
 			memorySize: 512, // Increased for Express overhead
 			timeout: Duration.seconds(30), // Increased timeout for complex operations
 			bundling: {
-				externalModules: ['aws-sdk'],
+				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
 				minify: true,
 				treeShaking: true,
 				sourceMap: false,
@@ -644,21 +647,76 @@ export class AppStack extends Stack {
 		galleriesBucket.grantReadWrite(resizeFn);
 		galleries.grantReadWriteData(resizeFn);
 		
-		// CRITICAL FIX: Add prefix filter to trigger Lambda on all gallery uploads
-		// The Lambda function filters internally for /originals/ and /final/ paths
-		// This prevents recursive loops: when Lambda writes previews/thumbs, those PUTs
-		// will trigger the Lambda but it will return early since they don't match /originals/ or /final/
-		const s3Notifications = require('aws-cdk-lib/aws-s3-notifications');
-		const s3EventType = require('aws-cdk-lib/aws-s3').EventType;
-		
-		// Trigger on all gallery uploads - Lambda filters for originals/ and final/ internally
-		// Note: suffix filter was removed because S3 keys end with filenames, not directory paths
-		// Keys are: galleries/{galleryId}/originals/{filename} or galleries/{galleryId}/final/{orderId}/{filename}
+		// Configure S3 event notifications to trigger resize Lambda on uploads
+		// Trigger on originals/ and final/ directories only (Lambda filters out previews/thumbs to prevent loops)
+		// Note: We trigger on all galleries/ files and let Lambda filter, since S3 filters can't easily exclude subdirectories
 		galleriesBucket.addEventNotification(
-			s3EventType.OBJECT_CREATED_PUT,
-			new s3Notifications.LambdaDestination(resizeFn),
-			{ prefix: 'galleries/' }
+			EventType.OBJECT_CREATED,
+			new LambdaDestination(resizeFn),
+			{ prefix: 'galleries/' } // Match all files in galleries/ prefix - Lambda will filter out previews/thumbs
 		);
+		
+		// Storage recalculation is now handled on-demand with caching (5-minute TTL)
+		// See backend/functions/galleries/recalculateBytesUsed.ts for implementation
+		// Critical operations (pay, validateUploadLimits) force recalculation; display uses cached values
+		// Note: S3 events trigger resize Lambda for image processing (previews/thumbs generation)
+
+		// SQS Queue to batch delete operations - reduces Lambda invocations significantly
+		// For 3000 deletes: without batching = 3000 invocations, with batching (batch size 10) = 300 invocations
+		const deleteQueue = new Queue(this, 'DeleteOperationsQueue', {
+			queueName: `PhotoHub-${props.stage}-DeleteOperationsQueue`,
+			encryption: QueueEncryption.SQS_MANAGED,
+			visibilityTimeout: Duration.minutes(3), // Must be > Lambda timeout (2 min) + processing time
+			receiveMessageWaitTime: Duration.seconds(20), // Long polling for cost efficiency
+			retentionPeriod: Duration.days(14)
+		});
+
+		// Lambda function to process batch deletes
+		// Processes deletes in batches (optimal batch size: 6 per batch, 10 batches per invocation)
+		// Consumes from SQS queue with batching to reduce invocations
+		const deleteBatchFn = new NodejsFunction(this, 'ImagesOnS3DeleteBatchFn', {
+			entry: path.join(__dirname, '../../../backend/functions/images/onS3DeleteBatch.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512, // Sufficient for batch delete operations
+			timeout: Duration.minutes(2),
+			bundling: {
+				externalModules: ['aws-sdk'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
+			},
+			environment: envVars
+		});
+		galleriesBucket.grantReadWrite(deleteBatchFn);
+		// Grant permissions to read galleries/orders and update order status after directory checks
+		galleries.grantReadData(deleteBatchFn);
+		orders.grantReadWriteData(deleteBatchFn);
+		// Storage recalculation is now on-demand - no need to invoke Lambda after deletes
+		
+		// Configure Lambda to consume from SQS with batching
+		// Batch size: 10 delete operations per invocation (optimal balance: cost vs memory/timeout)
+		// Max concurrency: 5 (prevents overwhelming DynamoDB and S3)
+		deleteBatchFn.addEventSource(new SqsEventSource(deleteQueue, {
+			batchSize: 10, // Process up to 10 delete operations per Lambda invocation
+			maxBatchingWindow: Duration.seconds(5), // Wait up to 5 seconds to batch more operations
+			maxConcurrency: 5 // Limit concurrent executions to prevent DynamoDB/S3 throttling
+		}));
+		
+		// Grant Lambda permission to consume from queue
+		deleteQueue.grantConsumeMessages(deleteBatchFn);
+		
+		// Store function names and queue URLs in environment
+		envVars['RESIZE_FN_NAME'] = resizeFn.functionName;
+		envVars['DELETE_BATCH_FN_NAME'] = deleteBatchFn.functionName;
+		envVars['DELETE_QUEUE_URL'] = deleteQueue.queueUrl;
+		
+		// Grant API Lambda permission to invoke batch delete Lambda (for deletePhoto, deleteFinalImage, and batch delete endpoints)
+		deleteBatchFn.grantInvoke(apiFn);
+		
+		// Update API Lambda environment with DELETE_BATCH_FN_NAME (added after apiFn was created)
+		apiFn.addEnvironment('DELETE_BATCH_FN_NAME', deleteBatchFn.functionName);
 
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC

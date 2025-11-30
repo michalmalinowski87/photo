@@ -2,11 +2,13 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import sharp from 'sharp';
 import { Readable } from 'stream';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const lambda = new LambdaClient({});
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
 	const chunks: Buffer[] = [];
@@ -30,20 +32,41 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Process images in parallel batches for better performance
 	const records = event.Records ?? [];
-	const BATCH_SIZE = 3; // Process 3 images concurrently to balance memory and speed
+	// Optimal batch size analysis:
+	// - Lambda: 1024MB memory, 1min timeout
+	// - Per image: ~10-30MB original + ~20-60MB Sharp processing = ~30-90MB
+	// - Batch of 5: ~150-450MB (15-44% memory) - safe with headroom
+	// - Batch of 8: ~240-720MB (23-70% memory) - still safe, better utilization
+	// - Cost: Fewer invocations = lower cost (Lambda charges per 100ms)
+	// - Performance: 5-8 images balances parallelization vs timeout risk
+	// Recommendation: 5-6 for conservative, 7-8 for aggressive optimization
+	const BATCH_SIZE = 6; // Process 6 images concurrently - optimal balance of cost, memory, and performance
 	
-	for (let i = 0; i < records.length; i += BATCH_SIZE) {
+	const processedGalleries = new Set<string>();
+	
+		for (let i = 0; i < records.length; i += BATCH_SIZE) {
 		const batch = records.slice(i, i + BATCH_SIZE);
-		await Promise.allSettled(batch.map(rec => processImage(rec, bucket, galleriesTable, logger)));
+		const results = await Promise.allSettled(batch.map(rec => processImage(rec, bucket, galleriesTable, logger, processedGalleries)));
+		
+		// Collect gallery IDs that were processed
+		results.forEach((result) => {
+			if (result.status === 'fulfilled' && result.value) {
+				processedGalleries.add(result.value);
+			}
+		});
 	}
+	
+	// Storage recalculation is now on-demand with caching (5-minute TTL)
+	// No need to trigger recalculation here - it will happen automatically when needed
+	// Critical operations (pay, validateUploadLimits) force recalculation; display uses cached values
 });
 
-async function processImage(rec: any, bucket: string, galleriesTable: string | undefined, logger: any) {
+async function processImage(rec: any, bucket: string, galleriesTable: string | undefined, logger: any, processedGalleries: Set<string>): Promise<string | null> {
 	const rawKey = rec.s3?.object?.key || '';
-	if (!rawKey) {
-		logger?.error('No key in S3 event', { record: rec });
-		return;
-	}
+		if (!rawKey) {
+			logger?.error('No key in S3 event', { record: rec });
+			return null;
+		}
 
 	// S3 event keys are URL-encoded, decode them
 	// Note: decodeURIComponent doesn't decode '+' as space, so we need to handle that
@@ -63,22 +86,27 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 	// This prevents infinite loops where creating previews/thumbs triggers the Lambda again
 	if (key.includes('/previews/') || key.includes('/thumbs/')) {
 		logger?.info('Skipping preview/thumb file (already processed)', { key });
-		return;
+		return null;
 	}
 
 	// Process files in originals/ or final/
 	const isOriginal = key.includes('/originals/');
 	const isFinal = key.includes('/final/');
-	if (!isOriginal && !isFinal) return;
+	if (!isOriginal && !isFinal) return null;
 
 	// Key format: galleries/{galleryId}/originals/{filename} or galleries/{galleryId}/final/{orderId}/{filename}
 	const parts = key.split('/');
-	if (parts.length < 4 || parts[0] !== 'galleries') {
-		logger?.error('Invalid key format', { key, rawKey });
-		return;
-	}
+		if (parts.length < 4 || parts[0] !== 'galleries') {
+			logger?.error('Invalid key format', { key, rawKey });
+			return null;
+		}
 		
 		const galleryId = parts[1];
+		if (!galleryId) {
+			logger?.error('No galleryId in key', { key, rawKey });
+			return null;
+		}
+		
 		let filename: string;
 		let previewKey: string;
 		let thumbKey: string;
@@ -133,7 +161,7 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 
 		if (!getObjectResponse.Body) {
 			logger?.error('No body for image', { key });
-			return;
+			return null;
 		}
 
 		const imageStream = getObjectResponse.Body as Readable;
@@ -145,7 +173,7 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 			imageMetadata = await sharp(imageBuffer).metadata();
 		} catch (err: any) {
 			logger?.info('Skipping non-image file', { key, error: err.message });
-			return;
+			return null;
 		}
 
 		const width = imageMetadata.width || 0;
@@ -312,6 +340,8 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 			});
 		}
 		}
+		
+		return null;
 	}
 
 

@@ -18,7 +18,6 @@ import * as ordersDownloadFinalZip from '../../../functions/orders/downloadFinal
 import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
 import * as ordersUploadFinalComplete from '../../../functions/orders/uploadFinalComplete';
-import * as ordersDeleteFinalImage from '../../../functions/orders/deleteFinalImage';
 import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOriginals';
 
 const router = Router();
@@ -39,7 +38,7 @@ router.post('/galleries/:id/orders/:orderId/approve-change', wrapHandler(ordersA
 router.post('/galleries/:id/orders/:orderId/deny-change', wrapHandler(ordersDenyChangeRequest.handler));
 // final/images and final/zip routes are registered as public routes in index.ts (no requireAuth)
 // router.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
-router.delete('/galleries/:id/orders/:orderId/final/images/:filename', wrapHandler(ordersDeleteFinalImage.handler));
+// Final image deletion now handled by galleries batch delete endpoint: POST /galleries/:id/photos/batch-delete with type='final'
 router.post('/galleries/:id/orders/:orderId/final/upload', wrapHandler(ordersUploadFinal.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload-batch', wrapHandler(ordersUploadFinalBatch.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload-complete', wrapHandler(ordersUploadFinalComplete.handler));

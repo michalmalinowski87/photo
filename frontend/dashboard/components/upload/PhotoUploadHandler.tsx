@@ -4,6 +4,7 @@ import { useImagePolling } from "../../hooks/useImagePolling";
 import { usePresignedUrls } from "../../hooks/usePresignedUrls";
 import { useS3Upload } from "../../hooks/useS3Upload";
 import { useToast } from "../../hooks/useToast";
+import { useGalleryStore } from "../../store/gallerySlice";
 import api from "../../lib/api-service";
 
 import { PerImageProgress } from "./UploadProgressOverlay";
@@ -265,8 +266,13 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
 
         // Handle completion based on type
         if (uploadSuccesses > 0 && !uploadCancelRef.current) {
+          // TRIGGER 1: Silent recalculation immediately after uploads complete (before processing)
+          // This updates storage values as soon as files are in S3, without UI notification
+          const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+          void refreshGalleryBytesOnly(config.galleryId, true); // forceRecalc = true, silent (no loading state)
+
           if (config.type === "finals") {
-            // Mark final upload complete
+            // Mark final upload complete (also triggers recalculation on backend)
             try {
               const orderId = config.orderId ?? "";
               await api.uploads.markFinalUploadComplete(config.galleryId, orderId);

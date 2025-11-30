@@ -190,10 +190,11 @@ export function useImagePolling(config: UseImagePollingConfig) {
               );
             }
 
-            // For originals, validate limits and silently refresh gallery bytes AFTER polling completes
+            // For originals, validate limits AFTER all photos are processed
+            // Note: Recalculation already happened after uploads complete (in PhotoUploadHandler)
+            // Processing doesn't change storage size, so no need to recalculate again
             if (config.type === "originals" && capturedUploadSuccesses > 0) {
-              // Wait a bit for backend to process images and update originalsBytesUsed
-              // Reduced delay for faster UI updates - backend should be quick to update
+              // Wait a bit for backend to process images
               setTimeout(async () => {
                 try {
                   // Only validate limits if we need to check for excess (optimistic updates already handled UI)
@@ -216,13 +217,7 @@ export function useImagePolling(config: UseImagePollingConfig) {
                 } catch (validationError) {
                   console.error("Failed to validate upload limits:", validationError);
                 }
-
-                // Use silent refresh to update byte usage without triggering loading state
-                // This prevents screen blink while still syncing the actual bytes used
-                const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-                await refreshGalleryBytesOnly(config.galleryId);
-                // Note: refreshGalleryBytesOnly already dispatches galleryUpdated event with refreshAfterUpload flag
-              }, 1000); // Reduced from 2000ms to 1000ms - backend should update quickly
+              }, 1000); // Wait for backend to finish processing
             }
 
             if (config.onUploadComplete) {
