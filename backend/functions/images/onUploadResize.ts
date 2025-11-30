@@ -247,51 +247,12 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 		});
 
 		// Update gallery bytes used based on type
-		// Use atomic ADD operation to prevent race conditions with concurrent uploads/deletions
-		if (galleriesTable && imageBuffer.length > 0) {
-			try {
-				if (isOriginal) {
-					// Update originalsBytesUsed for originals (atomic ADD prevents race conditions)
-					// Also update bytesUsed for backward compatibility
-					await ddb.send(new UpdateCommand({
-						TableName: galleriesTable,
-						Key: { galleryId },
-						UpdateExpression: 'ADD originalsBytesUsed :size, bytesUsed :size',
-						ExpressionAttributeValues: {
-							':size': imageBuffer.length
-						}
-					}));
-					logger?.info('Updated gallery originalsBytesUsed (atomic)', { 
-						galleryId, 
-						sizeAdded: imageBuffer.length,
-						type: 'originals'
-					});
-				} else {
-					// Update finalsBytesUsed for finals (atomic ADD prevents race conditions)
-					// Also update bytesUsed for backward compatibility
-					await ddb.send(new UpdateCommand({
-						TableName: galleriesTable,
-						Key: { galleryId },
-						UpdateExpression: 'ADD finalsBytesUsed :size, bytesUsed :size',
-						ExpressionAttributeValues: {
-							':size': imageBuffer.length
-						}
-					}));
-					logger?.info('Updated gallery finalsBytesUsed (atomic)', { 
-						galleryId, 
-						sizeAdded: imageBuffer.length,
-						type: 'finals'
-					});
-				}
-			} catch (updateErr: any) {
-				logger?.warn('Failed to update gallery bytes used', {
-					error: updateErr.message,
-					galleryId,
-					size: imageBuffer.length,
-					type: isOriginal ? 'originals' : 'finals'
-				});
-			}
-		}
+		// NOTE: We no longer update bytes used here to avoid double-counting
+		// Storage is now managed by:
+		// 1. Optimistic updates in frontend (immediate UI feedback)
+		// 2. Recalculation after uploads complete (accurate S3-based calculation)
+		// The resize Lambda should only process images, not update storage counts
+		// This prevents race conditions and double-counting issues
 		} catch (e: any) {
 			// Log error but continue processing other files
 			logger?.error('Failed to process image', {

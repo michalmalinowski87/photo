@@ -2,6 +2,7 @@ import { useCallback } from "react";
 
 import { applyOptimisticUpdate } from "../lib/optimistic-updates";
 import { PerImageProgress } from "../components/upload/UploadProgressOverlay";
+import { useGalleryStore } from "../store/gallerySlice";
 
 import { PresignedUrlData } from "./usePresignedUrls";
 
@@ -130,11 +131,20 @@ export function useS3Upload(config: UseS3UploadConfig) {
                 // This updates the sidebar instantly without waiting for API
                 // Safety: Only dispatch if uploadSucceeded is true (upload was successful)
                 if (uploadSucceeded && typeof window !== "undefined" && config.galleryId) {
+                  const beforeOptimistic = useGalleryStore.getState().currentGallery;
+                  const beforeOriginals = beforeOptimistic?.originalsBytesUsed;
+                  const beforeFinals = beforeOptimistic?.finalsBytesUsed;
+                  
+                  // eslint-disable-next-line no-console
                   console.log("[useS3Upload] Upload succeeded, dispatching optimistic update:", {
                     type: config.type,
                     galleryId: config.galleryId,
                     fileSize: file.size,
                     fileName: file.name,
+                    beforeOriginals,
+                    beforeFinals,
+                    expectedOriginals: config.type === "originals" ? (beforeOriginals ?? 0) + file.size : beforeOriginals,
+                    expectedFinals: config.type === "finals" ? (beforeFinals ?? 0) + file.size : beforeFinals,
                   });
 
                   // Apply optimistic update using utility function
@@ -148,6 +158,14 @@ export function useS3Upload(config: UseS3UploadConfig) {
                       // No-op for uploads - polling will update state
                     },
                     logContext: "useS3Upload",
+                  });
+                  
+                  const afterOptimistic = useGalleryStore.getState().currentGallery;
+                  // eslint-disable-next-line no-console
+                  console.log("[useS3Upload] After optimistic update:", {
+                    type: config.type,
+                    afterOriginals: afterOptimistic?.originalsBytesUsed,
+                    afterFinals: afterOptimistic?.finalsBytesUsed,
                   });
                 }
 

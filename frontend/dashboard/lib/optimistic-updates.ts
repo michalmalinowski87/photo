@@ -74,13 +74,18 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
     // For finals, update store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
 
+    // Update Zustand store optimistically
+    const storeState = useGalleryStore.getState();
+    const beforeFinalsBytes = storeState.currentGallery?.finalsBytesUsed as number | undefined;
+    
+    // eslint-disable-next-line no-console
     console.log(`[${params.logContext ?? "optimistic-updates"}] Applying finals optimistic update:`, {
       galleryId,
       sizeDelta,
+      beforeFinalsBytes: beforeFinalsBytes ?? 0,
+      expectedNewValue: (beforeFinalsBytes ?? 0) + sizeDelta,
     });
 
-    // Update Zustand store optimistically
-    const storeState = useGalleryStore.getState();
     if (storeState.currentGallery?.galleryId === galleryId) {
       (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(
         sizeDelta
@@ -88,9 +93,11 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
       const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as
         | number
         | undefined;
+      // eslint-disable-next-line no-console
       console.log(
         `[${params.logContext ?? "optimistic-updates"}] Updated store, new value:`,
-        newStoreValue
+        newStoreValue,
+        `(was ${beforeFinalsBytes ?? 0}, added ${sizeDelta})`
       );
 
       // Update optimistic state to match store

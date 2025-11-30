@@ -1,33 +1,29 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
 import { PublishGalleryWizard } from "../../../../components/galleries/PublishGalleryWizard";
+import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
-import Badge from "../../../../components/ui/badge/Badge";
-import Button from "../../../../components/ui/button/Button";
+import { FinalsTab } from "../../../../components/orders/FinalsTab";
+import { OrderHeader } from "../../../../components/orders/OrderHeader";
+import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
+import { OrderTabs } from "../../../../components/orders/OrderTabs";
+import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
+import { UploadProgressWrapper } from "../../../../components/orders/UploadProgressWrapper";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
-import { FullPageLoading, Loading } from "../../../../components/ui/loading/Loading";
-import { RetryableImage } from "../../../../components/ui/RetryableImage";
-import { FileUploadZone } from "../../../../components/upload/FileUploadZone";
+import { FullPageLoading } from "../../../../components/ui/loading/Loading";
 import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUploadHandler";
-import { StorageDisplay } from "../../../../components/upload/StorageDisplay";
-import {
-  UploadProgressOverlay,
-  type PerImageProgress,
-} from "../../../../components/upload/UploadProgressOverlay";
+import type { PerImageProgress } from "../../../../components/upload/UploadProgressOverlay";
+import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
+import { useOrderActions } from "../../../../hooks/useOrderActions";
+import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
+import { useOrderStatusRefresh } from "../../../../hooks/useOrderStatusRefresh";
 import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
-import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../../lib/currency";
-import { formatPrice } from "../../../../lib/format-price";
-import {
-  applyOptimisticUpdate,
-  calculateSizeDelta,
-  revertOptimisticUpdate,
-} from "../../../../lib/optimistic-updates";
+import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
@@ -47,17 +43,7 @@ interface GalleryImage {
   [key: string]: unknown;
 }
 
-interface Order {
-  orderId: string;
-  galleryId: string;
-  orderNumber?: string;
-  deliveryStatus?: string;
-  paymentStatus?: string;
-  totalCents?: number;
-  createdAt?: string;
-  selectedKeys?: string[];
-  [key: string]: unknown;
-}
+// Order type is imported from orderSlice store (single source of truth)
 
 interface Gallery {
   galleryId: string;
@@ -77,10 +63,6 @@ interface PaymentDetails {
   balanceAfterPayment?: number;
 }
 
-
-
-type BadgeColor = "primary" | "success" | "error" | "warning" | "info" | "light" | "dark";
-
 export default function OrderDetail() {
   const { showToast } = useToast();
   const router = useRouter();
@@ -89,28 +71,27 @@ export default function OrderDetail() {
   const { reloadGallery } = useGallery();
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [error, setError] = useState<string>("");
-  const [order, setOrder] = useState<Order | null>(null);
+  // Use Zustand store as single source of truth for order data (shared with sidebar and top bar)
+  const order = useOrderStore((state) => state.currentOrder);
+  const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [denyLoading, setDenyLoading] = useState<boolean>(false);
   const [originalImages, setOriginalImages] = useState<GalleryImage[]>([]);
   const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
+  const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
+  const { statusLastUpdatedRef } = useOrderStatusRefresh();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set()); // Track which images are being deleted
-  const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set()); // Track successfully deleted images to prevent reappearance
-  const deletingImagesRef = useRef<Set<string>>(new Set()); // Ref to track deleting images for closures
-  const deletedImageKeysRef = useRef<Set<string>>(new Set()); // Ref to track deleted images for closures
   const loadingOrderDataRef = useRef<boolean>(false); // Ref to prevent concurrent loadOrderData calls
-  const [savingAmount, setSavingAmount] = useState<boolean>(false);
-  const [isEditingAmount, setIsEditingAmount] = useState<boolean>(false);
-  const [editingAmountValue, setEditingAmountValue] = useState<string>("");
+  // Refs for tracking deleted images (initialized early for use in loadOrderData)
+  const deletingImagesRefForLoad = useRef<Set<string>>(new Set());
+  const deletedImageKeysRefForLoad = useRef<Set<string>>(new Set());
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
   const loadWalletBalance = useCallback(async (): Promise<number> => {
@@ -150,7 +131,6 @@ export default function OrderDetail() {
 
       // Prevent concurrent calls
       if (loadingOrderDataRef.current && !forceRefresh) {
-        console.log("[orderDetail.tsx] loadOrderData already in progress, skipping");
         return;
       }
 
@@ -161,16 +141,15 @@ export default function OrderDetail() {
       try {
         // Use store actions - they check cache first and fetch if needed
         const { fetchOrder } = useOrderStore.getState();
-        const { fetchGallery, fetchGalleryImages } = useGalleryStore.getState();
+        const { fetchGalleryImages, currentGallery } = useGalleryStore.getState();
 
-        // Fetch order, gallery, and images in parallel
-        const [orderData, galleryData, apiImages] = await Promise.all([
-          fetchOrder(galleryId as string, orderId as string, forceRefresh).catch((err) => {
+        // Fetch order and images in parallel
+        // NOTE: Don't fetch gallery data here - it would overwrite accurate bytes values
+        // Gallery bytes are managed by recalculation, not by reloading gallery data
+        // NOTE: Always use forceRefresh=true to ensure we get fresh order data (status might have changed)
+        const [orderData, apiImages] = await Promise.all([
+          fetchOrder(galleryId as string, orderId as string, true).catch((err) => {
             console.error("Failed to load order:", err);
-            return null;
-          }),
-          fetchGallery(galleryId as string, forceRefresh).catch((err) => {
-            console.error("Failed to load gallery:", err);
             return null;
           }),
           fetchGalleryImages(galleryId as string, forceRefresh).catch((err) => {
@@ -180,10 +159,33 @@ export default function OrderDetail() {
         ]);
 
         if (orderData) {
-          setOrder(orderData);
+          // Preserve status fields if they were recently updated (within last 5 seconds)
+          // This prevents cache from overwriting fresh status updates
+          const currentOrderInStore = useOrderStore.getState().currentOrder;
+          const fiveSecondsAgo = Date.now() - 5000;
+          const statusRecentlyUpdated = statusLastUpdatedRef.current > fiveSecondsAgo;
+          
+          if (statusRecentlyUpdated && 
+              currentOrderInStore?.deliveryStatus && 
+              (currentOrderInStore.deliveryStatus !== orderData.deliveryStatus || 
+               currentOrderInStore.paymentStatus !== orderData.paymentStatus)) {
+            // Status was recently updated, preserve it
+            setCurrentOrder({
+              ...orderData,
+              deliveryStatus: currentOrderInStore.deliveryStatus,
+              paymentStatus: currentOrderInStore.paymentStatus,
+              updatedAt: currentOrderInStore.updatedAt,
+            });
+          } else {
+            // Update store with fresh order data
+            setCurrentOrder(orderData);
+          }
         }
-        if (galleryData) {
-          setGallery(galleryData);
+        
+        // Preserve current gallery state - don't overwrite with stale data
+        // Only update if we don't have gallery data yet
+        if (!gallery && currentGallery?.galleryId === galleryId) {
+          setGallery(currentGallery);
         }
 
         setOriginalImages(apiImages);
@@ -202,21 +204,11 @@ export default function OrderDetail() {
           }));
 
           // Filter out deleted images from API response
-          const validApiImages = mappedFinalImages.filter((img: GalleryImage) => {
-            const imgKey = img.key ?? img.filename;
-            if (!imgKey) {
-              return false;
-            }
-            // Skip if currently being deleted
-            if (deletingImagesRef.current.has(imgKey)) {
-              return false;
-            }
-            // Skip if successfully deleted
-            if (deletedImageKeysRef.current.has(imgKey)) {
-              return false;
-            }
-            return true;
-          });
+          const validApiImages = filterDeletedImages(
+            mappedFinalImages,
+            deletingImagesRefForLoad.current,
+            deletedImageKeysRefForLoad.current
+          );
 
           // Set images directly - no placeholders
           setFinalImages(validApiImages);
@@ -232,8 +224,6 @@ export default function OrderDetail() {
         const isNetworkError = error.message?.includes("Network error");
 
         if (isCorsError || isNetworkError) {
-          // Log but don't show toast for CORS/network errors - they're usually transient
-          console.warn("[orderDetail.tsx] CORS/Network error during loadOrderData:", error.message);
           // Don't set error state for CORS errors - they're usually temporary
         } else {
           const errorMsg = formatApiError(err);
@@ -249,8 +239,47 @@ export default function OrderDetail() {
   );
 
   // Track per-image upload progress
-  const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
-  const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
+  const [perImageProgress] = useState<PerImageProgress[]>([]);
+
+  // Use hooks for order actions and amount editing (after state declarations)
+  const {
+    isEditingAmount,
+    editingAmountValue,
+    savingAmount,
+    setEditingAmountValue,
+    handleStartEditAmount,
+    handleCancelEditAmount,
+    handleSaveAmount,
+  } = useOrderAmountEdit({
+    galleryId,
+    orderId,
+    currentTotalCents: order?.totalCents ?? 0,
+    onSave: loadOrderData,
+  });
+
+  const {
+    deleteImage,
+    handleDeleteImageClick,
+    deletingImages,
+    deletingImagesRef,
+    deletedImageKeysRef,
+  } = useFinalImageDelete({
+    galleryId,
+    orderId,
+    setFinalImages,
+    setOptimisticFinalsBytes,
+  });
+
+  // Sync refs for use in loadOrderData
+  useEffect(() => {
+    deletingImagesRefForLoad.current = deletingImagesRef.current;
+  }, [deletingImagesRef]);
+
+  useEffect(() => {
+    deletedImageKeysRefForLoad.current = deletedImageKeysRef.current;
+  }, [deletedImageKeysRef]);
+
+  const { refreshOrderStatus } = useOrderStatusRefresh();
 
   // Use universal photo upload handler (after loadOrderData is defined)
   const {
@@ -265,12 +294,13 @@ export default function OrderDetail() {
     orderId: orderId as string,
     type: "finals",
     getInitialImageCount: () => finalImages.length,
-    onPerImageProgress: (progress) => {
-      setPerImageProgress(progress);
-      // Reset dismissed state when new upload starts
-      if (progress.length > 0 && progress.some((p) => p.status === "uploading")) {
-        setIsOverlayDismissed(false);
-      }
+    onPerImageProgress: () => {
+      // Progress is handled by UploadProgressWrapper component
+    },
+    onUploadSuccess: (_fileName, _file, _uploadedKey) => {
+      // Optimistic update is already handled by useS3Upload.ts
+      // No need to update here to avoid double-counting (same pattern as originals)
+      // File uploaded successfully - optimistic update already handled by useS3Upload
     },
     onImagesUpdated: (updatedImages) => {
       // For finals, map images to include previewUrl/thumbUrl/finalUrl structure
@@ -280,19 +310,11 @@ export default function OrderDetail() {
         finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download
       }));
 
-      const validApiImages = mappedImages.filter((img: GalleryImage) => {
-        const imgKey = img.key ?? img.filename;
-        if (!imgKey) {
-          return false;
-        }
-        if (deletingImagesRef.current.has(imgKey)) {
-          return false;
-        }
-        if (deletedImageKeysRef.current.has(imgKey)) {
-          return false;
-        }
-        return true;
-      });
+      const validApiImages = filterDeletedImages(
+        mappedImages,
+        deletingImagesRef.current,
+        deletedImageKeysRef.current
+      );
 
       // Only update if we have valid images with URLs
       if (validApiImages.length > 0) {
@@ -301,26 +323,33 @@ export default function OrderDetail() {
     },
     onUploadComplete: () => {
       // Reload final images from API after upload completes to ensure we have the latest data
+      // Note: Storage recalculation already happened after S3 upload (in PhotoUploadHandler)
+      // Order status is refreshed via onOrderUpdated callback (called after markFinalUploadComplete)
+      // This just refreshes the order data to show the new images
       if (galleryId && orderId) {
         void loadOrderData();
       }
     },
-    onOrderUpdated: (_orderId) => {
-      // Store updates will trigger re-renders automatically via Zustand subscriptions
+    onOrderUpdated: async (updatedOrderId) => {
+      // Refresh order status when order is updated (e.g., after upload-complete endpoint)
+      if (galleryId && updatedOrderId) {
+        try {
+          const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId);
+          const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId as string);
+          if (galleryIdStr && orderIdStr && updatedOrderId === orderIdStr) {
+            await refreshOrderStatus(galleryIdStr, orderIdStr);
+          }
+        } catch (statusErr) {
+          // eslint-disable-next-line no-console
+          console.error("[STATUS_UPDATE] onOrderUpdated - Failed to refresh order status", statusErr);
+        }
+      }
     },
     loadOrderData,
     deletingImagesRef,
     deletedImageKeysRef,
   });
 
-  // Sync refs with state so closures always have latest values
-  useEffect(() => {
-    deletingImagesRef.current = deletingImages;
-  }, [deletingImages]);
-
-  useEffect(() => {
-    deletedImageKeysRef.current = deletedImageKeys;
-  }, [deletedImageKeys]);
 
   useEffect(() => {
     initializeAuth(
@@ -365,11 +394,8 @@ export default function OrderDetail() {
       return undefined;
     }
 
-    console.log("[orderDetail.tsx] Setting up finals update listeners, galleryId:", galleryId);
-
     // Ensure gallery is in store before subscribing (needed for updateFinalsBytesUsed to work)
     if (gallery && useGalleryStore.getState().currentGallery?.galleryId !== galleryId) {
-      console.log("[orderDetail.tsx] Setting gallery in store");
       const { setCurrentGallery } = useGalleryStore.getState();
       // Only set if gallery has required fields
       if (gallery.galleryId && gallery.ownerId && gallery.state) {
@@ -391,26 +417,12 @@ export default function OrderDetail() {
       if (currentFinalsBytes !== undefined && currentFinalsBytes !== prevFinalsBytes) {
         prevFinalsBytes = currentFinalsBytes;
 
-        console.log("[orderDetail.tsx] Zustand store subscription fired:", {
-          storeGalleryId: currentGallery?.galleryId,
-          currentGalleryId: galleryId,
-          finalsBytesUsed: currentFinalsBytes,
-        });
-
         const newFinalsBytes = currentFinalsBytes;
-        console.log(
-          "[orderDetail.tsx] Store update matches our gallery, newFinalsBytes:",
-          newFinalsBytes
-        );
 
         // Update optimistic state to match store (store has the latest optimistic value)
         // Only update if we don't already have this value (avoid unnecessary re-renders)
         setOptimisticFinalsBytes((prev) => {
           if (prev !== newFinalsBytes) {
-            console.log("[orderDetail.tsx] Updating optimistic from store subscription:", {
-              prev,
-              newFinalsBytes,
-            });
             return newFinalsBytes;
           }
           return prev;
@@ -430,7 +442,6 @@ export default function OrderDetail() {
     });
 
     return () => {
-      console.log("[orderDetail.tsx] Cleaning up finals update listeners");
       unsubscribe();
     };
   }, [galleryId, gallery, optimisticFinalsBytes]);
@@ -438,15 +449,11 @@ export default function OrderDetail() {
   // Clear optimistic state when upload completes and data is reloaded
   useEffect(() => {
     if (isUploadComplete && optimisticFinalsBytes !== null) {
-      console.log(
-        "[orderDetail.tsx] Upload complete, reloading data and clearing optimistic state"
-      );
       // Reload data and clear optimistic state after a delay
       void loadOrderData(true).then(() => {
         setTimeout(() => {
           setOptimisticFinalsBytes((prev) => {
             if (prev !== null) {
-              console.log("[orderDetail.tsx] Clearing optimistic state after reload");
               return null;
             }
             return prev;
@@ -474,19 +481,7 @@ export default function OrderDetail() {
     }
 
     // Get selectedKeys from order
-    let orderSelectedKeys: string[] = [];
-    if (order.selectedKeys !== undefined && order.selectedKeys !== null) {
-      if (Array.isArray(order.selectedKeys)) {
-        orderSelectedKeys = order.selectedKeys;
-      } else if (typeof order.selectedKeys === "string") {
-        try {
-          const parsed: unknown = JSON.parse(order.selectedKeys);
-          orderSelectedKeys = Array.isArray(parsed) ? (parsed as string[]) : [order.selectedKeys];
-        } catch {
-          orderSelectedKeys = [order.selectedKeys];
-        }
-      }
-    }
+    const orderSelectedKeys = normalizeSelectedKeys(order.selectedKeys);
 
     if (isSelectionEnabled && orderSelectedKeys.length > 0) {
       // Check if selected images exist
@@ -547,442 +542,57 @@ export default function OrderDetail() {
 
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
-  const handleDeleteFinalDirect = async (image: GalleryImage): Promise<void> => {
-    const imageKey = image.key ?? image.filename;
-    if (!imageKey || !galleryId || !orderId) {
-      return;
-    }
-
-    // Prevent duplicate deletions
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Mark image as being deleted
-    setDeletingImages((prev) => new Set(prev).add(imageKey));
-
-    // Optimistically remove image from local state immediately
-    setFinalImages((prevImages) =>
-      prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
-    );
-
-    // Get image size for optimistic update
-    const imageSize = image.size ?? 0;
-    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
-
-    // Apply optimistic update immediately (before API call)
-    if (sizeDelta !== undefined && galleryId) {
-      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-      if (galleryIdStr) {
-        applyOptimisticUpdate({
-          type: "finals",
-          galleryId: galleryIdStr,
-          sizeDelta,
-          setOptimisticFinalsBytes,
-          logContext: "orderDetail.tsx handleDeleteFinalDirect",
-        });
-      }
-    }
-
-    try {
-      await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
-
-      // Mark as successfully deleted to prevent reappearance
-      setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-
-      // Clear deleted key after 30 seconds to allow eventual consistency
-      // This ensures deleted images don't reappear even if API returns stale data
-      setTimeout(() => {
-        setDeletedImageKeys((prev) => {
-          const updated = new Set(prev);
-          updated.delete(imageKey);
-          return updated;
-        });
-      }, 30000);
-
-      // Remove from deleting set and reload if no other deletions are in progress
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
-        if (updated.size === 0 && galleryId) {
-          // Use setTimeout to ensure state update completes before refresh
-          setTimeout(async () => {
-            const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-            const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-            if (galleryIdStr) {
-              // Force recalculation after delete to get accurate values (bypasses cache)
-              await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
-            }
-            await loadOrderData();
-            // Store update will trigger re-renders automatically via Zustand subscriptions
-          }, 0);
-        }
-        return updated;
-      });
-
-      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-    } catch (err) {
-      // Revert optimistic update on error
-      if (sizeDelta !== undefined && galleryId) {
-        const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-        if (galleryIdStr) {
-          revertOptimisticUpdate({
-            type: "finals",
-            galleryId: galleryIdStr,
-            sizeDelta,
-            setOptimisticFinalsBytes,
-            logContext: "orderDetail.tsx handleDeleteFinalDirect",
-          });
-        }
-      }
-
-      // On error, restore the image to the list (only if not in deletedImageKeys)
-      if (!deletedImageKeys.has(imageKey)) {
-        setFinalImages((prevImages) => {
-          const restored = [...prevImages];
-          restored.push(image);
-          return restored;
-        });
-      }
-
-      // Remove from deleting set
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        return updated;
-      });
-
-      showToast("error", "Błąd", formatApiError(err));
-    }
-  };
-
   const handleDeleteFinalImageClick = (image: GalleryImage): void => {
-    const imageKey = image.key ?? image.filename;
-
-    if (!imageKey) {
-      return;
+    const imageToDeleteResult = handleDeleteImageClick(image);
+    if (imageToDeleteResult) {
+      setImageToDelete(imageToDeleteResult);
+      setDeleteConfirmOpen(true);
     }
-
-    // Prevent deletion if already being deleted
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Check if deletion confirmation is suppressed
-    const suppressKey = "final_image_delete_confirm_suppress";
-    const suppressUntil = localStorage.getItem(suppressKey);
-    if (suppressUntil) {
-      const suppressUntilTime = parseInt(suppressUntil, 10);
-      if (Date.now() < suppressUntilTime) {
-        // Suppression is still active, proceed directly with deletion
-        void handleDeleteFinalDirect(image);
-        return;
-      } else {
-        // Suppression expired, remove it
-        localStorage.removeItem(suppressKey);
-      }
-    }
-
-    setImageToDelete(image);
-    setDeleteConfirmOpen(true);
   };
 
   const handleDeleteFinal = async (suppressChecked?: boolean): Promise<void> => {
     if (!imageToDelete) {
       return;
     }
-
-    const imageKey = imageToDelete.key ?? imageToDelete.filename;
-    if (!imageKey || !galleryId || !orderId) {
-      return;
-    }
-
-    // Prevent duplicate deletions
-    if (deletingImages.has(imageKey)) {
-      return;
-    }
-
-    // Mark image as being deleted
-    setDeletingImages((prev) => new Set(prev).add(imageKey));
-
-    // Optimistically remove image from local state immediately
-    setFinalImages((prevImages) =>
-      prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
-    );
-
-    // Get image size for optimistic update
-    const imageSize = imageToDelete.size ?? 0;
-    const sizeDelta = calculateSizeDelta(imageSize, true); // true = deletion
-
-    // Apply optimistic update immediately (before API call)
-    if (sizeDelta !== undefined && galleryId) {
-      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-      if (galleryIdStr) {
-        applyOptimisticUpdate({
-          type: "finals",
-          galleryId: galleryIdStr,
-          sizeDelta,
-          setOptimisticFinalsBytes,
-          logContext: "orderDetail.tsx handleDeleteFinal",
-        });
-      }
-    }
-
     try {
-      await api.orders.deleteFinalImage(galleryId as string, orderId as string, imageKey);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
-
-      // Save suppression only after successful deletion
-      if (suppressChecked) {
-        const suppressKey = "final_image_delete_confirm_suppress";
-        const suppressUntil = Date.now() + 15 * 60 * 1000;
-        localStorage.setItem(suppressKey, suppressUntil.toString());
-      }
-
-      // Mark as successfully deleted to prevent reappearance
-      setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-
-      // Clear deleted key after 30 seconds to allow eventual consistency
-      // This ensures deleted images don't reappear even if API returns stale data
-      setTimeout(() => {
-        setDeletedImageKeys((prev) => {
-          const updated = new Set(prev);
-          updated.delete(imageKey);
-          return updated;
-        });
-      }, 30000);
-
-      // Close modal only after successful deletion
+      await deleteImage(imageToDelete, suppressChecked);
       setDeleteConfirmOpen(false);
       setImageToDelete(null);
-
-      // Remove from deleting set and reload if no other deletions are in progress
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        // If this was the last deletion, refresh bytes to sync with server (lightweight update)
-        if (updated.size === 0 && galleryId) {
-          // Use setTimeout to ensure state update completes before refresh
-          setTimeout(async () => {
-            const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-            const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-            if (galleryIdStr) {
-              // Force recalculation after delete to get accurate values (bypasses cache)
-              await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
-            }
-            await loadOrderData();
-            // Store update will trigger re-renders automatically via Zustand subscriptions
-          }, 0);
-        }
-        return updated;
-      });
-
-      showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-    } catch (err) {
-      // Revert optimistic update on error
-      if (sizeDelta !== undefined && galleryId) {
-        const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : (galleryId as string);
-        if (galleryIdStr) {
-          revertOptimisticUpdate({
-            type: "finals",
-            galleryId: galleryIdStr,
-            sizeDelta,
-            setOptimisticFinalsBytes,
-            logContext: "orderDetail.tsx handleDeleteFinal",
-          });
-        }
-      }
-
-      // On error, restore the image to the list (only if not in deletedImageKeys)
-      if (!deletedImageKeys.has(imageKey)) {
-        setFinalImages((prevImages) => {
-          const restored = [...prevImages];
-          restored.push(imageToDelete);
-          return restored;
-        });
-      }
-
-      // Remove from deleting set
-      setDeletingImages((prev) => {
-        const updated = new Set(prev);
-        updated.delete(imageKey);
-        return updated;
-      });
-
-      showToast("error", "Błąd", formatApiError(err));
-      // Keep modal open on error so user can retry
+    } catch {
+      // Error already handled in deleteImage, keep modal open
     }
   };
 
-  const handleStartEditAmount = (): void => {
-    if (!order) {
-      return;
-    }
-    setEditingAmountValue(centsToPlnString(order.totalCents ?? 0));
-    setIsEditingAmount(true);
-  };
 
-  const handleCancelEditAmount = (): void => {
-    setIsEditingAmount(false);
-    setEditingAmountValue("");
-  };
-
-  const handleSaveAmount = async (): Promise<void> => {
-    if (!galleryId || !orderId || !order) {
-      return;
-    }
-
-    const newTotalCents = plnToCents(editingAmountValue);
-
-    setSavingAmount(true);
-    try {
-      await api.orders.update(galleryId as string, orderId as string, {
-        totalCents: newTotalCents,
-      });
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateOrderCache } = useOrderStore.getState();
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateOrderCache(orderId as string);
-      invalidateAllGalleryCaches(galleryId as string);
-
-      await loadOrderData(true); // Force refresh
-      setIsEditingAmount(false);
-      setEditingAmountValue("");
-      showToast("success", "Sukces", "Kwota została zaktualizowana");
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
-    } finally {
-      setSavingAmount(false);
-    }
-  };
-
-  const handleApproveChangeRequest = async (): Promise<void> => {
-    if (!galleryId || !orderId) {
-      return;
-    }
-
-    try {
-      await api.orders.approveChangeRequest(galleryId as string, orderId as string);
-
-      // Invalidate cache to force fresh data fetch
-      const { invalidateOrderCache, invalidateGalleryOrdersCache } = useOrderStore.getState();
-      const { invalidateGalleryCache, invalidateGalleryOrdersCache: invalidateGalleryOrders } =
-        useGalleryStore.getState();
-      invalidateOrderCache(orderId as string);
-      invalidateGalleryOrdersCache(galleryId as string);
-      invalidateGalleryCache(galleryId as string);
-      invalidateGalleryOrders(galleryId as string);
-
-      showToast(
-        "success",
-        "Sukces",
-        "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
-      );
-      await loadOrderData(true); // Force refresh
-      // Reload gallery to update order status in sidebar
+  const {
+    handleApproveChangeRequest,
+    handleDenyChangeRequest: handleDenyChangeRequestAction,
+    handleDenyConfirm: handleDenyConfirmAction,
+  } = useOrderActions({
+    galleryId,
+    orderId,
+    gallery,
+    loadOrderData: () => loadOrderData(true),
+    loadGalleryOrders: async () => {
       if (reloadGallery) {
         await reloadGallery();
       }
-    } catch (err) {
-      showToast(
-        "error",
-        "Błąd",
-        formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
-      );
-    }
-  };
+    },
+    openDenyModal: () => setDenyModalOpen(true),
+    closeDenyModal: () => setDenyModalOpen(false),
+    setDenyLoading,
+    openCleanupModal: () => {}, // Not used in this component
+    closeCleanupModal: () => {}, // Not used in this component
+  });
 
   const handleDenyChangeRequest = (): void => {
-    setDenyModalOpen(true);
+    handleDenyChangeRequestAction();
   };
 
   const handleDenyConfirm = async (reason?: string): Promise<void> => {
-    if (!galleryId || !orderId) {
-      return;
-    }
-
-    setDenyLoading(true);
-
-    try {
-      await api.orders.denyChangeRequest(galleryId as string, orderId as string, reason);
-
-      // Invalidate cache to force fresh data fetch
-      const { invalidateOrderCache, invalidateGalleryOrdersCache } = useOrderStore.getState();
-      const { invalidateGalleryCache, invalidateGalleryOrdersCache: invalidateGalleryOrders } =
-        useGalleryStore.getState();
-      invalidateOrderCache(orderId as string);
-      invalidateGalleryOrdersCache(galleryId as string);
-      invalidateGalleryCache(galleryId as string);
-      invalidateGalleryOrders(galleryId as string);
-
-      showToast(
-        "success",
-        "Sukces",
-        "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
-      );
-      setDenyModalOpen(false);
-      await loadOrderData(true); // Force refresh
-      // Reload gallery to update order status in sidebar
-      if (reloadGallery) {
-        await reloadGallery();
-      }
-    } catch (err) {
-      showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany");
-    } finally {
-      setDenyLoading(false);
-    }
+    await handleDenyConfirmAction(reason);
   };
 
-  const getDeliveryStatusBadge = (status?: string) => {
-    const statusMap: Record<string, { color: BadgeColor; label: string }> = {
-      CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
-      CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-      AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
-      CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
-      PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
-      PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
-      DELIVERED: { color: "success", label: "Dostarczone" },
-      CANCELLED: { color: "error", label: "Anulowane" },
-    };
-
-    const statusInfo = statusMap[status ?? ""] ?? {
-      color: "light" as BadgeColor,
-      label: status ?? "",
-    };
-    return (
-      <Badge color={statusInfo.color} variant="light">
-        {statusInfo.label}
-      </Badge>
-    );
-  };
-
-  const getPaymentStatusBadge = (status?: string) => {
-    const statusMap: Record<string, { color: BadgeColor; label: string }> = {
-      UNPAID: { color: "error", label: "Nieopłacone" },
-      PARTIALLY_PAID: { color: "warning", label: "Częściowo opłacone" },
-      PAID: { color: "success", label: "Opłacone" },
-      REFUNDED: { color: "error", label: "Zwrócone" },
-    };
-
-    const statusInfo = statusMap[status ?? ""] ?? {
-      color: "light" as BadgeColor,
-      label: status ?? "",
-    };
-    return (
-      <Badge color={statusInfo.color} variant="light">
-        {statusInfo.label}
-      </Badge>
-    );
-  };
 
   if (loading && !order) {
     return <FullPageLoading text="Ładowanie zlecenia..." />;
@@ -1000,24 +610,9 @@ export default function OrderDetail() {
 
   // Normalize selectedKeys - handle both array and string formats
   // For non-selection galleries, empty/undefined selectedKeys means "all photos"
-  let selectedKeys: string[] = [];
-  if (order.selectedKeys !== undefined && order.selectedKeys !== null) {
-    if (Array.isArray(order.selectedKeys)) {
-      selectedKeys = order.selectedKeys;
-    } else if (typeof order.selectedKeys === "string") {
-      try {
-        const parsed: unknown = JSON.parse(order.selectedKeys);
-        selectedKeys = Array.isArray(parsed) ? (parsed as string[]) : [order.selectedKeys];
-      } catch (_e) {
-        selectedKeys = [order.selectedKeys];
-      }
-    }
-  }
+  const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
 
-  // For non-selection galleries: always show ALL images (selectedKeys is irrelevant)
-  // For selection galleries: show only selected images, or "no photos selected" if empty/undefined
-  const shouldShowAllImages = !selectionEnabled;
 
   // Hide "Wybrane przez klienta" section if:
   // - Selection is enabled
@@ -1055,29 +650,14 @@ export default function OrderDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/galleries/${Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "")}`}
-          >
-            <Button variant="outline" size="sm">
-              ← Powrót do galerii
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">
-            Zlecenie #
-            {order.orderNumber ??
-              (order.orderId
-                ? order.orderId.slice(-8)
-                : ((Array.isArray(orderId) ? orderId[0] : orderId) ?? ""))}
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          {getDeliveryStatusBadge(order.deliveryStatus)}
-          {getPaymentStatusBadge(order.paymentStatus)}
-        </div>
-      </div>
+      <OrderHeader
+        galleryId={galleryId}
+        orderId={orderId}
+        orderNumber={order.orderNumber}
+        orderIdFallback={order.orderId}
+        deliveryStatus={order.deliveryStatus}
+        paymentStatus={order.paymentStatus}
+      />
 
       {error && (
         <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
@@ -1085,512 +665,62 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {/* Change Request Actions */}
       {order.deliveryStatus === "CHANGES_REQUESTED" && (
-        <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                Prośba o zmiany
-              </div>
-              <div className="text-xs text-warning-600 dark:text-warning-400">
-                Klient prosi o możliwość modyfikacji wyboru. Zatwierdź, aby odblokować wybór, lub
-                odrzuć, aby przywrócić poprzedni status.
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={handleApproveChangeRequest}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                Zatwierdź
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleDenyChangeRequest}>
-                Odrzuć
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ChangeRequestBanner
+          onApprove={handleApproveChangeRequest}
+          onDeny={handleDenyChangeRequest}
+        />
       )}
 
-      {/* Order Info */}
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Kwota dodatkowych usług
-            </div>
-            <div className="flex items-center gap-2">
-              {isEditingAmount ? (
-                <>
-                  <input
-                    type="text"
-                    value={editingAmountValue}
-                    onChange={(e) => {
-                      const formatted = formatCurrencyInput(e.target.value);
-                      setEditingAmountValue(formatted);
-                    }}
-                    className="text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-0 border-b-2 border-gray-400 dark:border-gray-500 focus:outline-none focus:border-brand-500 dark:focus:border-brand-400 px-0 py-0 max-w-[150px]"
-                    autoFocus
-                    disabled={savingAmount}
-                  />
-                  <span className="text-lg font-semibold text-gray-900 dark:text-white">PLN</span>
-                  <button
-                    onClick={handleSaveAmount}
-                    disabled={savingAmount}
-                    className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="Zapisz"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleCancelEditAmount}
-                    disabled={savingAmount}
-                    className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="Anuluj"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                  {savingAmount && <Loading size="sm" />}
-                </>
-              ) : (
-                <>
-                  <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatPrice(order.totalCents)}
-                  </span>
-                  <button
-                    onClick={handleStartEditAmount}
-                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-                    title="Edytuj kwotę"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Data utworzenia</div>
-            <div className="text-lg font-semibold text-gray-900 dark:text-white">
-              {order.createdAt ? new Date(order.createdAt).toLocaleDateString("pl-PL") : "-"}
-            </div>
-          </div>
-          {selectionEnabled && order.selectedKeys && (
-            <div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Wybrane zdjęcia</div>
-              <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                {selectedKeys.length} zdjęć
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <OrderInfoCard
+        totalCents={order.totalCents ?? 0}
+        createdAt={order.createdAt}
+        selectedKeysCount={selectedKeys.length}
+        selectionEnabled={selectionEnabled}
+        isEditingAmount={isEditingAmount}
+        editingAmountValue={editingAmountValue}
+        savingAmount={savingAmount}
+        onStartEdit={handleStartEditAmount}
+        onCancelEdit={handleCancelEditAmount}
+        onSave={handleSaveAmount}
+        onAmountChange={setEditingAmountValue}
+      />
 
-      {/* Tabs - Only show if selection is enabled and not in PREPARING_DELIVERY/DELIVERED status */}
       {selectionEnabled && !hideSelectedSection && (
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab("originals")}
-              className={`px-4 py-2 font-medium border-b-2 ${
-                activeTab === "originals"
-                  ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
-            >
-              Wybrane przez klienta ({selectedKeys.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("finals")}
-              className={`px-4 py-2 font-medium border-b-2 ${
-                activeTab === "finals"
-                  ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
-            >
-              Finały ({finalImages.length})
-            </button>
-          </div>
-        </div>
+        <OrderTabs
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          originalsCount={selectedKeys.length}
+          finalsCount={finalImages.length}
+        />
       )}
 
-      {/* Tab Content */}
       {selectionEnabled && !hideSelectedSection && activeTab === "originals" && (
-        <div className="space-y-4">
-          {shouldShowAllImages ? (
-            // Non-selection gallery: show all images
-            <>
-              {originalImages.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                  <p>Ładowanie zdjęć...</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-4">
-                  {originalImages.map((img, idx) => {
-                    const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
-                    return (
-                      <div
-                        key={imgKey ?? idx}
-                        className="relative border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={img.previewUrl ?? img.thumbUrl ?? img.url ?? ""}
-                          alt={imgKey}
-                          className="w-full h-48 object-cover"
-                          onError={(e) => {
-                            // Fallback to thumbUrl if previewUrl fails
-                            if (
-                              img.previewUrl &&
-                              img.thumbUrl &&
-                              e.currentTarget.src === img.previewUrl
-                            ) {
-                              e.currentTarget.src = img.thumbUrl;
-                            } else if (
-                              img.thumbUrl &&
-                              img.url &&
-                              e.currentTarget.src === img.thumbUrl
-                            ) {
-                              e.currentTarget.src = img.url;
-                            }
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          ) : selectedKeys.length === 0 ? (
-            // Selection gallery but no selectedKeys yet
-            // If order has a delivery status that suggests photos should exist, show all images as fallback
-            (order.deliveryStatus === "CLIENT_APPROVED" ||
-              order.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
-              order.deliveryStatus === "PREPARING_DELIVERY" ||
-              order.deliveryStatus === "DELIVERED") &&
-            originalImages.length > 0 ? (
-              // Legacy order or missing selectedKeys - show all images as fallback
-              <div className="space-y-2">
-                <div className="p-2 bg-info-50 border border-info-200 rounded-lg dark:bg-info-500/10 dark:border-info-500/20">
-                  <p className="text-xs text-info-800 dark:text-info-200">
-                    Uwaga: Zlecenie nie ma zapisanych wybranych kluczy. Wyświetlane są wszystkie
-                    zdjęcia.
-                  </p>
-                </div>
-                <div className="grid grid-cols-4 gap-4">
-                  {originalImages.map((img, idx) => {
-                    const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
-                    return (
-                      <div
-                        key={imgKey ?? idx}
-                        className="relative border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={img.previewUrl ?? img.thumbUrl ?? img.url ?? ""}
-                          alt={imgKey}
-                          className="w-full h-48 object-cover"
-                          onError={(e) => {
-                            if (
-                              img.previewUrl &&
-                              img.thumbUrl &&
-                              e.currentTarget.src === img.previewUrl
-                            ) {
-                              e.currentTarget.src = img.thumbUrl;
-                            } else if (
-                              img.thumbUrl &&
-                              img.url &&
-                              e.currentTarget.src === img.thumbUrl
-                            ) {
-                              e.currentTarget.src = img.url;
-                            }
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                <p>Klient nie wybrał jeszcze żadnych zdjęć.</p>
-                {order.deliveryStatus && order.deliveryStatus !== "CLIENT_SELECTING" && (
-                  <p className="mt-2 text-xs text-gray-400">
-                    Status zlecenia: {order.deliveryStatus}
-                  </p>
-                )}
-              </div>
-            )
-          ) : (
-            // Selection gallery with selectedKeys: show filtered images
-            <>
-              {originalImages.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                  <p>Ładowanie zdjęć...</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-4">
-                  {originalImages
-                    .filter((img) => {
-                      // Try multiple key fields and normalize for comparison
-                      const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
-                      // Normalize selectedKeys for comparison (handle URL encoding, spaces, etc.)
-                      const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
-                      return normalizedSelectedKeys.includes(imgKey);
-                    })
-                    .map((img, idx) => {
-                      const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
-                      return (
-                        <div
-                          key={imgKey ?? idx}
-                          className="relative border-2 border-brand-500 ring-2 ring-brand-200 rounded-lg overflow-hidden"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={img.previewUrl ?? img.thumbUrl ?? img.url ?? ""}
-                            alt={imgKey}
-                            className="w-full h-48 object-cover"
-                            onError={(e) => {
-                              // Fallback to thumbUrl if previewUrl fails
-                              if (
-                                img.previewUrl &&
-                                img.thumbUrl &&
-                                e.currentTarget.src === img.previewUrl
-                              ) {
-                                e.currentTarget.src = img.thumbUrl;
-                              } else if (
-                                img.thumbUrl &&
-                                img.url &&
-                                e.currentTarget.src === img.thumbUrl
-                              ) {
-                                e.currentTarget.src = img.url;
-                              }
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-              {selectedKeys.length > 0 &&
-                originalImages.length > 0 &&
-                originalImages.filter((img) => {
-                  const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
-                  const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
-                  return normalizedSelectedKeys.includes(imgKey);
-                }).length === 0 && (
-                  <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-                    <p className="text-sm text-warning-800 dark:text-warning-200">
-                      Nie znaleziono zdjęć pasujących do wybranych kluczy. Wybrane klucze:{" "}
-                      {selectedKeys.slice(0, 5).join(", ")}
-                      {selectedKeys.length > 5 ? "..." : ""}
-                    </p>
-                    <p className="text-xs text-warning-600 dark:text-warning-400 mt-1">
-                      Dostępne zdjęcia: {originalImages.length} | Wybrane klucze:{" "}
-                      {selectedKeys.length}
-                    </p>
-                  </div>
-                )}
-            </>
-          )}
-        </div>
+        <OriginalsTab
+          images={originalImages}
+          selectedKeys={selectedKeys}
+          selectionEnabled={selectionEnabled}
+          deliveryStatus={order.deliveryStatus}
+        />
       )}
 
-      {/* Show finals content when:
-			     - Selection is disabled (always show finals)
-			     - Selected section is hidden (finals uploaded - only show finals)
-			     - Selection enabled and selected section visible, but user is on finals tab
-			*/}
       {(!(selectionEnabled && !hideSelectedSection) || activeTab === "finals") && (
-        <div className="space-y-4">
-          {/* Show unpaid message if gallery is not paid */}
-          {!isGalleryPaid && (
-            <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                    Galeria nieopublikowana
-                  </div>
-                  <div className="text-xs text-warning-600 dark:text-warning-400">
-                    Nie możesz przesłać zdjęć finalnych, ponieważ galeria nie została opublikowana.
-                    Opublikuj galerię aby kontynuować.
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={handlePayClick}
-                  disabled={paymentLoading}
-                >
-                  {paymentLoading ? "Przetwarzanie..." : "Opublikuj galerię"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Upload Progress Bar */}
-          {uploading && uploadProgress.total > 0 && (
-            <div className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-3 flex-1">
-                  <Loading size="sm" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        Przesyłanie zdjęć finalnych...
-                      </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {uploadProgress.current} / {uploadProgress.total}
-                      </span>
-                    </div>
-                    {uploadProgress.currentFileName && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {uploadProgress.currentFileName}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={cancelUpload}
-                  className="ml-4 px-3 py-1.5 text-sm font-medium text-error-600 dark:text-error-400 hover:text-error-700 dark:hover:text-error-300 border border-error-300 dark:border-error-700 rounded-md hover:bg-error-50 dark:hover:bg-error-900/20 transition-colors"
-                >
-                  Anuluj
-                </button>
-              </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-brand-500 h-2 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
-                  }}
-                />
-              </div>
-              {uploadProgress.errors.length > 0 && (
-                <div className="mt-2 text-xs text-error-600 dark:text-error-400">
-                  Błędy: {uploadProgress.errors.length} | Sukcesy: {uploadProgress.successes}
-                </div>
-              )}
-            </div>
-          )}
-
-          {canUploadFinals && (
-            <FileUploadZone
-              onFileSelect={handleFileSelect}
-              uploading={uploading}
-              accept="image/*"
-              multiple={true}
-            >
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-                stroke="currentColor"
-                fill="none"
-                viewBox="0 0 48 48"
-                aria-hidden="true"
-              >
-                <path
-                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <div className="mt-4">
-                <p className="text-base font-medium text-gray-900 dark:text-white">
-                  Przeciągnij zdjęcia tutaj lub kliknij, aby wybrać
-                </p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Obsługiwane formaty: JPG, PNG, GIF
-                </p>
-              </div>
-              {gallery && (gallery.finalsLimitBytes as number | undefined) && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <StorageDisplay
-                    bytesUsed={
-                      optimisticFinalsBytes ?? (gallery.finalsBytesUsed as number | undefined) ?? 0
-                    }
-                    limitBytes={gallery.finalsLimitBytes as number}
-                    label="Finalne"
-                    isLoading={optimisticFinalsBytes !== null && loading}
-                  />
-                </div>
-              )}
-            </FileUploadZone>
-          )}
-
-          {finalImages.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              Brak zdjęć finalnych
-            </div>
-          ) : (
-            <div className="grid grid-cols-4 gap-4">
-              {finalImages.map((img, idx) => {
-                const imageKey = img.key ?? img.filename ?? "";
-
-                return (
-                  <div
-                    key={imageKey ?? idx}
-                    className="relative group border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-brand-500 dark:hover:border-brand-400 transition-colors"
-                  >
-                    <div className="aspect-square relative">
-                      <RetryableImage
-                        src={img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? ""}
-                        alt={imageKey}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                      {canUploadFinals && (
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteFinalImageClick(img);
-                            }}
-                            disabled={deletingImages.has(imageKey)}
-                            className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                              deletingImages.has(imageKey)
-                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                : "bg-error-500 text-white hover:bg-error-600"
-                            }`}
-                            title={deletingImages.has(imageKey) ? "Usuwanie..." : "Usuń zdjęcie"}
-                          >
-                            {deletingImages.has(imageKey) ? "Usuwanie..." : "Usuń"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                        {imageKey}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <FinalsTab
+          images={finalImages}
+          gallery={gallery}
+          canUpload={canUploadFinals}
+          isGalleryPaid={isGalleryPaid}
+          uploading={uploading}
+          uploadProgress={uploadProgress}
+          optimisticFinalsBytes={optimisticFinalsBytes}
+          deletingImages={deletingImages}
+          loading={loading}
+          onFileSelect={handleFileSelect}
+          onCancelUpload={cancelUpload}
+          onDeleteImage={handleDeleteFinalImageClick}
+          onPayClick={handlePayClick}
+          paymentLoading={paymentLoading}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -1649,25 +779,11 @@ export default function OrderDetail() {
       )}
 
       {/* Upload Progress Overlay */}
-      {(() => {
-        const currentProgress =
-          handlerPerImageProgress.length > 0 ? handlerPerImageProgress : perImageProgress;
-
-        if (currentProgress.length === 0 || isOverlayDismissed) {
-          return null;
-        }
-
-        return (
-          <UploadProgressOverlay
-            images={currentProgress}
-            isUploadComplete={isUploadComplete}
-            onDismiss={() => {
-              setIsOverlayDismissed(true);
-              setPerImageProgress([]);
-            }}
-          />
-        );
-      })()}
+      <UploadProgressWrapper
+        handlerPerImageProgress={handlerPerImageProgress}
+        perImageProgress={perImageProgress}
+        isUploadComplete={isUploadComplete}
+      />
 
       {/* Payment Confirmation Modal */}
       {paymentDetails && (

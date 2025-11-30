@@ -828,6 +828,31 @@ class ApiService {
     },
 
     /**
+     * Get order status (lightweight endpoint for refreshing status after uploads/deletes)
+     */
+    getOrderStatus: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      orderId: string;
+      galleryId: string;
+      deliveryStatus: string;
+      paymentStatus: string;
+      amount: number;
+      state: string;
+      createdAt: string;
+      updatedAt: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/status`);
+    },
+
+    /**
      * Get final images for an order
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

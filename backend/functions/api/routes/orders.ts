@@ -3,6 +3,7 @@ import { wrapHandler } from './handlerWrapper';
 import * as ordersList from '../../../functions/orders/list';
 import * as ordersListAll from '../../../functions/orders/listAll';
 import * as ordersGet from '../../../functions/orders/get';
+import * as ordersGetStatus from '../../../functions/orders/getStatus';
 import * as ordersDownloadZip from '../../../functions/orders/downloadZip';
 import * as ordersMarkPaid from '../../../functions/orders/markPaid';
 import * as ordersMarkPartiallyPaid from '../../../functions/orders/markPartiallyPaid';
@@ -27,6 +28,7 @@ router.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
 // orders/delivered route is registered as public route in index.ts (no requireAuth)
 // router.get('/galleries/:id/orders/delivered', wrapHandler(ordersListDelivered.handler));
 router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
+router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));
 // orders/:orderId/zip route is registered as public route in index.ts (no requireAuth)
 // router.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));

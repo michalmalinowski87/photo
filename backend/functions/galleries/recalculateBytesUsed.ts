@@ -37,10 +37,12 @@ export async function calculateOriginalsSize(bucket: string, galleryId: string):
 	return totalSize;
 }
 
-export async function calculateFinalsSize(bucket: string, galleryId: string): Promise<number> {
+export async function calculateFinalsSize(bucket: string, galleryId: string, logger?: any): Promise<number> {
 	let totalSize = 0;
 	let continuationToken: string | undefined;
 	const prefix = `galleries/${galleryId}/final/`;
+	const includedFiles: Array<{ key: string; size: number }> = [];
+	const excludedFiles: Array<{ key: string; size: number; reason: string }> = [];
 
 	do {
 		const listResponse = await s3.send(new ListObjectsV2Command({
@@ -53,21 +55,49 @@ export async function calculateFinalsSize(bucket: string, galleryId: string): Pr
 			// Only count final images directly under order directories, exclude previews/thumbs in subdirectories
 			// Structure: galleries/{galleryId}/final/{orderId}/{filename}
 			// We want to exclude: galleries/{galleryId}/final/{orderId}/previews/... and .../thumbs/...
-			totalSize += listResponse.Contents
-				.filter(obj => {
-					const key = obj.Key || '';
-					const relativePath = key.replace(prefix, '');
-					// Count only files directly under order directories (not in previews/ or thumbs/ subdirectories)
-					// A valid path should be: {orderId}/{filename} with no additional slashes
-					const pathParts = relativePath.split('/');
-					// Should have exactly 2 parts: orderId and filename
-					return pathParts.length === 2 && pathParts[0] && pathParts[1];
-				})
-				.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+			const filtered = listResponse.Contents.filter(obj => {
+				const key = obj.Key || '';
+				const relativePath = key.replace(prefix, '');
+				// Count only files directly under order directories (not in previews/ or thumbs/ subdirectories)
+				// A valid path should be: {orderId}/{filename} with no additional slashes
+				const pathParts = relativePath.split('/');
+				// Should have exactly 2 parts: orderId and filename
+				const isValid = pathParts.length === 2 && pathParts[0] && pathParts[1];
+				
+				if (obj.Size && obj.Size > 0) {
+					if (isValid) {
+						includedFiles.push({ key, size: obj.Size });
+					} else {
+						excludedFiles.push({ 
+							key, 
+							size: obj.Size, 
+							reason: `pathParts.length=${pathParts.length}, parts: [${pathParts.join(', ')}]` 
+						});
+					}
+				}
+				return isValid;
+			});
+			
+			totalSize += filtered.reduce((sum, obj) => sum + (obj.Size || 0), 0);
 		}
 
 		continuationToken = listResponse.NextContinuationToken;
 	} while (continuationToken);
+
+	// Log all included and excluded files for debugging
+	logger?.info('calculateFinalsSize - Included files', { 
+		galleryId, 
+		count: includedFiles.length, 
+		files: includedFiles,
+		totalSize 
+	});
+	if (excludedFiles.length > 0) {
+		logger?.info('calculateFinalsSize - Excluded files', { 
+			galleryId, 
+			count: excludedFiles.length, 
+			files: excludedFiles 
+		});
+	}
 
 	return totalSize;
 }
@@ -230,8 +260,8 @@ export async function recalculateStorageInternal(
 	}
 
 	try {
-		finalsSize = await calculateFinalsSize(bucket, galleryId);
-		logger?.info('Calculated finals size from S3', { galleryId, finalsSize });
+		finalsSize = await calculateFinalsSize(bucket, galleryId, logger);
+		logger?.info('Calculated finals size from S3', { galleryId, finalsSize, bucket });
 	} catch (err: any) {
 		logger?.error('Failed to calculate finals size', {
 			error: err.message,

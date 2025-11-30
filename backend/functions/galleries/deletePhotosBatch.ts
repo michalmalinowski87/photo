@@ -22,30 +22,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// For final images, also verify order exists
-	if (type === 'final' && ordersTable) {
-		if (!orderId) {
-			return {
-				statusCode: 400,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'orderId is required for final image deletions' })
-			};
-		}
-
-		const orderGet = await ddb.send(new GetCommand({
-			TableName: ordersTable,
-			Key: { galleryId, orderId }
-		}));
-
-		if (!orderGet.Item) {
-			return {
-				statusCode: 404,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Order not found' })
-			};
-		}
-	}
-
+	// Extract parameters from event FIRST (before using them)
 	const galleryId = event?.pathParameters?.id;
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const filenames = body.filenames || [];
@@ -66,6 +43,30 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'orderId is required for final image deletions' })
+		};
+	}
+
+	// For final images, also verify order exists
+	if (type === 'final' && ordersTable && orderId) {
+		const orderGet = await ddb.send(new GetCommand({
+			TableName: ordersTable,
+			Key: { galleryId, orderId }
+		}));
+
+		if (!orderGet.Item) {
+			return {
+				statusCode: 404,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Order not found' })
+			};
+		}
+	}
+
+	if (!galleryId || !Array.isArray(filenames) || filenames.length === 0) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'galleryId and filenames array are required' })
 		};
 	}
 
@@ -116,6 +117,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Invoke batch delete Lambda directly
 	try {
+		logger.info('Invoking batch delete Lambda', {
+			galleryId,
+			type,
+			orderId,
+			count: filenames.length,
+			deleteBatchFnName
+		});
+
 		await lambda.send(new InvokeCommand({
 			FunctionName: deleteBatchFnName,
 			InvocationType: 'Event', // Async invocation - don't wait for completion
@@ -125,14 +134,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			})
 		}));
 
-		logger.info('Invoked batch delete Lambda for multiple photo deletions', {
+		logger.info('Successfully invoked batch delete Lambda for multiple photo deletions', {
 			galleryId,
+			type,
+			orderId,
 			count: filenames.length
 		});
 	} catch (err: any) {
 		logger.error('Failed to invoke batch delete Lambda', {
 			error: err.message,
 			galleryId,
+			type,
+			orderId,
 			count: filenames.length
 		});
 		return {
@@ -143,10 +156,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Get current gallery state to return (recalculation will happen asynchronously)
+	// Note: This returns current DB state, which may not reflect deletions yet (async processing)
+	logger.info('Fetching current gallery state to return', {
+		galleryId,
+		type
+	});
 	const updatedGallery = await ddb.send(new GetCommand({
 		TableName: galleriesTable,
 		Key: { galleryId }
 	}));
+
+	logger.info('Current gallery state from DB', {
+		galleryId,
+		type,
+		originalsBytesUsed: updatedGallery.Item?.originalsBytesUsed,
+		finalsBytesUsed: updatedGallery.Item?.finalsBytesUsed,
+		bytesUsed: updatedGallery.Item?.bytesUsed,
+	});
 
 	if (type === 'final') {
 		const updatedFinalsBytesUsed = Math.max(updatedGallery.Item?.finalsBytesUsed || 0, 0);

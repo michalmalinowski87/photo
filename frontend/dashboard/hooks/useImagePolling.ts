@@ -181,6 +181,20 @@ export function useImagePolling(config: UseImagePollingConfig) {
               pollingTimeoutRef.current = null;
             }
 
+            // eslint-disable-next-line no-console
+            console.log("[useImagePolling] Processing complete", {
+              type: config.type,
+              galleryId: config.galleryId,
+              orderId: config.orderId,
+              attempts,
+              maxAttempts,
+              hasNewImages,
+              expectedNewImageCount,
+              capturedUploadSuccesses,
+              currentOriginalsBytes: useGalleryStore.getState().currentGallery?.originalsBytesUsed,
+              currentFinalsBytes: useGalleryStore.getState().currentGallery?.finalsBytesUsed,
+            });
+
             if (attempts < maxAttempts) {
               const typeLabel = config.type === "finals" ? "zdjęć finalnych" : "zdjęć";
               showToast(
@@ -197,6 +211,10 @@ export function useImagePolling(config: UseImagePollingConfig) {
               // Wait a bit for backend to process images
               setTimeout(async () => {
                 try {
+                  // eslint-disable-next-line no-console
+                  console.log("[useImagePolling] Validating upload limits for originals", {
+                    galleryId: config.galleryId,
+                  });
                   // Only validate limits if we need to check for excess (optimistic updates already handled UI)
                   // This prevents unnecessary API calls and flicker
                   const validationResult = await api.galleries.validateUploadLimits(
@@ -204,6 +222,11 @@ export function useImagePolling(config: UseImagePollingConfig) {
                   );
 
                   if (!validationResult.withinLimit && validationResult.excessBytes !== undefined) {
+                    // eslint-disable-next-line no-console
+                    console.log("[useImagePolling] Upload limits exceeded", {
+                      galleryId: config.galleryId,
+                      excessBytes: validationResult.excessBytes,
+                    });
                     config.onValidationNeeded?.({
                       uploadedSizeBytes: validationResult.uploadedSizeBytes,
                       originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
@@ -215,12 +238,19 @@ export function useImagePolling(config: UseImagePollingConfig) {
                     });
                   }
                 } catch (validationError) {
-                  console.error("Failed to validate upload limits:", validationError);
+                  // eslint-disable-next-line no-console
+                  console.error("[useImagePolling] Failed to validate upload limits:", validationError);
                 }
               }, 1000); // Wait for backend to finish processing
             }
 
             if (config.onUploadComplete) {
+              // eslint-disable-next-line no-console
+              console.log("[useImagePolling] Calling onUploadComplete callback", {
+                type: config.type,
+                galleryId: config.galleryId,
+                orderId: config.orderId,
+              });
               config.onUploadComplete();
             }
 

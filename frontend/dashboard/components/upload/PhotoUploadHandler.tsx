@@ -78,6 +78,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
   const uploadCancelRef = useRef(false);
   const fileToKeyMapRef = useRef<Map<string, string>>(new Map());
   const fileNameToFileMapRef = useRef<Map<string, File>>(new Map()); // Track File objects by filename
+  const hasTriggeredRecalculationRef = useRef(false); // Guard to ensure recalculation is only called once per batch
 
   // Initialize hooks
   const { fetchPresignedUrls } = usePresignedUrls({
@@ -204,6 +205,7 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
       config.onPerImageProgress?.(initialProgress);
       fileToKeyMapRef.current.clear();
       fileNameToFileMapRef.current.clear();
+      hasTriggeredRecalculationRef.current = false; // Reset guard for new upload batch
       
       // Store File objects for later use
       imageFiles.forEach((file) => {
@@ -265,20 +267,44 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
         }
 
         // Handle completion based on type
-        if (uploadSuccesses > 0 && !uploadCancelRef.current) {
-          // TRIGGER 1: Silent recalculation immediately after uploads complete (before processing)
+        if (uploadSuccesses > 0 && !uploadCancelRef.current && !hasTriggeredRecalculationRef.current) {
+          // TRIGGER 1: Silent recalculation immediately after ALL uploads complete (before processing)
           // This updates storage values as soon as files are in S3, without UI notification
+          // Guard ensures this is only called once per upload batch
+          hasTriggeredRecalculationRef.current = true;
+          
+          // eslint-disable-next-line no-console
+          console.log("[PhotoUploadHandler] All uploads complete, triggering recalculation", {
+            type: config.type,
+            galleryId: config.galleryId,
+            orderId: config.orderId,
+            uploadSuccesses,
+            currentOriginalsBytes: useGalleryStore.getState().currentGallery?.originalsBytesUsed,
+            currentFinalsBytes: useGalleryStore.getState().currentGallery?.finalsBytesUsed,
+          });
+          
           const { refreshGalleryBytesOnly } = useGalleryStore.getState();
           void refreshGalleryBytesOnly(config.galleryId, true); // forceRecalc = true, silent (no loading state)
 
           if (config.type === "finals") {
-            // Mark final upload complete (also triggers recalculation on backend)
+            // eslint-disable-next-line no-console
+            console.log("[PhotoUploadHandler] Finals upload complete, marking upload-complete endpoint", {
+              galleryId: config.galleryId,
+              orderId: config.orderId,
+            });
+            // Mark final upload complete (also triggers recalculation on backend and updates order status)
             try {
               const orderId = config.orderId ?? "";
               await api.uploads.markFinalUploadComplete(config.galleryId, orderId);
-              if (config.loadOrderData) {
-                await config.loadOrderData();
-              }
+              // eslint-disable-next-line no-console
+              console.log("[PhotoUploadHandler] Finals upload-complete endpoint called successfully", {
+                galleryId: config.galleryId,
+                orderId,
+              });
+              // Don't call loadOrderData here - it would fetch stale gallery data and overwrite the correct bytes
+              // The refreshGalleryBytesOnly call above already updates the bytes correctly
+              // Order status will be refreshed when processing completes (via onUploadComplete callback)
+              // The onOrderUpdated callback can be used to refresh order status if needed
               if (config.onOrderUpdated && orderId) {
                 setTimeout(() => {
                   if (config.onOrderUpdated && orderId) {
@@ -286,7 +312,13 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
                   }
                 }, 100);
               }
-            } catch (_completeErr) {
+            } catch (completeErr) {
+              // eslint-disable-next-line no-console
+              console.error("[PhotoUploadHandler] Failed to mark finals upload complete", {
+                error: completeErr,
+                galleryId: config.galleryId,
+                orderId: config.orderId,
+              });
               showToast(
                 "warning",
                 "Ostrzeżenie",
