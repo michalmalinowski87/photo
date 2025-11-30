@@ -2,8 +2,8 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
 
-import { GalleryPricingModal } from "../../../../components/galleries/GalleryPricingModal";
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
+import { PublishGalleryWizard } from "../../../../components/galleries/PublishGalleryWizard";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
 import Badge from "../../../../components/ui/badge/Badge";
 import Button from "../../../../components/ui/button/Button";
@@ -21,7 +21,6 @@ import { useGallery } from "../../../../context/GalleryContext";
 import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
-import { getPricingModalData } from "../../../../lib/calculate-plan";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../../lib/currency";
 import { formatPrice } from "../../../../lib/format-price";
 import {
@@ -29,7 +28,6 @@ import {
   calculateSizeDelta,
   revertOptimisticUpdate,
 } from "../../../../lib/optimistic-updates";
-import type { PricingModalData } from "../../../../lib/plan-types";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
@@ -121,7 +119,6 @@ export default function OrderDetail() {
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
   const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
 
   // Define functions first (before useEffect hooks that use them)
@@ -592,23 +589,11 @@ export default function OrderDetail() {
 
   // Polling cleanup is handled by usePhotoUploadHandler hook
 
-  const handlePayClick = async (): Promise<void> => {
+  const handlePayClick = (): void => {
     if (!galleryId || paymentLoading) {
       return;
     }
-
-    setPaymentLoading(true);
-
-    try {
-      // Always calculate plan first - this will determine the best plan based on uploaded photos
-      const modalData = await getPricingModalData(galleryId as string);
-      setPricingModalData(modalData);
-      setPaymentLoading(false);
-    } catch (err) {
-      const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg ?? "Nie udało się obliczyć planu. Spróbuj ponownie.");
-      setPaymentLoading(false);
-    }
+    setShowPaymentModal(true);
   };
 
   const handlePaymentConfirm = async (): Promise<void> => {
@@ -1699,25 +1684,14 @@ export default function OrderDetail() {
       />
 
       {/* Pricing Modal - Show when user clicks publish gallery */}
-      {pricingModalData && (
-        <GalleryPricingModal
-          isOpen={!!pricingModalData}
+      {galleryId && (
+        <PublishGalleryWizard
+          isOpen={showPaymentModal}
           onClose={() => {
-            setPricingModalData(null);
+            setShowPaymentModal(false);
           }}
           galleryId={galleryId as string}
-          suggestedPlan={pricingModalData.suggestedPlan}
-          originalsLimitBytes={pricingModalData.originalsLimitBytes}
-          finalsLimitBytes={pricingModalData.finalsLimitBytes}
-          uploadedSizeBytes={pricingModalData.uploadedSizeBytes}
-          selectionEnabled={pricingModalData.selectionEnabled}
-          usagePercentage={pricingModalData.usagePercentage}
-          isNearCapacity={pricingModalData.isNearCapacity}
-          isAtCapacity={pricingModalData.isAtCapacity}
-          exceedsLargestPlan={pricingModalData.exceedsLargestPlan}
-          nextTierPlan={pricingModalData.nextTierPlan ?? undefined}
-          onPlanSelected={async () => {
-            setPricingModalData(null);
+          onSuccess={async () => {
             // Reload gallery data to update payment status
             if (reloadGallery) {
               await reloadGallery();

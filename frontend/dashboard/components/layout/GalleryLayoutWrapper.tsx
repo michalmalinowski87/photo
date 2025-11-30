@@ -13,8 +13,8 @@ import { useGalleryStore } from "../../store/gallerySlice";
 import { useOrderStore, type Order as StoreOrder } from "../../store/orderSlice";
 import { useUserStore } from "../../store/userSlice";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
-import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
+import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
 import { CleanupOriginalsModal } from "../orders/CleanupOriginalsModal";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
 import { FullPageLoading } from "../ui/loading/Loading";
@@ -572,7 +572,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       <ClientSendSuccessPopup
         isOpen={showClientSendPopup}
         onClose={() => setShowClientSendPopup(false)}
-        galleryName={gallery?.galleryName as string | undefined}
+        galleryName={gallery?.galleryName}
       />
     </GalleryProvider>
   );

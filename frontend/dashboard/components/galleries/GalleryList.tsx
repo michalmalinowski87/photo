@@ -1,18 +1,18 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
-import { getPricingModalData } from "../../lib/calculate-plan";
-import type { PricingModalData } from "../../lib/plan-types";
+import { useGalleryStore } from "../../store/gallerySlice";
 import { useUserStore } from "../../store/userSlice";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
-import { GalleryPricingModal } from "./GalleryPricingModal";
+import { PublishGalleryWizard } from "./PublishGalleryWizard";
 
 interface Gallery {
   galleryId: string;
@@ -40,11 +40,17 @@ interface GalleryListProps {
     | "gotowe-do-wysylki"
     | "dostarczone";
   onLoadingChange?: (loading: boolean, initialLoad: boolean) => void;
+  onWizardOpenChange?: (isOpen: boolean) => void;
 }
 
-const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingChange }) => {
-  const [loading, setLoading] = useState(true); // Start with true to prevent flicker
-  const [initialLoad, setInitialLoad] = useState(true); // Track if this is the initial load
+const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingChange, onWizardOpenChange }) => {
+  const router = useRouter();
+  const publishWizardOpen = useGalleryStore((state) => state.publishWizardOpen);
+  const publishWizardGalleryId = useGalleryStore((state) => state.publishWizardGalleryId);
+  const publishWizardState = useGalleryStore((state) => state.publishWizardState);
+  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
+  const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState("");
 
   interface WalletBalanceResponse {
@@ -58,10 +64,8 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   }
 
   const [galleries, setGalleries] = useState<Gallery[]>([]);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
-  const [pricingModalData, setPricingModalData] = useState<PricingModalData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [selectedGalleryIdForLoading, setSelectedGalleryIdForLoading] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -94,14 +98,13 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
       const response = await api.galleries.list();
       const galleriesList = Array.isArray(response) ? response : response.items ?? [];
       
-      // Apply filter client-side if needed (api-service doesn't support filter param yet)
+      // Apply filter client-side
       let filteredGalleries = galleriesList;
       if (filter) {
         filteredGalleries = galleriesList.filter((gallery: Gallery) => {
           if (filter === "unpaid") {
             return gallery.isPaid === false;
           }
-          // Add other filter logic as needed
           return true;
         });
       }
@@ -156,21 +159,10 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, initialLoad]);
 
-  const handlePayClick = async (galleryId: string) => {
-    setSelectedGalleryId(galleryId);
-    setPaymentLoading(true);
-
-    try {
-      // Get plan recommendation data
-      const modalData = await getPricingModalData(galleryId);
-      setPricingModalData(modalData);
-      setShowPaymentModal(true);
-    } catch (err) {
-      const errorMsg = formatApiError(err);
-      showToast("error", "Błąd", errorMsg ?? "Nie udało się przygotować płatności");
-    } finally {
-      setPaymentLoading(false);
-    }
+  const handlePayClick = (galleryId: string) => {
+    setSelectedGalleryIdForLoading(galleryId);
+    setPublishWizardOpen(true, galleryId);
+    onWizardOpenChange?.(true);
   };
 
   const handlePaymentComplete = async () => {
@@ -238,7 +230,24 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
   };
 
   return (
-    <div className="space-y-4">
+    <>
+      {publishWizardOpen && publishWizardGalleryId && (
+        <PublishGalleryWizard
+            key={publishWizardGalleryId}
+            isOpen={publishWizardOpen}
+            onClose={() => {
+              setPublishWizardOpen(false);
+              setPaymentLoading(false);
+              onWizardOpenChange?.(false);
+            }}
+            galleryId={publishWizardGalleryId}
+            onSuccess={handlePaymentComplete}
+            renderAsModal={false}
+          initialState={publishWizardState}
+        />
+      )}
+      {!publishWizardOpen && (
+        <div className="space-y-4">
       {error && (
         <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
           {error}
@@ -357,7 +366,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
                           onClick={() => handlePayClick(gallery.galleryId)}
                           disabled={paymentLoading}
                         >
-                          {paymentLoading && selectedGalleryId === gallery.galleryId
+                          {paymentLoading && selectedGalleryIdForLoading === gallery.galleryId
                             ? "Przetwarzanie..."
                             : "Opłać galerię"}
                         </Button>
@@ -394,29 +403,24 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         </div>
       )}
 
-      {/* Payment Confirmation Modal */}
-      {pricingModalData && selectedGalleryId && (
-        <GalleryPricingModal
-          isOpen={showPaymentModal}
-          onClose={() => {
-            setShowPaymentModal(false);
-            setPaymentLoading(false);
-            setSelectedGalleryId(null);
-            setPricingModalData(null);
-          }}
-          galleryId={selectedGalleryId}
-          suggestedPlan={pricingModalData.suggestedPlan}
-          originalsLimitBytes={pricingModalData.originalsLimitBytes}
-          finalsLimitBytes={pricingModalData.finalsLimitBytes}
-          uploadedSizeBytes={pricingModalData.uploadedSizeBytes}
-          selectionEnabled={pricingModalData.selectionEnabled}
-          usagePercentage={pricingModalData.usagePercentage}
-          isNearCapacity={pricingModalData.isNearCapacity}
-          isAtCapacity={pricingModalData.isAtCapacity}
-          exceedsLargestPlan={pricingModalData.exceedsLargestPlan}
-          nextTierPlan={pricingModalData.nextTierPlan}
-          onPlanSelected={handlePaymentComplete}
-        />
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          if (!deleteLoading) {
+            setShowDeleteDialog(false);
+            setGalleryToDelete(null);
+          }
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń galerię"
+        message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName ?? galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        confirmText="Usuń galerię"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={deleteLoading}
+      />
+        </div>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -436,7 +440,7 @@ const GalleryList: React.FC<GalleryListProps> = ({ filter = "unpaid", onLoadingC
         variant="danger"
         loading={deleteLoading}
       />
-    </div>
+    </>
   );
 };
 

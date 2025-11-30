@@ -65,24 +65,32 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     (router.query.publish === "true" && router.query.galleryId === gallery?.galleryId)
   );
 
-  // Load tutorial preference
-  useEffect(() => {
-    const loadPreference = async () => {
-      try {
-        const businessInfo = await api.auth.getBusinessInfo();
-        const disabled =
-          businessInfo.tutorialNextStepsDisabled === true ||
-          businessInfo.tutorialClientSendDisabled === true;
-        setTutorialDisabled(disabled);
-      } catch (error) {
-        console.error("Failed to load tutorial preference:", error);
-        // Default to showing if we can't load preference
-        setTutorialDisabled(false);
-      }
-    };
+  // Load tutorial preference - deferred until overlay is expanded or user interacts
+  const loadTutorialPreference = useCallback(async () => {
+    // Check if we already have the preference cached
+    if (tutorialDisabled !== null) {
+      return; // Already loaded
+    }
 
-    void loadPreference();
-  }, []);
+    try {
+      const businessInfo = await api.auth.getBusinessInfo();
+      const disabled =
+        businessInfo.tutorialNextStepsDisabled === true ||
+        businessInfo.tutorialClientSendDisabled === true;
+      setTutorialDisabled(disabled);
+    } catch (error) {
+      console.error("Failed to load tutorial preference:", error);
+      // Default to showing if we can't load preference
+      setTutorialDisabled(false);
+    }
+  }, [tutorialDisabled]);
+
+  // Load preference when overlay is expanded (user shows interest)
+  useEffect(() => {
+    if (nextStepsOverlayExpanded && tutorialDisabled === null) {
+      void loadTutorialPreference();
+    }
+  }, [nextStepsOverlayExpanded, tutorialDisabled, loadTutorialPreference]);
 
   // Calculate steps with debouncing to prevent flickering
   // Use optimistic bytes if available for immediate updates
@@ -321,6 +329,11 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   }, [allCompleted, nextStepsOverlayExpanded, gallery, galleryLoading, steps.length, setNextStepsOverlayExpanded]);
 
   const handleDontShowAgain = async (): Promise<void> => {
+    // Load preference first if not loaded (needed for update)
+    if (tutorialDisabled === null) {
+      await loadTutorialPreference();
+    }
+
     setIsSavingPreference(true);
     try {
       await api.auth.updateBusinessInfo({

@@ -190,11 +190,10 @@ export function useImagePolling(config: UseImagePollingConfig) {
               );
             }
 
-            // For originals, validate limits and reload gallery AFTER polling completes
+            // For originals, validate limits and silently refresh gallery bytes AFTER polling completes
             if (
               config.type === "originals" &&
-              capturedUploadSuccesses > 0 &&
-              config.reloadGallery
+              capturedUploadSuccesses > 0
             ) {
               // Wait a bit for backend to process images and update originalsBytesUsed
               // Reduced delay for faster UI updates - backend should be quick to update
@@ -221,23 +220,11 @@ export function useImagePolling(config: UseImagePollingConfig) {
                   console.error("Failed to validate upload limits:", validationError);
                 }
 
-                // Reload gallery to update byte usage (only after all uploads complete)
-                // This is the only place we reload gallery during uploads - optimistic updates handle the rest
-                if (config.reloadGallery) {
-                  await config.reloadGallery();
-                  // Dispatch event to notify components and clear optimistic state if it matches
-                  // Mark as refreshAfterUpload to prevent sidebar from making unnecessary calculate-plan calls
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(
-                      new CustomEvent("galleryUpdated", {
-                        detail: {
-                          galleryId: config.galleryId,
-                          refreshAfterUpload: true, // Signal that this is a refresh after upload completion
-                        },
-                      })
-                    );
-                  }
-                }
+                // Use silent refresh to update byte usage without triggering loading state
+                // This prevents screen blink while still syncing the actual bytes used
+                const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+                await refreshGalleryBytesOnly(config.galleryId);
+                // Note: refreshGalleryBytesOnly already dispatches galleryUpdated event with refreshAfterUpload flag
               }, 1000); // Reduced from 2000ms to 1000ms - backend should update quickly
             }
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { getPlanRecommendation } from "../../lib/calculate-plan";
 import type { PlanRecommendation } from "../../lib/plan-types";
@@ -156,14 +156,40 @@ export default function GallerySidebar({
       });
   }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
 
-  // Listen for gallery updates (e.g., after uploads/deletions) with optimistic updates
+  // Function to manually trigger plan calculation (deferred until needed)
+  const calculatePlanRecommendation = useCallback(async () => {
+    if (galleryLoading || isPaid || !gallery?.galleryId || isLoadingPlanRecommendation) {
+      return;
+    }
+
+    setIsLoadingPlanRecommendation(true);
+    try {
+      const recommendation = await getPlanRecommendation(gallery.galleryId);
+      if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
+        setPlanRecommendation(null);
+        setOptimisticBytesUsed(0);
+      } else {
+        setPlanRecommendation(recommendation);
+        setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
+      }
+    } catch (error) {
+      console.error("Failed to calculate plan recommendation:", error);
+      const galleryBytes = (gallery.originalsBytesUsed as number | undefined) ?? 0;
+      if (galleryBytes === 0) {
+        setPlanRecommendation(null);
+        setOptimisticBytesUsed(0);
+      }
+    } finally {
+      setIsLoadingPlanRecommendation(false);
+    }
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, isLoadingPlanRecommendation]);
+
+  // Listen for gallery updates (e.g., after uploads/deletions) with optimistic updates only
+  // Defer plan calculation until user actually needs it (e.g., opens pricing modal)
   useEffect(() => {
     if (galleryLoading || isPaid || !gallery?.galleryId) {
       return;
     }
-
-    let requestCounter = 0;
-    let debounceTimer: NodeJS.Timeout | null = null;
 
     // Use refs to avoid stale closures
     const galleryRef = { current: gallery };
@@ -184,7 +210,6 @@ export default function GallerySidebar({
           }>
         | undefined;
       const sizeDelta = customEvent?.detail?.sizeDelta;
-      const isUpload = customEvent?.detail?.isUpload ?? false;
       const refreshAfterUpload = customEvent?.detail?.refreshAfterUpload ?? false;
       const eventGalleryId = customEvent?.detail?.galleryId;
       
@@ -203,7 +228,7 @@ export default function GallerySidebar({
             0;
           const newOptimisticBytes = Math.max(0, currentBytes + sizeDelta);
 
-          // Update plan recommendation optimistically
+          // Update plan recommendation optimistically (if we have one)
           if (newOptimisticBytes === 0) {
             setPlanRecommendation(null);
           } else if (planRecommendationRef.current) {
@@ -218,109 +243,22 @@ export default function GallerySidebar({
         });
       }
 
-      // Skip API call if this is a refresh after upload completion
-      // The optimistic updates already handled the UI, and we don't want to cause flicker
-      // by calling calculate-plan immediately after uploads complete
+      // Skip plan calculation if this is a refresh after upload completion
+      // Plan calculation will happen when user opens pricing modal or when component becomes visible
       if (refreshAfterUpload) {
-        // Just clear any pending debounce timers - don't make API calls
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
-          debounceTimer = null;
-        }
         return;
       }
 
-      // Clear any existing debounce timer
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
-
-      // For uploads, debounce the API call to avoid multiple calls during rapid uploads
-      // For deletions, call immediately (deletions are typically single operations)
-      if (isUpload) {
-        // Debounce: wait 2 seconds after last upload event before calling API
-        // This ensures we only calculate plan once when uploads are complete
-        debounceTimer = setTimeout(async () => {
-          // Increment counter to track the latest request
-          requestCounter += 1;
-          const currentRequest = requestCounter;
-
-          // Refresh plan recommendation from API in background (for accuracy)
-          setIsLoadingPlanRecommendation(true);
-          try {
-            const currentGalleryId = galleryRef.current?.galleryId;
-            if (!currentGalleryId) {
-              return;
-            }
-            const recommendation = await getPlanRecommendation(currentGalleryId);
-
-            // Only update if this is still the latest request (prevent stale data from race conditions)
-            if (currentRequest === requestCounter) {
-              // If no photos are uploaded, clear the plan recommendation
-              if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
-                setPlanRecommendation(null);
-                setOptimisticBytesUsed(0);
-              } else {
-                setPlanRecommendation(recommendation);
-                setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
-              }
-            }
-          } catch (error) {
-            // Only update on error if this is still the latest request
-            if (currentRequest === requestCounter) {
-              console.error("Failed to refresh plan recommendation:", error);
-              // On error, clear recommendation if gallery shows no photos
-              if ((galleryRef.current?.originalsBytesUsed as number | undefined) ?? 0 === 0) {
-                setPlanRecommendation(null);
-                setOptimisticBytesUsed(0);
-              }
-            }
-          } finally {
-            // Only update loading state if this is still the latest request
-            if (currentRequest === requestCounter) {
-              setIsLoadingPlanRecommendation(false);
-            }
-          }
-        }, 2000); // Wait 2 seconds after last upload event
-      } else {
-        // For deletions or refresh events (no sizeDelta), call immediately (no debounce needed)
-        requestCounter += 1;
-        const currentRequest = requestCounter;
-
-        setIsLoadingPlanRecommendation(true);
-        try {
-          const currentGalleryId = galleryRef.current?.galleryId;
-          if (!currentGalleryId) {
-            return;
-          }
-          const recommendation = await getPlanRecommendation(currentGalleryId);
-
-          if (currentRequest === requestCounter) {
-            if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
-              setPlanRecommendation(null);
-              // Clear optimistic bytes when gallery is empty
-              setOptimisticBytesUsed(0);
-            } else {
-              setPlanRecommendation(recommendation);
-              // Use API value to clear any stale optimistic state
-              setOptimisticBytesUsed(recommendation.uploadedSizeBytes);
-            }
-          }
-        } catch (error) {
-          if (currentRequest === requestCounter) {
-            console.error("Failed to refresh plan recommendation:", error);
-            // On error, check gallery state and clear optimistic bytes if empty
-              const galleryBytes = (galleryRef.current?.originalsBytesUsed as number | undefined) ?? 0;
-            if (galleryBytes === 0) {
-              setPlanRecommendation(null);
-              setOptimisticBytesUsed(0);
-            }
-          }
-        } finally {
-          if (currentRequest === requestCounter) {
-            setIsLoadingPlanRecommendation(false);
-          }
+      // For deletions, clear plan recommendation if gallery is empty
+      // But don't recalculate - let it be calculated lazily when needed
+      if (sizeDelta !== undefined && sizeDelta < 0) {
+        const currentBytes = 
+          optimisticBytesUsed ??
+          planRecommendationRef.current?.uploadedSizeBytes ??
+          (galleryRef.current?.originalsBytesUsed as number | undefined) ??
+          0;
+        if (currentBytes + sizeDelta <= 0) {
+          setPlanRecommendation(null);
         }
       }
     };
@@ -329,89 +267,55 @@ export default function GallerySidebar({
       window.addEventListener("galleryUpdated", handleGalleryUpdate);
       return () => {
         window.removeEventListener("galleryUpdated", handleGalleryUpdate);
-        // Clear debounce timer and invalidate any pending requests
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
-        }
-        requestCounter += 1;
       };
     }
     return undefined;
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation]);
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation, optimisticBytesUsed]);
 
-  // Also refresh when gallery.originalsBytesUsed changes (in case event didn't fire or was missed)
-  // This ensures we update even if the event wasn't dispatched
-  // BUT: Skip if we have optimistic bytes (means we're in the middle of uploads/deletions)
-  // This prevents flicker during uploads when gallery prop updates
+  // Calculate plan on initial mount if gallery has photos and is not paid
+  // This ensures plan is available when sidebar components render
   useEffect(() => {
     if (galleryLoading || isPaid || !gallery?.galleryId) {
       return;
     }
 
-    // If gallery shows 0 bytes, immediately clear recommendation and optimistic bytes
-    // This handles the case where all photos are deleted (especially when suppression is active)
+    const hasPhotos = (gallery.originalsBytesUsed as number | undefined) ?? 0 > 0;
+    // Only calculate if we have photos and don't have a recommendation yet
+    if (hasPhotos && !planRecommendation && !isLoadingPlanRecommendation) {
+      void calculatePlanRecommendation();
+    }
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, planRecommendation, isLoadingPlanRecommendation, calculatePlanRecommendation]);
+
+  // Listen for publish wizard open event to calculate plan when user needs it
+  useEffect(() => {
+    const handleOpenPublishWizard = (event: CustomEvent) => {
+      if (event.detail?.galleryId === gallery?.galleryId && !isPaid) {
+        // Calculate plan when user opens pricing modal
+        void calculatePlanRecommendation();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
+      return () => {
+        window.removeEventListener("openPublishWizard", handleOpenPublishWizard as EventListener);
+      };
+    }
+    return undefined;
+  }, [gallery?.galleryId, isPaid, calculatePlanRecommendation]);
+
+  // Clear plan recommendation if gallery becomes empty (e.g., all photos deleted)
+  useEffect(() => {
+    if (galleryLoading || isPaid || !gallery?.galleryId) {
+      return;
+    }
+
     const currentBytes = gallery.originalsBytesUsed as number | undefined;
     if (currentBytes === 0 || currentBytes === undefined) {
       setPlanRecommendation(null);
-      setOptimisticBytesUsed(0); // Clear optimistic bytes when gallery is empty
-      setIsLoadingPlanRecommendation(false);
-      return;
+      setOptimisticBytesUsed(0);
     }
-
-    // Skip API call if we have optimistic bytes - this means we're in the middle of uploads/deletions
-    // The event handler will handle the refresh when operations complete
-    // This prevents flicker by avoiding unnecessary calculate-plan calls during uploads
-    if (optimisticBytesUsed !== null) {
-      // We have optimistic state, skip this refresh - event handler will update when ready
-      return;
-    }
-
-    // Debounce to avoid too many API calls, but use shorter delay for better UX
-    let isCancelled = false;
-
-    const timeoutId = setTimeout(() => {
-      if (isCancelled) {
-        return;
-      }
-
-      setIsLoadingPlanRecommendation(true);
-
-      getPlanRecommendation(gallery.galleryId)
-        .then((recommendation) => {
-          // Only update if this effect hasn't been cancelled and we're still on the same gallery
-          if (isCancelled) {
-            return;
-          }
-
-          // If no photos are uploaded, clear the plan recommendation
-          if (!recommendation || (recommendation.uploadedSizeBytes ?? 0) === 0) {
-            setPlanRecommendation(null);
-          } else {
-            setPlanRecommendation(recommendation);
-          }
-        })
-        .catch((error) => {
-          if (isCancelled) {
-            return;
-          }
-          console.error("Failed to refresh plan recommendation:", error);
-          // On error, clear recommendation if gallery shows no photos
-          if ((gallery.originalsBytesUsed as number | undefined) ?? 0 === 0) {
-            setPlanRecommendation(null);
-          }
-        })
-        .finally(() => {
-          if (!isCancelled) {
-            setIsLoadingPlanRecommendation(false);
-          }
-        });
-    }, 200); // Reduced from 500ms to 200ms for faster updates
-
-    return () => {
-      isCancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid, optimisticBytesUsed]);
+  }, [gallery?.galleryId, gallery?.originalsBytesUsed, galleryLoading, isPaid]);
 
   const handleBack = () => {
     if (typeof window !== "undefined" && gallery?.galleryId) {

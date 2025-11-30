@@ -69,7 +69,7 @@ export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
   }, [selectedPlanKey, selectedDuration, suggestedStorage, selectionEnabled]);
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border-2 border-blue-300 dark:border-blue-500/30 rounded-lg p-6 mb-4">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border-2 border-blue-300 dark:border-blue-500/30 rounded-lg px-6 pt-6 pb-4 mb-4">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
@@ -130,7 +130,7 @@ export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
       {/* Plan Details */}
       {selectedPlan && (
         <>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-500/30">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Limit oryginałów</p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -143,26 +143,6 @@ export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
                 {formatBytes(selectedPlan.storageLimitBytes)}
               </p>
             </div>
-          </div>
-
-          {/* Gallery Type Info */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-500/30">
-            <p className="text-sm text-gray-700 dark:text-gray-300">
-              <strong>Typ galerii:</strong>{" "}
-              {selectionEnabled ? (
-                <span>Z selekcją klienta</span>
-              ) : (
-                <span>
-                  Bez selekcji{" "}
-                  <span className="text-green-600 dark:text-green-400">(zniżka 20%)</span>
-                </span>
-              )}
-            </p>
-            {selectionEnabled && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Limit finalnych zdjęć jest taki sam jak limit oryginałów (darmowy bufor).
-              </p>
-            )}
           </div>
         </>
       )}

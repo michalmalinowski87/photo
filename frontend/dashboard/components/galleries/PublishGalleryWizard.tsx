@@ -1,10 +1,11 @@
-import { useRouter } from "next/router";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
-import { formatPrice } from "../../lib/format-price";
+import api, { formatApiError } from "../../lib/api-service";
 import { getPricingModalData } from "../../lib/calculate-plan";
+import { formatPrice } from "../../lib/format-price";
 import type { PricingModalData } from "../../lib/plan-types";
 import {
   getPlanByStorageAndDuration,
@@ -14,14 +15,11 @@ import {
   type PlanKey,
 } from "../../lib/pricing-plans";
 import { useUserStore } from "../../store/userSlice";
-import api, { formatApiError } from "../../lib/api-service";
 import Button from "../ui/button/Button";
-import Input from "../ui/input/InputField";
 
 import { CapacityWarning } from "./pricing/CapacityWarning";
 import { PlanSelectionGrid } from "./pricing/PlanSelectionGrid";
 import { SuggestedPlanSection } from "./pricing/SuggestedPlanSection";
-import { UploadedSizeInfo } from "./pricing/UploadedSizeInfo";
 import { StripeRedirectOverlay } from "./StripeRedirectOverlay";
 
 interface PublishGalleryWizardProps {
@@ -29,22 +27,21 @@ interface PublishGalleryWizardProps {
   onClose: () => void;
   galleryId: string;
   onSuccess?: () => void;
+  renderAsModal?: boolean; // If true, renders with backdrop overlay. If false, renders inline like gallery view
+  initialState?: {
+    duration?: string;
+    planKey?: string;
+  } | null;
 }
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-};
 
 export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   isOpen,
   onClose,
   galleryId,
   onSuccess,
+  renderAsModal = false,
+  initialState,
 }) => {
-  const router = useRouter();
   const { showToast } = useToast();
   const { walletBalanceCents, refreshWalletBalance } = useUserStore();
   const [loading, setLoading] = useState(false);
@@ -52,7 +49,6 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
-  const [photoCount, setPhotoCount] = useState<number | null>(null);
 
   const { handleSelectPlan, isProcessing, showRedirectOverlay, redirectInfo } = usePlanPayment({
     galleryId,
@@ -63,36 +59,19 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     onClose,
   });
 
-  // Check URL params for state restoration
+  // Restore state from initialState prop (set by store from URL params)
   useEffect(() => {
-    if (isOpen && typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const publishParam = params.get("publish");
-      const galleryParam = params.get("galleryId");
-      const durationParam = params.get("duration") as Duration | null;
-      const planKeyParam = params.get("planKey") as PlanKey | null;
-
-      // If we're opening from URL params, restore state
-      if (publishParam === "true" && galleryParam === galleryId) {
-        if (durationParam && ["1m", "3m", "12m"].includes(durationParam)) {
-          setSelectedDuration(durationParam);
-        }
-        if (planKeyParam) {
-          setSelectedPlanKey(planKeyParam);
-        }
-
-        // Clear URL params after reading
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete("publish");
-        newUrl.searchParams.delete("galleryId");
-        newUrl.searchParams.delete("duration");
-        newUrl.searchParams.delete("planKey");
-        window.history.replaceState({}, "", newUrl.toString());
+    if (isOpen && initialState) {
+      if (initialState.duration && ["1m", "3m", "12m"].includes(initialState.duration)) {
+        setSelectedDuration(initialState.duration as Duration);
+      }
+      if (initialState.planKey) {
+        setSelectedPlanKey(initialState.planKey as PlanKey);
       }
     }
-  }, [isOpen, galleryId]);
+  }, [isOpen, initialState]);
 
-  // Load pricing data and photo count
+  // Load pricing data and photo count - only once when modal opens
   useEffect(() => {
     if (!isOpen || !galleryId) {
       return;
@@ -102,18 +81,9 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       setLoading(true);
       setError("");
       try {
-        // Load pricing data
-        const data = await getPricingModalData(galleryId, selectedDuration);
+        // Load pricing data with default duration (1m) - we'll calculate other durations client-side
+        const data = await getPricingModalData(galleryId, "1m");
         setPricingData(data);
-
-        // Load photo count
-        try {
-          const imagesResponse = await api.galleries.getImages(galleryId);
-          setPhotoCount(imagesResponse.images?.length ?? 0);
-        } catch (err) {
-          console.error("Failed to load photo count:", err);
-          setPhotoCount(null);
-        }
 
         // Load wallet balance
         await refreshWalletBalance();
@@ -127,7 +97,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     };
 
     void loadData();
-  }, [isOpen, galleryId, selectedDuration, refreshWalletBalance, showToast]);
+  }, [isOpen, galleryId, refreshWalletBalance, showToast]);
 
   // Extract storage size from suggested plan
   const suggestedStorage = useMemo(() => {
@@ -195,7 +165,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     ? Math.max(0, selectedPlan.priceCents - walletBalance)
     : 0;
 
-  const handlePublish = async () => {
+  const handlePublish = () => {
     if (!selectedPlan) {
       showToast("error", "Błąd", "Proszę wybrać plan");
       return;
@@ -204,7 +174,6 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     void handleSelectPlan(selectedPlan);
   };
 
-  const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [isTopUpLoading, setIsTopUpLoading] = useState(false);
 
   const handleTopUp = useCallback(
@@ -243,24 +212,12 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     [galleryId, selectedDuration, selectedPlanKey, showToast]
   );
 
-  const handleCustomTopUp = () => {
-    const amount = parseFloat(topUpAmount);
-    if (isNaN(amount) || amount < 20) {
-      showToast("error", "Błąd", "Minimalna kwota doładowania to 20 PLN");
-      return;
-    }
-    void handleTopUp(Math.round(amount * 100));
-  };
 
-  if (!isOpen) {
-    return null;
-  }
-
-  return (
-    <div className="w-full h-[calc(100vh-140px)] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+  const wizardContent = !isOpen ? null : (
+    <div className={`${renderAsModal ? 'w-full max-w-7xl h-[calc(100vh-2rem)]' : 'w-full max-h-[calc(100vh-200px)]'} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Opublikuj galerię</h1>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Opublikuj galerię</h1>
         <button
           onClick={onClose}
           className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -302,30 +259,6 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
         ) : pricingData ? (
           <div className="h-full flex items-center justify-center p-8">
             <div className="w-full max-w-6xl mx-auto space-y-6">
-              {/* Uploaded Photos Info */}
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                      Przesłane zdjęcia
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {photoCount !== null ? photoCount : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                      Wykorzystane miejsce
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatBytes(pricingData.uploadedSizeBytes)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <UploadedSizeInfo uploadedSizeBytes={pricingData.uploadedSizeBytes} />
-
               <CapacityWarning
                 uploadedSizeBytes={pricingData.uploadedSizeBytes}
                 originalsLimitBytes={pricingData.originalsLimitBytes}
@@ -350,59 +283,32 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
                 </div>
 
                 {!isBalanceSufficient && selectedPlan && (
-                  <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 rounded-lg">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
-                      <strong>Niewystarczające saldo.</strong> Doładowanie portfela jest tańsze niż
-                      płatność przez Stripe (brak opłat przetwarzania).
-                    </p>
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Szybkie doładowanie:
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {[
-                            Math.max(2000, Math.ceil(balanceShortfall / 100) * 100),
-                            Math.max(5000, Math.ceil(balanceShortfall / 100) * 100 + 3000),
-                            Math.max(10000, Math.ceil(balanceShortfall / 100) * 100 + 8000),
-                          ].map((amountCents) => (
-                            <Button
-                              key={amountCents}
-                              size="sm"
-                              variant="primary"
-                              onClick={() => void handleTopUp(amountCents)}
-                              disabled={isTopUpLoading}
-                            >
-                              +{amountCents / 100} PLN
-                            </Button>
-                          ))}
-                        </div>
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Szybkie doładowanie:
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Własna kwota:
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            type="text"
-                            placeholder="Kwota (min 20 PLN)"
-                            value={topUpAmount}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/[^0-9.,]/g, "");
-                              setTopUpAmount(value);
-                            }}
-                            className="flex-1"
-                          />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {[
+                          Math.max(2000, Math.ceil(balanceShortfall / 100) * 100),
+                          Math.max(5000, Math.ceil(balanceShortfall / 100) * 100 + 3000),
+                          Math.max(10000, Math.ceil(balanceShortfall / 100) * 100 + 8000),
+                        ].map((amountCents) => (
                           <Button
+                            key={amountCents}
+                            size="sm"
                             variant="primary"
-                            onClick={handleCustomTopUp}
+                            onClick={() => void handleTopUp(amountCents)}
                             disabled={isTopUpLoading}
                           >
-                            Doładuj
+                            +{amountCents / 100} PLN
                           </Button>
-                        </div>
+                        ))}
                       </div>
                     </div>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                      Doładowanie portfela jest tańsze niż płatność przez Stripe (brak opłat przetwarzania).
+                    </p>
                   </div>
                 )}
               </div>
@@ -429,9 +335,24 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
                 selectionEnabled={pricingData.selectionEnabled}
                 onDurationChange={(duration) => {
                   setSelectedDuration(duration);
-                  const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
-                  if (planKey) {
-                    setSelectedPlanKey(planKey);
+                  // Only reset to suggested plan if no explicit plan is selected
+                  // or if the current selected plan doesn't match the new duration
+                  if (!selectedPlanKey) {
+                    const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
+                    if (planKey) {
+                      setSelectedPlanKey(planKey);
+                    }
+                  } else {
+                    // Check if current selected plan matches the new duration
+                    const currentPlan = getPlan(selectedPlanKey);
+                    const currentPlanDuration = currentPlan?.duration === "1 miesiąc" ? "1m" : currentPlan?.duration === "3 miesiące" ? "3m" : "12m";
+                    if (currentPlanDuration !== duration) {
+                      // Selected plan doesn't match new duration, reset to suggested
+                      const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
+                      if (planKey) {
+                        setSelectedPlanKey(planKey);
+                      }
+                    }
                   }
                 }}
                 onPlanKeyChange={setSelectedPlanKey}
@@ -443,7 +364,12 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
-        <Button variant="outline" onClick={onClose} disabled={isProcessing || loading}>
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={isProcessing || loading}
+          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+        >
           Anuluj
         </Button>
         <Button
@@ -467,5 +393,29 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       />
     </div>
   );
+
+  // If not open, return null
+  if (!isOpen || !wizardContent) {
+    return null;
+  }
+
+  // If renderAsModal is true, wrap in backdrop and portal
+  if (renderAsModal) {
+    const modalContent = (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
+        {wizardContent}
+      </div>
+    );
+
+    // Render modal via portal to document.body to ensure it's above all other content
+    if (typeof window !== "undefined") {
+      return createPortal(modalContent, document.body);
+    }
+
+    return modalContent;
+  }
+
+  // Otherwise, render inline (like in gallery view)
+  return wizardContent;
 };
 

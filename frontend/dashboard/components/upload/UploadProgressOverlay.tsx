@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 
 import { useBottomRightOverlay } from "../../context/BottomRightOverlayContext";
+
 import { CompletedItemsSection } from "./CompletedItemsSection";
 import { ProcessingCounter } from "./ProcessingCounter";
 import { UploadErrorsSection } from "./UploadErrorsSection";
@@ -31,7 +32,7 @@ export const UploadProgressOverlay: React.FC<UploadProgressOverlayProps> = ({
   // Get positioning from context (optional - may not be available)
   const overlayContext = useBottomRightOverlay();
   const rightOffset = useMemo(() => {
-    if (!overlayContext || !overlayContext.nextStepsVisible) {
+    if (!overlayContext?.nextStepsVisible) {
       return "1rem"; // Default: right-4
     }
     

@@ -54,7 +54,7 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
   const currentUploadedBytes =
     optimisticBytesUsed ??
     (isLoadingPlanRecommendation
-      ? 0 // While loading, assume no photos to prevent flicker
+      ? (planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0) // Keep previous value while loading
       : (planRecommendation?.uploadedSizeBytes ?? gallery.originalsBytesUsed ?? 0));
   // Only show plan content if we're not loading AND we have a plan recommendation
   const hasUploadedPhotos =
@@ -67,8 +67,17 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
           Galeria nieopublikowana
         </div>
 
-        {!hasUploadedPhotos ? (
-          <>
+        {/* Content container - uses grid to maintain stable layout, both states always in flow */}
+        {/* min-h ensures stable height even when content changes */}
+        <div className="grid grid-cols-1 min-h-[120px]">
+          {/* State 1: No photos uploaded - Always rendered, visibility controlled by opacity and visibility */}
+          <div
+            className={`col-start-1 row-start-1 transition-opacity duration-300 ${
+              !hasUploadedPhotos
+                ? "opacity-100 pointer-events-auto visible"
+                : "opacity-0 pointer-events-none invisible"
+            }`}
+          >
             <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
               Prześlij zdjęcia, aby system mógł wybrać optymalny plan dla Twojej galerii.
             </div>
@@ -80,9 +89,16 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
             >
               Przejdź do zdjęć
             </Button>
-          </>
-        ) : (
-          <>
+          </div>
+
+          {/* State 2: Has photos with plan recommendation - Always rendered, visibility controlled by opacity and visibility */}
+          <div
+            className={`col-start-1 row-start-1 transition-opacity duration-300 ${
+              hasUploadedPhotos
+                ? "opacity-100 pointer-events-auto visible"
+                : "opacity-0 pointer-events-none invisible"
+            }`}
+          >
             <div className="text-xs text-warning-600 dark:text-warning-400 mb-2">
               System zaproponował plan na podstawie przesłanych zdjęć.
             </div>
@@ -113,8 +129,8 @@ export const UnpublishedBanner: React.FC<UnpublishedBannerProps> = ({
             <Button size="sm" variant="primary" onClick={onPay} className="w-full">
               Opublikuj galerię
             </Button>
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );

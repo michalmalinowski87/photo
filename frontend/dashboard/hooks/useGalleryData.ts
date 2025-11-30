@@ -39,8 +39,15 @@ export const useGalleryData = ({
   } = useGalleryStore();
 
   const loadGalleryData = useCallback(
-    async (silent = false, forceRefresh = false) => {
+    async (silent = false, forceRefresh = false, bytesOnly = false) => {
       if (!galleryId) {
+        return;
+      }
+
+      // If bytesOnly is true, use silent refresh that only updates bytes
+      if (bytesOnly) {
+        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+        await refreshGalleryBytesOnly(galleryId as string);
         return;
       }
 

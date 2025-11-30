@@ -40,24 +40,26 @@ const GALLERY_ROUTES = [
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  
   // Check if current route is an auth route
-  // router.pathname is available during SSR
   const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
 
   // Check if current route is a gallery route (needs special layout)
-  // Note: Gallery routes will handle their own layout internally
   // Exclude filter routes from being treated as gallery routes
   const isGalleryRoute = router.pathname
     ? (() => {
-        // Check if the actual path (asPath) is a filter route
-        // router.asPath shows the actual URL, router.pathname shows the route pattern
+        // Check if it's a filter route (not a gallery route)
         if (router.asPath?.startsWith("/galleries/")) {
           const pathSegments = router.asPath.split("/").filter(Boolean);
-          if (pathSegments.length >= 2) {
-            const secondSegment = pathSegments[1];
-            if (FILTER_ROUTES.includes(secondSegment)) {
-              return false;
-            }
+          if (pathSegments.length >= 2 && FILTER_ROUTES.includes(pathSegments[1])) {
+            return false;
+          }
+        }
+        // Also check pathname directly for filter routes
+        if (router.pathname.startsWith("/galleries/")) {
+          const pathSegments = router.pathname.split("/").filter(Boolean);
+          if (pathSegments.length >= 2 && FILTER_ROUTES.includes(pathSegments[1])) {
+            return false;
           }
         }
         // Check if it matches gallery route patterns
@@ -111,7 +113,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [router.events]);
 
-  // Use AuthLayout for authentication pages (uses landing page template)
+  // Use AuthLayout for authentication pages
   if (isAuthRoute) {
     return (
       <WebPCompatibilityCheck>
@@ -122,10 +124,8 @@ export default function App({ Component, pageProps }: AppProps) {
     );
   }
 
-  // Gallery routes handle their own layout (GalleryLayout)
-  // Other dashboard pages use AppLayout
+  // Gallery routes handle their own layout
   if (isGalleryRoute) {
-    // Gallery routes use persistent GalleryLayoutWrapper that keeps sidebar mounted
     return (
       <WebPCompatibilityCheck>
         <AuthProvider>
@@ -133,9 +133,9 @@ export default function App({ Component, pageProps }: AppProps) {
             <ModalProvider>
               <ZipDownloadProvider>
                 <BottomRightOverlayProvider>
-                <GalleryLayoutWrapper>
-                  <Component {...pageProps} />
-                </GalleryLayoutWrapper>
+                  <GalleryLayoutWrapper>
+                    <Component {...pageProps} />
+                  </GalleryLayoutWrapper>
                 </BottomRightOverlayProvider>
               </ZipDownloadProvider>
             </ModalProvider>
@@ -145,6 +145,7 @@ export default function App({ Component, pageProps }: AppProps) {
     );
   }
 
+  // Other dashboard pages use AppLayout
   return (
     <WebPCompatibilityCheck>
       <AuthProvider>

@@ -2,8 +2,8 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
-import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
+import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";

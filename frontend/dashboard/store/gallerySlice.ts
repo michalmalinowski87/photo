@@ -54,6 +54,7 @@ interface GalleryState {
   fetchGallery: (galleryId: string, forceRefresh?: boolean) => Promise<Gallery | null>;
   fetchGalleryImages: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
   fetchGalleryOrders: (galleryId: string, forceRefresh?: boolean) => Promise<any[]>;
+  refreshGalleryBytesOnly: (galleryId: string) => Promise<void>; // Silent refresh that only updates bytes used
   setFilter: (filter: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -64,6 +65,14 @@ interface GalleryState {
   // Next Steps Overlay state (persistent across page navigation)
   nextStepsOverlayExpanded: boolean;
   setNextStepsOverlayExpanded: (expanded: boolean) => void;
+  // Publish Wizard state (for URL param restoration)
+  publishWizardOpen: boolean;
+  publishWizardGalleryId: string | null;
+  publishWizardState: {
+    duration?: string;
+    planKey?: string;
+  } | null;
+  setPublishWizardOpen: (open: boolean, galleryId?: string | null, state?: { duration?: string; planKey?: string } | null) => void;
 }
 
 export const useGalleryStore = create<GalleryState>()(
@@ -286,6 +295,54 @@ export const useGalleryStore = create<GalleryState>()(
         }
       },
 
+      refreshGalleryBytesOnly: async (galleryId: string) => {
+        const state = get();
+        
+        // Only refresh if this is the current gallery
+        if (state.currentGalleryId !== galleryId) {
+          return;
+        }
+
+        // Silent refresh: fetch gallery but only update bytes fields without triggering loading state
+        try {
+          const galleryData = await api.galleries.get(galleryId);
+          
+          // Only update bytes fields if gallery data is valid
+          if (galleryData?.galleryId && galleryData.ownerId && galleryData.state) {
+            set((currentState) => {
+              if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
+                return currentState; // Don't update if gallery changed
+              }
+              
+              // Only update bytes fields, keep everything else
+              return {
+                currentGallery: {
+                  ...currentState.currentGallery,
+                  originalsBytesUsed: galleryData.originalsBytesUsed,
+                  finalsBytesUsed: galleryData.finalsBytesUsed,
+                },
+                galleryCacheTimestamp: Date.now(), // Update cache timestamp
+              };
+            });
+
+            // Dispatch event with refreshAfterUpload flag to prevent cascading API calls
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("galleryUpdated", {
+                  detail: {
+                    galleryId,
+                    refreshAfterUpload: true, // Signal that this is a refresh after upload completion
+                  },
+                })
+              );
+            }
+          }
+        } catch (err) {
+          // Silently fail - don't show error or trigger loading state
+          console.error("[GalleryStore] Failed to refresh gallery bytes (silent):", err);
+        }
+      },
+
       setFilter: (filter: string) => {
         set((_state) => ({
           filters: { [filter]: true },
@@ -330,6 +387,17 @@ export const useGalleryStore = create<GalleryState>()(
       nextStepsOverlayExpanded: true,
       setNextStepsOverlayExpanded: (expanded: boolean) => {
         set({ nextStepsOverlayExpanded: expanded });
+      },
+      // Publish Wizard state
+      publishWizardOpen: false,
+      publishWizardGalleryId: null,
+      publishWizardState: null,
+      setPublishWizardOpen: (open: boolean, galleryId?: string | null, state?: { duration?: string; planKey?: string } | null) => {
+        set({
+          publishWizardOpen: open,
+          publishWizardGalleryId: open ? (galleryId ?? null) : null,
+          publishWizardState: open ? (state ?? null) : null,
+        });
       },
     }),
     { name: "GalleryStore" }

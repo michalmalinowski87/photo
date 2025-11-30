@@ -90,8 +90,9 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
             <div
               key={storage}
               onClick={() => {
+                // Just update the selected plan - duration is already correct
+                // since we only show plans for the selected duration
                 onPlanKeyChange(planKey);
-                onDurationChange(selectedDuration);
               }}
               className={`relative rounded-lg border-2 p-5 cursor-pointer transition-all ${
                 isSelected
