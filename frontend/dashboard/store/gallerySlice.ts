@@ -445,6 +445,7 @@ export const useGalleryStore = create<GalleryState>()(
           return orders;
         } catch (err) {
           // Return empty array on error instead of throwing
+          // eslint-disable-next-line no-console
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
           set({ galleryOrders: [] });
           return [];

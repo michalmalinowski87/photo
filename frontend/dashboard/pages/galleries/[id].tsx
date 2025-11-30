@@ -16,6 +16,7 @@ import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
 import { useGalleryStore } from "../../store/gallerySlice";
+import { useUserStore } from "../../store/userSlice";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -50,6 +51,189 @@ interface PaymentDetails {
   balanceAfterPayment?: number;
 }
 
+interface PaymentDetectionResult {
+  isWalletTopUp: boolean;
+  isGalleryPayment: boolean;
+  publishParam: string | null;
+  galleryIdParam: string | null;
+}
+
+/**
+ * Detects the type of payment redirect from URL parameters
+ */
+function detectPaymentType(
+  params: URLSearchParams,
+  galleryId: string | string[] | undefined
+): PaymentDetectionResult {
+  const paymentSuccess = params.get("payment") === "success";
+  const galleryParam = params.get("gallery");
+  const publishParam = params.get("publish");
+  const galleryIdParam = params.get("galleryId");
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+
+  const isGalleryPayment = paymentSuccess && galleryParam === galleryIdStr;
+  const isWalletTopUp =
+    paymentSuccess &&
+    galleryParam !== galleryIdStr && // Not a gallery payment
+    (galleryIdParam === galleryIdStr || publishParam === "true"); // Has wallet top-up context params
+
+  return {
+    isWalletTopUp,
+    isGalleryPayment,
+    publishParam,
+    galleryIdParam,
+  };
+}
+
+/**
+ * Cleans URL parameters, preserving specific params for publish wizard
+ */
+function cleanUrlParams(
+  preserveParams: { publish?: string | null; galleryId?: string | null }
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const newParams = new URLSearchParams();
+  if (preserveParams.publish === "true") {
+    newParams.set("publish", preserveParams.publish);
+  }
+  if (preserveParams.galleryId) {
+    newParams.set("galleryId", preserveParams.galleryId);
+  }
+
+  const newParamsStr = newParams.toString();
+  const newUrl = newParamsStr
+    ? `${window.location.pathname}?${newParamsStr}`
+    : window.location.pathname;
+  window.history.replaceState({}, "", newUrl);
+}
+
+/**
+ * Handles wallet top-up success: refreshes balance, reloads orders, shows toast
+ */
+async function handleWalletTopUpSuccess(
+  galleryIdStr: string,
+  refreshWalletBalance: () => Promise<void>,
+  invalidateGalleryOrdersCache: (galleryId: string) => void,
+  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  showToast: (type: "success" | "error", title: string, message: string) => void,
+  preserveParams: { publish?: string | null; galleryId?: string | null }
+): Promise<void> {
+  showToast("success", "Sukces", "Portfel został doładowany pomyślnie!");
+
+  // Refresh wallet balance
+  await refreshWalletBalance();
+
+  // Invalidate gallery orders cache to force reload
+  invalidateGalleryOrdersCache(galleryIdStr);
+
+  // Force reload gallery orders (bypass cache) - ensure orders are loaded
+  await loadOrders(true);
+
+  // Clean URL params but preserve publish/galleryId if present
+  cleanUrlParams(preserveParams);
+}
+
+/**
+ * Polls for gallery payment status and reloads data when confirmed
+ */
+async function pollGalleryPaymentStatus(
+  galleryIdStr: string,
+  initialGalleryState: string | undefined,
+  refreshGalleryStatusOnly: (galleryId: string) => Promise<void>,
+  reloadGallery: (() => Promise<void>) | undefined,
+  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  showToast: (type: "success" | "error", title: string, message: string) => void
+): Promise<void> {
+  let pollAttempts = 0;
+  const maxPollAttempts = 10; // Poll for up to 10 seconds
+  const pollInterval = 1000; // 1 second
+
+  const poll = async (): Promise<void> => {
+    try {
+      // Use micro endpoint to check payment status (lightweight)
+      try {
+        await refreshGalleryStatusOnly(galleryIdStr);
+
+        // Get updated gallery from store to check state
+        const updatedGallery = useGalleryStore.getState().currentGallery;
+
+        // Check if gallery state changed from DRAFT to PAID_ACTIVE
+        if (
+          updatedGallery?.state === "PAID_ACTIVE" &&
+          initialGalleryState === "DRAFT"
+        ) {
+          // Payment confirmed! Stop polling
+          if (reloadGallery) {
+            await reloadGallery();
+          }
+          await loadOrders(false);
+          showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+      } catch (apiError) {
+        console.error("Error fetching gallery status:", apiError);
+      }
+
+      pollAttempts++;
+
+      // If we've polled enough times, stop polling and do final reload
+      if (pollAttempts >= maxPollAttempts) {
+        // Final reload
+        if (reloadGallery) {
+          await reloadGallery();
+        }
+        await loadOrders(false);
+        showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
+        window.history.replaceState({}, "", window.location.pathname);
+      } else {
+        // Continue polling
+        setTimeout(poll, pollInterval);
+      }
+    } catch (error) {
+      console.error("Error polling payment status:", error);
+      // On error, just reload once and stop polling
+      if (reloadGallery) {
+        await reloadGallery();
+      }
+      await loadOrders(false);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  };
+
+  // Start polling immediately
+  await poll();
+}
+
+/**
+ * Handles gallery payment success: polls for status, reloads data, shows toast
+ */
+async function handleGalleryPaymentSuccess(
+  galleryIdStr: string,
+  gallery: Gallery,
+  refreshGalleryStatusOnly: (galleryId: string) => Promise<void>,
+  reloadGallery: (() => Promise<void>) | undefined,
+  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  showToast: (type: "success" | "error", title: string, message: string) => void
+): Promise<void> {
+  showToast("success", "Sukces", "Płatność zakończona pomyślnie! Weryfikowanie statusu...");
+
+  const initialGalleryState = gallery.state;
+
+  // Poll for payment status (fallback if webhook is slow)
+  await pollGalleryPaymentStatus(
+    galleryIdStr,
+    initialGalleryState,
+    refreshGalleryStatusOnly,
+    reloadGallery,
+    loadOrders,
+    showToast
+  );
+}
+
 export default function GalleryDetail() {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -58,7 +242,8 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders, refreshGalleryStatusOnly } = useGalleryStore();
+  const { fetchGalleryOrders, refreshGalleryStatusOnly, invalidateGalleryOrdersCache } = useGalleryStore();
+  const { refreshWalletBalance } = useUserStore();
   // Subscribe to gallery orders cache to trigger re-render when orders are updated
   const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryId ? state.galleryOrdersCache[galleryId as string] : null
@@ -79,7 +264,7 @@ export default function GalleryDetail() {
     stripeAmountCents: 0,
   });
 
-  const loadOrders = async (): Promise<void> => {
+  const loadOrders = async (forceRefresh = false): Promise<void> => {
     if (!galleryId) {
       return;
     }
@@ -87,10 +272,12 @@ export default function GalleryDetail() {
     setLoading(true);
 
     try {
-      // Use store action - checks cache first, fetches if needed
-      const orders = await fetchGalleryOrders(galleryId as string);
+      // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
+      const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
       setOrders(orders);
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[GalleryDetail] loadOrders: Error", err);
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
     } finally {
       setLoading(false);
@@ -149,76 +336,58 @@ export default function GalleryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, router.isReady, router.asPath]);
 
-  // UX IMPROVEMENT #1 & #3: Detect payment success after Stripe redirect, auto-refresh, and poll for payment status
+  // Handle payment redirects (wallet top-up or gallery payment) and ensure orders are always loaded
   useEffect(() => {
-    if (typeof window !== "undefined" && galleryId && router.isReady && gallery) {
-      const params = new URLSearchParams(window.location.search);
-      const paymentSuccess = params.get("payment") === "success";
-      const galleryParam = params.get("gallery");
+    if (typeof window === "undefined" || !galleryId || !router.isReady) {
+      return;
+    }
 
-      if (paymentSuccess && galleryParam === galleryId) {
-        // Show success toast
-        showToast("success", "Sukces", "Płatność zakończona pomyślnie! Weryfikowanie statusu...");
+    const params = new URLSearchParams(window.location.search);
+    const paymentDetection = detectPaymentType(params, galleryId);
 
-        // UX IMPROVEMENT #3: Poll for payment status (fallback if webhook is slow)
-        let pollAttempts = 0;
-        const maxPollAttempts = 10; // Poll for up to 10 seconds
-        const pollInterval = 1000; // 1 second
-        const initialGalleryState = gallery.state; // Store initial state to detect change
+    // Handle wallet top-up success (will load orders with fresh data)
+    if (paymentDetection.isWalletTopUp) {
+      void handleWalletTopUpSuccess(
+        galleryIdStr,
+        refreshWalletBalance,
+        invalidateGalleryOrdersCache,
+        loadOrders,
+        showToast,
+        {
+          publish: paymentDetection.publishParam,
+          galleryId: paymentDetection.galleryIdParam,
+        }
+      );
+      return;
+    }
 
-        const pollPaymentStatus = async () => {
-          try {
-            // Use micro endpoint to check payment status (lightweight)
-            try {
-              await refreshGalleryStatusOnly(galleryIdStr);
+    // Handle gallery payment success (will load orders immediately and during polling)
+    if (paymentDetection.isGalleryPayment && gallery) {
+      // Load orders immediately to ensure they're available
+      void loadOrders(false);
+      // Start polling for payment status confirmation
+      void handleGalleryPaymentSuccess(
+        galleryIdStr,
+        gallery,
+        refreshGalleryStatusOnly,
+        reloadGallery,
+        loadOrders,
+        showToast
+      );
+      return;
+    }
 
-              // Get updated gallery from store to check state
-              const updatedGallery = useGalleryStore.getState().currentGallery;
-
-              // Check if gallery state changed from DRAFT to PAID_ACTIVE
-              if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
-                // Payment confirmed! Stop polling
-                if (reloadGallery) {
-                  void reloadGallery();
-                }
-                void loadOrders();
-                showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
-                window.history.replaceState({}, "", window.location.pathname);
-                return;
-              }
-            } catch (apiError) {
-              console.error("Error fetching gallery status:", apiError);
-            }
-
-            pollAttempts++;
-
-            // If we've polled enough times, stop polling and do final reload
-            if (pollAttempts >= maxPollAttempts) {
-              // Final reload
-              if (reloadGallery) {
-                void reloadGallery();
-              }
-              void loadOrders();
-              showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
-              window.history.replaceState({}, "", window.location.pathname);
-            } else {
-              // Continue polling
-              setTimeout(pollPaymentStatus, pollInterval);
-            }
-          } catch (error) {
-            console.error("Error polling payment status:", error);
-            // On error, just reload once and stop polling
-            if (reloadGallery) {
-              void reloadGallery();
-            }
-            void loadOrders();
-            window.history.replaceState({}, "", window.location.pathname);
-          }
-        };
-
-        // Start polling immediately
-        void pollPaymentStatus();
-      }
+    // Always ensure orders are loaded (regardless of payment status)
+    // This ensures "Ukoncz Konfiguracje" overlay works correctly
+    // Check if we have redirect params (publish/galleryId) - force refresh in that case
+    const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
+    
+    // If we have redirect params, invalidate cache and force refresh
+    if (hasRedirectParams) {
+      invalidateGalleryOrdersCache(galleryIdStr);
+      void loadOrders(true);
+    } else {
+      void loadOrders(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, router.isReady, router.query, gallery]);

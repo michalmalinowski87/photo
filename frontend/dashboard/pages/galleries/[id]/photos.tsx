@@ -284,14 +284,15 @@ export default function GalleryPhotos() {
     [galleryId, showToast, fetchGalleryImages, deletingImagesRef]
   );
 
-  const loadApprovedSelections = useCallback(async (): Promise<void> => {
+  const loadApprovedSelections = useCallback(async (forceRefresh = false): Promise<void> => {
     if (!galleryId) {
       return;
     }
 
     try {
-      // Use store action - checks cache first, fetches if needed
-      const ordersData = await fetchGalleryOrders(galleryId as string);
+      // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
+      const ordersData = await fetchGalleryOrders(galleryId as string, forceRefresh);
+      
       setOrders(ordersData);
 
       // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
@@ -351,7 +352,9 @@ export default function GalleryPhotos() {
 
       setAllOrderSelectionKeys(allOrderKeys);
       setImageOrderStatus(imageStatusMap);
-    } catch (_err) {
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
       // Don't show error toast - this is not critical
     }
   }, [galleryId, fetchGalleryOrders]);
@@ -361,8 +364,23 @@ export default function GalleryPhotos() {
     initializeAuth(
       () => {
         if (galleryId) {
+          // Check for redirect params (Stripe redirect from wallet top-up or publish wizard)
+          const params = new URLSearchParams(
+            typeof window !== "undefined" ? window.location.search : ""
+          );
+          const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
+          const hasPaymentSuccess = params.get("payment") === "success";
+          
           void loadPhotos();
-          void loadApprovedSelections();
+          
+          // If we have redirect params (Stripe redirect), force refresh orders
+          if (hasRedirectParams || hasPaymentSuccess) {
+            const { invalidateGalleryOrdersCache } = useGalleryStore.getState();
+            invalidateGalleryOrdersCache(galleryId as string);
+            void loadApprovedSelections(true);
+          } else {
+            void loadApprovedSelections(false);
+          }
         }
       },
       () => {

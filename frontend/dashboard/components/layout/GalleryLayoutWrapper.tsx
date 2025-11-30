@@ -246,18 +246,64 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     setPublishWizardOpenStore(true, galleryId as string);
   };
 
-  // Check URL params to auto-open wizard
+  // Helper function to clean up publish wizard URL params
+  const cleanupPublishParams = useCallback(() => {
+    if (typeof window === "undefined" || !router.isReady) return;
+    
+    const params = new URLSearchParams(window.location.search);
+    const hadPublishParam = params.has("publish");
+    const hadGalleryIdParam = params.has("galleryId");
+    
+    if (hadPublishParam || hadGalleryIdParam) {
+      // Remove publish wizard params, but keep other params (like payment=success)
+      params.delete("publish");
+      params.delete("galleryId");
+      params.delete("duration");
+      params.delete("planKey");
+      
+      const newParamsStr = params.toString();
+      const newPath = router.asPath.split("?")[0]; // Get path without query string
+      const newUrl = newParamsStr 
+        ? `${newPath}?${newParamsStr}`
+        : newPath;
+      
+      // Use router.replace() to update Next.js router state properly
+      void router.replace(newUrl, undefined, { shallow: true });
+    }
+  }, [router]);
+
+  // Check URL params to auto-open wizard (but skip if gallery is already published)
   useEffect(() => {
-    if (typeof window !== "undefined" && galleryId && router.isReady) {
+    if (typeof window !== "undefined" && galleryId && router.isReady && gallery) {
       const params = new URLSearchParams(window.location.search);
       const publishParam = params.get("publish");
       const galleryParam = params.get("galleryId");
 
       if (publishParam === "true" && galleryParam === galleryId) {
-        setPublishWizardOpenStore(true, galleryId);
+        // Check if gallery is already published
+        const isAlreadyPublished = gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID";
+        
+        if (isAlreadyPublished) {
+          // Gallery is already published - clean up URL params but don't open wizard
+          cleanupPublishParams();
+        } else {
+          // Gallery is not published yet - open the wizard
+          setPublishWizardOpenStore(true, galleryId);
+        }
       }
     }
-  }, [galleryId, router.isReady]);
+  }, [galleryId, router.isReady, gallery, setPublishWizardOpenStore, cleanupPublishParams]);
+
+  // Clean up URL params when wizard closes (so NextStepsOverlay can show)
+  useEffect(() => {
+    if (typeof window !== "undefined" && router.isReady && galleryId) {
+      // Only clean up if wizard is closed and we have publish params in URL
+      if (!publishWizardOpen && router.query.publish === "true") {
+        cleanupPublishParams();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publishWizardOpen, router.isReady, router.query.publish, galleryId, cleanupPublishParams]);
 
   const confirmPayment = async () => {
     if (!galleryId || !paymentDetails) {
@@ -363,6 +409,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
             isOpen={isPublishWizardOpenForThisGallery}
             onClose={() => {
               setPublishWizardOpenStore(false);
+              // Clean up URL params when wizard closes so NextStepsOverlay can show
+              cleanupPublishParams();
             }}
             galleryId={galleryId}
             onSuccess={async () => {
