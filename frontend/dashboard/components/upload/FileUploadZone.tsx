@@ -71,6 +71,13 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         return;
       }
 
+      // Check if drag is over sidebar (left side < 380px) - don't activate overlay for sidebar
+      const isOverSidebar = e.clientX < 380;
+      if (isOverSidebar) {
+        // Don't activate full-page dragging for sidebar area
+        return;
+      }
+
       isDraggingFilesRef.current = true;
       dragCounterRef.current += 1;
       if (!uploading) {
@@ -79,6 +86,13 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
     };
 
     const handleDocumentDragOver = (e: DragEvent): void => {
+      // Check if drag is over sidebar (left side < 380px) - don't interfere with sidebar drag/drop
+      const isOverSidebar = e.clientX < 380;
+      if (isOverSidebar) {
+        // Don't prevent default or stop propagation for sidebar drag events
+        return;
+      }
+      
       e.preventDefault();
       e.stopPropagation();
       if (!uploading && isDraggingFilesRef.current) {
@@ -101,6 +115,17 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
     };
 
     const handleDocumentDrop = (e: DragEvent): void => {
+      // Check if drop is over sidebar (left side < 380px) - don't interfere with sidebar drag/drop
+      const isOverSidebar = e.clientX < 380;
+      if (isOverSidebar) {
+        // Don't prevent default or stop propagation for sidebar drop events
+        // Reset state but let the sidebar handle the drop
+        setIsFullPageDragging(false);
+        dragCounterRef.current = 0;
+        isDraggingFilesRef.current = false;
+        return;
+      }
+      
       e.preventDefault();
       e.stopPropagation();
       setIsFullPageDragging(false);
@@ -133,10 +158,10 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
 
   return (
     <>
-      {/* Full-page invisible overlay for drop detection */}
+      {/* Full-page invisible overlay for drop detection - excludes sidebar (380px) */}
       {fullPageDrop && isFullPageDragging && (
         <div
-          className="fixed inset-0 z-50 pointer-events-auto"
+          className="fixed top-0 right-0 bottom-0 left-[380px] z-50 pointer-events-auto"
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
