@@ -15,6 +15,12 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+    transition: transform 0.1s ease-in-out;
+  }
+  
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: scale(0.98);
   }
   body {
     @apply relative font-normal font-outfit bg-gray-50 dark:bg-gray-dark;

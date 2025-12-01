@@ -20,9 +20,9 @@ export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
   const getStatusText = () => {
     switch (status) {
       case "generating":
-        return "Generowanie ZIP...";
+        return "Generowanie ZIP";
       case "downloading":
-        return "Pobieranie ZIP...";
+        return "Pobieranie ZIP";
       case "error":
         return "Błąd";
       case "success":
@@ -96,14 +96,19 @@ export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Zamówienie: {orderId}</p>
+          {status === "generating" && (
+            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+              Pobieranie rozpocznie się automatycznie po wygenerowaniu pliku
+            </p>
+          )}
           {error && (
             <p className="text-xs text-error-600 dark:text-error-400 mt-1 break-words">{error}</p>
           )}
           {status === "generating" && (
             <div className="mt-2">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
                 <div
-                  className="bg-brand-500 h-1 rounded-full animate-pulse"
+                  className="bg-brand-500 h-1.5 rounded-full transition-all duration-300 animate-pulse"
                   style={{ width: "60%" }}
                 />
               </div>

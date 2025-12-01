@@ -246,7 +246,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
               {sendLinkLoading
                 ? "Wysyłanie..."
                 : hasExistingOrders
-                  ? "Wyślij link do galerii"
+                  ? "Wyślij link przypominający"
                   : "Udostępnij klientowi"}
             </Button>
           )}

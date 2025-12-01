@@ -101,11 +101,6 @@ export const useFinalImageDelete = ({
 
               if (!imageStillExists) {
                 // Image is gone from S3! Deletion is complete
-                // eslint-disable-next-line no-console
-                console.log(
-                  `[useFinalImageDelete] Image ${imageKey} deleted from S3 after ${attempts} poll attempts`
-                );
-
                 // Don't apply optimistic update here - we refresh immediately after
                 // This prevents conflicts with concurrent deletions and ensures accuracy
                 // The refresh will update bytes with the correct server-side value

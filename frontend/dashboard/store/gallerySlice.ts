@@ -143,13 +143,6 @@ export const useGalleryStore = create<GalleryState>()(
           const currentFinalsBytes =
             (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
           const newFinalsBytes = Math.max(0, currentFinalsBytes + sizeDelta);
-          // eslint-disable-next-line no-console
-          console.log("[gallerySlice] updateFinalsBytesUsed", {
-            currentFinalsBytes,
-            sizeDelta,
-            newFinalsBytes,
-            galleryId: state.currentGallery.galleryId,
-          });
           return {
             currentGallery: {
               ...state.currentGallery,
@@ -444,7 +437,15 @@ export const useGalleryStore = create<GalleryState>()(
           set({ galleryOrders: typedOrders });
           return orders;
         } catch (err) {
-          // Return empty array on error instead of throwing
+          // Check if error is 404 (gallery not found/deleted) - handle silently
+          const apiError = err as { status?: number };
+          if (apiError.status === 404) {
+            // Gallery doesn't exist (deleted) - return empty array silently
+            set({ galleryOrders: [] });
+            return [];
+          }
+          
+          // For other errors, log but still return empty array
           // eslint-disable-next-line no-console
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
           set({ galleryOrders: [] });
@@ -487,20 +488,8 @@ export const useGalleryStore = create<GalleryState>()(
       refreshGalleryBytesOnly: async (galleryId: string, forceRecalc = false) => {
         const state = get();
 
-        console.log("[gallerySlice] refreshGalleryBytesOnly - Starting", {
-          galleryId,
-          forceRecalc,
-          currentGalleryId: state.currentGalleryId,
-          currentFinalsBytes: state.currentGallery?.finalsBytesUsed,
-          currentOriginalsBytes: state.currentGallery?.originalsBytesUsed,
-        });
-
         // Only refresh if this is the current gallery
         if (state.currentGalleryId !== galleryId) {
-          console.log("[gallerySlice] refreshGalleryBytesOnly - Skipping (different gallery)", {
-            requestedGalleryId: galleryId,
-            currentGalleryId: state.currentGalleryId,
-          });
           return;
         }
 
@@ -508,31 +497,14 @@ export const useGalleryStore = create<GalleryState>()(
         // Debouncing removed - called explicitly when needed (image removed or all photos uploaded)
         // forceRecalc: if true, forces recalculation from S3 (bypasses cache)
         try {
-          console.log("[gallerySlice] refreshGalleryBytesOnly - Calling API", {
-            galleryId,
-            forceRecalc,
-          });
           const bytesData = await api.galleries.getBytesUsed(galleryId, forceRecalc);
-          console.log("[gallerySlice] refreshGalleryBytesOnly - API response", {
-            bytesData,
-            originalsBytesUsed: bytesData.originalsBytesUsed,
-            finalsBytesUsed: bytesData.finalsBytesUsed,
-          });
 
           // Only update bytes fields - lightweight update without full gallery fetch
           if (bytesData) {
             set((currentState) => {
               if (!currentState.currentGallery || currentState.currentGalleryId !== galleryId) {
-                console.log(
-                  "[gallerySlice] refreshGalleryBytesOnly - Skipping update (gallery changed)"
-                );
                 return currentState; // Don't update if gallery changed
               }
-
-              const beforeUpdate = {
-                originalsBytesUsed: currentState.currentGallery.originalsBytesUsed,
-                finalsBytesUsed: currentState.currentGallery.finalsBytesUsed,
-              };
 
               // Only update bytes fields, keep everything else
               const updatedGallery = {
@@ -540,15 +512,6 @@ export const useGalleryStore = create<GalleryState>()(
                 originalsBytesUsed: bytesData.originalsBytesUsed ?? 0,
                 finalsBytesUsed: bytesData.finalsBytesUsed ?? 0,
               };
-
-              // eslint-disable-next-line no-console
-              console.log("[gallerySlice] refreshGalleryBytesOnly - Updating store", {
-                before: beforeUpdate,
-                after: {
-                  originalsBytesUsed: updatedGallery.originalsBytesUsed,
-                  finalsBytesUsed: updatedGallery.finalsBytesUsed,
-                },
-              });
 
               return {
                 ...currentState,

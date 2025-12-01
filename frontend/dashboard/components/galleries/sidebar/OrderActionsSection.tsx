@@ -1,9 +1,10 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 
 import { useModal } from "../../../hooks/useModal";
 import { useGalleryStore } from "../../../store/gallerySlice";
 import { useOrderStore } from "../../../store/orderSlice";
 import Button from "../../ui/button/Button";
+import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
 interface OrderActionsSectionProps {
   orderId: string;
@@ -29,6 +30,12 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
 
+  // Confirmation dialog states
+  const [showSendFinalsDialog, setShowSendFinalsDialog] = useState(false);
+  const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
+  const [sendFinalsLoading, setSendFinalsLoading] = useState(false);
+  const [markPaidLoading, setMarkPaidLoading] = useState(false);
+
   // Get computed values from store (before conditional returns)
   const orderHasFinals = hasFinals(orderId);
   const canDownloadZipValue = canDownloadZip(orderId, gallery?.selectionEnabled);
@@ -44,9 +51,24 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
     openDenyModal();
   }, [openDenyModal]);
 
-  const handleMarkOrderPaid = useCallback(async () => {
-    if (!galleryId) return;
-    await markOrderPaid(galleryId, orderId);
+  const handleMarkOrderPaidClick = useCallback(() => {
+    setShowMarkPaidDialog(true);
+  }, []);
+
+  const handleMarkOrderPaidConfirm = useCallback(async () => {
+    if (!galleryId) {
+      setShowMarkPaidDialog(false);
+      return;
+    }
+    setMarkPaidLoading(true);
+    try {
+      await markOrderPaid(galleryId, orderId);
+      setShowMarkPaidDialog(false);
+    } catch (err) {
+      // Error handling is done in the store action
+    } finally {
+      setMarkPaidLoading(false);
+    }
   }, [galleryId, orderId, markOrderPaid]);
 
   const handleDownloadFinals = useCallback(async () => {
@@ -54,9 +76,24 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
     await downloadFinals(galleryId, orderId);
   }, [galleryId, orderId, downloadFinals]);
 
-  const handleSendFinalsToClient = useCallback(() => {
-    if (!galleryId) return;
-    void sendFinalsToClient(galleryId, orderId);
+  const handleSendFinalsToClientClick = useCallback(() => {
+    setShowSendFinalsDialog(true);
+  }, []);
+
+  const handleSendFinalsToClientConfirm = useCallback(async () => {
+    if (!galleryId) {
+      setShowSendFinalsDialog(false);
+      return;
+    }
+    setSendFinalsLoading(true);
+    try {
+      await sendFinalsToClient(galleryId, orderId);
+      setShowSendFinalsDialog(false);
+    } catch (err) {
+      // Error handling is done in the store action
+    } finally {
+      setSendFinalsLoading(false);
+    }
   }, [galleryId, orderId, sendFinalsToClient]);
 
   const handleDownloadZip = useCallback(async () => {
@@ -210,7 +247,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
           <Button
             size="sm"
             variant="outline"
-            onClick={handleMarkOrderPaid}
+            onClick={handleMarkOrderPaidClick}
+            disabled={markPaidLoading}
             className="w-full justify-start"
           >
             <svg
@@ -232,9 +270,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
           <Button
             size="sm"
             variant="outline"
-            onClick={handleSendFinalsToClient}
+            onClick={handleSendFinalsToClientClick}
             className="w-full justify-start"
-            disabled={order.deliveryStatus === "DELIVERED"}
+            disabled={order.deliveryStatus === "DELIVERED" || sendFinalsLoading}
           >
             <svg
               width="16"
@@ -252,10 +290,47 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
                 strokeLinejoin="round"
               />
             </svg>
-            {order.deliveryStatus === "DELIVERED" ? "Finały wysłane" : "Wyślij finały do klienta"}
+            {order.deliveryStatus === "DELIVERED" 
+              ? "Finały wysłane" 
+              : sendFinalsLoading 
+                ? "Wysyłanie..." 
+                : "Wyślij finały do klienta"}
           </Button>
         )}
       </div>
+
+      {/* Confirmation Dialogs */}
+      <ConfirmDialog
+        isOpen={showMarkPaidDialog}
+        onClose={() => {
+          if (!markPaidLoading) {
+            setShowMarkPaidDialog(false);
+          }
+        }}
+        onConfirm={handleMarkOrderPaidConfirm}
+        title="Oznacz zlecenie jako opłacone"
+        message={`Czy na pewno chcesz oznaczyć zlecenie #${order.orderNumber ?? orderId} jako opłacone?\n\nTa operacja jest nieodwracalna.`}
+        confirmText="Oznacz jako opłacone"
+        cancelText="Anuluj"
+        variant="info"
+        loading={markPaidLoading}
+      />
+
+      <ConfirmDialog
+        isOpen={showSendFinalsDialog}
+        onClose={() => {
+          if (!sendFinalsLoading) {
+            setShowSendFinalsDialog(false);
+          }
+        }}
+        onConfirm={handleSendFinalsToClientConfirm}
+        title="Wyślij finały do klienta"
+        message={`Czy na pewno chcesz wysłać finały dla zlecenia #${order.orderNumber ?? orderId} do klienta?\n\nTa operacja jest nieodwracalna. Klient otrzyma email z linkiem do pobrania finalnych zdjęć.`}
+        confirmText="Wyślij finały"
+        cancelText="Anuluj"
+        variant="info"
+        loading={sendFinalsLoading}
+      />
     </div>
   );
 };

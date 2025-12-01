@@ -122,7 +122,7 @@ export default function GalleryPhotos() {
   const [imageOrderStatus, setImageOrderStatus] = useState<Map<string, string>>(new Map()); // Map image key to order delivery status
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set()); // Track expanded order sections
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
 
   // Use hook for deletion logic
   const {
@@ -353,9 +353,20 @@ export default function GalleryPhotos() {
       setAllOrderSelectionKeys(allOrderKeys);
       setImageOrderStatus(imageStatusMap);
     } catch (err) {
+      // Check if error is 404 (gallery not found/deleted) - handle silently
+      const apiError = err as { status?: number };
+      if (apiError.status === 404) {
+        // Gallery doesn't exist (deleted) - silently return empty state
+        setOrders([]);
+        setApprovedSelectionKeys(new Set());
+        setAllOrderSelectionKeys(new Set());
+        setImageOrderStatus(new Map());
+        return;
+      }
+      
+      // For other errors, log but don't show toast - this is not critical
       // eslint-disable-next-line no-console
       console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
-      // Don't show error toast - this is not critical
     }
   }, [galleryId, fetchGalleryOrders]);
 
@@ -756,7 +767,7 @@ export default function GalleryPhotos() {
             </p>
           </div>
         ) : deliveredOrders.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {/* Order Sections */}
             {deliveredOrders.map((order) => {
               const orderId = order.orderId;
@@ -775,17 +786,19 @@ export default function GalleryPhotos() {
               return (
                 <div
                   key={orderId}
-                  className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700"
+                  className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <button
                     onClick={() => toggleSection(sectionId)}
-                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                      isExpanded ? "rounded-t-lg" : "rounded-lg"
+                    }`}
                   >
-                    <div className="flex-1 text-left">
+                    <div className="flex-1 text-left flex items-center gap-3 flex-wrap">
                       <div className="font-semibold text-gray-900 dark:text-white">
                         Zlecenie #{orderDisplayNumber}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
                         {order.createdAt && (
                           <span>Utworzono: {formatDate(order.createdAt)}</span>
                         )}
@@ -797,7 +810,7 @@ export default function GalleryPhotos() {
                           <span className="text-gray-400">Brak dat</span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
                         {orderImages.length}{" "}
                         {orderImages.length === 1
                           ? "zdjęcie"
@@ -807,7 +820,7 @@ export default function GalleryPhotos() {
                       </div>
                     </div>
                     <svg
-                      className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                      className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                         isExpanded ? "transform rotate-180" : ""
                       }`}
                       fill="none"
@@ -823,7 +836,7 @@ export default function GalleryPhotos() {
                     </svg>
                   </button>
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="px-4 pb-4 pt-2 rounded-b-lg">
                       {renderImageGrid(orderImages)}
                     </div>
                   )}
@@ -833,14 +846,16 @@ export default function GalleryPhotos() {
 
             {/* Unselected Section */}
             {unselectedImages.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
                 <button
                   onClick={() => toggleSection("unselected")}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                    expandedSections.has("unselected") ? "rounded-t-lg" : "rounded-lg"
+                  }`}
                 >
-                  <div className="flex-1 text-left">
+                  <div className="flex-1 text-left flex items-center gap-3">
                     <div className="font-semibold text-gray-900 dark:text-white">Niewybrane</div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
                       {unselectedImages.length}{" "}
                       {unselectedImages.length === 1
                         ? "zdjęcie"
@@ -850,7 +865,7 @@ export default function GalleryPhotos() {
                     </div>
                   </div>
                   <svg
-                    className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
+                    className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                       expandedSections.has("unselected") ? "transform rotate-180" : ""
                     }`}
                     fill="none"
@@ -866,7 +881,7 @@ export default function GalleryPhotos() {
                   </svg>
                 </button>
                 {expandedSections.has("unselected") && (
-                  <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="px-4 pb-4 pt-2 rounded-b-lg">
                     {renderImageGrid(unselectedImages)}
                   </div>
                 )}

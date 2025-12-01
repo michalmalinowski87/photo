@@ -107,7 +107,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         )}
 
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+          <Button 
+            variant="outline" 
+            onClick={handleClose} 
+            disabled={loading}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+          >
             {cancelText}
           </Button>
           <Button
@@ -118,7 +123,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               variant === "danger"
                 ? "bg-red-600 hover:bg-red-700 text-white"
                 : variant === "warning"
-                  ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                  ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-green-600 hover:bg-green-700 text-white"
             }
           >

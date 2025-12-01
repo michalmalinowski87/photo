@@ -57,14 +57,6 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
   if (params.type === "originals") {
     // For originals, update store optimistically (like finals)
     const isUpload = params.isUpload ?? sizeDelta > 0; // Positive delta = upload, negative = deletion
-    console.log(
-      `[${params.logContext ?? "optimistic-updates"}] Applying originals optimistic update:`,
-      {
-        galleryId,
-        sizeDelta,
-        isUpload,
-      }
-    );
 
     // Update Zustand store optimistically
     const storeState = useGalleryStore.getState();
@@ -81,17 +73,6 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
     const storeState = useGalleryStore.getState();
     const beforeFinalsBytes = storeState.currentGallery?.finalsBytesUsed as number | undefined;
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `[${params.logContext ?? "optimistic-updates"}] Applying finals optimistic update:`,
-      {
-        galleryId,
-        sizeDelta,
-        beforeFinalsBytes: beforeFinalsBytes ?? 0,
-        expectedNewValue: (beforeFinalsBytes ?? 0) + sizeDelta,
-      }
-    );
-
     if (storeState.currentGallery?.galleryId === galleryId) {
       (storeState as { updateFinalsBytesUsed?: (delta: number) => void }).updateFinalsBytesUsed?.(
         sizeDelta
@@ -99,12 +80,6 @@ export function applyOptimisticUpdate(params: ApplyOptimisticUpdateParams): void
       const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as
         | number
         | undefined;
-      // eslint-disable-next-line no-console
-      console.log(
-        `[${params.logContext ?? "optimistic-updates"}] Updated store, new value:`,
-        newStoreValue,
-        `(was ${beforeFinalsBytes ?? 0}, added ${sizeDelta})`
-      );
 
       // Update optimistic state to match store
       setOptimisticFinalsBytes(newStoreValue ?? null);
@@ -128,15 +103,6 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
 
   if (params.type === "originals") {
     // For originals, revert store update
-    console.log(
-      `[${params.logContext ?? "optimistic-updates"}] Reverting originals optimistic update:`,
-      {
-        galleryId,
-        originalSizeDelta: sizeDelta,
-        revertDelta,
-      }
-    );
-
     // Revert store update (add back the size)
     const storeState = useGalleryStore.getState();
     if (storeState.currentGallery?.galleryId === galleryId) {
@@ -148,15 +114,6 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
     // For finals, revert store, local state, and dispatch event
     const { setOptimisticFinalsBytes } = params;
 
-    console.log(
-      `[${params.logContext ?? "optimistic-updates"}] Reverting finals optimistic update:`,
-      {
-        galleryId,
-        originalSizeDelta: sizeDelta,
-        revertDelta,
-      }
-    );
-
     // Revert store update (add back the size)
     const storeState = useGalleryStore.getState();
     if (storeState.currentGallery?.galleryId === galleryId) {
@@ -166,10 +123,6 @@ export function revertOptimisticUpdate(params: RevertOptimisticUpdateParams): vo
       const newStoreValue = useGalleryStore.getState().currentGallery?.finalsBytesUsed as
         | number
         | undefined;
-      console.log(
-        `[${params.logContext ?? "optimistic-updates"}] Reverted store, new value:`,
-        newStoreValue
-      );
 
       // Revert optimistic state
       setOptimisticFinalsBytes(newStoreValue ?? null);

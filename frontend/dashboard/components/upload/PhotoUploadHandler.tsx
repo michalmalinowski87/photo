@@ -277,40 +277,15 @@ export function usePhotoUploadHandler(config: PhotoUploadHandlerConfig) {
           // Guard ensures this is only called once per upload batch
           hasTriggeredRecalculationRef.current = true;
 
-          // eslint-disable-next-line no-console
-          console.log("[PhotoUploadHandler] All uploads complete, triggering recalculation", {
-            type: config.type,
-            galleryId: config.galleryId,
-            orderId: config.orderId,
-            uploadSuccesses,
-            currentOriginalsBytes: useGalleryStore.getState().currentGallery?.originalsBytesUsed,
-            currentFinalsBytes: useGalleryStore.getState().currentGallery?.finalsBytesUsed,
-          });
-
           const { refreshGalleryBytesOnly } = useGalleryStore.getState();
           void refreshGalleryBytesOnly(config.galleryId, true); // forceRecalc = true, silent (no loading state)
 
           if (config.type === "finals") {
-            // eslint-disable-next-line no-console
-            console.log(
-              "[PhotoUploadHandler] Finals upload complete, marking upload-complete endpoint",
-              {
-                galleryId: config.galleryId,
-                orderId: config.orderId,
-              }
-            );
             // Mark final upload complete (also triggers recalculation on backend and updates order status)
             try {
               const orderId = config.orderId ?? "";
               await api.uploads.markFinalUploadComplete(config.galleryId, orderId);
-              // eslint-disable-next-line no-console
-              console.log(
-                "[PhotoUploadHandler] Finals upload-complete endpoint called successfully",
-                {
-                  galleryId: config.galleryId,
-                  orderId,
-                }
-              );
+
               // Don't call loadOrderData here - it would fetch stale gallery data and overwrite the correct bytes
               // The refreshGalleryBytesOnly call above already updates the bytes correctly
               // Order status will be refreshed when processing completes (via onUploadComplete callback)

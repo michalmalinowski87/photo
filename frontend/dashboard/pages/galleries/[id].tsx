@@ -276,6 +276,16 @@ export default function GalleryDetail() {
       const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
       setOrders(orders);
     } catch (err) {
+      // Check if error is 404 (gallery not found/deleted) - handle silently
+      const apiError = err as { status?: number };
+      if (apiError.status === 404) {
+        // Gallery doesn't exist (deleted) - silently set empty orders
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+      
+      // For other errors, show toast
       // eslint-disable-next-line no-console
       console.error("[GalleryDetail] loadOrders: Error", err);
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");

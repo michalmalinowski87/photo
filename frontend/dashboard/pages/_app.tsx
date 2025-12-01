@@ -12,6 +12,7 @@ import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredMod
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
+import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { clearEphemeralState } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -127,6 +128,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <WebPCompatibilityCheck>
         <SessionExpiredModalWrapper />
         <ToastContainer />
+        <ZipDownloadContainer />
         <GalleryLayoutWrapper>
           <Component {...pageProps} />
         </GalleryLayoutWrapper>
@@ -139,6 +141,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <WebPCompatibilityCheck>
       <SessionExpiredModalWrapper />
       <ToastContainer />
+      <ZipDownloadContainer />
       <AppLayout>
         <Component {...pageProps} />
       </AppLayout>
