@@ -22,6 +22,7 @@ interface BusinessForm {
 
 export default function Settings() {
   const { showToast } = useToast();
+  const [loading, setLoading] = useState<boolean>(true);
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [passwordLoading, setPasswordLoading] = useState<boolean>(false);
   const [businessInfoLoading, setBusinessInfoLoading] = useState<boolean>(false);
@@ -76,6 +77,8 @@ export default function Settings() {
           email: loginEmail,
         }));
       }
+    } finally {
+      setLoading(false);
     }
   }, [loginEmail]);
 
@@ -150,19 +153,32 @@ export default function Settings() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ustawienia</h1>
 
-      <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="space-y-1" style={{ minHeight: "60px" }}>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Email logowania
-          </label>
-          <p className="text-sm text-gray-900 dark:text-white">
-            {loginEmail ?? "Ładowanie danych..."}
-          </p>
-        </div>
-      </div>
+      {loading ? (
+        <>
+          {/* Email logowania Skeleton */}
+          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[93.33px] animate-fade-in-out"></div>
 
-      <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Zmiana hasła</h2>
+          {/* Zmiana hasła Skeleton */}
+          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[349.33px] animate-fade-in-out"></div>
+
+          {/* Informacje kontaktowe Skeleton */}
+          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-96 animate-fade-in-out"></div>
+        </>
+      ) : (
+        <>
+          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <div className="space-y-1" style={{ minHeight: "60px" }}>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Email logowania
+              </label>
+              <p className="text-sm text-gray-900 dark:text-white">
+                {loginEmail ?? "Ładowanie danych..."}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Zmiana hasła</h2>
 
         <form onSubmit={handlePasswordChange}>
           <div className="mb-1.5">
@@ -325,6 +341,8 @@ export default function Settings() {
           </div>
         </form>
       </div>
+        </>
+      )}
     </div>
   );
 }

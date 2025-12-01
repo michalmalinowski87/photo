@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 
 import Badge from "../components/ui/badge/Badge";
 import Button from "../components/ui/button/Button";
-import { Loading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import { useToast } from "../hooks/useToast";
@@ -163,51 +162,54 @@ export default function Wallet() {
         </div>
       )}
 
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Saldo portfela</div>
-            <div className="text-4xl font-bold text-gray-900 dark:text-white">
-              {balance !== null ? formatPrice(balance) : "0.00 PLN"}
+      {loading ? (
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[325.33px] animate-fade-in-out"></div>
+      ) : (
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Saldo portfela</div>
+              <div className="text-4xl font-bold text-gray-900 dark:text-white">
+                {balance !== null ? formatPrice(balance) : "0.00 PLN"}
+              </div>
             </div>
+            <Button variant="outline" onClick={loadBalance} disabled={loading}>
+              Odśwież
+            </Button>
           </div>
-          <Button variant="outline" onClick={loadBalance} disabled={loading}>
-            Odśwież
-          </Button>
+
+          <WalletTopUpSection
+            onTopUp={handleTopUpComplete}
+            isLoading={loading}
+            quickAmounts={[2000, 5000, 10000, 20000]}
+            showCustomInput={true}
+          />
         </div>
+      )}
 
-        <WalletTopUpSection
-          onTopUp={handleTopUpComplete}
-          isLoading={loading}
-          quickAmounts={[2000, 5000, 10000, 20000]}
-          showCustomInput={true}
-        />
-      </div>
-
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Historia transakcji
-          </h2>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCurrentPage(1);
-              setPageHistory([{ page: 1, cursor: null }]);
-              void loadTransactions(1, null);
-            }}
-            disabled={transactionsLoading}
-          >
-            Odśwież
-          </Button>
-        </div>
-
-        {transactionsLoading ? (
-          <div className="min-h-[620px] flex items-center justify-center">
-            <Loading size="lg" text="Ładowanie transakcji..." />
+      {transactionsLoading ? (
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[724px] animate-fade-in-out"></div>
+      ) : (
+        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Historia transakcji
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage(1);
+                setPageHistory([{ page: 1, cursor: null }]);
+                void loadTransactions(1, null);
+              }}
+              disabled={transactionsLoading}
+            >
+              Odśwież
+            </Button>
           </div>
-        ) : transactions.length === 0 ? (
+
+          {transactions.length === 0 ? (
           <div className="min-h-[530px] flex items-center justify-center">
             <p className="text-gray-500 dark:text-gray-400">Brak transakcji</p>
           </div>
@@ -340,7 +342,8 @@ export default function Wallet() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

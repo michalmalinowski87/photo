@@ -4,7 +4,6 @@ import { ActiveOrdersTable } from "../components/dashboard/ActiveOrdersTable";
 import { StatisticsCard } from "../components/dashboard/StatisticsCard";
 import { DenyChangeRequestModal } from "../components/orders/DenyChangeRequestModal";
 import { OrdersModal } from "../components/orders/OrdersModal";
-import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
@@ -230,10 +229,6 @@ export default function Dashboard() {
     void loadWalletBalance();
   };
 
-  if (loading) {
-    return <ContentViewLoading text="Ładowanie danych..." />;
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -246,46 +241,68 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatisticsCard title="Liczba dostarczonych zleceń" value={stats.deliveredOrders} />
-        <StatisticsCard
-          title="Zlecenia w trakcie wyboru przez klienta"
-          value={stats.clientSelectingOrders}
-        />
-        <StatisticsCard title="Zlecenia gotowe do wysyłki" value={stats.readyToShipOrders} />
-        <StatisticsCard
-          title="Całkowity przychód (PLN)"
-          value={formatPriceNumber(stats.totalRevenue)}
-        />
-      </div>
-
-      {/* Wallet Section */}
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Portfel</h2>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Saldo</div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {walletBalance !== null ? (walletBalance / 100).toFixed(2) : "0.00"} PLN
-            </div>
+      {loading ? (
+        <>
+          {/* Statistics Cards Skeleton */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-32 animate-fade-in-out"
+              ></div>
+            ))}
           </div>
-        </div>
-        <WalletTopUpSection
-          onTopUp={handleTopUpComplete}
-          isLoading={loading}
-          quickAmounts={[2000, 5000, 10000]}
-          showCustomInput={true}
-        />
-      </div>
 
-      {/* Active Orders List */}
-      <ActiveOrdersTable
-        orders={activeOrders}
-        onApproveChangeRequest={handleApproveChangeRequest}
-        onDenyChangeRequest={handleDenyChangeRequest}
-        onViewAllClick={() => setActiveOrdersModalOpen(true)}
-      />
+          {/* Wallet Section Skeleton */}
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-64 animate-fade-in-out"></div>
+
+          {/* Active Orders Table Skeleton */}
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-96 animate-fade-in-out"></div>
+        </>
+      ) : (
+        <>
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatisticsCard title="Liczba dostarczonych zleceń" value={stats.deliveredOrders} />
+            <StatisticsCard
+              title="Zlecenia w trakcie wyboru przez klienta"
+              value={stats.clientSelectingOrders}
+            />
+            <StatisticsCard title="Zlecenia gotowe do wysyłki" value={stats.readyToShipOrders} />
+            <StatisticsCard
+              title="Całkowity przychód (PLN)"
+              value={formatPriceNumber(stats.totalRevenue)}
+            />
+          </div>
+
+          {/* Wallet Section */}
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Portfel</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Saldo</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {walletBalance !== null ? (walletBalance / 100).toFixed(2) : "0.00"} PLN
+                </div>
+              </div>
+            </div>
+            <WalletTopUpSection
+              onTopUp={handleTopUpComplete}
+              isLoading={loading}
+              quickAmounts={[2000, 5000, 10000]}
+              showCustomInput={true}
+            />
+          </div>
+
+          {/* Active Orders List */}
+          <ActiveOrdersTable
+            orders={activeOrders}
+            onApproveChangeRequest={handleApproveChangeRequest}
+            onDenyChangeRequest={handleDenyChangeRequest}
+            onViewAllClick={() => setActiveOrdersModalOpen(true)}
+          />
+        </>
+      )}
 
       {/* Orders Modals */}
       <OrdersModal

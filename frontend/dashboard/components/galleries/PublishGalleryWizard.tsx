@@ -248,9 +248,30 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 
         {loading ? (
           <div className="h-full flex items-center justify-center p-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Ładowanie danych planu...</p>
+            <div className="w-full max-w-6xl mx-auto space-y-6">
+              {/* Wallet Balance Section Skeleton */}
+              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4 h-[205.33px] animate-fade-in-out"></div>
+
+              {/* Suggested Plan Section Skeleton */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border-2 border-blue-300 dark:border-blue-500/30 rounded-lg px-6 pt-6 pb-4 mb-4 h-[279.33px] animate-fade-in-out"></div>
+
+              {/* Plan Selection Grid Skeleton */}
+              <div className="mb-4 h-[360px] animate-fade-in-out">
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-4"></div>
+                <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <div className="flex-1 h-10 bg-white dark:bg-gray-700 rounded-md"></div>
+                  <div className="flex-1 h-10 bg-gray-200 dark:bg-gray-600 rounded-md"></div>
+                  <div className="flex-1 h-10 bg-gray-200 dark:bg-gray-600 rounded-md"></div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border-2 border-gray-200 dark:border-gray-700 p-5 h-[248px] animate-fade-in-out"
+                    ></div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         ) : pricingData ? (
