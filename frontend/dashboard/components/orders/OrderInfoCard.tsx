@@ -27,7 +27,7 @@ export function OrderInfoCard({
   // Subscribe to stores for order and gallery data
   const order = useOrderStore((state) => state.currentOrder);
   const gallery = useGalleryStore((state) => state.currentGallery);
-  
+
   // Defensive check: don't render until order is loaded
   if (!order) {
     return null;

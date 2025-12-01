@@ -269,11 +269,13 @@ export const useOrderStore = create<OrderState>()(
 
           // Show toast
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast(
-            "success",
-            "Sukces",
-            "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
-          );
+          useToastStore
+            .getState()
+            .showToast(
+              "success",
+              "Sukces",
+              "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
+            );
 
           // Reload order and gallery orders
           await state.fetchOrder(galleryId, orderId, true);
@@ -281,11 +283,13 @@ export const useOrderStore = create<OrderState>()(
           await galleryStore.fetchGalleryOrders(galleryId, true);
         } catch (err) {
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast(
-            "error",
-            "Błąd",
-            formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
-          );
+          useToastStore
+            .getState()
+            .showToast(
+              "error",
+              "Błąd",
+              formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
+            );
         }
       },
 
@@ -304,11 +308,13 @@ export const useOrderStore = create<OrderState>()(
 
           // Show toast
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast(
-            "success",
-            "Sukces",
-            "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
-          );
+          useToastStore
+            .getState()
+            .showToast(
+              "success",
+              "Sukces",
+              "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
+            );
 
           // Reload order and gallery orders
           await state.fetchOrder(galleryId, orderId, true);
@@ -316,11 +322,13 @@ export const useOrderStore = create<OrderState>()(
           await galleryStore.fetchGalleryOrders(galleryId, true);
         } catch (err) {
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast(
-            "error",
-            "Błąd",
-            formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany"
-          );
+          useToastStore
+            .getState()
+            .showToast(
+              "error",
+              "Błąd",
+              formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany"
+            );
         } finally {
           set({ denyLoading: false });
         }
@@ -342,7 +350,9 @@ export const useOrderStore = create<OrderState>()(
 
           // Show toast
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
+          useToastStore
+            .getState()
+            .showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
         } catch (err) {
           const { useToastStore } = await import("./toastSlice");
           useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
@@ -460,7 +470,9 @@ export const useOrderStore = create<OrderState>()(
           const response = await api.orders.sendFinalLink(galleryId, orderId);
 
           const { useToastStore } = await import("./toastSlice");
-          useToastStore.getState().showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
+          useToastStore
+            .getState()
+            .showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
 
           // Merge lightweight response into cached order instead of refetching
           state.updateOrderFields(orderId, {
@@ -614,7 +626,7 @@ export const useOrderStore = create<OrderState>()(
       canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => {
         const state = get();
         const selectionEnabled = gallerySelectionEnabled !== false;
-        
+
         // Check if this is the current order
         if (state.currentOrderId !== orderId) {
           // Try cache

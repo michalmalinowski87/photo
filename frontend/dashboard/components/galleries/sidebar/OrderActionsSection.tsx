@@ -16,7 +16,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
   const currentOrderId = useOrderStore((state) => state.currentOrderId);
-  
+
   // Get store actions
   const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
   const denyChangeRequest = useOrderStore((state) => state.denyChangeRequest);
@@ -43,7 +43,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
   // Action handlers - must be defined before any conditional returns
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!galleryId) return;
+    if (!galleryId) {return;}
     await approveChangeRequest(galleryId, orderId);
   }, [galleryId, orderId, approveChangeRequest]);
 
@@ -72,7 +72,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }, [galleryId, orderId, markOrderPaid]);
 
   const handleDownloadFinals = useCallback(async () => {
-    if (!galleryId) return;
+    if (!galleryId) {return;}
     await downloadFinals(galleryId, orderId);
   }, [galleryId, orderId, downloadFinals]);
 
@@ -97,7 +97,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }, [galleryId, orderId, sendFinalsToClient]);
 
   const handleDownloadZip = useCallback(async () => {
-    if (!galleryId) return;
+    if (!galleryId) {return;}
     await downloadZip(galleryId, orderId);
   }, [galleryId, orderId, downloadZip]);
 
@@ -122,32 +122,29 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
       <div className="space-y-2 px-3">
         {/* Download Selected Originals ZIP */}
-        {!isLoading &&
-          gallery &&
-          gallery.selectionEnabled !== false &&
-          canDownloadZipValue && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadZip}
-              className="w-full justify-start"
+        {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownloadZip}
+            className="w-full justify-start"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="mr-2"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="mr-2"
-              >
-                <path
-                  d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
-                  fill="currentColor"
-                />
-              </svg>
-              Pobierz wybrane oryginały (ZIP)
-            </Button>
-          )}
+              <path
+                d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
+                fill="currentColor"
+              />
+            </svg>
+            Pobierz wybrane oryginały (ZIP)
+          </Button>
+        )}
 
         {/* Download Finals - Only show if finals are uploaded */}
         {orderHasFinals && (
@@ -290,10 +287,10 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
                 strokeLinejoin="round"
               />
             </svg>
-            {order.deliveryStatus === "DELIVERED" 
-              ? "Finały wysłane" 
-              : sendFinalsLoading 
-                ? "Wysyłanie..." 
+            {order.deliveryStatus === "DELIVERED"
+              ? "Finały wysłane"
+              : sendFinalsLoading
+                ? "Wysyłanie..."
                 : "Wyślij finały do klienta"}
           </Button>
         )}

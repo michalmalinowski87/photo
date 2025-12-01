@@ -37,6 +37,15 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
 
   const [urlCopied, setUrlCopied] = useState(false);
 
+  // Early return: don't render if gallery doesn't exist or should hide
+  // Check gallery FIRST to prevent any computation or rendering with stale data
+  // This is critical to prevent flash of stale cache data after gallery deletion
+  // Also check if galleryId from URL doesn't match current gallery (indicates deletion/navigation)
+  const galleryIdMismatch = galleryIdStr && gallery?.galleryId !== galleryIdStr;
+  if (!gallery || shouldHideSecondaryElements || galleryIdMismatch) {
+    return null;
+  }
+
   // Use galleryUrl from store, fallback to computed if not set
   const displayGalleryUrl =
     galleryUrl ||
@@ -48,8 +57,8 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const hasPhotos = (gallery?.originalsBytesUsed ?? 0) > 0;
   const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
 
-  // Defensive check: don't render if no gallery URL or should hide
-  if (!displayGalleryUrl || shouldHideSecondaryElements) {
+  // Defensive check: don't render if no gallery URL
+  if (!displayGalleryUrl) {
     return null;
   }
 
@@ -93,12 +102,11 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   // Get gallery orders - use cache entry if available (it's kept fresh by fetchGalleryOrders)
   // The cache is invalidated and refetched when sendGalleryLinkToClient is called, so it should be current
   // We check both the cache entry (for reactivity) and the state (as fallback)
-  const galleryOrders: unknown[] | null =
-    galleryOrdersCacheEntry
-      ? (galleryOrdersCacheEntry.orders as unknown[])
-      : galleryOrdersState && Array.isArray(galleryOrdersState) && galleryOrdersState.length > 0
-        ? (galleryOrdersState as unknown[])
-        : null;
+  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry
+    ? (galleryOrdersCacheEntry.orders as unknown[])
+    : galleryOrdersState && Array.isArray(galleryOrdersState) && galleryOrdersState.length > 0
+      ? (galleryOrdersState as unknown[])
+      : null;
 
   // Check if gallery has a CLIENT_SELECTING order
   const hasClientSelectingOrder =
@@ -132,7 +140,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   return (
     <div className="py-4 border-b border-gray-200 dark:border-gray-800">
       <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Adres www galerii:</div>
-      <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs break-all text-blue-600 dark:text-blue-400 mb-2">
+      <div className="p-2 bg-transparent dark:bg-transparent rounded text-xs break-all text-blue-600 dark:text-blue-400 mb-2">
         {displayGalleryUrl}
       </div>
       <Button

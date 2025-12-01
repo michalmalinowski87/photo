@@ -1,5 +1,5 @@
-import { useOrderStore } from "../../store/orderSlice";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
+import { useOrderStore } from "../../store/orderSlice";
 
 interface OrderTabsProps {
   activeTab: "originals" | "finals";
@@ -10,7 +10,7 @@ interface OrderTabsProps {
 export function OrderTabs({ activeTab, onTabChange, finalsCount }: OrderTabsProps) {
   // Get order from store to calculate originals count
   const order = useOrderStore((state) => state.currentOrder);
-  
+
   // Defensive check: don't render until order is loaded
   if (!order) {
     return null;

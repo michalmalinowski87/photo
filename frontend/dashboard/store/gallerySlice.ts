@@ -444,7 +444,7 @@ export const useGalleryStore = create<GalleryState>()(
             set({ galleryOrders: [] });
             return [];
           }
-          
+
           // For other errors, log but still return empty array
           // eslint-disable-next-line no-console
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
@@ -469,10 +469,10 @@ export const useGalleryStore = create<GalleryState>()(
             const { useOrderStore } = await import("./orderSlice");
             useOrderStore.getState().invalidateGalleryOrdersCache(galleryId);
             get().invalidateGalleryOrdersCache(galleryId);
-            
+
             // Fetch fresh orders (will fetch since cache was invalidated)
             await get().fetchGalleryOrders(galleryId, false);
-            
+
             // Gallery data hasn't changed (just order creation), so no need to invalidate/fetch gallery cache
           }
 
@@ -659,9 +659,7 @@ export const useGalleryStore = create<GalleryState>()(
         const state = get();
         const url =
           state.galleryUrl ||
-          (typeof window !== "undefined"
-            ? `${window.location.origin}/gallery/${galleryId}`
-            : "");
+          (typeof window !== "undefined" ? `${window.location.origin}/gallery/${galleryId}` : "");
         if (typeof window !== "undefined" && url) {
           void navigator.clipboard.writeText(url).catch(() => {
             // Ignore clipboard errors

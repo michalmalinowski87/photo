@@ -146,7 +146,6 @@ export function useS3Upload(config: UseS3UploadConfig) {
                       // No-op for uploads - polling will update state
                     },
                   });
-
                 }
 
                 // Update per-image progress to processing

@@ -3,10 +3,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
+import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
-import Badge from "../../../components/ui/badge/Badge";
 import { FileUploadZone } from "../../../components/upload/FileUploadZone";
 import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";
 import { StorageDisplay } from "../../../components/upload/StorageDisplay";
@@ -284,91 +284,98 @@ export default function GalleryPhotos() {
     [galleryId, showToast, fetchGalleryImages, deletingImagesRef]
   );
 
-  const loadApprovedSelections = useCallback(async (forceRefresh = false): Promise<void> => {
-    if (!galleryId) {
-      return;
-    }
-
-    try {
-      // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
-      const ordersData = await fetchGalleryOrders(galleryId as string, forceRefresh);
-      
-      setOrders(ordersData);
-
-      // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
-      const approvedOrders = (ordersData as GalleryOrder[]).filter(
-        (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
-      );
-
-      // Collect all selected keys from approved orders
-      const approvedKeys = new Set<string>();
-      approvedOrders.forEach((order) => {
-        const selectedKeys = Array.isArray(order.selectedKeys)
-          ? order.selectedKeys
-          : typeof order.selectedKeys === "string"
-            ? (JSON.parse(order.selectedKeys) as string[])
-            : [];
-        selectedKeys.forEach((key: string) => approvedKeys.add(key));
-      });
-
-      setApprovedSelectionKeys(approvedKeys);
-
-      // Collect all selected keys from ANY order (for "Selected" display)
-      // Also track order delivery status for each image
-      const allOrderKeys = new Set<string>();
-      const imageStatusMap = new Map<string, string>();
-      
-      (ordersData as GalleryOrder[]).forEach((order) => {
-        const selectedKeys = Array.isArray(order.selectedKeys)
-          ? order.selectedKeys
-          : typeof order.selectedKeys === "string"
-            ? (JSON.parse(order.selectedKeys) as string[])
-            : [];
-        const orderStatus = order.deliveryStatus || "";
-        
-        selectedKeys.forEach((key: string) => {
-          allOrderKeys.add(key);
-          // Track the highest priority status for each image
-          // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
-          const currentStatus = imageStatusMap.get(key);
-          if (!currentStatus) {
-            imageStatusMap.set(key, orderStatus);
-          } else if (orderStatus === "DELIVERED") {
-            imageStatusMap.set(key, "DELIVERED");
-          } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
-            imageStatusMap.set(key, "PREPARING_DELIVERY");
-          } else if (orderStatus === "PREPARING_FOR_DELIVERY" && 
-                     currentStatus !== "DELIVERED" && 
-                     currentStatus !== "PREPARING_DELIVERY") {
-            imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
-          } else if (orderStatus === "CLIENT_APPROVED" && 
-                     currentStatus !== "DELIVERED" && 
-                     currentStatus !== "PREPARING_DELIVERY" &&
-                     currentStatus !== "PREPARING_FOR_DELIVERY") {
-            imageStatusMap.set(key, "CLIENT_APPROVED");
-          }
-        });
-      });
-
-      setAllOrderSelectionKeys(allOrderKeys);
-      setImageOrderStatus(imageStatusMap);
-    } catch (err) {
-      // Check if error is 404 (gallery not found/deleted) - handle silently
-      const apiError = err as { status?: number };
-      if (apiError.status === 404) {
-        // Gallery doesn't exist (deleted) - silently return empty state
-        setOrders([]);
-        setApprovedSelectionKeys(new Set());
-        setAllOrderSelectionKeys(new Set());
-        setImageOrderStatus(new Map());
+  const loadApprovedSelections = useCallback(
+    async (forceRefresh = false): Promise<void> => {
+      if (!galleryId) {
         return;
       }
-      
-      // For other errors, log but don't show toast - this is not critical
-      // eslint-disable-next-line no-console
-      console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
-    }
-  }, [galleryId, fetchGalleryOrders]);
+
+      try {
+        // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
+        const ordersData = await fetchGalleryOrders(galleryId as string, forceRefresh);
+
+        setOrders(ordersData);
+
+        // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
+        const approvedOrders = (ordersData as GalleryOrder[]).filter(
+          (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
+        );
+
+        // Collect all selected keys from approved orders
+        const approvedKeys = new Set<string>();
+        approvedOrders.forEach((order) => {
+          const selectedKeys = Array.isArray(order.selectedKeys)
+            ? order.selectedKeys
+            : typeof order.selectedKeys === "string"
+              ? (JSON.parse(order.selectedKeys) as string[])
+              : [];
+          selectedKeys.forEach((key: string) => approvedKeys.add(key));
+        });
+
+        setApprovedSelectionKeys(approvedKeys);
+
+        // Collect all selected keys from ANY order (for "Selected" display)
+        // Also track order delivery status for each image
+        const allOrderKeys = new Set<string>();
+        const imageStatusMap = new Map<string, string>();
+
+        (ordersData as GalleryOrder[]).forEach((order) => {
+          const selectedKeys = Array.isArray(order.selectedKeys)
+            ? order.selectedKeys
+            : typeof order.selectedKeys === "string"
+              ? (JSON.parse(order.selectedKeys) as string[])
+              : [];
+          const orderStatus = order.deliveryStatus || "";
+
+          selectedKeys.forEach((key: string) => {
+            allOrderKeys.add(key);
+            // Track the highest priority status for each image
+            // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
+            const currentStatus = imageStatusMap.get(key);
+            if (!currentStatus) {
+              imageStatusMap.set(key, orderStatus);
+            } else if (orderStatus === "DELIVERED") {
+              imageStatusMap.set(key, "DELIVERED");
+            } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
+              imageStatusMap.set(key, "PREPARING_DELIVERY");
+            } else if (
+              orderStatus === "PREPARING_FOR_DELIVERY" &&
+              currentStatus !== "DELIVERED" &&
+              currentStatus !== "PREPARING_DELIVERY"
+            ) {
+              imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
+            } else if (
+              orderStatus === "CLIENT_APPROVED" &&
+              currentStatus !== "DELIVERED" &&
+              currentStatus !== "PREPARING_DELIVERY" &&
+              currentStatus !== "PREPARING_FOR_DELIVERY"
+            ) {
+              imageStatusMap.set(key, "CLIENT_APPROVED");
+            }
+          });
+        });
+
+        setAllOrderSelectionKeys(allOrderKeys);
+        setImageOrderStatus(imageStatusMap);
+      } catch (err) {
+        // Check if error is 404 (gallery not found/deleted) - handle silently
+        const apiError = err as { status?: number };
+        if (apiError.status === 404) {
+          // Gallery doesn't exist (deleted) - silently return empty state
+          setOrders([]);
+          setApprovedSelectionKeys(new Set());
+          setAllOrderSelectionKeys(new Set());
+          setImageOrderStatus(new Map());
+          return;
+        }
+
+        // For other errors, log but don't show toast - this is not critical
+        // eslint-disable-next-line no-console
+        console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
+      }
+    },
+    [galleryId, fetchGalleryOrders]
+  );
 
   // Initialize auth and load data
   useEffect(() => {
@@ -381,9 +388,9 @@ export default function GalleryPhotos() {
           );
           const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
           const hasPaymentSuccess = params.get("payment") === "success";
-          
+
           void loadPhotos();
-          
+
           // If we have redirect params (Stripe redirect), force refresh orders
           if (hasRedirectParams || hasPaymentSuccess) {
             const { invalidateGalleryOrdersCache } = useGalleryStore.getState();
@@ -478,13 +485,13 @@ export default function GalleryPhotos() {
   // Get order delivery status for an image
   const getImageOrderStatus = (image: GalleryImage): string | null => {
     const imageKey = image.key ?? image.filename;
-    return imageKey ? (imageOrderStatus.get(imageKey) || null) : null;
+    return imageKey ? imageOrderStatus.get(imageKey) || null : null;
   };
 
   // Helper to normalize selectedKeys from order
   const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
-    if (!selectedKeys) return [];
-    if (Array.isArray(selectedKeys)) return selectedKeys.map((k) => k.toString().trim());
+    if (!selectedKeys) {return [];}
+    if (Array.isArray(selectedKeys)) {return selectedKeys.map((k) => k.toString().trim());}
     if (typeof selectedKeys === "string") {
       try {
         const parsed = JSON.parse(selectedKeys);
@@ -498,7 +505,7 @@ export default function GalleryPhotos() {
 
   // Format date for display
   const formatDate = (dateString?: string): string => {
-    if (!dateString) return "";
+    if (!dateString) {return "";}
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString("pl-PL", {
@@ -514,7 +521,7 @@ export default function GalleryPhotos() {
   };
 
   // Get delivered orders (DELIVERED or PREPARING_DELIVERY)
-  const deliveredOrders = (orders as GalleryOrder[]).filter(
+  const deliveredOrders = (orders).filter(
     (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
   );
 
@@ -524,7 +531,7 @@ export default function GalleryPhotos() {
 
   deliveredOrders.forEach((order) => {
     const orderId = order.orderId;
-    if (!orderId) return;
+    if (!orderId) {return;}
 
     const selectedKeys = normalizeOrderSelectedKeys(order.selectedKeys);
     const orderImages: GalleryImage[] = [];
@@ -601,33 +608,49 @@ export default function GalleryPhotos() {
                         />
                       ) : (
                         <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-                          <div className="text-xs text-gray-500 dark:text-gray-400">Ładowanie...</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Ładowanie...
+                          </div>
                         </div>
                       )
                     }
                   </LazyImage>
-                        {orderStatus && (() => {
-                          // Map order status to badge color and label (matching StatusBadges component)
-                          const statusMap: Record<string, { color: "success" | "info" | "warning" | "error" | "light" | "dark" | "primary"; label: string }> = {
-                            CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-                            PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
-                            PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
-                            DELIVERED: { color: "success", label: "Dostarczone" },
-                          };
-                          
-                          const statusInfo = statusMap[orderStatus] ?? {
-                            color: "light" as const,
-                            label: orderStatus,
-                          };
-                          
-                          return (
-                            <div className="absolute top-2 right-2 z-20">
-                              <Badge color={statusInfo.color} variant="light" size="sm">
-                                {statusInfo.label}
-                              </Badge>
-                            </div>
-                          );
-                        })()}
+                  {orderStatus &&
+                    (() => {
+                      // Map order status to badge color and label (matching StatusBadges component)
+                      const statusMap: Record<
+                        string,
+                        {
+                          color:
+                            | "success"
+                            | "info"
+                            | "warning"
+                            | "error"
+                            | "light"
+                            | "dark"
+                            | "primary";
+                          label: string;
+                        }
+                      > = {
+                        CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+                        PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
+                        PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+                        DELIVERED: { color: "success", label: "Dostarczone" },
+                      };
+
+                      const statusInfo = statusMap[orderStatus] ?? {
+                        color: "light" as const,
+                        label: orderStatus,
+                      };
+
+                      return (
+                        <div className="absolute top-2 right-2 z-20">
+                          <Badge color={statusInfo.color} variant="light" size="sm">
+                            {statusInfo.label}
+                          </Badge>
+                        </div>
+                      );
+                    })()}
                   {deletingImages.has(imageKey) && (
                     <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
                       <div className="flex flex-col items-center space-y-2">
@@ -771,10 +794,10 @@ export default function GalleryPhotos() {
             {/* Order Sections */}
             {deliveredOrders.map((order) => {
               const orderId = order.orderId;
-              if (!orderId) return null;
+              if (!orderId) {return null;}
 
               const orderImages = imagesByOrder.get(orderId) || [];
-              if (orderImages.length === 0) return null;
+              if (orderImages.length === 0) {return null;}
 
               const sectionId = `order-${orderId}`;
               const isExpanded = expandedSections.has(sectionId);
@@ -799,9 +822,7 @@ export default function GalleryPhotos() {
                         Zlecenie #{orderDisplayNumber}
                       </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
-                        {order.createdAt && (
-                          <span>Utworzono: {formatDate(order.createdAt)}</span>
-                        )}
+                        {order.createdAt && <span>Utworzono: {formatDate(order.createdAt)}</span>}
                         {order.createdAt && order.deliveredAt && <span className="mx-2">•</span>}
                         {order.deliveredAt && (
                           <span>Dostarczono: {formatDate(order.deliveredAt)}</span>

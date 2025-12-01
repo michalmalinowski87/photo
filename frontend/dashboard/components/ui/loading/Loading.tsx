@@ -69,7 +69,7 @@ export const FullPageLoading: React.FC<{ text?: string }> = ({ text }) => {
   );
 
   const loadingOverlay = (
-    <div className="fixed inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-[9999]">
       {content}
     </div>
   );

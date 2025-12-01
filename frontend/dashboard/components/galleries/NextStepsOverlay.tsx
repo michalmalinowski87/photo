@@ -51,13 +51,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     galleryStore as { setNextStepsOverlayExpanded: (expanded: boolean) => void }
   ).setNextStepsOverlayExpanded;
   const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
-  const publishWizardOpen = useGalleryStore((state) => 
-    state.publishWizardOpen && state.publishWizardGalleryId === gallery?.galleryId
+  const publishWizardOpen = useGalleryStore(
+    (state) => state.publishWizardOpen && state.publishWizardGalleryId === gallery?.galleryId
   );
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
   // Use galleryOrders from store instead of orders prop
   const galleryOrders = useGalleryStore((state) => state.galleryOrders);
-  
+
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
@@ -74,25 +74,33 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   // Priority: Store state > URL params (store state is the source of truth)
   const shouldHide = useMemo(() => {
     const isSettingsPage = router.pathname?.includes("/settings");
-    
+
     // Store state is the primary source of truth - if wizard is closed in store, ignore URL params
     if (isSettingsPage || publishWizardOpen) {
       return Boolean(isSettingsPage || publishWizardOpen);
     }
-    
+
     // Only check URL params if wizard is not open in store (fallback for initial page load)
-    const routerHasPublish = router.query.publish === "true" && router.query.galleryId === gallery?.galleryId;
-    
+    const routerHasPublish =
+      router.query.publish === "true" && router.query.galleryId === gallery?.galleryId;
+
     // Also check actual URL for immediate updates
     let actualUrlHasPublish = false;
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      actualUrlHasPublish = params.get("publish") === "true" && params.get("galleryId") === gallery?.galleryId;
+      actualUrlHasPublish =
+        params.get("publish") === "true" && params.get("galleryId") === gallery?.galleryId;
     }
-    
+
     const hasPublishParamInUrl = routerHasPublish || actualUrlHasPublish;
     return Boolean(isSettingsPage || hasPublishParamInUrl);
-  }, [router.pathname, router.query.publish, router.query.galleryId, gallery?.galleryId, publishWizardOpen]);
+  }, [
+    router.pathname,
+    router.query.publish,
+    router.query.galleryId,
+    gallery?.galleryId,
+    publishWizardOpen,
+  ]);
 
   // Load tutorial preference - deferred until overlay is expanded or user interacts
   const loadTutorialPreference = useCallback(async () => {
@@ -137,10 +145,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     // Use galleryOrders from store instead of orders prop
     const ordersToCheck = galleryOrders.length > 0 ? galleryOrders : orders;
     // If there's any order, the gallery has been sent to the client
-    const sendCompleted =
-      gallery.selectionEnabled !== false
-        ? ordersToCheck.length > 0
-        : null;
+    const sendCompleted = gallery.selectionEnabled !== false ? ordersToCheck.length > 0 : null;
 
     return [
       {
@@ -255,7 +260,6 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     overlayContext,
     shouldHide,
   ]);
-
 
   // Reset optimistic bytes when gallery changes
   useEffect(() => {

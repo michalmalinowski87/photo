@@ -43,7 +43,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     reloadGallery,
     copyGalleryUrl,
   } = useGalleryStore();
-  
+
   const {
     currentOrder: order,
     currentOrderId,
@@ -58,7 +58,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     sendFinalsToClient,
     downloadZip: downloadZipAction,
   } = useOrderStore();
-  
+
   const { walletBalanceCents: walletBalance, refreshWalletBalance } = useUserStore();
 
   // Modal hooks
@@ -152,7 +152,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   useEffect(() => {
     if (router.isReady && apiUrl && idToken && galleryId) {
       // Always ensure gallery is loaded - reload if galleryId changed or gallery is missing
-      if (!gallery || gallery.galleryId !== galleryId) {
+      if (gallery?.galleryId !== galleryId) {
         void loadGalleryData(false, true); // Force refresh
       }
       // Refresh wallet balance only when we have a valid token (userSlice handles its own caching)
@@ -248,25 +248,23 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Helper function to clean up publish wizard URL params
   const cleanupPublishParams = useCallback(() => {
-    if (typeof window === "undefined" || !router.isReady) return;
-    
+    if (typeof window === "undefined" || !router.isReady) {return;}
+
     const params = new URLSearchParams(window.location.search);
     const hadPublishParam = params.has("publish");
     const hadGalleryIdParam = params.has("galleryId");
-    
+
     if (hadPublishParam || hadGalleryIdParam) {
       // Remove publish wizard params, but keep other params (like payment=success)
       params.delete("publish");
       params.delete("galleryId");
       params.delete("duration");
       params.delete("planKey");
-      
+
       const newParamsStr = params.toString();
       const newPath = router.asPath.split("?")[0]; // Get path without query string
-      const newUrl = newParamsStr 
-        ? `${newPath}?${newParamsStr}`
-        : newPath;
-      
+      const newUrl = newParamsStr ? `${newPath}?${newParamsStr}` : newPath;
+
       // Use router.replace() to update Next.js router state properly
       void router.replace(newUrl, undefined, { shallow: true });
     }
@@ -281,8 +279,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
       if (publishParam === "true" && galleryParam === galleryId) {
         // Check if gallery is already published
-        const isAlreadyPublished = gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID";
-        
+        const isAlreadyPublished =
+          gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID";
+
         if (isAlreadyPublished) {
           // Gallery is already published - clean up URL params but don't open wizard
           cleanupPublishParams();
@@ -437,7 +436,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         onConfirm={handleDenyConfirm}
         loading={denyLoading}
       />
-
 
       {showPaymentModal && (
         <PaymentConfirmationModal

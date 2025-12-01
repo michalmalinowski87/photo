@@ -9,7 +9,7 @@ const GalleryHeader: React.FC = () => {
   const { orderId: orderIdFromQuery } = router.query;
   const orderId: string | undefined = Array.isArray(orderIdFromQuery)
     ? orderIdFromQuery[0]
-    : (orderIdFromQuery);
+    : orderIdFromQuery;
 
   return (
     <header className="top-0 flex w-full bg-white border-gray-200 dark:border-gray-800 dark:bg-gray-900 lg:border-b">

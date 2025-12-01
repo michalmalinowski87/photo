@@ -12,7 +12,7 @@ export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
   // Defensive check: subscribe to store and check if data is loaded
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
-  
+
   // Don't render until gallery data is loaded
   if (isLoading || !gallery || shouldHideSecondaryElements) {
     return null;

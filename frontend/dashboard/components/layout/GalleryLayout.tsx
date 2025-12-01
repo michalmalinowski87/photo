@@ -28,9 +28,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
       <div className="flex">
-        <div>
-          {shouldShowSidebar && <GallerySidebar />}
-        </div>
+        <div>{shouldShowSidebar && <GallerySidebar />}</div>
         <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
           <GalleryHeader />
           <div className="p-6">{children}</div>

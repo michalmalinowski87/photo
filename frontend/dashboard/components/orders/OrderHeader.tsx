@@ -10,21 +10,22 @@ import { StatusBadges } from "./StatusBadges";
 export function OrderHeader() {
   const router = useRouter();
   const { id: galleryId } = router.query;
-  
+
   // Subscribe to stores for order and gallery data
   const order = useOrderStore((state) => state.currentOrder);
   const currentGalleryId = useGalleryStore((state) => state.currentGalleryId);
-  
+
   // Defensive check: don't render until order is loaded
   if (!order) {
     return null;
   }
 
-  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId ?? currentGalleryId ?? "";
-  
+  const galleryIdStr = Array.isArray(galleryId)
+    ? galleryId[0]
+    : (galleryId ?? currentGalleryId ?? "");
+
   const displayOrderNumber =
-    order.orderNumber ??
-    (order.orderId ? order.orderId.slice(-8) : galleryIdStr.slice(-8));
+    order.orderNumber ?? (order.orderId ? order.orderId.slice(-8) : galleryIdStr.slice(-8));
 
   return (
     <div className="flex items-center justify-between">

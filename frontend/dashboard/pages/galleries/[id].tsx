@@ -88,9 +88,10 @@ function detectPaymentType(
 /**
  * Cleans URL parameters, preserving specific params for publish wizard
  */
-function cleanUrlParams(
-  preserveParams: { publish?: string | null; galleryId?: string | null }
-): void {
+function cleanUrlParams(preserveParams: {
+  publish?: string | null;
+  galleryId?: string | null;
+}): void {
   if (typeof window === "undefined") {
     return;
   }
@@ -161,10 +162,7 @@ async function pollGalleryPaymentStatus(
         const updatedGallery = useGalleryStore.getState().currentGallery;
 
         // Check if gallery state changed from DRAFT to PAID_ACTIVE
-        if (
-          updatedGallery?.state === "PAID_ACTIVE" &&
-          initialGalleryState === "DRAFT"
-        ) {
+        if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
           // Payment confirmed! Stop polling
           if (reloadGallery) {
             await reloadGallery();
@@ -242,7 +240,8 @@ export default function GalleryDetail() {
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders, refreshGalleryStatusOnly, invalidateGalleryOrdersCache } = useGalleryStore();
+  const { fetchGalleryOrders, refreshGalleryStatusOnly, invalidateGalleryOrdersCache } =
+    useGalleryStore();
   const { refreshWalletBalance } = useUserStore();
   // Subscribe to gallery orders cache to trigger re-render when orders are updated
   const galleryOrdersCacheEntry = useGalleryStore((state) =>
@@ -284,7 +283,7 @@ export default function GalleryDetail() {
         setLoading(false);
         return;
       }
-      
+
       // For other errors, show toast
       // eslint-disable-next-line no-console
       console.error("[GalleryDetail] loadOrders: Error", err);
@@ -391,7 +390,7 @@ export default function GalleryDetail() {
     // This ensures "Ukoncz Konfiguracje" overlay works correctly
     // Check if we have redirect params (publish/galleryId) - force refresh in that case
     const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
-    
+
     // If we have redirect params, invalidate cache and force refresh
     if (hasRedirectParams) {
       invalidateGalleryOrdersCache(galleryIdStr);

@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
+import { useGalleryStore } from "../../../store/gallerySlice";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
@@ -17,8 +18,10 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
 }) => {
   const router = useRouter();
   const { showToast } = useToast();
+  const { invalidateAllGalleryCaches, clearCurrentGallery } = useGalleryStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleDeleteClick = () => {
     setShowDeleteDialog(true);
@@ -29,19 +32,31 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
       return;
     }
 
+    // Show redirect overlay FIRST, before any other state changes
+    // This ensures it covers everything immediately
+    setIsRedirecting(true);
     setDeleteLoading(true);
+    // Close dialog immediately to hide it behind the overlay
+    setShowDeleteDialog(false);
 
     try {
       await api.galleries.delete(galleryId);
 
-      showToast("success", "Sukces", "Galeria została usunięta");
-      setShowDeleteDialog(false);
+      // Clear gallery state immediately to prevent component from rendering stale data
+      clearCurrentGallery();
+      // Invalidate caches immediately
+      invalidateAllGalleryCaches(galleryId);
 
-      // Navigate back to galleries list
-      void router.push("/");
+      // Navigate immediately - route change handler will also clear state as backup
+      void router.replace("/");
+
+      // Show toast after navigation starts
+      showToast("success", "Sukces", "Galeria została usunięta");
     } catch (err: unknown) {
       const errorMsg = formatApiError(err as Error);
       showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
+      // Hide redirect overlay on error so user can see the error
+      setIsRedirecting(false);
     } finally {
       setDeleteLoading(false);
     }
@@ -49,6 +64,18 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
 
   return (
     <>
+      {isRedirecting && (
+        <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-[9999]">
+          <div className="flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 relative">
+              <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Przekierowywanie...</p>
+          </div>
+        </div>
+      )}
+      
       <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
         <Button
           size="sm"
