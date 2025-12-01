@@ -44,7 +44,7 @@ export default function PaymentConfirmationModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-6">
+      <div className="p-4">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           Potwierdzenie płatności
         </h2>

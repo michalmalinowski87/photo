@@ -33,7 +33,7 @@ export default function SessionExpiredModal({ isOpen, returnUrl }: SessionExpire
       onClose={() => {}} // Prevent closing by clicking outside or ESC
       showCloseButton={false}
     >
-      <div className="p-6">
+      <div className="p-4">
         <div className="flex flex-col items-center text-center">
           <div className="mb-4">
             <svg

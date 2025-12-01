@@ -152,6 +152,23 @@ const GalleryList: React.FC<GalleryListProps> = ({
     void loadWalletBalance();
   }, [filter, loadGalleries, loadWalletBalance]);
 
+  // Close wizard when navigating away
+  useEffect(() => {
+    if (!publishWizardOpen || !router.events) {
+      return;
+    }
+
+    const handleRouteChange = () => {
+      setPublishWizardOpen(false);
+      onWizardOpenChange?.(false);
+    };
+
+    router.events.on("routeChangeStart", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChange);
+    };
+  }, [publishWizardOpen, router.events, setPublishWizardOpen, onWizardOpenChange]);
+
   // Notify parent of loading state changes
   useEffect(() => {
     if (onLoadingChange) {
@@ -250,7 +267,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
       {!publishWizardOpen && (
         <div className="space-y-4">
           {error && (
-            <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
+            <div>
               {error}
             </div>
           )}

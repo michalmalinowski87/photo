@@ -57,7 +57,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
-      <div className="p-6">
+      <div className="p-4">
         <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-5">{title}</h2>
 
         <p className="text-lg text-gray-600 dark:text-gray-400 mb-6 whitespace-pre-line">

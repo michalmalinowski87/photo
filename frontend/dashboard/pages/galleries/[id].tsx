@@ -717,7 +717,7 @@ export default function GalleryDetail() {
 
       {/* Send Link Modal */}
       <Modal isOpen={showSendLinkModal} onClose={() => setShowSendLinkModal(false)}>
-        <div className="p-6">
+        <div className="p-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Wyślij link do klienta
           </h2>

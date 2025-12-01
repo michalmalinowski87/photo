@@ -134,7 +134,7 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
   const modalContent = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+        <div className="p-4">
           <h2 className="text-2xl font-bold text-red-600 mb-4">
             Przekroczono limit miejsca w galerii
           </h2>

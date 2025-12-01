@@ -18,7 +18,7 @@ export const CleanupOriginalsModal: React.FC<CleanupOriginalsModalProps> = ({
 }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
-      <div className="p-6">
+      <div className="p-4">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
           Usuń wybrane oryginały?
         </h2>

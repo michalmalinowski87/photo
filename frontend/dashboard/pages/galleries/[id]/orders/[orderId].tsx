@@ -2,7 +2,6 @@ import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
-import { PublishGalleryWizard } from "../../../../components/galleries/PublishGalleryWizard";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
 import { FinalsTab } from "../../../../components/orders/FinalsTab";
@@ -73,6 +72,8 @@ export default function OrderDetail() {
   // Use Zustand store as single source of truth for order data (shared with sidebar and top bar)
   const order = useOrderStore((state) => state.currentOrder);
   const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
+  // Use Zustand store for publish wizard state (shared with GalleryLayoutWrapper)
+  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
@@ -87,8 +88,8 @@ export default function OrderDetail() {
   const deletingImagesRefForLoad = useRef<Set<string>>(new Set());
   const deletedImageKeysRefForLoad = useRef<Set<string>>(new Set());
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
-  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
+  const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] = useState<boolean>(false);
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // Define functions first (before useEffect hooks that use them)
@@ -445,6 +446,7 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, currentGallery?.isPaid, currentGallery?.state]);
 
+
   // Listen for finals uploads to update gallery's finalsBytesUsed reactively with optimistic updates
   useEffect(() => {
     if (!galleryId) {
@@ -539,7 +541,7 @@ export default function OrderDetail() {
     if (!galleryId || paymentLoading) {
       return;
     }
-    setShowPaymentModal(true);
+    setPublishWizardOpen(true, galleryId as string);
   };
 
   const handlePaymentConfirm = async (): Promise<void> => {
@@ -547,7 +549,7 @@ export default function OrderDetail() {
       return;
     }
 
-    setShowPaymentModal(false);
+    setPublishWizardOpen(false);
     setPaymentLoading(true);
 
     try {
@@ -637,8 +639,8 @@ export default function OrderDetail() {
 
   if (!order) {
     return (
-      <div className="p-6">
-        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
+      <div className="p-4">
+        <div>
           {error ?? "Nie znaleziono zlecenia"}
         </div>
       </div>
@@ -674,7 +676,7 @@ export default function OrderDetail() {
       <OrderHeader />
 
       {error && (
-        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
+        <div>
           {error}
         </div>
       )}
@@ -766,24 +768,6 @@ export default function OrderDetail() {
         loading={denyLoading}
       />
 
-      {/* Pricing Modal - Show when user clicks publish gallery */}
-      {galleryId && (
-        <PublishGalleryWizard
-          isOpen={showPaymentModal}
-          onClose={() => {
-            setShowPaymentModal(false);
-          }}
-          galleryId={galleryId as string}
-          onSuccess={async () => {
-            // Reload gallery data to update payment status
-            if (reloadGallery) {
-              await reloadGallery();
-            }
-            await loadOrderData();
-            await loadWalletBalance();
-          }}
-        />
-      )}
 
       {/* Upload Progress Overlay */}
       <UploadProgressWrapper
@@ -795,8 +779,8 @@ export default function OrderDetail() {
       {/* Payment Confirmation Modal */}
       {paymentDetails && (
         <PaymentConfirmationModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
+          isOpen={showPaymentConfirmationModal}
+          onClose={() => setShowPaymentConfirmationModal(false)}
           onConfirm={handlePaymentConfirm}
           totalAmountCents={paymentDetails.totalAmountCents}
           walletBalanceCents={walletBalance}

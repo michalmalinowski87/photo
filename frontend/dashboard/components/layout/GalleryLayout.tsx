@@ -31,7 +31,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children }) => {
         <div>{shouldShowSidebar && <GallerySidebar />}</div>
         <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
           <GalleryHeader />
-          <div className="p-6">{children}</div>
+          <div className="p-4">{children}</div>
         </div>
       </div>
     </div>

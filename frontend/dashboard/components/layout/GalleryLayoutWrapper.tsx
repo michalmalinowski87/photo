@@ -102,6 +102,30 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   }, [galleryId, orderId, fetchOrder]);
 
+  // Helper function to clean up publish wizard URL params
+  const cleanupPublishParams = useCallback(() => {
+    if (typeof window === "undefined" || !router.isReady) {return;}
+
+    const params = new URLSearchParams(window.location.search);
+    const hadPublishParam = params.has("publish");
+    const hadGalleryIdParam = params.has("galleryId");
+
+    if (hadPublishParam || hadGalleryIdParam) {
+      // Remove publish wizard params, but keep other params (like payment=success)
+      params.delete("publish");
+      params.delete("galleryId");
+      params.delete("duration");
+      params.delete("planKey");
+
+      const newParamsStr = params.toString();
+      const newPath = router.asPath.split("?")[0]; // Get path without query string
+      const newUrl = newParamsStr ? `${newPath}?${newParamsStr}` : newPath;
+
+      // Use router.replace() to update Next.js router state properly
+      void router.replace(newUrl, undefined, { shallow: true });
+    }
+  }, [router]);
+
   // Clear order state when navigating away from order page (but staying in gallery routes)
   useEffect(() => {
     // Clear order when orderId is removed from URL but we're still in gallery routes
@@ -123,6 +147,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
 
     const handleRouteChange = (url: string) => {
+      // Close publish wizard when navigating away
+      if (publishWizardOpen) {
+        setPublishWizardOpenStore(false);
+        cleanupPublishParams();
+      }
       if (!url.includes("/galleries/")) {
         clearCurrentGallery();
         clearCurrentOrder();
@@ -133,7 +162,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     return () => {
       router.events.off("routeChangeStart", handleRouteChange);
     };
-  }, [router, clearCurrentGallery, clearCurrentOrder]);
+  }, [router, clearCurrentGallery, clearCurrentOrder, publishWizardOpen, setPublishWizardOpenStore, cleanupPublishParams]);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -245,30 +274,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
     setPublishWizardOpenStore(true, galleryId as string);
   };
-
-  // Helper function to clean up publish wizard URL params
-  const cleanupPublishParams = useCallback(() => {
-    if (typeof window === "undefined" || !router.isReady) {return;}
-
-    const params = new URLSearchParams(window.location.search);
-    const hadPublishParam = params.has("publish");
-    const hadGalleryIdParam = params.has("galleryId");
-
-    if (hadPublishParam || hadGalleryIdParam) {
-      // Remove publish wizard params, but keep other params (like payment=success)
-      params.delete("publish");
-      params.delete("galleryId");
-      params.delete("duration");
-      params.delete("planKey");
-
-      const newParamsStr = params.toString();
-      const newPath = router.asPath.split("?")[0]; // Get path without query string
-      const newUrl = newParamsStr ? `${newPath}?${newParamsStr}` : newPath;
-
-      // Use router.replace() to update Next.js router state properly
-      void router.replace(newUrl, undefined, { shallow: true });
-    }
-  }, [router]);
 
   // Check URL params to auto-open wizard (but skip if gallery is already published)
   useEffect(() => {
@@ -390,8 +395,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   if (!gallery && loadError && !loading) {
     return (
       <GalleryLayout>
-        <div className="p-6">
-          <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600">
+        <div className="p-4">
+          <div>
             {loadError}
           </div>
         </div>

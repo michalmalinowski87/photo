@@ -27,7 +27,7 @@ interface PublishGalleryWizardProps {
   onClose: () => void;
   galleryId: string;
   onSuccess?: () => void;
-  renderAsModal?: boolean; // If true, renders with backdrop overlay. If false, renders inline like gallery view
+  renderAsModal?: boolean; // If true, renders with backdrop overlay covering full page. If false, renders inline like gallery view
   initialState?: {
     duration?: string;
     planKey?: string;
@@ -215,7 +215,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 
   const wizardContent = !isOpen ? null : (
     <div
-      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-200px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}
+      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-100px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
@@ -402,7 +402,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     return null;
   }
 
-  // If renderAsModal is true, wrap in backdrop and portal
+  // If renderAsModal is true, wrap in backdrop and portal covering full page
   if (renderAsModal) {
     const modalContent = (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">

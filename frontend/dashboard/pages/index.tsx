@@ -4,7 +4,7 @@ import { ActiveOrdersTable } from "../components/dashboard/ActiveOrdersTable";
 import { StatisticsCard } from "../components/dashboard/StatisticsCard";
 import { DenyChangeRequestModal } from "../components/orders/DenyChangeRequestModal";
 import { OrdersModal } from "../components/orders/OrdersModal";
-import { FullPageLoading } from "../components/ui/loading/Loading";
+import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import api, { formatApiError } from "../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
@@ -231,7 +231,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return <FullPageLoading text="Ładowanie danych..." />;
+    return <ContentViewLoading text="Ładowanie danych..." />;
   }
 
   return (
@@ -241,7 +241,7 @@ export default function Dashboard() {
       </div>
 
       {error && (
-        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
+        <div>
           {error}
         </div>
       )}

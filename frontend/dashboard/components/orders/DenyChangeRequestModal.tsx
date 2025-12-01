@@ -32,7 +32,7 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} className="max-w-lg">
-      <div className="p-6">
+      <div className="p-4">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
           Odrzuć prośbę o zmiany
         </h2>

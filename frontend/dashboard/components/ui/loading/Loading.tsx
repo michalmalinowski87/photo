@@ -86,3 +86,14 @@ export const FullPageLoading: React.FC<{ text?: string }> = ({ text }) => {
 export const InlineLoading: React.FC<{ text?: string }> = ({ text }) => {
   return <Loading size="md" text={text} />;
 };
+
+// Content view loading component - only covers the content area (not sidebar/header)
+// Use this for page-level loading states instead of FullPageLoading
+// This shows a loading state centered in the content area without covering sidebar/header
+export const ContentViewLoading: React.FC<{ text?: string }> = ({ text }) => {
+  return (
+    <div className="flex items-center justify-center min-h-[400px] py-16">
+      <Loading size="xl" text={text} />
+    </div>
+  );
+};

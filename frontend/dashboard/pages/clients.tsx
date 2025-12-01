@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 import Input from "../components/ui/input/InputField";
-import { FullPageLoading } from "../components/ui/loading/Loading";
+import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
@@ -280,7 +280,7 @@ export default function Clients() {
         </div>
 
         {error && (
-          <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-50 dark:border-error-200 dark:text-error-600">
+          <div>
             {error}
           </div>
         )}
@@ -390,7 +390,7 @@ export default function Clients() {
   }
 
   if (loading && initialLoad) {
-    return <FullPageLoading text="Ładowanie klientów..." />;
+    return <ContentViewLoading text="Ładowanie klientów..." />;
   }
 
   return (
@@ -407,7 +407,7 @@ export default function Clients() {
       </div>
 
       {error && (
-        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-50 dark:border-error-200 dark:text-error-600">
+        <div>
           {error}
         </div>
       )}

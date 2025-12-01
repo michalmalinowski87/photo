@@ -173,7 +173,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{title}</h2>
 
         {error && (
-          <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400 mb-4">
+          <div>
             {error}
           </div>
         )}

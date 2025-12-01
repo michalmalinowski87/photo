@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRouter } from "next/router";
+import { useState, useEffect } from "react";
 
 import { useSidebar } from "../../hooks/useSidebar";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
@@ -14,6 +15,7 @@ interface AppLayoutProps {
 }
 
 const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
+  const router = useRouter();
   const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
 
@@ -31,6 +33,22 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       window.location.href = `/galleries/${galleryId}/photos`;
     }
   };
+
+  // Close wizard when navigating away
+  useEffect(() => {
+    if (!wizardOpen || !router.events) {
+      return;
+    }
+
+    const handleRouteChange = () => {
+      setWizardOpen(false);
+    };
+
+    router.events.on("routeChangeStart", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChange);
+    };
+  }, [wizardOpen, router.events]);
 
   return (
     <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">

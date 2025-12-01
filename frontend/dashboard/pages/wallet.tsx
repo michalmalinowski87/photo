@@ -158,7 +158,7 @@ export default function Wallet() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Portfel</h1>
 
       {error && (
-        <div className="p-4 bg-error-50 border border-error-200 rounded-lg text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
+        <div>
           {error}
         </div>
       )}

@@ -100,7 +100,7 @@ export const ClientSendSuccessPopup: React.FC<ClientSendSuccessPopupProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4">
           {galleryName && (
             <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
               Galeria <strong className="text-gray-900 dark:text-white">{galleryName}</strong>{" "}
