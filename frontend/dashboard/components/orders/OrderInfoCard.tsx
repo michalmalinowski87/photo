@@ -3,6 +3,7 @@ import { formatPrice } from "../../lib/format-price";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
 import { useGalleryStore } from "../../store/gallerySlice";
 import { useOrderStore } from "../../store/orderSlice";
+import { useGalleryType } from "../hocs/withGalleryType";
 import { Loading } from "../ui/loading/Loading";
 
 interface OrderInfoCardProps {
@@ -27,9 +28,15 @@ export function OrderInfoCard({
   // Subscribe to stores for order and gallery data
   const order = useOrderStore((state) => state.currentOrder);
   const gallery = useGalleryStore((state) => state.currentGallery);
+  const { isNonSelectionGallery } = useGalleryType();
 
   // Defensive check: don't render until order is loaded
   if (!order) {
+    return null;
+  }
+
+  // Hide for non-selection galleries
+  if (isNonSelectionGallery) {
     return null;
   }
 

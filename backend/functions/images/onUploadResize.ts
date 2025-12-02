@@ -1,14 +1,16 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import sharp from 'sharp';
 import { Readable } from 'stream';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambda = new LambdaClient({});
+const cloudfront = new CloudFrontClient({});
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
 	const chunks: Buffer[] = [];
@@ -46,7 +48,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	
 		for (let i = 0; i < records.length; i += BATCH_SIZE) {
 		const batch = records.slice(i, i + BATCH_SIZE);
-		const results = await Promise.allSettled(batch.map(rec => processImage(rec, bucket, galleriesTable, logger, processedGalleries)));
+		const results = await Promise.allSettled(batch.map(rec => processImage(rec, bucket, galleriesTable, logger, processedGalleries, envProc)));
 		
 		// Collect gallery IDs that were processed
 		results.forEach((result) => {
@@ -61,7 +63,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Critical operations (pay, validateUploadLimits) force recalculation; display uses cached values
 });
 
-async function processImage(rec: any, bucket: string, galleriesTable: string | undefined, logger: any, processedGalleries: Set<string>): Promise<string | null> {
+async function processImage(rec: any, bucket: string, galleriesTable: string | undefined, logger: any, processedGalleries: Set<string>, envProc: any): Promise<string | null> {
 	const rawKey = rec.s3?.object?.key || '';
 		if (!rawKey) {
 			logger?.error('No key in S3 event', { record: rec });
@@ -218,6 +220,54 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 			thumbWebpSize: thumbWebpBuffer.length
 		});
 
+		// Check if preview/thumb already exist (indicating a replacement upload)
+		// This happens when uploading a file with the same name as an existing image
+		let previewExists = false;
+		let thumbExists = false;
+		let finalExists = false;
+		
+		try {
+			await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: previewWebpKey }));
+			previewExists = true;
+		} catch (err: any) {
+			if (err.name !== 'NotFound' && err.name !== 'NoSuchKey') {
+				logger?.warn('Error checking if preview exists', { error: err.name, previewWebpKey });
+			}
+		}
+		
+		try {
+			await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: thumbWebpKey }));
+			thumbExists = true;
+		} catch (err: any) {
+			if (err.name !== 'NotFound' && err.name !== 'NoSuchKey') {
+				logger?.warn('Error checking if thumb exists', { error: err.name, thumbWebpKey });
+			}
+		}
+		
+		// For finals, also check if the original final image exists
+		if (isFinal) {
+			try {
+				await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+				finalExists = true;
+			} catch (err: any) {
+				if (err.name !== 'NotFound' && err.name !== 'NoSuchKey') {
+					logger?.warn('Error checking if final exists', { error: err.name, key });
+				}
+			}
+		}
+		
+		const isReplacement = previewExists || thumbExists || finalExists;
+		if (isReplacement) {
+			logger?.info('Detected replacement upload (duplicate filename)', {
+				previewExists,
+				thumbExists,
+				finalExists,
+				previewWebpKey,
+				thumbWebpKey,
+				originalKey: isFinal ? key : undefined
+			});
+		}
+
 		// Upload preview and thumbnail in WebP format to S3
 		logger?.info('Uploading to S3', { previewWebpKey, thumbWebpKey });
 		await Promise.all([
@@ -236,6 +286,63 @@ async function processImage(rec: any, bucket: string, galleriesTable: string | u
 				CacheControl: 'max-age=31536000'
 			}))
 		]);
+		
+		// Invalidate CloudFront cache if this is a replacement (same filename)
+		// Only invalidate on replacement to avoid unnecessary invalidation costs
+		if (isReplacement) {
+			const distributionId = envProc?.env?.CLOUDFRONT_DISTRIBUTION_ID as string;
+			if (distributionId) {
+				try {
+					// Build invalidation paths - encode path segments to match CloudFront URL format
+					const invalidationPaths: string[] = [];
+					
+					// Always invalidate preview and thumb (they're always regenerated)
+					invalidationPaths.push(`/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`);
+					invalidationPaths.push(`/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`);
+					
+					// For finals, also invalidate the original final image
+					if (isFinal && finalExists) {
+						invalidationPaths.push(`/${key.split('/').map(encodeURIComponent).join('/')}`);
+					}
+					
+					logger?.info('Invalidating CloudFront cache for replaced images', {
+						distributionId,
+						paths: invalidationPaths,
+						count: invalidationPaths.length
+					});
+					
+					await cloudfront.send(new CreateInvalidationCommand({
+						DistributionId: distributionId,
+						InvalidationBatch: {
+							Paths: {
+								Quantity: invalidationPaths.length,
+								Items: invalidationPaths
+							},
+							CallerReference: `replacement-${Date.now()}-${Math.random().toString(36).substring(7)}`
+						}
+					}));
+					
+					logger?.info('CloudFront cache invalidation created successfully', {
+						distributionId,
+						paths: invalidationPaths
+					});
+				} catch (invalidationError: any) {
+					// Log error but don't fail the image processing
+					// CloudFront invalidation is best-effort - cache-busting query params will still work
+					logger?.error('Failed to invalidate CloudFront cache', {
+						error: {
+							name: invalidationError.name,
+							message: invalidationError.message
+						},
+						distributionId,
+						previewWebpKey,
+						thumbWebpKey
+					});
+				}
+			} else {
+				logger?.warn('CLOUDFRONT_DISTRIBUTION_ID not set, skipping cache invalidation');
+			}
+		}
 
 		logger?.info('Image processed successfully', { 
 			key, 

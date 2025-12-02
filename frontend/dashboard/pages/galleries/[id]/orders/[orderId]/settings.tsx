@@ -1,0 +1,38 @@
+import { useRouter } from "next/router";
+import { useEffect } from "react";
+
+import { GallerySettingsForm } from "../../../../../components/galleries/GallerySettingsForm";
+import { initializeAuth, redirectToLandingSignIn } from "../../../../../lib/auth-init";
+
+export default function OrderSettings() {
+  const router = useRouter();
+  const { id: galleryId, orderId } = router.query;
+
+  useEffect(() => {
+    initializeAuth(
+      () => {
+        // Auth successful, component will render
+      },
+      () => {
+        const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
+        const orderIdStr = Array.isArray(orderId) ? (orderId[0] ?? "") : (orderId ?? "");
+        redirectToLandingSignIn(`/galleries/${galleryIdStr}/orders/${orderIdStr}/settings`);
+      }
+    );
+  }, [galleryId, orderId]);
+
+  const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
+  const orderIdStr = Array.isArray(orderId) ? (orderId[0] ?? "") : (orderId ?? "");
+
+  if (!galleryIdStr || !orderIdStr) {
+    return null;
+  }
+
+  return (
+    <GallerySettingsForm
+      galleryId={galleryIdStr}
+      cancelLabel="Powrót do zlecenia"
+      cancelHref={`/galleries/${galleryIdStr}/orders/${orderIdStr}`}
+    />
+  );
+}

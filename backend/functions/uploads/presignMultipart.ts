@@ -1,5 +1,5 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
@@ -7,6 +7,10 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+const DEFAULT_PART_SIZE = 5 * 1024 * 1024; // 5MB per part
+const MIN_PART_SIZE = 5 * 1024 * 1024; // S3 minimum is 5MB (except last part)
+const MAX_PART_SIZE = 5 * 1024 * 1024 * 1024; // 5GB max per part
 
 async function calculateOriginalsSize(bucket: string, galleryId: string): Promise<number> {
 	let totalSize = 0;
@@ -30,12 +34,11 @@ async function calculateOriginalsSize(bucket: string, galleryId: string): Promis
 	return totalSize;
 }
 
-interface BatchFileRequest {
+interface MultipartFileRequest {
 	key: string;
 	contentType?: string;
-	fileSize?: number; // Required for originals
-	// Optional: Request presigned URLs for thumbnails/previews (for client-side generation)
-	includeThumbnails?: boolean; // If true, also generate presigned URLs for preview and thumbnail
+	fileSize: number;
+	partSize?: number; // Optional custom part size
 }
 
 export const handler = lambdaLogger(async (event: any) => {
@@ -46,7 +49,8 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const galleryId = body?.galleryId;
-	const files: BatchFileRequest[] = body?.files || [];
+	const orderId = body?.orderId; // Optional, for finals uploads
+	const files: MultipartFileRequest[] = body?.files || [];
 
 	if (!galleryId || !Array.isArray(files) || files.length === 0) {
 		return { 
@@ -158,94 +162,67 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 
-	// Generate presigned URLs for all files in parallel
-	const presignedUrls = await Promise.all(
+	// Generate multipart uploads for all files
+	const uploads = await Promise.all(
 		files.map(async (file) => {
-			const objectKey = `galleries/${galleryId}/${file.key}`;
-			const cmd = new PutObjectCommand({
+			const objectKey = orderId 
+				? `galleries/${galleryId}/final/${orderId}/${file.key}`
+				: `galleries/${galleryId}/${file.key}`;
+			
+			const contentType = file.contentType || 'application/octet-stream';
+			const fileSize = file.fileSize;
+			const partSize = file.partSize || DEFAULT_PART_SIZE;
+			
+			// Validate part size
+			if (partSize < MIN_PART_SIZE || partSize > MAX_PART_SIZE) {
+				throw new Error(`Part size must be between ${MIN_PART_SIZE} and ${MAX_PART_SIZE} bytes`);
+			}
+
+			// Calculate number of parts
+			const totalParts = Math.ceil(fileSize / partSize);
+			if (totalParts > 10000) {
+				throw new Error('File too large: exceeds S3 maximum of 10,000 parts');
+			}
+
+			// Create multipart upload
+			const createCmd = new CreateMultipartUploadCommand({
 				Bucket: bucket,
 				Key: objectKey,
-				ContentType: file.contentType || 'application/octet-stream'
+				ContentType: contentType,
 			});
-			const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
-			
-			const result: {
-				key: string;
-				url: string;
-				objectKey: string;
-				expiresInSeconds: number;
-				previewUrl?: string;
-				previewKey?: string;
-				thumbnailUrl?: string;
-				thumbnailKey?: string;
-			} = {
-				key: file.key,
-				url,
-				objectKey,
-				expiresInSeconds: 3600
-			};
 
-			// If client-side thumbnail generation is requested, also generate presigned URLs for preview and thumbnail
-			if (file.includeThumbnails) {
-				// Determine if this is an originals or finals upload
-				const isOriginal = file.key.startsWith('originals/');
-				const isFinal = file.key.startsWith('final/');
-				
-				if (isOriginal || isFinal) {
-					// Extract filename from key
-					// For originals: originals/{filename}
-					// For finals: final/{orderId}/{filename}
-					const keyParts = file.key.split('/');
-					let filename: string;
-					let previewKey: string;
-					let thumbKey: string;
-					
-					if (isOriginal) {
-						filename = keyParts.slice(1).join('/'); // Remove 'originals/' prefix
-						previewKey = `galleries/${galleryId}/previews/${filename}`;
-						thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
-					} else {
-						// final/{orderId}/{filename}
-						const orderId = keyParts[1];
-						filename = keyParts.slice(2).join('/');
-						previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
-						thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
-					}
-					
-					// Convert to WebP filenames
-					const getWebpKey = (originalKey: string) => {
-						const lastDot = originalKey.lastIndexOf('.');
-						if (lastDot === -1) return `${originalKey}.webp`;
-						return `${originalKey.substring(0, lastDot)}.webp`;
-					};
-					
-					const previewWebpKey = getWebpKey(previewKey);
-					const thumbWebpKey = getWebpKey(thumbKey);
-					
-					// Generate presigned URLs for preview and thumbnail
-					const [previewUrl, thumbUrl] = await Promise.all([
-						getSignedUrl(s3, new PutObjectCommand({
-							Bucket: bucket,
-							Key: previewWebpKey,
-							ContentType: 'image/webp',
-							CacheControl: 'max-age=31536000'
-						}), { expiresIn: 3600 }),
-						getSignedUrl(s3, new PutObjectCommand({
-							Bucket: bucket,
-							Key: thumbWebpKey,
-							ContentType: 'image/webp',
-							CacheControl: 'max-age=31536000'
-						}), { expiresIn: 3600 })
-					]);
-					
-					result.previewUrl = previewUrl;
-					result.previewKey = previewWebpKey.replace(`galleries/${galleryId}/`, '');
-					result.thumbnailUrl = thumbUrl;
-					result.thumbnailKey = thumbWebpKey.replace(`galleries/${galleryId}/`, '');
-				}
+			const createResponse = await s3.send(createCmd);
+			const uploadId = createResponse.UploadId;
+
+			if (!uploadId) {
+				throw new Error('Failed to create multipart upload');
 			}
-			
-			return result;
+
+			// Generate presigned URLs for each part
+			const parts = [];
+			for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+				const uploadPartCmd = new UploadPartCommand({
+					Bucket: bucket,
+					Key: objectKey,
+					UploadId: uploadId,
+					PartNumber: partNumber,
+				});
+
+				const partUrl = await getSignedUrl(s3, uploadPartCmd, { expiresIn: 3600 });
+				parts.push({
+					partNumber,
+					url: partUrl,
+				});
+			}
+
+			return {
+				uploadId,
+				key: file.key,
+				objectKey,
+				parts,
+				totalParts,
+				partSize,
+			};
 		})
 	);
 
@@ -253,8 +230,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ 
-			urls: presignedUrls,
-			count: presignedUrls.length
+			uploads,
+			count: uploads.length
 		})
 	};
 });

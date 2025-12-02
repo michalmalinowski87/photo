@@ -5,6 +5,7 @@ import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 import { useGalleryStore } from "../../store/gallerySlice";
+import { useGalleryType } from "../hocs/withGalleryType";
 
 interface Gallery {
   galleryId: string;
@@ -57,6 +58,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
   // Use galleryOrders from store instead of orders prop
   const galleryOrders = useGalleryStore((state) => state.galleryOrders);
+  const { isNonSelectionGallery } = useGalleryType();
+  const { fetchGalleryOrders } = useGalleryStore();
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
@@ -371,9 +374,30 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     ? gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE"
     : false;
 
-  const handlePublishClick = () => {
-    if (gallery?.galleryId) {
-      // Open publish wizard directly via Zustand store
+  const handlePublishClick = async () => {
+    if (!gallery?.galleryId) {
+      return;
+    }
+
+    // For non-selection galleries, navigate to order view instead of opening publish wizard
+    if (isNonSelectionGallery) {
+      try {
+        // Fetch gallery orders to get the order ID
+        const orders = await fetchGalleryOrders(gallery.galleryId, false);
+        if (orders && orders.length > 0 && orders[0]?.orderId) {
+          // Navigate to order view
+          void router.push(`/galleries/${gallery.galleryId}/orders/${orders[0].orderId}`);
+        } else {
+          // If no orders found, still open publish wizard as fallback
+          setPublishWizardOpen(true, gallery.galleryId);
+        }
+      } catch (err) {
+        // On error, fall back to opening publish wizard
+        console.error("Failed to fetch orders for non-selection gallery:", err);
+        setPublishWizardOpen(true, gallery.galleryId);
+      }
+    } else {
+      // For selection galleries, open publish wizard as before
       setPublishWizardOpen(true, gallery.galleryId);
     }
   };

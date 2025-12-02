@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
 import { useGalleryStore } from "../../store/gallerySlice";
 import { useOrderStore } from "../../store/orderSlice";
@@ -20,10 +20,49 @@ export default function GallerySidebar() {
     ? orderIdFromQuery[0]
     : orderIdFromQuery;
 
-  // Subscribe directly to store - no props needed
-  const gallery = useGalleryStore((state) => state.currentGallery);
+  // Subscribe directly to store - use selector that includes cache as fallback
+  const { id: galleryId } = router.query;
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  
+  // Use selector that includes cache - ensures gallery is always available if cached
+  const gallery = useGalleryStore((state) => {
+    const storeGallery = state.currentGallery;
+    // If store has gallery and it matches, use it
+    if (storeGallery?.galleryId === galleryIdStr) {
+      return storeGallery;
+    }
+    // Otherwise check cache - also subscribe to cache entry to make it reactive
+    if (galleryIdStr && typeof galleryIdStr === "string") {
+      const cacheEntry = state.galleryCache[galleryIdStr];
+      if (cacheEntry) {
+        const age = Date.now() - cacheEntry.timestamp;
+        if (age < 60000) { // Cache TTL: 60 seconds
+          const cached = cacheEntry.gallery;
+          if (cached?.galleryId === galleryIdStr) {
+            return cached;
+          }
+        }
+      }
+    }
+    return storeGallery;
+  });
+  
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
+  
+  // Gallery now includes cache, so use it directly
+  const effectiveGallery = gallery;
+  
+  // Only log when state actually changes to reduce spam
+  const prevStateRef = React.useRef({ hasGallery: !!gallery });
+  if (prevStateRef.current.hasGallery !== !!gallery) {
+    console.log("[GallerySidebar] Gallery check:", {
+      hasGallery: !!gallery,
+      hasEffectiveGallery: !!effectiveGallery,
+      galleryId: galleryIdStr,
+    });
+    prevStateRef.current = { hasGallery: !!gallery };
+  }
 
   const [viewportHeight, setViewportHeight] = useState<number>(
     typeof window !== "undefined" ? window.innerHeight : 1024
@@ -95,13 +134,13 @@ export default function GallerySidebar() {
       </div>
 
       {/* Gallery Info */}
-      {!isLoading && gallery ? (
+      {!isLoading && effectiveGallery ? (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">
           <Link
-            href={`/galleries/${gallery.galleryId}`}
+            href={`/galleries/${effectiveGallery.galleryId}`}
             className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
           >
-            {gallery.galleryName ?? "Galeria"}
+            {effectiveGallery.galleryName ?? "Galeria"}
           </Link>
         </div>
       ) : (
@@ -121,8 +160,8 @@ export default function GallerySidebar() {
       {orderId && order && <OrderActionsSection orderId={orderId} />}
 
       <DeleteGalleryButton
-        galleryId={gallery?.galleryId ?? ""}
-        galleryName={gallery?.galleryName}
+        galleryId={effectiveGallery?.galleryId ?? ""}
+        galleryName={effectiveGallery?.galleryName}
       />
     </aside>
   );

@@ -3,6 +3,79 @@ import { devtools } from "zustand/middleware";
 
 import api from "../lib/api-service";
 
+/**
+ * Helper function to add cache-busting query parameter to image URLs
+ * Uses lastModified timestamp + fetch timestamp to ensure CloudFront serves fresh images
+ * The fetch timestamp ensures we get fresh images even if S3 lastModified hasn't updated yet
+ */
+export function addCacheBustingToUrl(
+  url: string | null | undefined, 
+  lastModified?: string | number,
+  fetchTimestamp?: number
+): string | null {
+  if (!url) {
+    return null;
+  }
+
+  // Remove any existing cache-busting parameters to avoid duplicates
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.delete("t");
+    urlObj.searchParams.delete("v");
+    url = urlObj.toString();
+  } catch {
+    // If URL parsing fails, continue with original URL
+  }
+
+  // If URL already has query parameters, append; otherwise add
+  const separator = url.includes("?") ? "&" : "?";
+  
+  // Use lastModified timestamp if available, otherwise use current timestamp as fallback
+  const lastModifiedTs = lastModified 
+    ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
+    : Date.now();
+  
+  // Add fetch timestamp to ensure fresh images even if S3 metadata hasn't updated
+  // This is critical for replacements where S3 LastModified might lag
+  const fetchTs = fetchTimestamp || Date.now();
+  
+  // Combine both timestamps for maximum cache-busting reliability
+  // Format: t={lastModified}&f={fetchTimestamp}
+  return `${url}${separator}t=${lastModifiedTs}&f=${fetchTs}`;
+}
+
+/**
+ * Helper function to apply cache-busting to all image URLs in an image object
+ * Preserves the original type of the image
+ * Uses fetch timestamp to ensure fresh images even if S3 lastModified hasn't updated
+ */
+export function applyCacheBustingToImage<T extends Record<string, any>>(
+  image: T,
+  fetchTimestamp?: number
+): T {
+  if (!image || typeof image !== "object") {
+    return image;
+  }
+
+  const lastModified = image.lastModified;
+  const timestamp = lastModified 
+    ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
+    : undefined;
+  
+  // Use provided fetch timestamp or generate one (ensures fresh images on each API fetch)
+  const fetchTs = fetchTimestamp || Date.now();
+
+  return {
+    ...image,
+    url: addCacheBustingToUrl(image.url, timestamp, fetchTs),
+    previewUrl: addCacheBustingToUrl(image.previewUrl, timestamp, fetchTs),
+    thumbUrl: addCacheBustingToUrl(image.thumbUrl, timestamp, fetchTs),
+    finalUrl: addCacheBustingToUrl(image.finalUrl, timestamp, fetchTs),
+    previewUrlFallback: addCacheBustingToUrl(image.previewUrlFallback, timestamp, fetchTs),
+    thumbUrlFallback: addCacheBustingToUrl(image.thumbUrlFallback, timestamp, fetchTs),
+  } as T;
+}
+
 export interface Gallery {
   galleryId: string;
   galleryName?: string;
@@ -219,12 +292,19 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       setGalleryImages: (galleryId: string, images: any[]) => {
+        // Apply cache-busting to all image URLs using lastModified timestamp + fetch timestamp
+        // The fetch timestamp ensures fresh images even if S3 lastModified hasn't updated yet
+        const fetchTimestamp = Date.now();
+        const imagesWithCacheBusting = Array.isArray(images)
+          ? images.map((img) => applyCacheBustingToImage(img, fetchTimestamp))
+          : images;
+
         set((state) => ({
           galleryImagesCache: {
             ...state.galleryImagesCache,
             [galleryId]: {
-              images,
-              timestamp: Date.now(),
+              images: imagesWithCacheBusting,
+              timestamp: fetchTimestamp,
             },
           },
         }));
@@ -382,19 +462,25 @@ export const useGalleryStore = create<GalleryState>()(
       fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
         const state = get();
 
-        // Check cache first (unless force refresh)
+        // Always bypass cache when forceRefresh is true (used after uploads)
         if (!forceRefresh) {
           const cached = state.getGalleryImages(galleryId);
           if (cached) {
             return cached;
           }
+        } else {
+          // Clear cache when force refreshing
+          state.invalidateGalleryImagesCache(galleryId);
         }
 
         try {
+          // Always fetch fresh - no cache to avoid old state
           const response = await api.galleries.getImages(galleryId);
           const images = response.images ?? [];
+          // setGalleryImages will apply cache-busting automatically
           state.setGalleryImages(galleryId, images);
-          return images;
+          // Return images with cache-busting applied
+          return state.getGalleryImages(galleryId) ?? images;
         } catch (err) {
           // Return empty array on error instead of throwing
           console.error("[GalleryStore] Failed to fetch gallery images:", err);

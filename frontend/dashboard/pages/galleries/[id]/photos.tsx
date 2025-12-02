@@ -7,13 +7,8 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
-import { FileUploadZone } from "../../../components/upload/FileUploadZone";
-import { usePhotoUploadHandler } from "../../../components/upload/PhotoUploadHandler";
+import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { StorageDisplay } from "../../../components/upload/StorageDisplay";
-import {
-  UploadProgressOverlay,
-  type PerImageProgress,
-} from "../../../components/upload/UploadProgressOverlay";
 import { useGallery } from "../../../hooks/useGallery";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { useToast } from "../../../hooks/useToast";
@@ -115,14 +110,56 @@ export default function GalleryPhotos() {
     [key: string]: unknown;
   }
   const [orders, setOrders] = useState<GalleryOrder[]>([]);
-  const pollingActiveRef = useRef<boolean>(false); // Track if polling is active
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track polling timeout
   const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
   const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
   const [imageOrderStatus, setImageOrderStatus] = useState<Map<string, string>>(new Map()); // Map image key to order delivery status
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+
+  // Check for recovery state and auto-open modal
+  useEffect(() => {
+    if (!galleryId || typeof window === "undefined") return;
+    
+    const storageKey = `uppy_upload_state_${galleryId}_originals`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; type: string };
+        // If there's an active upload state, open the modal to allow recovery
+        if (state.isActiveUpload && state.galleryId === galleryId && state.type === "originals") {
+          setUploadModalOpen(true);
+        }
+      } catch {
+        // Ignore invalid entries
+      }
+    }
+  }, [galleryId]);
+
+  // Handle modal close - clear recovery flag if modal was auto-opened from recovery
+  const handleUploadModalClose = useCallback(() => {
+    setUploadModalOpen(false);
+    
+    // If modal was auto-opened from recovery and user closes it, clear the recovery flag
+    // so the global recovery modal doesn't keep showing
+    if (galleryId && typeof window !== "undefined") {
+      const storageKey = `uppy_upload_state_${galleryId}_originals`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        try {
+          const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; type: string };
+          if (state.isActiveUpload) {
+            // Clear the active flag but keep the state (in case user wants to manually resume later)
+            const updatedState = { ...state, isActiveUpload: false };
+            localStorage.setItem(storageKey, JSON.stringify(updatedState));
+          }
+        } catch {
+          // Ignore invalid entries
+        }
+      }
+    }
+  }, [galleryId]);
 
   // Use hook for deletion logic
   const {
@@ -135,8 +172,6 @@ export default function GalleryPhotos() {
     galleryId,
     setImages,
   });
-  const [perImageProgress, setPerImageProgress] = useState<PerImageProgress[]>([]);
-  const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -146,77 +181,6 @@ export default function GalleryPhotos() {
     nextTierLimitBytes?: number;
     isSelectionGallery?: boolean;
   } | null>(null);
-  const {
-    handleFileSelect,
-    uploading,
-    perImageProgress: handlerPerImageProgress,
-    isUploadComplete,
-  } = usePhotoUploadHandler({
-    galleryId: galleryId as string,
-    type: "originals",
-    getInitialImageCount: () => images.length,
-    onPerImageProgress: (progress) => {
-      setPerImageProgress(progress);
-      // Reset dismissed state when new upload starts
-      if (progress.length > 0 && progress.some((p) => p.status === "uploading")) {
-        setIsOverlayDismissed(false);
-      }
-    },
-    onUploadSuccess: (_fileName, _file, _uploadedKey) => {
-      // Optimistic update is already handled by useS3Upload.ts
-      // No need to update here to avoid double-counting
-    },
-    onImagesUpdated: (updatedImages) => {
-      // Simply set images when they're ready (have URLs from processing)
-      const validApiImages = updatedImages.filter((img: GalleryImage) => {
-        const imgKey = img.key ?? img.filename;
-        if (!imgKey) {
-          return false;
-        }
-        // Keep deleting images visible - only filter out successfully deleted ones
-        if (deletedImageKeysRef.current.has(imgKey)) {
-          return false;
-        }
-        return true;
-      });
-
-      // Preserve images that are currently being deleted (they may not be in updated images yet)
-      setImages((currentImages) => {
-        const deletingImageKeys = Array.from(deletingImagesRef.current);
-        const currentDeletingImages = currentImages.filter((img) => {
-          const imgKey = img.key ?? img.filename;
-          return imgKey && deletingImageKeys.includes(imgKey);
-        });
-
-        // Create a map of valid updated images by key for deduplication
-        const updatedImagesMap = new Map(
-          validApiImages.map((img) => [img.key ?? img.filename, img])
-        );
-
-        // Add deleting images that aren't already in updated images
-        currentDeletingImages.forEach((img) => {
-          const imgKey = img.key ?? img.filename;
-          if (imgKey && !updatedImagesMap.has(imgKey)) {
-            updatedImagesMap.set(imgKey, img);
-          }
-        });
-
-        // Return merged array (updated images + preserved deleting images)
-        const mergedImages = Array.from(updatedImagesMap.values());
-        // Only update if we have valid images
-        return mergedImages.length > 0 ? mergedImages : currentImages;
-      });
-    },
-    onValidationNeeded: (data) => {
-      setLimitExceededData(data);
-    },
-    reloadGallery: async () => {
-      // Bytes are updated optimistically and via refreshGalleryBytesOnly in useImagePolling
-      // No need to reload entire gallery - images already updated via onImagesUpdated
-    },
-    deletingImagesRef,
-    deletedImageKeysRef,
-  });
 
   // Define functions first (before useEffect hooks that use them)
   // Load images from store (checks cache first, fetches if needed)
@@ -283,6 +247,41 @@ export default function GalleryPhotos() {
     },
     [galleryId, showToast, fetchGalleryImages, deletingImagesRef]
   );
+
+  // Reload gallery after upload (simple refetch, no polling)
+  const reloadGalleryAfterUpload = useCallback(async () => {
+    if (!galleryId) return;
+    
+    // Invalidate cache and fetch fresh images
+    const { invalidateGalleryImagesCache, fetchGalleryImages } = useGalleryStore.getState();
+    invalidateGalleryImagesCache(galleryId as string);
+    await fetchGalleryImages(galleryId as string, true); // Force refresh
+    
+    // Update local state from store
+    const { getGalleryImages } = useGalleryStore.getState();
+    const storeImages = getGalleryImages(galleryId as string) ?? [];
+    
+    setImages((currentImages) => {
+      const deletingImageKeys = Array.from(deletingImagesRef.current);
+      const currentDeletingImages = currentImages.filter((img) => {
+        const imgKey = img.key ?? img.filename;
+        return imgKey && deletingImageKeys.includes(imgKey);
+      });
+
+      const storeImagesMap = new Map(
+        storeImages.map((img) => [img.key ?? img.filename, img])
+      );
+
+      currentDeletingImages.forEach((img) => {
+        const imgKey = img.key ?? img.filename;
+        if (imgKey && !storeImagesMap.has(imgKey)) {
+          storeImagesMap.set(imgKey, img);
+        }
+      });
+
+      return Array.from(storeImagesMap.values());
+    });
+  }, [galleryId, deletingImagesRef]);
 
   const loadApprovedSelections = useCallback(
     async (forceRefresh = false): Promise<void> => {
@@ -411,19 +410,6 @@ export default function GalleryPhotos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      // Stop polling when component unmounts
-      pollingActiveRef.current = false;
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current);
-        pollingTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
@@ -698,7 +684,11 @@ export default function GalleryPhotos() {
   return (
     <>
       {/* Next Steps Overlay */}
-      <NextStepsOverlay gallery={gallery} orders={orders} galleryLoading={galleryLoading} />
+      <NextStepsOverlay 
+        gallery={gallery} 
+        orders={orders as unknown as Array<{ orderId: string; [key: string]: unknown }>} 
+        galleryLoading={galleryLoading} 
+      />
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -716,67 +706,58 @@ export default function GalleryPhotos() {
             )}
           </div>
         </div>
-        {/* Drag and Drop Upload Area */}
-        <FileUploadZone
-          onFileSelect={handleFileSelect}
-          uploading={uploading}
-          accept="image/jpeg,image/png,image/jpg"
-          multiple={true}
-        >
-          <div className="space-y-2">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              stroke="currentColor"
-              fill="none"
-              viewBox="0 0 48 48"
-              aria-hidden="true"
+        {/* Upload Button */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
-              <path
-                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-semibold text-brand-600 dark:text-brand-400">
-                Kliknij aby przesłać
-              </span>{" "}
-              lub przeciągnij i upuść
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
-              Obsługiwane formaty: JPEG, PNG
-            </p>
-            {gallery?.originalsLimitBytes && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <StorageDisplay
-                  bytesUsed={
-                    (currentGallery?.originalsBytesUsed !== null &&
-                    currentGallery?.originalsBytesUsed !== undefined &&
-                    typeof currentGallery.originalsBytesUsed === "number"
-                      ? currentGallery.originalsBytesUsed
-                      : null) ??
-                    (gallery?.originalsBytesUsed !== null &&
-                    gallery?.originalsBytesUsed !== undefined &&
-                    typeof gallery?.originalsBytesUsed === "number"
-                      ? gallery.originalsBytesUsed
-                      : null) ??
-                    0
-                  }
-                  limitBytes={
-                    gallery?.originalsLimitBytes !== null &&
-                    gallery?.originalsLimitBytes !== undefined &&
-                    typeof gallery.originalsLimitBytes === "number"
-                      ? gallery.originalsLimitBytes
-                      : undefined
-                  }
-                  label="Oryginały"
-                  isLoading={galleryLoading}
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
                 />
-              </div>
-            )}
+              </svg>
+              Prześlij zdjęcia
+            </button>
           </div>
-        </FileUploadZone>
+          {gallery?.originalsLimitBytes && (
+            <div>
+              <StorageDisplay
+                bytesUsed={
+                  (currentGallery?.originalsBytesUsed !== null &&
+                  currentGallery?.originalsBytesUsed !== undefined &&
+                  typeof currentGallery.originalsBytesUsed === "number"
+                    ? currentGallery.originalsBytesUsed
+                    : null) ??
+                  (gallery?.originalsBytesUsed !== null &&
+                  gallery?.originalsBytesUsed !== undefined &&
+                  typeof gallery?.originalsBytesUsed === "number"
+                    ? gallery.originalsBytesUsed
+                    : null) ??
+                  0
+                }
+                limitBytes={
+                  gallery?.originalsLimitBytes !== null &&
+                  gallery?.originalsLimitBytes !== undefined &&
+                  typeof gallery.originalsLimitBytes === "number"
+                    ? gallery.originalsLimitBytes
+                    : undefined
+                }
+                label="Oryginały"
+                isLoading={galleryLoading}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Images Grid - Grouped by Orders */}
         {loading ? (
@@ -915,26 +896,24 @@ export default function GalleryPhotos() {
         )}
       </div>
 
-      {/* Upload Progress Overlay */}
-      {(() => {
-        const currentProgress =
-          handlerPerImageProgress.length > 0 ? handlerPerImageProgress : perImageProgress;
-
-        if (currentProgress.length === 0 || isOverlayDismissed) {
-          return null;
-        }
-
-        return (
-          <UploadProgressOverlay
-            images={currentProgress}
-            isUploadComplete={isUploadComplete}
-            onDismiss={() => {
-              setIsOverlayDismissed(true);
-              setPerImageProgress([]);
-            }}
-          />
-        );
-      })()}
+      {/* Uppy Upload Modal */}
+      {galleryId && (
+        <UppyUploadModal
+          isOpen={uploadModalOpen}
+          onClose={handleUploadModalClose}
+          config={{
+            galleryId: galleryId as string,
+            type: "originals",
+            onValidationNeeded: (data) => {
+              setLimitExceededData(data);
+            },
+            onUploadComplete: () => {
+              setUploadModalOpen(false);
+            },
+            reloadGallery: reloadGalleryAfterUpload,
+          }}
+        />
+      )}
 
       {/* Limit Exceeded Modal */}
       {limitExceededData && (

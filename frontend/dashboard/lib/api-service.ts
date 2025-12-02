@@ -642,7 +642,7 @@ class ApiService {
         `/galleries/${galleryId}/pricing-package`,
         {
           method: "PATCH",
-          body: JSON.stringify(pricingPackage),
+          body: JSON.stringify({ pricingPackage }),
         }
       );
       return result;
@@ -1278,9 +1278,18 @@ class ApiService {
      */
     getPresignedUrlsBatch: async (data: {
       galleryId: string;
-      files: Array<{ key: string; contentType?: string; fileSize?: number }>;
+      files: Array<{ key: string; contentType?: string; fileSize?: number; includeThumbnails?: boolean }>;
     }): Promise<{
-      urls: Array<{ key: string; url: string; objectKey: string; expiresInSeconds: number }>;
+      urls: Array<{ 
+        key: string; 
+        url: string; 
+        objectKey: string; 
+        expiresInSeconds: number;
+        previewUrl?: string;
+        previewKey?: string;
+        thumbnailUrl?: string;
+        thumbnailKey?: string;
+      }>;
       count: number;
     }> => {
       if (!data) {
@@ -1337,10 +1346,19 @@ class ApiService {
       galleryId: string,
       orderId: string,
       data: {
-        files: Array<{ key: string; contentType?: string; fileSize?: number }>;
+        files: Array<{ key: string; contentType?: string; fileSize?: number; includeThumbnails?: boolean }>;
       }
     ): Promise<{
-      urls: Array<{ key: string; url: string; objectKey: string; expiresInSeconds: number }>;
+      urls: Array<{ 
+        key: string; 
+        url: string; 
+        objectKey: string; 
+        expiresInSeconds: number;
+        previewUrl?: string;
+        previewKey?: string;
+        thumbnailUrl?: string;
+        thumbnailKey?: string;
+      }>;
       count: number;
     }> => {
       if (!galleryId) {
@@ -1377,6 +1395,138 @@ class ApiService {
           method: "POST",
         }
       );
+    },
+
+    /**
+     * Create multipart upload for large files
+     */
+    createMultipartUpload: async (
+      galleryId: string,
+      data: {
+        orderId?: string;
+        files: Array<{
+          key: string;
+          contentType?: string;
+          fileSize: number;
+          partSize?: number;
+        }>;
+      }
+    ): Promise<{
+      uploads: Array<{
+        uploadId: string;
+        key: string;
+        objectKey: string;
+        parts: Array<{ partNumber: number; url: string }>;
+        totalParts: number;
+        partSize: number;
+      }>;
+      count: number;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.files || !Array.isArray(data.files) || data.files.length === 0) {
+        throw new Error("Files array is required");
+      }
+      if (data.files.length > 50) {
+        throw new Error("Maximum 50 files per batch request");
+      }
+      return await this._request("/uploads/presign-multipart", {
+        method: "POST",
+        body: JSON.stringify({
+          galleryId,
+          orderId: data.orderId,
+          files: data.files,
+        }),
+      });
+    },
+
+    /**
+     * Complete multipart upload
+     */
+    completeMultipartUpload: async (
+      galleryId: string,
+      data: {
+        uploadId: string;
+        key: string;
+        parts: Array<{ partNumber: number; etag: string }>;
+      }
+    ): Promise<{
+      success: boolean;
+      key?: string;
+      etag?: string;
+      location?: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.uploadId || !data?.key || !data?.parts) {
+        throw new Error("uploadId, key, and parts are required");
+      }
+      return await this._request("/uploads/complete-multipart", {
+        method: "POST",
+        body: JSON.stringify({
+          galleryId,
+          uploadId: data.uploadId,
+          key: data.key,
+          parts: data.parts,
+        }),
+      });
+    },
+
+    /**
+     * List parts of a multipart upload (for resume)
+     */
+    listMultipartParts: async (
+      galleryId: string,
+      data: {
+        uploadId: string;
+        key: string;
+      }
+    ): Promise<{
+      parts: Array<{ partNumber: number; etag: string; size: number }>;
+      count: number;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.uploadId || !data?.key) {
+        throw new Error("uploadId and key are required");
+      }
+      return await this._request("/uploads/list-multipart-parts", {
+        method: "POST",
+        body: JSON.stringify({
+          galleryId,
+          uploadId: data.uploadId,
+          key: data.key,
+        }),
+      });
+    },
+
+    /**
+     * Abort multipart upload
+     */
+    abortMultipartUpload: async (
+      galleryId: string,
+      data: {
+        uploadId: string;
+        key: string;
+      }
+    ): Promise<{ success: boolean; message?: string }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.uploadId || !data?.key) {
+        throw new Error("uploadId and key are required");
+      }
+      return await this._request("/uploads/abort-multipart", {
+        method: "POST",
+        body: JSON.stringify({
+          galleryId,
+          uploadId: data.uploadId,
+          key: data.key,
+        }),
+      });
     },
   };
 

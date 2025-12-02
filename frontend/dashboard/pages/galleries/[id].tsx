@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
+import { useGalleryType } from "../../components/hocs/withGalleryType";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";
 import Button from "../../components/ui/button/Button";
@@ -243,6 +244,7 @@ export default function GalleryDetail() {
   const { fetchGalleryOrders, refreshGalleryStatusOnly, invalidateGalleryOrdersCache } =
     useGalleryStore();
   const { refreshWalletBalance } = useUserStore();
+  const { isNonSelectionGallery } = useGalleryType();
   // Subscribe to gallery orders cache to trigger re-render when orders are updated
   const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryId ? state.galleryOrdersCache[galleryId as string] : null
@@ -409,6 +411,28 @@ export default function GalleryDetail() {
       setLoading(false);
     }
   }, [galleryId, galleryOrdersCacheEntry]);
+
+  // Redirect non-selection galleries to order view
+  useEffect(() => {
+    if (!galleryId || !gallery || !isNonSelectionGallery || !router.isReady) {
+      return;
+    }
+
+    // Only redirect if we're on the gallery detail page (not already on order page)
+    if (router.pathname === "/galleries/[id]" && !router.asPath.includes("/orders/")) {
+      const redirectToOrder = async () => {
+        try {
+          const orders = await fetchGalleryOrders(galleryId as string, false);
+          if (orders && orders.length > 0 && orders[0]?.orderId) {
+            void router.replace(`/galleries/${galleryId}/orders/${orders[0].orderId}`);
+          }
+        } catch (err) {
+          console.error("Failed to fetch orders for redirect:", err);
+        }
+      };
+      void redirectToOrder();
+    }
+  }, [galleryId, gallery, isNonSelectionGallery, router, fetchGalleryOrders]);
 
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {
     if (!galleryId || !orderId) {

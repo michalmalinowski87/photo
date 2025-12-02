@@ -1,7 +1,9 @@
 import Link from "next/link";
-import React from "react";
+import { useRouter } from "next/router";
+import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
+import { useGalleryStore } from "../../store/gallerySlice";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
@@ -27,11 +29,14 @@ interface ActiveOrdersTableProps {
   onViewAllClick?: () => void;
 }
 
-const getDeliveryStatusBadge = (status: string) => {
+const getDeliveryStatusBadge = (status: string, isNonSelectionGallery: boolean = false) => {
   const statusMap: Record<string, { color: BadgeColor; label: string }> = {
     CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
     CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-    AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na finały" },
+    AWAITING_FINAL_PHOTOS: { 
+      color: "warning", 
+      label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na finały" 
+    },
     CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
     PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
     PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
@@ -69,6 +74,73 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
   onDenyChangeRequest,
   onViewAllClick,
 }) => {
+  const router = useRouter();
+  const { fetchGallery } = useGalleryStore();
+  const [navigatingGalleryId, setNavigatingGalleryId] = useState<string | null>(null);
+  const [galleryTypes, setGalleryTypes] = useState<Record<string, boolean>>({});
+
+  // Load gallery types for all orders
+  React.useEffect(() => {
+    const loadGalleryTypes = async () => {
+      const types: Record<string, boolean> = {};
+      for (const order of orders) {
+        const orderObj: Order = order;
+        const galleryId = typeof orderObj.galleryId === "string" ? orderObj.galleryId : "";
+        if (galleryId && !(galleryId in galleryTypes)) {
+          try {
+            const gallery = await fetchGallery(galleryId, false);
+            types[galleryId] = gallery?.selectionEnabled === false;
+          } catch {
+            types[galleryId] = false;
+          }
+        }
+      }
+      if (Object.keys(types).length > 0) {
+        setGalleryTypes((prev) => ({ ...prev, ...types }));
+      }
+    };
+    void loadGalleryTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, fetchGallery]);
+
+  const handleGalleryClick = async (e: React.MouseEvent<HTMLAnchorElement>, galleryId: string, orderId: string) => {
+    e.preventDefault();
+    
+    // Check if this is a non-selection gallery
+    try {
+      const gallery = await fetchGallery(galleryId, false);
+      const isNonSelection = gallery?.selectionEnabled === false;
+      
+      // Update gallery types cache
+      setGalleryTypes((prev) => ({ ...prev, [galleryId]: isNonSelection }));
+      
+      if (isNonSelection) {
+        // For non-selection galleries, navigate to order view
+        setNavigatingGalleryId(galleryId);
+        void router.push(`/galleries/${galleryId}/orders/${orderId}`);
+      } else {
+        // For selection galleries, navigate to gallery view
+        setNavigatingGalleryId(galleryId);
+        // Store current page as referrer when navigating to gallery
+        if (typeof window !== "undefined" && galleryId) {
+          const referrerKey = `gallery_referrer_${galleryId}`;
+          sessionStorage.setItem(referrerKey, window.location.pathname);
+        }
+        void router.push(`/galleries/${galleryId}`);
+      }
+    } catch (err) {
+      // On error, fall back to gallery view
+      console.error("Failed to fetch gallery:", err);
+      if (typeof window !== "undefined" && galleryId) {
+        const referrerKey = `gallery_referrer_${galleryId}`;
+        sessionStorage.setItem(referrerKey, window.location.pathname);
+      }
+      void router.push(`/galleries/${galleryId}`);
+    } finally {
+      setNavigatingGalleryId(null);
+    }
+  };
+
   return (
     <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
@@ -157,15 +229,16 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                       <Link
                         href={`/galleries/${galleryId}`}
                         className="text-brand-500 hover:text-brand-600"
-                        onClick={() => {
-                          // Store current page as referrer when navigating to gallery
-                          if (typeof window !== "undefined" && galleryId) {
-                            const referrerKey = `gallery_referrer_${galleryId}`;
-                            sessionStorage.setItem(referrerKey, window.location.pathname);
+                        onClick={(e) => {
+                          if (galleryId && orderId) {
+                            void handleGalleryClick(e, galleryId, orderId);
                           }
                         }}
                       >
                         {galleryName}
+                        {navigatingGalleryId === galleryId && (
+                          <span className="ml-2 text-xs text-gray-400">...</span>
+                        )}
                       </Link>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
@@ -177,7 +250,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                       </Link>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
-                      {getDeliveryStatusBadge(deliveryStatus)}
+                      {getDeliveryStatusBadge(deliveryStatus, galleryTypes[galleryId] ?? false)}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
                       {getPaymentStatusBadge(paymentStatus)}

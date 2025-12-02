@@ -1,6 +1,6 @@
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Import both CSS files - Next.js will handle them correctly
 // Auth CSS is loaded for auth routes, dashboard CSS for dashboard routes
@@ -14,6 +14,8 @@ import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { clearEphemeralState } from "../store";
+import { useUploadRecovery } from "../hooks/useUploadRecovery";
+import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];
@@ -34,10 +36,31 @@ const GALLERY_ROUTES = [
   "/galleries/[id]/photos",
   "/galleries/[id]/settings",
   "/galleries/[id]/orders/[orderId]",
+  "/galleries/[id]/orders/[orderId]/settings",
 ];
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  const { recoveryState, showModal, handleResume, handleClear } = useUploadRecovery();
+  const [swRegistered, setSwRegistered] = useState(false);
+
+  // Register Service Worker for Golden Retriever
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && !swRegistered) {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
+        .then((registration) => {
+          // eslint-disable-next-line no-console
+          console.log("Service Worker registered:", registration);
+          setSwRegistered(true);
+        })
+        .catch((error) => {
+          // eslint-disable-next-line no-console
+          console.error("Service Worker registration failed:", error);
+          // Continue without Service Worker (fallback to IndexedDB only)
+        });
+    }
+  }, [swRegistered]);
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
@@ -129,6 +152,18 @@ export default function App({ Component, pageProps }: AppProps) {
         <SessionExpiredModalWrapper />
         <ToastContainer />
         <ZipDownloadContainer />
+        {recoveryState && (
+          <UploadRecoveryModal
+            isOpen={showModal}
+            onClose={handleClear}
+            onResume={handleResume}
+            onClear={handleClear}
+            fileCount={recoveryState.fileCount}
+            galleryId={recoveryState.galleryId}
+            type={recoveryState.type}
+            orderId={recoveryState.orderId}
+          />
+        )}
         <GalleryLayoutWrapper>
           <Component {...pageProps} />
         </GalleryLayoutWrapper>
@@ -142,6 +177,18 @@ export default function App({ Component, pageProps }: AppProps) {
       <SessionExpiredModalWrapper />
       <ToastContainer />
       <ZipDownloadContainer />
+      {recoveryState && (
+        <UploadRecoveryModal
+          isOpen={showModal}
+          onClose={handleClear}
+          onResume={handleResume}
+          onClear={handleClear}
+          fileCount={recoveryState.fileCount}
+          galleryId={recoveryState.galleryId}
+          type={recoveryState.type}
+          orderId={recoveryState.orderId}
+        />
+      )}
       <AppLayout>
         <Component {...pageProps} />
       </AppLayout>

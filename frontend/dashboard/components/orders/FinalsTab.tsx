@@ -1,8 +1,6 @@
 import Button from "../ui/button/Button";
 import { Loading } from "../ui/loading/Loading";
 import { RetryableImage } from "../ui/RetryableImage";
-import { FileUploadZone } from "../upload/FileUploadZone";
-import { StorageDisplay } from "../upload/StorageDisplay";
 
 interface GalleryImage {
   id?: string;
@@ -27,14 +25,15 @@ interface FinalsTabProps {
   gallery: Gallery | null;
   canUpload: boolean;
   isGalleryPaid: boolean;
-  uploading: boolean;
   optimisticFinalsBytes: number | null;
   deletingImages: Set<string>;
   loading: boolean;
-  onFileSelect: (files: FileList | null) => void;
+  onUploadClick: () => void;
   onDeleteImage: (image: GalleryImage) => void;
   onPayClick: () => void;
   paymentLoading: boolean;
+  isNonSelectionGallery?: boolean;
+  orderDeliveryStatus?: string;
 }
 
 export function FinalsTab({
@@ -42,28 +41,34 @@ export function FinalsTab({
   gallery,
   canUpload,
   isGalleryPaid,
-  uploading,
   optimisticFinalsBytes,
   deletingImages,
   loading,
-  onFileSelect,
+  onUploadClick,
   onDeleteImage,
   onPayClick,
   paymentLoading,
+  isNonSelectionGallery = false,
+  orderDeliveryStatus,
 }: FinalsTabProps) {
+  // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
+  const shouldShowPublishButton =
+    isNonSelectionGallery &&
+    orderDeliveryStatus === "AWAITING_FINAL_PHOTOS" &&
+    !isGalleryPaid;
+
   return (
     <div className="space-y-4">
-      {/* Show unpaid message if gallery is not paid */}
-      {!isGalleryPaid && (
+      {/* Show publish button for non-selection galleries when appropriate */}
+      {shouldShowPublishButton && (
         <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                Galeria nieopublikowana
+                Opublikuj galerię
               </div>
               <div className="text-xs text-warning-600 dark:text-warning-400">
-                Nie możesz przesłać zdjęć finalnych, ponieważ galeria nie została opublikowana.
-                Opublikuj galerię aby kontynuować.
+                Opublikuj galerię aby kontynuować z procesem.
               </div>
             </div>
             <Button size="sm" variant="primary" onClick={onPayClick} disabled={paymentLoading}>
@@ -74,45 +79,26 @@ export function FinalsTab({
       )}
 
       {canUpload && (
-        <FileUploadZone
-          onFileSelect={onFileSelect}
-          uploading={uploading}
-          accept="image/*"
-          multiple={true}
-        >
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-            stroke="currentColor"
-            fill="none"
-            viewBox="0 0 48 48"
-            aria-hidden="true"
-          >
-            <path
-              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <div className="mt-4">
-            <p className="text-base font-medium text-gray-900 dark:text-white">
-              Przeciągnij zdjęcia tutaj lub kliknij, aby wybrać
-            </p>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Obsługiwane formaty: JPG, PNG, GIF
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Button onClick={onUploadClick} variant="primary">
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Prześlij zdjęcia finalne
+            </Button>
           </div>
-          {gallery?.finalsLimitBytes && (
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <StorageDisplay
-                bytesUsed={optimisticFinalsBytes ?? gallery.finalsBytesUsed ?? 0}
-                limitBytes={gallery.finalsLimitBytes}
-                label="Finalne"
-                isLoading={optimisticFinalsBytes !== null && loading}
-              />
-            </div>
-          )}
-        </FileUploadZone>
+        </div>
       )}
 
       {images.length === 0 ? (

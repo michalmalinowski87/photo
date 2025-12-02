@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
+import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
 import { FinalsTab } from "../../../../components/orders/FinalsTab";
@@ -9,11 +10,9 @@ import { OrderHeader } from "../../../../components/orders/OrderHeader";
 import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
 import { OrderTabs } from "../../../../components/orders/OrderTabs";
 import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
-import { UploadProgressWrapper } from "../../../../components/orders/UploadProgressWrapper";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading } from "../../../../components/ui/loading/Loading";
-import { usePhotoUploadHandler } from "../../../../components/upload/PhotoUploadHandler";
-import type { PerImageProgress } from "../../../../components/upload/UploadProgressOverlay";
+import { UppyUploadModal } from "../../../../components/uppy/UppyUploadModal";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
@@ -22,7 +21,7 @@ import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { useGalleryStore } from "../../../../store/gallerySlice";
+import { applyCacheBustingToImage, useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
 
@@ -67,6 +66,7 @@ export default function OrderDetail() {
   const { id: galleryId, orderId } = router.query;
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
+  const { isNonSelectionGallery } = useGalleryType();
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [error, setError] = useState<string>("");
   // Use Zustand store as single source of truth for order data (shared with sidebar and top bar)
@@ -207,8 +207,14 @@ export default function OrderDetail() {
             galleryId as string,
             orderId as string
           );
+          // Apply cache-busting with fetch timestamp to ensure CloudFront serves fresh images
+          // Fetch timestamp ensures fresh images even if S3 lastModified hasn't updated yet
+          const fetchTimestamp = Date.now();
+          const imagesWithCacheBusting = (finalResponse.images ?? []).map((img) =>
+            applyCacheBustingToImage(img, fetchTimestamp)
+          );
           // Map final images - keep finalUrl for download, use previewUrl/thumbUrl for display
-          const mappedFinalImages = (finalResponse.images ?? []).map((img: GalleryImage) => ({
+          const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
             ...img,
             url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "", // Use WebP for display
             finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download
@@ -231,14 +237,15 @@ export default function OrderDetail() {
             });
 
             // Create a map of valid API images by key for deduplication
-            const apiImagesMap = new Map(
-              validApiImages.map((img) => [img.key ?? img.filename, img])
+            const apiImagesMap = new Map<string, GalleryImage>(
+              validApiImages.map((img) => [img.key ?? img.filename ?? "", img])
             );
 
             // Add deleting images that aren't already in API response
             currentDeletingImages.forEach((img) => {
               const imgKey = img.key ?? img.filename;
-              if (imgKey && !apiImagesMap.has(imgKey)) {
+              if (imgKey && !apiImagesMap.has(imgKey) && img.url && img.finalUrl) {
+                // Ensure required fields exist before adding
                 apiImagesMap.set(imgKey, img);
               }
             });
@@ -272,8 +279,6 @@ export default function OrderDetail() {
     [galleryId, orderId, showToast]
   );
 
-  // Track per-image upload progress
-  const [perImageProgress] = useState<PerImageProgress[]>([]);
 
   // Use hooks for order actions and amount editing (after state declarations)
   const {
@@ -314,98 +319,97 @@ export default function OrderDetail() {
   }, [deletedImageKeysRef]);
 
   const { refreshOrderStatus } = useOrderStatusRefresh();
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
-  // Use universal photo upload handler (after loadOrderData is defined)
-  const {
-    handleFileSelect,
-    uploading,
-    perImageProgress: handlerPerImageProgress,
-    isUploadComplete,
-  } = usePhotoUploadHandler({
-    galleryId: galleryId as string,
-    orderId: orderId as string,
-    type: "finals",
-    getInitialImageCount: () => finalImages.length,
-    onPerImageProgress: () => {
-      // Progress is handled by UploadProgressWrapper component
-    },
-    onUploadSuccess: (_fileName, _file, _uploadedKey) => {
-      // Optimistic update is already handled by useS3Upload.ts
-      // No need to update here to avoid double-counting (same pattern as originals)
-      // File uploaded successfully - optimistic update already handled by useS3Upload
-    },
-    onImagesUpdated: (updatedImages) => {
-      // For finals, map images to include previewUrl/thumbUrl/finalUrl structure
-      const mappedImages = updatedImages.map((img: GalleryImage) => ({
+  // Check for recovery state and auto-open modal
+  useEffect(() => {
+    if (!galleryId || !orderId || typeof window === "undefined") return;
+    
+    const storageKey = `uppy_upload_state_${galleryId}_finals`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; orderId?: string; type: string };
+        // If there's an active upload state for this order, open the modal to allow recovery
+        if (state.isActiveUpload && state.galleryId === galleryId && state.orderId === orderId && state.type === "finals") {
+          setUploadModalOpen(true);
+        }
+      } catch {
+        // Ignore invalid entries
+      }
+    }
+  }, [galleryId, orderId]);
+
+  // Handle modal close - clear recovery flag if modal was auto-opened from recovery
+  const handleUploadModalClose = useCallback(() => {
+    setUploadModalOpen(false);
+    
+    // If modal was auto-opened from recovery and user closes it, clear the recovery flag
+    // so the global recovery modal doesn't keep showing
+    if (galleryId && orderId && typeof window !== "undefined") {
+      const storageKey = `uppy_upload_state_${galleryId}_finals`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        try {
+          const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; orderId?: string; type: string };
+          if (state.isActiveUpload && state.orderId === orderId) {
+            // Clear the active flag but keep the state (in case user wants to manually resume later)
+            const updatedState = { ...state, isActiveUpload: false };
+            localStorage.setItem(storageKey, JSON.stringify(updatedState));
+          }
+        } catch {
+          // Ignore invalid entries
+        }
+      }
+    }
+  }, [galleryId, orderId]);
+
+  // Reload final images after upload (simple refetch, no polling)
+  const reloadFinalImagesAfterUpload = useCallback(async () => {
+    if (!galleryId || !orderId) return;
+    
+    try {
+      const finalResponse = await api.orders.getFinalImages(
+        galleryId as string,
+        orderId as string
+      );
+      const fetchTimestamp = Date.now();
+      const imagesWithCacheBusting = (finalResponse.images ?? []).map((img) =>
+        applyCacheBustingToImage(img, fetchTimestamp)
+      );
+      const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
         ...img,
-        url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "", // Use WebP for display
-        finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download
+        url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "",
+        finalUrl: img.finalUrl ?? img.url ?? "",
       }));
-
       const validApiImages = filterDeletedImages(
-        mappedImages,
+        mappedFinalImages as Array<{ url: string; finalUrl: string; id?: string; key?: string; filename?: string; thumbUrl?: string; previewUrl?: string; isPlaceholder?: boolean; uploadTimestamp?: number; uploadIndex?: number; size?: number }>,
         deletingImagesRef.current,
         deletedImageKeysRef.current
       );
-
-      // Preserve images that are currently being deleted (they may not be in updated images yet)
+      
+      // Update local state
       setFinalImages((currentImages) => {
         const deletingImageKeys = Array.from(deletingImagesRef.current);
         const currentDeletingImages = currentImages.filter((img) => {
           const imgKey = img.key ?? img.filename;
           return imgKey && deletingImageKeys.includes(imgKey);
         });
-
-        // Create a map of valid updated images by key for deduplication
-        const updatedImagesMap = new Map(
-          validApiImages.map((img) => [img.key ?? img.filename, img])
+        const updatedImagesMap = new Map<string, GalleryImage>(
+          validApiImages.map((img) => [img.key ?? img.filename ?? "", img])
         );
-
-        // Add deleting images that aren't already in updated images
         currentDeletingImages.forEach((img) => {
           const imgKey = img.key ?? img.filename;
-          if (imgKey && !updatedImagesMap.has(imgKey)) {
+          if (imgKey && !updatedImagesMap.has(imgKey) && img.url && img.finalUrl) {
             updatedImagesMap.set(imgKey, img);
           }
         });
-
-        // Return merged array (updated images + preserved deleting images)
-        const mergedImages = Array.from(updatedImagesMap.values());
-        // Only update if we have valid images
-        return mergedImages.length > 0 ? mergedImages : currentImages;
+        return Array.from(updatedImagesMap.values());
       });
-    },
-    onUploadComplete: () => {
-      // Reload final images from API after upload completes to ensure we have the latest data
-      // Note: Storage recalculation already happened after S3 upload (in PhotoUploadHandler)
-      // Order status is refreshed via onOrderUpdated callback (called after markFinalUploadComplete)
-      // This just refreshes the order data to show the new images
-      if (galleryId && orderId) {
-        void loadOrderData();
-      }
-    },
-    onOrderUpdated: async (updatedOrderId) => {
-      // Refresh order status when order is updated (e.g., after upload-complete endpoint)
-      if (galleryId && updatedOrderId) {
-        try {
-          const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-          const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId as string);
-          if (galleryIdStr && orderIdStr && updatedOrderId === orderIdStr) {
-            await refreshOrderStatus(galleryIdStr, orderIdStr);
-          }
-        } catch (statusErr) {
-          // eslint-disable-next-line no-console
-          console.error(
-            "[STATUS_UPDATE] onOrderUpdated - Failed to refresh order status",
-            statusErr
-          );
-        }
-      }
-    },
-    loadOrderData,
-    deletingImagesRef,
-    deletedImageKeysRef,
-  });
+    } catch (err) {
+      console.error("[OrderDetail] Failed to reload final images:", err);
+    }
+  }, [galleryId, orderId, deletingImagesRef, deletedImageKeysRef]);
 
   useEffect(() => {
     initializeAuth(
@@ -505,24 +509,6 @@ export default function OrderDetail() {
     };
   }, [galleryId, gallery, optimisticFinalsBytes]);
 
-  // Clear optimistic state when upload completes and data is reloaded
-  useEffect(() => {
-    if (isUploadComplete && optimisticFinalsBytes !== null) {
-      // Reload data and clear optimistic state after a delay
-      void loadOrderData(true).then(() => {
-        setTimeout(() => {
-          setOptimisticFinalsBytes((prev) => {
-            if (prev !== null) {
-              return null;
-            }
-            return prev;
-          });
-        }, 2000);
-      });
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUploadComplete]); // Only depend on isUploadComplete
 
   // Auto-set to finals tab if selection is disabled (non-selection galleries)
   useEffect(() => {
@@ -535,7 +521,8 @@ export default function OrderDetail() {
     }
   }, [gallery, order]);
 
-  // Polling cleanup is handled by usePhotoUploadHandler hook
+  // For non-selection galleries, always show finals tab (no tab switcher)
+  const shouldShowTabs = !isNonSelectionGallery;
 
   const handlePayClick = (): void => {
     if (!galleryId || paymentLoading) {
@@ -698,7 +685,7 @@ export default function OrderDetail() {
         onAmountChange={setEditingAmountValue}
       />
 
-      {selectionEnabled && (
+      {shouldShowTabs && (
         <OrderTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -706,7 +693,7 @@ export default function OrderDetail() {
         />
       )}
 
-      {selectionEnabled && activeTab === "originals" && (
+      {shouldShowTabs && activeTab === "originals" && (
         <OriginalsTab
           images={originalImages}
           selectedKeys={selectedKeys}
@@ -715,20 +702,38 @@ export default function OrderDetail() {
         />
       )}
 
-      {(!selectionEnabled || activeTab === "finals") && (
+      {(!shouldShowTabs || activeTab === "finals") && (
         <FinalsTab
           images={finalImages}
           gallery={gallery}
           canUpload={canUploadFinals}
           isGalleryPaid={isGalleryPaid}
-          uploading={uploading}
           optimisticFinalsBytes={optimisticFinalsBytes}
           deletingImages={deletingImages}
           loading={loading}
-          onFileSelect={handleFileSelect}
+          onUploadClick={() => setUploadModalOpen(true)}
           onDeleteImage={handleDeleteFinalImageClick}
           onPayClick={handlePayClick}
           paymentLoading={paymentLoading}
+          isNonSelectionGallery={isNonSelectionGallery}
+          orderDeliveryStatus={order.deliveryStatus}
+        />
+      )}
+
+      {/* Uppy Upload Modal for Finals */}
+      {galleryId && orderId && (
+        <UppyUploadModal
+          isOpen={uploadModalOpen}
+          onClose={handleUploadModalClose}
+          config={{
+            galleryId: galleryId as string,
+            orderId: orderId as string,
+            type: "finals",
+            onUploadComplete: () => {
+              setUploadModalOpen(false);
+            },
+            reloadGallery: reloadFinalImagesAfterUpload,
+          }}
         />
       )}
 
@@ -769,12 +774,6 @@ export default function OrderDetail() {
       />
 
 
-      {/* Upload Progress Overlay */}
-      <UploadProgressWrapper
-        handlerPerImageProgress={handlerPerImageProgress}
-        perImageProgress={perImageProgress}
-        isUploadComplete={isUploadComplete}
-      />
 
       {/* Payment Confirmation Modal */}
       {paymentDetails && (

@@ -6,8 +6,9 @@ interface ModalProps {
   onClose: () => void;
   className?: string;
   children: React.ReactNode;
-  showCloseButton?: boolean; // New prop to control close button visibility
-  isFullscreen?: boolean; // Default to false for backwards compatibility
+  showCloseButton?: boolean;
+  isFullscreen?: boolean;
+  closeOnClickOutside?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,8 +16,9 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   children,
   className,
-  showCloseButton = true, // Default to true for backwards compatibility
+  showCloseButton = true,
   isFullscreen = false,
+  closeOnClickOutside = true,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -56,13 +58,13 @@ export const Modal: React.FC<ModalProps> = ({
     ? "w-full h-full"
     : "relative w-full mx-4 rounded-3xl bg-white dark:bg-gray-900 shadow-xl";
 
-  // Use default max-w-lg if no className provided, otherwise use className
-  // Check if className includes max-h for scrollable modals
-  const hasMaxHeight = className?.includes("max-h-");
+  // If className is provided, use it; otherwise default to max-w-lg
+  // If className includes height (h-), add flex flex-col for proper layout
+  const hasHeight = className?.includes("h-");
   const contentClasses = isFullscreen
     ? baseClasses
-    : className?.includes("max-w-")
-      ? `${baseClasses} ${className}${hasMaxHeight ? " flex flex-col" : ""}`
+    : className
+      ? `${baseClasses} ${className}${hasHeight ? " flex flex-col" : ""}`
       : `${baseClasses} max-w-lg`;
 
   const modalContent = (
@@ -70,7 +72,7 @@ export const Modal: React.FC<ModalProps> = ({
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm z-[999998]"
-          onClick={showCloseButton ? onClose : undefined}
+          onClick={closeOnClickOutside ? onClose : undefined}
         ></div>
       )}
       <div

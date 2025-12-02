@@ -1,3 +1,4 @@
+import { useRouter } from "next/router";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
@@ -14,7 +15,9 @@ import {
   type Duration,
   type PlanKey,
 } from "../../lib/pricing-plans";
+import { useGalleryStore } from "../../store/gallerySlice";
 import { useUserStore } from "../../store/userSlice";
+import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 
 import { CapacityWarning } from "./pricing/CapacityWarning";
@@ -43,19 +46,45 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   initialState,
 }) => {
   const { showToast } = useToast();
+  const router = useRouter();
   const { walletBalanceCents, refreshWalletBalance } = useUserStore();
+  const { fetchGalleryOrders } = useGalleryStore();
+  const { isNonSelectionGallery } = useGalleryType();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
 
+  const handlePaymentSuccess = useCallback(async () => {
+    onSuccess?.();
+    
+    // For non-selection galleries, navigate to order view after payment
+    if (isNonSelectionGallery) {
+      try {
+        const orders = await fetchGalleryOrders(galleryId, false);
+        if (orders && orders.length > 0) {
+          const firstOrder = orders[0] as { orderId?: string };
+          if (firstOrder?.orderId) {
+            void router.push(`/galleries/${galleryId}/orders/${firstOrder.orderId}`);
+            return;
+          }
+        }
+        // If no orders found, just close the wizard
+        onClose();
+      } catch (err) {
+        console.error("Failed to fetch orders after payment:", err);
+        onClose();
+      }
+    } else {
+      // For selection galleries, just close the wizard
+      onClose();
+    }
+  }, [isNonSelectionGallery, galleryId, fetchGalleryOrders, router, onSuccess, onClose]);
+
   const { handleSelectPlan, isProcessing, showRedirectOverlay, redirectInfo } = usePlanPayment({
     galleryId,
-    onSuccess: () => {
-      onSuccess?.();
-      onClose();
-    },
+    onSuccess: handlePaymentSuccess,
     onClose,
   });
 

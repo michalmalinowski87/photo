@@ -23,6 +23,12 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
   const deletedImageKeysRef = useRef<Set<string>>(new Set());
+  
+  // Toast batching refs
+  const successToastBatchRef = useRef<number>(0);
+  const errorToastBatchRef = useRef<number>(0);
+  const successToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const errorToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync refs with state
   deletingImagesRef.current = deletingImages;
@@ -55,10 +61,6 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
       try {
         await api.galleries.deleteImage(galleryIdStr, imageKey);
 
-        // Invalidate all caches to ensure fresh data on next fetch
-        const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-        invalidateAllGalleryCaches(galleryIdStr);
-
         // Save suppression only after successful deletion
         if (suppressChecked) {
           const suppressKey = "original_image_delete_confirm_suppress";
@@ -66,87 +68,73 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
 
-        // Poll for deletion completion - check when image is actually deleted from S3
-        // No optimistic update here - bytes will update only after S3 deletion is confirmed
-        // The "deleting" overlay provides user feedback during deletion
-        const pollForDeletion = async (): Promise<void> => {
-          // Small initial delay to give Lambda a moment to start processing
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          const maxAttempts = 30; // Max 30 seconds (1 second intervals)
-          const pollInterval = 1000; // Poll every 1 second
-          let attempts = 0;
-
-          while (attempts < maxAttempts) {
-            attempts++;
-
-            try {
-              // Check if image still exists in the API
-              const response = await api.galleries.getImages(galleryIdStr);
-              const images = response.images ?? [];
-              const imageStillExists = images.some(
-                (img: GalleryImage) => (img.key ?? img.filename) === imageKey
-              );
-
-              if (!imageStillExists) {
-                // Image is gone from S3! Deletion is complete
-                // Don't apply optimistic update here - we refresh immediately after
-                // This prevents conflicts with concurrent deletions and ensures accuracy
-                // The refresh will update bytes with the correct server-side value
-
-                break;
+        // Optimistically remove image from list immediately after successful delete
+        setImages((prevImages) => {
+          const remainingImages = prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
+          
+          // Check if this was the last image - if so, we need to call /status
+          const wasLastImage = remainingImages.length === 0;
+          
+          // Update Zustand store optimistically (side panel will pull from here)
+          const { currentGallery, updateOriginalsBytesUsed } = useGalleryStore.getState();
+          if (currentGallery && image.size) {
+            // Optimistically subtract the image size
+            updateOriginalsBytesUsed(-(image.size || 0));
+          }
+          
+          // If this was the last image, call /status endpoint to update gallery state
+          if (wasLastImage) {
+            void (async () => {
+              try {
+                const { refreshGalleryStatusOnly } = useGalleryStore.getState();
+                await refreshGalleryStatusOnly(galleryIdStr);
+              } catch (statusErr) {
+                // eslint-disable-next-line no-console
+                console.error("[useOriginalImageDelete] Failed to refresh status after last image deleted:", statusErr);
               }
-            } catch (pollErr) {
-              // If polling fails, log but continue (might be temporary network issue)
-              // eslint-disable-next-line no-console
-              console.warn("[useOriginalImageDelete] Poll check failed, retrying...", pollErr);
-            }
-
-            // Wait before next poll attempt
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+            })();
           }
+          
+          return remainingImages;
+        });
 
-          if (attempts >= maxAttempts) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `[useOriginalImageDelete] Polling timed out after ${maxAttempts} attempts for ${imageKey}`
-            );
-          }
+        // Remove from deleting set
+        setDeletingImages((prev) => {
+          const updated = new Set(prev);
+          updated.delete(imageKey);
+          return updated;
+        });
 
-          // Now that deletion is confirmed (or timed out), refresh bytes and status
-          const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-          await refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
+        // Mark as successfully deleted
+        setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
 
-          // Now that deletion is complete and bytes are refreshed, remove from UI
-          // Mark as successfully deleted to prevent reappearance
-          setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
+        // Refresh bytes only (this will update Zustand store with actual server value)
+        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+        void refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
 
-          // Remove from deleting set
-          setDeletingImages((prev) => {
+        // Clear deleted key after 30 seconds to allow eventual consistency
+        setTimeout(() => {
+          setDeletedImageKeys((prev) => {
             const updated = new Set(prev);
             updated.delete(imageKey);
             return updated;
           });
+        }, 30000);
 
-          // Remove image from list now that deletion is complete
-          setImages((prevImages) =>
-            prevImages.filter((img) => (img.key ?? img.filename) !== imageKey)
-          );
-
-          // Clear deleted key after 30 seconds to allow eventual consistency
-          setTimeout(() => {
-            setDeletedImageKeys((prev) => {
-              const updated = new Set(prev);
-              updated.delete(imageKey);
-              return updated;
-            });
-          }, 30000);
-        };
-
-        // Start polling for deletion completion (non-blocking)
-        void pollForDeletion();
-
-        showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+        // Batch success toasts
+        successToastBatchRef.current += 1;
+        if (successToastTimeoutRef.current) {
+          clearTimeout(successToastTimeoutRef.current);
+        }
+        successToastTimeoutRef.current = setTimeout(() => {
+          const count = successToastBatchRef.current;
+          successToastBatchRef.current = 0;
+          if (count === 1) {
+            showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+          } else {
+            showToast("success", "Sukces", `${count} zdjęć zostało usuniętych`);
+          }
+        }, 500);
       } catch (err) {
         // On error, image is already in the list (we didn't remove it), just remove deleting state
         // No optimistic update was applied yet, so no need to revert
@@ -158,7 +146,21 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           return updated;
         });
 
-        showToast("error", "Błąd", formatApiError(err));
+        // Batch error toasts
+        errorToastBatchRef.current += 1;
+        const errorMessage = formatApiError(err);
+        if (errorToastTimeoutRef.current) {
+          clearTimeout(errorToastTimeoutRef.current);
+        }
+        errorToastTimeoutRef.current = setTimeout(() => {
+          const count = errorToastBatchRef.current;
+          errorToastBatchRef.current = 0;
+          if (count === 1) {
+            showToast("error", "Błąd", errorMessage);
+          } else {
+            showToast("error", "Błąd", `Nie udało się usunąć ${count} zdjęć`);
+          }
+        }, 500);
         throw err;
       }
     },

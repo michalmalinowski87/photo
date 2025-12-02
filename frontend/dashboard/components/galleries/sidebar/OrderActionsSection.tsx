@@ -3,6 +3,7 @@ import React, { useCallback, useState } from "react";
 import { useModal } from "../../../hooks/useModal";
 import { useGalleryStore } from "../../../store/gallerySlice";
 import { useOrderStore } from "../../../store/orderSlice";
+import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
@@ -16,10 +17,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
   const currentOrderId = useOrderStore((state) => state.currentOrderId);
+  const { isNonSelectionGallery } = useGalleryType();
+  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
 
   // Get store actions
   const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
-  const denyChangeRequest = useOrderStore((state) => state.denyChangeRequest);
   const markOrderPaid = useOrderStore((state) => state.markOrderPaid);
   const downloadFinals = useOrderStore((state) => state.downloadFinals);
   const sendFinalsToClient = useOrderStore((state) => state.sendFinalsToClient);
@@ -101,13 +103,28 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
     await downloadZip(galleryId, orderId);
   }, [galleryId, orderId, downloadZip]);
 
+  const handlePublishClick = useCallback(() => {
+    if (gallery?.galleryId) {
+      setPublishWizardOpen(true, gallery.galleryId);
+    }
+  }, [gallery?.galleryId, setPublishWizardOpen]);
+
   // Defensive check: don't render until required data is loaded
   if (!orderId || !order || currentOrderId !== orderId) {
     return null;
   }
 
   const isPaid = gallery?.isPaid ?? false;
-  if (!isPaid) {
+  
+  // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
+  const shouldShowPublishButton =
+    isNonSelectionGallery &&
+    order.deliveryStatus === "AWAITING_FINAL_PHOTOS" &&
+    !isPaid;
+
+  // For non-selection galleries, show actions even if not paid (to show publish button)
+  // For selection galleries, only show if paid
+  if (!isNonSelectionGallery && !isPaid) {
     return null;
   }
 
@@ -121,6 +138,35 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
       </div>
 
       <div className="space-y-2 px-3">
+        {/* Publish Gallery Button for Non-Selection Galleries */}
+        {shouldShowPublishButton && (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={handlePublishClick}
+            className="w-full justify-start"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="mr-2"
+            >
+              <path
+                d="M10 2L3 7V17C3 17.5304 3.21071 18.0391 3.58579 18.4142C3.96086 18.7893 4.46957 19 5 19H15C15.5304 19 16.0391 18.7893 16.4142 18.4142C16.7893 18.0391 17 17.5304 17 17V7L10 2Z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </svg>
+            Opublikuj galerię
+          </Button>
+        )}
+
         {/* Download Selected Originals ZIP */}
         {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
           <Button

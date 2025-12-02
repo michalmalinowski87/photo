@@ -15,7 +15,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass } from 'aws-cdk-lib/aws-cloudfront';
+import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -647,14 +647,16 @@ export class AppStack extends Stack {
 		galleriesBucket.grantReadWrite(resizeFn);
 		galleries.grantReadWriteData(resizeFn);
 		
+		// DISABLED: S3 event notification for resize Lambda (temporarily disabled for Uppy thumbnail testing)
 		// Configure S3 event notifications to trigger resize Lambda on uploads
 		// Trigger on originals/ and final/ directories only (Lambda filters out previews/thumbs to prevent loops)
 		// Note: We trigger on all galleries/ files and let Lambda filter, since S3 filters can't easily exclude subdirectories
-		galleriesBucket.addEventNotification(
-			EventType.OBJECT_CREATED,
-			new LambdaDestination(resizeFn),
-			{ prefix: 'galleries/' } // Match all files in galleries/ prefix - Lambda will filter out previews/thumbs
-		);
+		// TODO: Re-enable after Uppy client-side thumbnail generation is tested and working
+		// galleriesBucket.addEventNotification(
+		// 	EventType.OBJECT_CREATED,
+		// 	new LambdaDestination(resizeFn),
+		// 	{ prefix: 'galleries/' } // Match all files in galleries/ prefix - Lambda will filter out previews/thumbs
+		// );
 		
 		// Storage recalculation is now handled on-demand with caching (5-minute TTL)
 		// See backend/functions/galleries/recalculateBytesUsed.ts for implementation
@@ -721,13 +723,33 @@ export class AppStack extends Stack {
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
 		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)
+		
+		// Create custom cache policy that includes query strings in cache key
+		// This allows cache-busting via query parameters (e.g., ?t=timestamp&v=random)
+		// This is essential for handling image replacements with the same filename
+		const imageCachePolicy = new CachePolicy(this, 'ImageCachePolicy', {
+			cachePolicyName: `PhotoCloud-${props.stage}-ImageCache`,
+			comment: 'Cache policy for images with query string support for cache-busting',
+			defaultTtl: Duration.days(365), // Long cache for images
+			minTtl: Duration.seconds(0),
+			maxTtl: Duration.days(365),
+			enableAcceptEncodingGzip: true,
+			enableAcceptEncodingBrotli: true,
+			// Include query strings in cache key to support cache-busting
+			queryStringBehavior: CacheQueryStringBehavior.all(),
+			// Don't include headers in cache key (standard for images)
+			headerBehavior: CacheHeaderBehavior.none(),
+			// Don't include cookies in cache key (standard for images)
+			cookieBehavior: CacheCookieBehavior.none()
+		});
+		
 		const dist = new Distribution(this, 'PreviewsDistribution', {
 			defaultBehavior: {
 				origin: S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
 					originAccessControlName: `PhotoCloud-${props.stage}-OAC`,
 					description: `Origin Access Control for PhotoCloud ${props.stage} galleries bucket`
 				}),
-				cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+				cachePolicy: imageCachePolicy,
 				allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
 				viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
 			},
@@ -748,6 +770,15 @@ export class AppStack extends Stack {
 			actions: ['cloudfront:CreateInvalidation'],
 			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
 		}));
+		
+		// Add CloudFront invalidation permissions to resize function
+		// This allows invalidating cache when images are replaced (same filename)
+		resizeFn.addToRolePolicy(new PolicyStatement({
+			actions: ['cloudfront:CreateInvalidation'],
+			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
+		}));
+		// Add CloudFront distribution ID to resize function environment
+		resizeFn.addEnvironment('CLOUDFRONT_DISTRIBUTION_ID', dist.distributionId);
 
 		// CloudWatch Monitoring & Alarms for CloudFront cost optimization
 		// Create SNS topic for cost alerts (only in production)

@@ -13,6 +13,8 @@ interface BatchFileRequest {
 	key: string;
 	contentType?: string;
 	fileSize?: number; // Optional for finals
+	// Optional: Request presigned URLs for thumbnails/previews (for client-side generation)
+	includeThumbnails?: boolean; // If true, also generate presigned URLs for preview and thumbnail
 }
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -143,12 +145,60 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 			const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
 			
-			return {
+			const result: {
+				key: string;
+				url: string;
+				objectKey: string;
+				expiresInSeconds: number;
+				previewUrl?: string;
+				previewKey?: string;
+				thumbnailUrl?: string;
+				thumbnailKey?: string;
+			} = {
 				key: file.key,
 				url,
 				objectKey,
 				expiresInSeconds: 3600
 			};
+
+			// If client-side thumbnail generation is requested, also generate presigned URLs for preview and thumbnail
+			if (file.includeThumbnails) {
+				// For finals: final/{orderId}/{filename}
+				const filename = file.key;
+				
+				// Convert to WebP filenames
+				const getWebpKey = (originalKey: string) => {
+					const lastDot = originalKey.lastIndexOf('.');
+					if (lastDot === -1) return `${originalKey}.webp`;
+					return `${originalKey.substring(0, lastDot)}.webp`;
+				};
+				
+				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${getWebpKey(filename)}`;
+				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${getWebpKey(filename)}`;
+				
+				// Generate presigned URLs for preview and thumbnail
+				const [previewUrl, thumbUrl] = await Promise.all([
+					getSignedUrl(s3, new PutObjectCommand({
+						Bucket: bucket,
+						Key: previewKey,
+						ContentType: 'image/webp',
+						CacheControl: 'max-age=31536000'
+					}), { expiresIn: 3600 }),
+					getSignedUrl(s3, new PutObjectCommand({
+						Bucket: bucket,
+						Key: thumbKey,
+						ContentType: 'image/webp',
+						CacheControl: 'max-age=31536000'
+					}), { expiresIn: 3600 })
+				]);
+				
+				result.previewUrl = previewUrl;
+				result.previewKey = previewKey.replace(`galleries/${galleryId}/`, '');
+				result.thumbnailUrl = thumbUrl;
+				result.thumbnailKey = thumbKey.replace(`galleries/${galleryId}/`, '');
+			}
+			
+			return result;
 		})
 	);
 
