@@ -1,4 +1,4 @@
-import { Check , ChevronRight, ChevronLeft } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
