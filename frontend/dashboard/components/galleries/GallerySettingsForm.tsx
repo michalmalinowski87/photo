@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Save } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback } from "react";
 
@@ -555,7 +555,12 @@ export function GallerySettingsForm({
           <Button variant="outline" onClick={handleCancel} disabled={saving}>
             {cancelLabel}
           </Button>
-          <Button variant="primary" onClick={handleUpdateSettings} disabled={saving}>
+          <Button
+            variant="primary"
+            onClick={handleUpdateSettings}
+            disabled={saving}
+            startIcon={<Save size={16} />}
+          >
             {saving ? "Zapisywanie..." : "Zapisz"}
           </Button>
         </div>

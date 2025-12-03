@@ -36,11 +36,12 @@ export default function SessionExpiredModal({ isOpen, returnUrl }: SessionExpire
     >
       <div className="p-12 sm:p-16">
         <div className="flex flex-col items-center text-center">
-          {/* Yellow warning triangle with exclamation mark */}
+          {/* Warning icon */}
           <div className="mb-10">
             <AlertTriangle
               size={80}
-              className="text-warning-500 dark:text-warning-400 fill-current"
+              className="text-warning-500 dark:text-warning-400"
+              strokeWidth={2}
             />
           </div>
 

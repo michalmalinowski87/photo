@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
@@ -132,12 +132,13 @@ export function FinalsTab({
                           onDeleteImage(img);
                         }}
                         disabled={deletingImages.size > 0}
-                        className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
                           deletingImages.size > 0
                             ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                             : "bg-error-500 text-white hover:bg-error-600"
                         }`}
                       >
+                        <Trash2 size={14} />
                         Usuń
                       </button>
                     </div>

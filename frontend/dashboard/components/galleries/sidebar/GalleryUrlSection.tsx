@@ -1,4 +1,4 @@
-import { Plus, Share2 } from "lucide-react";
+import { Plus, Share2, Copy, Check } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 
@@ -153,17 +153,24 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
             ? "!bg-green-500 hover:!bg-green-600 !border-green-500 hover:!border-green-600 !text-white shadow-md"
             : ""
         }`}
+        startIcon={
+          !urlCopied ? (
+            <span className="relative inline-flex items-center justify-center w-4 h-4 flex-shrink-0">
+              <Copy size={16} />
+            </span>
+          ) : null
+        }
       >
-        <span className="relative inline-block min-w-[120px] h-5">
+        <span className="relative inline-flex items-center h-5 min-w-[80px]">
           <span
-            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
+            className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
               urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"
             }`}
           >
             Kopiuj URL
           </span>
           <span
-            className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ease-in-out ${
+            className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
               urlCopied ? "opacity-100 scale-100" : "opacity-0 scale-90"
             }`}
           >

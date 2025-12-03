@@ -150,8 +150,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             variant="primary"
             onClick={handlePublishClick}
             className="w-full justify-start"
+            startIcon={<Home size={16} strokeWidth={2} />}
           >
-            <Home size={16} className="mr-2" strokeWidth={2} />
             Opublikuj galerię
           </Button>
         )}
@@ -163,8 +163,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             variant="outline"
             onClick={handleDownloadZip}
             className="w-full justify-start"
+            startIcon={<Download size={16} />}
           >
-            <Download size={16} className="mr-2" />
             Pobierz wybrane oryginały (ZIP)
           </Button>
         )}
@@ -176,8 +176,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             variant="outline"
             onClick={handleDownloadFinals}
             className="w-full justify-start"
+            startIcon={<Download size={16} />}
           >
-            <Download size={16} className="mr-2" />
             Pobierz finały
           </Button>
         )}
@@ -190,8 +190,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
               variant="primary"
               onClick={handleApproveChangeRequest}
               className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
+              startIcon={<CheckCircle2 size={16} strokeWidth={2} />}
             >
-              <CheckCircle2 size={16} className="mr-2" strokeWidth={2} />
               Zatwierdź prośbę o zmiany
             </Button>
             <Button
@@ -199,8 +199,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
               variant="outline"
               onClick={handleDenyChangeRequest}
               className="w-full justify-start"
+              startIcon={<XCircle size={16} strokeWidth={2} />}
             >
-              <XCircle size={16} className="mr-2" strokeWidth={2} />
               Odrzuć prośbę o zmiany
             </Button>
           </>
@@ -214,8 +214,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             onClick={handleMarkOrderPaidClick}
             disabled={markPaidLoading}
             className="w-full justify-start"
+            startIcon={<Check size={16} />}
           >
-            <Check size={16} className="mr-2" />
             Oznacz jako opłacone
           </Button>
         )}
@@ -228,8 +228,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             onClick={handleSendFinalsToClientClick}
             className="w-full justify-start"
             disabled={order.deliveryStatus === "DELIVERED" || sendFinalsLoading}
+            startIcon={<Send size={16} strokeWidth={2} />}
           >
-            <Send size={16} className="mr-2" strokeWidth={2} />
             {order.deliveryStatus === "DELIVERED"
               ? "Finały wysłane"
               : sendFinalsLoading
