@@ -569,7 +569,7 @@ export function signOut(): void {
 }
 
 /**
- * Invalidate the current session by corrupting the token
+ * Invalidate the current session by corrupting the token and clearing Cognito session
  * Useful for testing session expiration flow
  */
 export function invalidateSession(keepRefreshToken: boolean = false): void {
@@ -577,22 +577,7 @@ export function invalidateSession(keepRefreshToken: boolean = false): void {
     return;
   }
 
-  // Corrupt the ID token to simulate expiration
-  const idToken = localStorage.getItem("idToken");
-  if (idToken) {
-    // Replace with an invalid/expired token
-    localStorage.setItem("idToken", "invalid.token.here");
-  }
-
-  // Optionally remove access token
-  localStorage.removeItem("accessToken");
-
-  // Clear refresh token unless testing refresh flow
-  if (!keepRefreshToken) {
-    localStorage.removeItem("refreshToken");
-  }
-
-  // Clear Cognito SDK session
+  // Clear Cognito SDK session first
   const user = getCurrentUser();
   if (user) {
     user.signOut();
@@ -610,6 +595,43 @@ export function invalidateSession(keepRefreshToken: boolean = false): void {
     }
     keysToRemove.forEach((key) => sessionStorage.removeItem(key));
   }
+
+  // Corrupt the ID token to simulate expiration
+  const idToken = localStorage.getItem("idToken");
+  if (idToken) {
+    // Replace with an invalid/expired token
+    localStorage.setItem("idToken", "invalid.token.here");
+  }
+
+  // Remove access token
+  localStorage.removeItem("accessToken");
+
+  // Clear refresh token unless testing refresh flow
+  if (!keepRefreshToken) {
+    localStorage.removeItem("refreshToken");
+  }
+}
+
+/**
+ * Test helper: Directly trigger session expired event
+ * This can be called from the browser console for testing
+ */
+export function triggerSessionExpired(): void {
+  if (typeof window === "undefined") {
+    console.error("This function can only be called in the browser");
+    return;
+  }
+
+  console.log("🔴 Triggering session expired event...");
+
+  // Directly dispatch the session-expired event that the modal listens for
+  window.dispatchEvent(
+    new CustomEvent("session-expired", {
+      detail: { returnUrl: window.location.pathname + window.location.search },
+    })
+  );
+
+  console.log("✅ Session expired popup should now be visible!");
 }
 
 export function getHostedUILoginUrl(

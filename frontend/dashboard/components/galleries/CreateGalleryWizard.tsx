@@ -1,3 +1,4 @@
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
@@ -445,19 +446,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           onClick={onClose}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
-          <svg
-            className="w-6 h-6 text-gray-500 dark:text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <X className="w-6 h-6 text-gray-500 dark:text-gray-400" strokeWidth={2} />
         </button>
       </div>
 
@@ -520,23 +509,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           disabled={loading}
           className="flex-1 flex items-center justify-center gap-2"
         >
-          {currentStep !== 1 && (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M10 12L6 8L10 4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          {currentStep !== 1 && <ChevronLeft size={16} strokeWidth={1.5} />}
           {currentStep === 1 ? "Anuluj" : "Wstecz"}
         </Button>
         <div className="flex gap-3 flex-1 justify-end">
@@ -547,21 +520,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
               className="flex-1 flex items-center justify-center gap-2"
             >
               Dalej
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M6 12L10 8L6 4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <ChevronRight size={16} strokeWidth={1.5} />
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={loading} variant="primary" className="flex-1">

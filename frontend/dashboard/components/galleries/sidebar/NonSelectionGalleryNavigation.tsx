@@ -1,3 +1,4 @@
+import { Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect } from "react";
@@ -75,18 +76,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
               : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M4 3C2.89543 3 2 3.89543 2 5V15C2 16.1046 2.89543 17 4 17H16C17.1046 17 18 16.1046 18 15V5C18 3.89543 17.1046 3 16 3H4ZM4 5H16V15H4V5ZM6 7C5.44772 7 5 7.44772 5 8C5 8.55228 5.44772 9 6 9C6.55228 9 7 8.55228 7 8C7 7.44772 6.55228 7 6 7ZM8 11L10.5 8.5L13 11L15 9V13H5V9L8 11Z"
-              fill="currentColor"
-            />
-          </svg>
+          <ImageIcon size={20} />
           <span>Zdjęcia</span>
         </Link>
       </li>

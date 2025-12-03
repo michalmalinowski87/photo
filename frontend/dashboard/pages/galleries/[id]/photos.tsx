@@ -1,3 +1,4 @@
+import { Plus, ChevronDown } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
 
@@ -14,6 +15,7 @@ import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
 import { removeFileExtension } from "../../../lib/filename-utils";
+import { ImageFallbackUrls } from "../../../lib/image-fallback";
 import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface GalleryImage {
@@ -54,8 +56,6 @@ interface ApiImage {
 }
 
 // UploadProgress interface is imported from PhotoUploadHandler
-
-import { ImageFallbackUrls } from "../../../lib/image-fallback";
 
 export default function GalleryPhotos() {
   const router = useRouter();
@@ -687,14 +687,7 @@ export default function GalleryPhotos() {
             onClick={() => setUploadModalOpen(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
+            <Plus size={20} />
             Prześlij zdjęcia
           </button>
         </div>
@@ -765,21 +758,12 @@ export default function GalleryPhotos() {
                             : "zdjęć"}
                       </div>
                     </div>
-                    <svg
-                      className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                    <ChevronDown
+                      size={16}
+                      className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                         isExpanded ? "transform rotate-180" : ""
                       }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
+                    />
                   </button>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg">
@@ -810,21 +794,12 @@ export default function GalleryPhotos() {
                           : "zdjęć"}
                     </div>
                   </div>
-                  <svg
-                    className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                  <ChevronDown
+                    size={16}
+                    className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                       expandedSections.has("unselected") ? "transform rotate-180" : ""
                     }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                  />
                 </button>
                 {expandedSections.has("unselected") && (
                   <div className="px-4 pb-4 pt-2 rounded-b-lg">

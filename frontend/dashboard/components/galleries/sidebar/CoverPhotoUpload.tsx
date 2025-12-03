@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useRef } from "react";
 
@@ -215,8 +216,6 @@ export const CoverPhotoUpload: React.FC = () => {
               src={coverPhotoUrl}
               alt="Okładka galerii"
               className="w-full h-full object-cover rounded-lg pointer-events-none"
-              maxRetries={30}
-              initialDelay={500}
             />
             {processingCover && (
               <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
@@ -252,21 +251,7 @@ export const CoverPhotoUpload: React.FC = () => {
               </div>
             ) : (
               <>
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="text-gray-400 dark:text-gray-500 mb-2"
-                >
-                  <path
-                    d="M12 5V19M5 12H19"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400 text-center px-4">
                   Przeciągnij zdjęcie tutaj lub kliknij aby wybrać
                 </p>

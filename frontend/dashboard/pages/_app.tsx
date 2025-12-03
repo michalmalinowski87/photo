@@ -15,7 +15,10 @@ import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
+import { invalidateSession, triggerSessionExpired } from "../lib/auth";
 import { clearEphemeralState } from "../store";
+import { useAuthStore } from "../store/authSlice";
+import { useThemeStore } from "../store/themeSlice";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];
@@ -43,6 +46,41 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { recoveryState, showModal, handleResume, handleClear } = useUploadRecovery();
   const [swRegistered, setSwRegistered] = useState(false);
+  const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+
+  // Expose test helpers globally in development
+  useEffect(() => {
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      (window as any).testSessionExpiration = {
+        invalidate: () => {
+          invalidateSession();
+          console.log("✅ Session invalidated. Now navigate or refresh to trigger the popup.");
+        },
+        trigger: () => {
+          triggerSessionExpired();
+        },
+        help: () => {
+          console.log(`
+🧪 Session Expiration Test Helpers:
+
+1. testSessionExpiration.invalidate()
+   - Clears all tokens and Cognito session
+   - After this, navigate or refresh the page to trigger the session expired popup
+
+2. testSessionExpiration.trigger()
+   - Directly shows the session expired popup (simulates the event)
+
+Example:
+  testSessionExpiration.invalidate()
+  // Then refresh the page or navigate to trigger API calls
+          `);
+        },
+      };
+      console.log(
+        "🧪 Session expiration test helpers available! Run testSessionExpiration.help() for usage."
+      );
+    }
+  }, []);
 
   // Register Service Worker for Golden Retriever
   useEffect(() => {
@@ -129,6 +167,50 @@ export default function App({ Component, pageProps }: AppProps) {
       router.events.off("routeChangeStart", handleRouteChange);
     };
   }, [router.events]);
+
+  // Restore theme and clear session expired state when on non-auth routes
+  useEffect(() => {
+    const restoreThemeAndClearSessionExpired = () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      // Check if current route is an auth route
+      const currentIsAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
+
+      if (!currentIsAuthRoute) {
+        // Remove auth-dark class if present
+        document.documentElement.classList.remove("auth-dark");
+        document.body.classList.remove("auth-dark");
+
+        // Restore theme from store
+        const currentTheme = useThemeStore.getState().theme;
+        if (currentTheme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+
+        // Clear session expired state when on dashboard routes (successful login)
+        setSessionExpired(false);
+      }
+    };
+
+    // Restore immediately if not on auth route
+    if (router.isReady) {
+      restoreThemeAndClearSessionExpired();
+    }
+
+    // Also handle route changes
+    const handleRouteChangeComplete = () => {
+      restoreThemeAndClearSessionExpired();
+    };
+
+    router.events.on("routeChangeComplete", handleRouteChangeComplete);
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChangeComplete);
+    };
+  }, [router.isReady, router.pathname, router.events, setSessionExpired]);
 
   // Use AuthLayout for authentication pages
   if (isAuthRoute) {

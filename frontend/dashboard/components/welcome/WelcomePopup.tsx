@@ -1,3 +1,4 @@
+import { CircleDollarSign, Sparkles } from "lucide-react";
 import React from "react";
 
 import { formatPrice } from "../../lib/format-price";
@@ -26,19 +27,7 @@ export const WelcomePopup: React.FC<WelcomePopupProps> = ({
             {/* Animated background circle */}
             <div className="absolute inset-0 rounded-full bg-brand-400/20 via-brand-500/20 to-brand-600/20 animate-pulse"></div>
             <div className="relative inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 shadow-lg">
-              <svg
-                className="w-8 h-8 md:w-10 md:h-10 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                />
-              </svg>
+              <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-white" strokeWidth={2} />
             </div>
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2 bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">
@@ -61,19 +50,7 @@ export const WelcomePopup: React.FC<WelcomePopupProps> = ({
           <div className="relative flex flex-col md:flex-row items-start gap-3 md:gap-4">
             <div className="flex-shrink-0">
               <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-lg">
-                <svg
-                  className="w-6 h-6 md:w-7 md:h-7 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2.5}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+                <CircleDollarSign className="w-6 h-6 md:w-7 md:h-7 text-white" strokeWidth={2.5} />
               </div>
             </div>
             <div className="flex-1 min-w-0">

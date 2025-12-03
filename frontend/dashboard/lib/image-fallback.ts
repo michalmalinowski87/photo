@@ -112,7 +112,7 @@ export function getInitialImageUrl(
 export function isFinalUrl(url: string, img: ImageFallbackUrls): boolean {
   const normalized = normalizeUrl(url);
   // Check if URL matches finalUrl or url (original)
-  if ((img.finalUrl && urlsMatch(url, img.finalUrl)) || (img.url && urlsMatch(url, img.url))) {
+  if ((img.finalUrl && urlsMatch(url, img.finalUrl)) ?? (img.url && urlsMatch(url, img.url))) {
     return true;
   }
   // Check if URL path indicates it's the original (contains /final/ or /originals/ or doesn't contain size folders)

@@ -1,3 +1,4 @@
+import { X, Check } from "lucide-react";
 import React from "react";
 
 import { Loading } from "../loading/Loading";
@@ -34,33 +35,10 @@ export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
 
   const getStatusIcon = () => {
     if (status === "error") {
-      return (
-        <svg
-          className="w-5 h-5 text-error-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
-      );
+      return <X className="w-5 h-5 text-error-500" strokeWidth={2} />;
     }
     if (status === "success") {
-      return (
-        <svg
-          className="w-5 h-5 text-success-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-      );
+      return <Check className="w-5 h-5 text-success-500" strokeWidth={2} />;
     }
     return <Loading size="sm" />;
   };
@@ -85,14 +63,7 @@ export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
               aria-label="Zamknij"
               type="button"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-4 h-4" strokeWidth={2} />
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Zamówienie: {orderId}</p>

@@ -1,8 +1,8 @@
+import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/router";
 import React from "react";
 
 import { signOut } from "../../lib/auth";
-import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 
 interface SessionExpiredModalProps {
@@ -32,34 +32,34 @@ export default function SessionExpiredModal({ isOpen, returnUrl }: SessionExpire
       isOpen={isOpen}
       onClose={() => {}} // Prevent closing by clicking outside or ESC
       showCloseButton={false}
+      className="max-w-[45rem]"
     >
-      <div className="p-4">
+      <div className="p-12 sm:p-16">
         <div className="flex flex-col items-center text-center">
-          <div className="mb-4">
-            <svg
-              className="w-16 h-16 text-red-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+          {/* Yellow warning triangle with exclamation mark */}
+          <div className="mb-10">
+            <AlertTriangle
+              size={80}
+              className="text-warning-500 dark:text-warning-400 fill-current"
+            />
           </div>
 
-          <h2 className="text-2xl font-semibold mb-2 text-foreground">Twoja sesja wygasła</h2>
+          <h2 className="text-3xl sm:text-4xl font-semibold mb-4 text-gray-900 dark:text-white tracking-tight">
+            Sesja wygasła
+          </h2>
 
-          <p className="text-muted-foreground mb-6">
-            Twoja sesja wygasła ze względów bezpieczeństwa. Zaloguj się ponownie, aby kontynuować.
+          <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 mb-10 max-w-lg leading-relaxed">
+            Z powodów bezpieczeństwa wylogowaliśmy Cię.
+            <br />
+            Zaloguj się ponownie, aby kontynuować pracę.
           </p>
 
-          <Button variant="primary" size="md" onClick={handleGoToLogin} className="w-full">
-            Przejdź do logowania
-          </Button>
+          <button
+            onClick={handleGoToLogin}
+            className="w-full sm:w-auto min-w-[240px] px-10 py-5 text-base font-medium bg-brand-500 text-white rounded-lg shadow-lg shadow-brand-500/25 dark:shadow-brand-500/20 hover:bg-brand-600 hover:shadow-xl hover:shadow-brand-500/30 dark:hover:shadow-brand-500/25 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Zaloguj się ponownie
+          </button>
         </div>
       </div>
     </Modal>

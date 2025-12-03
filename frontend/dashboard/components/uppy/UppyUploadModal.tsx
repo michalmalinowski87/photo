@@ -1,6 +1,17 @@
 import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
 import "@uppy/core/css/style.min.css";
+import {
+  Upload,
+  Folder,
+  Image as ImageIcon,
+  Play,
+  Pause,
+  Check,
+  X,
+  ArrowUp,
+  CheckCircle2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
@@ -595,19 +606,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   disabled={uploading || uploadComplete}
                 />
                 <div className="space-y-2">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400"
-                    stroke="currentColor"
-                    fill="none"
-                    viewBox="0 0 48 48"
-                  >
-                    <path
-                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-4h12m-6-4v12m0 0l-4-4m4 4l4-4"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" strokeWidth={2} />
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Przeciągnij i upuść zdjęcia lub cały folder tutaj, lub kliknij, aby wybrać pliki
                   </p>
@@ -626,19 +625,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                     }}
                     disabled={uploading || uploadComplete}
                   >
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                      />
-                    </svg>
+                    <Folder className="w-4 h-4 mr-2" strokeWidth={2} />
                     Wybierz folder
                   </Button>
                 </div>
@@ -695,19 +682,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                               />
                             ) : (
                               <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                                <svg
-                                  className="w-12 h-12 text-gray-400"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                  />
-                                </svg>
+                                <ImageIcon className="w-12 h-12 text-gray-400" strokeWidth={2} />
                               </div>
                             )}
                             {(status === "uploading" || status === "paused") && (
@@ -723,21 +698,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                                   title={status === "paused" ? "Wznów" : "Wstrzymaj"}
                                 >
                                   {status === "paused" ? (
-                                    <svg
-                                      className="w-8 h-8 text-white"
-                                      fill="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path d="M8 5v14l11-7z" />
-                                    </svg>
+                                    <Play className="w-8 h-8 text-white fill-current" />
                                   ) : (
-                                    <svg
-                                      className="w-8 h-8 text-white"
-                                      fill="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                    </svg>
+                                    <Pause className="w-8 h-8 text-white fill-current" />
                                   )}
                                 </button>
                                 <div className="absolute bottom-6 left-0 right-0 text-center z-10">
@@ -755,36 +718,12 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                             )}
                             {status === "completed" && (
                               <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={3}
-                                    d="M5 13l4 4L19 7"
-                                  />
-                                </svg>
+                                <Check size={16} />
                               </div>
                             )}
                             {status === "error" && (
                               <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={3}
-                                    d="M6 18L18 6M6 6l12 12"
-                                  />
-                                </svg>
+                                <X size={16} />
                               </div>
                             )}
                             {status !== "uploading" && !uploadComplete && (
@@ -794,19 +733,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                                 type="button"
                                 title="Usuń"
                               >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2.5}
-                                    d="M6 18L18 6M6 6l12 12"
-                                  />
-                                </svg>
+                                <X size={16} />
                               </button>
                             )}
                           </div>
@@ -862,15 +789,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                       type="button"
                       title={isPaused ? "Wznów" : "Wstrzymaj"}
                     >
-                      {isPaused ? (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                        </svg>
-                      )}
+                      {isPaused ? <Play size={20} /> : <Pause size={20} />}
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-2">
@@ -896,19 +815,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                         <div className="flex items-center gap-4">
                           {uploadProgress.speed > 0 && (
                             <span className="flex items-center gap-1">
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 10l7-7m0 0l7 7m-7-7v18"
-                                />
-                              </svg>
+                              <ArrowUp size={12} />
                               {formatSpeed(uploadProgress.speed)}
                             </span>
                           )}
@@ -921,19 +828,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   </div>
                 ) : uploadComplete && uploadResult ? (
                   <div className="flex items-center gap-2">
-                    <svg
-                      className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
+                    <CheckCircle2
+                      size={20}
+                      className="text-green-600 dark:text-green-400 flex-shrink-0"
+                    />
                     <p className="text-sm font-medium text-green-800 dark:text-green-200">
                       {uploadResult.failed > 0
                         ? uploadResult.successful > 0

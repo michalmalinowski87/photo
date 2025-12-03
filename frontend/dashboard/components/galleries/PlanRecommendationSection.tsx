@@ -1,3 +1,5 @@
+import { CheckCircle2, AlertTriangle } from "lucide-react";
+
 import { formatPrice } from "../../lib/format-price";
 import type { PlanRecommendation } from "../../lib/plan-types";
 import {
@@ -40,19 +42,7 @@ export const PlanRecommendationSection: React.FC<PlanRecommendationSectionProps>
       <div className="flex items-start justify-between mb-5">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <svg
-              className="w-5 h-5 text-blue-600 dark:text-blue-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2} />
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
               Zaproponowany plan
             </span>
@@ -204,13 +194,7 @@ export const PlanRecommendationSection: React.FC<PlanRecommendationSectionProps>
           </div>
           {planRecommendation.isNearCapacity && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <AlertTriangle size={16} className="fill-current" />
               Galeria jest prawie pełna. Rozważ wybór większego planu.
             </p>
           )}

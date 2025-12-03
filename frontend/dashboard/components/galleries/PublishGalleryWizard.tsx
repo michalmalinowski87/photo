@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -254,14 +255,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
           className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           aria-label="Zamknij"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <X className="w-6 h-6" strokeWidth={2} />
         </button>
       </div>
 

@@ -1,3 +1,4 @@
+import { CheckCircle2, Image as ImageIcon, Check } from "lucide-react";
 import React from "react";
 
 interface GalleryTypeStepProps {
@@ -32,19 +33,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
                 selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
               }`}
             >
-              <svg
-                className="w-10 h-10 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <CheckCircle2 className="w-10 h-10 text-white" strokeWidth={2} />
             </div>
             <div className="text-center">
               <div
@@ -64,13 +53,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
           {selectionEnabled && (
             <div className="absolute top-4 right-4">
               <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <Check size={16} className="text-white" />
               </div>
             </div>
           )}
@@ -89,19 +72,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
                 !selectionEnabled ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
               }`}
             >
-              <svg
-                className="w-10 h-10 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
+              <ImageIcon className="w-10 h-10 text-white" strokeWidth={2} />
             </div>
             <div className="text-center">
               <div
@@ -121,13 +92,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
           {!selectionEnabled && (
             <div className="absolute top-4 right-4">
               <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <Check size={16} className="text-white" />
               </div>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import React, { useState, useEffect } from "react";
 
 import Button from "../button/Button";
@@ -85,17 +86,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                   }`}
                 >
                   {suppressChecked && (
-                    <svg
-                      className="w-3.5 h-3.5 text-white"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path d="M5 13l4 4L19 7"></path>
-                    </svg>
+                    <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
                   )}
                 </div>
               </div>

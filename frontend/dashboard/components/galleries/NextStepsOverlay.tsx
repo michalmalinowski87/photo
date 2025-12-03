@@ -1,3 +1,4 @@
+import { Check , ChevronRight, ChevronLeft } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
@@ -461,26 +462,18 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
               >
                 Ukończ konfigurację
               </h3>
-              <svg
-                className="w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              <ChevronRight
+                size={16}
+                className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
                 strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              />
             </>
           ) : (
-            <svg
-              className="w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <ChevronLeft
+              size={16}
+              className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
               strokeWidth={2.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
+            />
           )}
         </button>
 
@@ -530,15 +523,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                     } ${!step.completed && !isDisabled ? "group-hover:border-brand-400 dark:group-hover:border-brand-500 group-hover:bg-gray-100 dark:group-hover:bg-gray-600" : ""}`}
                   >
                     {step.completed ? (
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        strokeWidth={3}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-5 h-5" strokeWidth={3} />
                     ) : (
                       <div
                         className={`w-2.5 h-2.5 rounded-full transition-colors ${

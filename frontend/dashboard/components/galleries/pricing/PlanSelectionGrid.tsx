@@ -1,3 +1,4 @@
+import { CheckCircle2, Check, Info } from "lucide-react";
 import React from "react";
 
 import { formatPrice } from "../../../lib/format-price";
@@ -104,13 +105,7 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
               {isSuggested && (
                 <div className="absolute top-3 right-3">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+                    <CheckCircle2 size={12} className="fill-current" />
                     Sugerowany
                   </span>
                 </div>
@@ -120,19 +115,7 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
               {isSelected && !isSuggested && (
                 <div className="absolute top-3 right-3">
                   <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
-                    <svg
-                      className="w-4 h-4 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
+                    <Check className="w-4 h-4 text-white" strokeWidth={2} />
                   </div>
                 </div>
               )}
@@ -144,19 +127,11 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
                     {photoEstimate.displayText}
                   </p>
                   <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-gray-400 dark:text-gray-500 cursor-help"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
+                    <Info
+                      size={12}
+                      className="text-gray-400 dark:text-gray-500 cursor-help"
+                      strokeWidth={2}
+                    />
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                       {photoEstimate.tooltipText}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
@@ -177,45 +152,24 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <svg
-                    className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <CheckCircle2
+                    size={16}
+                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                  />
                   <span>Galeria chroniona hasłem</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <svg
-                    className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <CheckCircle2
+                    size={16}
+                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                  />
                   <span>Wybór zdjęć przez klienta</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <svg
-                    className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  <CheckCircle2
+                    size={16}
+                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                  />
                   <span>Wsparcie techniczne</span>
                 </div>
               </div>

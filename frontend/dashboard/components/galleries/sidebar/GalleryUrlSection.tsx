@@ -1,3 +1,4 @@
+import { Plus, Share2 } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 
@@ -178,22 +179,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
           size="sm"
           onClick={handlePublishClick}
           className="w-full mt-2"
-          startIcon={
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M8 2V14M2 8H14"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          }
+          startIcon={<Plus size={16} />}
         >
           Opublikuj galerię
         </Button>
@@ -208,22 +194,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
               size="sm"
               disabled
               className="w-full mt-2"
-              startIcon={
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M8 2V14M2 8H14"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              }
+              startIcon={<Share2 size={16} />}
             >
               Udostępniono klientowi
             </Button>
@@ -234,22 +205,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
               onClick={handleSendLink}
               disabled={sendLinkLoading}
               className="w-full mt-2"
-              startIcon={
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M8 2V14M2 8H14"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              }
+              startIcon={<Share2 size={16} />}
             >
               {sendLinkLoading
                 ? "Wysyłanie..."

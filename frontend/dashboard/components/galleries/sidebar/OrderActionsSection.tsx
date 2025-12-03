@@ -1,3 +1,4 @@
+import { Home, Download, CheckCircle2, XCircle, Check, Send } from "lucide-react";
 import React, { useCallback, useState } from "react";
 
 import { useModal } from "../../../hooks/useModal";
@@ -150,23 +151,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             onClick={handlePublishClick}
             className="w-full justify-start"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-2"
-            >
-              <path
-                d="M10 2L3 7V17C3 17.5304 3.21071 18.0391 3.58579 18.4142C3.96086 18.7893 4.46957 19 5 19H15C15.5304 19 16.0391 18.7893 16.4142 18.4142C16.7893 18.0391 17 17.5304 17 17V7L10 2Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            </svg>
+            <Home size={16} className="mr-2" strokeWidth={2} />
             Opublikuj galerię
           </Button>
         )}
@@ -179,19 +164,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             onClick={handleDownloadZip}
             className="w-full justify-start"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-2"
-            >
-              <path
-                d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
-                fill="currentColor"
-              />
-            </svg>
+            <Download size={16} className="mr-2" />
             Pobierz wybrane oryginały (ZIP)
           </Button>
         )}
@@ -204,19 +177,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             onClick={handleDownloadFinals}
             className="w-full justify-start"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-2"
-            >
-              <path
-                d="M10 2.5L5 7.5H8V13.5H12V7.5H15L10 2.5ZM3 15.5V17.5H17V15.5H3Z"
-                fill="currentColor"
-              />
-            </svg>
+            <Download size={16} className="mr-2" />
             Pobierz finały
           </Button>
         )}
@@ -230,29 +191,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
               onClick={handleApproveChangeRequest}
               className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="mr-2"
-              >
-                <path
-                  d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M7 10L9 12L13 8"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <CheckCircle2 size={16} className="mr-2" strokeWidth={2} />
               Zatwierdź prośbę o zmiany
             </Button>
             <Button
@@ -261,29 +200,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
               onClick={handleDenyChangeRequest}
               className="w-full justify-start"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="mr-2"
-              >
-                <path
-                  d="M10 18C14.4183 18 18 14.4183 18 10C18 5.58172 14.4183 2 10 2C5.58172 2 2 5.58172 2 10C2 14.4183 5.58172 18 10 18Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M7 7L13 13M13 7L7 13"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <XCircle size={16} className="mr-2" strokeWidth={2} />
               Odrzuć prośbę o zmiany
             </Button>
           </>
@@ -298,16 +215,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             disabled={markPaidLoading}
             className="w-full justify-start"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-2"
-            >
-              <path d="M8 13L4 9L5.41 7.59L8 10.17L14.59 3.58L16 5L8 13Z" fill="currentColor" />
-            </svg>
+            <Check size={16} className="mr-2" />
             Oznacz jako opłacone
           </Button>
         )}
@@ -321,22 +229,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
             className="w-full justify-start"
             disabled={order.deliveryStatus === "DELIVERED" || sendFinalsLoading}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="mr-2"
-            >
-              <path
-                d="M2.5 5L10 10L17.5 5M2.5 15L10 20L17.5 15M2.5 10L10 15L17.5 10"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <Send size={16} className="mr-2" strokeWidth={2} />
             {order.deliveryStatus === "DELIVERED"
               ? "Finały wysłane"
               : sendFinalsLoading

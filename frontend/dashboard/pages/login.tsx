@@ -7,6 +7,7 @@ import Input from "../components/ui/input/InputField";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
+import { useAuthStore } from "../store/authSlice";
 
 interface CognitoError extends Error {
   code?: string;
@@ -20,6 +21,7 @@ export default function Login() {
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const hasRedirected = useRef<boolean>(false);
+  const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
 
   useEffect(() => {
     // Setup auth status listener for landing page
@@ -58,6 +60,9 @@ export default function Login() {
                 sessionStorage.removeItem("authReturnUrl");
               }
 
+              // Clear session expired state if user has valid session
+              setSessionExpired(false);
+
               if (!hasRedirected.current) {
                 hasRedirected.current = true;
                 void router.push(returnUrl);
@@ -85,6 +90,9 @@ export default function Login() {
           if (typeof window !== "undefined") {
             sessionStorage.removeItem("authReturnUrl");
           }
+
+          // Clear session expired state if user has valid session
+          setSessionExpired(false);
 
           if (!hasRedirected.current) {
             hasRedirected.current = true;
@@ -119,6 +127,9 @@ export default function Login() {
 
       // Share tokens with landing domain via postMessage
       shareTokensWithOtherDomains();
+
+      // Clear session expired state after successful login
+      setSessionExpired(false);
 
       // Small delay to ensure postMessage is sent
       await new Promise((resolve) => setTimeout(resolve, 100));
