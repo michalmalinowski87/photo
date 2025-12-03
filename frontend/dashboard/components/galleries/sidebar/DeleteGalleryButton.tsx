@@ -71,11 +71,13 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
               <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
               <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Przekierowywanie...</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+              Przekierowywanie...
+            </p>
           </div>
         </div>
       )}
-      
+
       <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
         <Button
           size="sm"

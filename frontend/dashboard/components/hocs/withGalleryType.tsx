@@ -49,7 +49,11 @@ interface ConditionalRenderProps {
   showForNonSelection?: boolean;
 }
 
-export function GalleryTypeConditional({ children, showForSelection, showForNonSelection }: ConditionalRenderProps) {
+export function GalleryTypeConditional({
+  children,
+  showForSelection,
+  showForNonSelection,
+}: ConditionalRenderProps) {
   const { isNonSelectionGallery } = useGalleryType();
 
   if (isNonSelectionGallery && showForNonSelection) {
@@ -62,4 +66,3 @@ export function GalleryTypeConditional({ children, showForSelection, showForNonS
 
   return null;
 }
-

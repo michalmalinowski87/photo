@@ -72,4 +72,3 @@ export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProp
     </>
   );
 };
-

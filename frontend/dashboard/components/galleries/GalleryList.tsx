@@ -57,7 +57,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState("");
 
-
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedGalleryIdForLoading, setSelectedGalleryIdForLoading] = useState<string | null>(
@@ -262,11 +261,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
       )}
       {!publishWizardOpen && (
         <div className="space-y-4">
-          {error && (
-            <div>
-              {error}
-            </div>
-          )}
+          {error && <div>{error}</div>}
 
           {galleries.length === 0 ? (
             <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">

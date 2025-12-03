@@ -279,7 +279,6 @@ export default function OrderDetail() {
     [galleryId, orderId, showToast]
   );
 
-
   // Use hooks for order actions and amount editing (after state declarations)
   const {
     isEditingAmount,
@@ -323,15 +322,27 @@ export default function OrderDetail() {
 
   // Check for recovery state and auto-open modal
   useEffect(() => {
-    if (!galleryId || !orderId || typeof window === "undefined") {return;}
-    
+    if (!galleryId || !orderId || typeof window === "undefined") {
+      return;
+    }
+
     const storageKey = `uppy_upload_state_${galleryId}_finals`;
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
-        const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; orderId?: string; type: string };
+        const state = JSON.parse(stored) as {
+          isActiveUpload?: boolean;
+          galleryId: string;
+          orderId?: string;
+          type: string;
+        };
         // If there's an active upload state for this order, open the modal to allow recovery
-        if (state.isActiveUpload && state.galleryId === galleryId && state.orderId === orderId && state.type === "finals") {
+        if (
+          state.isActiveUpload &&
+          state.galleryId === galleryId &&
+          state.orderId === orderId &&
+          state.type === "finals"
+        ) {
           setUploadModalOpen(true);
         }
       } catch {
@@ -343,7 +354,7 @@ export default function OrderDetail() {
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
     setUploadModalOpen(false);
-    
+
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
     if (galleryId && orderId && typeof window !== "undefined") {
@@ -351,7 +362,12 @@ export default function OrderDetail() {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         try {
-          const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; orderId?: string; type: string };
+          const state = JSON.parse(stored) as {
+            isActiveUpload?: boolean;
+            galleryId: string;
+            orderId?: string;
+            type: string;
+          };
           if (state.isActiveUpload && state.orderId === orderId) {
             // Clear the active flag but keep the state (in case user wants to manually resume later)
             const updatedState = { ...state, isActiveUpload: false };
@@ -366,13 +382,12 @@ export default function OrderDetail() {
 
   // Reload final images after upload (simple refetch, no polling)
   const reloadFinalImagesAfterUpload = useCallback(async () => {
-    if (!galleryId || !orderId) {return;}
-    
+    if (!galleryId || !orderId) {
+      return;
+    }
+
     try {
-      const finalResponse = await api.orders.getFinalImages(
-        galleryId as string,
-        orderId as string
-      );
+      const finalResponse = await api.orders.getFinalImages(galleryId as string, orderId as string);
       // Cache busting is handled automatically by LazyRetryableImage component
       // using S3 lastModified timestamp (changes automatically when new photos are uploaded)
       const imagesWithCacheBusting = finalResponse.images ?? [];
@@ -382,11 +397,23 @@ export default function OrderDetail() {
         finalUrl: img.finalUrl ?? img.url ?? "",
       }));
       const validApiImages = filterDeletedImages(
-        mappedFinalImages as Array<{ url: string; finalUrl: string; id?: string; key?: string; filename?: string; thumbUrl?: string; previewUrl?: string; isPlaceholder?: boolean; uploadTimestamp?: number; uploadIndex?: number; size?: number }>,
+        mappedFinalImages as Array<{
+          url: string;
+          finalUrl: string;
+          id?: string;
+          key?: string;
+          filename?: string;
+          thumbUrl?: string;
+          previewUrl?: string;
+          isPlaceholder?: boolean;
+          uploadTimestamp?: number;
+          uploadIndex?: number;
+          size?: number;
+        }>,
         deletingImagesRef.current,
         deletedImageKeysRef.current
       );
-      
+
       // Update local state
       setFinalImages((currentImages) => {
         const deletingImageKeys = Array.from(deletingImagesRef.current);
@@ -449,7 +476,6 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, currentGallery?.isPaid, currentGallery?.state]);
 
-
   // Listen for finals uploads to update gallery's finalsBytesUsed reactively with optimistic updates
   useEffect(() => {
     if (!galleryId) {
@@ -507,7 +533,6 @@ export default function OrderDetail() {
       unsubscribe();
     };
   }, [galleryId, gallery, optimisticFinalsBytes]);
-
 
   // Auto-set to finals tab if selection is disabled (non-selection galleries)
   useEffect(() => {
@@ -626,9 +651,7 @@ export default function OrderDetail() {
   if (!order) {
     return (
       <div className="p-4">
-        <div>
-          {error ?? "Nie znaleziono zlecenia"}
-        </div>
+        <div>{error ?? "Nie znaleziono zlecenia"}</div>
       </div>
     );
   }
@@ -661,11 +684,7 @@ export default function OrderDetail() {
     <div className="space-y-6">
       <OrderHeader />
 
-      {error && (
-        <div>
-          {error}
-        </div>
-      )}
+      {error && <div>{error}</div>}
 
       {order.deliveryStatus === "CHANGES_REQUESTED" && (
         <ChangeRequestBanner
@@ -771,8 +790,6 @@ export default function OrderDetail() {
         onConfirm={handleDenyConfirm}
         loading={denyLoading}
       />
-
-
 
       {/* Payment Confirmation Modal */}
       {paymentDetails && (

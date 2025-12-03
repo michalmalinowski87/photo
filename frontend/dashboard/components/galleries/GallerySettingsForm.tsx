@@ -34,7 +34,7 @@ export function GallerySettingsForm({
 }: GallerySettingsFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  
+
   // Get gallery from store using selector with cache fallback (same pattern as GalleryLayoutWrapper)
   // This ensures gallery is always available if cached, even during navigation
   const currentGalleryId = useGalleryStore((state) => state.currentGalleryId);
@@ -46,21 +46,22 @@ export function GallerySettingsForm({
   const gallery = useGalleryStore((state) => {
     const storeGallery = state.currentGallery;
     const storeGalleryId = state.currentGalleryId;
-    
+
     // Determine which galleryId to use - prefer URL, fallback to store
     const targetGalleryId = galleryId ?? storeGalleryId;
-    
+
     if (targetGalleryId) {
       // If store has gallery and it matches target, use it
       if (storeGallery?.galleryId === targetGalleryId) {
         return storeGallery;
       }
-      
+
       // Otherwise check cache - subscribe to cache entry to make it reactive
       const cacheEntry = state.galleryCache[targetGalleryId];
       if (cacheEntry) {
         const age = Date.now() - cacheEntry.timestamp;
-        if (age < 60000) { // Cache TTL: 60 seconds
+        if (age < 60000) {
+          // Cache TTL: 60 seconds
           const cached = cacheEntry.gallery;
           if (cached?.galleryId === targetGalleryId) {
             return cached;
@@ -68,14 +69,14 @@ export function GallerySettingsForm({
         }
       }
     }
-    
+
     // Fallback to store gallery (might be from previous route during navigation)
     return storeGallery;
   });
 
   // Only show loading if store is actively loading AND we don't have gallery (including cached)
   const galleryLoading = isLoading && !gallery;
-  
+
   // Only log when state actually changes to reduce spam
   const prevStateRef = React.useRef({
     galleryId,
@@ -83,7 +84,7 @@ export function GallerySettingsForm({
     hasGallery: !!gallery,
     isLoading,
   });
-  
+
   if (
     prevStateRef.current.galleryId !== galleryId ||
     prevStateRef.current.currentGalleryId !== currentGalleryId ||
@@ -97,18 +98,18 @@ export function GallerySettingsForm({
       isLoading,
     };
   }
-  
+
   // Reload gallery function
   const reloadGallery = useCallback(async () => {
     if (galleryId) {
       await fetchGallery(galleryId, true); // Force refresh
     }
   }, [galleryId, fetchGallery]);
-  
+
   // Only fetch if we truly don't have the gallery and we're not loading
   // This is a last resort - GalleryLayoutWrapper should handle loading
   useEffect(() => {
-      if (router.isReady && galleryId && !gallery && !isLoading) {
+    if (router.isReady && galleryId && !gallery && !isLoading) {
       // Set currentGalleryId first so fetchGallery will update currentGallery
       setCurrentGalleryId(galleryId);
       void fetchGallery(galleryId, false);
@@ -569,4 +570,3 @@ export function GallerySettingsForm({
     </div>
   );
 }
-

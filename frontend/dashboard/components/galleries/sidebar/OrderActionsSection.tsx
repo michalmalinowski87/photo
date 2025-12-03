@@ -45,7 +45,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
   // Action handlers - must be defined before any conditional returns
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!galleryId) {return;}
+    if (!galleryId) {
+      return;
+    }
     await approveChangeRequest(galleryId, orderId);
   }, [galleryId, orderId, approveChangeRequest]);
 
@@ -74,7 +76,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }, [galleryId, orderId, markOrderPaid]);
 
   const handleDownloadFinals = useCallback(async () => {
-    if (!galleryId) {return;}
+    if (!galleryId) {
+      return;
+    }
     await downloadFinals(galleryId, orderId);
   }, [galleryId, orderId, downloadFinals]);
 
@@ -99,7 +103,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }, [galleryId, orderId, sendFinalsToClient]);
 
   const handleDownloadZip = useCallback(async () => {
-    if (!galleryId) {return;}
+    if (!galleryId) {
+      return;
+    }
     await downloadZip(galleryId, orderId);
   }, [galleryId, orderId, downloadZip]);
 
@@ -115,12 +121,10 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }
 
   const isPaid = gallery?.isPaid ?? false;
-  
+
   // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
   const shouldShowPublishButton =
-    isNonSelectionGallery &&
-    order.deliveryStatus === "AWAITING_FINAL_PHOTOS" &&
-    !isPaid;
+    isNonSelectionGallery && order.deliveryStatus === "AWAITING_FINAL_PHOTOS" && !isPaid;
 
   // For non-selection galleries, show actions even if not paid (to show publish button)
   // For selection galleries, only show if paid

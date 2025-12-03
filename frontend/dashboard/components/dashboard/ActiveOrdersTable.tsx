@@ -33,9 +33,9 @@ const getDeliveryStatusBadge = (status: string, isNonSelectionGallery: boolean =
   const statusMap: Record<string, { color: BadgeColor; label: string }> = {
     CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
     CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-    AWAITING_FINAL_PHOTOS: { 
-      color: "warning", 
-      label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na finały" 
+    AWAITING_FINAL_PHOTOS: {
+      color: "warning",
+      label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na finały",
     },
     CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
     PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
@@ -103,17 +103,21 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, fetchGallery]);
 
-  const handleGalleryClick = async (e: React.MouseEvent<HTMLAnchorElement>, galleryId: string, orderId: string) => {
+  const handleGalleryClick = async (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    galleryId: string,
+    orderId: string
+  ) => {
     e.preventDefault();
-    
+
     // Check if this is a non-selection gallery
     try {
       const gallery = await fetchGallery(galleryId, false);
       const isNonSelection = gallery?.selectionEnabled === false;
-      
+
       // Update gallery types cache
       setGalleryTypes((prev) => ({ ...prev, [galleryId]: isNonSelection }));
-      
+
       if (isNonSelection) {
         // For non-selection galleries, navigate to order view
         setNavigatingGalleryId(galleryId);

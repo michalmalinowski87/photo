@@ -55,9 +55,7 @@ export function FinalsTab({
 }: FinalsTabProps) {
   // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
   const shouldShowPublishButton =
-    isNonSelectionGallery &&
-    orderDeliveryStatus === "AWAITING_FINAL_PHOTOS" &&
-    !isGalleryPaid;
+    isNonSelectionGallery && orderDeliveryStatus === "AWAITING_FINAL_PHOTOS" && !isGalleryPaid;
 
   return (
     <div className="space-y-4">
@@ -84,12 +82,7 @@ export function FinalsTab({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Button onClick={onUploadClick} variant="primary">
-              <svg
-                className="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"

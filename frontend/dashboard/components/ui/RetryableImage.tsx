@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 
-import { ImageFallbackUrls, ImageSize, getNextFallbackUrl, createImageErrorHandler } from "../../lib/image-fallback";
+import {
+  ImageFallbackUrls,
+  ImageSize,
+  getNextFallbackUrl,
+  createImageErrorHandler,
+} from "../../lib/image-fallback";
 
 interface RetryableImageProps {
   src: string;
@@ -12,13 +17,13 @@ interface RetryableImageProps {
 
 /**
  * Robust image component with progressive fallback strategy.
- * 
+ *
  * Fallback strategy:
  * 1. CloudFront URL (primary) - thumb/preview/bigthumb
  * 2. S3 presigned URL fallback (if CloudFront fails with 403)
  * 3. Next size version (thumb → preview → bigthumb)
  * 4. Original photo from S3 (ultimate fallback)
- * 
+ *
  * This ensures robust, fail-free image loading even when CloudFront returns 403 errors.
  */
 import { getInitialImageUrl } from "../../lib/image-fallback";
@@ -28,7 +33,7 @@ export const RetryableImage: React.FC<RetryableImageProps> = ({
   alt,
   className = "",
   imageData,
-  preferredSize = 'thumb',
+  preferredSize = "thumb",
 }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -36,7 +41,7 @@ export const RetryableImage: React.FC<RetryableImageProps> = ({
   const initialSrc = imageData ? getInitialImageUrl(imageData, preferredSize) : src;
   const [currentSrc, setCurrentSrc] = useState<string>(initialSrc);
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
-  const attemptedSizesRef = useRef<Set<'thumb' | 'preview' | 'bigthumb'>>(new Set());
+  const attemptedSizesRef = useRef<Set<"thumb" | "preview" | "bigthumb">>(new Set());
 
   useEffect(() => {
     // Reset state when src or imageData changes
@@ -84,21 +89,27 @@ export const RetryableImage: React.FC<RetryableImageProps> = ({
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>): void => {
     const failedUrl = e.currentTarget.src;
-    
+
     // Determine which size failed based on URL
-    const getSizeFromUrl = (url: string): 'thumb' | 'preview' | 'bigthumb' | null => {
-      const normalized = url.split('?')[0]; // Remove query params
-      if (normalized.includes('/thumbs/')) {return 'thumb';}
-      if (normalized.includes('/previews/')) {return 'preview';}
-      if (normalized.includes('/bigthumbs/')) {return 'bigthumb';}
+    const getSizeFromUrl = (url: string): "thumb" | "preview" | "bigthumb" | null => {
+      const normalized = url.split("?")[0]; // Remove query params
+      if (normalized.includes("/thumbs/")) {
+        return "thumb";
+      }
+      if (normalized.includes("/previews/")) {
+        return "preview";
+      }
+      if (normalized.includes("/bigthumbs/")) {
+        return "bigthumb";
+      }
       return null;
     };
-    
+
     const failedSize = getSizeFromUrl(failedUrl);
     if (failedSize && imageData) {
       attemptedSizesRef.current.add(failedSize);
     }
-    
+
     // Prevent infinite fallback loops
     if (fallbackAttemptsRef.current.has(failedUrl)) {
       setIsLoading(false);
@@ -109,7 +120,12 @@ export const RetryableImage: React.FC<RetryableImageProps> = ({
 
     // If imageData is provided, try progressive fallback
     if (imageData) {
-      const nextUrl = getNextFallbackUrl(failedUrl, imageData, attemptedSizesRef.current, preferredSize);
+      const nextUrl = getNextFallbackUrl(
+        failedUrl,
+        imageData,
+        attemptedSizesRef.current,
+        preferredSize
+      );
       if (nextUrl && !fallbackAttemptsRef.current.has(nextUrl)) {
         // Mark the size of the next URL as attempted
         const nextSize = getSizeFromUrl(nextUrl);

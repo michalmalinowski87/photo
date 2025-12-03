@@ -23,7 +23,7 @@ export default function GallerySidebar() {
   // Subscribe directly to store - use selector that includes cache as fallback
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  
+
   // Use selector that includes cache - ensures gallery is always available if cached
   const gallery = useGalleryStore((state) => {
     const storeGallery = state.currentGallery;
@@ -36,7 +36,8 @@ export default function GallerySidebar() {
       const cacheEntry = state.galleryCache[galleryIdStr];
       if (cacheEntry) {
         const age = Date.now() - cacheEntry.timestamp;
-        if (age < 60000) { // Cache TTL: 60 seconds
+        if (age < 60000) {
+          // Cache TTL: 60 seconds
           const cached = cacheEntry.gallery;
           if (cached?.galleryId === galleryIdStr) {
             return cached;
@@ -46,13 +47,13 @@ export default function GallerySidebar() {
     }
     return storeGallery;
   });
-  
+
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
-  
+
   // Gallery now includes cache, so use it directly
   const effectiveGallery = gallery;
-  
+
   const prevStateRef = React.useRef({ hasGallery: !!gallery });
   if (prevStateRef.current.hasGallery !== !!gallery) {
     prevStateRef.current = { hasGallery: !!gallery };

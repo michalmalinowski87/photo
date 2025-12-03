@@ -32,28 +32,29 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Get galleryId from router - handle both string and array cases
   const galleryIdFromQuery = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdStr = typeof galleryIdFromQuery === "string" ? galleryIdFromQuery : undefined;
-  
+
   // Subscribe to both currentGallery, currentGalleryId, and cache to make selector reactive
   // This ensures we always have the gallery even during navigation when galleryId is temporarily undefined
   const gallery = useGalleryStore((state) => {
     const storeGallery = state.currentGallery;
     const storeGalleryId = state.currentGalleryId;
-    
+
     // Determine which galleryId to use - prefer URL, fallback to store
     const targetGalleryId = galleryIdStr ?? storeGalleryId;
-    
+
     if (targetGalleryId) {
       // If store has gallery and it matches target, use it
       if (storeGallery?.galleryId === targetGalleryId) {
         return storeGallery;
       }
-      
+
       // Otherwise check cache - subscribe to cache entry to make it reactive
       // Accessing state.galleryCache[targetGalleryId] makes this reactive to cache changes
       const cacheEntry = state.galleryCache[targetGalleryId];
       if (cacheEntry) {
         const age = Date.now() - cacheEntry.timestamp;
-        if (age < 60000) { // Cache TTL: 60 seconds
+        if (age < 60000) {
+          // Cache TTL: 60 seconds
           const cached = cacheEntry.gallery;
           if (cached?.galleryId === targetGalleryId) {
             return cached;
@@ -61,11 +62,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         }
       }
     }
-    
+
     // Fallback to store gallery (might be from previous route during navigation)
     return storeGallery;
   });
-  
+
   const {
     isLoading: loading,
     error: loadError,
@@ -141,7 +142,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Helper function to clean up publish wizard URL params
   const cleanupPublishParams = useCallback(() => {
-    if (typeof window === "undefined" || !router.isReady) {return;}
+    if (typeof window === "undefined" || !router.isReady) {
+      return;
+    }
 
     const params = new URLSearchParams(window.location.search);
     const hadPublishParam = params.has("publish");
@@ -172,7 +175,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
     // Ensure currentGalleryId and currentGallery are set if we have a galleryId in URL but it's not set in store
     if (galleryId && typeof galleryId === "string") {
-      const { currentGalleryId: storeGalleryId, currentGallery: storeGallery, setCurrentGalleryId, setCurrentGallery, getGalleryFromCache } = useGalleryStore.getState();
+      const {
+        currentGalleryId: storeGalleryId,
+        currentGallery: storeGallery,
+        setCurrentGalleryId,
+        setCurrentGallery,
+        getGalleryFromCache,
+      } = useGalleryStore.getState();
       if (storeGalleryId !== galleryId || storeGallery?.galleryId !== galleryId) {
         // Only set if we have cached gallery data, otherwise let the load effect handle it
         const cached = getGalleryFromCache(galleryId, 60000);
@@ -214,7 +223,14 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     return () => {
       router.events.off("routeChangeStart", handleRouteChange);
     };
-  }, [router, clearCurrentGallery, clearCurrentOrder, publishWizardOpen, setPublishWizardOpenStore, cleanupPublishParams]);
+  }, [
+    router,
+    clearCurrentGallery,
+    clearCurrentOrder,
+    publishWizardOpen,
+    setPublishWizardOpenStore,
+    cleanupPublishParams,
+  ]);
 
   useEffect(() => {
     setApiUrl(process.env.NEXT_PUBLIC_API_URL ?? "");
@@ -232,27 +248,31 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Track if we've already loaded for this galleryId to prevent duplicate loads
   const loadedGalleryIdRef = React.useRef<string | null>(null);
-  
+
   useEffect(() => {
     const currentGalleryId = galleryId as string;
-    
+
     // Skip if we've already loaded this gallery (unless it's a different gallery)
-    if (loadedGalleryIdRef.current === currentGalleryId && gallery?.galleryId === currentGalleryId) {
+    if (
+      loadedGalleryIdRef.current === currentGalleryId &&
+      gallery?.galleryId === currentGalleryId
+    ) {
       return;
     }
-    
+
     if (router.isReady && apiUrl && idToken && currentGalleryId) {
       // Check cache first - if we have cached data for this gallery, use it
-      const { getGalleryFromCache, setCurrentGallery, setCurrentGalleryId } = useGalleryStore.getState();
+      const { getGalleryFromCache, setCurrentGallery, setCurrentGalleryId } =
+        useGalleryStore.getState();
       const cachedGallery = getGalleryFromCache(currentGalleryId, 60000);
-      
+
       // If we have cached gallery and it matches, use it immediately (no loading state)
       if (cachedGallery?.galleryId === currentGalleryId) {
         setCurrentGallery(cachedGallery);
         setCurrentGalleryId(currentGalleryId);
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
       }
-      
+
       // Only fetch if gallery doesn't match AND we don't have cache
       if (gallery?.galleryId !== currentGalleryId && !cachedGallery) {
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loading
@@ -263,7 +283,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       } else if (gallery?.galleryId === currentGalleryId) {
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
       }
-      
+
       // Refresh wallet balance only when we have a valid token (userSlice handles its own caching)
       if (idToken && idToken.trim() !== "") {
         void refreshWalletBalance();
@@ -298,7 +318,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // This runs on ALL gallery pages (photos, orders, settings, etc.)
   const syncRecalcTriggeredRef = React.useRef(false);
   const { fetchGalleryImages } = useGalleryStore();
-  
+
   useEffect(() => {
     // Reset sync recalculation trigger when gallery changes
     if (galleryId) {
@@ -307,12 +327,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   }, [galleryId]);
 
   useEffect(() => {
-    if (
-      !galleryId ||
-      loading ||
-      !gallery ||
-      syncRecalcTriggeredRef.current
-    ) {
+    if (!galleryId || loading || !gallery || syncRecalcTriggeredRef.current) {
       return;
     }
 
@@ -336,27 +351,29 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
 
     // No cached images - fetch fresh to check if images actually exist
-    void fetchGalleryImages(galleryId as string, false).then((images) => {
-      const hasImages = images && images.length > 0;
+    void fetchGalleryImages(galleryId as string, false)
+      .then((images) => {
+        const hasImages = images && images.length > 0;
 
-      // Trigger recalculation if: bytes used > 0 but no images exist
-      if (!hasImages && totalBytesUsed > 0 && !syncRecalcTriggeredRef.current) {
-        syncRecalcTriggeredRef.current = true;
+        // Trigger recalculation if: bytes used > 0 but no images exist
+        if (!hasImages && totalBytesUsed > 0 && !syncRecalcTriggeredRef.current) {
+          syncRecalcTriggeredRef.current = true;
 
-        // Automatically trigger forced recalculation to sync state
-        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-        void refreshGalleryBytesOnly(galleryId as string, true)
-          .then(() => {
-            // Sync recalculation completed
-          })
-          .catch((err) => {
-            // Reset trigger on error so we can retry
-            syncRecalcTriggeredRef.current = false;
-          });
-      }
-    }).catch((err) => {
-      // Failed to fetch images for check - silently continue
-    });
+          // Automatically trigger forced recalculation to sync state
+          const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+          void refreshGalleryBytesOnly(galleryId as string, true)
+            .then(() => {
+              // Sync recalculation completed
+            })
+            .catch((err) => {
+              // Reset trigger on error so we can retry
+              syncRecalcTriggeredRef.current = false;
+            });
+        }
+      })
+      .catch((err) => {
+        // Failed to fetch images for check - silently continue
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, gallery, loading]); // Run when gallery data changes
 
@@ -534,26 +551,40 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const setCurrentGallery = useGalleryStore((state) => state.setCurrentGallery);
   const setCurrentGalleryId = useGalleryStore((state) => state.setCurrentGalleryId);
   const currentGalleryId = useGalleryStore((state) => state.currentGalleryId);
-  
+
   // Check cache directly from store state (reactive) - use galleryIdStr or currentGalleryId as fallback
   const targetIdForCache = galleryIdStr ?? currentGalleryId;
-  const cacheEntry = useGalleryStore((state) => targetIdForCache ? state.galleryCache[targetIdForCache] : null);
-  const cachedGallery = cacheEntry && (Date.now() - cacheEntry.timestamp < 60000) ? cacheEntry.gallery : null;
-  
+  const cacheEntry = useGalleryStore((state) =>
+    targetIdForCache ? state.galleryCache[targetIdForCache] : null
+  );
+  const cachedGallery =
+    cacheEntry && Date.now() - cacheEntry.timestamp < 60000 ? cacheEntry.gallery : null;
+
   useLayoutEffect(() => {
     // If we have cached gallery but store doesn't have it, restore it
     const targetId = galleryIdStr ?? currentGalleryId;
-    if (cachedGallery?.galleryId === targetId && (gallery?.galleryId !== targetId)) {
+    if (cachedGallery?.galleryId === targetId && gallery?.galleryId !== targetId) {
       setCurrentGallery(cachedGallery);
       setCurrentGalleryId(targetId);
     }
-  }, [cachedGallery?.galleryId, galleryIdStr, currentGalleryId, gallery?.galleryId, setCurrentGallery, setCurrentGalleryId]);
-  
+  }, [
+    cachedGallery?.galleryId,
+    galleryIdStr,
+    currentGalleryId,
+    gallery?.galleryId,
+    setCurrentGallery,
+    setCurrentGalleryId,
+  ]);
+
   // Gallery selector already includes cache, so use it directly
   const effectiveGallery = gallery;
-  
+
   // Only log when state actually changes to reduce spam
-  const prevStateRef = React.useRef({ loading, hasGallery: !!gallery, hasCachedGallery: !!cachedGallery });
+  const prevStateRef = React.useRef({
+    loading,
+    hasGallery: !!gallery,
+    hasCachedGallery: !!cachedGallery,
+  });
   if (
     prevStateRef.current.loading !== loading ||
     prevStateRef.current.hasGallery !== !!gallery ||
@@ -561,7 +592,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   ) {
     prevStateRef.current = { loading, hasGallery: !!gallery, hasCachedGallery: !!cachedGallery };
   }
-  
+
   // Only show loading if we're loading AND we don't have gallery (including cached)
   if (loading && !effectiveGallery) {
     return (
@@ -576,9 +607,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     return (
       <GalleryLayout>
         <div className="p-4">
-          <div>
-            {loadError}
-          </div>
+          <div>{loadError}</div>
         </div>
       </GalleryLayout>
     );

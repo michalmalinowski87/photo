@@ -32,7 +32,7 @@ export const useFinalImageDelete = ({
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
   const deletedImageKeysRef = useRef<Set<string>>(new Set());
-  
+
   // Toast batching refs
   const successToastBatchRef = useRef<number>(0);
   const errorToastBatchRef = useRef<number>(0);
@@ -81,17 +81,19 @@ export const useFinalImageDelete = ({
         // Optimistically remove image from list immediately after successful delete
         const imageSize = image.size || 0;
         let wasLastImage = false;
-        
+
         setFinalImages((prevImages) => {
-          const remainingImages = prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
+          const remainingImages = prevImages.filter(
+            (img) => (img.key ?? img.filename) !== imageKey
+          );
           wasLastImage = remainingImages.length === 0;
-          
+
           // Clear optimistic state
           setOptimisticFinalsBytes(null);
-          
+
           return remainingImages;
         });
-        
+
         // Update Zustand store optimistically after state update (side panel will pull from here)
         // Do this after setState to avoid React warning about setState during render
         const { currentGallery, updateFinalsBytesUsed } = useGalleryStore.getState();
@@ -101,7 +103,7 @@ export const useFinalImageDelete = ({
             updateFinalsBytesUsed(-imageSize);
           });
         }
-        
+
         // If this was the last image, call /status endpoint
         if (wasLastImage) {
           void (async () => {
@@ -109,7 +111,10 @@ export const useFinalImageDelete = ({
               await refreshOrderStatus(galleryIdStr, orderIdStr);
             } catch (statusErr) {
               // eslint-disable-next-line no-console
-              console.error("[useFinalImageDelete] Failed to refresh order status after last image deleted:", statusErr);
+              console.error(
+                "[useFinalImageDelete] Failed to refresh order status after last image deleted:",
+                statusErr
+              );
             }
           })();
         }
@@ -139,7 +144,7 @@ export const useFinalImageDelete = ({
 
         // Batch success toasts - accumulate count and show single toast
         successToastBatchRef.current += 1;
-        
+
         // If there's already a pending toast, don't reset the timeout, just increment count
         if (!successToastTimeoutRef.current) {
           // Only set timeout if one doesn't exist
@@ -168,7 +173,7 @@ export const useFinalImageDelete = ({
         // Batch error toasts - accumulate count and show single toast
         errorToastBatchRef.current += 1;
         const errorMessage = formatApiError(err);
-        
+
         // If there's already a pending toast, don't reset the timeout, just increment count
         if (!errorToastTimeoutRef.current) {
           // Only set timeout if one doesn't exist

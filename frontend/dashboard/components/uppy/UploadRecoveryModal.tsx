@@ -34,8 +34,8 @@ export const UploadRecoveryModal: React.FC<UploadRecoveryModalProps> = ({
         </h2>
 
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Wykryto nieukończone przesyłanie {fileCount} {fileCount === 1 ? "pliku" : "plików"} {typeLabel}.
-          Możesz wznowić przesyłanie lub je anulować.
+          Wykryto nieukończone przesyłanie {fileCount} {fileCount === 1 ? "pliku" : "plików"}{" "}
+          {typeLabel}. Możesz wznowić przesyłanie lub je anulować.
         </p>
 
         <div className="flex justify-end gap-3 mt-6">
@@ -50,4 +50,3 @@ export const UploadRecoveryModal: React.FC<UploadRecoveryModalProps> = ({
     </Modal>
   );
 };
-

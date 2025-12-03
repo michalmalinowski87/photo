@@ -86,4 +86,3 @@ export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
     </li>
   );
 };
-

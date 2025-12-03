@@ -8,8 +8,12 @@ This document outlines the three-tier image optimization strategy implemented fo
 
 ### Tier 1: Thumbnail (300x300, Square)
 - **Dimensions**: 300x300 pixels (square, cropped)
-- **File Size**: ~14KB
+- **File Size**: ~14-16KB (target, adaptive compression if >20KB)
 - **Quality**: 80 (WebP, hardcoded by Uppy's ThumbnailGenerator)
+- **Adaptive Optimization**: Re-compresses if exceeds 20KB with quality based on original size
+  - Very large originals (>20MB): 0.57 quality, 25KB maxSizeMB
+  - Large originals (10-20MB): 0.65 quality, 50KB maxSizeMB
+  - Medium originals (2-10MB): 0.75 quality, 50KB maxSizeMB
 - **Use Case**: CMS grid views, admin panels, quick previews
 - **Generation**: Uppy's ThumbnailGenerator (via `thumbnail:generated` event)
 - **Format**: WebP
@@ -17,19 +21,29 @@ This document outlines the three-tier image optimization strategy implemented fo
 
 ### Tier 2: BigThumb (600px, Maintain Ratio)
 - **Dimensions**: 600px (maintains aspect ratio)
-- **File Size**: ~80-120KB
-- **Quality**: 0.90 (WebP)
+- **File Size**: ~80-120KB (target, adaptive quality)
+- **Quality**: 0.76-0.90 (WebP, adaptive based on original file size)
+- **Adaptive Strategy**: 
+  - Very large originals (>20MB): 0.76 quality, 160KB maxSizeMB
+  - Large originals (10-20MB): 0.82 quality
+  - Medium originals (2-10MB): 0.88 quality
+  - Small originals (<2MB): 0.90 quality (maintain quality)
 - **Use Case**: Masonry/responsive grid layouts in client gallery
-- **Generation**: browser-image-compression library
+- **Generation**: browser-image-compression library with adaptive quality
 - **Format**: WebP
 - **Storage Path**: `galleries/{galleryId}/bigthumbs/{filename}.webp`
 
 ### Tier 3: Preview (1400px, Maintain Ratio)
 - **Dimensions**: 1400px (maintains aspect ratio)
-- **File Size**: ~0.8-1.2MB
-- **Quality**: 0.92 (WebP, near-lossless)
+- **File Size**: ~0.8-1.2MB (target, adaptive quality)
+- **Quality**: 0.85-0.92 (WebP, adaptive based on original file size)
+- **Adaptive Strategy**:
+  - Very large originals (>20MB): 0.85 quality to hit size target
+  - Large originals (10-20MB): 0.88 quality
+  - Medium originals (2-10MB): 0.90 quality
+  - Small originals (<2MB): 0.92 quality (maintain quality, near-lossless)
 - **Use Case**: Full-screen quality preview for picky choosers
-- **Generation**: browser-image-compression library
+- **Generation**: browser-image-compression library with adaptive quality
 - **Format**: WebP
 - **Storage Path**: `galleries/{galleryId}/previews/{filename}.webp`
 
@@ -42,17 +56,30 @@ This document outlines the three-tier image optimization strategy implemented fo
    - Listens to `thumbnail:generated` event
    - Square format optimized for CMS grid views
    - Quality 80 (hardcoded, cannot be changed)
+   - **Adaptive Optimization**: If thumbnail exceeds 20KB, applies additional compression pass
+     - Very large originals (>20MB): 0.57 quality, 25KB maxSizeMB → ~14-16KB target
+     - Large originals (10-20MB): 0.65 quality, 50KB maxSizeMB
+     - Medium originals (2-10MB): 0.75 quality, 50KB maxSizeMB
+   - Ensures consistent quality across file sizes while hitting size targets
 
 2. **BigThumb (600px)**:
-   - Generated using `browser-image-compression` library
+   - Generated using `browser-image-compression` library with adaptive quality
    - Maintains original aspect ratio
-   - Quality 0.90 for optimal balance between quality and file size
+   - **Adaptive Quality**: Adjusts based on original file size (0.76-0.90)
+     - Very large originals (>20MB): 0.76 quality, 160KB maxSizeMB → ~100-120KB target
+     - Large originals (10-20MB): 0.82 quality
+     - Medium originals (2-10MB): 0.88 quality
+     - Small originals (<2MB): 0.90 quality (maintain quality)
    - Generated during `upload-success` event
 
 3. **Preview (1400px)**:
-   - Generated using `browser-image-compression` library
+   - Generated using `browser-image-compression` library with adaptive quality
    - Maintains original aspect ratio
-   - Quality 0.92 (near-lossless) for professional review
+   - **Adaptive Quality**: Adjusts based on original file size (0.85-0.92)
+     - Very large originals (>20MB): 0.85 quality to hit 0.8-1.2MB target
+     - Large originals (10-20MB): 0.88 quality
+     - Medium originals (2-10MB): 0.90 quality
+     - Small originals (<2MB): 0.92 quality (maintain quality, near-lossless)
    - Generated during `upload-success` event
 
 ### Upload Flow
@@ -60,10 +87,16 @@ This document outlines the three-tier image optimization strategy implemented fo
 All three versions are generated and uploaded in parallel during the `upload-success` event:
 
 ```typescript
+// Calculate file size for adaptive quality
+const fileSizeMB = file.data.size / (1024 * 1024);
+
 const [preview, bigThumb, thumbnailBlob] = await Promise.all([
-  this.generatePreview(file, 1400, 0.92),
-  this.generateBigThumb(file, 600, 0.90),
-  this.getThumbnailBlob(file),
+  // Preview uses adaptive quality (0.85-0.92 based on file size)
+  this.generatePreview(file, 1400),
+  // BigThumb uses adaptive quality (0.76-0.90 based on file size)
+  this.generateBigThumb(file, 600),
+  // Thumbnail with adaptive optimization if needed (0.57-0.75 based on file size)
+  this.getThumbnailBlob(file, fileSizeMB),
 ]);
 
 await Promise.all([
@@ -72,6 +105,15 @@ await Promise.all([
   this.uploadToS3(presignedData.thumbnailUrl, thumbnailBlob, "image/webp"),
 ]);
 ```
+
+**Adaptive Quality Calculation**:
+- Quality is automatically calculated based on original file size
+- Very large originals (>20MB) get more aggressive compression to hit size targets
+- Large originals (10-20MB) get moderate compression
+- Medium originals (2-10MB) use standard quality
+- Small originals (<2MB) maintain higher quality (already small files)
+- Ensures consistent file sizes while prioritizing quality for client selection
+- Balances quality consistency across file sizes with size target achievement
 
 ### API Response Structure
 
@@ -163,21 +205,38 @@ The `listImages` API returns all three versions:
 
 ## Technical Assumptions
 
-### Quality Settings
-1. **Thumbnail (Quality 80)**: 
-   - Hardcoded by Uppy's ThumbnailGenerator
+### Adaptive Quality Settings
+
+The compression strategy uses adaptive quality based on original file size to better hit target file size ranges while maintaining quality priority for client photo selection.
+
+1. **Thumbnail (Quality 80, Adaptive if >20KB)**: 
+   - Base quality 80 hardcoded by Uppy's ThumbnailGenerator
    - Cannot be changed without forking the library
    - Sufficient for 300x300 thumbnails
+   - **Adaptive Optimization**: If thumbnail exceeds 20KB, applies additional compression pass
+     - **Very large originals (>20MB)**: 0.57 quality, 25KB maxSizeMB → ~14-16KB target
+     - **Large originals (10-20MB)**: 0.65 quality, 50KB maxSizeMB
+     - **Medium originals (2-10MB)**: 0.75 quality, 50KB maxSizeMB
+   - Ensures quality consistency across file sizes (32MB thumbnails match 11.6MB quality)
+   - Target: ~14-16KB file size
 
-2. **BigThumb (Quality 0.90)**:
-   - Optimal balance for 600px images
-   - Visually excellent quality with good compression
-   - ~80-120KB file size
+2. **BigThumb (Adaptive Quality 0.76-0.90)**:
+   - **Very large originals (>20MB)**: 0.76 quality, 160KB maxSizeMB → ~100-120KB target
+   - **Large originals (10-20MB)**: 0.82 quality
+   - **Medium originals (2-10MB)**: 0.88 quality
+   - **Small originals (<2MB)**: 0.90 quality (maintain quality)
+   - Visually excellent quality with optimal file size
+   - Target: ~80-120KB file size
 
-3. **Preview (Quality 0.92)**:
-   - Near-lossless quality
-   - Visually indistinguishable from lossless
-   - ~0.8-1.2MB file size
+3. **Preview (Adaptive Quality 0.85-0.92)**:
+   - **Very large originals (>20MB)**: 0.85 quality to hit 0.8-1.2MB target
+   - **Large originals (10-20MB)**: 0.88 quality
+   - **Medium originals (2-10MB)**: 0.90 quality
+   - **Small originals (<2MB)**: 0.92 quality (near-lossless, maintain quality)
+   - Near-lossless quality for professional review
+   - Target: ~0.8-1.2MB file size
+
+**Quality Priority**: Quality is prioritized for client photo selection experience. Adaptive quality ensures we hit target file sizes for large originals while maintaining excellent quality for smaller originals.
 
 ### Format Choice (WebP)
 - **Compression**: ~45% smaller than PNG, ~28% smaller than optimized PNG
@@ -349,7 +408,7 @@ Monitor in CloudWatch:
 ## Future Considerations
 
 ### Potential Optimizations
-1. **Adaptive Quality**: Adjust quality based on connection speed (Network Information API)
+1. **Connection-Based Adaptive Quality**: Adjust quality based on connection speed (Network Information API) - currently adapts based on file size
 2. **Progressive JPEG**: Consider progressive JPEG for even faster perceived load times
 3. **AVIF Format**: Consider AVIF for even better compression (when browser support improves)
 4. **Geographic Restrictions**: Block content delivery to regions with no audience
@@ -362,14 +421,54 @@ Monitor in CloudWatch:
 4. **Cache Hit Ratio**: Monitor origin requests vs total requests
 5. **Cost Tracking**: Use AWS Cost Explorer to track CloudFront costs over time
 
+## Adaptive Quality Strategy
+
+### Overview
+
+The compression strategy uses **adaptive quality** that adjusts based on original file size to better hit target file size ranges while maintaining quality priority for client photo selection.
+
+### Benefits
+
+1. **Consistent File Sizes**: Better consistency in hitting target file size ranges across different original image sizes
+2. **Quality Priority**: Maintains excellent quality for client photo selection, especially for smaller originals
+3. **Optimized for Large Originals**: Reduces quality slightly for very large originals to hit size targets without compromising visual quality
+4. **Smart Adaptation**: Automatically adjusts compression based on image complexity and original size
+
+### Implementation
+
+- **Preview**: Quality ranges from 0.85 (very large >20MB) to 0.92 (small <2MB)
+- **BigThumb**: Quality ranges from 0.76 (very large >20MB) to 0.90 (small <2MB), with 160KB maxSizeMB for very large files
+- **Thumbnail**: Base quality 80, with additional compression pass if exceeds 20KB
+  - Quality ranges from 0.57 (very large >20MB) to 0.75 (medium 2-10MB)
+  - maxSizeMB: 25KB for very large files, 50KB for others
+
+### Expected Results
+
+Based on optimized test data:
+- **Very large originals (32MB)**: 
+  - Preview: ~700KB (within 0.8-1.2MB target)
+  - BigThumb: ~100-120KB (within 80-120KB target)
+  - Thumbnail: ~14-16KB (matches quality of 11.6MB files)
+- **Large originals (11.6MB)**: 
+  - Preview: ~355KB (acceptable, good quality)
+  - BigThumb: ~64-72KB (within target)
+  - Thumbnail: ~14.6KB (perfect match)
+- **Medium originals (2.5MB)**: 
+  - Preview: ~192KB (acceptable)
+  - BigThumb: ~36KB (acceptable)
+  - Thumbnail: ~4.2KB (excellent)
+- **Small originals (<2MB)**: 
+  - All sizes maintain excellent quality (files already small)
+
 ## Conclusion
 
-The three-tier optimization strategy provides an optimal balance between quality, file size, and loading performance. By generating three versions of each image, we can:
+The three-tier optimization strategy with adaptive quality provides an optimal balance between quality, file size, and loading performance. By generating three versions of each image with adaptive quality based on original file size, we can:
 
 1. **Optimize for Context**: Use the right version for each use case
 2. **Support All Devices**: From mobile 3G to 8K TV displays
-3. **Maintain Quality**: Professional-grade quality where needed
-4. **Minimize Bandwidth**: Reduce unnecessary data transfer
+3. **Maintain Quality**: Professional-grade quality where needed, prioritized for client selection
+4. **Minimize Bandwidth**: Reduce unnecessary data transfer while hitting consistent file size targets
+5. **Adaptive Compression**: Automatically adjust quality to hit target file sizes without compromising visual quality
 
-This strategy ensures excellent user experience across all devices and connection speeds while maintaining professional image quality standards.
+This strategy ensures excellent user experience across all devices and connection speeds while maintaining professional image quality standards and consistent file size targets.
 

@@ -172,11 +172,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
       <div className="p-6 flex-1 overflow-y-auto">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{title}</h2>
 
-        {error && (
-          <div>
-            {error}
-          </div>
-        )}
+        {error && <div>{error}</div>}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">

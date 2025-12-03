@@ -23,7 +23,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
   const deletedImageKeysRef = useRef<Set<string>>(new Set());
-  
+
   // Toast batching refs
   const successToastBatchRef = useRef<number>(0);
   const errorToastBatchRef = useRef<number>(0);
@@ -70,18 +70,20 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
 
         // Optimistically remove image from list immediately after successful delete
         setImages((prevImages) => {
-          const remainingImages = prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
-          
+          const remainingImages = prevImages.filter(
+            (img) => (img.key ?? img.filename) !== imageKey
+          );
+
           // Check if this was the last image - if so, we need to call /status
           const wasLastImage = remainingImages.length === 0;
-          
+
           // Update Zustand store optimistically (side panel will pull from here)
           const { currentGallery, updateOriginalsBytesUsed } = useGalleryStore.getState();
           if (currentGallery && image.size) {
             // Optimistically subtract the image size
             updateOriginalsBytesUsed(-(image.size || 0));
           }
-          
+
           // If this was the last image, call /status endpoint to update gallery state
           if (wasLastImage) {
             void (async () => {
@@ -90,11 +92,14 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
                 await refreshGalleryStatusOnly(galleryIdStr);
               } catch (statusErr) {
                 // eslint-disable-next-line no-console
-                console.error("[useOriginalImageDelete] Failed to refresh status after last image deleted:", statusErr);
+                console.error(
+                  "[useOriginalImageDelete] Failed to refresh status after last image deleted:",
+                  statusErr
+                );
               }
             })();
           }
-          
+
           return remainingImages;
         });
 
@@ -123,7 +128,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
 
         // Batch success toasts - accumulate count and show single toast
         successToastBatchRef.current += 1;
-        
+
         // If there's already a pending toast, don't reset the timeout, just increment count
         if (!successToastTimeoutRef.current) {
           // Only set timeout if one doesn't exist
@@ -152,7 +157,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
         // Batch error toasts - accumulate count and show single toast
         errorToastBatchRef.current += 1;
         const errorMessage = formatApiError(err);
-        
+
         // If there's already a pending toast, don't reset the timeout, just increment count
         if (!errorToastTimeoutRef.current) {
           // Only set timeout if one doesn't exist

@@ -58,7 +58,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 
   const handlePaymentSuccess = useCallback(async () => {
     onSuccess?.();
-    
+
     // For non-selection galleries, navigate to order view after payment
     if (isNonSelectionGallery) {
       try {

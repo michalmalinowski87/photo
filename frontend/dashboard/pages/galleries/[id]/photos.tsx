@@ -87,13 +87,19 @@ export default function GalleryPhotos() {
 
   // Check for recovery state and auto-open modal
   useEffect(() => {
-    if (!galleryId || typeof window === "undefined") {return;}
-    
+    if (!galleryId || typeof window === "undefined") {
+      return;
+    }
+
     const storageKey = `uppy_upload_state_${galleryId}_originals`;
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
-        const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; type: string };
+        const state = JSON.parse(stored) as {
+          isActiveUpload?: boolean;
+          galleryId: string;
+          type: string;
+        };
         // If there's an active upload state, open the modal to allow recovery
         if (state.isActiveUpload && state.galleryId === galleryId && state.type === "originals") {
           setUploadModalOpen(true);
@@ -107,7 +113,7 @@ export default function GalleryPhotos() {
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
     setUploadModalOpen(false);
-    
+
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
     if (galleryId && typeof window !== "undefined") {
@@ -115,7 +121,11 @@ export default function GalleryPhotos() {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         try {
-          const state = JSON.parse(stored) as { isActiveUpload?: boolean; galleryId: string; type: string };
+          const state = JSON.parse(stored) as {
+            isActiveUpload?: boolean;
+            galleryId: string;
+            type: string;
+          };
           if (state.isActiveUpload) {
             // Clear the active flag but keep the state (in case user wants to manually resume later)
             const updatedState = { ...state, isActiveUpload: false };
@@ -200,7 +210,6 @@ export default function GalleryPhotos() {
           // Return merged array (API images + preserved deleting images)
           return Array.from(apiImagesMap.values());
         });
-
       } catch (err) {
         if (!silent) {
           const errorMsg = formatApiError(err);
@@ -218,17 +227,19 @@ export default function GalleryPhotos() {
 
   // Reload gallery after upload (simple refetch, no polling)
   const reloadGalleryAfterUpload = useCallback(async () => {
-    if (!galleryId) {return;}
-    
+    if (!galleryId) {
+      return;
+    }
+
     // Invalidate cache and fetch fresh images
     const { invalidateGalleryImagesCache, fetchGalleryImages } = useGalleryStore.getState();
     invalidateGalleryImagesCache(galleryId as string);
     await fetchGalleryImages(galleryId as string, true); // Force refresh
-    
+
     // Update local state from store
     const { getGalleryImages } = useGalleryStore.getState();
     const storeImages = getGalleryImages(galleryId as string) ?? [];
-    
+
     setImages((currentImages) => {
       const deletingImageKeys = Array.from(deletingImagesRef.current);
       const currentDeletingImages = currentImages.filter((img) => {
@@ -236,9 +247,7 @@ export default function GalleryPhotos() {
         return imgKey && deletingImageKeys.includes(imgKey);
       });
 
-      const storeImagesMap = new Map(
-        storeImages.map((img) => [img.key ?? img.filename, img])
-      );
+      const storeImagesMap = new Map(storeImages.map((img) => [img.key ?? img.filename, img]));
 
       currentDeletingImages.forEach((img) => {
         const imgKey = img.key ?? img.filename;
@@ -443,8 +452,12 @@ export default function GalleryPhotos() {
 
   // Helper to normalize selectedKeys from order
   const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
-    if (!selectedKeys) {return [];}
-    if (Array.isArray(selectedKeys)) {return selectedKeys.map((k) => k.toString().trim());}
+    if (!selectedKeys) {
+      return [];
+    }
+    if (Array.isArray(selectedKeys)) {
+      return selectedKeys.map((k) => k.toString().trim());
+    }
     if (typeof selectedKeys === "string") {
       try {
         const parsed = JSON.parse(selectedKeys);
@@ -458,7 +471,9 @@ export default function GalleryPhotos() {
 
   // Format date for display
   const formatDate = (dateString?: string): string => {
-    if (!dateString) {return "";}
+    if (!dateString) {
+      return "";
+    }
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString("pl-PL", {
@@ -474,7 +489,7 @@ export default function GalleryPhotos() {
   };
 
   // Get delivered orders (DELIVERED or PREPARING_DELIVERY)
-  const deliveredOrders = (orders).filter(
+  const deliveredOrders = orders.filter(
     (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
   );
 
@@ -484,7 +499,9 @@ export default function GalleryPhotos() {
 
   deliveredOrders.forEach((order) => {
     const orderId = order.orderId;
-    if (!orderId) {return;}
+    if (!orderId) {
+      return;
+    }
 
     const selectedKeys = normalizeOrderSelectedKeys(order.selectedKeys);
     const orderImages: GalleryImage[] = [];
@@ -642,10 +659,10 @@ export default function GalleryPhotos() {
   return (
     <>
       {/* Next Steps Overlay */}
-      <NextStepsOverlay 
-        gallery={gallery} 
-        orders={orders as unknown as Array<{ orderId: string; [key: string]: unknown }>} 
-        galleryLoading={galleryLoading} 
+      <NextStepsOverlay
+        gallery={gallery}
+        orders={orders as unknown as Array<{ orderId: string; [key: string]: unknown }>}
+        galleryLoading={galleryLoading}
       />
 
       <div className="space-y-6">
@@ -670,12 +687,7 @@ export default function GalleryPhotos() {
             onClick={() => setUploadModalOpen(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -703,10 +715,14 @@ export default function GalleryPhotos() {
             {/* Order Sections */}
             {deliveredOrders.map((order) => {
               const orderId = order.orderId;
-              if (!orderId) {return null;}
+              if (!orderId) {
+                return null;
+              }
 
               const orderImages = imagesByOrder.get(orderId) || [];
-              if (orderImages.length === 0) {return null;}
+              if (orderImages.length === 0) {
+                return null;
+              }
 
               const sectionId = `order-${orderId}`;
               const isExpanded = expandedSections.has(sectionId);

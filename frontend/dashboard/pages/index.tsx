@@ -235,11 +235,7 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Panel główny</h1>
       </div>
 
-      {error && (
-        <div>
-          {error}
-        </div>
-      )}
+      {error && <div>{error}</div>}
 
       {loading ? (
         <>

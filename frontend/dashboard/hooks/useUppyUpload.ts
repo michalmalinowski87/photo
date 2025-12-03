@@ -54,7 +54,9 @@ async function validateStorageLimits(
 
     if (!validationResult.withinLimit) {
       const excessBytes =
-        (validationResult.uploadedSizeBytes ?? 0) + totalSize - (validationResult.originalsLimitBytes ?? 0);
+        (validationResult.uploadedSizeBytes ?? 0) +
+        totalSize -
+        (validationResult.originalsLimitBytes ?? 0);
 
       if (excessBytes > 0) {
         onValidationNeeded?.({
@@ -182,10 +184,7 @@ function checkIfAnyFileIsPaused(uppy: Uppy | null): boolean {
   // Trust Uppy's file state - it manages isPaused internally
   const files = Object.values(uppy.getFiles());
   return files.some(
-    (f: UppyFile) => 
-      f.progress?.uploadStarted && 
-      !f.progress.uploadComplete && 
-      f.isPaused === true // Uppy manages this property
+    (f: UppyFile) => f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
   );
 }
 
@@ -207,7 +206,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   const uppyRef = useRef<Uppy | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ successful: number; failed: number } | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ successful: number; failed: number } | null>(
+    null
+  );
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState>(INITIAL_PROGRESS);
   const [isPaused, setIsPaused] = useState(false);
   const speedCalculationRef = useRef<SpeedCalculationState | null>(null);
@@ -316,7 +317,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // We update pause state on these events to keep UI in sync
     uppy.on("upload-progress", updatePauseState);
     uppy.on("upload", updatePauseState);
-    
+
     // Also update pause state whenever files change (add/remove)
     // This helps catch state changes after multiple pause/resume cycles
     uppy.on("file-removed", updatePauseState);
@@ -333,7 +334,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   }, [config.galleryId, config.orderId, config.type]);
 
   const startUpload = useCallback(() => {
-    if (!uppyRef.current) {return;}
+    if (!uppyRef.current) {
+      return;
+    }
 
     const files = Object.values(uppyRef.current.getFiles());
     if (files.length === 0) {
@@ -365,8 +368,10 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   }, [showToast, uploadComplete]);
 
   const cancelUpload = useCallback(async () => {
-    if (!uppyRef.current) {return;}
-    
+    if (!uppyRef.current) {
+      return;
+    }
+
     // Get all files from Uppy's current state - check all files that have s3KeyShort
     // This is simpler and more robust - we don't need to track anything
     const allFiles = Object.values(uppyRef.current.getFiles());
@@ -374,23 +379,23 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       const s3KeyShort = file.meta?.s3KeyShort as string | undefined;
       return !!s3KeyShort;
     });
-    
+
     // Set cancellation flag BEFORE cancelling to ignore the complete event that cancelAll() triggers
     isCancellingRef.current = true;
     uppyRef.current.cancelAll();
     uppyRef.current.clear();
-    
+
     setUploading(false);
     setIsPaused(false);
     setUploadComplete(false);
     setUploadResult(null);
     setUploadProgress(INITIAL_PROGRESS);
-    
+
     // Attempt to delete all files with s3KeyShort from S3
     // Silently ignore errors (files that don't exist, network errors, etc.)
     if (filesWithS3Key.length > 0) {
       const { galleryId, orderId, type } = configRef.current;
-      
+
       try {
         // Extract filenames from s3KeyShort for all files
         // Format: originals/{filename} or final/{orderId}/{filename}
@@ -404,11 +409,11 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
             return parts[parts.length - 1];
           })
           .filter((filename): filename is string => filename !== null);
-        
+
         if (filenames.length === 0) {
           return;
         }
-        
+
         if (type === "finals" && orderId) {
           // Delete final images in batch
           await api.orders.deleteFinalImagesBatch(galleryId, orderId, filenames).catch(() => {
@@ -424,7 +429,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         // Silently ignore all errors
       }
     }
-    
+
     // Reset cancellation flag after a brief delay to allow any pending events to be ignored
     setTimeout(() => {
       isCancellingRef.current = false;
@@ -438,7 +443,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // Use Uppy's built-in pauseAll() method to pause all uploads at once
     // The event listeners will automatically update our pause state via updatePauseState
     uppyRef.current.pauseAll();
-    
+
     // Also manually trigger pause state update to catch immediate changes
     // This helps ensure state is synced, especially after multiple pause/resume cycles
     const updatePauseState = () => {
@@ -447,10 +452,10 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         setIsPaused(paused);
       }
     };
-    
+
     // Update immediately
     updatePauseState();
-    
+
     // Update after delays to catch async state changes
     setTimeout(updatePauseState, 100);
     setTimeout(updatePauseState, 250);
@@ -460,7 +465,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     if (!uppyRef.current || !uploading) {
       return;
     }
-    
+
     // Get all files and check their state before resuming
     // Always call resumeAll() - it's safe even if nothing is paused
     // Uppy will only resume files that are actually paused
@@ -469,7 +474,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     } catch (error) {
       // Error calling resumeAll - silently continue
     }
-    
+
     // Also manually trigger a pause state update to catch immediate changes
     // This helps ensure state is synced, especially after multiple pause/resume cycles
     const updatePauseState = () => {
@@ -478,10 +483,10 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         setIsPaused(paused);
       }
     };
-    
+
     // Update immediately
     updatePauseState();
-    
+
     // Update after delays to catch async state changes
     // Multiple checks help with multiple pause/resume cycles
     setTimeout(updatePauseState, 100);

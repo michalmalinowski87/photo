@@ -156,11 +156,7 @@ export default function Wallet() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Portfel</h1>
 
-      {error && (
-        <div>
-          {error}
-        </div>
-      )}
+      {error && <div>{error}</div>}
 
       {loading ? (
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[325.33px] animate-fade-in-out"></div>
@@ -210,138 +206,138 @@ export default function Wallet() {
           </div>
 
           {transactions.length === 0 ? (
-          <div className="min-h-[530px] flex items-center justify-center">
-            <p className="text-gray-500 dark:text-gray-400">Brak transakcji</p>
-          </div>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <div className="h-[530px] overflow-y-auto">
-              <Table className="table-fixed w-full">
-                <TableHeader className="sticky top-0 z-10">
-                  <TableRow className="bg-gray-50 dark:bg-gray-900">
-                    <TableCell
-                      isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                    >
-                      Data
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                    >
-                      Typ
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                    >
-                      Status
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                    >
-                      Kwota
-                    </TableCell>
-                    <TableCell
-                      isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                    >
-                      Metoda płatności
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx) => {
-                    const isCredit = tx.type === "WALLET_TOPUP";
-                    const amount =
-                      tx.amountCents ??
-                      (tx.amount !== null && tx.amount !== undefined ? tx.amount * 100 : 0);
-
-                    return (
-                      <TableRow
-                        key={tx.transactionId ?? tx.txnId}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-800"
+            <div className="min-h-[530px] flex items-center justify-center">
+              <p className="text-gray-500 dark:text-gray-400">Brak transakcji</p>
+            </div>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <div className="h-[530px] overflow-y-auto">
+                <Table className="table-fixed w-full">
+                  <TableHeader className="sticky top-0 z-10">
+                    <TableRow className="bg-gray-50 dark:bg-gray-900">
+                      <TableCell
+                        isHeader
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                       >
-                        <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                          {tx.createdAt
-                            ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                          {getTransactionTypeLabel(tx.type)}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-sm">
-                          {getTransactionStatusBadge(tx.status)}
-                        </TableCell>
-                        <TableCell
-                          className={`px-4 py-3 text-sm text-right font-medium ${
-                            isCredit
-                              ? "text-success-600 dark:text-success-400"
-                              : "text-gray-900 dark:text-white"
-                          }`}
-                        >
-                          {isCredit ? "+" : "-"}
-                          {formatPrice(amount)}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                          {tx.paymentMethod === "WALLET"
-                            ? "Portfel"
-                            : tx.paymentMethod === "STRIPE"
-                              ? "Stripe"
-                              : (tx.paymentMethod ?? "-")}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {transactions.length < 9 &&
-                    Array.from({ length: 9 - transactions.length }).map((_, index) => (
-                      <TableRow key={`spacer-${index}`} className="h-[53px]">
-                        <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
-                        <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
-                        <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
-                        <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
-                        <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        )}
+                        Data
+                      </TableCell>
+                      <TableCell
+                        isHeader
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      >
+                        Typ
+                      </TableCell>
+                      <TableCell
+                        isHeader
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      >
+                        Status
+                      </TableCell>
+                      <TableCell
+                        isHeader
+                        className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      >
+                        Kwota
+                      </TableCell>
+                      <TableCell
+                        isHeader
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      >
+                        Metoda płatności
+                      </TableCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((tx) => {
+                      const isCredit = tx.type === "WALLET_TOPUP";
+                      const amount =
+                        tx.amountCents ??
+                        (tx.amount !== null && tx.amount !== undefined ? tx.amount * 100 : 0);
 
-        {transactions.length > 0 && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              Strona {currentPage}
-              {transactions.length === 10 && hasMore && " (więcej dostępne)"}
+                      return (
+                        <TableRow
+                          key={tx.transactionId ?? tx.txnId}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                            {tx.createdAt
+                              ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                            {getTransactionTypeLabel(tx.type)}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-sm">
+                            {getTransactionStatusBadge(tx.status)}
+                          </TableCell>
+                          <TableCell
+                            className={`px-4 py-3 text-sm text-right font-medium ${
+                              isCredit
+                                ? "text-success-600 dark:text-success-400"
+                                : "text-gray-900 dark:text-white"
+                            }`}
+                          >
+                            {isCredit ? "+" : "-"}
+                            {formatPrice(amount)}
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                            {tx.paymentMethod === "WALLET"
+                              ? "Portfel"
+                              : tx.paymentMethod === "STRIPE"
+                                ? "Stripe"
+                                : (tx.paymentMethod ?? "-")}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {transactions.length < 9 &&
+                      Array.from({ length: 9 - transactions.length }).map((_, index) => (
+                        <TableRow key={`spacer-${index}`} className="h-[53px]">
+                          <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                          <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                          <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                          <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                          <TableCell className="px-4 py-3 border-transparent">&nbsp;</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousPage}
-                disabled={transactionsLoading || currentPage === 1}
-              >
-                Poprzednia
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={transactionsLoading || !hasMore}
-              >
-                Następna
-              </Button>
+          )}
+
+          {transactions.length > 0 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Strona {currentPage}
+                {transactions.length === 10 && hasMore && " (więcej dostępne)"}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={transactionsLoading || currentPage === 1}
+                >
+                  Poprzednia
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={transactionsLoading || !hasMore}
+                >
+                  Następna
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       )}
     </div>

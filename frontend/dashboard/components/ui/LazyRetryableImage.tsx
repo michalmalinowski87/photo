@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 
-import { ImageFallbackUrls, ImageSize, getInitialImageUrl, getNextFallbackUrl, isFinalUrl } from "../../lib/image-fallback";
+import {
+  ImageFallbackUrls,
+  ImageSize,
+  getInitialImageUrl,
+  getNextFallbackUrl,
+  isFinalUrl,
+} from "../../lib/image-fallback";
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
 
 interface LazyRetryableImageProps {
@@ -16,12 +22,12 @@ interface LazyRetryableImageProps {
 
 /**
  * Unified image component that combines lazy loading and progressive fallback.
- * 
+ *
  * Features:
  * - Lazy loading: Only loads when image enters viewport (Intersection Observer)
  * - Progressive fallback: CloudFront → S3 presigned → next size → original
  * - Single source of truth: All fallback logic in image-fallback.ts
- * 
+ *
  * Fallback strategy (defined in image-fallback.ts):
  * 1. CloudFront URL (primary) - thumb/preview/bigthumb
  * 2. S3 presigned URL fallback (if CloudFront fails with 403)
@@ -32,7 +38,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   imageData,
   alt,
   className = "",
-  preferredSize = 'thumb',
+  preferredSize = "thumb",
   rootMargin = "50px",
   placeholder,
   loadingPlaceholder,
@@ -43,7 +49,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   const [hasError, setHasError] = useState<boolean>(false);
   const [currentSrc, setCurrentSrc] = useState<string>("");
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
-  const attemptedSizesRef = useRef<Set<'thumb' | 'preview' | 'bigthumb'>>(new Set());
+  const attemptedSizesRef = useRef<Set<"thumb" | "preview" | "bigthumb">>(new Set());
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const hasInitializedRef = useRef<boolean>(false);
@@ -58,13 +64,13 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   useEffect(() => {
     // Reset initialization flag and state when imageData or preferredSize changes
     hasInitializedRef.current = false;
-    
+
     setIsLoading(true);
     setHasError(false);
     setCurrentSrc(initialSrc);
     fallbackAttemptsRef.current.clear();
     attemptedSizesRef.current.clear();
-    
+
     // Mark initial size as attempted
     attemptedSizesRef.current.add(preferredSize);
 
@@ -73,13 +79,15 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
       setHasError(true);
       return;
     }
-    
+
     hasInitializedRef.current = true;
   }, [imageData, preferredSize, initialSrc, alt]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {
-    if (!containerRef.current) {return;}
+    if (!containerRef.current) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -107,16 +115,22 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>): void => {
     const failedUrl = e.currentTarget.src;
-    
+
     // Determine which size failed based on URL
-    const getSizeFromUrl = (url: string): 'thumb' | 'preview' | 'bigthumb' | null => {
-      const normalized = url.split('?')[0]; // Remove query params
-      if (normalized.includes('/thumbs/')) {return 'thumb';}
-      if (normalized.includes('/previews/')) {return 'preview';}
-      if (normalized.includes('/bigthumbs/')) {return 'bigthumb';}
+    const getSizeFromUrl = (url: string): "thumb" | "preview" | "bigthumb" | null => {
+      const normalized = url.split("?")[0]; // Remove query params
+      if (normalized.includes("/thumbs/")) {
+        return "thumb";
+      }
+      if (normalized.includes("/previews/")) {
+        return "preview";
+      }
+      if (normalized.includes("/bigthumbs/")) {
+        return "bigthumb";
+      }
       return null;
     };
-    
+
     // Track which size failed (if it's a size variant)
     // Note: We DON'T skip size-based fallbacks just because the initial URL was final
     // Sizes might exist on S3 even if they don't exist on CloudFront
@@ -126,7 +140,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     }
     // If it's not a size variant (i.e., it's the final/original), we don't mark sizes as attempted
     // This allows the fallback chain to still try available sizes (e.g., S3 presigned thumb/preview/bigthumb)
-    
+
     // Prevent infinite fallback loops
     if (fallbackAttemptsRef.current.has(failedUrl)) {
       setIsLoading(false);
@@ -140,36 +154,41 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     // Try progressive fallback (strategy defined in image-fallback.ts)
     // Cache busting is applied automatically in getNextFallbackUrl
     // Pass attempted sizes and preferred size to determine correct fallback chain
-    const nextUrl = getNextFallbackUrl(failedUrl, imageData, attemptedSizesRef.current, preferredSize);
-    
+    const nextUrl = getNextFallbackUrl(
+      failedUrl,
+      imageData,
+      attemptedSizesRef.current,
+      preferredSize
+    );
+
     if (nextUrl && !fallbackAttemptsRef.current.has(nextUrl)) {
       // Mark the size of the next URL as attempted
       const nextSize = getSizeFromUrl(nextUrl);
       if (nextSize) {
         attemptedSizesRef.current.add(nextSize);
       }
-      
+
       // Add exponential backoff delay to prevent DDoS when many images fail simultaneously
       // This prevents all 800+ images from cascading through fallbacks at once
       const backoffDelay = Math.min(100 * Math.pow(2, attemptCount), 2000); // Max 2 seconds
-      
+
       // Check circuit breaker before retrying
       if (imageFallbackThrottler.isCircuitOpen()) {
         setIsLoading(false);
         setHasError(true);
         return;
       }
-      
+
       // Record failure for circuit breaker tracking
       imageFallbackThrottler.recordFailure();
-      
+
       // Retry with exponential backoff
       setTimeout(() => {
         setCurrentSrc(nextUrl);
         setIsLoading(true);
         setHasError(false);
       }, backoffDelay);
-      
+
       return;
     }
 
@@ -221,4 +240,3 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     </div>
   );
 };
-

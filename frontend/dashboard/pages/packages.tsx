@@ -181,11 +181,7 @@ export default function Packages() {
           </button>
         </div>
 
-        {error && (
-          <div>
-            {error}
-          </div>
-        )}
+        {error && <div>{error}</div>}
 
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
@@ -301,11 +297,7 @@ export default function Packages() {
         </button>
       </div>
 
-      {error && (
-        <div>
-          {error}
-        </div>
-      )}
+      {error && <div>{error}</div>}
 
       {packages.length === 0 ? (
         <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">

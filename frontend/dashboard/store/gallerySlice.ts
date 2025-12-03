@@ -6,19 +6,19 @@ import api from "../lib/api-service";
 /**
  * Helper function to add cache-busting query parameter to image URLs
  * Uses S3 lastModified timestamp to avoid unnecessary cache busting
- * 
+ *
  * Strategy:
  * - If lastModified is available: use only that (t={lastModified})
  *   - Same file = same timestamp = can be cached
  *   - Different file = different timestamp = fresh fetch
  * - If lastModified is missing: use current timestamp as fallback
  * - When a new photo is uploaded, S3's lastModified changes automatically
- * 
+ *
  * NOTE: This function is kept for backward compatibility but cache busting
  * is now handled automatically in image-fallback.ts as part of the unified strategy
  */
 export function addCacheBustingToUrl(
-  url: string | null | undefined, 
+  url: string | null | undefined,
   lastModified?: string | number
 ): string | null {
   if (!url) {
@@ -38,14 +38,16 @@ export function addCacheBustingToUrl(
 
   // If URL already has query parameters, append; otherwise add
   const separator = url.includes("?") ? "&" : "?";
-  
+
   // Use lastModified timestamp if available (from S3 LastModified)
   // This ensures we don't cache-bust unnecessarily - same file = same timestamp
   // When a new photo is uploaded, S3 lastModified changes automatically
-  const lastModifiedTs = lastModified 
-    ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
+  const lastModifiedTs = lastModified
+    ? typeof lastModified === "string"
+      ? new Date(lastModified).getTime()
+      : lastModified
     : Date.now();
-  
+
   // Format: t={lastModified}
   return `${url}${separator}t=${lastModifiedTs}`;
 }
@@ -53,20 +55,20 @@ export function addCacheBustingToUrl(
 /**
  * Helper function to apply cache-busting to all image URLs in an image object
  * Preserves the original type of the image
- * 
+ *
  * NOTE: This function is kept for backward compatibility but cache busting
  * is now handled automatically in image-fallback.ts as part of the unified strategy
  */
-export function applyCacheBustingToImage<T extends Record<string, any>>(
-  image: T
-): T {
+export function applyCacheBustingToImage<T extends Record<string, any>>(image: T): T {
   if (!image || typeof image !== "object") {
     return image;
   }
 
   const lastModified = image.lastModified;
-  const timestamp = lastModified 
-    ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
+  const timestamp = lastModified
+    ? typeof lastModified === "string"
+      ? new Date(lastModified).getTime()
+      : lastModified
     : undefined;
 
   return {
@@ -481,7 +483,7 @@ export const useGalleryStore = create<GalleryState>()(
           // Always fetch fresh - no cache to avoid old state
           // Request only thumb size for dashboard gallery photos view (optimization)
           // Fallback URLs will still be available if needed
-          const response = await api.galleries.getImages(galleryId, 'thumb');
+          const response = await api.galleries.getImages(galleryId, "thumb");
           const images = response.images ?? [];
           // setGalleryImages will apply cache-busting automatically
           state.setGalleryImages(galleryId, images);

@@ -18,10 +18,7 @@ interface UppyUploadModalProps {
 // ============================================================================
 
 function isImageFile(file: File | { name: string; type?: string }): boolean {
-  return (
-    file.type?.startsWith("image/") ||
-    /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
-  );
+  return file.type?.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
 }
 
 function addFileToUppy(uppy: Uppy, file: File): void {
@@ -122,7 +119,6 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
   }
 }
 
-
 // ============================================================================
 // Debug Component
 // ============================================================================
@@ -137,7 +133,11 @@ const FilesGridDebugger: React.FC<{ uppy: Uppy }> = ({ uppy }) => {
           id: file.id,
           progress: file.progress,
           isPaused: file.isPaused,
-          state: file.progress?.uploadStarted ? "uploading" : file.progress?.uploadComplete ? "complete" : "pending",
+          state: file.progress?.uploadStarted
+            ? "uploading"
+            : file.progress?.uploadComplete
+              ? "complete"
+              : "pending",
           percentage: file.progress?.percentage,
           bytesUploaded: file.progress?.bytesUploaded,
           bytesTotal: file.progress?.bytesTotal,
@@ -150,34 +150,52 @@ const FilesGridDebugger: React.FC<{ uppy: Uppy }> = ({ uppy }) => {
 
     // Log on events with more detail
     const eventHandlers: Array<[string, (data: any) => void]> = [
-      ["upload-start", (data) => {
-        console.log("🚀 Event: upload-start", data);
-        setTimeout(logFilesState, 100);
-      }],
-      ["upload-progress", (file, progress) => {
-        console.log(`📊 Event: upload-progress - ${file?.name}`, {
-          file: file?.name,
-          progress,
-          percentage: file?.progress?.percentage,
-        });
-        setTimeout(logFilesState, 100);
-      }],
-      ["upload", (data) => {
-        console.log("⬆️ Event: upload", data);
-        setTimeout(logFilesState, 100);
-      }],
-      ["upload-success", (file, response) => {
-        console.log("✅ Event: upload-success", file?.name, response);
-        setTimeout(logFilesState, 100);
-      }],
-      ["file-added", (file) => {
-        console.log("➕ Event: file-added", file?.name);
-        setTimeout(logFilesState, 100);
-      }],
-      ["file-removed", (file) => {
-        console.log("➖ Event: file-removed", file?.name);
-        setTimeout(logFilesState, 100);
-      }],
+      [
+        "upload-start",
+        (data) => {
+          console.log("🚀 Event: upload-start", data);
+          setTimeout(logFilesState, 100);
+        },
+      ],
+      [
+        "upload-progress",
+        (file, progress) => {
+          console.log(`📊 Event: upload-progress - ${file?.name}`, {
+            file: file?.name,
+            progress,
+            percentage: file?.progress?.percentage,
+          });
+          setTimeout(logFilesState, 100);
+        },
+      ],
+      [
+        "upload",
+        (data) => {
+          console.log("⬆️ Event: upload", data);
+          setTimeout(logFilesState, 100);
+        },
+      ],
+      [
+        "upload-success",
+        (file, response) => {
+          console.log("✅ Event: upload-success", file?.name, response);
+          setTimeout(logFilesState, 100);
+        },
+      ],
+      [
+        "file-added",
+        (file) => {
+          console.log("➕ Event: file-added", file?.name);
+          setTimeout(logFilesState, 100);
+        },
+      ],
+      [
+        "file-removed",
+        (file) => {
+          console.log("➖ Event: file-removed", file?.name);
+          setTimeout(logFilesState, 100);
+        },
+      ],
     ];
 
     eventHandlers.forEach(([event, handler]) => {
@@ -198,11 +216,7 @@ const FilesGridDebugger: React.FC<{ uppy: Uppy }> = ({ uppy }) => {
 // Component
 // ============================================================================
 
-export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
-  isOpen,
-  onClose,
-  config,
-}) => {
+export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClose, config }) => {
   const {
     uppy,
     uploading,
@@ -270,16 +284,16 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       const uppyFiles = Object.values(uppy.getFiles());
       const currentFileIds = uppyFiles.map((f: UppyFile) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
-      
+
       // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
       const filesChanged =
         currentFileIds.length !== lastFileIds.length ||
         !currentFileIds.every((id, idx) => id === lastFileIds[idx]);
-      
+
       if (!filesChanged && !forceUpdate) {
         return; // No change, skip sync
       }
-      
+
       if (process.env.NODE_ENV === "development" && forceUpdate) {
         console.log("[syncFiles] Force updating files state", {
           fileCount: uppyFiles.length,
@@ -291,7 +305,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
           })),
         });
       }
-      
+
       lastSyncedFileIdsRef.current = currentFileIds;
       setFiles(uppyFiles);
     };
@@ -324,7 +338,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       syncFiles(true);
     };
     uppy.on("upload-progress", handleUploadProgress);
-    
+
     // Listen to upload events to catch pause/resume state changes (force update)
     const handleUpload = () => {
       if (process.env.NODE_ENV === "development") {
@@ -383,7 +397,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
   const handleCancelClose = () => {
     // User canceled - resume all paused uploads
     setShowCloseConfirm(false);
-    
+
     // Use the hook's resumeUpload() - same as the progress bar uses
     // This ensures proper state updates and synchronization
     if (uploading) {
@@ -414,7 +428,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!uploading && !uploadComplete) {setIsDragging(true);}
+    if (!uploading && !uploadComplete) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -464,7 +480,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
 
   /**
    * Get thumbnail URL for Uppy file
-   * 
+   *
    * Priority (fastest to slowest):
    * 1. Blob/Data URL from Uppy's ThumbnailGenerator (file.preview) - FASTEST
    *    - Generated locally on user's computer before upload
@@ -473,7 +489,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
    * 2. Blob URL created from File object (file.data) - FAST
    *    - Also local, but requires creating blob URL
    *    - Cached to avoid recreating on every render
-   * 
+   *
    * Note: We never fetch from CloudFront/S3 for Uppy thumbnails because:
    * - Files are local until upload completes
    * - Blob URLs are the fastest and most responsive option
@@ -502,7 +518,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
     return undefined;
   };
 
-
   if (!isOpen) {
     return null;
   }
@@ -521,7 +536,8 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
               Anulować przesyłanie?
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Przesyłanie zostało wstrzymane. Jeśli anulujesz, wszystkie przesłane pliki zostaną usunięte z galerii.
+              Przesyłanie zostało wstrzymane. Jeśli anulujesz, wszystkie przesłane pliki zostaną
+              usunięte z galerii.
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={handleCancelClose}>
@@ -562,7 +578,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                     : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
                 } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                 onClick={() => {
-                  if (!uploading && !uploadComplete) {fileInputRef.current?.click();}
+                  if (!uploading && !uploadComplete) {
+                    fileInputRef.current?.click();
+                  }
                 }}
               >
                 <input
@@ -602,7 +620,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                     variant="secondary"
                     size="sm"
                     onClick={() => {
-                      if (!uploading && !uploadComplete) {folderInputRef.current?.click();}
+                      if (!uploading && !uploadComplete) {
+                        folderInputRef.current?.click();
+                      }
                     }}
                     disabled={uploading || uploadComplete}
                   >
@@ -636,15 +656,20 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
 
               {files.length > 0 && (
                 <>
-                  {process.env.NODE_ENV === "development" && uppy && <FilesGridDebugger uppy={uppy} />}
-                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                  {process.env.NODE_ENV === "development" && uppy && (
+                    <FilesGridDebugger uppy={uppy} />
+                  )}
+                  <div
+                    className="grid gap-4"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                  >
                     {files.map((file) => {
                       // Get fresh file state from Uppy to ensure we have latest isPaused value
                       const freshFile = uppy?.getFile(file.id) || file;
                       const status = getFileStatus(freshFile);
                       const progress = getFileProgress(freshFile);
                       const thumbnail = getThumbnail(freshFile);
-                      
+
                       // Debug logging
                       if (process.env.NODE_ENV === "development") {
                         console.log(`[Thumbnail] File: ${freshFile.name}`, {
@@ -655,7 +680,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                           progress: freshFile.progress?.percentage,
                         });
                       }
-                      
+
                       return (
                         <div
                           key={freshFile.id}
@@ -698,11 +723,19 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                                   title={status === "paused" ? "Wznów" : "Wstrzymaj"}
                                 >
                                   {status === "paused" ? (
-                                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <svg
+                                      className="w-8 h-8 text-white"
+                                      fill="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
                                       <path d="M8 5v14l11-7z" />
                                     </svg>
                                   ) : (
-                                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <svg
+                                      className="w-8 h-8 text-white"
+                                      fill="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
                                       <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                                     </svg>
                                   )}
@@ -722,7 +755,12 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                             )}
                             {status === "completed" && (
                               <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -734,7 +772,12 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                             )}
                             {status === "error" && (
                               <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -896,7 +939,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                         ? uploadResult.successful > 0
                           ? `Przesłano ${uploadResult.successful} z ${uploadResult.successful + uploadResult.failed} ${config.type === "finals" ? "zdjęć finalnych" : "zdjęć"}. ${uploadResult.failed} nie powiodło się.`
                           : `Nie udało się przesłać żadnego ${config.type === "finals" ? "zdjęcia finalnego" : "zdjęcia"}.`
-                        : `${uploadResult.successful} ${uploadResult.successful === 1 ? (config.type === "finals" ? "zdjęcie finalne" : "zdjęcie") : (config.type === "finals" ? "zdjęć finalnych" : "zdjęć")} zostało przesłanych`}
+                        : `${uploadResult.successful} ${uploadResult.successful === 1 ? (config.type === "finals" ? "zdjęcie finalne" : "zdjęcie") : config.type === "finals" ? "zdjęć finalnych" : "zdjęć"} zostało przesłanych`}
                     </p>
                   </div>
                 ) : null}

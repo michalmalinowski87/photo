@@ -17,7 +17,7 @@ const getStorageKey = (galleryId: string, type: "originals" | "finals"): string 
 
 const getAllUploadStates = (): Array<{ key: string; state: UploadState }> => {
   if (typeof window === "undefined") return [];
-  
+
   const states: Array<{ key: string; state: UploadState }> = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -48,29 +48,29 @@ export function useUploadRecovery() {
 
   const checkForRecovery = useCallback(() => {
     if (typeof window === "undefined") return;
-    
+
     const states = getAllUploadStates();
     if (states.length > 0) {
       // Use the most recent state (highest uploadStartedAt)
       const mostRecent = states.reduce((prev, current) => {
         return current.state.uploadStartedAt > prev.state.uploadStartedAt ? current : prev;
       });
-      
+
       // Only show recovery modal if we're NOT already on the target URL
       // If we're on the target URL, the page-level logic will handle opening the upload modal
       const currentUrl = window.location.href;
       const targetUrl = mostRecent.state.url;
-      
+
       // Check if we're already on the target page (ignore query params and hash)
       const currentPath = new URL(currentUrl).pathname;
       const targetPath = new URL(targetUrl).pathname;
-      
+
       if (currentPath === targetPath) {
         // We're already on the target page, don't show global recovery modal
         // The page will handle opening the upload modal
         return;
       }
-      
+
       setRecoveryState(mostRecent.state);
       setShowModal(true);
     }
@@ -83,7 +83,7 @@ export function useUploadRecovery() {
 
   const handleResume = useCallback(() => {
     if (!recoveryState) return;
-    
+
     setShowModal(false);
     // Redirect to the stored URL
     router.push(recoveryState.url).then(() => {
@@ -94,10 +94,10 @@ export function useUploadRecovery() {
 
   const handleClear = useCallback(() => {
     if (!recoveryState) return;
-    
+
     // Clear localStorage state
     clearUploadState(recoveryState.galleryId, recoveryState.type);
-    
+
     // Clear Golden Retriever's IndexedDB storage for this gallery/type
     // We need to access the IndexedDB directly since we don't have Uppy instance here
     if (typeof window !== "undefined" && "indexedDB" in window) {
@@ -110,7 +110,7 @@ export function useUploadRecovery() {
         // Failed to clear Golden Retriever IndexedDB
       };
     }
-    
+
     setShowModal(false);
     setRecoveryState(null);
   }, [recoveryState]);
@@ -123,4 +123,3 @@ export function useUploadRecovery() {
     checkForRecovery,
   };
 }
-

@@ -15,23 +15,25 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
   const isOnOrderPage = router.pathname?.includes("/orders/");
   const { orderId } = router.query;
   const orderIdFromUrl: string | undefined = Array.isArray(orderId) ? orderId[0] : orderId;
-  
+
   // Subscribe to gallery orders from store - use both cache and state
   const galleryOrdersCacheEntry = useGalleryStore((state) =>
     galleryId ? state.galleryOrdersCache[galleryId] : null
   );
   const galleryOrdersState = useGalleryStore((state) => state.galleryOrders);
-  
+
   // Get orders from cache or state
   const galleryOrders = galleryOrdersCacheEntry
     ? (galleryOrdersCacheEntry.orders as Array<{ orderId?: string }>)
     : galleryOrdersState && Array.isArray(galleryOrdersState) && galleryOrdersState.length > 0
       ? (galleryOrdersState as Array<{ orderId?: string }>)
       : [];
-  
+
   // Get first order ID - use URL orderId if available, otherwise use first order from store
   // This is computed directly from reactive store subscriptions, no need for state
-  const firstOrderId = orderIdFromUrl || (galleryOrders && galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
+  const firstOrderId =
+    orderIdFromUrl ||
+    (galleryOrders && galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
 
   // Fetch orders if not available
   useEffect(() => {
@@ -91,4 +93,3 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
     </>
   );
 };
-

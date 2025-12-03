@@ -41,7 +41,7 @@ export function OrderHeader() {
         )}
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">
           {isNonSelectionGallery
-            ? gallery?.galleryName ?? "Galeria"
+            ? (gallery?.galleryName ?? "Galeria")
             : `Zlecenie #${displayOrderNumber}`}
         </h1>
       </div>

@@ -507,7 +507,7 @@ class ApiService {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      const queryParams = sizes ? `?sizes=${encodeURIComponent(sizes)}` : '';
+      const queryParams = sizes ? `?sizes=${encodeURIComponent(sizes)}` : "";
       return await this._request(`/galleries/${galleryId}/images${queryParams}`);
     },
 
@@ -1311,12 +1311,17 @@ class ApiService {
      */
     getPresignedUrlsBatch: async (data: {
       galleryId: string;
-      files: Array<{ key: string; contentType?: string; fileSize?: number; includeThumbnails?: boolean }>;
+      files: Array<{
+        key: string;
+        contentType?: string;
+        fileSize?: number;
+        includeThumbnails?: boolean;
+      }>;
     }): Promise<{
-      urls: Array<{ 
-        key: string; 
-        url: string; 
-        objectKey: string; 
+      urls: Array<{
+        key: string;
+        url: string;
+        objectKey: string;
         expiresInSeconds: number;
         previewUrl?: string;
         previewKey?: string;
@@ -1381,13 +1386,18 @@ class ApiService {
       galleryId: string,
       orderId: string,
       data: {
-        files: Array<{ key: string; contentType?: string; fileSize?: number; includeThumbnails?: boolean }>;
+        files: Array<{
+          key: string;
+          contentType?: string;
+          fileSize?: number;
+          includeThumbnails?: boolean;
+        }>;
       }
     ): Promise<{
-      urls: Array<{ 
-        key: string; 
-        url: string; 
-        objectKey: string; 
+      urls: Array<{
+        key: string;
+        url: string;
+        objectKey: string;
         expiresInSeconds: number;
         previewUrl?: string;
         previewKey?: string;
