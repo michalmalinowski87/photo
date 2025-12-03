@@ -20,8 +20,8 @@ import { useOrderStatusRefresh } from "../../../../hooks/useOrderStatusRefresh";
 import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
-import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import { removeFileExtension } from "../../../../lib/filename-utils";
+import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
@@ -323,7 +323,7 @@ export default function OrderDetail() {
 
   // Check for recovery state and auto-open modal
   useEffect(() => {
-    if (!galleryId || !orderId || typeof window === "undefined") return;
+    if (!galleryId || !orderId || typeof window === "undefined") {return;}
     
     const storageKey = `uppy_upload_state_${galleryId}_finals`;
     const stored = localStorage.getItem(storageKey);
@@ -366,7 +366,7 @@ export default function OrderDetail() {
 
   // Reload final images after upload (simple refetch, no polling)
   const reloadFinalImagesAfterUpload = useCallback(async () => {
-    if (!galleryId || !orderId) return;
+    if (!galleryId || !orderId) {return;}
     
     try {
       const finalResponse = await api.orders.getFinalImages(

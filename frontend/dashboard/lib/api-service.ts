@@ -1320,6 +1320,8 @@ class ApiService {
         expiresInSeconds: number;
         previewUrl?: string;
         previewKey?: string;
+        bigThumbUrl?: string;
+        bigThumbKey?: string;
         thumbnailUrl?: string;
         thumbnailKey?: string;
       }>;
@@ -1389,6 +1391,8 @@ class ApiService {
         expiresInSeconds: number;
         previewUrl?: string;
         previewKey?: string;
+        bigThumbUrl?: string;
+        bigThumbKey?: string;
         thumbnailUrl?: string;
         thumbnailKey?: string;
       }>;

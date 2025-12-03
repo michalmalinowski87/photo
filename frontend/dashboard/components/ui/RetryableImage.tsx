@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+
 import { ImageFallbackUrls, ImageSize, getNextFallbackUrl, createImageErrorHandler } from "../../lib/image-fallback";
 
 interface RetryableImageProps {
@@ -87,9 +88,9 @@ export const RetryableImage: React.FC<RetryableImageProps> = ({
     // Determine which size failed based on URL
     const getSizeFromUrl = (url: string): 'thumb' | 'preview' | 'bigthumb' | null => {
       const normalized = url.split('?')[0]; // Remove query params
-      if (normalized.includes('/thumbs/')) return 'thumb';
-      if (normalized.includes('/previews/')) return 'preview';
-      if (normalized.includes('/bigthumbs/')) return 'bigthumb';
+      if (normalized.includes('/thumbs/')) {return 'thumb';}
+      if (normalized.includes('/previews/')) {return 'preview';}
+      if (normalized.includes('/bigthumbs/')) {return 'bigthumb';}
       return null;
     };
     

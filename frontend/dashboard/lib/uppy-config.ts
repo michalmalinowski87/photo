@@ -92,6 +92,7 @@ function processBatch(queue: BatchQueue): void {
                 s3KeyShort: urlData.key,
                 presignedData: {
                   previewUrl: urlData.previewUrl,
+                  bigThumbUrl: urlData.bigThumbUrl,
                   thumbnailUrl: urlData.thumbnailUrl,
                 },
               },
@@ -138,6 +139,7 @@ function processBatch(queue: BatchQueue): void {
                 s3KeyShort: urlData.key,
                 presignedData: {
                   previewUrl: urlData.previewUrl,
+                  bigThumbUrl: urlData.bigThumbUrl,
                   thumbnailUrl: urlData.thumbnailUrl,
                 },
               },

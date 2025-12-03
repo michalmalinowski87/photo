@@ -6,7 +6,6 @@ import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { removeFileExtension } from "../../../lib/filename-utils";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGallery } from "../../../hooks/useGallery";
@@ -14,6 +13,7 @@ import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
+import { removeFileExtension } from "../../../lib/filename-utils";
 import { useGalleryStore } from "../../../store/gallerySlice";
 
 interface GalleryImage {

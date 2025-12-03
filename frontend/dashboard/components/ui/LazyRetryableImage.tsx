@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+
 import { ImageFallbackUrls, ImageSize, getInitialImageUrl, getNextFallbackUrl, isFinalUrl } from "../../lib/image-fallback";
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
 
@@ -78,7 +79,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
 
   // Intersection Observer for lazy loading
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {return;}
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -110,9 +111,9 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     // Determine which size failed based on URL
     const getSizeFromUrl = (url: string): 'thumb' | 'preview' | 'bigthumb' | null => {
       const normalized = url.split('?')[0]; // Remove query params
-      if (normalized.includes('/thumbs/')) return 'thumb';
-      if (normalized.includes('/previews/')) return 'preview';
-      if (normalized.includes('/bigthumbs/')) return 'bigthumb';
+      if (normalized.includes('/thumbs/')) {return 'thumb';}
+      if (normalized.includes('/previews/')) {return 'preview';}
+      if (normalized.includes('/bigthumbs/')) {return 'bigthumb';}
       return null;
     };
     
