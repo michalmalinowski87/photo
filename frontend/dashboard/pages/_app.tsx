@@ -50,13 +50,9 @@ export default function App({ Component, pageProps }: AppProps) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
         .then((registration) => {
-          // eslint-disable-next-line no-console
-          console.log("Service Worker registered:", registration);
           setSwRegistered(true);
         })
         .catch((error) => {
-          // eslint-disable-next-line no-console
-          console.error("Service Worker registration failed:", error);
           // Continue without Service Worker (fallback to IndexedDB only)
         });
     }

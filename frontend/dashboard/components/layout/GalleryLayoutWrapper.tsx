@@ -303,42 +303,16 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     // Reset sync recalculation trigger when gallery changes
     if (galleryId) {
       syncRecalcTriggeredRef.current = false;
-      // eslint-disable-next-line no-console
-      console.log("[GalleryLayoutWrapper] Sync detection: Reset trigger for gallery", galleryId);
     }
   }, [galleryId]);
 
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("[GalleryLayoutWrapper] Sync detection: Effect running", {
-      galleryId,
-      galleryLoading: loading,
-      hasGallery: !!gallery,
-      alreadyTriggered: syncRecalcTriggeredRef.current,
-    });
-
     if (
       !galleryId ||
       loading ||
       !gallery ||
       syncRecalcTriggeredRef.current
     ) {
-      // eslint-disable-next-line no-console
-      console.log("[GalleryLayoutWrapper] Sync detection: Skipping check - conditions not met", {
-        reason: !galleryId
-          ? "no galleryId"
-          : loading
-            ? "loading"
-            : !gallery
-              ? "no gallery"
-              : syncRecalcTriggeredRef.current
-                ? "already triggered"
-                : "unknown",
-        galleryId,
-        loading,
-        hasGallery: !!gallery,
-        alreadyTriggered: syncRecalcTriggeredRef.current,
-      });
       return;
     }
 
@@ -346,18 +320,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     const finalsBytesUsed = gallery?.finalsBytesUsed ?? 0;
     const totalBytesUsed = originalsBytesUsed + finalsBytesUsed;
 
-    // eslint-disable-next-line no-console
-    console.log("[GalleryLayoutWrapper] Sync detection: Checking gallery data", {
-      galleryId,
-      originalsBytesUsed,
-      finalsBytesUsed,
-      totalBytesUsed,
-    });
-
     // Only check if bytes used > 0 (otherwise no sync issue possible)
     if (totalBytesUsed === 0) {
-      // eslint-disable-next-line no-console
-      console.log("[GalleryLayoutWrapper] Sync detection: No bytes used - no sync issue possible");
       return;
     }
 
@@ -366,78 +330,32 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     const cachedImages = getGalleryImages(galleryId as string, 60000); // 60s cache
     const hasCachedImages = cachedImages && cachedImages.length > 0;
 
-    // eslint-disable-next-line no-console
-    console.log("[GalleryLayoutWrapper] Sync detection: Checking images", {
-      galleryId,
-      cachedImagesCount: cachedImages?.length ?? 0,
-      hasCachedImages,
-    });
-
     if (hasCachedImages) {
       // Images exist in cache - no sync issue
-      // eslint-disable-next-line no-console
-      console.log("[GalleryLayoutWrapper] Sync detection: Images exist in cache - no sync issue");
       return;
     }
 
     // No cached images - fetch fresh to check if images actually exist
-    // eslint-disable-next-line no-console
-    console.log("[GalleryLayoutWrapper] Sync detection: No cached images, fetching to verify...");
-    
     void fetchGalleryImages(galleryId as string, false).then((images) => {
       const hasImages = images && images.length > 0;
-
-      // eslint-disable-next-line no-console
-      console.log("[GalleryLayoutWrapper] Sync detection: Images fetch result", {
-        galleryId,
-        imagesCount: images?.length ?? 0,
-        hasImages,
-        totalBytesUsed,
-      });
 
       // Trigger recalculation if: bytes used > 0 but no images exist
       if (!hasImages && totalBytesUsed > 0 && !syncRecalcTriggeredRef.current) {
         syncRecalcTriggeredRef.current = true;
 
-        // eslint-disable-next-line no-console
-        console.log(
-          "[GalleryLayoutWrapper] ✅ AUTO-DETECTED SYNC ISSUE: Empty images but bytes used > 0, triggering forced recalculation",
-          {
-            galleryId,
-            imagesCount: images?.length ?? 0,
-            originalsBytesUsed,
-            finalsBytesUsed,
-            totalBytesUsed,
-          }
-        );
-
         // Automatically trigger forced recalculation to sync state
         const { refreshGalleryBytesOnly } = useGalleryStore.getState();
         void refreshGalleryBytesOnly(galleryId as string, true)
           .then(() => {
-            // eslint-disable-next-line no-console
-            console.log("[GalleryLayoutWrapper] ✅ Sync recalculation completed successfully", {
-              galleryId,
-            });
+            // Sync recalculation completed
           })
           .catch((err) => {
             // Reset trigger on error so we can retry
             syncRecalcTriggeredRef.current = false;
-            // eslint-disable-next-line no-console
-            console.error("[GalleryLayoutWrapper] ❌ Failed to trigger sync recalculation:", err);
           });
-      } else {
-        // eslint-disable-next-line no-console
-        console.log("[GalleryLayoutWrapper] Sync detection: No mismatch detected", {
-          galleryId,
-          reason: hasImages ? "images exist" : totalBytesUsed === 0 ? "no bytes used" : "already triggered",
-          imagesCount: images?.length ?? 0,
-          totalBytesUsed,
-        });
       }
     }).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error("[GalleryLayoutWrapper] Sync detection: Failed to fetch images for check:", err);
+      // Failed to fetch images for check - silently continue
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, gallery, loading]); // Run when gallery data changes

@@ -104,12 +104,10 @@ export function useUploadRecovery() {
       const dbName = `uppy-golden-retriever-${recoveryState.galleryId}-${recoveryState.type}`;
       const deleteRequest = indexedDB.deleteDatabase(dbName);
       deleteRequest.onsuccess = () => {
-        // eslint-disable-next-line no-console
-        console.log("Golden Retriever IndexedDB cleared");
+        // Golden Retriever IndexedDB cleared
       };
       deleteRequest.onerror = () => {
-        // eslint-disable-next-line no-console
-        console.error("Failed to clear Golden Retriever IndexedDB");
+        // Failed to clear Golden Retriever IndexedDB
       };
     }
     

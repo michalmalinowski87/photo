@@ -576,13 +576,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
 
                               <button
                                 onClick={() => {
-                                  // eslint-disable-next-line no-console
-                                  console.log("[UppyUploadModal] Individual file pause/resume clicked", {
-                                    fileId: file.id,
-                                    fileName: file.name,
-                                    currentState: file.isPaused ? "paused" : "uploading",
-                                    willChangeTo: file.isPaused ? "uploading" : "paused",
-                                  });
                                   pauseResumeFile(file.id);
                                 }}
                                 className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
@@ -706,12 +699,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
-                        // eslint-disable-next-line no-console
-                        console.log("[UppyUploadModal] Global pause/resume clicked", {
-                          currentState: isPaused ? "paused" : "uploading",
-                          willChangeTo: isPaused ? "uploading" : "paused",
-                          action: isPaused ? "resume" : "pause",
-                        });
                         if (isPaused) {
                           resumeUpload();
                         } else {

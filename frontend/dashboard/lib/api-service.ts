@@ -218,10 +218,6 @@ class ApiService {
           // Handle 503 Service Unavailable - retry with exponential backoff
           if (response.status === 503 && attempt < MAX_RETRIES) {
             const delay = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
-            console.warn(
-              `[ApiService] 503 Service Unavailable, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`,
-              { endpoint, url }
-            );
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue; // Retry the request
           }
@@ -299,10 +295,6 @@ class ApiService {
           if (apiError.status === 503 && attempt < MAX_RETRIES) {
             // This should have been caught above, but handle it here as fallback
             const delay = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
-            console.warn(
-              `[ApiService] 503 error in catch, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`,
-              { endpoint, url }
-            );
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }

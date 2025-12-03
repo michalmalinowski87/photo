@@ -23,7 +23,6 @@ interface PendingFileRequest {
   contentType: string;
   resolve: (value: any) => void;
   reject: (error: Error) => void;
-  timestamp: number;
 }
 
 interface BatchQueue {
@@ -114,20 +113,14 @@ function processBatch(queue: BatchQueue): void {
   if (originalsFiles.length > 0) {
     void (async () => {
       try {
-        const timestamp = Date.now();
         const response = await api.uploads.getPresignedUrlsBatch({
           galleryId: queue.galleryId,
-          files: originalsFiles.map((req, index) => {
-            const sanitizedFilename = req.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-            // Use timestamp + index to ensure uniqueness
-            const uniqueKey = `originals/${timestamp}_${index}_${sanitizedFilename}`;
-            return {
-              key: uniqueKey,
-              contentType: req.contentType,
-              fileSize: req.fileSize,
-              includeThumbnails: true,
-            };
-          }),
+          files: originalsFiles.map((req) => ({
+            key: `originals/${req.fileName}`,
+            contentType: req.contentType,
+            fileSize: req.fileSize,
+            includeThumbnails: true,
+          })),
         });
 
         // Map responses back to files
@@ -195,7 +188,6 @@ function queueFileRequest(
       contentType,
       resolve,
       reject,
-      timestamp: Date.now(),
     });
 
     // If batch is full, process immediately
@@ -251,16 +243,14 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     },
   });
 
-  // Listen for file removal events to debug
-  uppy.on("file-removed", (file: UppyFile, reason?: string) => {
-    // eslint-disable-next-line no-console
-    console.warn("[Uppy] File removed:", file.id, file.name, "Reason:", reason);
+  // Listen for file removal events
+  uppy.on("file-removed", (_file: UppyFile, _reason?: string) => {
+    // File removed event handler
   });
   
   // Listen for restriction failures
-  uppy.on("restriction-failed", (file: UppyFile, error: Error) => {
-    // eslint-disable-next-line no-console
-    console.error("[Uppy] File restriction failed:", file.id, file.name, error.message);
+  uppy.on("restriction-failed", (_file: UppyFile, _error: Error) => {
+    // Restriction failed event handler
   });
 
   // Add Thumbnail Generator for client-side previews
@@ -380,7 +370,6 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
             });
           },
           reject,
-          timestamp: Date.now(),
         };
 
         multipartQueue.pending.set(file.id, fileRequest);
@@ -398,15 +387,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
 
           void (async () => {
             try {
-              const timestamp = Date.now();
-              const files = pendingArray.map((req, index) => {
-                let key: string;
-                if (type === "finals") {
-                  key = req.fileName;
-                } else {
-                  const sanitizedFilename = req.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-                  key = `originals/${timestamp}_${index}_${sanitizedFilename}`;
-                }
+              const files = pendingArray.map((req) => {
+                const key = type === "finals" ? req.fileName : `originals/${req.fileName}`;
                 return {
                   key,
                   contentType: req.contentType,
@@ -492,19 +474,10 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         }
       }
       
-      // All retries failed - log warning and return empty array
+      // All retries failed - return empty array
       // This allows upload to continue from scratch rather than blocking resume
       // Note: This means Uppy will re-upload parts that were already uploaded,
       // but this is better than blocking the entire upload
-      // eslint-disable-next-line no-console
-      console.warn("[Uppy] Failed to list multipart parts after retries, resuming from scratch", {
-        fileName: file.name,
-        uploadId,
-        key,
-        error: lastError?.message,
-        attempts: maxRetries + 1,
-        note: "Upload will continue but may re-upload already uploaded parts",
-      });
       
       // Return empty array - Uppy will treat this as a fresh upload
       // This ensures resume can proceed even when listParts fails
@@ -583,7 +556,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     // Use Uppy's upload-progress event - fires for each file during upload
     // Calculate aggregate progress from all files (Uppy provides per-file progress)
     uppy.on("upload-progress", (file, progress) => {
-      if (!file || !progress) return;
+      if (!file || !progress) {return;}
       
       // Get all files from Uppy - this is the source of truth
       const allFiles = Object.values(uppy.getFiles());

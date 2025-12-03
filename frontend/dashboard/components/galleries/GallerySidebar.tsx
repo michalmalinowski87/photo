@@ -53,14 +53,8 @@ export default function GallerySidebar() {
   // Gallery now includes cache, so use it directly
   const effectiveGallery = gallery;
   
-  // Only log when state actually changes to reduce spam
   const prevStateRef = React.useRef({ hasGallery: !!gallery });
   if (prevStateRef.current.hasGallery !== !!gallery) {
-    console.log("[GallerySidebar] Gallery check:", {
-      hasGallery: !!gallery,
-      hasEffectiveGallery: !!effectiveGallery,
-      galleryId: galleryIdStr,
-    });
     prevStateRef.current = { hasGallery: !!gallery };
   }
 

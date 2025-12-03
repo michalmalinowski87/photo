@@ -372,7 +372,6 @@ export function refreshIdToken(): Promise<string> {
                 }
               } catch (_e) {
                 // Failed to update sessionStorage, but tokens are in localStorage
-                console.warn("Failed to update sessionStorage after token refresh:", _e);
               }
             }
 

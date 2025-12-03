@@ -76,12 +76,7 @@ export class ThumbnailUploadPlugin extends BasePlugin {
         
         // Also cache the blob so we don't need to convert again
         file.meta.thumbnailBlob = blob;
-        
-        // eslint-disable-next-line no-console
-        console.log("[ThumbnailUpload] Converted blob URL to data URL for:", file.name);
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn("[ThumbnailUpload] Failed to convert blob URL, will use original:", error);
         file.meta.thumbnailPreview = preview;
       }
     } else {
@@ -103,8 +98,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
     } | undefined;
 
     if (!presignedData?.previewUrl || !presignedData?.thumbnailUrl) {
-      // eslint-disable-next-line no-console
-      console.warn("[ThumbnailUpload] No presigned URLs found in file metadata");
       return;
     }
 
@@ -116,8 +109,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
       const thumbnailBlob = await this.getThumbnailBlob(file);
 
       if (!preview || !thumbnailBlob) {
-        // eslint-disable-next-line no-console
-        console.warn("[ThumbnailUpload] Failed to generate preview/thumbnail for file:", file.name);
         return;
       }
 
@@ -126,12 +117,7 @@ export class ThumbnailUploadPlugin extends BasePlugin {
         this.uploadToS3(presignedData.previewUrl, preview, "image/webp"),
         this.uploadToS3(presignedData.thumbnailUrl, thumbnailBlob, "image/webp"),
       ]);
-
-      // eslint-disable-next-line no-console
-      console.log("[ThumbnailUpload] Successfully uploaded thumbnails for:", file.name);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[ThumbnailUpload] Failed to upload thumbnails:", error);
       // Don't fail the upload if thumbnail upload fails
     }
   }
@@ -170,8 +156,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
       const thumbnailPreview = file.preview || file.meta?.thumbnailPreview;
       
       if (!thumbnailPreview) {
-        // eslint-disable-next-line no-console
-        console.warn("[ThumbnailUpload] No thumbnail preview found for file:", file.name);
         return null;
       }
 
@@ -185,8 +169,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
         blob = this.dataURLtoBlob(thumbnailPreview);
       } else if (thumbnailPreview.startsWith("blob:")) {
         // This shouldn't happen if handleThumbnailGenerated() ran correctly
-        // eslint-disable-next-line no-console
-        console.warn("[ThumbnailUpload] Unexpected blob URL, converting to data URL:", file.name);
         const response = await fetch(thumbnailPreview);
         blob = await response.blob();
         // Convert to data URL for future use
@@ -202,8 +184,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
       // Since we configured thumbnailType: 'image/webp', it should already be WebP
       // But verify and convert if needed
       if (blob.type !== "image/webp") {
-        // eslint-disable-next-line no-console
-        console.warn("[ThumbnailUpload] Thumbnail is not WebP, converting:", blob.type);
         blob = await this.convertToWebP(blob, 200, 0.8);
       }
       
@@ -215,8 +195,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
       
       return blob;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[ThumbnailUpload] Failed to get thumbnail blob:", error);
       return null;
     }
   }
@@ -271,8 +249,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
 
       return compressedFile;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[ThumbnailUpload] Failed to generate preview:", error);
       return null;
     }
   }
@@ -300,8 +276,6 @@ export class ThumbnailUploadPlugin extends BasePlugin {
       
       return compressedFile;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn("[ThumbnailUpload] Failed to convert to WebP, returning original:", error);
       return blob; // Fallback to original
     }
   }

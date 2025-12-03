@@ -393,7 +393,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       
       try {
         // Extract filenames from s3KeyShort for all files
-        // Format: originals/{timestamp}_{index}_{filename} or final/{orderId}/{filename}
+        // Format: originals/{filename} or final/{orderId}/{filename}
         const filenames = filesWithS3Key
           .map((file: UppyFile) => {
             const s3KeyShort = file.meta?.s3KeyShort as string;
@@ -462,43 +462,12 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     }
     
     // Get all files and check their state before resuming
-    const files = Object.values(uppyRef.current.getFiles());
-    const pausedFiles = files.filter(
-      (f: UppyFile) => 
-        f.progress?.uploadStarted && 
-        !f.progress.uploadComplete && 
-        f.isPaused === true
-    );
-    
-    // eslint-disable-next-line no-console
-    console.log("[useUppyUpload] resumeUpload", {
-      totalFiles: files.length,
-      pausedFiles: pausedFiles.length,
-      pausedFileIds: pausedFiles.map((f: UppyFile) => f.id),
-      allFilesState: files.map((f: UppyFile) => ({
-        id: f.id,
-        name: f.name,
-        uploadStarted: f.progress?.uploadStarted,
-        uploadComplete: f.progress?.uploadComplete,
-        isPaused: f.isPaused,
-      })),
-    });
-    
     // Always call resumeAll() - it's safe even if nothing is paused
     // Uppy will only resume files that are actually paused
-    // eslint-disable-next-line no-console
-    console.log("[useUppyUpload] Calling resumeAll()", {
-      pausedFilesCount: pausedFiles.length,
-      uppyInstance: !!uppyRef.current,
-    });
-    
     try {
       uppyRef.current.resumeAll();
-      // eslint-disable-next-line no-console
-      console.log("[useUppyUpload] resumeAll() called successfully");
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("[useUppyUpload] Error calling resumeAll()", error);
+      // Error calling resumeAll - silently continue
     }
     
     // Also manually trigger a pause state update to catch immediate changes
@@ -524,14 +493,6 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       return;
     }
     const file = uppyRef.current.getFile(fileId);
-    const wasPaused = file?.isPaused ?? false;
-    // eslint-disable-next-line no-console
-    console.log("[useUppyUpload] pauseResumeFile", {
-      fileId,
-      fileName: file?.name,
-      wasPaused,
-      willBePaused: !wasPaused,
-    });
     uppyRef.current.pauseResume(fileId);
   }, []);
 

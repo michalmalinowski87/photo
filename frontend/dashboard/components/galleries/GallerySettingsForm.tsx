@@ -154,12 +154,6 @@ export function GallerySettingsForm({
 
   // Gallery data comes from GalleryContext - initialize form when gallery loads
   useEffect(() => {
-    console.log("[GallerySettingsForm] Gallery changed, updating form:", {
-      hasGallery: !!gallery,
-      galleryId: gallery?.galleryId,
-      galleryName: gallery?.galleryName,
-    });
-    
     if (gallery) {
       setSettingsForm({
         galleryName: gallery.galleryName ?? "",
@@ -172,7 +166,6 @@ export function GallerySettingsForm({
       });
       setExtraPriceInput(null);
       setPackagePriceInput(null);
-      console.log("[GallerySettingsForm] Form initialized with gallery data");
     }
   }, [gallery]);
 
