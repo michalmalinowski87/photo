@@ -1,5 +1,6 @@
 import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
+import "@uppy/core/css/style.min.css";
 import { useEffect, useRef, useState } from "react";
 
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
@@ -74,7 +75,16 @@ function getFileStatus(file: UppyFile): "completed" | "uploading" | "paused" | "
     return "completed";
   }
   if (file.progress?.uploadStarted) {
-    return file.isPaused ? "paused" : "uploading";
+    const isPaused = file.isPaused ?? false;
+    const status = isPaused ? "paused" : "uploading";
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[getFileStatus] File: ${file.name}`, {
+        uploadStarted: file.progress?.uploadStarted,
+        isPaused,
+        status,
+      });
+    }
+    return status;
   }
   if (file.error) {
     return "error";
@@ -111,6 +121,78 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
     });
   }
 }
+
+
+// ============================================================================
+// Debug Component
+// ============================================================================
+
+const FilesGridDebugger: React.FC<{ uppy: Uppy }> = ({ uppy }) => {
+  useEffect(() => {
+    const logFilesState = () => {
+      const files = Object.values(uppy.getFiles());
+      console.log("=== Uppy Files State ===");
+      files.forEach((file) => {
+        console.log(`File: ${file.name}`, {
+          id: file.id,
+          progress: file.progress,
+          isPaused: file.isPaused,
+          state: file.progress?.uploadStarted ? "uploading" : file.progress?.uploadComplete ? "complete" : "pending",
+          percentage: file.progress?.percentage,
+          bytesUploaded: file.progress?.bytesUploaded,
+          bytesTotal: file.progress?.bytesTotal,
+        });
+      });
+    };
+
+    // Log on mount
+    logFilesState();
+
+    // Log on events with more detail
+    const eventHandlers: Array<[string, (data: any) => void]> = [
+      ["upload-start", (data) => {
+        console.log("🚀 Event: upload-start", data);
+        setTimeout(logFilesState, 100);
+      }],
+      ["upload-progress", (file, progress) => {
+        console.log(`📊 Event: upload-progress - ${file?.name}`, {
+          file: file?.name,
+          progress,
+          percentage: file?.progress?.percentage,
+        });
+        setTimeout(logFilesState, 100);
+      }],
+      ["upload", (data) => {
+        console.log("⬆️ Event: upload", data);
+        setTimeout(logFilesState, 100);
+      }],
+      ["upload-success", (file, response) => {
+        console.log("✅ Event: upload-success", file?.name, response);
+        setTimeout(logFilesState, 100);
+      }],
+      ["file-added", (file) => {
+        console.log("➕ Event: file-added", file?.name);
+        setTimeout(logFilesState, 100);
+      }],
+      ["file-removed", (file) => {
+        console.log("➖ Event: file-removed", file?.name);
+        setTimeout(logFilesState, 100);
+      }],
+    ];
+
+    eventHandlers.forEach(([event, handler]) => {
+      uppy.on(event as any, handler);
+    });
+
+    return () => {
+      eventHandlers.forEach(([event, handler]) => {
+        uppy.off(event as any, handler);
+      });
+    };
+  }, [uppy]);
+
+  return null;
+};
 
 // ============================================================================
 // Component
@@ -179,8 +261,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
 
     // Sync our files state with Uppy's current state
     // Trust Uppy - it manages all file state, we just display it
-    // Only sync if files actually changed to prevent unnecessary re-renders
-    const syncFiles = () => {
+    const syncFiles = (forceUpdate = false) => {
       // Use ref to check if modal is still open (avoids stale closure)
       if (!isMountedRef.current || !uppy || !isOpenRef.current) {
         return;
@@ -190,13 +271,25 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       const currentFileIds = uppyFiles.map((f: UppyFile) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
       
-      // Only sync if files actually changed (compare IDs)
+      // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
       const filesChanged =
         currentFileIds.length !== lastFileIds.length ||
         !currentFileIds.every((id, idx) => id === lastFileIds[idx]);
       
-      if (!filesChanged) {
+      if (!filesChanged && !forceUpdate) {
         return; // No change, skip sync
+      }
+      
+      if (process.env.NODE_ENV === "development" && forceUpdate) {
+        console.log("[syncFiles] Force updating files state", {
+          fileCount: uppyFiles.length,
+          files: uppyFiles.map((f: UppyFile) => ({
+            name: f.name,
+            isPaused: f.isPaused,
+            uploadStarted: f.progress?.uploadStarted,
+            progress: f.progress?.percentage,
+          })),
+        });
       }
       
       lastSyncedFileIdsRef.current = currentFileIds;
@@ -212,8 +305,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       "file-added",
       "file-removed",
       "files-added",
-      "upload-progress",
-      "upload",
       "upload-success",
       "thumbnail:generated",
       "upload-error",
@@ -225,11 +316,31 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       uppy.on(event as any, syncFiles);
     });
 
+    // For upload-progress, always force update to show progress overlays
+    const handleUploadProgress = () => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[syncFiles] upload-progress event fired, forcing update");
+      }
+      syncFiles(true);
+    };
+    uppy.on("upload-progress", handleUploadProgress);
+    
+    // Listen to upload events to catch pause/resume state changes (force update)
+    const handleUpload = () => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[syncFiles] upload event fired, forcing update");
+      }
+      syncFiles(true);
+    };
+    uppy.on("upload", handleUpload);
+
     return () => {
       isMountedRef.current = false;
       eventHandlers.forEach((event) => {
         uppy.off(event as any, syncFiles);
       });
+      uppy.off("upload-progress", handleUploadProgress);
+      uppy.off("upload", handleUpload);
       // Clear files and reset tracking when effect cleans up (modal closed)
       setFiles([]);
       lastSyncedFileIdsRef.current = [];
@@ -357,7 +468,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
     if (file.preview) {
       return file.preview;
     }
-    
+
     // Fallback: create blob URL from File object
     // Cache the blob URL to avoid recreating it on every render
     if (file.data && file.data instanceof File) {
@@ -365,40 +476,14 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
       if (cachedUrl) {
         return cachedUrl;
       }
-      
+
       const blobUrl = URL.createObjectURL(file.data);
       blobUrlCacheRef.current.set(file.id, blobUrl);
       return blobUrl;
     }
-    
+
     return undefined;
   };
-
-  // Clean up blob URLs when files are removed to prevent memory leaks
-  useEffect(() => {
-    if (!uppy) {return;}
-    
-    const cleanup = () => {
-      const currentFiles = Object.values(uppy.getFiles());
-      const currentFileIds = new Set(currentFiles.map((f: UppyFile) => f.id));
-      
-      // Remove blob URLs for files that no longer exist
-      blobUrlCacheRef.current.forEach((url, fileId) => {
-        if (!currentFileIds.has(fileId)) {
-          URL.revokeObjectURL(url);
-          blobUrlCacheRef.current.delete(fileId);
-        }
-      });
-    };
-    
-    uppy.on("file-removed", cleanup);
-    return () => {
-      uppy.off("file-removed", cleanup);
-      // Cleanup all blob URLs when component unmounts
-      blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
-      blobUrlCacheRef.current.clear();
-    };
-  }, [uppy]);
 
 
   if (!isOpen) {
@@ -533,161 +618,169 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
               </div>
 
               {files.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {files.map((file) => {
-                    const status = getFileStatus(file);
-                    const progress = getFileProgress(file);
-                    const thumbnail = getThumbnail(file);
-
-                    return (
-                      <div
-                        key={file.id}
-                        className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-                      >
-                        <div className="aspect-square relative">
-                          {thumbnail ? (
-                            <img
-                              src={thumbnail}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <svg
-                                className="w-12 h-12 text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                />
-                              </svg>
-                            </div>
-                          )}
-
-                          {(status === "uploading" || status === "paused") && (
-                            <div className="absolute inset-0 z-10">
-                              <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
-
+                <>
+                  {process.env.NODE_ENV === "development" && uppy && <FilesGridDebugger uppy={uppy} />}
+                  <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                    {files.map((file) => {
+                      // Get fresh file state from Uppy to ensure we have latest isPaused value
+                      const freshFile = uppy?.getFile(file.id) || file;
+                      const status = getFileStatus(freshFile);
+                      const progress = getFileProgress(freshFile);
+                      const thumbnail = getThumbnail(freshFile);
+                      
+                      // Debug logging
+                      if (process.env.NODE_ENV === "development") {
+                        console.log(`[Thumbnail] File: ${freshFile.name}`, {
+                          status,
+                          isPaused: freshFile.isPaused,
+                          uploadStarted: freshFile.progress?.uploadStarted,
+                          uploadComplete: freshFile.progress?.uploadComplete,
+                          progress: freshFile.progress?.percentage,
+                        });
+                      }
+                      
+                      return (
+                        <div
+                          key={freshFile.id}
+                          className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                        >
+                          <div className="aspect-square relative">
+                            {thumbnail ? (
+                              <img
+                                src={thumbnail}
+                                alt={freshFile.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                <svg
+                                  className="w-12 h-12 text-gray-400"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            {(status === "uploading" || status === "paused") && (
+                              <div className="absolute inset-0 z-10">
+                                <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
+                                <button
+                                  onClick={() => {
+                                    pauseResumeFile(freshFile.id);
+                                  }}
+                                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
+                                  type="button"
+                                  title={status === "paused" ? "Wznów" : "Wstrzymaj"}
+                                >
+                                  {status === "paused" ? (
+                                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <div className="absolute bottom-6 left-0 right-0 text-center z-10">
+                                  <p className="text-white text-xs font-bold drop-shadow-lg">
+                                    {Math.round(progress)}%
+                                  </p>
+                                </div>
+                                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60">
+                                  <div
+                                    className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm"
+                                    style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            )}
+                            {status === "completed" && (
+                              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            {status === "error" && (
+                              <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            {status !== "uploading" && !uploadComplete && (
                               <button
-                                onClick={() => {
-                                  pauseResumeFile(file.id);
-                                }}
-                                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
+                                onClick={() => handleRemoveFile(freshFile.id)}
+                                className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
                                 type="button"
-                                title={file.isPaused ? "Wznów" : "Wstrzymaj"}
+                                title="Usuń"
                               >
-                                {file.isPaused ? (
-                                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                                  </svg>
-                                )}
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2.5}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
                               </button>
-
-                              <div className="absolute bottom-6 left-0 right-0 text-center z-10">
-                                <p className="text-white text-xs font-bold drop-shadow-lg">
+                            )}
+                          </div>
+                          <div className="p-2">
+                            <p
+                              className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
+                              title={freshFile.name}
+                            >
+                              {freshFile.name}
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {formatFileSize(freshFile.size || 0)}
+                              </p>
+                              {status === "uploading" && (
+                                <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
                                   {Math.round(progress)}%
                                 </p>
-                              </div>
-
-                              <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60">
-                                <div
-                                  className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm"
-                                  style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-                                ></div>
-                              </div>
+                              )}
                             </div>
-                          )}
-
-                          {status === "completed" && (
-                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={3}
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            </div>
-                          )}
-
-                          {status === "error" && (
-                            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={3}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </div>
-                          )}
-
-                          {status !== "uploading" && !uploadComplete && (
-                            <button
-                              onClick={() => handleRemoveFile(file.id)}
-                              className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
-                              type="button"
-                              title="Usuń"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
+                            {status === "error" && freshFile.error && (
+                              <p
+                                className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
+                                title={freshFile.error.message}
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2.5}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="p-2">
-                          <p
-                            className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
-                            title={file.name}
-                          >
-                            {file.name}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatFileSize(file.size || 0)}
-                            </p>
-                            {status === "uploading" && (
-                              <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
-                                {Math.round(progress)}%
+                                {freshFile.error.message}
                               </p>
                             )}
                           </div>
-                          {status === "error" && file.error && (
-                            <p
-                              className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
-                              title={file.error.message}
-                            >
-                              {file.error.message}
-                            </p>
-                          )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           </div>

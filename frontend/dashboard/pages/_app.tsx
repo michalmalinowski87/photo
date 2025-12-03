@@ -13,9 +13,9 @@ import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
-import { clearEphemeralState } from "../store";
-import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
+import { useUploadRecovery } from "../hooks/useUploadRecovery";
+import { clearEphemeralState } from "../store";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];

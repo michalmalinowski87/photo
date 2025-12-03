@@ -256,8 +256,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   // Add Thumbnail Generator for client-side previews
   // Generate thumbnail (200px) for UI display
   uppy.use(ThumbnailGenerator, {
-    thumbnailWidth: 200, // Thumbnail width
-    thumbnailHeight: 200, // Thumbnail height
+    thumbnailWidth: 300, // Thumbnail width - 300px for professional quality display
+    thumbnailHeight: 300, // Thumbnail height - 300px for professional quality display
     thumbnailType: "image/webp", // Generate WebP thumbnails
     waitForThumbnailsBeforeUpload: false, // Don't wait, upload can proceed
   });
