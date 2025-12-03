@@ -254,11 +254,14 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   });
 
   // Add Thumbnail Generator for client-side previews
-  // Generate thumbnail (200px) for UI display
+  // Generate thumbnail (300px) for UI display
+  // Note: ThumbnailGenerator uses quality 80 (hardcoded) for WebP
+  // For lossless WebP, we would need quality 1.0, but ThumbnailGenerator doesn't expose this option
+  // Quality 80 WebP at 300x300 is still very good for thumbnails and saves bandwidth
   uppy.use(ThumbnailGenerator, {
     thumbnailWidth: 300, // Thumbnail width - 300px for professional quality display
     thumbnailHeight: 300, // Thumbnail height - 300px for professional quality display
-    thumbnailType: "image/webp", // Generate WebP thumbnails
+    thumbnailType: "image/webp", // Generate WebP thumbnails (quality 80, hardcoded in ThumbnailGenerator)
     waitForThumbnailsBeforeUpload: false, // Don't wait, upload can proceed
   });
 
