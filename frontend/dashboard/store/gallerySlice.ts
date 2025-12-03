@@ -5,13 +5,21 @@ import api from "../lib/api-service";
 
 /**
  * Helper function to add cache-busting query parameter to image URLs
- * Uses lastModified timestamp + fetch timestamp to ensure CloudFront serves fresh images
- * The fetch timestamp ensures we get fresh images even if S3 lastModified hasn't updated yet
+ * Uses S3 lastModified timestamp to avoid unnecessary cache busting
+ * 
+ * Strategy:
+ * - If lastModified is available: use only that (t={lastModified})
+ *   - Same file = same timestamp = can be cached
+ *   - Different file = different timestamp = fresh fetch
+ * - If lastModified is missing: use current timestamp as fallback
+ * - When a new photo is uploaded, S3's lastModified changes automatically
+ * 
+ * NOTE: This function is kept for backward compatibility but cache busting
+ * is now handled automatically in image-fallback.ts as part of the unified strategy
  */
 export function addCacheBustingToUrl(
   url: string | null | undefined, 
-  lastModified?: string | number,
-  fetchTimestamp?: number
+  lastModified?: string | number
 ): string | null {
   if (!url) {
     return null;
@@ -21,6 +29,7 @@ export function addCacheBustingToUrl(
   try {
     const urlObj = new URL(url);
     urlObj.searchParams.delete("t");
+    urlObj.searchParams.delete("f");
     urlObj.searchParams.delete("v");
     url = urlObj.toString();
   } catch {
@@ -30,28 +39,26 @@ export function addCacheBustingToUrl(
   // If URL already has query parameters, append; otherwise add
   const separator = url.includes("?") ? "&" : "?";
   
-  // Use lastModified timestamp if available, otherwise use current timestamp as fallback
+  // Use lastModified timestamp if available (from S3 LastModified)
+  // This ensures we don't cache-bust unnecessarily - same file = same timestamp
+  // When a new photo is uploaded, S3 lastModified changes automatically
   const lastModifiedTs = lastModified 
     ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
     : Date.now();
   
-  // Add fetch timestamp to ensure fresh images even if S3 metadata hasn't updated
-  // This is critical for replacements where S3 LastModified might lag
-  const fetchTs = fetchTimestamp || Date.now();
-  
-  // Combine both timestamps for maximum cache-busting reliability
-  // Format: t={lastModified}&f={fetchTimestamp}
-  return `${url}${separator}t=${lastModifiedTs}&f=${fetchTs}`;
+  // Format: t={lastModified}
+  return `${url}${separator}t=${lastModifiedTs}`;
 }
 
 /**
  * Helper function to apply cache-busting to all image URLs in an image object
  * Preserves the original type of the image
- * Uses fetch timestamp to ensure fresh images even if S3 lastModified hasn't updated
+ * 
+ * NOTE: This function is kept for backward compatibility but cache busting
+ * is now handled automatically in image-fallback.ts as part of the unified strategy
  */
 export function applyCacheBustingToImage<T extends Record<string, any>>(
-  image: T,
-  fetchTimestamp?: number
+  image: T
 ): T {
   if (!image || typeof image !== "object") {
     return image;
@@ -61,18 +68,17 @@ export function applyCacheBustingToImage<T extends Record<string, any>>(
   const timestamp = lastModified 
     ? (typeof lastModified === "string" ? new Date(lastModified).getTime() : lastModified)
     : undefined;
-  
-  // Use provided fetch timestamp or generate one (ensures fresh images on each API fetch)
-  const fetchTs = fetchTimestamp || Date.now();
 
   return {
     ...image,
-    url: addCacheBustingToUrl(image.url, timestamp, fetchTs),
-    previewUrl: addCacheBustingToUrl(image.previewUrl, timestamp, fetchTs),
-    thumbUrl: addCacheBustingToUrl(image.thumbUrl, timestamp, fetchTs),
-    finalUrl: addCacheBustingToUrl(image.finalUrl, timestamp, fetchTs),
-    previewUrlFallback: addCacheBustingToUrl(image.previewUrlFallback, timestamp, fetchTs),
-    thumbUrlFallback: addCacheBustingToUrl(image.thumbUrlFallback, timestamp, fetchTs),
+    url: addCacheBustingToUrl(image.url, timestamp),
+    previewUrl: addCacheBustingToUrl(image.previewUrl, timestamp),
+    thumbUrl: addCacheBustingToUrl(image.thumbUrl, timestamp),
+    finalUrl: addCacheBustingToUrl(image.finalUrl, timestamp),
+    previewUrlFallback: addCacheBustingToUrl(image.previewUrlFallback, timestamp),
+    thumbUrlFallback: addCacheBustingToUrl(image.thumbUrlFallback, timestamp),
+    bigThumbUrl: addCacheBustingToUrl(image.bigThumbUrl, timestamp),
+    bigThumbUrlFallback: addCacheBustingToUrl(image.bigThumbUrlFallback, timestamp),
   } as T;
 }
 
@@ -292,19 +298,17 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       setGalleryImages: (galleryId: string, images: any[]) => {
-        // Apply cache-busting to all image URLs using lastModified timestamp + fetch timestamp
-        // The fetch timestamp ensures fresh images even if S3 lastModified hasn't updated yet
-        const fetchTimestamp = Date.now();
-        const imagesWithCacheBusting = Array.isArray(images)
-          ? images.map((img) => applyCacheBustingToImage(img, fetchTimestamp))
-          : images;
+        // Store images as-is - cache busting is now handled automatically by LazyRetryableImage
+        // component using the unified image loading strategy in image-fallback.ts
+        // This ensures cache busting is part of the single source of truth
 
+        const cacheTimestamp = Date.now();
         set((state) => ({
           galleryImagesCache: {
             ...state.galleryImagesCache,
             [galleryId]: {
-              images: imagesWithCacheBusting,
-              timestamp: fetchTimestamp,
+              images, // Store without cache busting - applied by component
+              timestamp: cacheTimestamp,
             },
           },
         }));
@@ -475,7 +479,9 @@ export const useGalleryStore = create<GalleryState>()(
 
         try {
           // Always fetch fresh - no cache to avoid old state
-          const response = await api.galleries.getImages(galleryId);
+          // Request only thumb size for dashboard gallery photos view (optimization)
+          // Fallback URLs will still be available if needed
+          const response = await api.galleries.getImages(galleryId, 'thumb');
           const images = response.images ?? [];
           // setGalleryImages will apply cache-busting automatically
           state.setGalleryImages(galleryId, images);

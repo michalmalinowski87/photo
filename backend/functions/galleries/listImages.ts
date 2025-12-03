@@ -1,5 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
@@ -36,6 +37,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({ error: 'Missing galleryId' })
 		};
 	}
+
+	// Parse requested sizes from query string (comma-separated: thumb,preview,bigthumb)
+	// If not provided, generate all sizes (backward compatible)
+	const requestedSizesParam = event?.queryStringParameters?.sizes;
+	const requestedSizes = requestedSizesParam 
+		? new Set(requestedSizesParam.split(',').map(s => s.trim().toLowerCase()))
+		: new Set(['thumb', 'preview', 'bigthumb']); // Default: all sizes
 
 	// Verify gallery exists
 	let gallery;
@@ -153,8 +161,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// For each original, generate WebP preview/thumb URLs from previews/thumbs folders
 		// This allows showing previews even when originals are deleted (after finals upload)
 		// But we only list originals as the source of truth
-		const images = Array.from(originalKeys)
-			.map((filename: string) => {
+		// Generate S3 presigned URLs as fallback for robust image loading
+		const images = await Promise.all(
+			Array.from(originalKeys).map(async (filename: string) => {
 				if (!filename) return null;
 				
 				// Skip WebP files in originals folder (shouldn't happen, but safety check)
@@ -163,6 +172,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 				
 				const originalObj = originalFiles.get(filename);
+				const originalKey = `galleries/${galleryId}/originals/${filename}`;
 				
 				// Generate WebP filename for this original (e.g., "image.png" -> "image.webp")
 				const webpFilename = getWebpFilename(filename);
@@ -175,20 +185,129 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const hasBigThumbWebp = bigThumbKeys.has(webpFilename);
 				const hasThumbWebp = thumbKeys.has(webpFilename);
 				
-				// Build CloudFront URLs - encode path segments
-				// Only return WebP URLs from previews/bigthumbs/thumbs folders (no fallback)
-				const previewUrl = hasPreviewWebp && cloudfrontDomain
-					? `https://${cloudfrontDomain}/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`
-					: null;
-				const previewUrlFallback = null; // No fallback, WebP only
-				const bigThumbUrl = hasBigThumbWebp && cloudfrontDomain
-					? `https://${cloudfrontDomain}/${bigThumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
-					: null;
-				const bigThumbUrlFallback = null; // No fallback, WebP only
-				const thumbUrl = hasThumbWebp && cloudfrontDomain
-					? `https://${cloudfrontDomain}/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
-					: null;
-				const thumbUrlFallback = null; // No fallback, WebP only
+				// Helper function to verify CloudFront URL exists before returning it
+				// This prevents frontend from trying URLs for files that don't exist
+				const verifyAndBuildCloudFrontUrl = async (
+					hasFile: boolean,
+					key: string,
+					sizeName: string
+				): Promise<string | null> => {
+					if (!hasFile || !cloudfrontDomain) {
+						return null;
+					}
+					
+					// Build CloudFront URL
+					const cloudFrontUrl = `https://${cloudfrontDomain}/${key.split('/').map(encodeURIComponent).join('/')}`;
+					
+					// Verify file exists in S3 before returning CloudFront URL
+					// This prevents frontend from trying URLs for non-existent files
+					try {
+						await s3.send(new HeadObjectCommand({
+							Bucket: bucket,
+							Key: key
+						}));
+						// File exists, return CloudFront URL
+						return cloudFrontUrl;
+					} catch (headErr: any) {
+						// File doesn't exist (404) - don't return URL
+						if (headErr.name === 'NotFound' || headErr.$metadata?.httpStatusCode === 404) {
+							return null;
+						}
+						// Other errors (permissions, etc.) - return URL anyway
+						// CloudFront might have the file even if HEAD fails
+						return cloudFrontUrl;
+					}
+				};
+				
+				// Build and verify CloudFront URLs in parallel
+				const [previewUrl, bigThumbUrl, thumbUrl] = await Promise.all([
+					verifyAndBuildCloudFrontUrl(hasPreviewWebp, previewWebpKey, 'preview'),
+					verifyAndBuildCloudFrontUrl(hasBigThumbWebp, bigThumbWebpKey, 'bigthumb'),
+					verifyAndBuildCloudFrontUrl(hasThumbWebp, thumbWebpKey, 'thumb')
+				]);
+
+				// Generate S3 presigned URLs as fallback (24 hour expiry)
+				// Only generate for requested sizes to optimize performance
+				// These will be used if CloudFront returns 403 or fails
+				// We verify existence using HEAD requests before generating presigned URLs
+				// This prevents generating URLs for non-existent files and optimizes frontend load time
+				let previewUrlFallback: string | null = null;
+				let bigThumbUrlFallback: string | null = null;
+				let thumbUrlFallback: string | null = null;
+				let originalUrl: string | null = null;
+
+				try {
+					// Helper function to verify existence and generate presigned URL
+					const verifyAndGeneratePresignedUrl = async (
+						key: string,
+						sizeName: string
+					): Promise<string | null> => {
+						try {
+							// Quick HEAD request to verify file exists (faster than GET, doesn't download)
+							await s3.send(new HeadObjectCommand({
+								Bucket: bucket,
+								Key: key
+							}));
+							
+							// File exists, generate presigned URL
+							const cmd = new GetObjectCommand({
+								Bucket: bucket,
+								Key: key
+							});
+							return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
+						} catch (headErr: any) {
+							// File doesn't exist (404) - don't generate URL
+							if (headErr.name === 'NotFound' || headErr.$metadata?.httpStatusCode === 404) {
+								return null;
+							}
+							// Other errors (permissions, etc.) - don't generate URL
+							return null;
+						}
+					};
+
+					// Generate presigned URLs in parallel for better performance
+					// Only check and generate for sizes that were found in listing AND requested
+					const presignedUrlPromises: Promise<void>[] = [];
+
+					if (hasPreviewWebp && requestedSizes.has('preview')) {
+						presignedUrlPromises.push(
+							verifyAndGeneratePresignedUrl(previewWebpKey, 'preview')
+								.then(url => { previewUrlFallback = url; })
+						);
+					}
+
+					if (hasBigThumbWebp && requestedSizes.has('bigthumb')) {
+						presignedUrlPromises.push(
+							verifyAndGeneratePresignedUrl(bigThumbWebpKey, 'bigthumb')
+								.then(url => { bigThumbUrlFallback = url; })
+						);
+					}
+
+					if (hasThumbWebp && requestedSizes.has('thumb')) {
+						presignedUrlPromises.push(
+							verifyAndGeneratePresignedUrl(thumbWebpKey, 'thumb')
+								.then(url => { thumbUrlFallback = url; })
+						);
+					}
+
+					// Always verify and generate presigned URL for original photo (ultimate fallback)
+					// This is needed for fallback even if not explicitly requested
+					if (originalObj) {
+						presignedUrlPromises.push(
+							verifyAndGeneratePresignedUrl(originalKey, 'original')
+								.then(url => { originalUrl = url; })
+						);
+					}
+
+					// Wait for all presigned URL generations to complete
+					await Promise.all(presignedUrlPromises);
+				} catch (err: any) {
+					// Log error but don't fail - fallback URLs are optional
+					logger.warn('Failed to generate presigned URLs for fallback', {
+						filename,
+						error: err.message
+					});
+				}
 
 				// Use original size (from originals folder)
 				const size = originalObj?.Size || 0;
@@ -196,17 +315,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 				return {
 					key: filename, // Original filename (PNG/JPEG)
-					previewUrl,    // WebP preview URL (1400px) from previews folder
-					previewUrlFallback,
-					bigThumbUrl,   // WebP big thumb URL (600px) from bigthumbs folder
-					bigThumbUrlFallback,
-					thumbUrl,      // WebP thumb URL (300x300) from thumbs folder
-					thumbUrlFallback,
+					previewUrl,    // CloudFront WebP preview URL (1400px) from previews folder
+					previewUrlFallback, // S3 presigned URL fallback for preview
+					bigThumbUrl,   // CloudFront WebP big thumb URL (600px) from bigthumbs folder
+					bigThumbUrlFallback, // S3 presigned URL fallback for big thumb
+					thumbUrl,      // CloudFront WebP thumb URL (300x300) from thumbs folder
+					thumbUrlFallback, // S3 presigned URL fallback for thumb
+					url: originalUrl, // S3 presigned URL for original photo (ultimate fallback)
 					size,
 					lastModified
 				};
 			})
-			.filter((item): item is { key: string; previewUrl: string | null; thumbUrl: string | null; size: number; lastModified: string | undefined } => item !== null)
+		);
+
+		const filteredImages = images
+			.filter((item): item is { key: string; previewUrl: string | null; thumbUrl: string | null; url: string | null; size: number; lastModified: string | undefined } => item !== null)
 			.sort((a, b) => {
 				// Sort by filename for consistent ordering
 				return a.key.localeCompare(b.key);
@@ -227,8 +350,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				galleryId,
-				images,
-				count: images.length
+				images: filteredImages,
+				count: filteredImages.length
 			})
 		};
 	} catch (error: any) {

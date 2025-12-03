@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getInitialImageUrl, getNextFallbackUrl } from './imageFallback';
 
-// Lazy loading component using Intersection Observer
-function LazyImage({ src, alt, style, onLoad }) {
+// Lazy loading component using Intersection Observer with fallback support
+// Uses shared fallback strategy from imageFallback.js
+function LazyImage({ img, alt, style, onLoad, preferredSize = 'bigthumb' }) {
 	const [isInView, setIsInView] = useState(false);
 	const [hasLoaded, setHasLoaded] = useState(false);
+	const initialSrc = getInitialImageUrl(img, preferredSize);
+	const [currentSrc, setCurrentSrc] = useState(initialSrc);
+	const fallbackAttemptsRef = useRef(new Set());
+	const attemptedSizesRef = useRef(new Set());
 	const imgRef = useRef(null);
 	const containerRef = useRef(null);
+
+	useEffect(() => {
+		const newSrc = getInitialImageUrl(img, preferredSize);
+		setCurrentSrc(newSrc);
+		fallbackAttemptsRef.current.clear();
+		attemptedSizesRef.current.clear();
+		attemptedSizesRef.current.add(preferredSize);
+	}, [img, preferredSize]);
 
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -27,12 +41,50 @@ function LazyImage({ src, alt, style, onLoad }) {
 		};
 	}, []);
 
+	const handleError = (e) => {
+		const failedUrl = e.currentTarget.src;
+		
+		// Determine which size failed based on URL
+		const getSizeFromUrl = (url) => {
+			const normalized = url.split('?')[0]; // Remove query params
+			if (normalized.includes('/thumbs/')) return 'thumb';
+			if (normalized.includes('/previews/')) return 'preview';
+			if (normalized.includes('/bigthumbs/')) return 'bigthumb';
+			return null;
+		};
+		
+		const failedSize = getSizeFromUrl(failedUrl);
+		if (failedSize) {
+			attemptedSizesRef.current.add(failedSize);
+		}
+		
+		// Prevent infinite fallback loops
+		if (fallbackAttemptsRef.current.has(failedUrl)) {
+			return;
+		}
+		fallbackAttemptsRef.current.add(failedUrl);
+
+		// Try next fallback URL
+		if (img) {
+			const nextUrl = getNextFallbackUrl(failedUrl, img, attemptedSizesRef.current, preferredSize);
+			if (nextUrl && !fallbackAttemptsRef.current.has(nextUrl)) {
+				// Mark the size of the next URL as attempted
+				const nextSize = getSizeFromUrl(nextUrl);
+				if (nextSize) {
+					attemptedSizesRef.current.add(nextSize);
+				}
+				setCurrentSrc(nextUrl);
+				return;
+			}
+		}
+	};
+
 	return (
 		<div ref={containerRef} style={style}>
 			{isInView ? (
 				<img 
 					ref={imgRef}
-					src={src} 
+					src={currentSrc} 
 					alt={alt}
 					loading="lazy"
 					style={{ 
@@ -44,6 +96,7 @@ function LazyImage({ src, alt, style, onLoad }) {
 						setHasLoaded(true);
 						if (onLoad) onLoad();
 					}}
+					onError={handleError}
 				/>
 			) : (
 				<div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f0f0f0' }}>
@@ -105,10 +158,13 @@ export default function GalleryThumbnails({
 								style={{ position: 'relative' }}
 							>
 								{/* Use bigThumbUrl for masonry grid layout, fallback to previewUrl or thumbUrl */}
-								{(img.bigThumbUrl || img.previewUrl || img.thumbUrl) ? (
+								{/* Progressive fallback: CloudFront → S3 presigned → next size → original */}
+								{/* Strategy defined in imageFallback.js */}
+								{(img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.url) ? (
 									<LazyImage 
-										src={img.bigThumbUrl || img.previewUrl || img.thumbUrl} 
+										img={img}
 										alt={img.key}
+										preferredSize="bigthumb"
 										style={{ 
 											width: '100%', 
 											height: '250px', 
@@ -199,8 +255,13 @@ export default function GalleryThumbnails({
 								textOverflow: 'ellipsis',
 								overflow: 'hidden',
 								whiteSpace: 'nowrap'
-							}}>
-								{img.key}
+							}} title={img.key}>
+								{(() => {
+									// Remove file extension for display
+									const filename = img.key || '';
+									const lastDot = filename.lastIndexOf('.');
+									return lastDot === -1 ? filename : filename.substring(0, lastDot);
+								})()}
 							</div>
 						</div>
 					);

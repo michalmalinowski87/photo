@@ -1,6 +1,8 @@
+import { ImageFallbackUrls } from "../../lib/image-fallback";
+import { removeFileExtension } from "../../lib/filename-utils";
 import Button from "../ui/button/Button";
+import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
-import { RetryableImage } from "../ui/RetryableImage";
 
 interface GalleryImage {
   id?: string;
@@ -38,12 +40,12 @@ interface FinalsTabProps {
 
 export function FinalsTab({
   images,
-  gallery,
+  gallery: _gallery,
   canUpload,
   isGalleryPaid,
-  optimisticFinalsBytes,
+  optimisticFinalsBytes: _optimisticFinalsBytes,
   deletingImages,
-  loading,
+  loading: _loading,
   onUploadClick,
   onDeleteImage,
   onPayClick,
@@ -118,13 +120,11 @@ export function FinalsTab({
                 }`}
               >
                 <div className="aspect-square relative">
-                  <RetryableImage
-                    // Image loading priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
-                    // We NEVER fetch full S3 images if thumbnails/previews are available
-                    // This reduces bandwidth and improves performance
-                    src={img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? ""}
+                  <LazyRetryableImage
+                    imageData={img as ImageFallbackUrls}
                     alt={imageKey}
                     className="w-full h-full object-cover rounded-lg"
+                    preferredSize="thumb"
                   />
                   {/* Deleting overlay - always visible when deleting */}
                   {deletingImages.has(imageKey) && (
@@ -156,7 +156,9 @@ export function FinalsTab({
                   )}
                 </div>
                 <div className="p-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{imageKey}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
+                    {removeFileExtension(imageKey)}
+                  </p>
                 </div>
               </div>
             );

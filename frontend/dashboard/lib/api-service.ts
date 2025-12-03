@@ -499,13 +499,16 @@ class ApiService {
 
     /**
      * Get gallery images
+     * @param sizes - Optional comma-separated list of sizes to request (thumb,preview,bigthumb)
+     *                 If not provided, all sizes are returned (backward compatible)
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getImages: async (galleryId: string): Promise<{ images: any[] }> => {
+    getImages: async (galleryId: string, sizes?: string): Promise<{ images: any[] }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      return await this._request(`/galleries/${galleryId}/images`);
+      const queryParams = sizes ? `?sizes=${encodeURIComponent(sizes)}` : '';
+      return await this._request(`/galleries/${galleryId}/images${queryParams}`);
     },
 
     /**

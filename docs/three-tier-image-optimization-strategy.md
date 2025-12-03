@@ -207,6 +207,77 @@ The `listImages` API returns all three versions:
 2. **Modal View**: Uses Preview (1400px) only when needed, not preloaded
 3. **CMS View**: Uses Thumbnail (300x300), saving ~99% bandwidth vs. original
 
+## Robust Image Loading & Fallback Strategy
+
+### Progressive Fallback Implementation
+
+To ensure robust, fail-free image loading even when CloudFront returns 403 errors or other failures, we implement a comprehensive progressive fallback strategy:
+
+1. **Primary: CloudFront CDN URLs**
+   - CloudFront thumb (thumbUrl) - 300x300 WebP
+   - CloudFront preview (previewUrl) - 1400px WebP
+   - CloudFront big thumb (bigThumbUrl) - 600px WebP
+
+2. **Fallback Level 1: S3 Presigned URLs (Same Size)**
+   - If CloudFront returns 403 or fails, try S3 presigned URL for the same size
+   - thumbUrlFallback - S3 presigned URL for thumb
+   - previewUrlFallback - S3 presigned URL for preview
+   - bigThumbUrlFallback - S3 presigned URL for big thumb
+   - Presigned URLs expire after 24 hours for security
+
+3. **Fallback Level 2: Next Size Version**
+   - If current size fails (both CloudFront and S3), try next size
+   - Fallback order depends on preferred size:
+     - **thumb preferred**: CloudFront thumb → bigthumb → preview → S3 thumb → bigthumb → preview → original
+     - **bigthumb preferred**: CloudFront bigthumb → preview → S3 bigthumb → preview → original
+     - **preview preferred**: CloudFront preview → S3 preview → original
+   - Each size tries both CloudFront and S3 presigned URL (if verified to exist)
+   - **Smart Detection**: System always tries all available sizes, even if initial URL was original
+
+4. **Fallback Level 3: Original Photo**
+   - If all optimized versions fail, fetch original photo from S3
+   - Tries both CloudFront finalUrl and S3 presigned url (if different)
+   - Original photo is displayed as thumb/preview/bigthumb based on context
+   - Ensures images always load, even if optimization versions are missing
+
+### Implementation Details
+
+**Backend (listImages.ts)**:
+- Generates CloudFront URLs for all image versions (based on S3 listing)
+- **Smart Verification**: Uses HEAD requests to verify file existence before generating presigned URLs
+  - Performs HEAD request for each size (preview, bigthumb, thumb, original)
+  - Only generates presigned URL if HEAD request succeeds (file exists)
+  - If HEAD returns 404, skips presigned URL generation (returns null)
+  - All HEAD requests run in parallel for optimal performance
+- Only generates S3 presigned URLs for files that actually exist (verified via HEAD request)
+- Generates S3 presigned URL for original photo (ultimate fallback, also verified)
+- **Performance**: HEAD requests are fast (~10-50ms each) and run in parallel
+- **Optimization**: Prevents frontend from receiving URLs for non-existent files
+- **Result**: Frontend only receives URLs for files that exist, reducing failed attempts
+- All verified fallback URLs included in API response
+
+**Frontend Components**:
+- `LazyRetryableImage` component handles progressive fallback with lazy loading
+- `image-fallback.ts` utility provides unified fallback logic (single source of truth)
+- All image components use progressive fallback strategy
+- Prevents infinite fallback loops with attempt tracking
+- **Smart Skipping**: Only tries URLs that backend verified exist (null URLs skipped immediately)
+
+**Gallery Components**:
+- `GalleryThumbnails` - Grid view with fallback
+- `ImageModal` - Full-screen view with fallback
+- `ProcessedPhotosView` - Processed photos with fallback
+
+### Benefits
+
+1. **Robustness**: Images always load, even if CloudFront fails
+2. **Performance**: Prefers optimized versions, falls back only when needed
+3. **User Experience**: Seamless fallback, no broken images
+4. **Fail-Safe**: Original photos ensure images are always available
+5. **Optimized Backend**: HEAD request verification prevents generating URLs for non-existent files
+6. **Faster Frontend**: Skips non-existent URLs immediately (no failed network requests)
+7. **Comprehensive Fallback**: Always tries all available sizes, doesn't skip based on initial URL type
+
 ## CloudFront CDN Optimization
 
 ### Current Implementation
@@ -233,6 +304,12 @@ The `listImages` API returns all three versions:
    - Data transfer spike alarm (>10GB/day threshold)
    - Request count spike alarm (>100k requests/day threshold)
    - Origin request ratio alarm (cache hit ratio < 80%)
+
+6. **Robust Fallback Strategy** ✅
+   - Progressive fallback: CloudFront → S3 presigned → next size → original
+   - Ensures images always load even when CloudFront returns 403
+   - S3 presigned URLs generated for all image versions
+   - Original photos available as ultimate fallback
 
 ### AWS Free Tier
 

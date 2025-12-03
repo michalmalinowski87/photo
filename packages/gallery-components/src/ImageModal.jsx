@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { getInitialImageUrl, getNextFallbackUrl } from './imageFallback';
 
 export default function ImageModal({
 	image,
@@ -14,6 +15,10 @@ export default function ImageModal({
 	if (!image || index === null || index === undefined) {
 		return null;
 	}
+
+	const [currentImageUrl, setCurrentImageUrl] = useState(null);
+	const fallbackAttemptsRef = useRef(new Set());
+	const attemptedSizesRef = useRef(new Set());
 
 	useEffect(() => {
 		function handleKeyDown(e) {
@@ -36,9 +41,52 @@ export default function ImageModal({
 	// Fallback to bigThumbUrl or thumbUrl if previewUrl not available
 	// For processed photos: use previewUrl for display, finalUrl for download
 	// For originals: use previewUrl for display
-	const imageUrl = isProcessed 
-		? (image.previewUrl || image.bigThumbUrl || image.thumbUrl || image.finalUrl)
-		: (image.previewUrl || image.bigThumbUrl || image.thumbUrl);
+	// Progressive fallback: CloudFront → S3 presigned → next size → original
+	// Strategy defined in imageFallback.js
+	useEffect(() => {
+		const preferredSize = isProcessed ? 'preview' : 'preview';
+		const initialUrl = getInitialImageUrl(image, preferredSize);
+		setCurrentImageUrl(initialUrl);
+		fallbackAttemptsRef.current.clear();
+		attemptedSizesRef.current.clear();
+		attemptedSizesRef.current.add(preferredSize);
+	}, [image, isProcessed]);
+
+	const handleImageError = (e) => {
+		const failedUrl = e.currentTarget.src;
+		
+		// Determine which size failed based on URL
+		const getSizeFromUrl = (url) => {
+			const normalized = url.split('?')[0]; // Remove query params
+			if (normalized.includes('/thumbs/')) return 'thumb';
+			if (normalized.includes('/previews/')) return 'preview';
+			if (normalized.includes('/bigthumbs/')) return 'bigthumb';
+			return null;
+		};
+		
+		const failedSize = getSizeFromUrl(failedUrl);
+		if (failedSize) {
+			attemptedSizesRef.current.add(failedSize);
+		}
+		
+		if (fallbackAttemptsRef.current.has(failedUrl)) {
+			return;
+		}
+		fallbackAttemptsRef.current.add(failedUrl);
+
+		const preferredSize = isProcessed ? 'preview' : 'preview';
+		const nextUrl = getNextFallbackUrl(failedUrl, image, attemptedSizesRef.current, preferredSize);
+		if (nextUrl && !fallbackAttemptsRef.current.has(nextUrl)) {
+			// Mark the size of the next URL as attempted
+			const nextSize = getSizeFromUrl(nextUrl);
+			if (nextSize) {
+				attemptedSizesRef.current.add(nextSize);
+			}
+			setCurrentImageUrl(nextUrl);
+			return;
+		}
+	};
+
 	const isSelected = selectedKeys && selectedKeys.has && selectedKeys.has(image.key);
 
 	return (
@@ -158,10 +206,11 @@ export default function ImageModal({
 				)}
 
 				{/* Image */}
-				{imageUrl ? (
+				{currentImageUrl ? (
 					<img
-						src={imageUrl}
+						src={currentImageUrl}
 						alt={image.key}
+						onError={handleImageError}
 						onContextMenu={(e) => {
 							// Allow right-click save on processed photos
 							if (isProcessed && image.finalUrl) {

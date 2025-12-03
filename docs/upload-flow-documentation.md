@@ -23,10 +23,18 @@ The upload system uses a **simple, debounced approach** with no polling:
 - `fetchGalleryImages()` always bypasses cache when `forceRefresh = true`
 - Applies cache-busting query parameters to image URLs
 
-### 3. **RetryableImage Component** (`frontend/dashboard/components/ui/RetryableImage.tsx`)
-- Handles individual image loading state
-- Retries loading if image fails (up to 30 times with exponential backoff)
+### 3. **LazyRetryableImage Component** (`frontend/dashboard/components/ui/LazyRetryableImage.tsx`)
+- Handles individual image loading state with lazy loading (Intersection Observer)
+- Implements progressive fallback strategy (CloudFront → S3 → next size → original)
+- Uses exponential backoff to prevent cascading failures
 - Shows loading spinner while image loads
+- **Smart Fallback**: Only tries URLs that backend verified exist (null URLs skipped immediately)
+
+### 4. **Image Fallback System** (`frontend/dashboard/lib/image-fallback.ts`)
+- Single source of truth for image loading strategy
+- Handles URL selection, progressive fallback, and cache busting
+- Automatically applies cache busting using S3 lastModified timestamp
+- Prevents infinite fallback loops with attempt tracking
 
 ## Step-by-Step Flow: Single Image Upload
 
@@ -78,9 +86,10 @@ After ALL uploads complete:
 fetchGalleryImages() called
 ├─ invalidateGalleryImagesCache(galleryId) // Clear cache
 ├─ API call: GET /api/galleries/{galleryId}/images
-├─ Backend returns images with lastModified timestamps
+├─ Backend verifies file existence (HEAD requests) before generating presigned URLs
+├─ Backend returns images with lastModified timestamps and verified presigned URLs
 ├─ setGalleryImages() called → applies cache-busting
-└─ Returns images with cache-busting: ?t={lastModified}&f={fetchTimestamp}
+└─ Returns images with cache-busting: ?t={lastModified}
 ```
 
 **Note**: We only fetch images, NOT the full gallery. Gallery metadata (bytes, settings) is updated separately via `refreshGalleryBytesOnly()`.
@@ -140,15 +149,15 @@ Client-side thumbnail generation (Uppy plugin)
 After 2 seconds:
 ├─ fetchGalleryImages() called with forceRefresh = true
 ├─ API returns images with NEW lastModified timestamps
-├─ Cache-busting applied: ?t={newLastModified}&f={fetchTimestamp}
+├─ Cache-busting applied: ?t={newLastModified} (S3 lastModified changes automatically)
 └─ Old cached image URLs become invalid
 ```
 
 #### Step 6: Image Update
 ```
 RetryableImage receives new URL with new cache-busting params
-├─ Old URL: image.webp?t=1234567890&f=1234567890
-├─ New URL: image.webp?t=1234567891&f=1234567891
+├─ Old URL: image.webp?t=1234567890
+├─ New URL: image.webp?t=1234567891 (S3 lastModified changes automatically)
 └─ Browser fetches fresh image (CloudFront cache invalidated)
 ```
 
@@ -164,21 +173,26 @@ RetryableImage receives new URL with new cache-busting params
 API response:
 {
   key: "image.jpg",
-  url: "https://s3.../image.jpg",           // ✅ Available (S3 direct)
-  previewUrl: null,                          // ❌ Not ready yet
-  thumbUrl: null                             // ❌ Not ready yet
+  url: "https://s3.../image.jpg",           // ✅ Available (S3 direct, verified via HEAD)
+  previewUrl: null,                          // ❌ Not ready yet (HEAD returned 404)
+  thumbUrl: null,                            // ❌ Not ready yet (HEAD returned 404)
+  previewUrlFallback: null,                  // ❌ Not generated (file doesn't exist)
+  thumbUrlFallback: null                     // ❌ Not generated (file doesn't exist)
 }
 
-Image mapping:
-url = previewUrl ?? thumbUrl ?? finalUrl ?? url
-url = null ?? null ?? null ?? "https://s3.../image.jpg"
+Image mapping (via getInitialImageUrl):
+url = thumbUrl ?? previewUrl ?? bigThumbUrl ?? finalUrl ?? url
+url = null ?? null ?? null ?? null ?? "https://s3.../image.jpg"
 url = "https://s3.../image.jpg"              // ✅ Falls back to S3
 ```
 
-#### Step 8: RetryableImage Loading
+#### Step 8: LazyRetryableImage Loading
 ```
-RetryableImage receives src="https://s3.../image.jpg"
+LazyRetryableImage receives src="https://s3.../image.jpg"
+├─ Lazy loads when image enters viewport (Intersection Observer)
 ├─ Attempts to load image
+├─ If fails → progressive fallback (tries all available sizes)
+├─ Skips null URLs immediately (no failed network requests)
 ├─ If fails: retries with exponential backoff (up to 30 times)
 ├─ Shows loading spinner while loading
 └─ Once loaded: displays image
@@ -212,29 +226,33 @@ User refreshes or navigates away and back:
    }
    ```
 
-2. **Frontend Applies Cache-Busting**
+2. **Frontend Applies Cache-Busting Automatically**
    ```typescript
-   // gallerySlice.ts - applyCacheBustingToImage()
+   // image-fallback.ts - getInitialImageUrl()
+   // Cache busting is applied automatically using S3 lastModified
    const timestamp = new Date(lastModified).getTime();
-   const fetchTimestamp = Date.now();
-   const url = `${previewUrl}?t=${timestamp}&f=${fetchTimestamp}`;
+   const url = `${previewUrl}?t=${timestamp}`;
    ```
 
 3. **Result**
    ```
    Original: https://cdn.../preview.webp
-   Cached:   https://cdn.../preview.webp?t=1704110400000&f=1704110401000
+   Cached:   https://cdn.../preview.webp?t=1704110400000
    ```
 
-### Why Two Timestamps?
+### Cache Busting Strategy
 
-- **`t` (lastModified)**: Stable cache key based on file modification time
+- **Uses S3 `lastModified` timestamp only**
   - Same file = same `t` value = can be cached
   - Different file = different `t` value = fresh fetch
-  
-- **`f` (fetchTimestamp)**: Ensures uniqueness on every API fetch
-  - Prevents browser/CDN from serving stale cached responses
-  - Even if `lastModified` hasn't propagated yet, `f` ensures fresh fetch
+  - When a new photo is uploaded, S3's `lastModified` changes automatically
+  - No need for additional cache busting parameters
+
+### Benefits
+
+- **Efficient**: Only cache-busts when files actually change
+- **Automatic**: Handled by unified image loading strategy in `image-fallback.ts`
+- **Simple**: Single timestamp parameter (`t`) instead of multiple
 
 ## No Cache Policy
 
@@ -296,8 +314,8 @@ T=2s:   All uploads complete → onComplete callback → fetchGalleryImages() ex
 ### How It Works
 
 ```typescript
-// RetryableImage.tsx
-export const RetryableImage = ({ src, maxRetries = 30 }) => {
+// LazyRetryableImage.tsx
+export const LazyRetryableImage = ({ imageData, preferredSize = 'thumb' }) => {
   const [imageSrc, setImageSrc] = useState(src);
   const [isLoading, setIsLoading] = useState(true);
   const retryCountRef = useRef(0);
@@ -403,10 +421,12 @@ Step 7: RetryableImage retries 30 times
 
 1. **No Polling**: Debounced fetch happens once after uploads
 2. **No Cache After Upload**: Always `forceRefresh = true` to avoid stale state
-3. **Individual Loading**: Each `RetryableImage` handles its own state
+3. **Individual Loading**: Each `LazyRetryableImage` handles its own state with lazy loading
 4. **Fallback to S3**: If previews/thumbs not ready, use direct S3 URLs
-5. **Cache-Busting**: Query params ensure fresh images (`?t=...&f=...`)
-6. **Simple & Reliable**: Minimal complexity, maximum reliability
+5. **Cache-Busting**: Query params ensure fresh images (`?t={lastModified}`)
+6. **Smart Verification**: Backend verifies file existence (HEAD requests) before generating presigned URLs
+7. **Optimized Fallback**: Frontend only tries URLs that backend verified exist (null URLs skipped immediately)
+8. **Simple & Reliable**: Minimal complexity, maximum reliability
 
 ## Code Locations
 
@@ -439,8 +459,13 @@ Step 7: RetryableImage retries 30 times
    - Reload function: `reloadGallery()` (lines 354-359)
    - Image loading: `loadOrderData()` (lines 127-280)
 
-6. **RetryableImage.tsx**
-   - Location: `frontend/dashboard/components/ui/RetryableImage.tsx`
+6. **LazyRetryableImage.tsx**
+   - Location: `frontend/dashboard/components/ui/LazyRetryableImage.tsx`
+   - Handles lazy loading and progressive fallback
+
+7. **image-fallback.ts**
+   - Location: `frontend/dashboard/lib/image-fallback.ts`
+   - Single source of truth for image loading strategy
    - Retry logic: `handleError()` (lines 73-98)
    - Loading state: `useEffect()` (lines 25-71)
 
@@ -450,7 +475,7 @@ Step 7: RetryableImage retries 30 times
 - [ ] **Upload completion works correctly**: Multiple rapid uploads → single fetch after all complete
 - [ ] **Cache bypassed**: `forceRefresh = true` after uploads
 - [ ] **Fallback works**: Images use S3 URLs if previews not ready
-- [ ] **Cache-busting applied**: URLs have `?t=...&f=...` params
+- [ ] **Cache-busting applied**: URLs have `?t={lastModified}` params
 - [ ] **RetryableImage handles errors**: Retries with exponential backoff
 - [ ] **Progress updates**: Uppy shows progress per file
 - [ ] **Thumbnail generation**: Client-side previews/thumbs generated and uploaded

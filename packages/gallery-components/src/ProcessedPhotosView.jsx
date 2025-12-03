@@ -1,4 +1,108 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { getInitialImageUrl, getNextFallbackUrl } from './imageFallback';
+
+// Image item component with fallback support
+// Uses shared fallback strategy from imageFallback.js
+function ProcessedImageItem({ img, index, onImageClick }) {
+	const initialSrc = getInitialImageUrl(img, 'bigthumb');
+	const [currentSrc, setCurrentSrc] = useState(initialSrc);
+	const fallbackAttemptsRef = useRef(new Set());
+	const attemptedSizesRef = useRef(new Set());
+
+	useEffect(() => {
+		const newSrc = getInitialImageUrl(img, 'bigthumb');
+		setCurrentSrc(newSrc);
+		fallbackAttemptsRef.current.clear();
+		attemptedSizesRef.current.clear();
+		attemptedSizesRef.current.add('bigthumb');
+	}, [img]);
+
+	const handleError = (e) => {
+		const failedUrl = e.currentTarget.src;
+		
+		// Determine which size failed based on URL
+		const getSizeFromUrl = (url) => {
+			const normalized = url.split('?')[0]; // Remove query params
+			if (normalized.includes('/thumbs/')) return 'thumb';
+			if (normalized.includes('/previews/')) return 'preview';
+			if (normalized.includes('/bigthumbs/')) return 'bigthumb';
+			return null;
+		};
+		
+		const failedSize = getSizeFromUrl(failedUrl);
+		if (failedSize) {
+			attemptedSizesRef.current.add(failedSize);
+		}
+		
+		if (fallbackAttemptsRef.current.has(failedUrl)) {
+			return;
+		}
+		fallbackAttemptsRef.current.add(failedUrl);
+
+		const nextUrl = getNextFallbackUrl(failedUrl, img, attemptedSizesRef.current, 'bigthumb');
+		if (nextUrl && !fallbackAttemptsRef.current.has(nextUrl)) {
+			// Mark the size of the next URL as attempted
+			const nextSize = getSizeFromUrl(nextUrl);
+			if (nextSize) {
+				attemptedSizesRef.current.add(nextSize);
+			}
+			setCurrentSrc(nextUrl);
+			return;
+		}
+	};
+
+	return (
+		<div
+			style={{
+				position: 'relative',
+				cursor: 'pointer',
+				border: '2px solid #ddd',
+				borderRadius: 8,
+				overflow: 'hidden',
+				background: '#f0f0f0',
+				transition: 'all 0.2s',
+				boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+			}}
+			onClick={() => onImageClick && onImageClick(index)}
+		>
+			{currentSrc ? (
+				<img 
+					src={currentSrc} 
+					alt={img.key}
+					onError={handleError}
+					style={{ 
+						width: '100%', 
+						height: '250px', 
+						objectFit: 'cover',
+						display: 'block'
+					}}
+				/>
+			) : (
+				<div style={{ width: '100%', height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+					No preview
+				</div>
+			)}
+			<div style={{
+				position: 'absolute',
+				bottom: 0,
+				left: 0,
+				right: 0,
+				background: 'rgba(0,0,0,0.7)',
+				color: 'white',
+				padding: 8,
+				fontSize: '12px',
+				textAlign: 'center'
+			}} title={img.key}>
+				{(() => {
+					// Remove file extension for display
+					const filename = img.key || '';
+					const lastDot = filename.lastIndexOf('.');
+					return lastDot === -1 ? filename : filename.substring(0, lastDot);
+				})()}
+			</div>
+		</div>
+	);
+}
 
 export default function ProcessedPhotosView({
 	galleryId,
@@ -334,50 +438,12 @@ export default function ProcessedPhotosView({
 								marginTop: 16
 							}}>
 								{finalImages.map((img, index) => (
-									<div
+									<ProcessedImageItem
 										key={img.key}
-										style={{
-											position: 'relative',
-											cursor: 'pointer',
-											border: '2px solid #ddd',
-											borderRadius: 8,
-											overflow: 'hidden',
-											background: '#f0f0f0',
-											transition: 'all 0.2s',
-											boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-										}}
-										onClick={() => onImageClick && onImageClick(index)}
-									>
-										{(img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl) ? (
-											<img 
-												src={img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl} 
-												alt={img.key}
-												style={{ 
-													width: '100%', 
-													height: '250px', 
-													objectFit: 'cover',
-													display: 'block'
-												}}
-											/>
-										) : (
-											<div style={{ width: '100%', height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-												No preview
-											</div>
-										)}
-										<div style={{
-											position: 'absolute',
-											bottom: 0,
-											left: 0,
-											right: 0,
-											background: 'rgba(0,0,0,0.7)',
-											color: 'white',
-											padding: 8,
-											fontSize: '12px',
-											textAlign: 'center'
-										}}>
-											{img.key}
-										</div>
-									</div>
+										img={img}
+										index={index}
+										onImageClick={onImageClick}
+									/>
 								))}
 							</div>
 						</div>

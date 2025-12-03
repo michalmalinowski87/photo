@@ -21,7 +21,8 @@ import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { applyCacheBustingToImage, useGalleryStore } from "../../../../store/gallerySlice";
+import { removeFileExtension } from "../../../../lib/filename-utils";
+import { useGalleryStore } from "../../../../store/gallerySlice";
 import { useOrderStore } from "../../../../store/orderSlice";
 import { useUserStore } from "../../../../store/userSlice";
 
@@ -207,12 +208,9 @@ export default function OrderDetail() {
             galleryId as string,
             orderId as string
           );
-          // Apply cache-busting with fetch timestamp to ensure CloudFront serves fresh images
-          // Fetch timestamp ensures fresh images even if S3 lastModified hasn't updated yet
-          const fetchTimestamp = Date.now();
-          const imagesWithCacheBusting = (finalResponse.images ?? []).map((img) =>
-            applyCacheBustingToImage(img, fetchTimestamp)
-          );
+          // Cache busting is handled automatically by LazyRetryableImage component
+          // using S3 lastModified timestamp (changes automatically when new photos are uploaded)
+          const imagesWithCacheBusting = finalResponse.images ?? [];
           // Map final images - keep finalUrl for download, use thumbUrl/previewUrl for display
           // Image loading priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
           // We NEVER fetch full S3 images (finalUrl) if thumbnails/previews are available
@@ -375,10 +373,9 @@ export default function OrderDetail() {
         galleryId as string,
         orderId as string
       );
-      const fetchTimestamp = Date.now();
-      const imagesWithCacheBusting = (finalResponse.images ?? []).map((img) =>
-        applyCacheBustingToImage(img, fetchTimestamp)
-      );
+      // Cache busting is handled automatically by LazyRetryableImage component
+      // using S3 lastModified timestamp (changes automatically when new photos are uploaded)
+      const imagesWithCacheBusting = finalResponse.images ?? [];
       const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
         ...img,
         url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "",
@@ -753,7 +750,7 @@ export default function OrderDetail() {
         title="Usuń zdjęcie"
         message={
           imageToDelete
-            ? `Czy na pewno chcesz usunąć zdjęcie "${imageToDelete.key ?? imageToDelete.filename ?? ""}"?\nTa operacja jest nieodwracalna.`
+            ? `Czy na pewno chcesz usunąć zdjęcie "${removeFileExtension(imageToDelete.key ?? imageToDelete.filename ?? "")}"?\nTa operacja jest nieodwracalna.`
             : ""
         }
         confirmText="Usuń"

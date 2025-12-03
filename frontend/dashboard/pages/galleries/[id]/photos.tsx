@@ -1,12 +1,13 @@
 import { useRouter } from "next/router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
+import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
+import { removeFileExtension } from "../../../lib/filename-utils";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
-import { RetryableImage } from "../../../components/ui/RetryableImage";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGallery } from "../../../hooks/useGallery";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
@@ -54,61 +55,7 @@ interface ApiImage {
 
 // UploadProgress interface is imported from PhotoUploadHandler
 
-/**
- * Get the optimal image URL for display, prioritizing thumbnails/previews over full images
- * 
- * Priority order (smallest to largest):
- * 1. CloudFront thumb (thumbUrl) - smallest, fastest, optimized WebP
- * 2. CloudFront preview (previewUrl) - larger but still optimized WebP
- * 3. Full S3 image (url/finalUrl) - LAST RESORT only if no thumbnails exist
- * 
- * This ensures we NEVER fetch full S3 images when thumbnails/previews are available,
- * reducing bandwidth, improving performance, and preventing API Gateway overload.
- */
-function getImageDisplayUrl(img: {
-  thumbUrl?: string | null;
-  previewUrl?: string | null;
-  url?: string | null;
-  finalUrl?: string | null;
-}): string {
-  // Priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
-  return img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "";
-}
-
-// Lazy loading wrapper component using Intersection Observer
-const LazyImage: React.FC<{ src: string; children: (src: string | null) => React.ReactNode }> = ({
-  src,
-  children,
-}) => {
-  const [isInView, setIsInView] = useState<boolean>(false);
-  const imgRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "50px" } // Start loading 50px before entering viewport
-    );
-
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  return (
-    <div ref={imgRef} className="w-full h-full">
-      {isInView ? children(src) : children(null)}
-    </div>
-  );
-};
+import { ImageFallbackUrls } from "../../../lib/image-fallback";
 
 export default function GalleryPhotos() {
   const router = useRouter();
@@ -582,9 +529,8 @@ export default function GalleryPhotos() {
         const isInAnyOrder = isImageInAnyOrder(img);
         const orderStatus = getImageOrderStatus(img);
         const imageKey = img.key ?? img.filename ?? "";
-        // Use helper function to ensure proper priority: thumb → preview → full (last resort)
-        const imageSrc = getImageDisplayUrl(img);
-        const isProcessing = !imageSrc;
+        // Check if image has any available URLs
+        const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
 
         return (
           <div
@@ -605,23 +551,12 @@ export default function GalleryPhotos() {
                 </div>
               ) : (
                 <>
-                  <LazyImage src={imageSrc}>
-                    {(lazySrc) =>
-                      lazySrc ? (
-                        <RetryableImage
-                          src={lazySrc}
-                          alt={imageKey}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Ładowanie...
-                          </div>
-                        </div>
-                      )
-                    }
-                  </LazyImage>
+                  <LazyRetryableImage
+                    imageData={img as ImageFallbackUrls}
+                    alt={imageKey}
+                    className="w-full h-full object-cover rounded-lg"
+                    preferredSize="thumb"
+                  />
                   {orderStatus &&
                     (() => {
                       // Map order status to badge color and label (matching StatusBadges component)
@@ -694,7 +629,9 @@ export default function GalleryPhotos() {
               )}
             </div>
             <div className="p-2">
-              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{imageKey}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
+                {removeFileExtension(imageKey)}
+              </p>
             </div>
           </div>
         );
@@ -947,7 +884,7 @@ export default function GalleryPhotos() {
         title="Usuń zdjęcie"
         message={
           imageToDelete
-            ? `Czy na pewno chcesz usunąć zdjęcie "${imageToDelete.key ?? imageToDelete.filename}"?\nTa operacja jest nieodwracalna.`
+            ? `Czy na pewno chcesz usunąć zdjęcie "${removeFileExtension(imageToDelete.key ?? imageToDelete.filename)}"?\nTa operacja jest nieodwracalna.`
             : ""
         }
         confirmText="Usuń"

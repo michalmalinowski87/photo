@@ -462,14 +462,31 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({
     }
   };
 
+  /**
+   * Get thumbnail URL for Uppy file
+   * 
+   * Priority (fastest to slowest):
+   * 1. Blob/Data URL from Uppy's ThumbnailGenerator (file.preview) - FASTEST
+   *    - Generated locally on user's computer before upload
+   *    - No network request needed, instant display
+   *    - This is Uppy's default strategy and should always be preferred
+   * 2. Blob URL created from File object (file.data) - FAST
+   *    - Also local, but requires creating blob URL
+   *    - Cached to avoid recreating on every render
+   * 
+   * Note: We never fetch from CloudFront/S3 for Uppy thumbnails because:
+   * - Files are local until upload completes
+   * - Blob URLs are the fastest and most responsive option
+   * - Uppy's ThumbnailGenerator already provides optimized thumbnails
+   */
   const getThumbnail = (file: UppyFile): string | undefined => {
-    // Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
-    // Prefer this as it's already optimized by Uppy
+    // Priority 1: Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
+    // This is the fastest option - generated locally, no network request
     if (file.preview) {
       return file.preview;
     }
 
-    // Fallback: create blob URL from File object
+    // Priority 2: Create blob URL from File object (also local, but slightly slower)
     // Cache the blob URL to avoid recreating it on every render
     if (file.data && file.data instanceof File) {
       const cachedUrl = blobUrlCacheRef.current.get(file.id);

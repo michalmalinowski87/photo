@@ -1,10 +1,17 @@
+import { ImageFallbackUrls } from "../../lib/image-fallback";
+import { LazyRetryableImage } from "../ui/LazyRetryableImage";
+
 interface GalleryImage {
   id?: string;
   key?: string;
   filename?: string;
   url?: string;
   thumbUrl?: string;
+  thumbUrlFallback?: string;
   previewUrl?: string;
+  previewUrlFallback?: string;
+  bigThumbUrl?: string;
+  bigThumbUrlFallback?: string;
   [key: string]: unknown;
 }
 
@@ -37,27 +44,11 @@ export function OriginalsTab({
                 : "border border-gray-200 dark:border-gray-700"
             } rounded-lg overflow-hidden`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              // Priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
-              // We NEVER fetch full S3 images if thumbnails/previews are available
-              src={img.thumbUrl ?? img.previewUrl ?? img.url ?? ""}
+            <LazyRetryableImage
+              imageData={img as ImageFallbackUrls}
               alt={imgKey}
               className="w-full h-48 object-cover"
-              onError={(e) => {
-                // Progressive fallback: thumb → preview → full S3 (last resort only)
-                // Only fallback to full S3 image if all thumbnails/previews fail
-                if (img.thumbUrl && img.previewUrl && e.currentTarget.src === img.thumbUrl) {
-                  // CloudFront thumb failed, try CloudFront preview
-                  e.currentTarget.src = img.previewUrl;
-                } else if (img.thumbUrl && img.url && e.currentTarget.src === img.thumbUrl) {
-                  // No preview available, thumb failed, fallback to S3 full (last resort)
-                  e.currentTarget.src = img.url;
-                } else if (img.previewUrl && img.url && e.currentTarget.src === img.previewUrl) {
-                  // Preview failed, fallback to S3 full (last resort)
-                  e.currentTarget.src = img.url;
-                }
-              }}
+              preferredSize="thumb"
             />
           </div>
         );
