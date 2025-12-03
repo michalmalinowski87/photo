@@ -115,7 +115,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Prepare files to delete: originals, previews, and thumbnails
+	// Prepare files to delete: originals, previews, thumbnails, and bigthumbs
 	const toDelete: { Key: string }[] = [];
 	for (const key of selectedKeys) {
 		// Delete original (keeps original extension)
@@ -127,6 +127,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		// Delete thumbnail (WebP format)
 		toDelete.push({ Key: `galleries/${galleryId}/thumbs/${webpFilename}` });
+		
+		// Delete bigthumb (WebP format)
+		toDelete.push({ Key: `galleries/${galleryId}/bigthumbs/${webpFilename}` });
 	}
 
 	// Batch delete (S3 allows up to 1000 objects per request)
@@ -217,7 +220,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
-		logger?.info('Cleaned up originals, previews, and thumbnails', { 
+		logger?.info('Cleaned up originals, previews, thumbnails, and bigthumbs', { 
 			galleryId, 
 			orderId, 
 			selectedKeysCount: selectedKeys.length,
@@ -229,7 +232,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
-				message: 'Originals, previews, and thumbnails cleaned up successfully',
+				message: 'Originals, previews, thumbnails, and bigthumbs cleaned up successfully',
 				galleryId,
 				orderId,
 				selectedKeysCount: selectedKeys.length,
@@ -249,7 +252,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				error: 'Cleanup failed',
-				message: 'Failed to delete originals, previews, and thumbnails. Please retry.',
+				message: 'Failed to delete originals, previews, thumbnails, and bigthumbs. Please retry.',
 				details: err.message
 			})
 		};

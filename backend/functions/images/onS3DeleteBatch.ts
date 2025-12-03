@@ -36,10 +36,12 @@ async function processDelete(
 		const webpFilename = getWebpFilename(filename);
 		let previewKey: string;
 		let thumbKey: string;
+		let bigThumbKey: string;
 		
 		if (type === 'original') {
 			previewKey = `galleries/${galleryId}/previews/${webpFilename}`;
 			thumbKey = `galleries/${galleryId}/thumbs/${webpFilename}`;
+			bigThumbKey = `galleries/${galleryId}/bigthumbs/${webpFilename}`;
 		} else {
 			// Final image
 			if (!orderId) {
@@ -48,13 +50,15 @@ async function processDelete(
 			}
 			previewKey = `galleries/${galleryId}/final/${orderId}/previews/${webpFilename}`;
 			thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${webpFilename}`;
+			bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${webpFilename}`;
 		}
 
-		// Delete from S3 (original/final, previews, thumbs)
+		// Delete from S3 (original/final, previews, thumbs, bigthumbs)
 		const deleteResults = await Promise.allSettled([
 			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: originalKey })),
 			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: previewKey })),
-			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: thumbKey }))
+			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: thumbKey })),
+			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: bigThumbKey }))
 		]);
 
 		const deleteErrors = deleteResults.filter(r => r.status === 'rejected');
