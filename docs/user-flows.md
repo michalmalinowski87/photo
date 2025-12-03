@@ -427,14 +427,14 @@ Photographers upload original photos, system automatically generates previews an
    - **Note**: Storage limit checked BEFORE upload (prevents partial uploads)
 
 3. **Automatic Processing**
-   - S3 upload triggers Lambda function (`onUploadResize`)
-   - Lambda processes each image:
+   - Client-side thumbnail generation via Uppy plugin
+   - Plugin processes each image in browser:
      - Generates 1200px preview → `galleries/{galleryId}/previews/{filename}`
      - Generates 200px thumbnail → `galleries/{galleryId}/thumbs/{filename}`
-     - Uses Sharp library for resizing
-     - Updates gallery `originalsBytesUsed` field
+     - Uses Canvas API for resizing
+     - Uploads previews/thumbs to S3 using presigned URLs
    - Previews and thumbnails served via CloudFront CDN
-   - Processing happens asynchronously (no blocking)
+   - Processing happens immediately (no server-side delay)
 
 4. **Post-Upload Validation**
    - After batch upload completes, system calls `POST /galleries/{id}/validate-upload-limits`

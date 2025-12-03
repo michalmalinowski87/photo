@@ -198,17 +198,20 @@ export const handler = lambdaLogger(async (event: any) => {
 					const keyParts = file.key.split('/');
 					let filename: string;
 					let previewKey: string;
+					let bigThumbKey: string;
 					let thumbKey: string;
 					
 					if (isOriginal) {
 						filename = keyParts.slice(1).join('/'); // Remove 'originals/' prefix
 						previewKey = `galleries/${galleryId}/previews/${filename}`;
+						bigThumbKey = `galleries/${galleryId}/bigthumbs/${filename}`;
 						thumbKey = `galleries/${galleryId}/thumbs/${filename}`;
 					} else {
 						// final/{orderId}/{filename}
 						const orderId = keyParts[1];
 						filename = keyParts.slice(2).join('/');
 						previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+						bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
 						thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
 					}
 					
@@ -220,13 +223,20 @@ export const handler = lambdaLogger(async (event: any) => {
 					};
 					
 					const previewWebpKey = getWebpKey(previewKey);
+					const bigThumbWebpKey = getWebpKey(bigThumbKey);
 					const thumbWebpKey = getWebpKey(thumbKey);
 					
-					// Generate presigned URLs for preview and thumbnail
-					const [previewUrl, thumbUrl] = await Promise.all([
+					// Generate presigned URLs for all three versions: preview, bigThumb, and thumbnail
+					const [previewUrl, bigThumbUrl, thumbUrl] = await Promise.all([
 						getSignedUrl(s3, new PutObjectCommand({
 							Bucket: bucket,
 							Key: previewWebpKey,
+							ContentType: 'image/webp',
+							CacheControl: 'max-age=31536000'
+						}), { expiresIn: 3600 }),
+						getSignedUrl(s3, new PutObjectCommand({
+							Bucket: bucket,
+							Key: bigThumbWebpKey,
 							ContentType: 'image/webp',
 							CacheControl: 'max-age=31536000'
 						}), { expiresIn: 3600 }),
@@ -240,6 +250,8 @@ export const handler = lambdaLogger(async (event: any) => {
 					
 					result.previewUrl = previewUrl;
 					result.previewKey = previewWebpKey.replace(`galleries/${galleryId}/`, '');
+					result.bigThumbUrl = bigThumbUrl;
+					result.bigThumbKey = bigThumbWebpKey.replace(`galleries/${galleryId}/`, '');
 					result.thumbnailUrl = thumbUrl;
 					result.thumbnailKey = thumbWebpKey.replace(`galleries/${galleryId}/`, '');
 				}

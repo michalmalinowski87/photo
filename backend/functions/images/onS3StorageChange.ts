@@ -1,23 +1,20 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { recalculateStorageInternal } from '../galleries/recalculateBytesUsed';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const lambda = new LambdaClient({});
 
 /**
  * Lambda function for recalculating gallery storage bytes from S3
  * 
  * Triggered by:
- * - S3 OBJECT_CREATED_PUT events (for uploads) - calculates storage from originals first, then triggers resizeFn
+ * - S3 OBJECT_CREATED_PUT events (for uploads) - calculates storage from originals
  * - Programmatically from deleteBatchFn (after delete batch processing)
  * - Programmatically from pay.ts (on-demand)
  * - Programmatically from validateUploadLimits.ts (on-demand)
  * 
- * Flow for uploads: S3 event → storageRecalcFn (fast, calculates from originals) → resizeFn (slow, processes images)
- * This ensures storage is calculated ASAP from originals, while resizing happens asynchronously
+ * Image resizing is now handled client-side via Uppy thumbnail generation
  */
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -103,7 +100,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	const processedGalleries = new Set<string>();
-	const s3KeysForResize = new Set<string>(); // Use Set to deduplicate keys (S3 can send duplicate events)
 	
 	// Process records - handle both S3 events and programmatic calls
 	for (const record of s3EventRecords) {
@@ -153,19 +149,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 		
 		processedGalleries.add(galleryId);
-		
-		// If this is an S3 event (SQS or direct, not programmatic), collect the key for resizeFn
-		// Use Set to deduplicate - S3 can send duplicate events for the same file
-		if (isS3Event || isSQSEvent) {
-			s3KeysForResize.add(key);
-		}
 	}
 	
 	logger?.info('Processing galleries for storage recalculation', { 
 		galleryCount: processedGalleries.size,
-		galleryIds: Array.from(processedGalleries),
-		s3KeysForResize: s3KeysForResize.size,
-		uniqueKeys: Array.from(s3KeysForResize)
+		galleryIds: Array.from(processedGalleries)
 	});
 
 	// Recalculate storage for each unique gallery
@@ -173,8 +161,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Note: Conditional updates in recalculateStorageInternal prevent race conditions
 	// when multiple Lambda invocations process the same gallery concurrently
 	// No debounce/cache needed - batch processing handles deduplication
-	
-	const resizeFnName = envProc?.env?.RESIZE_FN_NAME as string;
 	
 	for (const galleryId of processedGalleries) {
 		try {
@@ -222,95 +208,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 			// Continue processing other galleries even if one fails
 		}
-	}
-
-	// After storage recalculation, trigger resizeFn for image processing (only for S3 CREATE events)
-	// This ensures storage is calculated from originals first (fast), then images are resized (slow)
-	// For programmatic calls (deleteBatchFn, pay, validateUploadLimits), no resize needed
-	if ((isS3Event || isSQSEvent) && resizeFnName && s3KeysForResize.size > 0) {
-		// Create resize records from the deduplicated keys
-		// We need to reconstruct the S3 event record format for resizeFn
-		const uniqueKeys = Array.from(s3KeysForResize);
-		const resizeRecords: any[] = [];
-		
-		// Build records from unique keys - match the original S3 event format
-		for (const decodedKey of uniqueKeys) {
-			// Find the original record that matches this key (for event metadata)
-			const matchingRecord = s3EventRecords.find((rec: any) => {
-				const key = rec.s3?.object?.key || '';
-				const decodedKeyFromRecord = key.replace(/\+/g, '%20');
-				try {
-					const decoded = decodeURIComponent(decodedKeyFromRecord);
-					return decoded === decodedKey;
-				} catch {
-					return false;
-				}
-			});
-			
-			if (matchingRecord) {
-				resizeRecords.push(matchingRecord);
-			} else {
-				// If we can't find the original record, create a synthetic one
-				// This ensures resizeFn gets the key even if record matching fails
-				resizeRecords.push({
-					eventName: 'ObjectCreated:Put',
-					s3: {
-						bucket: {
-							name: bucket
-						},
-						object: {
-							key: decodedKey
-						}
-					}
-				});
-			}
-		}
-		
-		if (resizeRecords.length > 0) {
-			logger?.info('Invoking resize Lambda after storage calculation', {
-				imageCount: resizeRecords.length,
-				uniqueKeys: uniqueKeys.length,
-				resizeFnName,
-				keys: uniqueKeys
-			});
-			
-			try {
-				await lambda.send(new InvokeCommand({
-					FunctionName: resizeFnName,
-					InvocationType: 'Event', // Async invocation
-					Payload: JSON.stringify({
-						Records: resizeRecords
-					})
-				}));
-				
-				logger?.info('Successfully triggered resize Lambda after storage calculation', {
-					imageCount: resizeRecords.length,
-					uniqueKeys: uniqueKeys.length
-				});
-			} catch (err: any) {
-				logger?.error('Failed to invoke resize Lambda after storage calculation', {
-					error: err.message,
-					stack: err.stack,
-					functionName: resizeFnName,
-					recordCount: resizeRecords.length
-				});
-			}
-		} else {
-			logger?.warn('No valid resize records after filtering', {
-				uniqueKeysCount: uniqueKeys.length,
-				s3EventRecordsCount: s3EventRecords.length,
-				uniqueKeys: Array.from(uniqueKeys)
-			});
-		}
-	} else {
-		logger?.warn('Skipping resizeFn invocation - condition not met', {
-			isS3Event,
-			isSQSEvent,
-			resizeFnName: !!resizeFnName,
-			resizeFnNameValue: resizeFnName,
-			s3KeysForResizeCount: s3KeysForResize.size,
-			s3KeysForResize: Array.from(s3KeysForResize)
-		});
 	}
 
 	logger?.info('S3 storage change processing completed', {

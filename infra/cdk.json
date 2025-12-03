@@ -1,8 +1,7 @@
 {
   "app": "node dist/bin/cdk.js",
   "context": {
-    "@aws-cdk/core:stackRelativeExports": true,
-    "sharpLayerArn": "arn:aws:lambda:eu-west-1:822961100030:layer:photocloud-sharp:1"
+    "@aws-cdk/core:stackRelativeExports": true
   }
 }
 

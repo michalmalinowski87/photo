@@ -116,6 +116,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		);
 		const previewKeys = new Set(previewFiles.keys());
 
+		// List big thumbs from S3
+		const bigThumbsPrefix = `galleries/${galleryId}/bigthumbs/`;
+		const bigThumbsListResponse = await s3.send(new ListObjectsV2Command({
+			Bucket: bucket,
+			Prefix: bigThumbsPrefix
+		}));
+		const bigThumbKeys = new Set(
+			(bigThumbsListResponse.Contents || []).map(obj => {
+				const fullKey = obj.Key || '';
+				return fullKey.replace(bigThumbsPrefix, '');
+			}).filter(Boolean)
+		);
+
 		// List thumbnails from S3
 		const thumbsPrefix = `galleries/${galleryId}/thumbs/`;
 		const thumbsListResponse = await s3.send(new ListObjectsV2Command({
@@ -154,18 +167,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Generate WebP filename for this original (e.g., "image.png" -> "image.webp")
 				const webpFilename = getWebpFilename(filename);
 				const previewWebpKey = `galleries/${galleryId}/previews/${webpFilename}`;
+				const bigThumbWebpKey = `galleries/${galleryId}/bigthumbs/${webpFilename}`;
 				const thumbWebpKey = `galleries/${galleryId}/thumbs/${webpFilename}`;
 				
-				// Check if WebP versions exist in previews/thumbs folders
+				// Check if WebP versions exist in previews/bigthumbs/thumbs folders
 				const hasPreviewWebp = previewFiles.has(webpFilename);
+				const hasBigThumbWebp = bigThumbKeys.has(webpFilename);
 				const hasThumbWebp = thumbKeys.has(webpFilename);
 				
 				// Build CloudFront URLs - encode path segments
-				// Only return WebP URLs from previews/thumbs folders (no fallback)
+				// Only return WebP URLs from previews/bigthumbs/thumbs folders (no fallback)
 				const previewUrl = hasPreviewWebp && cloudfrontDomain
 					? `https://${cloudfrontDomain}/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 				const previewUrlFallback = null; // No fallback, WebP only
+				const bigThumbUrl = hasBigThumbWebp && cloudfrontDomain
+					? `https://${cloudfrontDomain}/${bigThumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				const bigThumbUrlFallback = null; // No fallback, WebP only
 				const thumbUrl = hasThumbWebp && cloudfrontDomain
 					? `https://${cloudfrontDomain}/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
@@ -177,9 +196,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 				return {
 					key: filename, // Original filename (PNG/JPEG)
-					previewUrl,    // WebP preview URL from previews folder
+					previewUrl,    // WebP preview URL (1400px) from previews folder
 					previewUrlFallback,
-					thumbUrl,      // WebP thumb URL from thumbs folder
+					bigThumbUrl,   // WebP big thumb URL (600px) from bigthumbs folder
+					bigThumbUrlFallback,
+					thumbUrl,      // WebP thumb URL (300x300) from thumbs folder
 					thumbUrlFallback,
 					size,
 					lastModified

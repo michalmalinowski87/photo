@@ -104,9 +104,10 @@ export default function GalleryThumbnails({
 								onDoubleClick={() => onImageClick && onImageClick(index)}
 								style={{ position: 'relative' }}
 							>
-								{img.previewUrl ? (
+								{/* Use bigThumbUrl for masonry grid layout, fallback to previewUrl or thumbUrl */}
+								{(img.bigThumbUrl || img.previewUrl || img.thumbUrl) ? (
 									<LazyImage 
-										src={img.previewUrl} 
+										src={img.bigThumbUrl || img.previewUrl || img.thumbUrl} 
 										alt={img.key}
 										style={{ 
 											width: '100%', 

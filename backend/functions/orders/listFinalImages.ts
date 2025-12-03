@@ -104,8 +104,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				};
 				
 				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+				const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
 				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
 				const previewWebpKey = getWebpKey(previewKey);
+				const bigThumbWebpKey = getWebpKey(bigThumbKey);
 				const thumbWebpKey = getWebpKey(thumbKey);
 				
 				// Build CloudFront URLs - encode path segments
@@ -113,9 +115,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 				
-				// Processed WebP URLs for display (preview for full view, thumb for grid)
+				// Processed WebP URLs for display (three-tier optimization)
 				const previewUrl = cloudfrontDomain
 					? `https://${cloudfrontDomain}/${previewWebpKey.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				const bigThumbUrl = cloudfrontDomain
+					? `https://${cloudfrontDomain}/${bigThumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
 					: null;
 				const thumbUrl = cloudfrontDomain
 					? `https://${cloudfrontDomain}/${thumbWebpKey.split('/').map(encodeURIComponent).join('/')}`
@@ -124,8 +129,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return {
 					key: filename,
 					finalUrl, // Original unprocessed URL (for download)
-					previewUrl, // Processed WebP preview (for display)
-					thumbUrl, // Processed WebP thumbnail (for grid)
+					previewUrl, // Processed WebP preview (1400px) for full-screen viewing
+					bigThumbUrl, // Processed WebP big thumb (600px) for masonry grid
+					thumbUrl, // Processed WebP thumbnail (300x300) for CMS grid
 					size: obj.Size || 0,
 					lastModified: obj.LastModified?.toISOString()
 				};

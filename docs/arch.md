@@ -65,7 +65,8 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - `downloads/createZip.ts` - Create ZIP of selected photos
 
 #### Image Processing
-- `images/onUploadResize.ts` - Generate previews (1200px) and thumbnails (200px) using Sharp
+- Image resizing is now handled client-side via Uppy thumbnail generation plugin
+- No server-side Lambda function needed
 
 #### Processing
 - `processed/complete.ts` - Mark order as delivered

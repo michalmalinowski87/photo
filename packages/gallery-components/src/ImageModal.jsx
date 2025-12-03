@@ -32,11 +32,13 @@ export default function ImageModal({
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	}, [onClose, onNavigate]);
 
+	// For full-screen modal viewing, always use previewUrl (1400px) for best quality
+	// Fallback to bigThumbUrl or thumbUrl if previewUrl not available
 	// For processed photos: use previewUrl for display, finalUrl for download
 	// For originals: use previewUrl for display
 	const imageUrl = isProcessed 
-		? (image.previewUrl || image.thumbUrl || image.finalUrl)
-		: image.previewUrl;
+		? (image.previewUrl || image.bigThumbUrl || image.thumbUrl || image.finalUrl)
+		: (image.previewUrl || image.bigThumbUrl || image.thumbUrl);
 	const isSelected = selectedKeys && selectedKeys.has && selectedKeys.has(image.key);
 
 	return (

@@ -613,55 +613,12 @@ export class AppStack extends Stack {
 			targets: [new LambdaFunction(transactionExpiryFn)]
 		});
 
-		// Images resize with Sharp - using Lambda Layer to avoid native dependency bundling issues
-		// Sharp is excluded from bundling and provided via Lambda Layer
-		// To create the layer: Download from https://github.com/pH200/sharp-layer/releases
-		// Then: aws lambda publish-layer-version --layer-name sharp --zip-file fileb://release-x64.zip --compatible-runtimes nodejs20.x --compatible-architectures x86_64
-		// Then provide the ARN via: --context sharpLayerArn=arn:aws:lambda:REGION:ACCOUNT:layer:sharp:VERSION
-		const sharpLayerArn = this.node.tryGetContext('sharpLayerArn');
-		const resizeFn = new NodejsFunction(this, 'ImagesOnUploadResizeFnV2', {
-			entry: path.join(__dirname, '../../../backend/functions/images/onUploadResize.ts'),
-			handler: 'handler',
-			runtime: Runtime.NODEJS_20_X,
-			memorySize: 1024,
-			timeout: Duration.minutes(1),
-			// Note: Reserved concurrency not set due to low account limit (10 total)
-			// AWS requires minimum 10 unreserved concurrency, so we can't reserve any
-			// The S3 event prefix filters below are the primary protection against recursive loops
-			// To enable reserved concurrency, request limit increase: aws service-quotas request-service-quota-increase --service-code lambda --quota-code L-B99A9384 --desired-value 100
-			bundling: {
-				externalModules: ['aws-sdk', 'sharp'], // Sharp provided by layer
-				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
-				minify: true,
-				treeShaking: true,
-				sourceMap: false
-			},
-			environment: envVars
-		});
-		
-		// Add Sharp layer if provided via context
-		if (sharpLayerArn) {
-			const sharpLayer = LayerVersion.fromLayerVersionArn(this, 'SharpLayer', sharpLayerArn);
-			resizeFn.addLayers(sharpLayer);
-		}
-		galleriesBucket.grantReadWrite(resizeFn);
-		galleries.grantReadWriteData(resizeFn);
-		
-		// DISABLED: S3 event notification for resize Lambda (temporarily disabled for Uppy thumbnail testing)
-		// Configure S3 event notifications to trigger resize Lambda on uploads
-		// Trigger on originals/ and final/ directories only (Lambda filters out previews/thumbs to prevent loops)
-		// Note: We trigger on all galleries/ files and let Lambda filter, since S3 filters can't easily exclude subdirectories
-		// TODO: Re-enable after Uppy client-side thumbnail generation is tested and working
-		// galleriesBucket.addEventNotification(
-		// 	EventType.OBJECT_CREATED,
-		// 	new LambdaDestination(resizeFn),
-		// 	{ prefix: 'galleries/' } // Match all files in galleries/ prefix - Lambda will filter out previews/thumbs
-		// );
+		// Image resizing is now handled client-side via Uppy thumbnail generation
+		// No server-side resize Lambda needed
 		
 		// Storage recalculation is now handled on-demand with caching (5-minute TTL)
 		// See backend/functions/galleries/recalculateBytesUsed.ts for implementation
 		// Critical operations (pay, validateUploadLimits) force recalculation; display uses cached values
-		// Note: S3 events trigger resize Lambda for image processing (previews/thumbs generation)
 
 		// SQS Queue to batch delete operations - reduces Lambda invocations significantly
 		// For 3000 deletes: without batching = 3000 invocations, with batching (batch size 10) = 300 invocations
@@ -710,7 +667,6 @@ export class AppStack extends Stack {
 		deleteQueue.grantConsumeMessages(deleteBatchFn);
 		
 		// Store function names and queue URLs in environment
-		envVars['RESIZE_FN_NAME'] = resizeFn.functionName;
 		envVars['DELETE_BATCH_FN_NAME'] = deleteBatchFn.functionName;
 		envVars['DELETE_QUEUE_URL'] = deleteQueue.queueUrl;
 		
@@ -771,14 +727,6 @@ export class AppStack extends Stack {
 			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
 		}));
 		
-		// Add CloudFront invalidation permissions to resize function
-		// This allows invalidating cache when images are replaced (same filename)
-		resizeFn.addToRolePolicy(new PolicyStatement({
-			actions: ['cloudfront:CreateInvalidation'],
-			resources: [`arn:aws:cloudfront::${this.account}:distribution/${dist.distributionId}`]
-		}));
-		// Add CloudFront distribution ID to resize function environment
-		resizeFn.addEnvironment('CLOUDFRONT_DISTRIBUTION_ID', dist.distributionId);
 
 		// CloudWatch Monitoring & Alarms for CloudFront cost optimization
 		// Create SNS topic for cost alerts (only in production)

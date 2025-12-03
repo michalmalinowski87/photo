@@ -12,22 +12,18 @@ The upload system uses a **simple, debounced approach** with no polling:
 
 ## Architecture Components
 
-### 1. **PhotoUploadHandler** (`frontend/dashboard/components/upload/PhotoUploadHandler.tsx`)
-- Handles the entire upload orchestration
+### 1. **Uppy Upload System** (`frontend/dashboard/lib/uppy-config.ts`, `frontend/dashboard/hooks/useUppyUpload.ts`)
+- Handles the entire upload orchestration via Uppy 5.0
 - Manages presigned URL generation, S3 upload, and post-upload actions
-- Triggers debounced fetch after successful uploads
+- Generates client-side thumbnails (preview and thumbnail versions)
+- Triggers refetch after successful uploads
 
-### 2. **Debounced Fetch Utility** (`frontend/dashboard/lib/debounce-fetch.ts`)
-- Debounces `/images` API calls
-- If multiple uploads happen within 2 seconds, only one fetch executes
-- Prevents API spam from rapid uploads
-
-### 3. **Gallery Store** (`frontend/dashboard/store/gallerySlice.ts`)
+### 2. **Gallery Store** (`frontend/dashboard/store/gallerySlice.ts`)
 - Manages image state in Zustand store
 - `fetchGalleryImages()` always bypasses cache when `forceRefresh = true`
 - Applies cache-busting query parameters to image URLs
 
-### 4. **RetryableImage Component** (`frontend/dashboard/components/ui/RetryableImage.tsx`)
+### 3. **RetryableImage Component** (`frontend/dashboard/components/ui/RetryableImage.tsx`)
 - Handles individual image loading state
 - Retries loading if image fails (up to 30 times with exponential backoff)
 - Shows loading spinner while image loads
@@ -46,47 +42,45 @@ User selects file → handleFileSelect() called
 
 #### Step 2: Presigned URL Generation
 ```
-fetchPresignedUrls() called
+Uppy calls getUploadParameters() function
 ├─ API call: POST /api/uploads/presign-batch
-├─ Backend generates presigned S3 URLs
-└─ Returns: { urls: [{ key, uploadUrl }] }
+├─ Backend generates presigned S3 URLs (original, preview, thumbnail)
+└─ Returns: { urls: [{ key, uploadUrl, previewUrl, thumbnailUrl }] }
 ```
 
 #### Step 3: S3 Upload
 ```
-uploadFiles() called for each file
-├─ Uploads file to S3 using presigned URL
+Uppy uploads files to S3
+├─ Uploads original file using presigned URL
 ├─ Updates progress: 0% → 100%
-└─ On success: onUploadSuccess() callback
+└─ On success: upload-success event triggered
 ```
 
-#### Step 4: Post-Upload Actions
+#### Step 4: Client-Side Thumbnail Generation
+```
+ThumbnailUploadPlugin processes upload-success event
+├─ Generates preview (1200px) and thumbnail (200px) in browser
+├─ Converts to WebP format
+└─ Uploads previews/thumbs to S3 using presigned URLs
+```
+
+#### Step 5: Post-Upload Actions
 ```
 After ALL uploads complete:
-├─ Mark images as "ready" immediately
-│  └─ setPerImageProgress: "uploading" → "ready"
-├─ Show success toast
-└─ Trigger debounced fetch
+├─ Uppy triggers onComplete callback
+├─ Calls refreshGalleryBytesOnly() to update storage
+├─ Shows success toast
+└─ Triggers refetch of images
 ```
 
-#### Step 5: Debounced Fetch
+#### Step 6: Image Refetch
 ```
-debouncedFetch() called
-├─ Increments callCount
-├─ Clears existing timer (if any)
-├─ If pending fetch exists, waits for it
-├─ Otherwise, schedules new timer (2 seconds)
-└─ After 2 seconds: executes fetchFn() ONCE
-   ├─ invalidateGalleryImagesCache(galleryId) // Clear cache
-   ├─ fetchGalleryImages(galleryId, true) // forceRefresh = true
-   │  ├─ If forceRefresh: invalidateGalleryImagesCache() called again
-   │  ├─ Bypasses cache check (always fetches fresh)
-   │  ├─ API call: GET /api/galleries/{galleryId}/images
-   │  ├─ Backend returns images with lastModified timestamps
-   │  ├─ setGalleryImages() called → applies cache-busting
-   │  └─ Returns images with cache-busting: ?t={lastModified}&f={fetchTimestamp}
-   └─ If reloadGallery callback provided: calls it to update local state
-      └─ loadPhotos(false) // Updates local state from store (no loading spinner)
+fetchGalleryImages() called
+├─ invalidateGalleryImagesCache(galleryId) // Clear cache
+├─ API call: GET /api/galleries/{galleryId}/images
+├─ Backend returns images with lastModified timestamps
+├─ setGalleryImages() called → applies cache-busting
+└─ Returns images with cache-busting: ?t={lastModified}&f={fetchTimestamp}
 ```
 
 **Note**: We only fetch images, NOT the full gallery. Gallery metadata (bytes, settings) is updated separately via `refreshGalleryBytesOnly()`.
@@ -108,23 +102,21 @@ Images appear in UI
 #### Steps 1-3: Same as Single Upload
 - Each file goes through presigned URL → S3 upload → success
 
-#### Step 4: Multiple Debounced Fetches
+#### Step 4: Post-Upload Processing
 ```
-Upload 1 succeeds → debouncedFetch() called (timer starts: 2s)
-Upload 2 succeeds → debouncedFetch() called (timer reset: 2s)
-Upload 3 succeeds → debouncedFetch() called (timer reset: 2s)
+Upload 1 succeeds → ThumbnailUploadPlugin generates previews/thumbs
+Upload 2 succeeds → ThumbnailUploadPlugin generates previews/thumbs
 ...
-Upload 10 succeeds → debouncedFetch() called (timer reset: 2s)
+Upload 10 succeeds → ThumbnailUploadPlugin generates previews/thumbs
 
-Result: Only ONE fetch executes after 2 seconds from last upload
+All uploads complete → onComplete callback triggered
 ```
 
 #### Step 5: Single API Call
 ```
-After 2 seconds from last upload:
-├─ debounceTimer fires
-├─ fetchFn() executes ONCE
-├─ reloadGallery() called
+After all uploads complete:
+├─ refreshGalleryBytesOnly() called (updates storage)
+├─ fetchGalleryImages() called ONCE
 └─ All 10 images fetched in single API call
 ```
 
@@ -137,12 +129,10 @@ After 2 seconds from last upload:
 
 #### Step 4: Backend Processing
 ```
-Lambda function (onUploadResize.ts) triggered
-├─ Detects duplicate (HeadObjectCommand checks S3)
-├─ If replacement detected:
-│  ├─ Creates CloudFront invalidation for old paths
-│  └─ Processes new previews/thumbs
-└─ Updates DynamoDB with new lastModified timestamp
+Client-side thumbnail generation (Uppy plugin)
+├─ Generates preview (1200px) and thumbnail (200px) in browser
+├─ Uploads previews/thumbs to S3 using presigned URLs
+└─ Images immediately available (no server-side processing delay)
 ```
 
 #### Step 5: Debounced Fetch
@@ -270,52 +260,35 @@ fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
 - **Handles replacements**: Old cached images won't show up
 - **Simpler logic**: No need to compare cached vs fresh data
 
-## Debounce Implementation
+## Upload Completion Handling
 
 ### Code Flow
 
 ```typescript
-// debounce-fetch.ts
-let debounceTimer: NodeJS.Timeout | null = null;
-let pendingFetch: Promise<void> | null = null;
-let callCount = 0;
-
-export function debouncedFetch(fetchFn, delay = 2000) {
-  callCount++;
-  
-  // Clear existing timer
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-  }
-  
-  // If fetch already in progress, wait for it
-  if (pendingFetch) {
-    return pendingFetch;
-  }
-  
-  // Schedule new fetch
-  debounceTimer = setTimeout(async () => {
-    debounceTimer = null;
-    const currentCallCount = callCount;
-    callCount = 0; // Reset
+// useUppyUpload.ts
+uppy.on('complete', async (result) => {
+  // All uploads complete
+  if (result.successful.length > 0) {
+    // Update storage bytes
+    await refreshGalleryBytesOnly(galleryId, true);
     
-    if (currentCallCount > 0) {
-      pendingFetch = fetchFn();
-      await pendingFetch;
-      pendingFetch = null;
-    }
-  }, delay);
-}
+    // Refetch images
+    await fetchGalleryImages(galleryId, true);
+    
+    // Show success notification
+    toast.success('Zdjęcia zostały przesłane pomyślnie');
+  }
+});
 ```
 
 ### Example Timeline
 
 ```
-T=0s:   Upload 1 succeeds → debouncedFetch() → timer starts (2s)
-T=0.5s: Upload 2 succeeds → debouncedFetch() → timer resets (2s)
-T=1s:   Upload 3 succeeds → debouncedFetch() → timer resets (2s)
-T=1.5s: Upload 4 succeeds → debouncedFetch() → timer resets (2s)
-T=3.5s: Timer fires → fetchFn() executes ONCE
+T=0s:   Upload 1 succeeds → ThumbnailUploadPlugin generates previews/thumbs
+T=0.5s: Upload 2 succeeds → ThumbnailUploadPlugin generates previews/thumbs
+T=1s:   Upload 3 succeeds → ThumbnailUploadPlugin generates previews/thumbs
+T=1.5s: Upload 4 succeeds → ThumbnailUploadPlugin generates previews/thumbs
+T=2s:   All uploads complete → onComplete callback → fetchGalleryImages() executes ONCE
 ```
 
 ## RetryableImage Component
@@ -439,16 +412,15 @@ Step 7: RetryableImage retries 30 times
 
 ### Key Files
 
-1. **PhotoUploadHandler.tsx**
-   - Location: `frontend/dashboard/components/upload/PhotoUploadHandler.tsx`
-   - Key function: `handleFileSelect()` (lines ~140-360)
-   - Debounced fetch: Lines 331-344
-   - Post-upload logic: Lines 313-350
+1. **uppy-config.ts**
+   - Location: `frontend/dashboard/lib/uppy-config.ts`
+   - Key function: `createUppyInstance()` - Configures Uppy with S3 plugin and thumbnail generator
+   - Thumbnail upload: `ThumbnailUploadPlugin` generates and uploads previews/thumbs
 
-2. **debounce-fetch.ts**
-   - Location: `frontend/dashboard/lib/debounce-fetch.ts`
-   - Key function: `debouncedFetch()` (lines 10-47)
-   - Global state: `debounceTimer`, `pendingFetch`, `callCount`
+2. **useUppyUpload.ts**
+   - Location: `frontend/dashboard/hooks/useUppyUpload.ts`
+   - Key function: `useUppyUpload()` - Manages upload lifecycle
+   - Post-upload: `onComplete` callback handles storage update and image refetch
 
 3. **gallerySlice.ts**
    - Location: `frontend/dashboard/store/gallerySlice.ts`
@@ -475,14 +447,14 @@ Step 7: RetryableImage retries 30 times
 ## Code Review Checklist
 
 ### Functionality
-- [ ] **Debounce works correctly**: Multiple rapid uploads → single fetch
+- [ ] **Upload completion works correctly**: Multiple rapid uploads → single fetch after all complete
 - [ ] **Cache bypassed**: `forceRefresh = true` after uploads
 - [ ] **Fallback works**: Images use S3 URLs if previews not ready
 - [ ] **Cache-busting applied**: URLs have `?t=...&f=...` params
 - [ ] **RetryableImage handles errors**: Retries with exponential backoff
-- [ ] **Progress updates**: Status changes from "uploading" → "ready"
+- [ ] **Progress updates**: Uppy shows progress per file
+- [ ] **Thumbnail generation**: Client-side previews/thumbs generated and uploaded
 - [ ] **Replacements work**: Old images replaced with new cache-busted URLs
-- [ ] **CloudFront invalidation**: Backend invalidates cache on replacements
 
 ### Code Quality
 - [ ] **No memory leaks**: Timers cleared, refs reset
@@ -492,15 +464,17 @@ Step 7: RetryableImage retries 30 times
 - [ ] **Cleanup**: `uploadCancelRef` properly checked before operations
 
 ### Performance
-- [ ] **Debounce prevents spam**: Multiple uploads don't cause multiple API calls
+- [ ] **Single fetch after uploads**: Multiple uploads trigger single fetch after all complete
 - [ ] **Cache invalidation**: Cache properly cleared when needed
 - [ ] **No unnecessary re-renders**: State updates are minimal
 - [ ] **Retry limits**: RetryableImage doesn't retry indefinitely
+- [ ] **Client-side processing**: Thumbnails generated in browser (no server delay)
 
 ### Edge Cases
-- [ ] **Upload cancellation**: `uploadCancelRef` prevents operations after cancel
+- [ ] **Upload cancellation**: Uppy handles cancellation gracefully
 - [ ] **Network failures**: API failures don't break the UI
 - [ ] **Slow processing**: Images fallback to S3 if previews not ready
-- [ ] **Rapid uploads**: Debounce handles 10+ uploads correctly
+- [ ] **Rapid uploads**: Uppy handles 10+ uploads correctly with batching
 - [ ] **Image replacement**: Old images properly replaced with new ones
+- [ ] **Thumbnail generation failure**: Falls back to original if thumbnail generation fails
 

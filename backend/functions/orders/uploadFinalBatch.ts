@@ -174,13 +174,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				};
 				
 				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${getWebpKey(filename)}`;
+				const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${getWebpKey(filename)}`;
 				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${getWebpKey(filename)}`;
 				
-				// Generate presigned URLs for preview and thumbnail
-				const [previewUrl, thumbUrl] = await Promise.all([
+				// Generate presigned URLs for all three versions: preview, bigThumb, and thumbnail
+				const [previewUrl, bigThumbUrl, thumbUrl] = await Promise.all([
 					getSignedUrl(s3, new PutObjectCommand({
 						Bucket: bucket,
 						Key: previewKey,
+						ContentType: 'image/webp',
+						CacheControl: 'max-age=31536000'
+					}), { expiresIn: 3600 }),
+					getSignedUrl(s3, new PutObjectCommand({
+						Bucket: bucket,
+						Key: bigThumbKey,
 						ContentType: 'image/webp',
 						CacheControl: 'max-age=31536000'
 					}), { expiresIn: 3600 }),
@@ -194,6 +201,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				
 				result.previewUrl = previewUrl;
 				result.previewKey = previewKey.replace(`galleries/${galleryId}/`, '');
+				result.bigThumbUrl = bigThumbUrl;
+				result.bigThumbKey = bigThumbKey.replace(`galleries/${galleryId}/`, '');
 				result.thumbnailUrl = thumbUrl;
 				result.thumbnailKey = thumbKey.replace(`galleries/${galleryId}/`, '');
 			}

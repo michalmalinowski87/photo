@@ -348,9 +348,9 @@ export default function ProcessedPhotosView({
 										}}
 										onClick={() => onImageClick && onImageClick(index)}
 									>
-										{(img.previewUrl || img.thumbUrl || img.finalUrl) ? (
+										{(img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl) ? (
 											<img 
-												src={img.previewUrl || img.thumbUrl || img.finalUrl} 
+												src={img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl} 
 												alt={img.key}
 												style={{ 
 													width: '100%', 

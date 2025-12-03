@@ -102,7 +102,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return fullKey.replace(prefix, '');
 	}).filter((key): key is string => Boolean(key) && !key.includes('/'));
 
-	// Note: finalsBytesUsed is already tracked in onUploadResize.ts when each image is processed
+	// Note: finalsBytesUsed is tracked via storage recalculation when images are uploaded
 	// (same as originalsBytesUsed for originals). No need to recalculate here to avoid double-counting.
 
 	// If no final photos exist, nothing to process
