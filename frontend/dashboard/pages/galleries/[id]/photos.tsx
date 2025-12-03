@@ -7,8 +7,8 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { RetryableImage } from "../../../components/ui/RetryableImage";
-import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { StorageDisplay } from "../../../components/upload/StorageDisplay";
+import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGallery } from "../../../hooks/useGallery";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { useToast } from "../../../hooks/useToast";
@@ -54,6 +54,27 @@ interface ApiImage {
 }
 
 // UploadProgress interface is imported from PhotoUploadHandler
+
+/**
+ * Get the optimal image URL for display, prioritizing thumbnails/previews over full images
+ * 
+ * Priority order (smallest to largest):
+ * 1. CloudFront thumb (thumbUrl) - smallest, fastest, optimized WebP
+ * 2. CloudFront preview (previewUrl) - larger but still optimized WebP
+ * 3. Full S3 image (url/finalUrl) - LAST RESORT only if no thumbnails exist
+ * 
+ * This ensures we NEVER fetch full S3 images when thumbnails/previews are available,
+ * reducing bandwidth, improving performance, and preventing API Gateway overload.
+ */
+function getImageDisplayUrl(img: {
+  thumbUrl?: string | null;
+  previewUrl?: string | null;
+  url?: string | null;
+  finalUrl?: string | null;
+}): string {
+  // Priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
+  return img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "";
+}
 
 // Lazy loading wrapper component using Intersection Observer
 const LazyImage: React.FC<{ src: string; children: (src: string | null) => React.ReactNode }> = ({
@@ -120,7 +141,7 @@ export default function GalleryPhotos() {
 
   // Check for recovery state and auto-open modal
   useEffect(() => {
-    if (!galleryId || typeof window === "undefined") return;
+    if (!galleryId || typeof window === "undefined") {return;}
     
     const storageKey = `uppy_upload_state_${galleryId}_originals`;
     const stored = localStorage.getItem(storageKey);
@@ -233,6 +254,7 @@ export default function GalleryPhotos() {
           // Return merged array (API images + preserved deleting images)
           return Array.from(apiImagesMap.values());
         });
+
       } catch (err) {
         if (!silent) {
           const errorMsg = formatApiError(err);
@@ -245,12 +267,12 @@ export default function GalleryPhotos() {
         }
       }
     },
-    [galleryId, showToast, fetchGalleryImages, deletingImagesRef]
+    [galleryId, showToast, fetchGalleryImages, deletingImagesRef, gallery]
   );
 
   // Reload gallery after upload (simple refetch, no polling)
   const reloadGalleryAfterUpload = useCallback(async () => {
-    if (!galleryId) return;
+    if (!galleryId) {return;}
     
     // Invalidate cache and fetch fresh images
     const { invalidateGalleryImagesCache, fetchGalleryImages } = useGalleryStore.getState();
@@ -410,7 +432,6 @@ export default function GalleryPhotos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
-
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
 
@@ -562,7 +583,8 @@ export default function GalleryPhotos() {
         const isInAnyOrder = isImageInAnyOrder(img);
         const orderStatus = getImageOrderStatus(img);
         const imageKey = img.key ?? img.filename ?? "";
-        const imageSrc = img.thumbUrl ?? img.previewUrl ?? img.url ?? "";
+        // Use helper function to ensure proper priority: thumb → preview → full (last resort)
+        const imageSrc = getImageDisplayUrl(img);
         const isProcessing = !imageSrc;
 
         return (

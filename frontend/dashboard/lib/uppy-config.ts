@@ -1,7 +1,6 @@
 import AwsS3 from "@uppy/aws-s3";
 import Uppy from "@uppy/core";
 import type { UppyFile } from "@uppy/core";
-import GoldenRetriever from "@uppy/golden-retriever";
 import ThumbnailGenerator from "@uppy/thumbnail-generator";
 
 import api from "./api-service";
@@ -9,7 +8,10 @@ import { ThumbnailUploadPlugin } from "./uppy-thumbnail-upload-plugin";
 
 export type UploadType = "originals" | "finals";
 
-const MULTIPART_THRESHOLD = 5 * 1024 * 1024; // 5MB - use multipart for files larger than this
+// Uppy's recommended default: use multipart only for files larger than 100 MiB
+// This reduces API Gateway load for smaller files, which don't benefit from multipart overhead
+// See: https://uppy.io/docs/aws-s3/#shouldusemultipartfile
+const MULTIPART_THRESHOLD = 100 * 2 ** 20; // 100 MiB - Uppy's recommended default
 const BATCH_WINDOW_MS = 100; // Wait up to 100ms to collect files for batching
 const MAX_BATCH_SIZE = 50; // Maximum files per batch (API limit)
 
@@ -223,10 +225,9 @@ export interface UppyConfigOptions {
   orderId?: string; // Required for 'finals' type
   type: UploadType;
   onBeforeUpload?: (files: UppyFile[]) => Promise<boolean>;
-  onUploadProgress?: (progress: { current: number; total: number }) => void;
+  onUploadProgress?: (progress: { current: number; total: number; bytesUploaded?: number; bytesTotal?: number }) => void;
   onComplete?: (result: { successful: UppyFile[]; failed: UppyFile[] }) => void;
   onError?: (error: Error, file?: UppyFile) => void;
-  recoveryUrl?: string; // URL where upload was started (for recovery)
 }
 
 /**
@@ -246,15 +247,20 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       galleryId: config.galleryId,
       orderId: config.orderId,
       type: config.type,
-      recoveryUrl: config.recoveryUrl || (typeof window !== "undefined" ? window.location.href : ""),
       uploadStartedAt: Date.now().toString(),
     },
   });
 
-  // Add Golden Retriever for resumable uploads with Service Worker support
-  uppy.use(GoldenRetriever, {
-    serviceWorker: true, // Enable Service Worker for large file recovery
-    indexedDBName: `uppy-golden-retriever-${config.galleryId}-${config.type}`,
+  // Listen for file removal events to debug
+  uppy.on("file-removed", (file: UppyFile, reason?: string) => {
+    // eslint-disable-next-line no-console
+    console.warn("[Uppy] File removed:", file.id, file.name, "Reason:", reason);
+  });
+  
+  // Listen for restriction failures
+  uppy.on("restriction-failed", (file: UppyFile, error: Error) => {
+    // eslint-disable-next-line no-console
+    console.error("[Uppy] File restriction failed:", file.id, file.name, error.message);
   });
 
   // Add Thumbnail Generator for client-side previews
@@ -274,7 +280,10 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     id: "aws-s3",
     limit: 5, // Upload 5 files concurrently (adjust based on performance)
     shouldUseMultipart: (file: UppyFile) => {
-      // Use multipart for files larger than threshold
+      // Use multipart only for files larger than 100 MiB (Uppy's recommended default)
+      // For smaller files, simple PUT uploads are more efficient (1 API call vs 4+ for multipart)
+      // This reduces API Gateway load and prevents 503 errors from request overflow
+      // See: https://uppy.io/docs/aws-s3/#shouldusemultipartfile
       return (file.size || 0) > MULTIPART_THRESHOLD;
     },
     getUploadParameters: async (file: UppyFile) => {
@@ -453,17 +462,53 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     },
     listParts: async (file: UppyFile, { uploadId, key }: { uploadId: string; key: string }) => {
       // List existing parts for resume
+      // If this fails (e.g., 503 errors), return empty array to allow upload to continue
+      // This prevents resume failures from blocking uploads
       const galleryId = config.galleryId;
-      const response = await api.uploads.listMultipartParts(galleryId, {
+      const maxRetries = 2;
+      let lastError: Error | null = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await api.uploads.listMultipartParts(galleryId, {
+            uploadId,
+            key,
+          });
+
+          return response.parts.map((part) => ({
+            PartNumber: part.partNumber,
+            ETag: part.etag,
+            Size: part.size,
+          }));
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // If it's a 503 or 500, retry with exponential backoff
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 100; // 100ms, 200ms
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+      }
+      
+      // All retries failed - log warning and return empty array
+      // This allows upload to continue from scratch rather than blocking resume
+      // Note: This means Uppy will re-upload parts that were already uploaded,
+      // but this is better than blocking the entire upload
+      // eslint-disable-next-line no-console
+      console.warn("[Uppy] Failed to list multipart parts after retries, resuming from scratch", {
+        fileName: file.name,
         uploadId,
         key,
+        error: lastError?.message,
+        attempts: maxRetries + 1,
+        note: "Upload will continue but may re-upload already uploaded parts",
       });
-
-      return response.parts.map((part) => ({
-        PartNumber: part.partNumber,
-        ETag: part.etag,
-        Size: part.size,
-      }));
+      
+      // Return empty array - Uppy will treat this as a fresh upload
+      // This ensures resume can proceed even when listParts fails
+      return [];
     },
     prepareUploadPart: async (file: UppyFile, part: { number: number; chunk: Blob }) => {
       // Get presigned URL for this specific part
@@ -511,45 +556,65 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     },
   });
 
-  // Add event handlers
+  // Add preprocessor for upload validation (runs before upload starts)
+  // Preprocessors execute before upload begins, perfect for validation
   if (config.onBeforeUpload) {
-    uppy.on("upload", async () => {
-      const files = Object.values(uppy.getFiles());
-      const shouldProceed = await config.onBeforeUpload?.(files);
-      if (!shouldProceed) {
+    uppy.addPreProcessor(async (fileIds) => {
+      const files = fileIds.map((id) => uppy.getFile(id)).filter((f): f is UppyFile => f !== null);
+      
+      try {
+        const shouldProceed = await config.onBeforeUpload?.(files);
+        if (!shouldProceed) {
+          // Cancel all uploads if validation fails
+          // This prevents upload from starting
+          uppy.cancelAll();
+          // Don't throw - just cancel silently, validation callback handles UI
+          return;
+        }
+      } catch (error) {
+        // If validation throws an error, cancel upload
         uppy.cancelAll();
-        return;
+        throw error;
       }
     });
   }
 
   if (config.onUploadProgress) {
+    // Use Uppy's upload-progress event - fires for each file during upload
+    // Calculate aggregate progress from all files (Uppy provides per-file progress)
     uppy.on("upload-progress", (file, progress) => {
-      if (file && progress) {
-        const allFiles = Object.values(uppy.getFiles());
-        const uploadingFiles = allFiles.filter((f) => f.progress?.uploadStarted);
-        const total = uploadingFiles.length;
-        const current = uploadingFiles.filter(
-          (f) => f.progress?.uploadComplete === true
-        ).length;
+      if (!file || !progress) return;
+      
+      // Get all files from Uppy - this is the source of truth
+      const allFiles = Object.values(uppy.getFiles());
+      
+      // Filter to only files that have started uploading (Uppy manages this state)
+      const uploadingFiles = allFiles.filter((f) => f.progress?.uploadStarted);
+      const total = uploadingFiles.length;
+      
+      // Count completed files (Uppy tracks uploadComplete in file.progress)
+      const current = uploadingFiles.filter(
+        (f) => f.progress?.uploadComplete === true
+      ).length;
 
-        // Calculate total bytes uploaded and total bytes
-        let bytesUploaded = 0;
-        let bytesTotal = 0;
-        uploadingFiles.forEach((f) => {
-          if (f.progress) {
-            bytesUploaded += f.progress.bytesUploaded || 0;
-            bytesTotal += f.size || 0;
-          }
-        });
+      // Calculate total bytes from Uppy's file state
+      // Uppy tracks bytesUploaded and bytesTotal per file in file.progress
+      let bytesUploaded = 0;
+      let bytesTotal = 0;
+      uploadingFiles.forEach((f) => {
+        if (f.progress) {
+          bytesUploaded += f.progress.bytesUploaded || 0;
+          bytesTotal += f.size || 0; // file.size is the original file size
+        }
+      });
 
-        config.onUploadProgress?.({ 
-          current, 
-          total,
-          bytesUploaded,
-          bytesTotal,
-        });
-      }
+      // Call progress callback with aggregate values
+      config.onUploadProgress?.({ 
+        current, 
+        total,
+        bytesUploaded,
+        bytesTotal,
+      });
     });
   }
 

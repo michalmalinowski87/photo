@@ -90,21 +90,6 @@ export function GallerySettingsForm({
     prevStateRef.current.hasGallery !== !!gallery ||
     prevStateRef.current.isLoading !== isLoading
   ) {
-    console.log("[GallerySettingsForm] Render:", {
-      galleryId,
-      currentGalleryId,
-      currentGalleryFromStore: gallery?.galleryId,
-      isLoading,
-      hasGallery: !!gallery,
-      galleryMatches: gallery?.galleryId === galleryId,
-    });
-    
-    console.log("[GallerySettingsForm] Loading state:", {
-      isLoading,
-      hasGallery: !!gallery,
-      galleryLoading,
-    });
-    
     prevStateRef.current = {
       galleryId,
       currentGalleryId,
@@ -116,7 +101,6 @@ export function GallerySettingsForm({
   // Reload gallery function
   const reloadGallery = useCallback(async () => {
     if (galleryId) {
-      console.log("[GallerySettingsForm] Reloading gallery:", galleryId);
       await fetchGallery(galleryId, true); // Force refresh
     }
   }, [galleryId, fetchGallery]);
@@ -124,24 +108,10 @@ export function GallerySettingsForm({
   // Only fetch if we truly don't have the gallery and we're not loading
   // This is a last resort - GalleryLayoutWrapper should handle loading
   useEffect(() => {
-    console.log("[GallerySettingsForm] useEffect check:", {
-      routerReady: router.isReady,
-      galleryId,
-      hasGallery: !!gallery,
-      isLoading,
-      shouldFetch: router.isReady && galleryId && !gallery && !isLoading,
-    });
-    
-    if (router.isReady && galleryId && !gallery && !isLoading) {
-      console.log("[GallerySettingsForm] Fetching gallery (fallback):", galleryId);
+      if (router.isReady && galleryId && !gallery && !isLoading) {
       // Set currentGalleryId first so fetchGallery will update currentGallery
       setCurrentGalleryId(galleryId);
-      void fetchGallery(galleryId, false).then((fetched) => {
-        console.log("[GallerySettingsForm] Gallery fetched:", {
-          success: !!fetched,
-          galleryId: fetched?.galleryId,
-        });
-      });
+      void fetchGallery(galleryId, false);
     }
   }, [galleryId, gallery, isLoading, fetchGallery, router.isReady, setCurrentGalleryId]);
   const [saving, setSaving] = useState<boolean>(false);

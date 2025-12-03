@@ -213,11 +213,13 @@ export default function OrderDetail() {
           const imagesWithCacheBusting = (finalResponse.images ?? []).map((img) =>
             applyCacheBustingToImage(img, fetchTimestamp)
           );
-          // Map final images - keep finalUrl for download, use previewUrl/thumbUrl for display
+          // Map final images - keep finalUrl for download, use thumbUrl/previewUrl for display
+          // Image loading priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
+          // We NEVER fetch full S3 images (finalUrl) if thumbnails/previews are available
           const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
             ...img,
-            url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "", // Use WebP for display
-            finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download
+            url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "", // Prioritize thumb/preview
+            finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download (not for display)
           }));
 
           // Filter out deleted images from API response

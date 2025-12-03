@@ -177,7 +177,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         // Only set if we have cached gallery data, otherwise let the load effect handle it
         const cached = getGalleryFromCache(galleryId, 60000);
         if (cached?.galleryId === galleryId) {
-          console.log("[GalleryLayoutWrapper] Restoring gallery from cache in order clear effect:", galleryId);
           setCurrentGallery(cached);
           setCurrentGalleryId(galleryId);
         }
@@ -198,12 +197,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
 
     const handleRouteChange = (url: string) => {
-      console.log("[GalleryLayoutWrapper] Route change:", {
-        url,
-        isGalleryRoute: url.includes("/galleries/"),
-        willClearGallery: !url.includes("/galleries/"),
-      });
-      
       // Close publish wizard when navigating away
       if (publishWizardOpen) {
         setPublishWizardOpenStore(false);
@@ -212,11 +205,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       // ONLY clear gallery when navigating AWAY from gallery routes
       // Do NOT clear when navigating between gallery routes (e.g., photos -> settings)
       if (!url.includes("/galleries/")) {
-        console.log("[GalleryLayoutWrapper] Clearing gallery (navigating away from gallery routes)");
         clearCurrentGallery();
         clearCurrentOrder();
-      } else {
-        console.log("[GalleryLayoutWrapper] Staying in gallery routes, preserving gallery state");
       }
     };
 
@@ -251,30 +241,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       return;
     }
     
-    console.log("[GalleryLayoutWrapper] Gallery load effect:", {
-      routerReady: router.isReady,
-      hasApiUrl: !!apiUrl,
-      hasIdToken: !!idToken,
-      galleryId: currentGalleryId,
-      currentGalleryId: gallery?.galleryId,
-      galleryMatches: gallery?.galleryId === currentGalleryId,
-      alreadyLoaded: loadedGalleryIdRef.current === currentGalleryId,
-    });
-    
     if (router.isReady && apiUrl && idToken && currentGalleryId) {
       // Check cache first - if we have cached data for this gallery, use it
       const { getGalleryFromCache, setCurrentGallery, setCurrentGalleryId } = useGalleryStore.getState();
       const cachedGallery = getGalleryFromCache(currentGalleryId, 60000);
       
-      console.log("[GalleryLayoutWrapper] Cache check:", {
-        hasCachedGallery: !!cachedGallery,
-        cachedGalleryId: cachedGallery?.galleryId,
-        matches: cachedGallery?.galleryId === currentGalleryId,
-      });
-      
       // If we have cached gallery and it matches, use it immediately (no loading state)
       if (cachedGallery?.galleryId === currentGalleryId) {
-        console.log("[GalleryLayoutWrapper] Using cached gallery, setting in store");
         setCurrentGallery(cachedGallery);
         setCurrentGalleryId(currentGalleryId);
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
@@ -282,17 +255,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       
       // Only fetch if gallery doesn't match AND we don't have cache
       if (gallery?.galleryId !== currentGalleryId && !cachedGallery) {
-        console.log("[GalleryLayoutWrapper] Gallery mismatch and no cache, loading:", {
-          expected: currentGalleryId,
-          current: gallery?.galleryId,
-        });
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loading
         void loadGalleryData(false, true).then(() => {
           // Mark as loaded after fetch completes
           loadedGalleryIdRef.current = currentGalleryId;
         }); // Force refresh only if not in cache
       } else if (gallery?.galleryId === currentGalleryId) {
-        console.log("[GalleryLayoutWrapper] Gallery matches, skipping load");
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
       }
       
@@ -302,13 +270,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
       void checkDeliveredOrders();
       void loadGalleryOrders(true); // Force refresh
-    } else {
-      console.log("[GalleryLayoutWrapper] Not ready to load:", {
-        routerReady: router.isReady,
-        hasApiUrl: !!apiUrl,
-        hasIdToken: !!idToken,
-        galleryId: currentGalleryId,
-      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, apiUrl, idToken, galleryId]); // Removed gallery from deps to prevent loops
@@ -331,6 +292,155 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, orderCache?.timestamp]);
+
+  // Auto-detect and fix sync issues: if gallery shows bytes used > 0 but no images exist,
+  // automatically trigger forced recalculation to sync database with actual S3 state
+  // This runs on ALL gallery pages (photos, orders, settings, etc.)
+  const syncRecalcTriggeredRef = React.useRef(false);
+  const { fetchGalleryImages } = useGalleryStore();
+  
+  useEffect(() => {
+    // Reset sync recalculation trigger when gallery changes
+    if (galleryId) {
+      syncRecalcTriggeredRef.current = false;
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] Sync detection: Reset trigger for gallery", galleryId);
+    }
+  }, [galleryId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("[GalleryLayoutWrapper] Sync detection: Effect running", {
+      galleryId,
+      galleryLoading: loading,
+      hasGallery: !!gallery,
+      alreadyTriggered: syncRecalcTriggeredRef.current,
+    });
+
+    if (
+      !galleryId ||
+      loading ||
+      !gallery ||
+      syncRecalcTriggeredRef.current
+    ) {
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] Sync detection: Skipping check - conditions not met", {
+        reason: !galleryId
+          ? "no galleryId"
+          : loading
+            ? "loading"
+            : !gallery
+              ? "no gallery"
+              : syncRecalcTriggeredRef.current
+                ? "already triggered"
+                : "unknown",
+        galleryId,
+        loading,
+        hasGallery: !!gallery,
+        alreadyTriggered: syncRecalcTriggeredRef.current,
+      });
+      return;
+    }
+
+    const originalsBytesUsed = gallery?.originalsBytesUsed ?? 0;
+    const finalsBytesUsed = gallery?.finalsBytesUsed ?? 0;
+    const totalBytesUsed = originalsBytesUsed + finalsBytesUsed;
+
+    // eslint-disable-next-line no-console
+    console.log("[GalleryLayoutWrapper] Sync detection: Checking gallery data", {
+      galleryId,
+      originalsBytesUsed,
+      finalsBytesUsed,
+      totalBytesUsed,
+    });
+
+    // Only check if bytes used > 0 (otherwise no sync issue possible)
+    if (totalBytesUsed === 0) {
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] Sync detection: No bytes used - no sync issue possible");
+      return;
+    }
+
+    // Check images cache first
+    const { getGalleryImages } = useGalleryStore.getState();
+    const cachedImages = getGalleryImages(galleryId as string, 60000); // 60s cache
+    const hasCachedImages = cachedImages && cachedImages.length > 0;
+
+    // eslint-disable-next-line no-console
+    console.log("[GalleryLayoutWrapper] Sync detection: Checking images", {
+      galleryId,
+      cachedImagesCount: cachedImages?.length ?? 0,
+      hasCachedImages,
+    });
+
+    if (hasCachedImages) {
+      // Images exist in cache - no sync issue
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] Sync detection: Images exist in cache - no sync issue");
+      return;
+    }
+
+    // No cached images - fetch fresh to check if images actually exist
+    // eslint-disable-next-line no-console
+    console.log("[GalleryLayoutWrapper] Sync detection: No cached images, fetching to verify...");
+    
+    void fetchGalleryImages(galleryId as string, false).then((images) => {
+      const hasImages = images && images.length > 0;
+
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] Sync detection: Images fetch result", {
+        galleryId,
+        imagesCount: images?.length ?? 0,
+        hasImages,
+        totalBytesUsed,
+      });
+
+      // Trigger recalculation if: bytes used > 0 but no images exist
+      if (!hasImages && totalBytesUsed > 0 && !syncRecalcTriggeredRef.current) {
+        syncRecalcTriggeredRef.current = true;
+
+        // eslint-disable-next-line no-console
+        console.log(
+          "[GalleryLayoutWrapper] ✅ AUTO-DETECTED SYNC ISSUE: Empty images but bytes used > 0, triggering forced recalculation",
+          {
+            galleryId,
+            imagesCount: images?.length ?? 0,
+            originalsBytesUsed,
+            finalsBytesUsed,
+            totalBytesUsed,
+          }
+        );
+
+        // Automatically trigger forced recalculation to sync state
+        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
+        void refreshGalleryBytesOnly(galleryId as string, true)
+          .then(() => {
+            // eslint-disable-next-line no-console
+            console.log("[GalleryLayoutWrapper] ✅ Sync recalculation completed successfully", {
+              galleryId,
+            });
+          })
+          .catch((err) => {
+            // Reset trigger on error so we can retry
+            syncRecalcTriggeredRef.current = false;
+            // eslint-disable-next-line no-console
+            console.error("[GalleryLayoutWrapper] ❌ Failed to trigger sync recalculation:", err);
+          });
+      } else {
+        // eslint-disable-next-line no-console
+        console.log("[GalleryLayoutWrapper] Sync detection: No mismatch detected", {
+          galleryId,
+          reason: hasImages ? "images exist" : totalBytesUsed === 0 ? "no bytes used" : "already triggered",
+          imagesCount: images?.length ?? 0,
+          totalBytesUsed,
+        });
+      }
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[GalleryLayoutWrapper] Sync detection: Failed to fetch images for check:", err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, gallery, loading]); // Run when gallery data changes
 
   // Order action handlers using store actions directly
   const handleApproveChangeRequest = useCallback(async () => {
@@ -516,12 +626,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     // If we have cached gallery but store doesn't have it, restore it
     const targetId = galleryIdStr ?? currentGalleryId;
     if (cachedGallery?.galleryId === targetId && (gallery?.galleryId !== targetId)) {
-      console.log("[GalleryLayoutWrapper] Restoring cached gallery to store (useLayoutEffect):", {
-        cachedGalleryId: cachedGallery.galleryId,
-        galleryId: targetId,
-        storeHasGallery: !!gallery,
-        storeGalleryId: gallery?.galleryId,
-      });
       setCurrentGallery(cachedGallery);
       setCurrentGalleryId(targetId);
     }
@@ -537,14 +641,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     prevStateRef.current.hasGallery !== !!gallery ||
     prevStateRef.current.hasCachedGallery !== !!cachedGallery
   ) {
-    console.log("[GalleryLayoutWrapper] Loading check:", {
-      loading,
-      hasGallery: !!gallery,
-      hasCachedGallery: !!cachedGallery,
-      hasEffectiveGallery: !!effectiveGallery,
-      galleryId: galleryIdStr,
-      shouldShowLoading: loading && !effectiveGallery,
-    });
     prevStateRef.current = { loading, hasGallery: !!gallery, hasCachedGallery: !!cachedGallery };
   }
   

@@ -149,12 +149,6 @@ export const handler = lambdaLogger(async (event: any) => {
 				// Fall through to start new generation
 			} else {
 				// Still generating, return 202
-				console.log('ZIP still generating', {
-					galleryId,
-					orderId,
-					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
-					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
-				});
 				return {
 					statusCode: 202, // Accepted - processing
 					headers: { 'content-type': 'application/json' },
@@ -213,15 +207,6 @@ export const handler = lambdaLogger(async (event: any) => {
 					};
 				}
 				
-				console.log('Starting ZIP generation', {
-					galleryId,
-					orderId,
-					selectedKeysCount: selectedKeys.length,
-					existingFilesChecked: existingFilesCount,
-					missingFilesChecked: missingFiles.length,
-					zipFnName
-				});
-				
 				const lambda = new LambdaClient({});
 				const payload = Buffer.from(JSON.stringify({ galleryId, keys: order.selectedKeys, orderId }));
 				
@@ -231,13 +216,6 @@ export const handler = lambdaLogger(async (event: any) => {
 					Payload: payload, 
 					InvocationType: 'Event' // Async invocation
 				}));
-				
-				console.log('ZIP generation Lambda invoked', {
-					galleryId,
-					orderId,
-					statusCode: invokeResult.StatusCode,
-					functionName: zipFnName
-				});
 				
 				// Mark order as generating with timestamp
 				await ddb.send(new UpdateCommand({
@@ -250,15 +228,6 @@ export const handler = lambdaLogger(async (event: any) => {
 					}
 				}));
 			} catch (err: any) {
-				console.error('Failed to start ZIP generation:', {
-					error: err.message,
-					stack: err.stack,
-					galleryId,
-					orderId,
-					zipFnName,
-					hasSelectedKeys: !!order.selectedKeys,
-					selectedKeysCount: order.selectedKeys?.length || 0
-				});
 				return {
 					statusCode: 500,
 					headers: { 'content-type': 'application/json' },
@@ -293,7 +262,6 @@ export const handler = lambdaLogger(async (event: any) => {
 					Key: expectedZipKey
 				}));
 				// ZIP exists, clear generating flag
-				console.log('ZIP generation completed, clearing flag', { galleryId, orderId });
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
 					Key: { galleryId, orderId },
@@ -304,12 +272,6 @@ export const handler = lambdaLogger(async (event: any) => {
 				if (s3Err.name === 'NoSuchKey' || s3Err.name === 'NotFound') {
 					const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
 					const elapsedSeconds = zipGeneratingSince ? Math.round((Date.now() - zipGeneratingSince) / 1000) : 'unknown';
-					console.log('ZIP still generating', {
-						galleryId,
-						orderId,
-						elapsedSeconds,
-						zipGeneratingSince: zipGeneratingSince ? new Date(zipGeneratingSince).toISOString() : undefined
-					});
 					return {
 						statusCode: 202,
 						headers: { 'content-type': 'application/json' },
@@ -352,13 +314,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 		
 		// Read stream into buffer chunks
-		console.log('Reading ZIP from S3', {
-			galleryId,
-			orderId,
-			zipKey: expectedZipKey,
-			contentLength: getObjectResponse.ContentLength,
-			contentType: getObjectResponse.ContentType
-		});
 		
 		for await (const chunk of stream as Readable) {
 			chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -366,26 +321,9 @@ export const handler = lambdaLogger(async (event: any) => {
 		
 		const zipBuffer = Buffer.concat(chunks);
 		
-		console.log('ZIP read from S3', {
-			galleryId,
-			orderId,
-			chunksCount: chunks.length,
-			bufferSize: zipBuffer.length,
-			firstBytes: Array.from(zipBuffer.slice(0, 4))
-		});
-		
 		// Verify we got the expected amount of data
 		const contentLength = getObjectResponse.ContentLength;
-		if (contentLength && zipBuffer.length !== contentLength) {
-			console.warn('ZIP buffer size mismatch', {
-				expected: contentLength,
-				actual: zipBuffer.length,
-				galleryId,
-				orderId,
-				zipKey: expectedZipKey
-			});
-		}
-
+		
 		// Validate ZIP buffer - check for ZIP magic bytes (PK header)
 		if (zipBuffer.length === 0) {
 			console.error('ZIP file is empty', { galleryId, orderId, zipKey: expectedZipKey });

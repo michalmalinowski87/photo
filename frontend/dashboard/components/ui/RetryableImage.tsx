@@ -9,12 +9,14 @@ interface RetryableImageProps {
 /**
  * Simplified image component that displays images with basic loading state.
  * 
- * Image URL resolution logic:
- * - If thumbUrl exists (processed thumbnail) → use CloudFront URL (optimized)
- * - If thumbUrl doesn't exist → use S3 direct URL (unprocessed)
+ * Image URL priority (handled by parent component):
+ * 1. CloudFront thumb (thumbUrl) - smallest, fastest, optimized WebP
+ * 2. CloudFront preview (previewUrl) - larger but still optimized WebP
+ * 3. Full S3 image (url/finalUrl) - LAST RESORT only if no thumbnails exist
  * 
- * This logic is handled by the parent component when selecting the src.
- * This component just displays the image with a simple loading state.
+ * This component just displays the provided src URL with loading/error states.
+ * The parent component is responsible for selecting the optimal URL based on priority.
+ * We NEVER fetch full S3 images when thumbnails/previews are available.
  */
 export const RetryableImage: React.FC<RetryableImageProps> = ({
   src,

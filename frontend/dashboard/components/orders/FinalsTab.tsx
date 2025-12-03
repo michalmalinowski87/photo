@@ -119,7 +119,10 @@ export function FinalsTab({
               >
                 <div className="aspect-square relative">
                   <RetryableImage
-                    src={img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? ""}
+                    // Image loading priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
+                    // We NEVER fetch full S3 images if thumbnails/previews are available
+                    // This reduces bandwidth and improves performance
+                    src={img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? ""}
                     alt={imageKey}
                     className="w-full h-full object-cover rounded-lg"
                   />

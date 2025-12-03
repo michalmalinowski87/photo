@@ -121,20 +121,23 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           });
         }, 30000);
 
-        // Batch success toasts
+        // Batch success toasts - accumulate count and show single toast
         successToastBatchRef.current += 1;
-        if (successToastTimeoutRef.current) {
-          clearTimeout(successToastTimeoutRef.current);
+        
+        // If there's already a pending toast, don't reset the timeout, just increment count
+        if (!successToastTimeoutRef.current) {
+          // Only set timeout if one doesn't exist
+          successToastTimeoutRef.current = setTimeout(() => {
+            const count = successToastBatchRef.current;
+            successToastBatchRef.current = 0;
+            successToastTimeoutRef.current = null;
+            if (count === 1) {
+              showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+            } else {
+              showToast("success", "Sukces", `${count} zdjęć zostało usuniętych`);
+            }
+          }, 800); // Increased debounce window to catch rapid deletions
         }
-        successToastTimeoutRef.current = setTimeout(() => {
-          const count = successToastBatchRef.current;
-          successToastBatchRef.current = 0;
-          if (count === 1) {
-            showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-          } else {
-            showToast("success", "Sukces", `${count} zdjęć zostało usuniętych`);
-          }
-        }, 500);
       } catch (err) {
         // On error, image is already in the list (we didn't remove it), just remove deleting state
         // No optimistic update was applied yet, so no need to revert
@@ -146,21 +149,24 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           return updated;
         });
 
-        // Batch error toasts
+        // Batch error toasts - accumulate count and show single toast
         errorToastBatchRef.current += 1;
         const errorMessage = formatApiError(err);
-        if (errorToastTimeoutRef.current) {
-          clearTimeout(errorToastTimeoutRef.current);
+        
+        // If there's already a pending toast, don't reset the timeout, just increment count
+        if (!errorToastTimeoutRef.current) {
+          // Only set timeout if one doesn't exist
+          errorToastTimeoutRef.current = setTimeout(() => {
+            const count = errorToastBatchRef.current;
+            errorToastBatchRef.current = 0;
+            errorToastTimeoutRef.current = null;
+            if (count === 1) {
+              showToast("error", "Błąd", errorMessage);
+            } else {
+              showToast("error", "Błąd", `Nie udało się usunąć ${count} zdjęć`);
+            }
+          }, 800); // Increased debounce window to catch rapid deletions
         }
-        errorToastTimeoutRef.current = setTimeout(() => {
-          const count = errorToastBatchRef.current;
-          errorToastBatchRef.current = 0;
-          if (count === 1) {
-            showToast("error", "Błąd", errorMessage);
-          } else {
-            showToast("error", "Błąd", `Nie udało się usunąć ${count} zdjęć`);
-          }
-        }, 500);
         throw err;
       }
     },

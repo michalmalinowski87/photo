@@ -39,14 +39,22 @@ export function OriginalsTab({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={img.previewUrl ?? img.thumbUrl ?? img.url ?? ""}
+              // Priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
+              // We NEVER fetch full S3 images if thumbnails/previews are available
+              src={img.thumbUrl ?? img.previewUrl ?? img.url ?? ""}
               alt={imgKey}
               className="w-full h-48 object-cover"
               onError={(e) => {
-                // Fallback to thumbUrl if previewUrl fails
-                if (img.previewUrl && img.thumbUrl && e.currentTarget.src === img.previewUrl) {
-                  e.currentTarget.src = img.thumbUrl;
+                // Progressive fallback: thumb → preview → full S3 (last resort only)
+                // Only fallback to full S3 image if all thumbnails/previews fail
+                if (img.thumbUrl && img.previewUrl && e.currentTarget.src === img.thumbUrl) {
+                  // CloudFront thumb failed, try CloudFront preview
+                  e.currentTarget.src = img.previewUrl;
                 } else if (img.thumbUrl && img.url && e.currentTarget.src === img.thumbUrl) {
+                  // No preview available, thumb failed, fallback to S3 full (last resort)
+                  e.currentTarget.src = img.url;
+                } else if (img.previewUrl && img.url && e.currentTarget.src === img.previewUrl) {
+                  // Preview failed, fallback to S3 full (last resort)
                   e.currentTarget.src = img.url;
                 }
               }}

@@ -2,7 +2,6 @@ import { useState, useRef, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store/gallerySlice";
-import { useOrderStore } from "../store/orderSlice";
 
 import { useOrderStatusRefresh } from "./useOrderStatusRefresh";
 import { useToast } from "./useToast";
@@ -80,36 +79,40 @@ export const useFinalImageDelete = ({
         }
 
         // Optimistically remove image from list immediately after successful delete
+        const imageSize = image.size || 0;
+        let wasLastImage = false;
+        
         setFinalImages((prevImages) => {
           const remainingImages = prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
-          
-          // Check if this was the last image - if so, we need to call /status
-          const wasLastImage = remainingImages.length === 0;
-          
-          // Update Zustand store optimistically (side panel will pull from here)
-          const { currentGallery, updateFinalsBytesUsed } = useGalleryStore.getState();
-          if (currentGallery && image.size) {
-            // Optimistically subtract the image size
-            updateFinalsBytesUsed(-(image.size || 0));
-          }
+          wasLastImage = remainingImages.length === 0;
           
           // Clear optimistic state
           setOptimisticFinalsBytes(null);
           
-          // If this was the last image, call /status endpoint
-          if (wasLastImage) {
-            void (async () => {
-              try {
-                await refreshOrderStatus(galleryIdStr, orderIdStr);
-              } catch (statusErr) {
-                // eslint-disable-next-line no-console
-                console.error("[useFinalImageDelete] Failed to refresh order status after last image deleted:", statusErr);
-              }
-            })();
-          }
-          
           return remainingImages;
         });
+        
+        // Update Zustand store optimistically after state update (side panel will pull from here)
+        // Do this after setState to avoid React warning about setState during render
+        const { currentGallery, updateFinalsBytesUsed } = useGalleryStore.getState();
+        if (currentGallery && imageSize > 0) {
+          // Use requestAnimationFrame to schedule after current render cycle
+          requestAnimationFrame(() => {
+            updateFinalsBytesUsed(-imageSize);
+          });
+        }
+        
+        // If this was the last image, call /status endpoint
+        if (wasLastImage) {
+          void (async () => {
+            try {
+              await refreshOrderStatus(galleryIdStr, orderIdStr);
+            } catch (statusErr) {
+              // eslint-disable-next-line no-console
+              console.error("[useFinalImageDelete] Failed to refresh order status after last image deleted:", statusErr);
+            }
+          })();
+        }
 
         // Remove from deleting set
         setDeletingImages((prev) => {
@@ -134,20 +137,23 @@ export const useFinalImageDelete = ({
           });
         }, 30000);
 
-        // Batch success toasts
+        // Batch success toasts - accumulate count and show single toast
         successToastBatchRef.current += 1;
-        if (successToastTimeoutRef.current) {
-          clearTimeout(successToastTimeoutRef.current);
+        
+        // If there's already a pending toast, don't reset the timeout, just increment count
+        if (!successToastTimeoutRef.current) {
+          // Only set timeout if one doesn't exist
+          successToastTimeoutRef.current = setTimeout(() => {
+            const count = successToastBatchRef.current;
+            successToastBatchRef.current = 0;
+            successToastTimeoutRef.current = null;
+            if (count === 1) {
+              showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+            } else {
+              showToast("success", "Sukces", `${count} zdjęć zostało usuniętych`);
+            }
+          }, 800); // Increased debounce window to catch rapid deletions
         }
-        successToastTimeoutRef.current = setTimeout(() => {
-          const count = successToastBatchRef.current;
-          successToastBatchRef.current = 0;
-          if (count === 1) {
-            showToast("success", "Sukces", "Zdjęcie zostało usunięte");
-          } else {
-            showToast("success", "Sukces", `${count} zdjęć zostało usuniętych`);
-          }
-        }, 500);
       } catch (err) {
         // On error, image is already in the list (we didn't remove it), just remove deleting state
         // No optimistic update was applied yet, so no need to revert
@@ -159,21 +165,24 @@ export const useFinalImageDelete = ({
           return updated;
         });
 
-        // Batch error toasts
+        // Batch error toasts - accumulate count and show single toast
         errorToastBatchRef.current += 1;
         const errorMessage = formatApiError(err);
-        if (errorToastTimeoutRef.current) {
-          clearTimeout(errorToastTimeoutRef.current);
+        
+        // If there's already a pending toast, don't reset the timeout, just increment count
+        if (!errorToastTimeoutRef.current) {
+          // Only set timeout if one doesn't exist
+          errorToastTimeoutRef.current = setTimeout(() => {
+            const count = errorToastBatchRef.current;
+            errorToastBatchRef.current = 0;
+            errorToastTimeoutRef.current = null;
+            if (count === 1) {
+              showToast("error", "Błąd", errorMessage);
+            } else {
+              showToast("error", "Błąd", `Nie udało się usunąć ${count} zdjęć`);
+            }
+          }, 800); // Increased debounce window to catch rapid deletions
         }
-        errorToastTimeoutRef.current = setTimeout(() => {
-          const count = errorToastBatchRef.current;
-          errorToastBatchRef.current = 0;
-          if (count === 1) {
-            showToast("error", "Błąd", errorMessage);
-          } else {
-            showToast("error", "Błąd", `Nie udało się usunąć ${count} zdjęć`);
-          }
-        }, 500);
         throw err;
       }
     },

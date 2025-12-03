@@ -913,6 +913,44 @@ class ApiService {
     },
 
     /**
+     * Delete multiple final images in batch
+     */
+    deleteFinalImagesBatch: async (
+      galleryId: string,
+      orderId: string,
+      imageKeys: string[]
+    ): Promise<{
+      message: string;
+      galleryId: string;
+      orderId: string;
+      count: number;
+      finalsBytesUsed: number;
+      bytesUsed: number;
+      finalsLimitBytes: number;
+      finalsUsedMB: string;
+      finalsLimitMB: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      if (!Array.isArray(imageKeys) || imageKeys.length === 0) {
+        throw new Error("Image keys array is required and must not be empty");
+      }
+      // Use batch endpoint for final images
+      return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
+        method: "POST",
+        body: JSON.stringify({
+          filenames: imageKeys,
+          orderId,
+          type: "final",
+        }),
+      });
+    },
+
+    /**
      * Cleanup originals, previews, and thumbnails for selected photos
      * Only available for selection galleries
      */
