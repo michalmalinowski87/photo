@@ -1,5 +1,5 @@
-import { Plus, Check, X } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import { Plus, Check, X, Save } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
 
 import { generatePassword } from "../../../lib/password";
 import Button from "../../ui/button/Button";
@@ -60,7 +60,8 @@ interface ClientStepProps {
     isCompany: boolean;
     companyName: string;
     nip: string;
-  }) => Promise<void>;
+    isVatRegistered: boolean;
+  }, clientId?: string) => Promise<void>;
 }
 
 export const ClientStep: React.FC<ClientStepProps> = ({
@@ -83,50 +84,129 @@ export const ClientStep: React.FC<ClientStepProps> = ({
 }) => {
   const [saving, setSaving] = useState(false);
 
-  // Check if current email matches any existing client
+  // Determine if we're in edit mode (selected client with matching email)
+  const isEditMode = useMemo(() => {
+    if (!selectedClientId) {
+      return false;
+    }
+    const selectedClient = existingClients.find((c) => c.clientId === selectedClientId);
+    if (!selectedClient) {
+      return false;
+    }
+    const selectedClientEmail = (selectedClient.email ?? "").trim().toLowerCase();
+    const currentEmail = clientEmail.trim().toLowerCase();
+    return selectedClientEmail === currentEmail;
+  }, [selectedClientId, existingClients, clientEmail]);
+  
+  // Check if current email matches any existing client (excluding the currently selected client)
+  // eslint-disable-next-line no-console
   const isDuplicateClient = useMemo(() => {
     const trimmedEmail = clientEmail.trim().toLowerCase();
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] isDuplicateClient check:", {
+      trimmedEmail,
+      selectedClientId,
+      existingClientsCount: existingClients.length,
+    });
+    
     if (!trimmedEmail) {
+      // eslint-disable-next-line no-console
+      console.log("[DEBUG] No email, returning false");
       return false;
     }
     
     const isDuplicate = existingClients.some((client) => {
+      // Skip the currently selected client when checking for duplicates
+      if (selectedClientId && client.clientId === selectedClientId) {
+        // eslint-disable-next-line no-console
+        console.log("[DEBUG] Skipping selected client:", client.clientId);
+        return false;
+      }
       const existingEmail = (client.email ?? "").trim().toLowerCase();
-      return existingEmail === trimmedEmail;
+      const matches = existingEmail === trimmedEmail;
+      if (matches) {
+        // eslint-disable-next-line no-console
+        console.log("[DEBUG] Found duplicate email:", existingEmail, "for client:", client.clientId);
+      }
+      return matches;
     });
     
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] isDuplicateClient result:", isDuplicate);
     return isDuplicate;
-  }, [clientEmail, existingClients]);
+  }, [clientEmail, existingClients, selectedClientId]);
 
   const canSaveClient = useMemo(() => {
     const trimmedEmail = clientEmail.trim();
-    // Check all required fields
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] canSaveClient check:", {
+      trimmedEmail: trimmedEmail || "(empty)",
+      isCompany,
+      companyName: companyName.trim() || "(empty)",
+      nip: nip.trim() || "(empty)",
+      firstName: firstName.trim() || "(empty)",
+      lastName: lastName.trim() || "(empty)",
+      isDuplicateClient,
+    });
+    
+    // Note: We allow saving in edit mode (when email matches selected client)
+    // This is handled separately in canSaveClientInEditMode
+    
+    // Check all required fields (password is NOT required for saving client, only for wizard continuation)
     if (!trimmedEmail) {
-      return false;
-    }
-    if (!clientPassword.trim()) {
+      // eslint-disable-next-line no-console
+      console.log("[DEBUG] ❌ No email");
       return false;
     }
     if (isCompany) {
       if (!companyName.trim() || !nip.trim()) {
+        // eslint-disable-next-line no-console
+        console.log("[DEBUG] ❌ Missing company fields");
         return false;
       }
     } else {
       if (!firstName.trim() || !lastName.trim()) {
+        // eslint-disable-next-line no-console
+        console.log("[DEBUG] ❌ Missing individual fields");
         return false;
       }
     }
     // Enable if email is different from existing clients (not a duplicate)
-    return !isDuplicateClient;
-  }, [clientEmail, clientPassword, isCompany, companyName, nip, firstName, lastName, isDuplicateClient]);
+    const result = !isDuplicateClient;
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] ✅ canSaveClient result:", result);
+    return result;
+  }, [clientEmail, isCompany, companyName, nip, firstName, lastName, isDuplicateClient]);
 
   const disabledReason = useMemo(() => {
+    // In edit mode, check required fields (password is NOT required for saving client)
+    if (isEditMode) {
+      const trimmedEmail = clientEmail.trim();
+      if (!trimmedEmail) {
+        return "Email klienta jest wymagany";
+      }
+      if (isCompany) {
+        if (!companyName.trim()) {
+          return "Nazwa firmy jest wymagana";
+        }
+        if (!nip.trim()) {
+          return "NIP jest wymagany";
+        }
+      } else {
+        if (!firstName.trim()) {
+          return "Imię jest wymagane";
+        }
+        if (!lastName.trim()) {
+          return "Nazwisko jest wymagane";
+        }
+      }
+      return "";
+    }
+    
+    // In create mode, check for duplicates (password is NOT required for saving client)
     const trimmedEmail = clientEmail.trim();
     if (!trimmedEmail) {
       return "Email klienta jest wymagany";
-    }
-    if (!clientPassword.trim()) {
-      return "Hasło jest wymagane";
     }
     if (isCompany) {
       if (!companyName.trim()) {
@@ -147,9 +227,44 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       return "Klient o tym adresie email już istnieje";
     }
     return "";
-  }, [clientEmail, clientPassword, isCompany, companyName, nip, firstName, lastName, isDuplicateClient]);
+  }, [clientEmail, isCompany, companyName, nip, firstName, lastName, isDuplicateClient, isEditMode]);
 
   const isSaveDisabled = !canSaveClient;
+  
+  // Update canSaveClient to allow saving in edit mode
+  const canSaveClientInEditMode = useMemo(() => {
+    if (!isEditMode) {
+      return canSaveClient;
+    }
+    // In edit mode, check required fields but allow saving even if email matches selected client
+    // Password is NOT required for saving client, only for wizard continuation
+    const trimmedEmail = clientEmail.trim();
+    if (!trimmedEmail) {
+      return false;
+    }
+    if (isCompany) {
+      if (!companyName.trim() || !nip.trim()) {
+        return false;
+      }
+    } else {
+      if (!firstName.trim() || !lastName.trim()) {
+        return false;
+      }
+    }
+    return true;
+  }, [isEditMode, canSaveClient, clientEmail, isCompany, companyName, nip, firstName, lastName]);
+  
+  // Debug logging when values change
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] Button state:", {
+      canSaveClient,
+      isSaveDisabled,
+      disabledReason,
+      clientEmail,
+      selectedClientId,
+    });
+  }, [canSaveClient, isSaveDisabled, disabledReason, clientEmail, selectedClientId]);
 
   const clientOptions = existingClients.map((client) => ({
     value: client.clientId,
@@ -227,16 +342,16 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                       : undefined
                   }
                 />
-                <div className="absolute right-0 bottom-[36px]">
+                <div className="absolute right-0 bottom-[34px]">
                   <Button
                     type="button"
                     onClick={() => {
                       const newPassword = generatePassword();
                       onDataChange({ clientPassword: newPassword });
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11"
+                    className="text-green-600 dark:text-green-400 bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border-0 shadow-none"
                   >
-                    Generuj
+                    Generuj hasło
                   </Button>
                 </div>
               </div>
@@ -352,35 +467,42 @@ export const ClientStep: React.FC<ClientStepProps> = ({
 
       {onClientSave && (
         <div className="pt-2">
-          <div className="flex items-center justify-between gap-3">
-            {isCompany && (
-              <button
-                type="button"
-                onClick={() => onDataChange({ isVatRegistered: !isVatRegistered })}
-                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-              >
-                {isVatRegistered ? (
-                  <>
-                    <Check size={16} className="text-brand-500 dark:text-brand-400" />
-                    <span>Firma zarejestrowana jako podatnik VAT</span>
-                  </>
-                ) : (
-                  <>
-                    <X size={16} className="text-gray-400 dark:text-gray-500" />
-                    <span>Firma zarejestrowana jako podatnik VAT</span>
-                  </>
-                )}
-              </button>
-            )}
-            {!isCompany && <div />}
-            <div className="group relative">
+          <div className="flex items-center gap-3 h-[38px]">
+            <div className="flex-1">
+              {isCompany && (
+                <button
+                  type="button"
+                  onClick={() => onDataChange({ isVatRegistered: !isVatRegistered })}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer
+                    border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800
+                    hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700
+                    active:scale-[0.98]"
+                >
+                  {isVatRegistered ? (
+                    <>
+                      <Check size={16} className="text-green-600 dark:text-green-400" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Firma zarejestrowana jako podatnik VAT</span>
+                    </>
+                  ) : (
+                    <>
+                      <X size={16} className="text-red-500 dark:text-red-400" />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Firma zarejestrowana jako podatnik VAT</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="group relative flex-shrink-0">
               <button
                 onClick={async () => {
-                  if (!canSaveClient) {
+                  const canSave = isEditMode ? canSaveClientInEditMode : canSaveClient;
+                  if (!canSave) {
                     return;
                   }
                   setSaving(true);
                   try {
+                    // Only pass clientId if we're in edit mode and have a valid selectedClientId
+                    const clientIdToUpdate = isEditMode && selectedClientId ? selectedClientId : undefined;
                     await onClientSave({
                       email: clientEmail.trim(),
                       firstName: firstName.trim(),
@@ -389,27 +511,34 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                       isCompany,
                       companyName: companyName.trim(),
                       nip: nip.trim(),
-                    });
+                      isVatRegistered,
+                    }, clientIdToUpdate);
                   } finally {
                     setSaving(false);
                   }
                 }}
-                disabled={isSaveDisabled || saving}
-                className="flex items-center gap-2 text-base text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-brand-500 dark:disabled:hover:text-brand-400"
+                disabled={(isEditMode ? !canSaveClientInEditMode : isSaveDisabled) || saving}
+                className={`flex items-center gap-2 text-base transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  isEditMode
+                    ? "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:hover:text-blue-600 dark:disabled:hover:text-blue-400"
+                    : "text-green-700 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 disabled:hover:text-green-700 dark:disabled:hover:text-green-500"
+                }`}
               >
                 {saving ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin"></div>
+                    <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${
+                      isEditMode ? "border-blue-600 dark:border-blue-400" : "border-green-700 dark:border-green-500"
+                    }`}></div>
                     <span>Zapisywanie...</span>
                   </>
                 ) : (
                   <>
-                    <Plus size={16} />
-                    <span>Zapisz klienta</span>
+                    {isEditMode ? <Save size={16} /> : <Plus size={16} />}
+                    <span>{isEditMode ? "Zapisz klienta" : "Dodaj klienta"}</span>
                   </>
                 )}
               </button>
-              {isSaveDisabled && disabledReason && (
+              {(isEditMode ? !canSaveClientInEditMode : isSaveDisabled) && disabledReason && (
                 <div className="absolute bottom-full right-0 mb-2 w-80 max-w-[calc(100vw-2rem)] p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
                   {disabledReason}
                   <div className="absolute top-full right-8 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>

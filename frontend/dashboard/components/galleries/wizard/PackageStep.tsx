@@ -318,17 +318,17 @@ export const PackageStep: React.FC<PackageStepProps> = ({
                     }
                   }}
                   disabled={isSaveDisabled}
-                  className="flex items-center gap-2 text-base text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-brand-500 dark:disabled:hover:text-brand-400"
+                  className="flex items-center gap-2 text-base text-green-700 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-green-700 dark:disabled:hover:text-green-500"
                 >
                   {saving ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-green-700 dark:border-green-500 border-t-transparent rounded-full animate-spin"></div>
                       <span>Zapisywanie...</span>
                     </>
                   ) : (
                     <>
                       <Plus size={16} />
-                      <span>Zapisz pakiet</span>
+                      <span>Dodaj pakiet</span>
                     </>
                   )}
                 </button>

@@ -286,16 +286,21 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
         break;
       case 4:
-        if (data.selectedClientId) {
-          // Existing client selected - no validation needed
-          break;
-        }
-        if (!data.clientEmail.trim()) {
-          errors.clientEmail = "Email klienta jest wymagany";
-          isValid = false;
-        }
+        // Password is always required for wizard continuation (gallery access)
+        // but NOT required for saving client (passwords aren't saved with client data)
         if (!data.clientPassword.trim()) {
           errors.clientPassword = "Hasło jest wymagane";
+          isValid = false;
+        }
+        
+        if (data.selectedClientId) {
+          // Existing client selected - no need to validate client fields
+          break;
+        }
+        
+        // For new clients, validate all required fields
+        if (!data.clientEmail.trim()) {
+          errors.clientEmail = "Email klienta jest wymagany";
           isValid = false;
         }
         if (!data.isCompany) {
@@ -534,10 +539,23 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
               companyName: fieldErrors.companyName,
               nip: fieldErrors.nip,
             }}
-            onClientSave={async (clientData) => {
+            onClientSave={async (clientData, clientId) => {
               try {
-                await api.clients.create(clientData);
-                showToast("success", "Sukces", "Klient został zapisany");
+                if (clientId && clientId.trim()) {
+                  // Verify the client exists before updating
+                  const clientExists = existingClients.some((c) => c.clientId === clientId);
+                  if (clientExists) {
+                    await api.clients.update(clientId, clientData);
+                    showToast("success", "Sukces", "Klient został zaktualizowany");
+                  } else {
+                    // Client not found, create new instead
+                    await api.clients.create(clientData);
+                    showToast("success", "Sukces", "Klient został zapisany");
+                  }
+                } else {
+                  await api.clients.create(clientData);
+                  showToast("success", "Sukces", "Klient został zapisany");
+                }
                 await loadExistingClients();
               } catch (err) {
                 showToast("error", "Błąd", formatApiError(err as Error));
