@@ -19,7 +19,7 @@ interface SummaryStepProps {
   selectedClientId?: string;
   clientEmail: string;
   existingClients: Client[];
-  packageName: string;
+  packageName?: string;
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
@@ -41,7 +41,7 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
   const selectedClient = existingClients.find((c) => c.clientId === selectedClientId);
 
   return (
-    <div className="w-full">
+    <div className="w-full mt-[200px]">
       {/* Vertical Stack Layout - Modern Design */}
       <div className="flex flex-col gap-5">
         {/* Gallery Info Card */}
@@ -52,9 +52,7 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
               <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-50 dark:bg-brand-500/10">
                 <Image className="w-5 h-5 text-brand-600 dark:text-brand-400" />
               </div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Galeria
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Galeria</h3>
             </div>
             <div className="space-y-3.5">
               <div>
@@ -81,9 +79,7 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
               <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-500/10">
                 <User className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               </div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Klient
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Klient</h3>
             </div>
             <div className="space-y-3.5">
               <div>
@@ -94,7 +90,9 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
               </div>
               {selectedClient?.firstName && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Imię i nazwisko</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Imię i nazwisko
+                  </p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">
                     {selectedClient.firstName} {selectedClient.lastName}
                   </p>
@@ -102,7 +100,9 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
               )}
               {selectedClient?.companyName && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Firma</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Firma
+                  </p>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">
                     {selectedClient.companyName}
                   </p>
@@ -125,38 +125,50 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
               <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10">
                 <Package className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Pakiet
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Pakiet</h3>
             </div>
             <div className="space-y-3.5">
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Nazwa</p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{packageName}</p>
-              </div>
+              {packageName && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Nazwa
+                  </p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {packageName}
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Zdjęć</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Zdjęć
+                  </p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">
                     {includedCount}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Za dodatkowe</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Za dodatkowe
+                  </p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">
                     {formatPrice(extraPriceCents)}
                   </p>
                 </div>
               </div>
               <div className="pt-3.5 border-t border-gray-200/80 dark:border-gray-700/80">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Cena pakietu</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                  Cena pakietu
+                </p>
                 <p className="text-xl font-bold text-brand-600 dark:text-brand-400">
                   {formatPrice(packagePriceCents)}
                 </p>
               </div>
               {initialPaymentAmountCents > 0 && (
                 <div className="pt-3.5 border-t border-gray-200/80 dark:border-gray-700/80">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Wpłacono</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                    Wpłacono
+                  </p>
                   <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                     {formatPrice(initialPaymentAmountCents)}
                   </p>

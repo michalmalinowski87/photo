@@ -1,9 +1,8 @@
-import { Plus } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import { Plus, ArrowLeft } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
 
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../lib/currency";
 import { formatPrice } from "../../../lib/format-price";
-import Badge from "../../ui/badge/Badge";
 import TypeformInput from "../../ui/input/TypeformInput";
 import SearchableSelect from "../../ui/select/SearchableSelect";
 
@@ -19,7 +18,7 @@ interface Package {
 interface PackageStepProps {
   existingPackages: Package[];
   selectedPackageId?: string;
-  packageName: string;
+  packageName?: string;
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
@@ -74,47 +73,37 @@ export const PackageStep: React.FC<PackageStepProps> = ({
   onPackageSave,
 }) => {
   const [saving, setSaving] = useState(false);
-  // Calculate payment status based on package price and payment amount
-  const packagePriceCentsForStatus = packagePriceCents ?? 0;
-  const paymentStatusForPakiet =
-    initialPaymentAmountCents === 0
-      ? "UNPAID"
-      : initialPaymentAmountCents >= packagePriceCentsForStatus
-        ? "PAID"
-        : "PARTIALLY_PAID";
+  const [isFormMode, setIsFormMode] = useState(false);
 
   const formatPriceInput = formatCurrencyInput;
 
-  // Check if current form values match any existing package exactly
+  // Check if current form values match any existing package exactly (excluding name if empty)
   const isDuplicatePackage = useMemo(() => {
-    const trimmedName = packageName.trim();
-    if (!trimmedName) {
-      return false;
-    }
-    
+    const trimmedName = packageName?.trim() ?? "";
+
     const isDuplicate = existingPackages.some((pkg) => {
-      // Check if all values match exactly (including the selected package if it matches)
-      const matches = (
-        (pkg.name?.trim() ?? "") === trimmedName &&
+      // If name is provided, check if all values match exactly
+      if (trimmedName) {
+        const matches =
+          (pkg.name?.trim() ?? "") === trimmedName &&
+          (pkg.includedPhotos ?? 0) === includedCount &&
+          (pkg.pricePerExtraPhoto ?? 0) === extraPriceCents &&
+          (pkg.price ?? 0) === packagePriceCents;
+        return matches;
+      }
+      // If name is empty, only check if values match (excluding name)
+      return (
         (pkg.includedPhotos ?? 0) === includedCount &&
         (pkg.pricePerExtraPhoto ?? 0) === extraPriceCents &&
         (pkg.price ?? 0) === packagePriceCents
       );
-      
-      // If a package is selected and it matches, it's a duplicate (can't save same package)
-      // If a different package matches, it's also a duplicate
-      return matches;
     });
-    
+
     return isDuplicate;
   }, [packageName, includedCount, extraPriceCents, packagePriceCents, existingPackages]);
 
   const canSavePackage = useMemo(() => {
-    const trimmedName = packageName.trim();
-    // Check all required fields
-    if (!trimmedName) {
-      return false;
-    }
+    // Check all required fields (name is optional)
     if (includedCount === undefined || includedCount === null) {
       return false;
     }
@@ -126,71 +115,189 @@ export const PackageStep: React.FC<PackageStepProps> = ({
     }
     // Enable if values are different from existing packages (not a duplicate)
     return !isDuplicatePackage;
-  }, [packageName, includedCount, packagePriceCents, extraPriceCents, isDuplicatePackage]);
+  }, [includedCount, packagePriceCents, extraPriceCents, isDuplicatePackage]);
 
-  const disabledReason = useMemo(() => {
-    const trimmedName = packageName.trim();
-    if (!trimmedName) {
-      return "Nazwa pakietu jest wymagana";
+  // Reset form mode when package is selected
+  useEffect(() => {
+    if (selectedPackageId && isFormMode) {
+      setIsFormMode(false);
     }
-    if (includedCount === undefined || includedCount === null) {
-      return "Liczba zdjęć w pakiecie jest wymagana";
-    }
-    if (packagePriceCents === undefined || packagePriceCents === null || packagePriceCents === 0) {
-      return "Cena pakietu jest wymagana";
-    }
-    if (extraPriceCents === undefined || extraPriceCents === null) {
-      return "Cena za dodatkowe zdjęcie jest wymagana";
-    }
-    if (isDuplicatePackage) {
-      return "Pakiet o takich samych wartościach już istnieje";
-    }
-    return "";
-  }, [packageName, includedCount, packagePriceCents, extraPriceCents, isDuplicatePackage]);
+  }, [selectedPackageId, isFormMode]);
 
-  const isSaveDisabled = saving || !canSavePackage;
-
-  return (
-    <div className="w-full space-y-8">
-      {existingPackages.length > 0 && (
-        <div>
-          <SearchableSelect
-            options={existingPackages.map((pkg) => ({
-              value: pkg.packageId,
-              label: `${pkg.name} - ${formatPrice(pkg.price ?? 0)}`,
-            }))}
-            label=""
-            placeholder="Wybierz pakiet"
-            searchPlaceholder="Szukaj pakietu..."
-            value={selectedPackageId ?? ""}
-            onChange={(value) => {
-              if (value) {
-                onPackageSelect(value);
-              } else {
-                onDataChange({ selectedPackageId: undefined });
-              }
-            }}
-            emptyMessage="Nie znaleziono pakietów"
-          />
+  // Selector mode - step2-style layout
+  if (!isFormMode) {
+    return (
+      <div className="w-full mt-[200px]">
+        <div className="mb-8 md:mb-12">
+          <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+            Ustaw pakiet cenowy *
+          </div>
+          <p className="text-base text-gray-500 dark:text-gray-400 italic">
+            Wybierz istniejący pakiet lub stwórz nowy
+          </p>
         </div>
-      )}
+        <div className="flex flex-col gap-6">
+          {existingPackages.length > 0 && (
+            <div className="w-full">
+              <SearchableSelect
+                options={existingPackages.map((pkg) => {
+                  const namePart = pkg.name ? `${pkg.name} • ` : "";
+                  const pricePart = formatPrice(pkg.price ?? 0);
+                  const photosPart = `${pkg.includedPhotos ?? 0} zdjęć`;
+                  const extraPricePart = formatPrice(pkg.pricePerExtraPhoto ?? 0);
+
+                  return {
+                    value: pkg.packageId,
+                    label: `${namePart}${pricePart}`,
+                    subLabel: `${photosPart} • ${extraPricePart} za dodatkowe`,
+                  };
+                })}
+                label=""
+                placeholder="Wybierz pakiet"
+                searchPlaceholder="Szukaj pakietu..."
+                value={selectedPackageId ?? ""}
+                onChange={(value) => {
+                  if (value) {
+                    onPackageSelect(value);
+                  } else {
+                    onDataChange({ selectedPackageId: undefined });
+                  }
+                }}
+                emptyMessage="Nie znaleziono pakietów"
+                className="[&_button]:text-2xl [&_button]:pb-3 [&_input]:text-2xl [&_input]:pb-3 [&_button]:pt-2 [&_input]:pt-2"
+              />
+            </div>
+          )}
+
+          <div>
+            <TypeformInput
+              type="text"
+              label="Kwota wpłacona przez klienta (PLN)"
+              placeholder="0.00"
+              value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
+              onChange={(e) => {
+                const formatted = formatPriceInput(e.target.value);
+                onPaymentAmountInputChange(formatted);
+                onDataChange({
+                  initialPaymentAmountCents: plnToCents(formatted),
+                });
+              }}
+              onBlur={() => {
+                if (!paymentAmountInput || paymentAmountInput === "") {
+                  onPaymentAmountInputChange(null);
+                }
+              }}
+              error={!!fieldErrors.initialPaymentAmountCents}
+              errorMessage={fieldErrors.initialPaymentAmountCents}
+              hint="Kwota wpłacona przez klienta za pakiet zakupiony od fotografa"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-center mt-28">
+          <button
+            onClick={() => {
+              setIsFormMode(true);
+              onDataChange({
+                selectedPackageId: undefined,
+                packageName: "",
+                includedCount: 0,
+                extraPriceCents: 0,
+                packagePriceCents: 0,
+                initialPaymentAmountCents: 0,
+              });
+            }}
+            className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
+          >
+            <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <Plus className="w-10 h-10 text-white" strokeWidth={2} />
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+                Dodaj nowy pakiet
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Utwórz nowy pakiet cenowy
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Form mode - package form with reordered fields
+  return (
+    <div className="w-full space-y-8 mt-[200px]">
+      <div className="mb-8 md:mb-12">
+        <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+          Ustaw pakiet cenowy *
+        </div>
+        <p className="text-base text-gray-500 dark:text-gray-400 italic">
+          Wybierz istniejący pakiet lub stwórz nowy
+        </p>
+      </div>
+      {/* Back to selector button */}
+      <div className="mb-4">
+        <button
+          onClick={() => setIsFormMode(false)}
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Wróć do wyboru
+        </button>
+      </div>
 
       <div className="space-y-6">
-        <div>
-          <TypeformInput
-            type="text"
-            name="package-name"
-            label="Nazwa pakietu *"
-            placeholder="Nazwa pakietu"
-            value={packageName}
-            onChange={(e) => onDataChange({ packageName: e.target.value })}
-            error={!!fieldErrors.packageName}
-            errorMessage={fieldErrors.packageName}
-            autoComplete="off"
-            autoFocus
-          />
+        {/* Reordered fields: Row 1 - Package price + Payment amount */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <TypeformInput
+              type="text"
+              label="Cena pakietu (PLN) *"
+              placeholder="0.00"
+              value={packagePriceInput ?? centsToPlnString(packagePriceCents)}
+              onChange={(e) => {
+                const formatted = formatPriceInput(e.target.value);
+                onPackagePriceInputChange(formatted);
+                onDataChange({ packagePriceCents: plnToCents(formatted) });
+              }}
+              onBlur={() => {
+                if (!packagePriceInput || packagePriceInput === "") {
+                  onPackagePriceInputChange(null);
+                }
+              }}
+              error={!!fieldErrors.packagePriceCents}
+              errorMessage={fieldErrors.packagePriceCents}
+              autoFocus
+            />
+          </div>
+          <div>
+            <TypeformInput
+              type="text"
+              label="Kwota wpłacona przez klienta (PLN)"
+              placeholder="0.00"
+              value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
+              onChange={(e) => {
+                const formatted = formatPriceInput(e.target.value);
+                onPaymentAmountInputChange(formatted);
+                onDataChange({
+                  initialPaymentAmountCents: plnToCents(formatted),
+                });
+              }}
+              onBlur={() => {
+                if (!paymentAmountInput || paymentAmountInput === "") {
+                  onPaymentAmountInputChange(null);
+                }
+              }}
+              error={!!fieldErrors.initialPaymentAmountCents}
+              errorMessage={fieldErrors.initialPaymentAmountCents}
+              hint="Kwota wpłacona przez klienta za pakiet zakupiony od fotografa"
+            />
+          </div>
         </div>
 
+        {/* Reordered fields: Row 2 - Number of photos + Price per additional photo */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <TypeformInput
@@ -231,93 +338,48 @@ export const PackageStep: React.FC<PackageStepProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <TypeformInput
-              type="text"
-              label="Cena pakietu (PLN) *"
-              placeholder="0.00"
-              value={packagePriceInput ?? centsToPlnString(packagePriceCents)}
-              onChange={(e) => {
-                const formatted = formatPriceInput(e.target.value);
-                onPackagePriceInputChange(formatted);
-                onDataChange({ packagePriceCents: plnToCents(formatted) });
-              }}
-              onBlur={() => {
-                if (!packagePriceInput || packagePriceInput === "") {
-                  onPackagePriceInputChange(null);
-                }
-              }}
-              error={!!fieldErrors.packagePriceCents}
-              errorMessage={fieldErrors.packagePriceCents}
-            />
-          </div>
-          <div>
-            <TypeformInput
-              type="text"
-              label="Kwota wpłacona przez klienta (PLN)"
-              placeholder="0.00"
-              value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
-              onChange={(e) => {
-                const formatted = formatPriceInput(e.target.value);
-                onPaymentAmountInputChange(formatted);
-                onDataChange({
-                  initialPaymentAmountCents: plnToCents(formatted),
-                });
-              }}
-              onBlur={() => {
-                if (!paymentAmountInput || paymentAmountInput === "") {
-                  onPaymentAmountInputChange(null);
-                }
-              }}
-              error={!!fieldErrors.initialPaymentAmountCents}
-              errorMessage={fieldErrors.initialPaymentAmountCents}
-              hint="Kwota wpłacona przez klienta za pakiet zakupiony od fotografa"
-            />
-          </div>
+        {/* Package name field - optional, at the bottom */}
+        <div>
+          <TypeformInput
+            type="text"
+            name="package-name"
+            label="Nazwa pakietu"
+            placeholder="Nazwa pakietu (opcjonalne)"
+            value={packageName ?? ""}
+            onChange={(e) => onDataChange({ packageName: e.target.value || undefined })}
+            error={!!fieldErrors.packageName}
+            errorMessage={fieldErrors.packageName}
+            autoComplete="off"
+          />
         </div>
 
         <div className="pt-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Status płatności:</span>
-              <Badge
-                color={
-                  paymentStatusForPakiet === "PAID"
-                    ? "success"
-                    : paymentStatusForPakiet === "PARTIALLY_PAID"
-                      ? "warning"
-                      : "error"
-                }
-                variant="light"
-              >
-                {paymentStatusForPakiet === "PAID"
-                  ? "Opłacone"
-                  : paymentStatusForPakiet === "PARTIALLY_PAID"
-                    ? "Częściowo opłacone"
-                    : "Nieopłacone"}
-              </Badge>
-            </div>
+            <div />
             {onPackageSave && (
               <div className="group relative">
                 <button
                   onClick={async () => {
-                    if (!packageName.trim() || isDuplicatePackage) {
+                    if (!canSavePackage) {
                       return;
                     }
                     setSaving(true);
                     try {
+                      // Use package name if provided, otherwise use empty string (will be auto-generated on backend or use default)
                       await onPackageSave({
-                        name: packageName.trim(),
+                        name: packageName?.trim() ?? "",
                         includedPhotos: includedCount,
                         pricePerExtraPhoto: extraPriceCents,
                         price: packagePriceCents,
                       });
+                      // Reset payment amount when new package is saved
+                      onDataChange({ initialPaymentAmountCents: 0 });
+                      onPaymentAmountInputChange(null);
                     } finally {
                       setSaving(false);
                     }
                   }}
-                  disabled={isSaveDisabled}
+                  disabled={!canSavePackage || saving}
                   className="flex items-center gap-2 text-base text-green-700 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-green-700 dark:disabled:hover:text-green-500"
                 >
                   {saving ? (
@@ -332,9 +394,9 @@ export const PackageStep: React.FC<PackageStepProps> = ({
                     </>
                   )}
                 </button>
-                {isSaveDisabled && disabledReason && (
+                {!canSavePackage && (
                   <div className="absolute bottom-full right-0 mb-2 w-80 max-w-[calc(100vw-2rem)] p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                    {disabledReason}
+                    Wypełnij wszystkie wymagane pola
                     <div className="absolute top-full right-8 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
                   </div>
                 )}

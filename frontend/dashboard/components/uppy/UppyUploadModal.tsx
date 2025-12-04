@@ -227,7 +227,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
         return; // No change, skip sync
       }
 
-
       lastSyncedFileIdsRef.current = currentFileIds;
       setFiles(uppyFiles);
     };
@@ -330,7 +329,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       fileInputRef.current.value = "";
     }
   };
-
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -470,7 +468,12 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`flex flex-col ${isDragging ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
-          style={{ height: "calc(70vh + 200px)", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+          style={{
+            height: "calc(70vh + 200px)",
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
           <div style={{ flex: "1 1 0%", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
             <div className="p-6">
@@ -506,7 +509,8 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   <div className="space-y-2">
                     <Upload className="mx-auto h-12 w-12 text-gray-400" strokeWidth={2} />
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Przeciągnij i upuść zdjęcia lub cały folder tutaj, lub kliknij, aby wybrać pliki
+                      Przeciągnij i upuść zdjęcia lub cały folder tutaj, lub kliknij, aby wybrać
+                      pliki
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-500">
                       Obsługiwane formaty: JPG, PNG, WebP
@@ -545,7 +549,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                       const status = getFileStatus(freshFile);
                       const progress = getFileProgress(freshFile);
                       const thumbnail = getThumbnail(freshFile);
-
 
                       return (
                         <div

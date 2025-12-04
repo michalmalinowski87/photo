@@ -13,9 +13,16 @@ export const handler = lambdaLogger(async (event: any) => {
 	if (!id) return { statusCode: 400, body: 'missing id' };
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const pkg = body?.pricingPackage;
-	if (!pkg || typeof pkg.packageName !== 'string' || typeof pkg.includedCount !== 'number' || typeof pkg.extraPriceCents !== 'number' || typeof pkg.packagePriceCents !== 'number') {
-		return { statusCode: 400, body: 'pricingPackage requires { packageName, includedCount, extraPriceCents, packagePriceCents }' };
+	if (!pkg || 
+		(pkg.packageName !== undefined && typeof pkg.packageName !== 'string') ||
+		typeof pkg.includedCount !== 'number' || 
+		typeof pkg.extraPriceCents !== 'number' || 
+		typeof pkg.packagePriceCents !== 'number') {
+		return { statusCode: 400, body: 'pricingPackage requires { packageName?: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' };
 	}
+	
+	// Package name is optional - use provided name or undefined
+	const packageName = (pkg.packageName && pkg.packageName.trim()) ? pkg.packageName.trim() : undefined;
 	const requester = getUserIdFromEvent(event);
 	const got = await ddb.send(new GetCommand({ TableName: table, Key: { galleryId: id } }));
 	const gallery = got.Item as any;
@@ -54,12 +61,27 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
+	// Build pricingPackage object - only include packageName if it exists
+	const pricingPackageUpdate: {
+		packageName?: string;
+		includedCount: number;
+		extraPriceCents: number;
+		packagePriceCents: number;
+	} = {
+		includedCount: pkg.includedCount,
+		extraPriceCents: pkg.extraPriceCents,
+		packagePriceCents: pkg.packagePriceCents,
+	};
+	if (packageName !== undefined) {
+		pricingPackageUpdate.packageName = packageName;
+	}
+
 	await ddb.send(new UpdateCommand({
 		TableName: table,
 		Key: { galleryId: id },
 		UpdateExpression: 'SET pricingPackage = :p, updatedAt = :u',
 		ExpressionAttributeValues: {
-			':p': { packageName: pkg.packageName, includedCount: pkg.includedCount, extraPriceCents: pkg.extraPriceCents, packagePriceCents: pkg.packagePriceCents },
+			':p': pricingPackageUpdate,
 			':u': new Date().toISOString()
 		}
 	}));

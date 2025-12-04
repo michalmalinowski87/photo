@@ -113,4 +113,3 @@ export const useClientSearch = (initialLimit: number = 20): UseClientSearchRetur
     hasMore,
   };
 };
-

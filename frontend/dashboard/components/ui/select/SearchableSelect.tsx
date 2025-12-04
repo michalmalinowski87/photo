@@ -48,11 +48,12 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   // Filter options based on search query
   const filteredOptions = options.filter((option) => {
-    if (!searchQuery.trim()) {return true;}
+    if (!searchQuery.trim()) {
+      return true;
+    }
     const query = searchQuery.toLowerCase();
     return (
-      option.label.toLowerCase().includes(query) ||
-      (option.subLabel?.toLowerCase().includes(query))
+      option.label.toLowerCase().includes(query) || option.subLabel?.toLowerCase().includes(query)
     );
   });
 
@@ -100,7 +101,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) {return;}
+    if (disabled) {
+      return;
+    }
 
     switch (e.key) {
       case "Enter":
@@ -116,9 +119,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         if (!isOpen) {
           setIsOpen(true);
         } else {
-          setHighlightedIndex((prev) =>
-            prev < filteredOptions.length - 1 ? prev + 1 : prev
-          );
+          setHighlightedIndex((prev) => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
         }
         break;
       case "ArrowUp":
@@ -178,11 +179,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           aria-expanded={false}
           aria-label={placeholder}
         >
-          <span className={`truncate flex-1 ${
-            !selectedOption
-              ? "text-gray-400 dark:text-gray-500"
-              : "text-gray-400 dark:text-gray-500 opacity-15"
-          }`}>
+          <span
+            className={`truncate flex-1 ${
+              !selectedOption ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
+            }`}
+          >
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <div className="flex items-center gap-2 ml-2 flex-shrink-0">
@@ -256,9 +257,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 <X className="w-4 h-4 text-gray-400" />
               </div>
             )}
-            <ChevronDown
-              className="w-4 h-4 text-gray-400 transition-transform duration-200 rotate-180"
-            />
+            <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-200 rotate-180" />
           </div>
         </div>
       )}
@@ -310,9 +309,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         <div className="flex flex-col items-start flex-1 min-w-0">
                           <span
                             className={`text-lg truncate w-full ${
-                              isSelected
-                                ? "font-medium"
-                                : "font-normal"
+                              isSelected ? "font-medium" : "font-normal"
                             }`}
                           >
                             {option.label}
@@ -330,8 +327,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     </li>
                   );
                 })
-            )}
-          </ul>
+              )}
+            </ul>
           </div>
         </div>
       )}

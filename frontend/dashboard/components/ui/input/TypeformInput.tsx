@@ -169,13 +169,9 @@ const TypeformInput: FC<TypeformInputProps> = ({
       {/* Reserved space for error messages and helper text to prevent layout shifts */}
       <div className={`min-h-[20px] mt-3 ${errorContainerClassName}`}>
         {errorMessage ? (
-          <p className="text-sm text-error-500 dark:text-error-400">
-            {errorMessage}
-          </p>
+          <p className="text-sm text-error-500 dark:text-error-400">{errorMessage}</p>
         ) : hint ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {hint}
-          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>
         ) : null}
       </div>
     </div>
@@ -183,4 +179,3 @@ const TypeformInput: FC<TypeformInputProps> = ({
 };
 
 export default TypeformInput;
-

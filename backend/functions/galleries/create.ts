@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
 
@@ -47,11 +47,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'pricingPackage is required: { packageName: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
+			body: JSON.stringify({ error: 'pricingPackage is required: { packageName?: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
 		};
 	}
 	if (
-		typeof pricingPackage.packageName !== 'string' || 
+		(pricingPackage.packageName !== undefined && typeof pricingPackage.packageName !== 'string') ||
 		typeof pricingPackage.includedCount !== 'number' || 
 		typeof pricingPackage.extraPriceCents !== 'number' ||
 		typeof pricingPackage.packagePriceCents !== 'number'
@@ -59,9 +59,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'pricingPackage must have { packageName: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
+			body: JSON.stringify({ error: 'pricingPackage must have { packageName?: string, includedCount: number, extraPriceCents: number, packagePriceCents: number }' })
 		};
 	}
+	
+	// Package name is optional - use provided name or undefined
+	const finalPackageName = (pricingPackage.packageName && pricingPackage.packageName.trim()) 
+		? pricingPackage.packageName.trim() 
+		: undefined;
 	if (pricingPackage.includedCount < 0 || pricingPackage.extraPriceCents < 0 || pricingPackage.packagePriceCents < 0) {
 		return {
 			statusCode: 400,
@@ -110,12 +115,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	
 	// Add pricingPackage (required for client pricing per gallery)
-	item.pricingPackage = {
-		packageName: pricingPackage.packageName,
+	// Build pricingPackage object - only include packageName if it exists
+	const pricingPackageItem: {
+		packageName?: string;
+		includedCount: number;
+		extraPriceCents: number;
+		packagePriceCents: number;
+	} = {
 		includedCount: pricingPackage.includedCount,
 		extraPriceCents: pricingPackage.extraPriceCents,
 		packagePriceCents: pricingPackage.packagePriceCents
 	};
+	if (finalPackageName !== undefined) {
+		pricingPackageItem.packageName = finalPackageName;
+	}
+	item.pricingPackage = pricingPackageItem;
 
 	// Always accept clientEmail and clientPassword during creation (regardless of selectionEnabled)
 	// These will be used when sending the final gallery link to the client

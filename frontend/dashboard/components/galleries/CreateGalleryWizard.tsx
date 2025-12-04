@@ -4,12 +4,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth } from "../../lib/auth-init";
+import { useGalleryStore } from "../../store/gallerySlice";
+import Badge from "../ui/badge/Badge";
+import { FullPageLoading } from "../ui/loading/Loading";
 
 import { ClientStep } from "./wizard/ClientStep";
 import { GalleryNameStep } from "./wizard/GalleryNameStep";
 import { GalleryTypeStep } from "./wizard/GalleryTypeStep";
 import { PackageStep } from "./wizard/PackageStep";
-import { SummaryStep } from "./wizard/SummaryStep";
 
 interface CreateGalleryWizardProps {
   isOpen: boolean;
@@ -64,7 +66,7 @@ interface WizardData {
 
   // Step 3: Pakiet cenowy
   selectedPackageId?: string;
-  packageName: string;
+  packageName?: string;
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
@@ -80,8 +82,6 @@ interface WizardData {
   phone: string;
   nip: string;
   companyName: string;
-
-  // Step 5: Podsumowanie
   initialPaymentAmountCents: number;
 }
 
@@ -92,6 +92,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   devLocked = false,
 }) => {
   const { showToast } = useToast();
+  const { setGalleryCreationLoading } = useGalleryStore();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -198,10 +199,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     if (pkg) {
       const updates = {
         selectedPackageId: packageId,
-        packageName: pkg.name ?? "",
-        includedCount: pkg.includedPhotos ?? 0,
-        extraPriceCents: pkg.pricePerExtraPhoto ?? 0,
-        packagePriceCents: pkg.price ?? 0,
+        packageName: pkg.name?.trim() ?? "",
+        includedCount: Number(pkg.includedPhotos) || 0,
+        extraPriceCents: Number(pkg.pricePerExtraPhoto) || 0,
+        packagePriceCents: Number(pkg.price) || 0,
       };
       setData({ ...data, ...updates });
       // Clear related errors when package is selected
@@ -263,20 +264,28 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
         break;
       case 3:
-        // Validate all required fields
-        if (!data.packageName.trim()) {
-          errors.packageName = "Nazwa pakietu jest wymagana";
-          isValid = false;
-        }
-        if (data.includedCount === undefined || data.includedCount === null || data.includedCount <= 0) {
+        // Validate all required fields (package name is optional)
+        if (
+          data.includedCount === undefined ||
+          data.includedCount === null ||
+          data.includedCount <= 0
+        ) {
           errors.includedCount = "Liczba zdjęć w pakiecie jest wymagana";
           isValid = false;
         }
-        if (data.extraPriceCents === undefined || data.extraPriceCents === null || data.extraPriceCents <= 0) {
+        if (
+          data.extraPriceCents === undefined ||
+          data.extraPriceCents === null ||
+          data.extraPriceCents <= 0
+        ) {
           errors.extraPriceCents = "Cena za dodatkowe zdjęcie jest wymagana";
           isValid = false;
         }
-        if (data.packagePriceCents === undefined || data.packagePriceCents === null || data.packagePriceCents <= 0) {
+        if (
+          data.packagePriceCents === undefined ||
+          data.packagePriceCents === null ||
+          data.packagePriceCents <= 0
+        ) {
           errors.packagePriceCents = "Cena pakietu jest wymagana";
           isValid = false;
         }
@@ -292,12 +301,12 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           errors.clientPassword = "Hasło jest wymagane";
           isValid = false;
         }
-        
+
         if (data.selectedClientId) {
           // Existing client selected - no need to validate client fields
           break;
         }
-        
+
         // For new clients, validate all required fields
         if (!data.clientEmail.trim()) {
           errors.clientEmail = "Email klienta jest wymagany";
@@ -323,9 +332,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           }
         }
         break;
-      case 5:
-        // No validation needed for step 5
-        break;
       default:
         break;
     }
@@ -334,21 +340,17 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     return isValid;
   };
 
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, 5));
-    }
-  };
-
   const handleBack = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(5)) {
+    if (!validateStep(4)) {
       return;
     }
 
+    // Show loading overlay immediately
+    setGalleryCreationLoading(true);
     setLoading(true);
     setFieldErrors({});
 
@@ -356,39 +358,76 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       interface CreateGalleryRequestBody {
         selectionEnabled: boolean;
         pricingPackage: {
-          packageName: string;
+          packageName?: string;
           includedCount: number;
           extraPriceCents: number;
           packagePriceCents: number;
         };
-        galleryName: string;
-        initialPaymentAmountCents: number;
-        clientPassword: string;
+        galleryName?: string;
+        initialPaymentAmountCents?: number;
+        clientPassword?: string;
         clientEmail?: string;
         isVatRegistered?: boolean;
       }
 
+      // Ensure all numeric values are proper numbers
+      const includedCount = Number(data.includedCount) || 0;
+      const extraPriceCents = Number(data.extraPriceCents) || 0;
+      const packagePriceCents = Number(data.packagePriceCents) || 0;
+      const initialPaymentAmountCents = Number(data.initialPaymentAmountCents) || 0;
+
+      // Package name: only include if it's a non-empty string
+      const packageName = data.packageName?.trim();
+      const finalPackageName = packageName && packageName.length > 0 ? packageName : undefined;
+
+      // Build pricingPackage object - only include packageName if it exists
+      const pricingPackage: {
+        packageName?: string;
+        includedCount: number;
+        extraPriceCents: number;
+        packagePriceCents: number;
+      } = {
+        includedCount,
+        extraPriceCents,
+        packagePriceCents,
+      };
+      if (finalPackageName) {
+        pricingPackage.packageName = finalPackageName;
+      }
+
       const requestBody: CreateGalleryRequestBody = {
         selectionEnabled: data.selectionEnabled ?? false,
-        pricingPackage: {
-          packageName: data.packageName,
-          includedCount: data.includedCount,
-          extraPriceCents: data.extraPriceCents,
-          packagePriceCents: data.packagePriceCents,
-        },
-        galleryName: data.galleryName.trim(),
-        initialPaymentAmountCents: data.initialPaymentAmountCents,
-        clientPassword: data.clientPassword.trim(),
+        pricingPackage,
       };
+
+      // Add gallery name if provided
+      const galleryName = data.galleryName?.trim();
+      if (galleryName && galleryName.length > 0) {
+        requestBody.galleryName = galleryName;
+      }
+
+      // Add initial payment amount if provided
+      if (initialPaymentAmountCents > 0) {
+        requestBody.initialPaymentAmountCents = initialPaymentAmountCents;
+      }
+
+      // Add client password if provided
+      const clientPassword = data.clientPassword?.trim();
+      if (clientPassword && clientPassword.length > 0) {
+        requestBody.clientPassword = clientPassword;
+      }
 
       // Add client data
       if (data.selectedClientId) {
         const client = existingClients.find((c) => c.clientId === data.selectedClientId);
-        if (client) {
-          requestBody.clientEmail = client.email ?? "";
+        if (client?.email?.trim()) {
+          requestBody.clientEmail = client.email.trim();
         }
       } else {
-        requestBody.clientEmail = data.clientEmail.trim();
+        const clientEmail = data.clientEmail?.trim();
+        if (clientEmail && clientEmail.length > 0) {
+          requestBody.clientEmail = clientEmail;
+        }
         if (data.isCompany) {
           requestBody.isVatRegistered = Boolean(data.isVatRegistered);
         }
@@ -401,15 +440,29 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       }
 
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
+
+      // Keep loading overlay visible - it will be removed when gallery page is fully loaded
       onSuccess(response.galleryId);
       if (!devLocked) {
         onClose();
       }
     } catch (err: unknown) {
+      // Hide loading overlay on error
+      setGalleryCreationLoading(false);
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg);
-    } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      if (currentStep === 4) {
+        // On step 4 (client step), create the gallery instead of going to next step
+        void handleSubmit();
+      } else {
+        setCurrentStep((prev) => Math.min(prev + 1, 4));
+      }
     }
   };
 
@@ -564,57 +617,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
           />
         );
 
-      case 5:
-        return (
-          <SummaryStep
-            selectionEnabled={data.selectionEnabled ?? false}
-            galleryName={data.galleryName}
-            selectedClientId={data.selectedClientId}
-            clientEmail={data.clientEmail}
-            existingClients={existingClients}
-            packageName={data.packageName}
-            includedCount={data.includedCount}
-            extraPriceCents={data.extraPriceCents}
-            packagePriceCents={data.packagePriceCents}
-            initialPaymentAmountCents={data.initialPaymentAmountCents}
-          />
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  // Step questions for Typeform-style header
-  const getStepQuestion = (step: number): string => {
-    switch (step) {
-      case 1:
-        return "Wybierz typ galerii";
-      case 2:
-        return "Jaką nazwę ma mieć galeria?";
-      case 3:
-        return "Ustaw pakiet cenowy";
-      case 4:
-        return "Kogo zaprosimy do tej galerii?";
-      case 5:
-        return "Sprawdź podsumowanie";
-      default:
-        return "";
-    }
-  };
-
-  const getStepDescription = (step: number): string | null => {
-    switch (step) {
-      case 1:
-        return "Jak klient będzie korzystał z galerii?";
-      case 2:
-        return "To pomoże Ci łatwo ją znaleźć później";
-      case 3:
-        return "Wybierz istniejący pakiet lub stwórz nowy";
-      case 4:
-        return "Wybierz istniejącego klienta lub dodaj nowego";
-      case 5:
-        return "Wszystko wygląda dobrze? Możesz teraz utworzyć galerię!";
       default:
         return null;
     }
@@ -625,134 +627,170 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden">
-      {/* Modern Step Indicator - Bigger for better visibility */}
-      <div className="px-6 py-6 md:py-8 bg-gray-50 dark:bg-gray-dark flex-shrink-0">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {[
-            { num: 1, label: "Typ" },
-            { num: 2, label: "Nazwa" },
-            { num: 3, label: "Pakiet" },
-            { num: 4, label: "Klient" },
-            { num: 5, label: "Podsumowanie" },
-          ].map((step, index) => {
-            const isActive = step.num === currentStep;
-            const isCompleted = step.num < currentStep;
-            const isLast = index === 4;
+    <>
+      {/* Full-screen loading overlay - shows immediately when creating gallery */}
+      {loading && <FullPageLoading text="Tworzenie galerii..." />}
+      <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden relative">
+        {/* Close button - top right of main container */}
+        <button
+          onClick={onClose}
+          className="absolute top-[10px] right-[10px] z-10 w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] flex items-center justify-center"
+          title="Zamknij"
+        >
+          <X className="w-5 h-5" strokeWidth={2} />
+        </button>
+        {/* Modern Step Indicator - Bigger for better visibility */}
+        <div className="px-6 py-6 md:py-8 bg-gray-50 dark:bg-gray-dark flex-shrink-0">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            {[
+              { num: 1, label: "Typ" },
+              { num: 2, label: "Nazwa" },
+              { num: 3, label: "Pakiet" },
+              { num: 4, label: "Klient" },
+            ].map((step, index) => {
+              const isActive = step.num === currentStep;
+              const isCompleted = step.num < currentStep;
+              const isLast = index === 3;
 
-            return (
-              <React.Fragment key={step.num}>
-                <div className="flex flex-col items-center flex-1">
-                  <div
-                    className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-sm md:text-base font-semibold transition-all duration-300 ${
-                      isActive
-                        ? "bg-brand-500 text-white scale-110"
-                        : isCompleted
-                          ? "bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400"
-                          : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <Check className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
-                    ) : (
-                      step.num
-                    )}
+              return (
+                <React.Fragment key={step.num}>
+                  <div className="flex flex-col items-center flex-1">
+                    <div
+                      className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-sm md:text-base font-semibold transition-all duration-300 ${
+                        isActive
+                          ? "bg-brand-500 text-white scale-110"
+                          : isCompleted
+                            ? "bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {isCompleted ? (
+                        <Check className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
+                      ) : (
+                        step.num
+                      )}
+                    </div>
+                    <span
+                      className={`mt-3 text-xs md:text-sm font-medium transition-colors ${
+                        isActive
+                          ? "text-brand-600 dark:text-brand-400"
+                          : isCompleted
+                            ? "text-gray-600 dark:text-gray-400"
+                            : "text-gray-400 dark:text-gray-500"
+                      }`}
+                    >
+                      {step.label}
+                    </span>
                   </div>
-                  <span
-                    className={`mt-3 text-xs md:text-sm font-medium transition-colors ${
-                      isActive
-                        ? "text-brand-600 dark:text-brand-400"
-                        : isCompleted
-                          ? "text-gray-600 dark:text-gray-400"
-                          : "text-gray-400 dark:text-gray-500"
-                    }`}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-                {!isLast && (
-                  <div
-                    className={`flex-1 h-1 mx-3 -mt-7 transition-all duration-300 ${
-                      isCompleted
-                        ? "bg-brand-300 dark:bg-brand-500"
-                        : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            );
-          })}
+                  {!isLast && (
+                    <div
+                      className={`flex-1 h-1 mx-3 -mt-7 transition-all duration-300 ${
+                        isCompleted
+                          ? "bg-brand-300 dark:bg-brand-500"
+                          : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Content - Full height with Typeform-style spacing */}
-      <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50 dark:bg-gray-dark">
-        <div className="min-h-full flex flex-col">
-          {/* Close button - floating top right */}
-          {!devLocked && (
-            <button
-              onClick={onClose}
-              className="absolute top-6 right-6 z-10 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              title="Zamknij"
-            >
-              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" strokeWidth={2} />
-            </button>
-          )}
-
-          {/* Step Content - Better space utilization */}
-          <div className="flex-1 flex items-center justify-center px-6 md:px-8 lg:px-12 relative -mt-[200px]">
-            <div className="w-full max-w-5xl mx-auto">
-              {/* Step Question Header - Typeform style */}
-              <div className={currentStep === 2 ? "mb-0" : currentStep === 4 ? "mb-8 md:mb-12 pt-[150px]" : "mb-8 md:mb-12"}>
-                <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
-                  {getStepQuestion(currentStep)} *
-                </div>
-                {getStepDescription(currentStep) && (
-                  <p className="text-base text-gray-500 dark:text-gray-400 italic">
-                    {getStepDescription(currentStep)}
-                  </p>
-                )}
+        {/* Content - Full height with Typeform-style spacing */}
+        <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50 dark:bg-gray-dark">
+          <div className="min-h-full flex flex-col">
+            {/* Step Content - Better space utilization */}
+            <div className="flex-1 flex px-6 md:px-8 lg:px-12 relative">
+              <div className="w-full max-w-5xl mx-auto">
+                {/* Step Content */}
+                <div>{renderStep()}</div>
               </div>
-
-              {/* Step Content */}
-              <div>{renderStep()}</div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
-      <div className="flex items-center justify-between gap-4 px-6 py-6 bg-gray-50 dark:bg-gray-dark flex-shrink-0 h-24">
-        {currentStep > 1 && (
-          <button
-            onClick={handleBack}
-            disabled={loading}
-            className="px-6 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            ← Wstecz
-          </button>
-        )}
-        {currentStep === 1 && <div />}
-        {currentStep > 1 && (
-          <button
-            onClick={currentStep < 5 ? handleNext : handleSubmit}
-            disabled={loading}
-            className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading
-              ? "Przetwarzanie..."
-              : currentStep < 5
-                ? (
-                    <>
-                      OK <span className="text-lg">✓</span>
-                    </>
-                  )
-                : "Utwórz galerię"}
-          </button>
-        )}
-        {currentStep === 1 && <div />}
+        {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
+        <div className="flex items-center justify-between gap-4 px-6 py-6 bg-gray-50 dark:bg-gray-dark flex-shrink-0 h-24">
+          {currentStep > 1 && (
+            <button
+              onClick={handleBack}
+              disabled={loading}
+              className="px-6 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-[0.98]"
+            >
+              ← Wstecz
+            </button>
+          )}
+          {currentStep === 1 && (
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Anuluj
+            </button>
+          )}
+          <div className="flex items-center gap-4 ml-auto">
+            {/* Payment status - only for step 3 (Package step) */}
+            {currentStep === 3 &&
+              (() => {
+                const packagePriceCentsForStatus = data.packagePriceCents ?? 0;
+                // Always show "Nieopłacone" if no package price is set
+                const paymentStatus =
+                  packagePriceCentsForStatus === 0
+                    ? "UNPAID"
+                    : data.initialPaymentAmountCents === 0
+                      ? "UNPAID"
+                      : data.initialPaymentAmountCents >= packagePriceCentsForStatus
+                        ? "PAID"
+                        : "PARTIALLY_PAID";
+
+                return (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Status płatności:
+                    </span>
+                    <Badge
+                      color={
+                        paymentStatus === "PAID"
+                          ? "success"
+                          : paymentStatus === "PARTIALLY_PAID"
+                            ? "warning"
+                            : "error"
+                      }
+                      variant="light"
+                    >
+                      {paymentStatus === "PAID"
+                        ? "Opłacone"
+                        : paymentStatus === "PARTIALLY_PAID"
+                          ? "Częściowo opłacone"
+                          : "Nieopłacone"}
+                    </Badge>
+                  </div>
+                );
+              })()}
+            {currentStep > 1 && (
+              <button
+                onClick={handleNext}
+                disabled={loading}
+                className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  "Przetwarzanie..."
+                ) : currentStep === 4 ? (
+                  "Utwórz galerię"
+                ) : (
+                  <>
+                    OK <span className="text-lg">✓</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          {currentStep === 1 && <div />}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

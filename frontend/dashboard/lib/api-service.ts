@@ -621,7 +621,7 @@ class ApiService {
     updatePricingPackage: async (
       galleryId: string,
       pricingPackage: {
-        packageName: string;
+        packageName?: string;
         includedCount: number;
         extraPriceCents: number;
         packagePriceCents: number;

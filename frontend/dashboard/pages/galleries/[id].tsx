@@ -603,10 +603,25 @@ export default function GalleryDetail() {
     return null;
   }
 
+  // Check if we're coming from gallery creation - show loading overlay until fully loaded
+  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
+  const setGalleryCreationLoading = useGalleryStore((state) => state.setGalleryCreationLoading);
+
+  // Hide creation loading when gallery is fully loaded and orders are loaded
+  useEffect(() => {
+    if (galleryCreationLoading && !galleryLoading && !loading && gallery) {
+      setGalleryCreationLoading(false);
+    }
+  }, [galleryCreationLoading, galleryLoading, loading, gallery, setGalleryCreationLoading]);
+
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
   // Show loading only for orders, not gallery (gallery loading is handled by wrapper)
-  if (galleryLoading) {
-    return <FullPageLoading text="Ładowanie zleceń..." />;
+  if (galleryLoading || galleryCreationLoading) {
+    return (
+      <FullPageLoading
+        text={galleryCreationLoading ? "Tworzenie galerii..." : "Ładowanie zleceń..."}
+      />
+    );
   }
 
   if (!gallery) {

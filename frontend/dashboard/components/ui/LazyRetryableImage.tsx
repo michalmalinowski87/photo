@@ -74,7 +74,9 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   // Normalize URL by removing query parameters for comparison
   // This ensures cache-busting parameters don't cause false positives
   const normalizeUrlForComparison = (url: string | null | undefined): string => {
-    if (!url) {return "";}
+    if (!url) {
+      return "";
+    }
     try {
       const urlObj = new URL(url);
       return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
@@ -92,7 +94,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     // This handles cases where URLs might be in different order or some might be missing
     // Use a Set to deduplicate URLs (in case thumbUrl and thumbUrlFallback point to same resource)
     const urlSet = new Set<string>();
-    
+
     [
       normalizeUrlForComparison(imageData.thumbUrl),
       normalizeUrlForComparison(imageData.thumbUrlFallback),

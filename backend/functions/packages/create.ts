@@ -34,13 +34,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		price
 	} = body;
 
-	if (!name || !name.trim()) {
-		return {
-			statusCode: 400,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Package name is required' })
-		};
-	}
+	// Package name is optional - use provided name or undefined
+	const packageName = (name && name.trim()) ? name.trim() : undefined;
 
 	if (typeof includedPhotos !== 'number' || includedPhotos < 0) {
 		return {
@@ -72,7 +67,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	const pkg = {
 		packageId,
 		ownerId,
-		name: name.trim(),
+		name: packageName,
 		includedPhotos,
 		pricePerExtraPhoto,
 		price,

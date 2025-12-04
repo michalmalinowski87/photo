@@ -1,4 +1,4 @@
-import { Plus, Check, X, Save } from "lucide-react";
+import { Plus, Check, X, Save, ArrowLeft } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
 import { generatePassword } from "../../../lib/password";
@@ -52,16 +52,19 @@ interface ClientStepProps {
     companyName?: string;
     nip?: string;
   };
-  onClientSave?: (clientData: {
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    isCompany: boolean;
-    companyName: string;
-    nip: string;
-    isVatRegistered: boolean;
-  }, clientId?: string) => Promise<void>;
+  onClientSave?: (
+    clientData: {
+      email: string;
+      firstName: string;
+      lastName: string;
+      phone: string;
+      isCompany: boolean;
+      companyName: string;
+      nip: string;
+      isVatRegistered: boolean;
+    },
+    clientId?: string
+  ) => Promise<void>;
 }
 
 export const ClientStep: React.FC<ClientStepProps> = ({
@@ -83,6 +86,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
   onClientSave,
 }) => {
   const [saving, setSaving] = useState(false);
+  const [isFormMode, setIsFormMode] = useState(false);
 
   // Determine if we're in edit mode (selected client with matching email)
   const isEditMode = useMemo(() => {
@@ -97,7 +101,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
     const currentEmail = clientEmail.trim().toLowerCase();
     return selectedClientEmail === currentEmail;
   }, [selectedClientId, existingClients, clientEmail]);
-  
+
   // Check if current email matches any existing client (excluding the currently selected client)
   // eslint-disable-next-line no-console
   const isDuplicateClient = useMemo(() => {
@@ -108,13 +112,13 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       selectedClientId,
       existingClientsCount: existingClients.length,
     });
-    
+
     if (!trimmedEmail) {
       // eslint-disable-next-line no-console
       console.log("[DEBUG] No email, returning false");
       return false;
     }
-    
+
     const isDuplicate = existingClients.some((client) => {
       // Skip the currently selected client when checking for duplicates
       if (selectedClientId && client.clientId === selectedClientId) {
@@ -126,11 +130,16 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       const matches = existingEmail === trimmedEmail;
       if (matches) {
         // eslint-disable-next-line no-console
-        console.log("[DEBUG] Found duplicate email:", existingEmail, "for client:", client.clientId);
+        console.log(
+          "[DEBUG] Found duplicate email:",
+          existingEmail,
+          "for client:",
+          client.clientId
+        );
       }
       return matches;
     });
-    
+
     // eslint-disable-next-line no-console
     console.log("[DEBUG] isDuplicateClient result:", isDuplicate);
     return isDuplicate;
@@ -148,10 +157,10 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       lastName: lastName.trim() || "(empty)",
       isDuplicateClient,
     });
-    
+
     // Note: We allow saving in edit mode (when email matches selected client)
     // This is handled separately in canSaveClientInEditMode
-    
+
     // Check all required fields (password is NOT required for saving client, only for wizard continuation)
     if (!trimmedEmail) {
       // eslint-disable-next-line no-console
@@ -202,7 +211,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       }
       return "";
     }
-    
+
     // In create mode, check for duplicates (password is NOT required for saving client)
     const trimmedEmail = clientEmail.trim();
     if (!trimmedEmail) {
@@ -227,10 +236,19 @@ export const ClientStep: React.FC<ClientStepProps> = ({
       return "Klient o tym adresie email już istnieje";
     }
     return "";
-  }, [clientEmail, isCompany, companyName, nip, firstName, lastName, isDuplicateClient, isEditMode]);
+  }, [
+    clientEmail,
+    isCompany,
+    companyName,
+    nip,
+    firstName,
+    lastName,
+    isDuplicateClient,
+    isEditMode,
+  ]);
 
   const isSaveDisabled = !canSaveClient;
-  
+
   // Update canSaveClient to allow saving in edit mode
   const canSaveClientInEditMode = useMemo(() => {
     if (!isEditMode) {
@@ -253,7 +271,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
     }
     return true;
   }, [isEditMode, canSaveClient, clientEmail, isCompany, companyName, nip, firstName, lastName]);
-  
+
   // Debug logging when values change
   useEffect(() => {
     // eslint-disable-next-line no-console
@@ -269,60 +287,64 @@ export const ClientStep: React.FC<ClientStepProps> = ({
   const clientOptions = existingClients.map((client) => ({
     value: client.clientId,
     label: client.isCompany
-      ? client.companyName ?? ""
+      ? (client.companyName ?? "")
       : `${client.firstName ?? ""} ${client.lastName ?? ""}`.trim() || "Bez nazwy",
     subLabel: client.email ?? "",
   }));
 
-  return (
-    <div className="w-full space-y-4">
-      {existingClients.length > 0 && (
-        <div>
-          <SearchableSelect
-            options={clientOptions}
-            label=""
-            placeholder="Wybierz klienta"
-            searchPlaceholder="Szukaj po imieniu, nazwisku, email..."
-            value={selectedClientId ?? ""}
-            onChange={(value) => {
-              if (value) {
-                onClientSelect(value);
-              } else {
-                onDataChange({
-                  selectedClientId: undefined,
-                  clientEmail: "",
-                  firstName: "",
-                  lastName: "",
-                  companyName: "",
-                  nip: "",
-                  phone: "",
-                  isCompany: false,
-                  isVatRegistered: false,
-                });
-              }
-            }}
-            emptyMessage="Nie znaleziono klientów"
-          />
-        </div>
-      )}
+  // Reset form mode when client is selected
+  useEffect(() => {
+    if (selectedClientId && isFormMode) {
+      setIsFormMode(false);
+    }
+  }, [selectedClientId, isFormMode]);
 
-      <div>
-        <div className="space-y-0">
-          <div>
-            <TypeformInput
-              type="email"
-              label="Email klienta"
-              placeholder="email@example.com"
-              value={clientEmail}
-              onChange={(e) => onDataChange({ clientEmail: e.target.value })}
-              error={!!fieldErrors.clientEmail}
-              errorMessage={fieldErrors.clientEmail}
-              required
-              autoFocus
-            />
+  // Selector mode - step2-style layout
+  if (!isFormMode) {
+    return (
+      <div className="w-full mt-[200px]">
+        <div className="mb-8 md:mb-12">
+          <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+            Kogo zaprosimy do tej galerii? *
           </div>
+          <p className="text-base text-gray-500 dark:text-gray-400 italic">
+            Wybierz istniejącego klienta lub dodaj nowego
+          </p>
+        </div>
+        <div className="flex flex-col gap-6">
+          {existingClients.length > 0 && (
+            <div className="w-full">
+              <SearchableSelect
+                options={clientOptions}
+                label=""
+                placeholder="Wybierz klienta"
+                searchPlaceholder="Szukaj po imieniu, nazwisku, email..."
+                value={selectedClientId ?? ""}
+                onChange={(value) => {
+                  if (value) {
+                    onClientSelect(value);
+                  } else {
+                    onDataChange({
+                      selectedClientId: undefined,
+                      clientEmail: "",
+                      firstName: "",
+                      lastName: "",
+                      companyName: "",
+                      nip: "",
+                      phone: "",
+                      isCompany: false,
+                      isVatRegistered: false,
+                    });
+                  }
+                }}
+                emptyMessage="Nie znaleziono klientów"
+                className="[&_button]:text-2xl [&_button]:pb-3 [&_input]:text-2xl [&_input]:pb-3 [&_button]:pt-2 [&_input]:pt-2"
+              />
+            </div>
+          )}
 
-          <div>
+          {/* Password field - always visible in selector mode */}
+          <form className="w-full" onSubmit={(e) => e.preventDefault()}>
             <div className="flex gap-2">
               <div className="flex-1 relative">
                 <TypeformInput
@@ -334,6 +356,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                   required
                   error={!!fieldErrors.clientPassword}
                   errorMessage={fieldErrors.clientPassword}
+                  inputClassName="text-2xl pb-3 pt-6"
                   hint={
                     !fieldErrors.clientPassword
                       ? selectionEnabled
@@ -356,114 +379,227 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </form>
 
-        <div className="space-y-2 mt-12">
-          <div className="flex gap-6 pb-1">
-          <button
-            type="button"
-            onClick={() =>
-              onDataChange({
-                isCompany: false,
-                isVatRegistered: false,
-              })
-            }
-            className={`text-base font-medium transition-colors border-b-2 pb-2 ${
-              !isCompany
-                ? "border-gray-900 dark:border-gray-300 text-gray-900 dark:text-white"
-                : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
-            }`}
-          >
-            Osoba fizyczna
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onDataChange({
-                isCompany: true,
-                isVatRegistered,
-              })
-            }
-            className={`text-base font-medium transition-colors border-b-2 pb-2 ${
-              isCompany
-                ? "border-gray-900 dark:border-gray-300 text-gray-900 dark:text-white"
-                : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
-            }`}
-          >
-            Firma
-          </button>
-          </div>
-
-        {isCompany ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <TypeformInput
-                  type="text"
-                  label="Nazwa firmy"
-                  placeholder="Nazwa firmy"
-                  value={companyName}
-                  onChange={(e) => onDataChange({ companyName: e.target.value })}
-                  required
-                  error={!!fieldErrors.companyName}
-                  errorMessage={fieldErrors.companyName}
-                />
+          <div className="flex justify-center mt-28">
+            <button
+              onClick={() => {
+                setIsFormMode(true);
+                onDataChange({
+                  selectedClientId: undefined,
+                  clientEmail: "",
+                  firstName: "",
+                  lastName: "",
+                  companyName: "",
+                  nip: "",
+                  phone: "",
+                  isCompany: false,
+                  isVatRegistered: false,
+                  clientPassword: "",
+                });
+              }}
+              className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
+            >
+              <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                <Plus className="w-10 h-10 text-white" strokeWidth={2} />
               </div>
-              <div>
-                <TypeformInput
-                  type="text"
-                  label="NIP"
-                  placeholder="NIP"
-                  value={nip}
-                  onChange={(e) => onDataChange({ nip: e.target.value })}
-                  required
-                  error={!!fieldErrors.nip}
-                  errorMessage={fieldErrors.nip}
-                />
+              <div className="text-center">
+                <div className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+                  Dodaj nowego klienta
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Utwórz nowy profil klienta
+                </div>
               </div>
-            </div>
-          </>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <TypeformInput
-                type="text"
-                label="Imię"
-                placeholder="Imię"
-                value={firstName}
-                onChange={(e) => onDataChange({ firstName: e.target.value })}
-                required
-                error={!!fieldErrors.firstName}
-                errorMessage={fieldErrors.firstName}
-              />
-            </div>
-            <div>
-              <TypeformInput
-                type="text"
-                label="Nazwisko"
-                placeholder="Nazwisko"
-                value={lastName}
-                onChange={(e) => onDataChange({ lastName: e.target.value })}
-                required
-                error={!!fieldErrors.lastName}
-                errorMessage={fieldErrors.lastName}
-              />
-            </div>
+            </button>
           </div>
-        )}
-
-        <div>
-          <TypeformInput
-            type="tel"
-            label="Telefon"
-            placeholder="Telefon"
-            value={phone}
-            onChange={(e) => onDataChange({ phone: e.target.value })}
-          />
-        </div>
         </div>
       </div>
+    );
+  }
+
+  // Form mode - full client form
+  return (
+    <div className="w-full space-y-4 mt-[200px]">
+      <div className="mb-8 md:mb-12">
+        <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+          Kogo zaprosimy do tej galerii? *
+        </div>
+        <p className="text-base text-gray-500 dark:text-gray-400 italic">
+          Wybierz istniejącego klienta lub dodaj nowego
+        </p>
+      </div>
+      {/* Back to selector button */}
+      <div className="mb-4">
+        <button
+          onClick={() => setIsFormMode(false)}
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Wróć do wyboru
+        </button>
+      </div>
+
+      <form onSubmit={(e) => e.preventDefault()}>
+        <div>
+          <div className="space-y-0">
+            <div>
+              <TypeformInput
+                type="email"
+                label="Email klienta"
+                placeholder="email@example.com"
+                value={clientEmail}
+                onChange={(e) => onDataChange({ clientEmail: e.target.value })}
+                error={!!fieldErrors.clientEmail}
+                errorMessage={fieldErrors.clientEmail}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <TypeformInput
+                    type="password"
+                    label="Hasło"
+                    placeholder="Hasło"
+                    value={clientPassword}
+                    onChange={(e) => onDataChange({ clientPassword: e.target.value })}
+                    required
+                    error={!!fieldErrors.clientPassword}
+                    errorMessage={fieldErrors.clientPassword}
+                    hint={
+                      !fieldErrors.clientPassword
+                        ? selectionEnabled
+                          ? "Hasło do wyboru zdjęć przez klienta"
+                          : "Hasło do dostępu do finalnej galerii"
+                        : undefined
+                    }
+                  />
+                  <div className="absolute right-0 bottom-[34px]">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const newPassword = generatePassword();
+                        onDataChange({ clientPassword: newPassword });
+                      }}
+                      className="text-green-600 dark:text-green-400 bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border-0 shadow-none"
+                    >
+                      Generuj hasło
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 mt-12">
+            <div className="flex gap-6 pb-1">
+              <button
+                type="button"
+                onClick={() =>
+                  onDataChange({
+                    isCompany: false,
+                    isVatRegistered: false,
+                  })
+                }
+                className={`text-base font-medium transition-colors border-b-2 pb-2 ${
+                  !isCompany
+                    ? "border-gray-900 dark:border-gray-300 text-gray-900 dark:text-white"
+                    : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                }`}
+              >
+                Osoba fizyczna
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onDataChange({
+                    isCompany: true,
+                    isVatRegistered,
+                  })
+                }
+                className={`text-base font-medium transition-colors border-b-2 pb-2 ${
+                  isCompany
+                    ? "border-gray-900 dark:border-gray-300 text-gray-900 dark:text-white"
+                    : "border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                }`}
+              >
+                Firma
+              </button>
+            </div>
+
+            {isCompany ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <TypeformInput
+                      type="text"
+                      label="Nazwa firmy"
+                      placeholder="Nazwa firmy"
+                      value={companyName}
+                      onChange={(e) => onDataChange({ companyName: e.target.value })}
+                      required
+                      error={!!fieldErrors.companyName}
+                      errorMessage={fieldErrors.companyName}
+                    />
+                  </div>
+                  <div>
+                    <TypeformInput
+                      type="text"
+                      label="NIP"
+                      placeholder="NIP"
+                      value={nip}
+                      onChange={(e) => onDataChange({ nip: e.target.value })}
+                      required
+                      error={!!fieldErrors.nip}
+                      errorMessage={fieldErrors.nip}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <TypeformInput
+                    type="text"
+                    label="Imię"
+                    placeholder="Imię"
+                    value={firstName}
+                    onChange={(e) => onDataChange({ firstName: e.target.value })}
+                    required
+                    error={!!fieldErrors.firstName}
+                    errorMessage={fieldErrors.firstName}
+                  />
+                </div>
+                <div>
+                  <TypeformInput
+                    type="text"
+                    label="Nazwisko"
+                    placeholder="Nazwisko"
+                    value={lastName}
+                    onChange={(e) => onDataChange({ lastName: e.target.value })}
+                    required
+                    error={!!fieldErrors.lastName}
+                    errorMessage={fieldErrors.lastName}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <TypeformInput
+                type="tel"
+                label="Telefon"
+                placeholder="Telefon"
+                value={phone}
+                onChange={(e) => onDataChange({ phone: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      </form>
 
       {onClientSave && (
         <div className="pt-2">
@@ -481,12 +617,16 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                   {isVatRegistered ? (
                     <>
                       <Check size={16} className="text-green-600 dark:text-green-400" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">Firma zarejestrowana jako podatnik VAT</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Firma zarejestrowana jako podatnik VAT
+                      </span>
                     </>
                   ) : (
                     <>
                       <X size={16} className="text-red-500 dark:text-red-400" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">Firma zarejestrowana jako podatnik VAT</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Firma zarejestrowana jako podatnik VAT
+                      </span>
                     </>
                   )}
                 </button>
@@ -502,17 +642,21 @@ export const ClientStep: React.FC<ClientStepProps> = ({
                   setSaving(true);
                   try {
                     // Only pass clientId if we're in edit mode and have a valid selectedClientId
-                    const clientIdToUpdate = isEditMode && selectedClientId ? selectedClientId : undefined;
-                    await onClientSave({
-                      email: clientEmail.trim(),
-                      firstName: firstName.trim(),
-                      lastName: lastName.trim(),
-                      phone: phone.trim(),
-                      isCompany,
-                      companyName: companyName.trim(),
-                      nip: nip.trim(),
-                      isVatRegistered,
-                    }, clientIdToUpdate);
+                    const clientIdToUpdate =
+                      isEditMode && selectedClientId ? selectedClientId : undefined;
+                    await onClientSave(
+                      {
+                        email: clientEmail.trim(),
+                        firstName: firstName.trim(),
+                        lastName: lastName.trim(),
+                        phone: phone.trim(),
+                        isCompany,
+                        companyName: companyName.trim(),
+                        nip: nip.trim(),
+                        isVatRegistered,
+                      },
+                      clientIdToUpdate
+                    );
                   } finally {
                     setSaving(false);
                   }
@@ -526,9 +670,13 @@ export const ClientStep: React.FC<ClientStepProps> = ({
               >
                 {saving ? (
                   <>
-                    <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${
-                      isEditMode ? "border-blue-600 dark:border-blue-400" : "border-green-700 dark:border-green-500"
-                    }`}></div>
+                    <div
+                      className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${
+                        isEditMode
+                          ? "border-blue-600 dark:border-blue-400"
+                          : "border-green-700 dark:border-green-500"
+                      }`}
+                    ></div>
                     <span>Zapisywanie...</span>
                   </>
                 ) : (

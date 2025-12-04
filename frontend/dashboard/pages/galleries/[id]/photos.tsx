@@ -228,7 +228,9 @@ export default function GalleryPhotos() {
             // Compare all URL properties to detect any changes
             // Normalize lastModified for comparison (handle string vs number)
             const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-              if (lm === undefined) {return undefined;}
+              if (lm === undefined) {
+                return undefined;
+              }
               return typeof lm === "string" ? new Date(lm).getTime() : lm;
             };
 
@@ -305,9 +307,7 @@ export default function GalleryPhotos() {
       });
 
       // Create a map of current images by key for quick lookup
-      const currentImagesMap = new Map(
-        currentImages.map((img) => [img.key ?? img.filename, img])
-      );
+      const currentImagesMap = new Map(currentImages.map((img) => [img.key ?? img.filename, img]));
 
       // Create a map of store images by key
       const storeImagesMap = new Map(storeImages.map((img) => [img.key ?? img.filename, img]));
@@ -320,37 +320,39 @@ export default function GalleryPhotos() {
       storeImagesMap.forEach((storeImg, imgKey) => {
         const currentImg = currentImagesMap.get(imgKey);
 
-            // Check if image data actually changed by comparing URLs and lastModified
-            // Compare all URL properties to detect any changes
-            // Normalize lastModified for comparison (handle string vs number)
-            const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-              if (lm === undefined) {return undefined;}
-              return typeof lm === "string" ? new Date(lm).getTime() : lm;
-            };
+        // Check if image data actually changed by comparing URLs and lastModified
+        // Compare all URL properties to detect any changes
+        // Normalize lastModified for comparison (handle string vs number)
+        const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
+          if (lm === undefined) {
+            return undefined;
+          }
+          return typeof lm === "string" ? new Date(lm).getTime() : lm;
+        };
 
-            const currentLastModified = normalizeLastModified(currentImg?.lastModified);
-            const storeLastModified = normalizeLastModified(storeImg.lastModified);
+        const currentLastModified = normalizeLastModified(currentImg?.lastModified);
+        const storeLastModified = normalizeLastModified(storeImg.lastModified);
 
-            const hasDataChanged =
-              !currentImg ||
-              currentImg.thumbUrl !== storeImg.thumbUrl ||
-              currentImg.thumbUrlFallback !== storeImg.thumbUrlFallback ||
-              currentImg.previewUrl !== storeImg.previewUrl ||
-              currentImg.previewUrlFallback !== storeImg.previewUrlFallback ||
-              currentImg.bigThumbUrl !== storeImg.bigThumbUrl ||
-              currentImg.bigThumbUrlFallback !== storeImg.bigThumbUrlFallback ||
-              currentImg.url !== storeImg.url ||
-              currentImg.finalUrl !== storeImg.finalUrl ||
-              currentLastModified !== storeLastModified;
+        const hasDataChanged =
+          !currentImg ||
+          currentImg.thumbUrl !== storeImg.thumbUrl ||
+          currentImg.thumbUrlFallback !== storeImg.thumbUrlFallback ||
+          currentImg.previewUrl !== storeImg.previewUrl ||
+          currentImg.previewUrlFallback !== storeImg.previewUrlFallback ||
+          currentImg.bigThumbUrl !== storeImg.bigThumbUrl ||
+          currentImg.bigThumbUrlFallback !== storeImg.bigThumbUrlFallback ||
+          currentImg.url !== storeImg.url ||
+          currentImg.finalUrl !== storeImg.finalUrl ||
+          currentLastModified !== storeLastModified;
 
-            // If image exists and data hasn't changed, preserve the existing object
-            // This maintains object reference stability for LazyRetryableImage
-            if (currentImg && !hasDataChanged) {
-              mergedImages.push(currentImg);
-            } else {
-              // New image or data changed - use new object
-              mergedImages.push(storeImg);
-            }
+        // If image exists and data hasn't changed, preserve the existing object
+        // This maintains object reference stability for LazyRetryableImage
+        if (currentImg && !hasDataChanged) {
+          mergedImages.push(currentImg);
+        } else {
+          // New image or data changed - use new object
+          mergedImages.push(storeImg);
+        }
       });
 
       // Add deleting images that aren't in store (they may not be in API response yet)
@@ -676,11 +678,13 @@ export default function GalleryPhotos() {
               ) : (
                 <>
                   <LazyRetryableImage
-                    imageData={{
-                      ...img,
-                      key: img.key,
-                      filename: img.filename,
-                    } as ImageFallbackUrls & { key?: string; filename?: string }}
+                    imageData={
+                      {
+                        ...img,
+                        key: img.key,
+                        filename: img.filename,
+                      } as ImageFallbackUrls & { key?: string; filename?: string }
+                    }
                     alt={imageKey}
                     className="w-full h-full object-cover rounded-lg"
                     preferredSize="thumb"

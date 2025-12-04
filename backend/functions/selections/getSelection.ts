@@ -76,7 +76,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
 			hasDeliveredOrder, // For showing processed photos view
 			selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
-			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packageName: '', packagePriceCents: 0 }
+			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
 		})
 	};
 });

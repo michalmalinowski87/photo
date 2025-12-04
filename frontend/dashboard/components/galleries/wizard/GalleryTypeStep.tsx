@@ -14,11 +14,19 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
   const isSecondSelected = selectionEnabled === false;
 
   return (
-    <div className="w-full">
+    <div className="w-full mt-[200px]">
+      <div className="mb-8 md:mb-12">
+        <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+          Wybierz typ galerii *
+        </div>
+        <p className="text-base text-gray-500 dark:text-gray-400 italic">
+          Jak klient będzie korzystał z galerii?
+        </p>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl ml-0">
         <button
           onClick={() => onSelectionEnabledChange(true)}
-          className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 ${
+          className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isFirstSelected
               ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
               : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
@@ -57,7 +65,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
         </button>
         <button
           onClick={() => onSelectionEnabledChange(false)}
-          className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 ${
+          className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isSecondSelected
               ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
               : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
@@ -79,7 +87,7 @@ export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
                     : "text-gray-900 dark:text-white"
                 }`}
               >
-                Wszystkie zdjęcia
+                Bez wyboru
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Klient otrzyma wszystkie zdjęcia bez możliwości wyboru

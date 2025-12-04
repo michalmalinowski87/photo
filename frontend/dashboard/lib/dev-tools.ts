@@ -110,10 +110,7 @@ Quick Examples:
   };
 
   // Show welcome message
-  console.log(
-    `%c🧪 PhotoCloud Dev Tools`,
-    "color: #10b981; font-weight: bold; font-size: 14px;"
-  );
+  console.log(`%c🧪 PhotoCloud Dev Tools`, "color: #10b981; font-weight: bold; font-size: 14px;");
   console.log(
     "Run %cdevTools.help()%c for available commands.",
     "color: #3b82f6; font-weight: bold;",
@@ -131,4 +128,3 @@ export function isDevToolsAvailable(): boolean {
     typeof (window as any).devTools !== "undefined"
   );
 }
-

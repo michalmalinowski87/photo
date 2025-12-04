@@ -14,7 +14,15 @@ export const GalleryNameStep: React.FC<GalleryNameStepProps> = ({
   error,
 }) => {
   return (
-    <div className="w-full">
+    <div className="w-full mt-[200px]">
+      <div className="mb-8 md:mb-12">
+        <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+          Jaką nazwę ma mieć galeria? *
+        </div>
+        <p className="text-base text-gray-500 dark:text-gray-400 italic">
+          To pomoże Ci łatwo ją znaleźć później
+        </p>
+      </div>
       <TypeformInput
         type="text"
         placeholder=""

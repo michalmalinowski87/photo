@@ -14,7 +14,7 @@ interface SettingsForm {
   galleryName: string;
   clientEmail: string;
   clientPassword: string;
-  packageName: string;
+  packageName?: string;
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
@@ -201,17 +201,10 @@ export function GallerySettingsForm({
 
       if (pkgChanged) {
         // Ensure all required fields are present and valid
-        const packageName = settingsForm.packageName?.trim() || "";
+        const packageName = settingsForm.packageName?.trim() || undefined;
         const includedCount = Number(settingsForm.includedCount) || 0;
         const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
         const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;
-
-        // Validate that all required fields are present
-        if (!packageName) {
-          showToast("error", "Błąd", "Nazwa pakietu jest wymagana");
-          setSaving(false);
-          return;
-        }
 
         await api.galleries.updatePricingPackage(galleryId, {
           packageName,
@@ -343,7 +336,7 @@ export function GallerySettingsForm({
                   <Input
                     type="text"
                     placeholder="Nazwa pakietu"
-                    value={settingsForm.packageName}
+                    value={settingsForm.packageName ?? ""}
                     disabled={true}
                   />
                 </div>

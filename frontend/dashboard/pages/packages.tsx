@@ -352,7 +352,7 @@ export default function Packages() {
               {packages.map((pkg) => (
                 <TableRow key={pkg.packageId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <TableCell className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                    {pkg.name}
+                    {pkg.name || "-"}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                     {pkg.includedPhotos}
