@@ -1,6 +1,6 @@
 import React from "react";
 
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 
 interface StorageUsageInfoProps {
   orderId?: string;

@@ -1,21 +1,39 @@
-// Main store exports
-export { useUserStore } from "./userSlice";
-export { useGalleryStore } from "./gallerySlice";
-export { useOrderStore } from "./orderSlice";
-export { useUploadStore } from "./uploadSlice";
-export { useDownloadStore } from "./downloadSlice";
-export { useUIStore } from "./uiSlice";
+// Unified store
+export { useUnifiedStore, type UnifiedStore } from "./unifiedStore";
 
-import { useGalleryStore } from "./gallerySlice";
-import { useOrderStore } from "./orderSlice";
-import { useUploadStore } from "./uploadSlice";
-import { useDownloadStore } from "./downloadSlice";
+// Re-export all hooks from centralized hooks file
+export {
+  useAuthStore,
+  useDownloadStore,
+  useGalleryStore,
+  useModalStore,
+  useOrderStore,
+  useOverlayStore,
+  useSidebarStore,
+  useThemeStore,
+  useToastStore,
+  useUploadStore,
+  useUserStore,
+  useUIStore,
+} from "./hooks";
+
+// Re-export types from slice files
+export type { Gallery, GalleryOrder } from "./gallerySlice";
+export type { Order } from "./orderSlice";
+export type { ToastMessage } from "./toastSlice";
+export type { UploadProgress } from "./uploadSlice";
+export type { DownloadProgress } from "./downloadSlice";
+export type { Theme } from "./themeSlice";
+export type { TablePreferences } from "./uiSlice";
 
 // Helper function to clear all ephemeral state on navigation
+import { useUnifiedStore } from "./unifiedStore";
+
 export const clearEphemeralState = () => {
-  useGalleryStore.getState().clearCurrentGallery();
-  useOrderStore.getState().clearOrderList();
-  useOrderStore.getState().clearCurrentOrder();
-  useUploadStore.getState().clearCompletedUploads();
-  useDownloadStore.getState().clearCompletedDownloads();
+  const store = useUnifiedStore.getState();
+  if (store.clearCurrentGallery) {store.clearCurrentGallery();}
+  if (store.clearOrderList) {store.clearOrderList();}
+  if (store.clearCurrentOrder) {store.clearCurrentOrder();}
+  if (store.clearCompletedUploads) {store.clearCompletedUploads();}
+  if (store.clearCompletedDownloads) {store.clearCompletedDownloads();}
 };

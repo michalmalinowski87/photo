@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
-import { useGalleryStore } from "../store/gallerySlice";
+import { useGalleryStore } from "../store";
 
 import { useToast } from "./useToast";
 

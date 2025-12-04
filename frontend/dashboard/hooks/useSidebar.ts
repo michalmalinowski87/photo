@@ -1,4 +1,4 @@
-import { useSidebarStore } from "../store/sidebarSlice";
+import { useSidebarStore } from "../store";
 
 /**
  * Hook for managing sidebar state

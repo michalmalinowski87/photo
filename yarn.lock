@@ -1748,6 +1748,11 @@
   resolved "https://registry.npmjs.org/@aws/lambda-invoke-store/-/lambda-invoke-store-0.2.0.tgz"
   integrity sha512-D1jAmAZQYMoPiacfgNf7AWhg3DFN3Wq/vQv3WINt9znwjzHp2x+WzdJFxxj7xZL7V1U79As6G8f7PorMYWBKsQ==
 
+"@babel/runtime@^7.23.2":
+  version "7.28.4"
+  resolved "https://registry.npmjs.org/@babel/runtime/-/runtime-7.28.4.tgz"
+  integrity sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==
+
 "@balena/dockerignore@^1.0.2":
   version "1.0.2"
   resolved "https://registry.npmjs.org/@balena/dockerignore/-/dockerignore-1.0.2.tgz"
@@ -2222,9 +2227,9 @@
     "@photocloud/gallery-components" "*"
     "@radix-ui/react-label" "^2.0.2"
     "@radix-ui/react-slot" "^1.0.2"
+    "@redux-devtools/extension" "^3.3.0"
     "@uppy/aws-s3" "^5.1.0"
     "@uppy/core" "^5.2.0"
-    "@uppy/dashboard" "^5.1.0"
     "@uppy/golden-retriever" "^5.2.0"
     "@uppy/react" "^5.1.1"
     "@uppy/thumbnail-generator" "^5.1.0"
@@ -2678,6 +2683,14 @@
   version "1.1.1"
   resolved "https://registry.npmjs.org/@radix-ui/rect/-/rect-1.1.1.tgz"
   integrity sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==
+
+"@redux-devtools/extension@^3.3.0":
+  version "3.3.0"
+  resolved "https://registry.npmjs.org/@redux-devtools/extension/-/extension-3.3.0.tgz"
+  integrity sha512-X34S/rC8S/M1BIrkYD1mJ5f8vlH0BDqxXrs96cvxSBo4FhMdbhU+GUGsmNYov1xjSyLMHgo8NYrUG8bNX7525g==
+  dependencies:
+    "@babel/runtime" "^7.23.2"
+    immutable "^4.3.4"
 
 "@rtsao/scc@^1.1.0":
   version "1.1.0"
@@ -5587,6 +5600,11 @@ image-q@^4.0.0:
   dependencies:
     "@types/node" "16.9.1"
 
+immutable@^4.3.4:
+  version "4.3.7"
+  resolved "https://registry.npmjs.org/immutable/-/immutable-4.3.7.tgz"
+  integrity sha512-1hqclzwYwjRDFLjcFxOM5AYkkG0rpFPpr1RLPMEuGczoS7YA8gLhy8SWXYRAA/XwfEHpfo3cw5JGioS32fnMRw==
+
 import-fresh@^3.2.1:
   version "3.3.1"
   resolved "https://registry.npmjs.org/import-fresh/-/import-fresh-3.3.1.tgz"
@@ -6958,6 +6976,11 @@ readdirp@~3.6.0:
   dependencies:
     picomatch "^2.2.1"
 
+"redux@^3.1.0 || ^4.0.0 || ^5.0.0":
+  version "5.0.1"
+  resolved "https://registry.npmjs.org/redux/-/redux-5.0.1.tgz"
+  integrity sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==
+
 reflect.getprototypeof@^1.0.6, reflect.getprototypeof@^1.0.9:
   version "1.0.10"
   resolved "https://registry.npmjs.org/reflect.getprototypeof/-/reflect.getprototypeof-1.0.10.tgz"
@@ -7398,16 +7421,7 @@ string-argv@^0.3.2:
     is-fullwidth-code-point "^3.0.0"
     strip-ansi "^6.0.1"
 
-string-width@^4.1.0:
-  version "4.2.3"
-  resolved "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz"
-  integrity sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==
-  dependencies:
-    emoji-regex "^8.0.0"
-    is-fullwidth-code-point "^3.0.0"
-    strip-ansi "^6.0.1"
-
-string-width@^4.2.3:
+string-width@^4.1.0, string-width@^4.2.3:
   version "4.2.3"
   resolved "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz"
   integrity sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==

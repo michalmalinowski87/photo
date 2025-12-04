@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
+
 import api, { formatApiError } from "../lib/api-service";
 
 export interface Order {
@@ -12,7 +12,7 @@ export interface Order {
   [key: string]: any;
 }
 
-interface OrderState {
+export interface OrderSlice {
   currentOrder: Order | null;
   orderList: Order[];
   currentOrderId: string | null;
@@ -52,9 +52,12 @@ interface OrderState {
   canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => boolean;
 }
 
-export const useOrderStore = create<OrderState>()(
-  devtools(
-    (set, get) => ({
+export const createOrderSlice: StateCreator<
+  OrderSlice,
+  [["zustand/devtools", never]],
+  [],
+  OrderSlice
+> = (set, get) => ({
       currentOrder: null,
       orderList: [],
       currentOrderId: null,
@@ -67,45 +70,57 @@ export const useOrderStore = create<OrderState>()(
 
       setCurrentOrder: (order: Order | null) => {
         if (order) {
-          set((state) => ({
-            currentOrder: order,
-            currentOrderId: order.orderId,
-            currentGalleryId: order.galleryId,
-            orderCache: {
-              ...state.orderCache,
-              [order.orderId]: {
-                order,
-                timestamp: Date.now(),
+          set(
+            (state) => ({
+              currentOrder: order,
+              currentOrderId: order.orderId,
+              currentGalleryId: order.galleryId,
+              orderCache: {
+                ...state.orderCache,
+                [order.orderId]: {
+                  order,
+                  timestamp: Date.now(),
+                },
               },
-            },
-          }));
+            }),
+            undefined,
+            "order/setCurrentOrder"
+          );
         } else {
-          set({
-            currentOrder: null,
-            currentOrderId: null,
-          });
+          set(
+            {
+              currentOrder: null,
+              currentOrderId: null,
+            },
+            undefined,
+            "order/clearCurrentOrder"
+          );
         }
       },
 
       setOrderList: (orders: Order[]) => {
-        set({ orderList: orders });
+        set({ orderList: orders }, undefined, "order/setOrderList");
       },
 
       setCurrentOrderId: (orderId: string | null) => {
-        set({ currentOrderId: orderId });
+        set({ currentOrderId: orderId }, undefined, "order/setCurrentOrderId");
       },
 
       setCurrentGalleryId: (galleryId: string | null) => {
-        set({ currentGalleryId: galleryId });
+        set({ currentGalleryId: galleryId }, undefined, "order/setCurrentGalleryId");
       },
 
       getCachedOrder: (orderId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.orderCache[orderId];
-        if (!cached) return null;
+        if (!cached) {
+          return null;
+        }
 
         const age = Date.now() - cached.timestamp;
-        if (age > maxAge) return null; // Cache expired
+        if (age > maxAge) {
+          return null; // Cache expired
+        }
 
         return cached.order;
       },
@@ -113,41 +128,51 @@ export const useOrderStore = create<OrderState>()(
       isOrderStale: (orderId: string, maxAge: number = 30000) => {
         const state = get();
         const cached = state.orderCache[orderId];
-        if (!cached) return true;
+        if (!cached) {
+          return true;
+        }
 
         const age = Date.now() - cached.timestamp;
         return age > maxAge;
       },
 
       invalidateOrderCache: (orderId: string) => {
-        set((state) => {
-          const newCache = { ...state.orderCache };
-          delete newCache[orderId];
-          return {
-            orderCache: newCache,
-            // Also clear current order if it matches
-            currentOrder: state.currentOrderId === orderId ? null : state.currentOrder,
-            currentOrderId: state.currentOrderId === orderId ? null : state.currentOrderId,
-          };
-        });
+        set(
+          (state) => {
+            const newCache = { ...state.orderCache };
+            delete newCache[orderId];
+            return {
+              orderCache: newCache,
+              // Also clear current order if it matches
+              currentOrder: state.currentOrderId === orderId ? null : state.currentOrder,
+              currentOrderId: state.currentOrderId === orderId ? null : state.currentOrderId,
+            };
+          },
+          undefined,
+          "order/invalidateOrderCache"
+        );
       },
 
       invalidateGalleryOrdersCache: (galleryId: string) => {
-        set((state) => {
-          // Remove all orders for this gallery from cache
-          const newCache: Record<string, { order: Order; timestamp: number }> = {};
-          Object.entries(state.orderCache).forEach(([orderId, cached]) => {
-            if (cached.order.galleryId !== galleryId) {
-              newCache[orderId] = cached;
-            }
-          });
-          return {
-            orderCache: newCache,
-            // Clear current order if it belongs to this gallery
-            currentOrder: state.currentGalleryId === galleryId ? null : state.currentOrder,
-            currentOrderId: state.currentGalleryId === galleryId ? null : state.currentOrderId,
-          };
-        });
+        set(
+          (state) => {
+            // Remove all orders for this gallery from cache
+            const newCache: Record<string, { order: Order; timestamp: number }> = {};
+            Object.entries(state.orderCache).forEach(([orderId, cached]) => {
+              if (cached.order.galleryId !== galleryId) {
+                newCache[orderId] = cached;
+              }
+            });
+            return {
+              orderCache: newCache,
+              // Clear current order if it belongs to this gallery
+              currentOrder: state.currentGalleryId === galleryId ? null : state.currentOrder,
+              currentOrderId: state.currentGalleryId === galleryId ? null : state.currentOrderId,
+            };
+          },
+          undefined,
+          "order/invalidateGalleryOrdersCache"
+        );
       },
 
       fetchOrder: async (galleryId: string, orderId: string, forceRefresh = false) => {
@@ -168,91 +193,103 @@ export const useOrderStore = create<OrderState>()(
         }
 
         // Fetch from API
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null }, undefined, "order/fetchOrder/start");
         try {
           const orderData = await api.orders.get(galleryId, orderId);
 
           // Update store
           state.setCurrentOrder(orderData as Order);
 
-          set({ isLoading: false });
+          set({ isLoading: false }, undefined, "order/fetchOrder/success");
           return orderData as Order;
         } catch (err) {
           const error = err instanceof Error ? err.message : "Failed to fetch order";
-          set({ error, isLoading: false });
+          set({ error, isLoading: false }, undefined, "order/fetchOrder/error");
           throw err;
         }
       },
 
       updateOrderFields: (orderId: string, fields: Partial<Order>) => {
-        set((state) => {
-          // Update cache if order exists in cache
-          const cached = state.orderCache[orderId];
-          if (cached) {
-            const updatedOrder = { ...cached.order, ...fields };
-            const newCache = {
-              ...state.orderCache,
-              [orderId]: {
-                order: updatedOrder,
-                timestamp: Date.now(), // Update timestamp to keep cache fresh
-              },
-            };
+        set(
+          (state) => {
+            // Update cache if order exists in cache
+            const cached = state.orderCache[orderId];
+            if (cached) {
+              const updatedOrder = { ...cached.order, ...fields };
+              const newCache = {
+                ...state.orderCache,
+                [orderId]: {
+                  order: updatedOrder,
+                  timestamp: Date.now(), // Update timestamp to keep cache fresh
+                },
+              };
 
-            // Update current order if it matches
-            const newCurrentOrder =
-              state.currentOrderId === orderId ? updatedOrder : state.currentOrder;
+              // Update current order if it matches
+              const newCurrentOrder =
+                state.currentOrderId === orderId ? updatedOrder : state.currentOrder;
 
-            return {
-              orderCache: newCache,
-              currentOrder: newCurrentOrder,
-            };
-          }
+              return {
+                orderCache: newCache,
+                currentOrder: newCurrentOrder,
+              };
+            }
 
-          // If not in cache, just return state as-is
-          return state;
-        });
+            // If not in cache, just return state as-is
+            return state;
+          },
+          undefined,
+          "order/updateOrderFields"
+        );
       },
 
       updateOrderInList: (orderId: string, fields: Partial<Order>) => {
-        set((state) => {
-          const updatedList = state.orderList.map((order) =>
-            order.orderId === orderId ? { ...order, ...fields } : order
-          );
+        set(
+          (state) => {
+            const updatedList = state.orderList.map((order) =>
+              order.orderId === orderId ? { ...order, ...fields } : order
+            );
 
-          return {
-            orderList: updatedList,
-          };
-        });
+            return {
+              orderList: updatedList,
+            };
+          },
+          undefined,
+          "order/updateOrderInList"
+        );
       },
 
       setLoading: (loading: boolean) => {
-        set({ isLoading: loading });
+        set({ isLoading: loading }, undefined, "order/setLoading");
       },
 
       setError: (error: string | null) => {
-        set({ error });
+        set({ error }, undefined, "order/setError");
       },
 
       clearCurrentOrder: () => {
-        set({ currentOrder: null, currentOrderId: null });
+        set({ currentOrder: null, currentOrderId: null }, undefined, "order/clearCurrentOrder");
       },
 
       clearOrderList: () => {
-        set({ orderList: [] });
+        set({ orderList: [] }, undefined, "order/clearOrderList");
       },
 
       clearAll: () => {
-        set({
-          currentOrder: null,
-          orderList: [],
-          currentOrderId: null,
-          currentGalleryId: null,
-          orderCache: {},
-          isLoading: false,
-          error: null,
-          denyLoading: false,
-          cleanupLoading: false,
-        });
+        set(
+          {
+            currentOrder: null,
+            orderList: [],
+            currentOrderId: null,
+            currentGalleryId: null,
+            orderCache: {},
+            isLoading: false,
+            error: null,
+            denyLoading: false,
+            cleanupLoading: false,
+          },
+          undefined,
+          "order/clearAll"
+        );
       },
 
       // Order action methods
@@ -263,12 +300,12 @@ export const useOrderStore = create<OrderState>()(
 
           // Invalidate all caches to ensure fresh data on next fetch
           state.invalidateOrderCache(orderId);
-          const { useGalleryStore } = await import("./gallerySlice");
+          const { useGalleryStore } = await import("./hooks");
           useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
           state.invalidateGalleryOrdersCache(galleryId);
 
           // Show toast
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast(
@@ -282,7 +319,7 @@ export const useOrderStore = create<OrderState>()(
           const galleryStore = useGalleryStore.getState();
           await galleryStore.fetchGalleryOrders(galleryId, true);
         } catch (err) {
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast(
@@ -295,19 +332,19 @@ export const useOrderStore = create<OrderState>()(
 
       denyChangeRequest: async (galleryId: string, orderId: string, reason?: string) => {
         const state = get();
-        set({ denyLoading: true });
+        set({ denyLoading: true }, undefined, "order/denyChangeRequest/start");
 
         try {
           await api.orders.denyChangeRequest(galleryId, orderId, reason);
 
           // Invalidate all caches to ensure fresh data on next fetch
           state.invalidateOrderCache(orderId);
-          const { useGalleryStore } = await import("./gallerySlice");
+          const { useGalleryStore } = await import("./hooks");
           useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
           state.invalidateGalleryOrdersCache(galleryId);
 
           // Show toast
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast(
@@ -321,7 +358,7 @@ export const useOrderStore = create<OrderState>()(
           const galleryStore = useGalleryStore.getState();
           await galleryStore.fetchGalleryOrders(galleryId, true);
         } catch (err) {
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast(
@@ -330,7 +367,7 @@ export const useOrderStore = create<OrderState>()(
               formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany"
             );
         } finally {
-          set({ denyLoading: false });
+          set({ denyLoading: false }, undefined, "order/denyChangeRequest/complete");
         }
       },
 
@@ -344,17 +381,17 @@ export const useOrderStore = create<OrderState>()(
             paidAt: response.paidAt,
           });
           // Invalidate all caches to ensure fresh data on next fetch
-          const { useGalleryStore } = await import("./gallerySlice");
+          const { useGalleryStore } = await import("./hooks");
           useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
           state.invalidateGalleryOrdersCache(galleryId);
 
           // Show toast
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
         } catch (err) {
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
         }
       },
@@ -464,12 +501,12 @@ export const useOrderStore = create<OrderState>()(
 
       sendFinalsToClient: async (galleryId: string, orderId: string) => {
         const state = get();
-        set({ cleanupLoading: true });
+        set({ cleanupLoading: true }, undefined, "order/sendFinalsToClient/start");
 
         try {
           const response = await api.orders.sendFinalLink(galleryId, orderId);
 
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore
             .getState()
             .showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
@@ -480,14 +517,14 @@ export const useOrderStore = create<OrderState>()(
             deliveredAt: response.deliveredAt,
           });
           // Invalidate all caches to ensure fresh data on next fetch
-          const { useGalleryStore } = await import("./gallerySlice");
+          const { useGalleryStore } = await import("./hooks");
           useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
           state.invalidateGalleryOrdersCache(galleryId);
         } catch (err) {
-          const { useToastStore } = await import("./toastSlice");
+          const { useToastStore } = await import("./hooks");
           useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
         } finally {
-          set({ cleanupLoading: false });
+          set({ cleanupLoading: false }, undefined, "order/sendFinalsToClient/complete");
         }
       },
 
@@ -656,7 +693,5 @@ export const useOrderStore = create<OrderState>()(
           (Array.isArray(order.selectedKeys) ? order.selectedKeys.length > 0 : true)
         );
       },
-    }),
-    { name: "OrderStore" }
-  )
-);
+});
+

@@ -5,7 +5,7 @@ import api, { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatPrice } from "../lib/format-price";
-import { useGalleryStore } from "../store/gallerySlice";
+import { useGalleryStore } from "../store";
 
 interface Order {
   orderId: string;

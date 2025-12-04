@@ -17,7 +17,7 @@ import { formatApiError } from "../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 
 interface GalleryImage {
   id?: string;
@@ -71,8 +71,10 @@ export default function GalleryPhotos() {
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
   const { fetchGalleryImages, fetchGalleryOrders, currentGallery } = useGalleryStore();
+  // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
+  const [hasInitialized, setHasInitialized] = useState<boolean>(false);
   interface GalleryOrder {
     orderId?: string;
     orderNumber?: string | number;
@@ -462,6 +464,12 @@ export default function GalleryPhotos() {
 
   // Initialize auth and load data
   useEffect(() => {
+    // Don't initialize until galleryId is available from router
+    if (!galleryId) {
+      return;
+    }
+
+    setHasInitialized(false);
     initializeAuth(
       () => {
         if (galleryId) {
@@ -472,7 +480,9 @@ export default function GalleryPhotos() {
           const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
           const hasPaymentSuccess = params.get("payment") === "success";
 
-          void loadPhotos();
+          void loadPhotos().then(() => {
+            setHasInitialized(true);
+          });
 
           // If we have redirect params (Stripe redirect), force refresh orders
           if (hasRedirectParams || hasPaymentSuccess) {
@@ -532,8 +542,13 @@ export default function GalleryPhotos() {
     }
   };
 
+  // Show loading if galleryId is not yet available from router (prevents flash of empty state)
+  if (!galleryId) {
+    return <FullPageLoading text="Ładowanie..." />;
+  }
+
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
-  if (galleryLoading) {
+  if (galleryLoading || !hasInitialized) {
     return <FullPageLoading text="Ładowanie galerii..." />;
   }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useToastStore, type ToastMessage } from "../../../store/toastSlice";
+import { useToastStore, type ToastMessage } from "../../../store";
 
 import Toast from "./Toast";
 

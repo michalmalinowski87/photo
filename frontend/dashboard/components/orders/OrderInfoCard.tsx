@@ -3,8 +3,8 @@ import { Check, X, Pencil } from "lucide-react";
 import { formatCurrencyInput, centsToPlnString } from "../../lib/currency";
 import { formatPrice } from "../../lib/format-price";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
-import { useGalleryStore } from "../../store/gallerySlice";
-import { useOrderStore } from "../../store/orderSlice";
+import { useGalleryStore } from "../../store";
+import { useOrderStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Loading } from "../ui/loading/Loading";
 

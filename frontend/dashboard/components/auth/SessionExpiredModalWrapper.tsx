@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 
-import { useAuthStore } from "../../store/authSlice";
+import { useAuthStore } from "../../store";
 
 import SessionExpiredModal from "./SessionExpiredModal";
 

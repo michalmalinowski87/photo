@@ -1,7 +1,7 @@
 import React, { ComponentType, useCallback, useRef } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
-import { useUploadStore } from "../store/uploadSlice";
+import { useUploadStore } from "../store";
 
 interface UploadConfig {
   apiUrl?: string; // Deprecated - kept for backward compatibility but not used

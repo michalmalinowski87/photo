@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useDownloadStore } from "../../../store/downloadSlice";
+import { useDownloadStore } from "../../../store";
 
 import { ZipDownloadProgress } from "./ZipDownloadProgress";
 

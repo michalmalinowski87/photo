@@ -1,8 +1,7 @@
 import { useRouter } from "next/router";
 import { useCallback } from "react";
 
-import { useGalleryStore, type Gallery } from "../store/gallerySlice";
-import { useOrderStore } from "../store/orderSlice";
+import { useGalleryStore, useOrderStore, type Gallery } from "../store";
 
 /**
  * Hook for accessing gallery data from Zustand store

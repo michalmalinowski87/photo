@@ -1,5 +1,4 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
 export interface ToastMessage {
   id: string;
@@ -9,7 +8,7 @@ export interface ToastMessage {
   duration?: number;
 }
 
-interface ToastState {
+export interface ToastSlice {
   toasts: ToastMessage[];
   showToast: (
     variant: "success" | "error" | "warning" | "info",
@@ -21,35 +20,44 @@ interface ToastState {
   clearAllToasts: () => void;
 }
 
-export const useToastStore = create<ToastState>()(
-  devtools(
-    (set) => ({
-      toasts: [],
+export const createToastSlice: StateCreator<
+  ToastSlice,
+  [["zustand/devtools", never]],
+  [],
+  ToastSlice
+> = (set) => ({
+  toasts: [],
 
-      showToast: (
-        variant: "success" | "error" | "warning" | "info",
-        title: string,
-        message: string,
-        duration?: number
-      ) => {
-        const id = Math.random().toString(36).substring(7);
-        const newToast: ToastMessage = { id, variant, title, message, duration };
-        set((state) => ({
-          toasts: [...state.toasts, newToast],
-        }));
-        return id;
-      },
+  showToast: (
+    variant: "success" | "error" | "warning" | "info",
+    title: string,
+    message: string,
+    duration?: number
+  ) => {
+    const id = Math.random().toString(36).substring(7);
+    const newToast: ToastMessage = { id, variant, title, message, duration };
+    set(
+      (state) => ({
+        toasts: [...state.toasts, newToast],
+      }),
+      undefined,
+      `toast/showToast/${variant}`
+    );
+    return id;
+  },
 
-      removeToast: (id: string) => {
-        set((state) => ({
-          toasts: state.toasts.filter((toast) => toast.id !== id),
-        }));
-      },
+  removeToast: (id: string) => {
+    set(
+      (state) => ({
+        toasts: state.toasts.filter((toast) => toast.id !== id),
+      }),
+      undefined,
+      "toast/removeToast"
+    );
+  },
 
-      clearAllToasts: () => {
-        set({ toasts: [] });
-      },
-    }),
-    { name: "ToastStore" }
-  )
-);
+  clearAllToasts: () => {
+    set({ toasts: [] }, undefined, "toast/clearAllToasts");
+  },
+});
+

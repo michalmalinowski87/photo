@@ -1,5 +1,4 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
 import api from "../lib/api-service";
 
@@ -108,7 +107,7 @@ export interface GalleryOrder {
   [key: string]: unknown;
 }
 
-interface GalleryState {
+export interface GallerySlice {
   currentGallery: Gallery | null;
   galleryList: Gallery[];
   currentGalleryId: string | null;
@@ -135,6 +134,7 @@ interface GalleryState {
   hasDeliveredOrders: boolean | undefined;
   galleryUrl: string;
   sendLinkLoading: boolean;
+  galleryCreationLoading: boolean;
   setCurrentGallery: (gallery: Gallery | null) => void;
   setGalleryList: (galleries: Gallery[]) => void;
   setCurrentGalleryId: (galleryId: string | null) => void;
@@ -158,6 +158,7 @@ interface GalleryState {
   setFilter: (filter: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setGalleryCreationLoading: (loading: boolean) => void;
   updateFinalsBytesUsed: (sizeDelta: number) => void; // Optimistic update for finals bytes
   updateOriginalsBytesUsed: (sizeDelta: number) => void; // Optimistic update for originals bytes
   updateCoverPhotoUrl: (coverPhotoUrl: string | null) => void; // Update only cover photo URL
@@ -180,7 +181,7 @@ interface GalleryState {
     state?: { duration?: string; planKey?: string } | null
   ) => void;
   // Additional actions moved from hooks/components
-  setGalleryOrders: (orders: GalleryOrder[]) => void;
+  setCurrentGalleryOrders: (orders: GalleryOrder[]) => void;
   setHasDeliveredOrders: (has: boolean | undefined) => void;
   setGalleryUrl: (url: string) => void;
   setSendLinkLoading: (loading: boolean) => void;
@@ -191,9 +192,12 @@ interface GalleryState {
 
 // Debouncing removed - refreshGalleryBytesOnly is now called explicitly when needed
 
-export const useGalleryStore = create<GalleryState>()(
-  devtools(
-    (set, get) => ({
+export const createGallerySlice: StateCreator<
+  GallerySlice,
+  [["zustand/devtools", never]],
+  [],
+  GallerySlice
+> = (set, get) => ({
       currentGallery: null,
       galleryList: [],
       currentGalleryId: null,
@@ -208,80 +212,101 @@ export const useGalleryStore = create<GalleryState>()(
       hasDeliveredOrders: undefined,
       galleryUrl: "",
       sendLinkLoading: false,
+      galleryCreationLoading: false,
 
       setCurrentGallery: (gallery: Gallery | null) => {
-        set({
-          currentGallery: gallery,
-          currentGalleryId: gallery?.galleryId || null,
-        });
+        set(
+          {
+            currentGallery: gallery,
+            currentGalleryId: gallery?.galleryId || null,
+          },
+          undefined,
+          "gallery/setCurrentGallery"
+        );
       },
 
       updateFinalsBytesUsed: (sizeDelta: number) => {
-        set((state) => {
-          if (!state.currentGallery) {
-            return state;
-          }
-          const currentFinalsBytes =
-            (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
-          const newFinalsBytes = Math.max(0, currentFinalsBytes + sizeDelta);
-          return {
-            currentGallery: {
-              ...state.currentGallery,
-              finalsBytesUsed: newFinalsBytes,
-            },
-          };
-        });
+        set(
+          (state) => {
+            if (!state.currentGallery) {
+              return state;
+            }
+            const currentFinalsBytes =
+              (state.currentGallery.finalsBytesUsed as number | undefined) ?? 0;
+            const newFinalsBytes = Math.max(0, currentFinalsBytes + sizeDelta);
+            return {
+              currentGallery: {
+                ...state.currentGallery,
+                finalsBytesUsed: newFinalsBytes,
+              },
+            };
+          },
+          undefined,
+          "gallery/updateFinalsBytesUsed"
+        );
       },
 
       updateOriginalsBytesUsed: (sizeDelta: number) => {
-        set((state) => {
-          if (!state.currentGallery) {
-            return state;
-          }
-          const currentOriginalsBytes =
-            (state.currentGallery.originalsBytesUsed as number | undefined) ?? 0;
-          const newOriginalsBytes = Math.max(0, currentOriginalsBytes + sizeDelta);
-          return {
-            currentGallery: {
-              ...state.currentGallery,
-              originalsBytesUsed: newOriginalsBytes,
-            },
-          };
-        });
+        set(
+          (state) => {
+            if (!state.currentGallery) {
+              return state;
+            }
+            const currentOriginalsBytes =
+              (state.currentGallery.originalsBytesUsed as number | undefined) ?? 0;
+            const newOriginalsBytes = Math.max(0, currentOriginalsBytes + sizeDelta);
+            return {
+              currentGallery: {
+                ...state.currentGallery,
+                originalsBytesUsed: newOriginalsBytes,
+              },
+            };
+          },
+          undefined,
+          "gallery/updateOriginalsBytesUsed"
+        );
       },
 
       updateCoverPhotoUrl: (coverPhotoUrl: string | null) => {
-        set((state) => {
-          if (!state.currentGallery) {
-            return state;
-          }
-          return {
-            currentGallery: {
-              ...state.currentGallery,
-              coverPhotoUrl,
-            },
-          };
-        });
+        set(
+          (state) => {
+            if (!state.currentGallery) {
+              return state;
+            }
+            return {
+              currentGallery: {
+                ...state.currentGallery,
+                coverPhotoUrl: coverPhotoUrl ?? undefined,
+              },
+            };
+          },
+          undefined,
+          "gallery/updateCoverPhotoUrl"
+        );
       },
 
       setGalleryList: (galleries: Gallery[]) => {
-        set({ galleryList: galleries });
+        set({ galleryList: galleries }, undefined, "gallery/setGalleryList");
       },
 
       setCurrentGalleryId: (galleryId: string | null) => {
-        set({ currentGalleryId: galleryId });
+        set({ currentGalleryId: galleryId }, undefined, "gallery/setCurrentGalleryId");
       },
 
       setGalleryOrders: (galleryId: string, orders: any[]) => {
-        set((state) => ({
-          galleryOrdersCache: {
-            ...state.galleryOrdersCache,
-            [galleryId]: {
-              orders,
-              timestamp: Date.now(),
+        set(
+          (state) => ({
+            galleryOrdersCache: {
+              ...state.galleryOrdersCache,
+              [galleryId]: {
+                orders,
+                timestamp: Date.now(),
+              },
             },
-          },
-        }));
+          }),
+          undefined,
+          "gallery/setGalleryOrders"
+        );
       },
 
       getGalleryOrders: (galleryId: string, maxAge: number = 30000) => {
@@ -305,15 +330,19 @@ export const useGalleryStore = create<GalleryState>()(
         // This ensures cache busting is part of the single source of truth
 
         const cacheTimestamp = Date.now();
-        set((state) => ({
-          galleryImagesCache: {
-            ...state.galleryImagesCache,
-            [galleryId]: {
-              images, // Store without cache busting - applied by component
-              timestamp: cacheTimestamp,
+        set(
+          (state) => ({
+            galleryImagesCache: {
+              ...state.galleryImagesCache,
+              [galleryId]: {
+                images, // Store without cache busting - applied by component
+                timestamp: cacheTimestamp,
+              },
             },
-          },
-        }));
+          }),
+          undefined,
+          "gallery/setGalleryImages"
+        );
       },
 
       getGalleryImages: (galleryId: string, maxAge: number = 30000) => {
@@ -348,35 +377,47 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       invalidateGalleryCache: (galleryId?: string) => {
-        set((state) => {
-          if (galleryId) {
-            const newCache = { ...state.galleryCache };
-            delete newCache[galleryId];
-            return { galleryCache: newCache };
-          }
-          // Clear all cache if no galleryId specified
-          return { galleryCache: {} };
-        });
+        set(
+          (state) => {
+            if (galleryId) {
+              const newCache = { ...state.galleryCache };
+              delete newCache[galleryId];
+              return { galleryCache: newCache };
+            }
+            // Clear all cache if no galleryId specified
+            return { galleryCache: {} };
+          },
+          undefined,
+          "gallery/invalidateGalleryCache"
+        );
       },
 
       invalidateGalleryOrdersCache: (galleryId: string) => {
-        set((state) => {
-          const newCache = { ...state.galleryOrdersCache };
-          delete newCache[galleryId];
-          return {
-            galleryOrdersCache: newCache,
-          };
-        });
+        set(
+          (state) => {
+            const newCache = { ...state.galleryOrdersCache };
+            delete newCache[galleryId];
+            return {
+              galleryOrdersCache: newCache,
+            };
+          },
+          undefined,
+          "gallery/invalidateGalleryOrdersCache"
+        );
       },
 
       invalidateGalleryImagesCache: (galleryId: string) => {
-        set((state) => {
-          const newCache = { ...state.galleryImagesCache };
-          delete newCache[galleryId];
-          return {
-            galleryImagesCache: newCache,
-          };
-        });
+        set(
+          (state) => {
+            const newCache = { ...state.galleryImagesCache };
+            delete newCache[galleryId];
+            return {
+              galleryImagesCache: newCache,
+            };
+          },
+          undefined,
+          "gallery/invalidateGalleryImagesCache"
+        );
       },
 
       // Comprehensive cache invalidation - invalidates all caches for a gallery
@@ -396,16 +437,31 @@ export const useGalleryStore = create<GalleryState>()(
           return state.inFlightRequests[galleryId];
         }
 
+        // Set loading state FIRST, before cache check, to ensure it appears early in DevTools
+        // This ensures loading state is visible immediately when fetch is needed
+        const needsFetch = forceRefresh || !state.getGalleryFromCache(galleryId);
+        if (needsFetch && !state.isLoading) {
+          set({ isLoading: true, error: null }, undefined, "gallery/setLoading");
+        }
+
         // Check cache first (unless force refresh)
         if (!forceRefresh) {
           const cached = state.getGalleryFromCache(galleryId);
           if (cached) {
+            // Clear loading if we have cache
+            if (state.isLoading) {
+              set({ isLoading: false }, undefined, "gallery/setLoading");
+            }
             // Update current gallery if it's the one being viewed
             if (state.currentGalleryId === galleryId) {
-              set({
-                currentGallery: cached,
-                currentGalleryId: galleryId,
-              });
+              set(
+                {
+                  currentGallery: cached,
+                  currentGalleryId: galleryId,
+                },
+                undefined,
+                "gallery/setCurrentGalleryFromCache"
+              );
             }
             return cached;
           }
@@ -413,7 +469,7 @@ export const useGalleryStore = create<GalleryState>()(
 
         // Create the fetch promise and store it for deduplication
         const fetchPromise = (async () => {
-          set({ isLoading: true, error: null });
+          // Loading already set above if needed
           try {
             const galleryData = await api.galleries.get(galleryId);
 
@@ -422,45 +478,57 @@ export const useGalleryStore = create<GalleryState>()(
               const gallery = galleryData as Gallery;
 
               // Update cache
-              set((currentState) => ({
-                galleryCache: {
-                  ...currentState.galleryCache,
-                  [galleryId]: {
-                    gallery,
-                    timestamp: Date.now(),
+              set(
+                (currentState) => ({
+                  galleryCache: {
+                    ...currentState.galleryCache,
+                    [galleryId]: {
+                      gallery,
+                      timestamp: Date.now(),
+                    },
                   },
-                },
-                currentGallery: gallery,
-                currentGalleryId: galleryId,
-                isLoading: false,
-              }));
+                  currentGallery: gallery,
+                  currentGalleryId: galleryId,
+                  isLoading: false,
+                }),
+                undefined,
+                "gallery/fetchGallery/success"
+              );
 
               return gallery;
             }
 
-            set({ isLoading: false });
+            set({ isLoading: false }, undefined, "gallery/fetchGallery/empty");
             return null;
           } catch (err) {
             const error = err instanceof Error ? err.message : "Failed to fetch gallery";
-            set({ error, isLoading: false });
+            set({ error, isLoading: false }, undefined, "gallery/fetchGallery/error");
             throw err;
           } finally {
             // Remove from in-flight requests when done
-            set((currentState) => {
-              const newInFlight = { ...currentState.inFlightRequests };
-              delete newInFlight[galleryId];
-              return { inFlightRequests: newInFlight };
-            });
+            set(
+              (currentState) => {
+                const newInFlight = { ...currentState.inFlightRequests };
+                delete newInFlight[galleryId];
+                return { inFlightRequests: newInFlight };
+              },
+              undefined,
+              "gallery/fetchGallery/cleanup"
+            );
           }
         })();
 
         // Store the promise for deduplication
-        set((currentState) => ({
-          inFlightRequests: {
-            ...currentState.inFlightRequests,
-            [galleryId]: fetchPromise,
-          },
-        }));
+        set(
+          (currentState) => ({
+            inFlightRequests: {
+              ...currentState.inFlightRequests,
+              [galleryId]: fetchPromise,
+            },
+          }),
+          undefined,
+          "gallery/fetchGallery/deduplicate"
+        );
 
         return fetchPromise;
       },
@@ -511,7 +579,7 @@ export const useGalleryStore = create<GalleryState>()(
                 "orderId" in order &&
                 typeof (order as { orderId?: unknown }).orderId === "string"
             );
-            set({ galleryOrders: typedOrders });
+            set({ galleryOrders: typedOrders }, undefined, "gallery/fetchGalleryOrders/fromCache");
             return cached;
           }
         }
@@ -528,27 +596,27 @@ export const useGalleryStore = create<GalleryState>()(
               "orderId" in order &&
               typeof (order as { orderId?: unknown }).orderId === "string"
           );
-          set({ galleryOrders: typedOrders });
+          set({ galleryOrders: typedOrders }, undefined, "gallery/fetchGalleryOrders/success");
           return orders;
         } catch (err) {
           // Check if error is 404 (gallery not found/deleted) - handle silently
           const apiError = err as { status?: number };
           if (apiError.status === 404) {
             // Gallery doesn't exist (deleted) - return empty array silently
-            set({ galleryOrders: [] });
+            set({ galleryOrders: [] }, undefined, "gallery/fetchGalleryOrders/404");
             return [];
           }
 
           // For other errors, log but still return empty array
           // eslint-disable-next-line no-console
           console.error("[GalleryStore] Failed to fetch gallery orders:", err);
-          set({ galleryOrders: [] });
+          set({ galleryOrders: [] }, undefined, "gallery/fetchGalleryOrders/error");
           return [];
         }
       },
 
       sendGalleryLinkToClient: async (galleryId: string) => {
-        set({ sendLinkLoading: true });
+        set({ sendLinkLoading: true }, undefined, "gallery/sendGalleryLinkToClient/start");
         try {
           const response = await api.galleries.sendToClient(galleryId);
           const isReminder = response.isReminder ?? false;
@@ -560,7 +628,7 @@ export const useGalleryStore = create<GalleryState>()(
             // UI will update via the isReminder response to show appropriate message
           } else {
             // For initial invitations: a new order was created, so invalidate orders cache
-            const { useOrderStore } = await import("./orderSlice");
+            const { useOrderStore } = await import("./hooks");
             useOrderStore.getState().invalidateGalleryOrdersCache(galleryId);
             get().invalidateGalleryOrdersCache(galleryId);
 
@@ -570,10 +638,10 @@ export const useGalleryStore = create<GalleryState>()(
             // Gallery data hasn't changed (just order creation), so no need to invalidate/fetch gallery cache
           }
 
-          set({ sendLinkLoading: false });
+          set({ sendLinkLoading: false }, undefined, "gallery/sendGalleryLinkToClient/success");
           return { isReminder };
         } catch (err) {
-          set({ sendLinkLoading: false });
+          set({ sendLinkLoading: false }, undefined, "gallery/sendGalleryLinkToClient/error");
           console.error("[GalleryStore] Failed to send gallery link:", err);
           throw err;
         }
@@ -611,7 +679,10 @@ export const useGalleryStore = create<GalleryState>()(
                 ...currentState,
                 currentGallery: updatedGallery,
               };
-            });
+            },
+            undefined,
+            "gallery/refreshGalleryBytesOnly"
+          );
 
             // Zustand state update will trigger re-renders automatically via subscriptions
           }
@@ -649,7 +720,10 @@ export const useGalleryStore = create<GalleryState>()(
                   isPaid: statusData.isPaid,
                 },
               };
-            });
+            },
+            undefined,
+            "gallery/refreshGalleryStatusOnly"
+          );
 
             // Zustand state update will trigger re-renders automatically via subscriptions
           }
@@ -660,51 +734,67 @@ export const useGalleryStore = create<GalleryState>()(
       },
 
       setFilter: (filter: string) => {
-        set((_state) => ({
-          filters: { [filter]: true },
-        }));
+        set(
+          (_state) => ({
+            filters: { [filter]: true },
+          }),
+          undefined,
+          "gallery/setFilter"
+        );
       },
 
       setLoading: (loading: boolean) => {
-        set({ isLoading: loading });
+        set({ isLoading: loading }, undefined, "gallery/setLoading");
       },
 
       setError: (error: string | null) => {
-        set({ error });
+        set({ error }, undefined, "gallery/setError");
+      },
+
+      setGalleryCreationLoading: (loading: boolean) => {
+        set({ galleryCreationLoading: loading }, undefined, "gallery/setGalleryCreationLoading");
       },
 
       clearCurrentGallery: () => {
-        set({
-          currentGallery: null,
-          currentGalleryId: null,
-        });
+        set(
+          {
+            currentGallery: null,
+            currentGalleryId: null,
+          },
+          undefined,
+          "gallery/clearCurrentGallery"
+        );
       },
 
       clearGalleryList: () => {
-        set({ galleryList: [] });
+        set({ galleryList: [] }, undefined, "gallery/clearGalleryList");
       },
 
       clearAll: () => {
-        set({
-          currentGallery: null,
-          galleryList: [],
-          currentGalleryId: null,
-          galleryOrdersCache: {},
-          galleryImagesCache: {},
-          filters: {},
-          isLoading: false,
-          error: null,
-          galleryOrders: [],
-          hasDeliveredOrders: undefined,
-          galleryUrl: "",
-          sendLinkLoading: false,
-        });
+        set(
+          {
+            currentGallery: null,
+            galleryList: [],
+            currentGalleryId: null,
+            galleryOrdersCache: {},
+            galleryImagesCache: {},
+            filters: {},
+            isLoading: false,
+            error: null,
+            galleryOrders: [],
+            hasDeliveredOrders: undefined,
+            galleryUrl: "",
+            sendLinkLoading: false,
+          },
+          undefined,
+          "gallery/clearAll"
+        );
       },
 
       // Next Steps Overlay state
       nextStepsOverlayExpanded: true,
       setNextStepsOverlayExpanded: (expanded: boolean) => {
-        set({ nextStepsOverlayExpanded: expanded });
+        set({ nextStepsOverlayExpanded: expanded }, undefined, "gallery/setNextStepsOverlayExpanded");
       },
       // Publish Wizard state
       publishWizardOpen: false,
@@ -715,37 +805,45 @@ export const useGalleryStore = create<GalleryState>()(
         galleryId?: string | null,
         state?: { duration?: string; planKey?: string } | null
       ) => {
-        set({
-          publishWizardOpen: open,
-          publishWizardGalleryId: open ? (galleryId ?? null) : null,
-          publishWizardState: open ? (state ?? null) : null,
-        });
+        set(
+          {
+            publishWizardOpen: open,
+            publishWizardGalleryId: open ? (galleryId ?? null) : null,
+            publishWizardState: open ? (state ?? null) : null,
+          },
+          undefined,
+          "gallery/setPublishWizardOpen"
+        );
       },
 
       // Additional actions
-      setGalleryOrders: (orders: GalleryOrder[]) => {
-        set({ galleryOrders: orders });
+      setCurrentGalleryOrders: (orders: GalleryOrder[]) => {
+        set({ galleryOrders: orders }, undefined, "gallery/setCurrentGalleryOrders");
       },
 
       setHasDeliveredOrders: (has: boolean | undefined) => {
-        set({ hasDeliveredOrders: has });
+        set({ hasDeliveredOrders: has }, undefined, "gallery/setHasDeliveredOrders");
       },
 
       setGalleryUrl: (url: string) => {
-        set({ galleryUrl: url });
+        set({ galleryUrl: url }, undefined, "gallery/setGalleryUrl");
       },
 
       setSendLinkLoading: (loading: boolean) => {
-        set({ sendLinkLoading: loading });
+        set({ sendLinkLoading: loading }, undefined, "gallery/setSendLinkLoading");
       },
 
       checkDeliveredOrders: async (galleryId: string) => {
         try {
           const response = await api.galleries.checkDeliveredOrders(galleryId);
           const items = response.items ?? [];
-          set({ hasDeliveredOrders: Array.isArray(items) && items.length > 0 });
+          set(
+            { hasDeliveredOrders: Array.isArray(items) && items.length > 0 },
+            undefined,
+            "gallery/checkDeliveredOrders/success"
+          );
         } catch (_err) {
-          set({ hasDeliveredOrders: false });
+          set({ hasDeliveredOrders: false }, undefined, "gallery/checkDeliveredOrders/error");
         }
       },
 
@@ -767,7 +865,5 @@ export const useGalleryStore = create<GalleryState>()(
         await state.fetchGalleryOrders(galleryId, forceRefresh);
         await state.checkDeliveredOrders(galleryId);
       },
-    }),
-    { name: "GalleryStore" }
-  )
-);
+});
+

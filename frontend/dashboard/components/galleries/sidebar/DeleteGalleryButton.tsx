@@ -4,7 +4,7 @@ import React, { useState } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 

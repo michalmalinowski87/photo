@@ -20,6 +20,7 @@
     "@photocloud/gallery-components": "*",
     "@radix-ui/react-label": "^2.0.2",
     "@radix-ui/react-slot": "^1.0.2",
+    "@redux-devtools/extension": "^3.3.0",
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
     "@uppy/golden-retriever": "^5.2.0",

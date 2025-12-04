@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 
-import { useGalleryStore } from "../../store/gallerySlice";
+import { useGalleryStore } from "../../store";
 import { FullPageLoading } from "../ui/loading/Loading";
 
 import GalleryList from "./GalleryList";

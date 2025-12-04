@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore } from "../../store/gallerySlice";
+import { useGalleryStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";

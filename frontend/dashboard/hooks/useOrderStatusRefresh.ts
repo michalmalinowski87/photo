@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import api from "../lib/api-service";
-import { useOrderStore } from "../store/orderSlice";
+import { useOrderStore } from "../store";
 
 /**
  * Hook to refresh order status without invalidating the cache.

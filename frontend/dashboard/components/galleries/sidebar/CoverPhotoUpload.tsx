@@ -4,7 +4,7 @@ import React, { useState, useRef } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 import { RetryableImage } from "../../ui/RetryableImage";
 
 export const CoverPhotoUpload: React.FC = () => {

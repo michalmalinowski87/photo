@@ -4,8 +4,8 @@ import React, { useState } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store/gallerySlice";
-import { useOrderStore } from "../../../store/orderSlice";
+import { useGalleryStore } from "../../../store";
+import { useOrderStore } from "../../../store";
 import Button from "../../ui/button/Button";
 
 interface GalleryUrlSectionProps {

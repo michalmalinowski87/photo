@@ -22,9 +22,9 @@ import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { useGalleryStore } from "../../../../store/gallerySlice";
-import { useOrderStore } from "../../../../store/orderSlice";
-import { useUserStore } from "../../../../store/userSlice";
+import { useGalleryStore } from "../../../../store";
+import { useOrderStore } from "../../../../store";
+import { useUserStore } from "../../../../store";
 
 interface GalleryImage {
   id?: string;

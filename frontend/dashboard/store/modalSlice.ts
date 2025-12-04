@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface ModalState {
+export interface ModalSlice {
   modals: Record<string, boolean>;
   openModal: (id: string) => void;
   closeModal: (id: string) => void;
@@ -10,41 +9,54 @@ interface ModalState {
   closeAllModals: () => void;
 }
 
-export const useModalStore = create<ModalState>()(
-  devtools(
-    (set, get) => ({
-      modals: {},
+export const createModalSlice: StateCreator<
+  ModalSlice,
+  [["zustand/devtools", never]],
+  [],
+  ModalSlice
+> = (set, get) => ({
+  modals: {},
 
-      openModal: (id: string) => {
-        set((state) => ({
-          modals: { ...state.modals, [id]: true },
-        }));
-      },
+  openModal: (id: string) => {
+    set(
+      (state) => ({
+        modals: { ...state.modals, [id]: true },
+      }),
+      undefined,
+      `modal/openModal/${id}`
+    );
+  },
 
-      closeModal: (id: string) => {
-        set((state) => {
-          const { [id]: _removed, ...rest } = state.modals;
-          return { modals: rest };
-        });
+  closeModal: (id: string) => {
+    set(
+      (state) => {
+        const { [id]: _removed, ...rest } = state.modals;
+        return { modals: rest };
       },
+      undefined,
+      `modal/closeModal/${id}`
+    );
+  },
 
-      toggleModal: (id: string) => {
-        set((state) => ({
-          modals: {
-            ...state.modals,
-            [id]: !state.modals[id],
-          },
-        }));
-      },
+  toggleModal: (id: string) => {
+    set(
+      (state) => ({
+        modals: {
+          ...state.modals,
+          [id]: !state.modals[id],
+        },
+      }),
+      undefined,
+      `modal/toggleModal/${id}`
+    );
+  },
 
-      isOpen: (id: string) => {
-        return get().modals[id] || false;
-      },
+  isOpen: (id: string) => {
+    return get().modals[id] || false;
+  },
 
-      closeAllModals: () => {
-        set({ modals: {} });
-      },
-    }),
-    { name: "ModalStore" }
-  )
-);
+  closeAllModals: () => {
+    set({ modals: {} }, undefined, "modal/closeAllModals");
+  },
+});
+

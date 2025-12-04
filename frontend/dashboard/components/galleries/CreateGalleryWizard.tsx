@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth } from "../../lib/auth-init";
-import { useGalleryStore } from "../../store/gallerySlice";
+import { useGalleryStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import { FullPageLoading } from "../ui/loading/Loading";
 

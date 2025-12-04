@@ -2,8 +2,8 @@ import { Home, Download, CheckCircle2, XCircle, Check, Send } from "lucide-react
 import React, { useCallback, useState } from "react";
 
 import { useModal } from "../../../hooks/useModal";
-import { useGalleryStore } from "../../../store/gallerySlice";
-import { useOrderStore } from "../../../store/orderSlice";
+import { useGalleryStore } from "../../../store";
+import { useOrderStore } from "../../../store";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";

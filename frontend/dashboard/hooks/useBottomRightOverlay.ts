@@ -1,4 +1,6 @@
-import { useOverlayStore } from "../store/overlaySlice";
+import { useMemo } from "react";
+
+import { useOverlayStore } from "../store";
 
 /**
  * Hook for managing bottom right overlay state
@@ -16,14 +18,26 @@ export const useBottomRightOverlay = () => {
   const setNextStepsWidth = useOverlayStore((state) => state.setNextStepsWidth);
   const setNextStepsCollapsedWidth = useOverlayStore((state) => state.setNextStepsCollapsedWidth);
 
-  return {
-    nextStepsVisible,
-    nextStepsExpanded,
-    nextStepsWidth,
-    nextStepsCollapsedWidth,
-    setNextStepsVisible,
-    setNextStepsExpanded,
-    setNextStepsWidth,
-    setNextStepsCollapsedWidth,
-  };
+  return useMemo(
+    () => ({
+      nextStepsVisible,
+      nextStepsExpanded,
+      nextStepsWidth,
+      nextStepsCollapsedWidth,
+      setNextStepsVisible,
+      setNextStepsExpanded,
+      setNextStepsWidth,
+      setNextStepsCollapsedWidth,
+    }),
+    [
+      nextStepsVisible,
+      nextStepsExpanded,
+      nextStepsWidth,
+      nextStepsCollapsedWidth,
+      setNextStepsVisible,
+      setNextStepsExpanded,
+      setNextStepsWidth,
+      setNextStepsCollapsedWidth,
+    ]
+  );
 };

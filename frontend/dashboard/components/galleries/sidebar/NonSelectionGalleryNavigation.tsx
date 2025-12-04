@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect } from "react";
 
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 
 interface NonSelectionGalleryNavigationProps {
   galleryId: string;

@@ -1,7 +1,7 @@
 import React, { ComponentType, useMemo, useState, useCallback } from "react";
 
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
-import { useUIStore } from "../store/uiSlice";
+import { useUIStore } from "../store";
 
 interface Column<T> {
   key: string;

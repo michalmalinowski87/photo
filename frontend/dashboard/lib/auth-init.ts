@@ -3,6 +3,8 @@
  * Sets up token sharing and checks for authentication
  */
 
+import { useUserStore } from "../store";
+
 import { initAuth, getIdToken } from "./auth";
 import { setupDashboardAuthStatusListener } from "./dashboard-auth-status";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "./token-sharing";
@@ -46,14 +48,19 @@ export function initializeAuth(
             const email = payload.email ?? "";
             const username = payload["cognito:username"] ?? payload.email ?? "";
 
-            // Populate user store
+            // Populate user store (only if values changed)
             if (typeof window !== "undefined") {
-              // Dynamic import to avoid require() style import
-              void import("../store/userSlice").then((userStoreModule) => {
-                userStoreModule.useUserStore.getState().setUser(userId, email, username);
-                // Don't refresh wallet balance here - let components handle it when ready
-                // The token might not be persisted to localStorage yet
-              });
+              const currentUser = useUserStore.getState();
+              // Only set if values are different to prevent duplicate updates
+              if (
+                currentUser.userId !== userId ||
+                currentUser.email !== email ||
+                currentUser.username !== username
+              ) {
+                useUserStore.getState().setUser(userId, email, username);
+              }
+              // Don't refresh wallet balance here - let components handle it when ready
+              // The token might not be persisted to localStorage yet
             }
           } catch (_e) {
             // Failed to parse token, continue anyway
@@ -77,13 +84,18 @@ export function initializeAuth(
                 const email = payload.email ?? "";
                 const username = payload["cognito:username"] ?? payload.email ?? "";
 
-                // Populate user store
+                // Populate user store (only if values changed)
                 if (typeof window !== "undefined") {
-                  // Dynamic import to avoid require() style import
-                  void import("../store/userSlice").then((userStoreModule) => {
-                    userStoreModule.useUserStore.getState().setUser(userId, email, username);
-                    // Don't refresh wallet balance here - let components handle it when ready
-                  });
+                  const currentUser = useUserStore.getState();
+                  // Only set if values are different to prevent duplicate updates
+                  if (
+                    currentUser.userId !== userId ||
+                    currentUser.email !== email ||
+                    currentUser.username !== username
+                  ) {
+                    useUserStore.getState().setUser(userId, email, username);
+                  }
+                  // Don't refresh wallet balance here - let components handle it when ready
                 }
 
                 if (onTokenFound) {
@@ -114,13 +126,18 @@ export function initializeAuth(
             const email = payload.email ?? "";
             const username = payload["cognito:username"] ?? payload.email ?? "";
 
-            // Populate user store
+            // Populate user store (only if values changed)
             if (typeof window !== "undefined") {
-              // Dynamic import to avoid require() style import
-              void import("../store/userSlice").then((userStoreModule) => {
-                userStoreModule.useUserStore.getState().setUser(userId, email, username);
-                // Don't refresh wallet balance here - let components handle it when ready
-              });
+              const currentUser = useUserStore.getState();
+              // Only set if values are different to prevent duplicate updates
+              if (
+                currentUser.userId !== userId ||
+                currentUser.email !== email ||
+                currentUser.username !== username
+              ) {
+                useUserStore.getState().setUser(userId, email, username);
+              }
+              // Don't refresh wallet balance here - let components handle it when ready
             }
 
             if (onTokenFound) {

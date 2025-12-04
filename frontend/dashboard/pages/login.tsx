@@ -7,7 +7,7 @@ import Input from "../components/ui/input/InputField";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
-import { useAuthStore } from "../store/authSlice";
+import { useAuthStore } from "../store";
 
 interface CognitoError extends Error {
   code?: string;

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { useModalStore } from "../store/modalSlice";
+import { useModalStore } from "../store";
 
 /**
  * Hook for managing modal state

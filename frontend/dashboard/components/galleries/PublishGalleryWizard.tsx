@@ -16,8 +16,8 @@ import {
   type Duration,
   type PlanKey,
 } from "../../lib/pricing-plans";
-import { useGalleryStore } from "../../store/gallerySlice";
-import { useUserStore } from "../../store/userSlice";
+import { useGalleryStore } from "../../store";
+import { useUserStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 

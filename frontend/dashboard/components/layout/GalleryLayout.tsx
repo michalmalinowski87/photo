@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 
-import { useGalleryStore } from "../../store/gallerySlice";
+import { useGalleryStore } from "../../store";
 import GallerySidebar from "../galleries/GallerySidebar";
 
 import GalleryHeader from "./GalleryHeader";

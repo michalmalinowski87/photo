@@ -1,4 +1,4 @@
-import { useThemeStore } from "../store/themeSlice";
+import { useThemeStore } from "../store";
 
 /**
  * Hook for managing theme state

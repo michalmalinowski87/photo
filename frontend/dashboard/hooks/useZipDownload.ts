@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { useDownloadStore } from "../store/downloadSlice";
+import { useDownloadStore } from "../store";
 
 /**
  * Hook for managing zip download state

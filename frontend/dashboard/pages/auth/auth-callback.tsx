@@ -2,7 +2,7 @@ import { useRouter } from "next/router";
 import React, { useEffect, useRef } from "react";
 
 import { exchangeCodeForTokens } from "../../lib/auth";
-import { useAuthStore } from "../../store/authSlice";
+import { useAuthStore } from "../../store";
 
 export default function AuthCallback() {
   const router = useRouter();

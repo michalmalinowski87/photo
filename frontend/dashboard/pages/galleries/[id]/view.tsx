@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 
 interface OwnerGalleryViewProps {
   token: string;

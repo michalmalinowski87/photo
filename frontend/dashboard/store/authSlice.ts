@@ -1,25 +1,28 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface AuthState {
+export interface AuthSlice {
   isSessionExpired: boolean;
   returnUrl: string;
   setSessionExpired: (expired: boolean, returnUrl?: string) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  devtools(
-    (set) => ({
-      isSessionExpired: false,
-      returnUrl: "",
+export const createAuthSlice: StateCreator<
+  AuthSlice,
+  [["zustand/devtools", never]],
+  [],
+  AuthSlice
+> = (set) => ({
+  isSessionExpired: false,
+  returnUrl: "",
 
-      setSessionExpired: (expired: boolean, returnUrl?: string) => {
-        set({
-          isSessionExpired: expired,
-          returnUrl: returnUrl ?? "",
-        });
+  setSessionExpired: (expired: boolean, returnUrl?: string) => {
+    set(
+      {
+        isSessionExpired: expired,
+        returnUrl: returnUrl ?? "",
       },
-    }),
-    { name: "AuthStore" }
-  )
-);
+      undefined,
+      "auth/setSessionExpired"
+    );
+  },
+});

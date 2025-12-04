@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import React from "react";
 
-import { useGalleryStore } from "../../../store/gallerySlice";
+import { useGalleryStore } from "../../../store";
 import { useGalleryType } from "../../hocs/withGalleryType";
 
 import { GallerySettingsLink } from "./GallerySettingsLink";

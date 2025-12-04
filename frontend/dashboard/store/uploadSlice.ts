@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface UploadProgress {
+export interface UploadProgress {
   id: string;
   type: "original" | "final" | "cover";
   galleryId?: string;
@@ -14,7 +13,7 @@ interface UploadProgress {
   status: "uploading" | "completed" | "error" | "cancelled";
 }
 
-interface UploadState {
+export interface UploadSlice {
   uploads: Record<string, UploadProgress>;
   addUpload: (id: string, upload: Omit<UploadProgress, "id">) => void;
   updateUpload: (id: string, updates: Partial<UploadProgress>) => void;
@@ -23,64 +22,87 @@ interface UploadState {
   clearCompletedUploads: () => void;
 }
 
-export const useUploadStore = create<UploadState>()(
-  devtools(
-    (set) => ({
-      uploads: {},
+export const createUploadSlice: StateCreator<
+  UploadSlice,
+  [["zustand/devtools", never]],
+  [],
+  UploadSlice
+> = (set) => ({
+  uploads: {},
 
-      addUpload: (id: string, upload: Omit<UploadProgress, "id">) => {
-        set((state) => ({
+  addUpload: (id: string, upload: Omit<UploadProgress, "id">) => {
+    set(
+      (state) => ({
+        uploads: {
+          ...state.uploads,
+          [id]: { ...upload, id },
+        },
+      }),
+      undefined,
+      "upload/addUpload"
+    );
+  },
+
+  updateUpload: (id: string, updates: Partial<UploadProgress>) => {
+    set(
+      (state) => {
+        const upload = state.uploads[id];
+        if (!upload) {
+          return state;
+        }
+        return {
           uploads: {
             ...state.uploads,
-            [id]: { ...upload, id },
+            [id]: { ...upload, ...updates },
           },
-        }));
+        };
       },
+      undefined,
+      "upload/updateUpload"
+    );
+  },
 
-      updateUpload: (id: string, updates: Partial<UploadProgress>) => {
-        set((state) => {
-          const upload = state.uploads[id];
-          if (!upload) return state;
-          return {
-            uploads: {
-              ...state.uploads,
-              [id]: { ...upload, ...updates },
-            },
-          };
-        });
+  removeUpload: (id: string) => {
+    set(
+      (state) => {
+        const { [id]: _removed, ...rest } = state.uploads;
+        return { uploads: rest };
       },
+      undefined,
+      "upload/removeUpload"
+    );
+  },
 
-      removeUpload: (id: string) => {
-        set((state) => {
-          const { [id]: _removed, ...rest } = state.uploads;
-          return { uploads: rest };
-        });
-      },
-
-      clearUploads: (type?: "original" | "final" | "cover") => {
-        if (type) {
-          set((state) => {
-            const filtered = Object.fromEntries(
-              Object.entries(state.uploads).filter(([_, upload]) => upload.type !== type)
-            );
-            return { uploads: filtered };
-          });
-        } else {
-          set({ uploads: {} });
-        }
-      },
-
-      clearCompletedUploads: () => {
-        set((state) => {
+  clearUploads: (type?: "original" | "final" | "cover") => {
+    if (type) {
+      set(
+        (state) => {
           const filtered = Object.fromEntries(
-            Object.entries(state.uploads).filter(
-              ([_, upload]) => upload.status !== "completed" && upload.status !== "error"
-            )
+            Object.entries(state.uploads).filter(([_, upload]) => upload.type !== type)
           );
           return { uploads: filtered };
-        });
+        },
+        undefined,
+        `upload/clearUploads/${type}`
+      );
+    } else {
+      set({ uploads: {} }, undefined, "upload/clearUploads/all");
+    }
+  },
+
+  clearCompletedUploads: () => {
+    set(
+      (state) => {
+        const filtered = Object.fromEntries(
+          Object.entries(state.uploads).filter(
+            ([_, upload]) => upload.status !== "completed" && upload.status !== "error"
+          )
+        );
+        return { uploads: filtered };
       },
-    }),
-    { name: "UploadStore" }
-  )
-);
+      undefined,
+      "upload/clearCompletedUploads"
+    );
+  },
+});
+

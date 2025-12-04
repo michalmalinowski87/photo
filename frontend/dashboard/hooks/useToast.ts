@@ -1,4 +1,4 @@
-import { useToastStore } from "../store/toastSlice";
+import { useToastStore } from "../store";
 
 /**
  * Hook for managing toast notifications

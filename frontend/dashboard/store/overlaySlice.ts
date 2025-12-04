@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface OverlayState {
+export interface OverlaySlice {
   nextStepsVisible: boolean;
   nextStepsExpanded: boolean;
   nextStepsWidth: number;
@@ -12,30 +11,37 @@ interface OverlayState {
   setNextStepsCollapsedWidth: (width: number) => void;
 }
 
-export const useOverlayStore = create<OverlayState>()(
-  devtools(
-    (set) => ({
-      nextStepsVisible: false,
-      nextStepsExpanded: true,
-      nextStepsWidth: 384, // w-96 = 384px
-      nextStepsCollapsedWidth: 64, // w-16 = 4rem = 64px
+export const createOverlaySlice: StateCreator<
+  OverlaySlice,
+  [["zustand/devtools", never]],
+  [],
+  OverlaySlice
+> = (set) => ({
+  nextStepsVisible: false,
+  nextStepsExpanded: true,
+  nextStepsWidth: 384, // w-96 = 384px
+  nextStepsCollapsedWidth: 64, // w-16 = 4rem = 64px
 
-      setNextStepsVisible: (visible: boolean) => {
-        set({ nextStepsVisible: visible });
-      },
+  setNextStepsVisible: (visible: boolean) => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[OverlaySlice] setNextStepsVisible", visible, new Error().stack);
+    }
+    set({ nextStepsVisible: visible }, undefined, "overlay/setNextStepsVisible");
+  },
 
-      setNextStepsExpanded: (expanded: boolean) => {
-        set({ nextStepsExpanded: expanded });
-      },
+  setNextStepsExpanded: (expanded: boolean) => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[OverlaySlice] setNextStepsExpanded", expanded, new Error().stack);
+    }
+    set({ nextStepsExpanded: expanded }, undefined, "overlay/setNextStepsExpanded");
+  },
 
-      setNextStepsWidth: (width: number) => {
-        set({ nextStepsWidth: width });
-      },
+  setNextStepsWidth: (width: number) => {
+    set({ nextStepsWidth: width }, undefined, "overlay/setNextStepsWidth");
+  },
 
-      setNextStepsCollapsedWidth: (width: number) => {
-        set({ nextStepsCollapsedWidth: width });
-      },
-    }),
-    { name: "OverlayStore" }
-  )
-);
+  setNextStepsCollapsedWidth: (width: number) => {
+    set({ nextStepsCollapsedWidth: width }, undefined, "overlay/setNextStepsCollapsedWidth");
+  },
+});
+

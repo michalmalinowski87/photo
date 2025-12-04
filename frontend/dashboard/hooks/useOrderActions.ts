@@ -2,8 +2,8 @@ import { useCallback } from "react";
 
 import { useZipDownload as useZipDownloadHook } from "../hocs/withZipDownload";
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore } from "../store/gallerySlice";
-import { useOrderStore } from "../store/orderSlice";
+import { useGalleryStore } from "../store";
+import { useOrderStore } from "../store";
 
 import { useToast } from "./useToast";
 

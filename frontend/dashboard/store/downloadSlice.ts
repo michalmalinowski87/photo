@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface DownloadProgress {
+export interface DownloadProgress {
   id: string;
   orderId: string;
   galleryId: string;
@@ -9,7 +8,7 @@ interface DownloadProgress {
   error?: string;
 }
 
-interface DownloadState {
+export interface DownloadSlice {
   downloads: Record<string, DownloadProgress>;
   addDownload: (id: string, download: Omit<DownloadProgress, "id">) => void;
   updateDownload: (id: string, updates: Partial<DownloadProgress>) => void;
@@ -18,55 +17,74 @@ interface DownloadState {
   clearCompletedDownloads: () => void;
 }
 
-export const useDownloadStore = create<DownloadState>()(
-  devtools(
-    (set) => ({
-      downloads: {},
+export const createDownloadSlice: StateCreator<
+  DownloadSlice,
+  [["zustand/devtools", never]],
+  [],
+  DownloadSlice
+> = (set) => ({
+  downloads: {},
 
-      addDownload: (id: string, download: Omit<DownloadProgress, "id">) => {
-        set((state) => ({
+  addDownload: (id: string, download: Omit<DownloadProgress, "id">) => {
+    set(
+      (state) => ({
+        downloads: {
+          ...state.downloads,
+          [id]: { ...download, id },
+        },
+      }),
+      undefined,
+      "download/addDownload"
+    );
+  },
+
+  updateDownload: (id: string, updates: Partial<DownloadProgress>) => {
+    set(
+      (state) => {
+        const download = state.downloads[id];
+        if (!download) {
+          return state;
+        }
+        return {
           downloads: {
             ...state.downloads,
-            [id]: { ...download, id },
+            [id]: { ...download, ...updates },
           },
-        }));
+        };
       },
+      undefined,
+      "download/updateDownload"
+    );
+  },
 
-      updateDownload: (id: string, updates: Partial<DownloadProgress>) => {
-        set((state) => {
-          const download = state.downloads[id];
-          if (!download) return state;
-          return {
-            downloads: {
-              ...state.downloads,
-              [id]: { ...download, ...updates },
-            },
-          };
-        });
+  removeDownload: (id: string) => {
+    set(
+      (state) => {
+        const { [id]: _removed, ...rest } = state.downloads;
+        return { downloads: rest };
       },
+      undefined,
+      "download/removeDownload"
+    );
+  },
 
-      removeDownload: (id: string) => {
-        set((state) => {
-          const { [id]: _removed, ...rest } = state.downloads;
-          return { downloads: rest };
-        });
-      },
+  clearDownloads: () => {
+    set({ downloads: {} }, undefined, "download/clearDownloads");
+  },
 
-      clearDownloads: () => {
-        set({ downloads: {} });
+  clearCompletedDownloads: () => {
+    set(
+      (state) => {
+        const filtered = Object.fromEntries(
+          Object.entries(state.downloads).filter(
+            ([_, download]) => download.status !== "success" && download.status !== "error"
+          )
+        );
+        return { downloads: filtered };
       },
+      undefined,
+      "download/clearCompletedDownloads"
+    );
+      },
+});
 
-      clearCompletedDownloads: () => {
-        set((state) => {
-          const filtered = Object.fromEntries(
-            Object.entries(state.downloads).filter(
-              ([_, download]) => download.status !== "success" && download.status !== "error"
-            )
-          );
-          return { downloads: filtered };
-        });
-      },
-    }),
-    { name: "DownloadStore" }
-  )
-);

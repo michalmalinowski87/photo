@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore } from "../store/gallerySlice";
+import { useGalleryStore } from "../store";
 
 import { useToast } from "./useToast";
 

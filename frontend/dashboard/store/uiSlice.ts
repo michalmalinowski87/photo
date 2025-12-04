@@ -1,50 +1,52 @@
-import { create } from "zustand";
-import { persist, devtools } from "zustand/middleware";
+import { StateCreator } from "zustand";
 
-interface TablePreferences {
+export interface TablePreferences {
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;
   itemsPerPage?: number;
 }
 
-interface UIState {
+export interface UISlice {
   tablePreferences: Record<string, TablePreferences>;
   setTablePreferences: (tableId: string, preferences: TablePreferences) => void;
   clearTablePreferences: (tableId?: string) => void;
 }
 
-export const useUIStore = create<UIState>()(
-  devtools(
-    persist(
-      (set) => ({
-        tablePreferences: {},
+export const createUISlice: StateCreator<
+  UISlice,
+  [["zustand/devtools", never]],
+  [],
+  UISlice
+> = (set) => ({
+  tablePreferences: {},
 
-        setTablePreferences: (tableId: string, preferences: TablePreferences) => {
-          set((state) => ({
-            tablePreferences: {
-              ...state.tablePreferences,
-              [tableId]: preferences,
-            },
-          }));
-        },
-
-        clearTablePreferences: (tableId?: string) => {
-          if (tableId) {
-            set((state) => {
-              const { [tableId]: _removed, ...rest } = state.tablePreferences;
-              return { tablePreferences: rest };
-            });
-          } else {
-            set({ tablePreferences: {} });
-          }
+  setTablePreferences: (tableId: string, preferences: TablePreferences) => {
+    set(
+      (state) => ({
+        tablePreferences: {
+          ...state.tablePreferences,
+          [tableId]: preferences,
         },
       }),
-      {
-        name: "ui-preferences-storage",
-        // Only persist UI preferences, not ephemeral data
+      undefined,
+      `ui/setTablePreferences/${tableId}`
+    );
+  },
+
+  clearTablePreferences: (tableId?: string) => {
+    if (tableId) {
+      set(
+        (state) => {
+          const { [tableId]: _removed, ...rest } = state.tablePreferences;
+          return { tablePreferences: rest };
+        },
+        undefined,
+        `ui/clearTablePreferences/${tableId}`
+      );
+    } else {
+      set({ tablePreferences: {} }, undefined, "ui/clearTablePreferences/all");
       }
-    ),
-    { name: "UIStore" }
-  )
-);
+    },
+});
+

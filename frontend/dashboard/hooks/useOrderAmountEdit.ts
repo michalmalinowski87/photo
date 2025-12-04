@@ -2,8 +2,8 @@ import { useState, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
 import { plnToCents, centsToPlnString } from "../lib/currency";
-import { useGalleryStore } from "../store/gallerySlice";
-import { useOrderStore } from "../store/orderSlice";
+import { useGalleryStore } from "../store";
+import { useOrderStore } from "../store";
 import { useToast } from "./useToast";
 
 interface UseOrderAmountEditOptions {

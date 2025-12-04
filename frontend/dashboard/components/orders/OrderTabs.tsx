@@ -1,5 +1,5 @@
 import { normalizeSelectedKeys } from "../../lib/order-utils";
-import { useOrderStore } from "../../store/orderSlice";
+import { useOrderStore } from "../../store";
 
 interface OrderTabsProps {
   activeTab: "originals" | "finals";

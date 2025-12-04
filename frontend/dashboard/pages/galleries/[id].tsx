@@ -16,8 +16,8 @@ import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore } from "../../store/gallerySlice";
-import { useUserStore } from "../../store/userSlice";
+import { useGalleryStore } from "../../store";
+import { useUserStore } from "../../store";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
