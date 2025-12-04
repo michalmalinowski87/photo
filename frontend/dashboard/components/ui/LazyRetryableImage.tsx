@@ -10,7 +10,10 @@ import {
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
 
 interface LazyRetryableImageProps {
-  imageData: ImageFallbackUrls;
+  imageData: ImageFallbackUrls & {
+    key?: string;
+    filename?: string;
+  };
   alt: string;
   className?: string;
   preferredSize?: ImageSize; // Preferred size for initial load (thumb/preview/bigthumb)
@@ -47,12 +50,90 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   const [isInView, setIsInView] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
-  const [currentSrc, setCurrentSrc] = useState<string>("");
+  // Initialize currentSrc from initialSrc to ensure it's set on first render
+  const [currentSrc, setCurrentSrc] = useState<string>(() => {
+    const initial = getInitialImageUrl(imageData, preferredSize);
+    return initial || "";
+  });
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
   const attemptedSizesRef = useRef<Set<"thumb" | "preview" | "bigthumb">>(new Set());
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const hasInitializedRef = useRef<boolean>(false);
+  const previousImageDataRef = useRef<{
+    identifier: string;
+    urls: string;
+    lastModified: string | number | undefined;
+  } | null>(null);
+
+  // Generate stable identifier for the image (key or filename, or fallback to alt)
+  const imageIdentifier = useMemo(() => {
+    return imageData.key ?? imageData.filename ?? alt;
+  }, [imageData.key, imageData.filename, alt]);
+
+  // Normalize URL by removing query parameters for comparison
+  // This ensures cache-busting parameters don't cause false positives
+  const normalizeUrlForComparison = (url: string | null | undefined): string => {
+    if (!url) return "";
+    try {
+      const urlObj = new URL(url);
+      return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+    } catch {
+      // If URL parsing fails, remove query string manually
+      return url.split("?")[0];
+    }
+  };
+
+  // Create a stable signature of image data for comparison
+  // This allows us to detect actual data changes vs just object reference changes
+  // URLs are normalized (query params removed) to avoid cache-busting false positives
+  const imageDataSignature = useMemo(() => {
+    // Collect all normalized URLs and sort them for consistent comparison
+    // This handles cases where URLs might be in different order or some might be missing
+    // Use a Set to deduplicate URLs (in case thumbUrl and thumbUrlFallback point to same resource)
+    const urlSet = new Set<string>();
+    
+    [
+      normalizeUrlForComparison(imageData.thumbUrl),
+      normalizeUrlForComparison(imageData.thumbUrlFallback),
+      normalizeUrlForComparison(imageData.previewUrl),
+      normalizeUrlForComparison(imageData.previewUrlFallback),
+      normalizeUrlForComparison(imageData.bigThumbUrl),
+      normalizeUrlForComparison(imageData.bigThumbUrlFallback),
+      normalizeUrlForComparison(imageData.url),
+      normalizeUrlForComparison(imageData.finalUrl),
+    ]
+      .filter(Boolean)
+      .forEach((url) => urlSet.add(url));
+
+    const normalizedUrls = Array.from(urlSet).sort().join("|");
+
+    // Normalize lastModified for comparison (convert to number if string)
+    // Use a more lenient comparison - round to nearest second to handle precision differences
+    const normalizedLastModified =
+      imageData.lastModified !== undefined
+        ? typeof imageData.lastModified === "string"
+          ? Math.round(new Date(imageData.lastModified).getTime() / 1000) * 1000
+          : Math.round(imageData.lastModified / 1000) * 1000
+        : undefined;
+
+    return {
+      identifier: imageIdentifier,
+      urls: normalizedUrls,
+      lastModified: normalizedLastModified,
+    };
+  }, [
+    imageIdentifier,
+    imageData.thumbUrl,
+    imageData.thumbUrlFallback,
+    imageData.previewUrl,
+    imageData.previewUrlFallback,
+    imageData.bigThumbUrl,
+    imageData.bigThumbUrlFallback,
+    imageData.url,
+    imageData.finalUrl,
+    imageData.lastModified,
+  ]);
 
   // Compute initial URL from imageData (cache busting applied automatically)
   // Use useMemo to avoid recomputing on every render
@@ -60,28 +141,67 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     return getInitialImageUrl(imageData, preferredSize);
   }, [imageData, preferredSize]);
 
-  // Reset state when imageData or preferredSize changes (NOT when isInView changes)
+  // Reset state only when actual image data changes (not just object reference)
   useEffect(() => {
-    // Reset initialization flag and state when imageData or preferredSize changes
+    const previous = previousImageDataRef.current;
+    const current = imageDataSignature;
+
+    // Check if this is the same image with the same data
+    // lastModified is already normalized to nearest second in imageDataSignature
+    const lastModifiedMatch = previous?.lastModified === current.lastModified;
+
+    const isSameImage =
+      previous &&
+      previous.identifier === current.identifier &&
+      previous.urls === current.urls &&
+      lastModifiedMatch;
+
+    // Only reset if:
+    // 1. First time (no previous data)
+    // 2. Different image (identifier changed)
+    // 3. Image data actually changed (URLs or lastModified changed significantly)
+    // 4. Preferred size changed
+    if (isSameImage && previousImageDataRef.current) {
+      // Same image with same data - preserve state, don't reset
+      // Only set currentSrc if it's empty (shouldn't happen with useState initializer, but safety check)
+      if (!currentSrc) {
+        const freshInitialSrc = getInitialImageUrl(imageData, preferredSize);
+        if (freshInitialSrc) {
+          setCurrentSrc(freshInitialSrc);
+        }
+      }
+      // Update the ref to track current state
+      previousImageDataRef.current = current;
+      // Don't reset anything - preserve all state including loading/error states
+      return;
+    }
+
+    // Image changed or data changed - reset state
+
+    // Compute initialSrc fresh from current imageData to ensure we have latest value
+    const freshInitialSrc = getInitialImageUrl(imageData, preferredSize);
+
     hasInitializedRef.current = false;
 
     setIsLoading(true);
     setHasError(false);
-    setCurrentSrc(initialSrc);
+    setCurrentSrc(freshInitialSrc);
     fallbackAttemptsRef.current.clear();
     attemptedSizesRef.current.clear();
 
     // Mark initial size as attempted
     attemptedSizesRef.current.add(preferredSize);
 
-    if (!initialSrc) {
+    if (!freshInitialSrc) {
       setIsLoading(false);
       setHasError(true);
       return;
     }
 
     hasInitializedRef.current = true;
-  }, [imageData, preferredSize, initialSrc, alt]);
+    previousImageDataRef.current = current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageDataSignature, preferredSize]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {

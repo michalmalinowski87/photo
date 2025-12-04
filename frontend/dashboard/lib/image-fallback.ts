@@ -299,21 +299,6 @@ export function getNextFallbackUrl(
   }
 
   // No more fallbacks available
-  console.warn("[ImageFallback] ❌ No more fallbacks available", {
-    failedUrl: normalizeUrl(failedUrl),
-    preferredSize: detectedPreferredSize,
-    attemptedSizes: attemptedSizes ? Array.from(attemptedSizes) : [],
-    availableUrls: {
-      hasThumbUrl: !!img.thumbUrl,
-      hasThumbUrlFallback: !!img.thumbUrlFallback,
-      hasPreviewUrl: !!img.previewUrl,
-      hasPreviewUrlFallback: !!img.previewUrlFallback,
-      hasBigThumbUrl: !!img.bigThumbUrl,
-      hasBigThumbUrlFallback: !!img.bigThumbUrlFallback,
-      hasUrl: !!img.url,
-      hasFinalUrl: !!img.finalUrl,
-    },
-  });
   return null;
 }
 

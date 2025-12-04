@@ -59,21 +59,7 @@ class ImageFallbackThrottler {
     // Update failure count
     this.circuitBreaker.failures = this.circuitBreaker.failureTimestamps.length;
 
-    // Log when approaching threshold (at 50%, 75%, 90%)
-    const thresholdPercent = (this.circuitBreaker.failures / this.FAILURE_THRESHOLD) * 100;
-    if (
-      thresholdPercent >= 50 &&
-      thresholdPercent < 100 &&
-      this.circuitBreaker.failures % 5 === 0
-    ) {
-      console.log("[ImageFallbackThrottler] ⚠️ Approaching circuit breaker threshold", {
-        failures: this.circuitBreaker.failures,
-        threshold: this.FAILURE_THRESHOLD,
-        percent: Math.round(thresholdPercent),
-        windowMs: this.FAILURE_WINDOW_MS,
-        isOpen: this.circuitBreaker.isOpen,
-      });
-    }
+    // Track when approaching threshold (no logging to reduce noise)
 
     // Check if we should open the circuit
     if (this.circuitBreaker.failures >= this.FAILURE_THRESHOLD && !this.circuitBreaker.isOpen) {
@@ -98,19 +84,6 @@ class ImageFallbackThrottler {
   private openCircuit(): void {
     if (!this.circuitBreaker.isOpen) {
       const now = Date.now();
-      console.warn(
-        "[ImageFallbackThrottler] 🔴 Opening circuit breaker - too many failures detected",
-        {
-          failures: this.circuitBreaker.failures,
-          threshold: this.FAILURE_THRESHOLD,
-          windowMs: this.FAILURE_WINDOW_MS,
-          resetAfterMs: this.CIRCUIT_RESET_MS,
-          timestamp: new Date(now).toISOString(),
-          failureTimestamps: this.circuitBreaker.failureTimestamps.map((ts) =>
-            new Date(ts).toISOString()
-          ),
-        }
-      );
       this.circuitBreaker.isOpen = true;
       this.circuitBreaker.openedAt = now;
     }
@@ -120,16 +93,6 @@ class ImageFallbackThrottler {
    * Reset the circuit breaker
    */
   private resetCircuit(): void {
-    const wasOpen = this.circuitBreaker.isOpen;
-    const wasOpenFor = this.circuitBreaker.openedAt ? Date.now() - this.circuitBreaker.openedAt : 0;
-
-    console.log("[ImageFallbackThrottler] 🟢 Resetting circuit breaker", {
-      wasOpen,
-      wasOpenForMs: wasOpenFor,
-      failures: this.circuitBreaker.failures,
-      timestamp: new Date().toISOString(),
-    });
-
     this.circuitBreaker = {
       failures: 0,
       lastFailureTime: 0,
@@ -172,19 +135,7 @@ class ImageFallbackThrottler {
         return false;
       }
 
-      // Log circuit breaker status periodically (every 5 seconds)
-      const logInterval = 5000;
-      const timeSinceLastLog = timeSinceOpen % logInterval;
-      if (timeSinceLastLog < 100) {
-        // Log within 100ms of interval
-        console.log("[ImageFallbackThrottler] Circuit breaker is OPEN", {
-          timeSinceOpenMs: timeSinceOpen,
-          resetAfterMs: this.CIRCUIT_RESET_MS,
-          remainingMs: this.CIRCUIT_RESET_MS - timeSinceOpen,
-          failures: this.circuitBreaker.failures,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Circuit breaker is open, will reset after timeout
     }
 
     return true;

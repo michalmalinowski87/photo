@@ -48,10 +48,15 @@ interface ApiImage {
   key?: string;
   filename?: string;
   thumbUrl?: string;
+  thumbUrlFallback?: string;
   previewUrl?: string;
+  previewUrlFallback?: string;
+  bigThumbUrl?: string;
+  bigThumbUrlFallback?: string;
   url?: string;
+  finalUrl?: string;
   size?: number;
-  lastModified?: number;
+  lastModified?: number | string;
   [key: string]: unknown;
 }
 
@@ -176,12 +181,18 @@ export default function GalleryPhotos() {
         const apiImages = await fetchGalleryImages(galleryId as string);
 
         // Map images to GalleryImage format
+        // Include all properties from API response to ensure proper fallback handling
         const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
           key: img.key,
           filename: img.filename,
           thumbUrl: img.thumbUrl,
+          thumbUrlFallback: img.thumbUrlFallback,
           previewUrl: img.previewUrl,
+          previewUrlFallback: img.previewUrlFallback,
+          bigThumbUrl: img.bigThumbUrl,
+          bigThumbUrlFallback: img.bigThumbUrlFallback,
           url: img.url,
+          finalUrl: img.finalUrl,
           size: img.size,
           lastModified: img.lastModified,
           isPlaceholder: false,
@@ -196,19 +207,64 @@ export default function GalleryPhotos() {
             return imgKey && deletingImageKeys.includes(imgKey);
           });
 
-          // Create a map of valid API images by key for deduplication
+          // Create a map of current images by key for quick lookup
+          const currentImagesMap = new Map(
+            currentImages.map((img) => [img.key ?? img.filename, img])
+          );
+
+          // Create a map of API images by key
           const apiImagesMap = new Map(mappedImages.map((img) => [img.key ?? img.filename, img]));
 
-          // Add deleting images that aren't already in API response
-          currentDeletingImages.forEach((img) => {
-            const imgKey = img.key ?? img.filename;
-            if (imgKey && !apiImagesMap.has(imgKey)) {
-              apiImagesMap.set(imgKey, img);
+          // Merge: preserve existing image objects when data hasn't changed
+          // This prevents unnecessary re-renders and state resets in LazyRetryableImage
+          const mergedImages: GalleryImage[] = [];
+
+          // Process all images from API (includes new and existing)
+          apiImagesMap.forEach((apiImg, imgKey) => {
+            const currentImg = currentImagesMap.get(imgKey);
+
+            // Check if image data actually changed by comparing URLs and lastModified
+            // Compare all URL properties to detect any changes
+            // Normalize lastModified for comparison (handle string vs number)
+            const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
+              if (lm === undefined) return undefined;
+              return typeof lm === "string" ? new Date(lm).getTime() : lm;
+            };
+
+            const currentLastModified = normalizeLastModified(currentImg.lastModified);
+            const apiLastModified = normalizeLastModified(apiImg.lastModified);
+
+            const hasDataChanged =
+              !currentImg ||
+              currentImg.thumbUrl !== apiImg.thumbUrl ||
+              currentImg.thumbUrlFallback !== apiImg.thumbUrlFallback ||
+              currentImg.previewUrl !== apiImg.previewUrl ||
+              currentImg.previewUrlFallback !== apiImg.previewUrlFallback ||
+              currentImg.bigThumbUrl !== apiImg.bigThumbUrl ||
+              currentImg.bigThumbUrlFallback !== apiImg.bigThumbUrlFallback ||
+              currentImg.url !== apiImg.url ||
+              currentImg.finalUrl !== apiImg.finalUrl ||
+              currentLastModified !== apiLastModified;
+
+            // If image exists and data hasn't changed, preserve the existing object
+            // This maintains object reference stability for LazyRetryableImage
+            if (currentImg && !hasDataChanged) {
+              mergedImages.push(currentImg);
+            } else {
+              // New image or data changed - use new object
+              mergedImages.push(apiImg);
             }
           });
 
-          // Return merged array (API images + preserved deleting images)
-          return Array.from(apiImagesMap.values());
+          // Add deleting images that aren't in API response (they may not be in API response yet)
+          currentDeletingImages.forEach((img) => {
+            const imgKey = img.key ?? img.filename;
+            if (imgKey && !apiImagesMap.has(imgKey)) {
+              mergedImages.push(img);
+            }
+          });
+
+          return mergedImages;
         });
       } catch (err) {
         if (!silent) {
@@ -247,16 +303,64 @@ export default function GalleryPhotos() {
         return imgKey && deletingImageKeys.includes(imgKey);
       });
 
+      // Create a map of current images by key for quick lookup
+      const currentImagesMap = new Map(
+        currentImages.map((img) => [img.key ?? img.filename, img])
+      );
+
+      // Create a map of store images by key
       const storeImagesMap = new Map(storeImages.map((img) => [img.key ?? img.filename, img]));
 
+      // Merge: preserve existing image objects when data hasn't changed
+      // This prevents unnecessary re-renders and state resets in LazyRetryableImage
+      const mergedImages: GalleryImage[] = [];
+
+      // Process all images from store (includes new and existing)
+      storeImagesMap.forEach((storeImg, imgKey) => {
+        const currentImg = currentImagesMap.get(imgKey);
+
+            // Check if image data actually changed by comparing URLs and lastModified
+            // Compare all URL properties to detect any changes
+            // Normalize lastModified for comparison (handle string vs number)
+            const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
+              if (lm === undefined) return undefined;
+              return typeof lm === "string" ? new Date(lm).getTime() : lm;
+            };
+
+            const currentLastModified = normalizeLastModified(currentImg.lastModified);
+            const storeLastModified = normalizeLastModified(storeImg.lastModified);
+
+            const hasDataChanged =
+              !currentImg ||
+              currentImg.thumbUrl !== storeImg.thumbUrl ||
+              currentImg.thumbUrlFallback !== storeImg.thumbUrlFallback ||
+              currentImg.previewUrl !== storeImg.previewUrl ||
+              currentImg.previewUrlFallback !== storeImg.previewUrlFallback ||
+              currentImg.bigThumbUrl !== storeImg.bigThumbUrl ||
+              currentImg.bigThumbUrlFallback !== storeImg.bigThumbUrlFallback ||
+              currentImg.url !== storeImg.url ||
+              currentImg.finalUrl !== storeImg.finalUrl ||
+              currentLastModified !== storeLastModified;
+
+            // If image exists and data hasn't changed, preserve the existing object
+            // This maintains object reference stability for LazyRetryableImage
+            if (currentImg && !hasDataChanged) {
+              mergedImages.push(currentImg);
+            } else {
+              // New image or data changed - use new object
+              mergedImages.push(storeImg);
+            }
+      });
+
+      // Add deleting images that aren't in store (they may not be in API response yet)
       currentDeletingImages.forEach((img) => {
         const imgKey = img.key ?? img.filename;
         if (imgKey && !storeImagesMap.has(imgKey)) {
-          storeImagesMap.set(imgKey, img);
+          mergedImages.push(img);
         }
       });
 
-      return Array.from(storeImagesMap.values());
+      return mergedImages;
     });
   }, [galleryId, deletingImagesRef]);
 
@@ -541,17 +645,19 @@ export default function GalleryPhotos() {
   // Render image grid
   const renderImageGrid = (imagesToRender: GalleryImage[]) => (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {imagesToRender.map((img, idx) => {
+      {imagesToRender.map((img) => {
         const isApproved = isImageInApprovedSelection(img);
         const isInAnyOrder = isImageInAnyOrder(img);
         const orderStatus = getImageOrderStatus(img);
+        // Use stable key/filename as identifier - always prefer key, fallback to filename
+        // This ensures React can properly reconcile components when images are reordered
         const imageKey = img.key ?? img.filename ?? "";
         // Check if image has any available URLs
         const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
 
         return (
           <div
-            key={imageKey ?? idx}
+            key={imageKey}
             className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
               deletingImages.has(imageKey) ? "opacity-60" : ""
             }`}
@@ -569,7 +675,11 @@ export default function GalleryPhotos() {
               ) : (
                 <>
                   <LazyRetryableImage
-                    imageData={img as ImageFallbackUrls}
+                    imageData={{
+                      ...img,
+                      key: img.key,
+                      filename: img.filename,
+                    } as ImageFallbackUrls & { key?: string; filename?: string }}
                     alt={imageKey}
                     className="w-full h-full object-cover rounded-lg"
                     preferredSize="thumb"

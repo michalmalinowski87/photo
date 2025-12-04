@@ -3,7 +3,6 @@ import Uppy from "@uppy/core";
 import "@uppy/core/css/style.min.css";
 import {
   Upload,
-  Folder,
   Image as ImageIcon,
   Play,
   Pause,
@@ -85,13 +84,6 @@ function getFileStatus(file: UppyFile): "completed" | "uploading" | "paused" | "
   if (file.progress?.uploadStarted) {
     const isPaused = file.isPaused ?? false;
     const status = isPaused ? "paused" : "uploading";
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[getFileStatus] File: ${file.name}`, {
-        uploadStarted: file.progress?.uploadStarted,
-        isPaused,
-        status,
-      });
-    }
     return status;
   }
   if (file.error) {
@@ -134,92 +126,8 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
 // Debug Component
 // ============================================================================
 
-const FilesGridDebugger: React.FC<{ uppy: Uppy }> = ({ uppy }) => {
-  useEffect(() => {
-    const logFilesState = () => {
-      const files = Object.values(uppy.getFiles());
-      console.log("=== Uppy Files State ===");
-      files.forEach((file) => {
-        console.log(`File: ${file.name}`, {
-          id: file.id,
-          progress: file.progress,
-          isPaused: file.isPaused,
-          state: file.progress?.uploadStarted
-            ? "uploading"
-            : file.progress?.uploadComplete
-              ? "complete"
-              : "pending",
-          percentage: file.progress?.percentage,
-          bytesUploaded: file.progress?.bytesUploaded,
-          bytesTotal: file.progress?.bytesTotal,
-        });
-      });
-    };
-
-    // Log on mount
-    logFilesState();
-
-    // Log on events with more detail
-    const eventHandlers: Array<[string, (data: any) => void]> = [
-      [
-        "upload-start",
-        (data) => {
-          console.log("🚀 Event: upload-start", data);
-          setTimeout(logFilesState, 100);
-        },
-      ],
-      [
-        "upload-progress",
-        (file, progress) => {
-          console.log(`📊 Event: upload-progress - ${file?.name}`, {
-            file: file?.name,
-            progress,
-            percentage: file?.progress?.percentage,
-          });
-          setTimeout(logFilesState, 100);
-        },
-      ],
-      [
-        "upload",
-        (data) => {
-          console.log("⬆️ Event: upload", data);
-          setTimeout(logFilesState, 100);
-        },
-      ],
-      [
-        "upload-success",
-        (file, response) => {
-          console.log("✅ Event: upload-success", file?.name, response);
-          setTimeout(logFilesState, 100);
-        },
-      ],
-      [
-        "file-added",
-        (file) => {
-          console.log("➕ Event: file-added", file?.name);
-          setTimeout(logFilesState, 100);
-        },
-      ],
-      [
-        "file-removed",
-        (file) => {
-          console.log("➖ Event: file-removed", file?.name);
-          setTimeout(logFilesState, 100);
-        },
-      ],
-    ];
-
-    eventHandlers.forEach(([event, handler]) => {
-      uppy.on(event as any, handler);
-    });
-
-    return () => {
-      eventHandlers.forEach(([event, handler]) => {
-        uppy.off(event as any, handler);
-      });
-    };
-  }, [uppy]);
-
+const FilesGridDebugger: React.FC<{ uppy: Uppy }> = () => {
+  // Debug component removed - no longer needed
   return null;
 };
 
@@ -246,13 +154,27 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
   const [files, setFiles] = useState<UppyFile[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   const isMountedRef = useRef(true);
   const isOpenRef = useRef(isOpen);
   const lastSyncedFileIdsRef = useRef<string[]>([]);
   // Cache blob URLs to avoid recreating them on every render
   const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
+
+  // Track viewport height to conditionally hide dropzone visual on small screens
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      setViewportHeight(window.innerHeight);
+    };
+
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+    };
+  }, []);
 
   // Reset upload state when modal closes (but don't clear Uppy files - let user see completed uploads)
   // Only reset our UI state, files will be cleared when user explicitly closes after completion
@@ -305,17 +227,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
         return; // No change, skip sync
       }
 
-      if (process.env.NODE_ENV === "development" && forceUpdate) {
-        console.log("[syncFiles] Force updating files state", {
-          fileCount: uppyFiles.length,
-          files: uppyFiles.map((f: UppyFile) => ({
-            name: f.name,
-            isPaused: f.isPaused,
-            uploadStarted: f.progress?.uploadStarted,
-            progress: f.progress?.percentage,
-          })),
-        });
-      }
 
       lastSyncedFileIdsRef.current = currentFileIds;
       setFiles(uppyFiles);
@@ -343,18 +254,12 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
 
     // For upload-progress, always force update to show progress overlays
     const handleUploadProgress = () => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[syncFiles] upload-progress event fired, forcing update");
-      }
       syncFiles(true);
     };
     uppy.on("upload-progress", handleUploadProgress);
 
     // Listen to upload events to catch pause/resume state changes (force update)
     const handleUpload = () => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[syncFiles] upload event fired, forcing update");
-      }
       syncFiles(true);
     };
     uppy.on("upload", handleUpload);
@@ -426,15 +331,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !uppy || uploadComplete) {
-      return;
-    }
-    Array.from(e.target.files).forEach((file) => addFileToUppy(uppy, file));
-    if (folderInputRef.current) {
-      folderInputRef.current.value = "";
-    }
-  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -565,7 +461,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       <Modal
         isOpen={isOpen && !showCloseConfirm}
         onClose={handleClose}
-        className="w-[70vw] h-[70vh] max-w-[90vw] max-h-[90vh]"
+        className="w-[70vw] max-w-[90vw] max-h-[90vh]"
         showCloseButton={true}
         closeOnClickOutside={false}
       >
@@ -574,7 +470,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`flex flex-col ${isDragging ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
-          style={{ height: "70vh", maxHeight: "70vh", display: "flex", flexDirection: "column" }}
+          style={{ height: "calc(70vh + 200px)", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
         >
           <div style={{ flex: "1 1 0%", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
             <div className="p-6">
@@ -582,18 +478,45 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                 Prześlij zdjęcia
               </h2>
 
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
-                  isDragging
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
-                } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                onClick={() => {
-                  if (!uploading && !uploadComplete) {
-                    fileInputRef.current?.click();
-                  }
-                }}
-              >
+              {/* Dropzone - hide only when files are present AND viewport height <= 610px */}
+              {!(files.length > 0 && viewportHeight <= 610) && (
+                <div
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
+                    isDragging
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                  } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  onClick={() => {
+                    if (!uploading && !uploadComplete) {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    webkitdirectory=""
+                    directory=""
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                    disabled={uploading || uploadComplete}
+                  />
+                  <div className="space-y-2">
+                    <Upload className="mx-auto h-12 w-12 text-gray-400" strokeWidth={2} />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Przeciągnij i upuść zdjęcia lub cały folder tutaj, lub kliknij, aby wybrać pliki
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      Obsługiwane formaty: JPG, PNG, WebP
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Hidden file input - always present for drag/drop functionality */}
+              {files.length > 0 && viewportHeight <= 610 && (
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -605,41 +528,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   className="hidden"
                   disabled={uploading || uploadComplete}
                 />
-                <div className="space-y-2">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" strokeWidth={2} />
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Przeciągnij i upuść zdjęcia lub cały folder tutaj, lub kliknij, aby wybrać pliki
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
-                    Obsługiwane formaty: JPG, PNG, WebP
-                  </p>
-                </div>
-                <div className="flex gap-2 justify-center mt-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      if (!uploading && !uploadComplete) {
-                        folderInputRef.current?.click();
-                      }
-                    }}
-                    disabled={uploading || uploadComplete}
-                  >
-                    <Folder className="w-4 h-4 mr-2" strokeWidth={2} />
-                    Wybierz folder
-                  </Button>
-                </div>
-                <input
-                  ref={folderInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  {...({ webkitdirectory: "" } as any)}
-                  onChange={handleFolderInputChange}
-                  className="hidden"
-                  disabled={uploading || uploadComplete}
-                />
-              </div>
+              )}
 
               {files.length > 0 && (
                 <>
@@ -657,16 +546,6 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                       const progress = getFileProgress(freshFile);
                       const thumbnail = getThumbnail(freshFile);
 
-                      // Debug logging
-                      if (process.env.NODE_ENV === "development") {
-                        console.log(`[Thumbnail] File: ${freshFile.name}`, {
-                          status,
-                          isPaused: freshFile.isPaused,
-                          uploadStarted: freshFile.progress?.uploadStarted,
-                          uploadComplete: freshFile.progress?.uploadComplete,
-                          progress: freshFile.progress?.percentage,
-                        });
-                      }
 
                       return (
                         <div
