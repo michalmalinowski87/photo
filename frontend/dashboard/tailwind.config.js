@@ -139,12 +139,12 @@ module.exports = {
       },
       keyframes: {
         "fade-in-out": {
-          "0%, 100%": { opacity: "0.4" },
-          "50%": { opacity: "0.7" },
+          "0%, 100%": { opacity: "0.3" },
+          "50%": { opacity: "0.9" },
         },
       },
       animation: {
-        "fade-in-out": "fade-in-out 2s ease-in-out infinite",
+        "fade-in-out": "fade-in-out 2.5s ease-in-out infinite",
       },
     },
   },
