@@ -441,11 +441,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
 
+      // Close wizard first for cleaner transition, then navigate
       // Keep loading overlay visible - it will be removed when gallery page is fully loaded
-      onSuccess(response.galleryId);
       if (!devLocked) {
         onClose();
       }
+      // Navigate after closing wizard to ensure smooth transition
+      onSuccess(response.galleryId);
     } catch (err: unknown) {
       // Hide loading overlay on error
       setGalleryCreationLoading(false);

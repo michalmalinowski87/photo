@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 
 import { useSidebar } from "../../hooks/useSidebar";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
+import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
+import { useGalleryStore } from "../../store";
 
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
@@ -19,6 +21,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [devLocked, setDevLocked] = useState(false);
+  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
 
   const handleCreateGallery = () => {
     setWizardOpen(true);
@@ -33,8 +36,10 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       const referrerKey = `gallery_referrer_${galleryId}`;
       sessionStorage.setItem(referrerKey, window.location.pathname);
       // Redirect to photos page as the first action is uploading photos
+      // Use router.push instead of window.location.href to avoid full page reload
+      // This keeps the loading state and provides smoother transition
       if (!devLocked) {
-        window.location.href = `/galleries/${galleryId}/photos`;
+        void router.push(`/galleries/${galleryId}/photos`);
       }
     }
   };
@@ -77,37 +82,41 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   }, [wizardOpen, devLocked, router.events]);
 
   return (
-    <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
-      <WelcomePopupWrapper onCreateGallery={onCreateGallery ?? handleCreateGallery} />
-      <div>
-        <AppSidebar />
-        <Backdrop />
-      </div>
-      <div
-        className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[290px] ${
-          isMobileOpen ? "ml-0" : ""
-        }`}
-      >
-        <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
-        <div className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}>
-          {wizardOpen ? (
-            <CreateGalleryWizard
-              isOpen={wizardOpen}
-              onClose={() => {
-                if (!devLocked) {
-                  setWizardOpen(false);
-                  setDevLocked(false);
-                }
-              }}
-              onSuccess={handleWizardSuccess}
-              devLocked={devLocked}
-            />
-          ) : (
-            children
-          )}
+    <>
+      {/* Global loading overlay that persists across navigation during gallery creation */}
+      {galleryCreationLoading && <FullPageLoading text="Tworzenie galerii..." />}
+      <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
+        <WelcomePopupWrapper onCreateGallery={onCreateGallery ?? handleCreateGallery} />
+        <div>
+          <AppSidebar />
+          <Backdrop />
+        </div>
+        <div
+          className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[290px] ${
+            isMobileOpen ? "ml-0" : ""
+          }`}
+        >
+          <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
+          <div className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}>
+            {wizardOpen ? (
+              <CreateGalleryWizard
+                isOpen={wizardOpen}
+                onClose={() => {
+                  if (!devLocked) {
+                    setWizardOpen(false);
+                    setDevLocked(false);
+                  }
+                }}
+                onSuccess={handleWizardSuccess}
+                devLocked={devLocked}
+              />
+            ) : (
+              children
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

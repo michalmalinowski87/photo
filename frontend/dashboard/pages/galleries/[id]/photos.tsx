@@ -70,7 +70,7 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { fetchGalleryImages, fetchGalleryOrders, currentGallery } = useGalleryStore();
+  const { fetchGalleryImages, fetchGalleryOrders, currentGallery, galleryCreationLoading, setGalleryCreationLoading } = useGalleryStore();
   // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -462,6 +462,13 @@ export default function GalleryPhotos() {
     [galleryId, fetchGalleryOrders]
   );
 
+  // Clear galleryCreationLoading when gallery and images are fully loaded
+  useEffect(() => {
+    if (galleryCreationLoading && !galleryLoading && hasInitialized && gallery && !loading) {
+      setGalleryCreationLoading(false);
+    }
+  }, [galleryCreationLoading, galleryLoading, hasInitialized, gallery, loading, setGalleryCreationLoading]);
+
   // Initialize auth and load data
   useEffect(() => {
     // Don't initialize until galleryId is available from router
@@ -548,6 +555,8 @@ export default function GalleryPhotos() {
   }
 
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
+  // galleryCreationLoading is handled at AppLayout level to persist across navigation
+  // Only show regular loading here
   if (galleryLoading || !hasInitialized) {
     return <FullPageLoading text="Ładowanie galerii..." />;
   }

@@ -78,6 +78,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     sendLinkLoading,
     reloadGallery,
     copyGalleryUrl,
+    galleryCreationLoading,
   } = useGalleryStore();
 
   const {
@@ -590,7 +591,9 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   }
 
   // Only show loading if we're loading AND we don't have gallery (including cached)
-  if (loading && !effectiveGallery) {
+  // Don't show duplicate loading if galleryCreationLoading is already showing
+  // galleryCreationLoading will be shown by the gallery detail/photos page
+  if (loading && !effectiveGallery && !galleryCreationLoading) {
     return (
       <GalleryLayout>
         <FullPageLoading text="Ładowanie galerii..." />

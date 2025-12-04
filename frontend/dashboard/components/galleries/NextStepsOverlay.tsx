@@ -79,6 +79,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
   // Use galleryOrders from store instead of orders prop
   const galleryOrders = useGalleryStore((state) => state.galleryOrders);
+  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
   const { isNonSelectionGallery } = useGalleryType();
   const { fetchGalleryOrders } = useGalleryStore();
 
@@ -270,6 +271,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     console.log("[NextStepsOverlay] useLayoutEffect: Initializing visibility", {
       galleryId: gallery?.galleryId,
       galleryLoading,
+      galleryCreationLoading,
       currentOverlayVisible,
       currentOverlayExpanded,
       galleryCompletedSetup,
@@ -279,21 +281,24 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       nextStepsOverlayExpanded,
     });
 
-    // Calculate visibility using same logic as isVisible
-    const shouldBeVisible =
+    // Calculate intended visibility (what it should be when not creating)
+    const intendedVisible =
       !galleryCompletedSetup &&
       !shouldHide &&
       tutorialDisabled !== true &&
       !!gallery &&
       !galleryLoading &&
       steps.length > 0;
+    
+    // Hide overlay during gallery creation to avoid blinking
+    const shouldBeVisible = intendedVisible && !galleryCreationLoading;
     const newVisible = Boolean(shouldBeVisible);
     const newExpanded = Boolean(nextStepsOverlayExpanded);
 
     // On initial mount, if we have a persisted visible state, preserve it during loading
     // This prevents the overlay from disappearing when navigating between routes
-    // Only update if gallery is loaded and visibility should change
-    const shouldPreserveState = currentOverlayVisible && galleryLoading;
+    // Also preserve state during gallery creation to prevent blinking
+    const shouldPreserveState = (currentOverlayVisible && galleryLoading) || galleryCreationLoading;
     const finalVisible = shouldPreserveState ? currentOverlayVisible : newVisible;
     const finalExpanded = newExpanded;
 
@@ -327,6 +332,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     tutorialDisabled,
     gallery,
     galleryLoading,
+    galleryCreationLoading,
     steps.length,
     nextStepsOverlayExpanded,
     setOverlayVisible,
@@ -336,17 +342,25 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
 
   // Update context when visibility or expansion state changes (if context available)
   // Use useMemo to calculate visibility once and prevent unnecessary updates
+  // Hide overlay during gallery creation to avoid blinking - preserve intended visibility
   const calculatedVisibility = useMemo(() => {
-    const shouldBeVisible =
+    // Calculate intended visibility (what it should be when not creating)
+    const intendedVisible =
       !galleryCompletedSetup &&
       !shouldHide &&
       tutorialDisabled !== true &&
       !!gallery &&
       !galleryLoading &&
       steps.length > 0;
+    
+    // Hide overlay during gallery creation, but preserve intended state
+    // This prevents blinking when galleryCreationLoading toggles
+    const shouldBeVisible = intendedVisible && !galleryCreationLoading;
+    
     return {
       visible: Boolean(shouldBeVisible),
       expanded: Boolean(nextStepsOverlayExpanded),
+      intendedVisible: Boolean(intendedVisible), // Track intended state for smooth transitions
     };
   }, [
     galleryCompletedSetup,
@@ -356,10 +370,14 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     galleryLoading,
     steps.length,
     nextStepsOverlayExpanded,
+    galleryCreationLoading,
   ]);
 
   // Track previous values to prevent unnecessary updates
   const prevVisibilityRef = useRef({ visible: null as boolean | null, expanded: null as boolean | null });
+  const prevGalleryCreationLoadingRef = useRef<boolean | null>(null);
+  const suppressUpdatesRef = useRef<boolean>(false);
+  const pendingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!overlayContext || !hasInitializedVisibilityRef.current) {
@@ -369,8 +387,74 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
 
     const { visible: newVisible, expanded: newExpanded } = calculatedVisibility;
     const prev = prevVisibilityRef.current;
+    const prevGalleryCreationLoading = prevGalleryCreationLoadingRef.current;
 
-    // Only update if values actually changed AND are different from previous update
+    // If galleryCreationLoading is active, suppress all visibility updates and hide overlay
+    if (galleryCreationLoading) {
+      suppressUpdatesRef.current = true;
+      // Clear any pending updates
+      if (pendingUpdateTimeoutRef.current) {
+        clearTimeout(pendingUpdateTimeoutRef.current);
+        pendingUpdateTimeoutRef.current = null;
+      }
+      // Hide overlay immediately if it's visible
+      if (overlayContext.nextStepsVisible) {
+        setOverlayVisible(false);
+        prev.visible = false;
+      }
+      prevGalleryCreationLoadingRef.current = galleryCreationLoading;
+      return;
+    }
+
+    // If we just finished creating, set up a delayed update
+    const justFinishedCreating = prevGalleryCreationLoading === true && galleryCreationLoading === false;
+    
+    if (justFinishedCreating) {
+      suppressUpdatesRef.current = true;
+      // Clear any existing pending update
+      if (pendingUpdateTimeoutRef.current) {
+        clearTimeout(pendingUpdateTimeoutRef.current);
+      }
+      // Capture intended expanded state for the timeout
+      const targetExpanded = newExpanded;
+      // Schedule update after state stabilizes (longer delay to let all updates settle)
+      pendingUpdateTimeoutRef.current = setTimeout(() => {
+        suppressUpdatesRef.current = false;
+        // Re-check visibility one more time to ensure we have the latest state
+        const currentIntended = !galleryCompletedSetup &&
+          !shouldHide &&
+          tutorialDisabled !== true &&
+          !!gallery &&
+          !galleryLoading &&
+          steps.length > 0;
+        const finalVisible = currentIntended;
+        if (overlayContext.nextStepsVisible !== finalVisible) {
+          setOverlayVisible(finalVisible);
+          prev.visible = finalVisible;
+        }
+        if (overlayContext.nextStepsExpanded !== targetExpanded) {
+          setOverlayExpanded(targetExpanded);
+          prev.expanded = targetExpanded;
+        }
+        pendingUpdateTimeoutRef.current = null;
+      }, 300); // Longer delay to ensure all state updates have settled
+      
+      prevGalleryCreationLoadingRef.current = galleryCreationLoading;
+      return () => {
+        if (pendingUpdateTimeoutRef.current) {
+          clearTimeout(pendingUpdateTimeoutRef.current);
+          pendingUpdateTimeoutRef.current = null;
+        }
+      };
+    }
+
+    // If we're suppressing updates (during transition), skip
+    if (suppressUpdatesRef.current) {
+      prevGalleryCreationLoadingRef.current = galleryCreationLoading;
+      return;
+    }
+
+    // Normal update logic - only when not suppressing
     const visibilityChanged = overlayContext.nextStepsVisible !== newVisible && prev.visible !== newVisible;
     const expandedChanged = overlayContext.nextStepsExpanded !== newExpanded && prev.expanded !== newExpanded;
 
@@ -397,22 +481,20 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         setOverlayExpanded(newExpanded);
         prev.expanded = newExpanded;
       }
-    } else {
-      console.log("[NextStepsOverlay] useEffect: Skipping update - no changes", {
-        newVisible,
-        newExpanded,
-        currentStoreVisible: overlayContext.nextStepsVisible,
-        currentStoreExpanded: overlayContext.nextStepsExpanded,
-        prevVisible: prev.visible,
-        prevExpanded: prev.expanded,
-      });
     }
+    
+    prevGalleryCreationLoadingRef.current = galleryCreationLoading;
+    
+    // Explicit return for TypeScript (useEffect cleanup is optional)
+    return undefined;
     // Only depend on calculated values, not store values (to prevent loops)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     calculatedVisibility.visible,
     calculatedVisibility.expanded,
     overlayContext,
+    galleryCreationLoading,
+    calculatedVisibility.intendedVisible,
   ]);
 
   // Reset optimistic bytes when gallery changes
