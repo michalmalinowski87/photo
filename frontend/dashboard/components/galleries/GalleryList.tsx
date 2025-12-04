@@ -1,4 +1,19 @@
-import { Trash2 } from "lucide-react";
+import {
+  Trash2,
+  Image,
+  Folder,
+  Send,
+  Mail,
+  CheckCircle,
+  CheckSquare,
+  Edit,
+  MessageSquare,
+  Package,
+  Truck,
+  CheckCircle2,
+  CircleCheck,
+  Plus,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
@@ -11,6 +26,7 @@ import { useUserStore } from "../../store/userSlice";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
+import { EmptyState } from "../ui/empty-state/EmptyState";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
 import { PublishGalleryWizard } from "./PublishGalleryWizard";
@@ -243,6 +259,78 @@ const GalleryList: React.FC<GalleryListProps> = ({
     );
   };
 
+  const getEmptyStateConfig = () => {
+    const handleCreateGallery = () => {
+      router.push("/galleries/robocze");
+    };
+
+    switch (filter) {
+      case "unpaid":
+        return {
+          icon: <Folder size={64} />,
+          title: "Brak wersji roboczych",
+          description:
+            "Wersje robocze to nieopłacone galerie. Utwórz nową galerię, prześlij zdjęcia i opłać ją, aby przesłać do klienta.",
+          actionButton: {
+            label: "Utwórz galerię",
+            onClick: handleCreateGallery,
+            icon: <Plus size={18} />,
+          },
+        };
+      case "wyslano":
+        return {
+          icon: <Send size={64} />,
+          title: "Brak galerii wysłanych do klienta",
+          description:
+            "Tutaj pojawią się galerie, które zostały wysłane do klientów. Po opłaceniu galerii i wysłaniu linku, galeria automatycznie pojawi się w tej sekcji.",
+          processExplanation:
+            "Proces: Utwórz galerię → Prześlij zdjęcia → Opłać galerię → Wyślij link do klienta",
+        };
+      case "wybrano":
+        return {
+          icon: <CheckCircle size={64} />,
+          title: "Brak galerii z wybranymi zdjęciami",
+          description:
+            "Tutaj pojawią się galerie, w których klient wybrał zdjęcia. Po wyborze zdjęć przez klienta, galeria automatycznie pojawi się tutaj.",
+          processExplanation:
+            "Proces: Klient otrzymuje link → Przegląda zdjęcia → Wybiera zdjęcia → Galeria pojawia się tutaj",
+        };
+      case "prosba-o-zmiany":
+        return {
+          icon: <Edit size={64} />,
+          title: "Brak próśb o zmiany",
+          description:
+            "Tutaj pojawią się galerie, w których klient złożył prośbę o zmiany. Po złożeniu prośby przez klienta, galeria automatycznie pojawi się w tej sekcji.",
+          processExplanation:
+            "Proces: Klient wybiera zdjęcia → Składa prośbę o zmiany → Galeria pojawia się tutaj",
+        };
+      case "gotowe-do-wysylki":
+        return {
+          icon: <Package size={64} />,
+          title: "Brak galerii gotowych do wysyłki",
+          description:
+            "Tutaj pojawią się galerie, które są gotowe do wysłania klientowi. Po zatwierdzeniu zmian i przygotowaniu finalnych zdjęć, galeria automatycznie pojawi się tutaj.",
+          processExplanation:
+            "Proces: Zatwierdź zmiany → Przygotuj finalne zdjęcia → Galeria pojawia się tutaj",
+        };
+      case "dostarczone":
+        return {
+          icon: <CheckCircle2 size={64} />,
+          title: "Brak dostarczonych galerii",
+          description:
+            "Tutaj pojawią się galerie, które zostały dostarczone klientowi. Po wysłaniu finalnych zdjęć klientowi, galeria automatycznie pojawi się w tej sekcji.",
+          processExplanation:
+            "Proces: Przygotuj finalne zdjęcia → Wyślij do klienta → Galeria pojawia się tutaj",
+        };
+      default:
+        return {
+          icon: <Image size={64} />,
+          title: "Brak galerii do wyświetlenia",
+          description: "Nie znaleziono galerii spełniających kryteria filtrowania.",
+        };
+    }
+  };
+
   return (
     <>
       {publishWizardOpen && publishWizardGalleryId && (
@@ -265,9 +353,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
           {error && <div>{error}</div>}
 
           {galleries.length === 0 ? (
-            <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
-              Brak galerii do wyświetlenia
-            </div>
+            <EmptyState {...getEmptyStateConfig()} />
           ) : (
             <div className="overflow-x-auto">
               <Table>

@@ -1,8 +1,9 @@
-import { X } from "lucide-react";
+import { X, Users, Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
+import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
@@ -415,11 +416,22 @@ export default function Clients() {
       ) : null}
 
       {clients.length === 0 ? (
-        <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
-          {searchQuery
-            ? "Brak wyników wyszukiwania."
-            : 'Brak klientów. Kliknij "Dodaj klienta" aby dodać pierwszego.'}
-        </div>
+        searchQuery ? (
+          <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
+            Brak wyników wyszukiwania.
+          </div>
+        ) : (
+          <EmptyState
+            icon={<Users size={64} />}
+            title="Brak klientów"
+            description="Zacznij od dodania pierwszego klienta. Klienci pozwalają Ci zarządzać kontaktami i przypisywać ich do galerii."
+            actionButton={{
+              label: "Dodaj klienta",
+              onClick: handleCreate,
+              icon: <Plus size={18} />,
+            }}
+          />
+        )
       ) : (
         <>
           <div className="overflow-x-auto">

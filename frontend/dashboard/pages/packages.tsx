@@ -1,8 +1,9 @@
-import { X } from "lucide-react";
+import { X, Package, Plus } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
+import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
@@ -294,9 +295,16 @@ export default function Packages() {
       {error && <div>{error}</div>}
 
       {packages.length === 0 ? (
-        <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
-          Brak pakietów. Kliknij &quot;Dodaj pakiet&quot; aby dodać pierwszy.
-        </div>
+        <EmptyState
+          icon={<Package size={64} />}
+          title="Brak pakietów"
+          description="Utwórz swój pierwszy pakiet cenowy. Pakiety definiują liczbę zdjęć w pakiecie i cenę za dodatkowe zdjęcia."
+          actionButton={{
+            label: "Dodaj pakiet",
+            onClick: handleCreate,
+            icon: <Plus size={18} />,
+          }}
+        />
       ) : (
         <div className="overflow-x-auto">
           <Table>

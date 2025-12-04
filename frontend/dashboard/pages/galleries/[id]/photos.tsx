@@ -1,4 +1,4 @@
-import { Plus, ChevronDown } from "lucide-react";
+import { Plus, ChevronDown, Image, Upload } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
 
@@ -6,6 +6,7 @@ import { LimitExceededModal } from "../../../components/galleries/LimitExceededM
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
+import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
@@ -808,11 +809,16 @@ export default function GalleryPhotos() {
             <Loading size="lg" text="Ładowanie zdjęć..." />
           </div>
         ) : images.length === 0 ? (
-          <div className="p-12 text-center bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-gray-500 dark:text-gray-400">
-              Brak zdjęć w galerii. Prześlij zdjęcia aby rozpocząć.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Image size={64} />}
+            title="Brak zdjęć w galerii"
+            description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
+            actionButton={{
+              label: "Prześlij zdjęcia",
+              onClick: () => setUploadModalOpen(true),
+              icon: <Upload size={18} />,
+            }}
+          />
         ) : deliveredOrders.length > 0 ? (
           <div className="space-y-2">
             {/* Order Sections */}

@@ -1,8 +1,9 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Star } from "lucide-react";
 
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import Button from "../ui/button/Button";
+import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
 
@@ -92,7 +93,20 @@ export function FinalsTab({
       )}
 
       {images.length === 0 ? (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">Brak zdjęć finalnych</div>
+        <EmptyState
+          icon={<Sparkles size={64} />}
+          title="Brak zdjęć finalnych"
+          description="Prześlij zdjęcia finalne dla tego zlecenia. Zdjęcia finalne to wersje gotowe do dostarczenia klientowi."
+          actionButton={
+            canUpload
+              ? {
+                  label: "Prześlij zdjęcia finalne",
+                  onClick: onUploadClick,
+                  icon: <Plus size={18} />,
+                }
+              : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-4 gap-4">
           {images.map((img, idx) => {
