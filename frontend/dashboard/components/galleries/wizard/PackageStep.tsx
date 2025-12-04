@@ -1,4 +1,5 @@
-import React from "react";
+import { Plus } from "lucide-react";
+import React, { useState } from "react";
 
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../lib/currency";
 import { formatPrice } from "../../../lib/format-price";
@@ -38,6 +39,12 @@ interface PackageStepProps {
   onExtraPriceInputChange: (value: string | null) => void;
   onPackagePriceInputChange: (value: string | null) => void;
   onPaymentAmountInputChange: (value: string | null) => void;
+  onPackageSave?: (packageData: {
+    name: string;
+    includedPhotos: number;
+    pricePerExtraPhoto: number;
+    price: number;
+  }) => Promise<void>;
 }
 
 export const PackageStep: React.FC<PackageStepProps> = ({
@@ -56,7 +63,9 @@ export const PackageStep: React.FC<PackageStepProps> = ({
   onExtraPriceInputChange,
   onPackagePriceInputChange,
   onPaymentAmountInputChange,
+  onPackageSave,
 }) => {
+  const [saving, setSaving] = useState(false);
   // Calculate payment status based on package price and payment amount
   const packagePriceCentsForStatus = packagePriceCents ?? 0;
   const paymentStatusForPakiet =
@@ -191,27 +200,65 @@ export const PackageStep: React.FC<PackageStepProps> = ({
           </div>
           {packagePriceCentsForStatus > 0 && (
             <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Status płatności:</p>
-              <Badge
-                color={
-                  paymentStatusForPakiet === "PAID"
-                    ? "success"
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Status płatności:</p>
+                <Badge
+                  color={
+                    paymentStatusForPakiet === "PAID"
+                      ? "success"
+                      : paymentStatusForPakiet === "PARTIALLY_PAID"
+                        ? "warning"
+                        : "error"
+                  }
+                  variant="light"
+                >
+                  {paymentStatusForPakiet === "PAID"
+                    ? "Opłacone"
                     : paymentStatusForPakiet === "PARTIALLY_PAID"
-                      ? "warning"
-                      : "error"
-                }
-                variant="light"
-              >
-                {paymentStatusForPakiet === "PAID"
-                  ? "Opłacone"
-                  : paymentStatusForPakiet === "PARTIALLY_PAID"
-                    ? "Częściowo opłacone"
-                    : "Nieopłacone"}
-              </Badge>
+                      ? "Częściowo opłacone"
+                      : "Nieopłacone"}
+                </Badge>
+              </div>
             </div>
           )}
         </div>
       </div>
+      {onPackageSave && (
+        <div className="flex justify-end -mt-[12px]">
+          <button
+            onClick={async () => {
+              if (!packageName.trim()) {
+                return;
+              }
+              setSaving(true);
+              try {
+                await onPackageSave({
+                  name: packageName.trim(),
+                  includedPhotos: includedCount,
+                  pricePerExtraPhoto: extraPriceCents,
+                  price: packagePriceCents,
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
+            disabled={!!selectedPackageId || saving || !packageName.trim()}
+            className="flex items-center gap-2 text-base text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-brand-500 dark:disabled:hover:text-brand-400"
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin"></div>
+                <span>Zapisywanie...</span>
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                <span>Zapisz pakiet</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

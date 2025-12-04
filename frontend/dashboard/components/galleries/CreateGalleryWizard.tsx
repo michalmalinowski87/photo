@@ -389,6 +389,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             onExtraPriceInputChange={setExtraPriceInput}
             onPackagePriceInputChange={setPackagePriceInput}
             onPaymentAmountInputChange={setPaymentAmountInput}
+            onPackageSave={async (packageData) => {
+              try {
+                await api.packages.create(packageData);
+                showToast("success", "Sukces", "Pakiet został zapisany");
+                await loadExistingPackages();
+              } catch (err) {
+                showToast("error", "Błąd", formatApiError(err as Error));
+              }
+            }}
           />
         );
 
@@ -409,6 +418,15 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             selectionEnabled={data.selectionEnabled}
             onClientSelect={handleClientSelect}
             onDataChange={(updates) => setData({ ...data, ...updates })}
+            onClientSave={async (clientData) => {
+              try {
+                await api.clients.create(clientData);
+                showToast("success", "Sukces", "Klient został zapisany");
+                await loadExistingClients();
+              } catch (err) {
+                showToast("error", "Błąd", formatApiError(err as Error));
+              }
+            }}
           />
         );
 

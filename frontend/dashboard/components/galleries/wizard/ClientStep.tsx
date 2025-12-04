@@ -1,4 +1,5 @@
-import React from "react";
+import { Plus } from "lucide-react";
+import React, { useState } from "react";
 
 import { generatePassword } from "../../../lib/password";
 import Button from "../../ui/button/Button";
@@ -43,6 +44,15 @@ interface ClientStepProps {
     nip?: string;
     companyName?: string;
   }) => void;
+  onClientSave?: (clientData: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    isCompany: boolean;
+    companyName: string;
+    nip: string;
+  }) => Promise<void>;
 }
 
 export const ClientStep: React.FC<ClientStepProps> = ({
@@ -60,7 +70,18 @@ export const ClientStep: React.FC<ClientStepProps> = ({
   selectionEnabled,
   onClientSelect,
   onDataChange,
+  onClientSave,
 }) => {
+  const [saving, setSaving] = useState(false);
+
+  const canSaveClient = () => {
+    if (!clientEmail.trim()) {return false;}
+    if (isCompany) {
+      return !!(companyName.trim() && nip.trim());
+    } else {
+      return !!(firstName.trim() && lastName.trim());
+    }
+  };
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="text-center space-y-2">
@@ -237,6 +258,45 @@ export const ClientStep: React.FC<ClientStepProps> = ({
           </div>
         </div>
       </div>
+      {onClientSave && (
+        <div className="flex justify-end -mt-[12px]">
+          <button
+            onClick={async () => {
+              if (!canSaveClient()) {
+                return;
+              }
+              setSaving(true);
+              try {
+                await onClientSave({
+                  email: clientEmail.trim(),
+                  firstName: firstName.trim(),
+                  lastName: lastName.trim(),
+                  phone: phone.trim(),
+                  isCompany,
+                  companyName: companyName.trim(),
+                  nip: nip.trim(),
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
+            disabled={!!selectedClientId || saving || !canSaveClient()}
+            className="flex items-center gap-2 text-base text-brand-500 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-brand-500 dark:disabled:hover:text-brand-400"
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin"></div>
+                <span>Zapisywanie...</span>
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                <span>Zapisz klienta</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
