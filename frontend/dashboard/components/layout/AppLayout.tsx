@@ -18,25 +18,51 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   const router = useRouter();
   const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [devLocked, setDevLocked] = useState(false);
 
   const handleCreateGallery = () => {
     setWizardOpen(true);
   };
 
   const handleWizardSuccess = (galleryId: string) => {
-    setWizardOpen(false);
+    if (!devLocked) {
+      setWizardOpen(false);
+    }
     if (typeof window !== "undefined") {
       // Store dashboard as referrer when creating a new gallery
       const referrerKey = `gallery_referrer_${galleryId}`;
       sessionStorage.setItem(referrerKey, window.location.pathname);
       // Redirect to photos page as the first action is uploading photos
-      window.location.href = `/galleries/${galleryId}/photos`;
+      if (!devLocked) {
+        window.location.href = `/galleries/${galleryId}/photos`;
+      }
     }
   };
 
-  // Close wizard when navigating away
+  // Dev mode: Listen for wizard open event and check for lock flag
   useEffect(() => {
-    if (!wizardOpen || !router.events) {
+    if (typeof window === "undefined" || process.env.NODE_ENV !== "development") {
+      return;
+    }
+
+    const handleOpenWizard = () => {
+      const shouldLock = (window as any).__galleryWizardDevLocked === true;
+      if (shouldLock) {
+        setDevLocked(true);
+        (window as any).__galleryWizardDevLocked = false; // Reset flag
+      }
+      if (!wizardOpen) {
+        setWizardOpen(true);
+      }
+    };
+
+    window.addEventListener("openGalleryWizard", handleOpenWizard);
+    return () => window.removeEventListener("openGalleryWizard", handleOpenWizard);
+  }, [wizardOpen]);
+
+  // Close wizard when navigating away (unless dev locked)
+  useEffect(() => {
+    if (!wizardOpen || devLocked || !router.events) {
       return;
     }
 
@@ -48,7 +74,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
     return () => {
       router.events.off("routeChangeStart", handleRouteChange);
     };
-  }, [wizardOpen, router.events]);
+  }, [wizardOpen, devLocked, router.events]);
 
   return (
     <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
@@ -63,12 +89,18 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
         }`}
       >
         <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
-        <div className="p-4 mx-auto max-w-7xl md:p-6">
+        <div className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}>
           {wizardOpen ? (
             <CreateGalleryWizard
               isOpen={wizardOpen}
-              onClose={() => setWizardOpen(false)}
+              onClose={() => {
+                if (!devLocked) {
+                  setWizardOpen(false);
+                  setDevLocked(false);
+                }
+              }}
               onSuccess={handleWizardSuccess}
+              devLocked={devLocked}
             />
           ) : (
             children

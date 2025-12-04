@@ -1,10 +1,9 @@
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { X, Check } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth } from "../../lib/auth-init";
-import Button from "../ui/button/Button";
 
 import { ClientStep } from "./wizard/ClientStep";
 import { GalleryNameStep } from "./wizard/GalleryNameStep";
@@ -16,6 +15,23 @@ interface CreateGalleryWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (galleryId: string) => void;
+  devLocked?: boolean;
+}
+
+interface FieldErrors {
+  galleryName?: string;
+  packageName?: string;
+  includedCount?: string;
+  extraPriceCents?: string;
+  packagePriceCents?: string;
+  initialPaymentAmountCents?: string;
+  clientEmail?: string;
+  clientPassword?: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  nip?: string;
+  [key: string]: string | undefined;
 }
 
 interface Package {
@@ -41,7 +57,7 @@ interface Client {
 
 interface WizardData {
   // Step 1: Typ galerii
-  selectionEnabled: boolean;
+  selectionEnabled?: boolean;
 
   // Step 2: Nazwa galerii
   galleryName: string;
@@ -73,14 +89,14 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  devLocked = false,
 }) => {
   const { showToast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [existingPackages, setExistingPackages] = useState<Package[]>([]);
   const [existingClients, setExistingClients] = useState<Client[]>([]);
-  const [galleryNameError, setGalleryNameError] = useState("");
   // Store raw input values to preserve decimal point while typing
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
@@ -89,11 +105,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const dataLoadedRef = useRef(false);
 
   const [data, setData] = useState<WizardData>({
-    selectionEnabled: true,
     galleryName: "",
-    packageName: "Basic",
-    includedCount: 1,
-    extraPriceCents: 500,
+    packageName: "",
+    includedCount: 0,
+    extraPriceCents: 0,
     packagePriceCents: 0,
     clientEmail: "",
     clientPassword: "",
@@ -145,18 +160,17 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         );
       }
       setCurrentStep(1);
-      setError("");
-      setGalleryNameError("");
+      setFieldErrors({});
       // Reset input states
       setExtraPriceInput("");
       setPackagePriceInput("");
       setPaymentAmountInput("");
       setData({
-        selectionEnabled: true,
+        selectionEnabled: undefined,
         galleryName: "",
-        packageName: "Basic",
-        includedCount: 1,
-        extraPriceCents: 500,
+        packageName: "",
+        includedCount: 0,
+        extraPriceCents: 0,
         packagePriceCents: 0,
         clientEmail: "",
         clientPassword: "",
@@ -175,17 +189,30 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   }, [isOpen, loadExistingPackages, loadExistingClients]);
 
+  // Dev tools are initialized centrally in _app.tsx via initDevTools()
+  // The wizard.open() command dispatches the 'openGalleryWizard' event
+  // which AppLayout listens for
+
   const handlePackageSelect = (packageId: string) => {
     const pkg = existingPackages.find((p) => p.packageId === packageId);
     if (pkg) {
-      setData({
-        ...data,
+      const updates = {
         selectedPackageId: packageId,
         packageName: pkg.name ?? "",
         includedCount: pkg.includedPhotos ?? 0,
         extraPriceCents: pkg.pricePerExtraPhoto ?? 0,
         packagePriceCents: pkg.price ?? 0,
+      };
+      setData({ ...data, ...updates });
+      // Clear related errors when package is selected
+      const errorKeys = Object.keys(updates);
+      const newErrors = { ...fieldErrors };
+      errorKeys.forEach((key) => {
+        if (newErrors[key as keyof FieldErrors]) {
+          delete newErrors[key as keyof FieldErrors];
+        }
       });
+      setFieldErrors(newErrors);
       // Reset input states to show prefilled values
       setExtraPriceInput(null);
       setPackagePriceInput(null);
@@ -195,8 +222,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const handleClientSelect = (clientId: string) => {
     const client = existingClients.find((c) => c.clientId === clientId);
     if (client) {
-      setData({
-        ...data,
+      const updates = {
         selectedClientId: clientId,
         clientEmail: client.email ?? "",
         isCompany: Boolean(client.isCompany),
@@ -206,68 +232,101 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         companyName: client.companyName ?? "",
         nip: client.nip ?? "",
         phone: client.phone ?? "",
+      };
+      setData({ ...data, ...updates });
+      // Clear related errors when client is selected
+      const errorKeys = Object.keys(updates);
+      const newErrors = { ...fieldErrors };
+      errorKeys.forEach((key) => {
+        if (newErrors[key as keyof FieldErrors]) {
+          delete newErrors[key as keyof FieldErrors];
+        }
       });
+      setFieldErrors(newErrors);
     }
   };
 
   const validateStep = (step: number): boolean => {
-    setError("");
-    setGalleryNameError("");
+    const errors: FieldErrors = {};
+    let isValid = true;
 
     switch (step) {
       case 1:
-        return true;
+        if (data.selectionEnabled === undefined) {
+          isValid = false;
+        }
+        break;
       case 2:
         if (!data.galleryName.trim()) {
-          setError("Nazwa galerii jest wymagana");
-          return false;
+          errors.galleryName = "Nazwa galerii jest wymagana";
+          isValid = false;
         }
-        return true;
+        break;
       case 3:
+        // Validate all required fields
         if (!data.packageName.trim()) {
-          setError("Nazwa pakietu jest wymagana");
-          return false;
+          errors.packageName = "Nazwa pakietu jest wymagana";
+          isValid = false;
         }
-        if (data.includedCount < 0 || data.extraPriceCents < 0 || data.packagePriceCents < 0) {
-          setError("Wartości pakietu nie mogą być ujemne");
-          return false;
+        if (data.includedCount === undefined || data.includedCount === null || data.includedCount <= 0) {
+          errors.includedCount = "Liczba zdjęć w pakiecie jest wymagana";
+          isValid = false;
+        }
+        if (data.extraPriceCents === undefined || data.extraPriceCents === null || data.extraPriceCents <= 0) {
+          errors.extraPriceCents = "Cena za dodatkowe zdjęcie jest wymagana";
+          isValid = false;
+        }
+        if (data.packagePriceCents === undefined || data.packagePriceCents === null || data.packagePriceCents <= 0) {
+          errors.packagePriceCents = "Cena pakietu jest wymagana";
+          isValid = false;
         }
         if (data.initialPaymentAmountCents < 0) {
-          setError("Kwota wpłacona nie może być ujemna");
-          return false;
+          errors.initialPaymentAmountCents = "Kwota wpłacona nie może być ujemna";
+          isValid = false;
         }
-        return true;
+        break;
       case 4:
         if (data.selectedClientId) {
-          return true; // Existing client selected
+          // Existing client selected - no validation needed
+          break;
         }
         if (!data.clientEmail.trim()) {
-          setError("Email klienta jest wymagany");
-          return false;
+          errors.clientEmail = "Email klienta jest wymagany";
+          isValid = false;
         }
         if (!data.clientPassword.trim()) {
-          setError("Hasło jest wymagane");
-          return false;
+          errors.clientPassword = "Hasło jest wymagane";
+          isValid = false;
         }
-        if (!data.isCompany && (!data.firstName.trim() || !data.lastName.trim())) {
-          setError("Imię i nazwisko są wymagane");
-          return false;
+        if (!data.isCompany) {
+          if (!data.firstName.trim()) {
+            errors.firstName = "Imię jest wymagane";
+            isValid = false;
+          }
+          if (!data.lastName.trim()) {
+            errors.lastName = "Nazwisko jest wymagane";
+            isValid = false;
+          }
+        } else {
+          if (!data.companyName.trim()) {
+            errors.companyName = "Nazwa firmy jest wymagana";
+            isValid = false;
+          }
+          if (!data.nip.trim()) {
+            errors.nip = "NIP jest wymagany dla firm";
+            isValid = false;
+          }
         }
-        if (data.isCompany && !data.companyName.trim()) {
-          setError("Nazwa firmy jest wymagana");
-          return false;
-        }
-        if (data.isCompany && !data.nip.trim()) {
-          setError("NIP jest wymagany dla firm");
-          return false;
-        }
-        return true;
+        break;
       case 5:
-        // No validation needed for step 5 - payment amount is collected in step 3
-        return true;
+        // No validation needed for step 5
+        break;
       default:
-        return true;
+        break;
     }
+
+    setFieldErrors(errors);
+    return isValid;
   };
 
   const handleNext = () => {
@@ -286,7 +345,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
 
     setLoading(true);
-    setError("");
+    setFieldErrors({});
 
     try {
       interface CreateGalleryRequestBody {
@@ -305,7 +364,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       }
 
       const requestBody: CreateGalleryRequestBody = {
-        selectionEnabled: data.selectionEnabled,
+        selectionEnabled: data.selectionEnabled ?? false,
         pricingPackage: {
           packageName: data.packageName,
           includedCount: data.includedCount,
@@ -338,10 +397,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
       onSuccess(response.galleryId);
-      onClose();
+      if (!devLocked) {
+        onClose();
+      }
     } catch (err: unknown) {
       const errorMsg = formatApiError(err);
-      setError(errorMsg);
       showToast("error", "Błąd", errorMsg);
     } finally {
       setLoading(false);
@@ -354,7 +414,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         return (
           <GalleryTypeStep
             selectionEnabled={data.selectionEnabled}
-            onSelectionEnabledChange={(enabled) => setData({ ...data, selectionEnabled: enabled })}
+            onSelectionEnabledChange={(enabled) => {
+              setData({ ...data, selectionEnabled: enabled });
+              // Auto-advance to next step when selection is made
+              setTimeout(() => {
+                setCurrentStep(2);
+              }, 300);
+            }}
           />
         );
 
@@ -364,10 +430,11 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             galleryName={data.galleryName}
             onGalleryNameChange={(name) => {
               setData({ ...data, galleryName: name });
-              setGalleryNameError("");
+              if (fieldErrors.galleryName) {
+                setFieldErrors({ ...fieldErrors, galleryName: undefined });
+              }
             }}
-            error={galleryNameError}
-            onErrorChange={setGalleryNameError}
+            error={fieldErrors.galleryName}
           />
         );
 
@@ -382,13 +449,31 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             packagePriceCents={data.packagePriceCents}
             initialPaymentAmountCents={data.initialPaymentAmountCents}
             onPackageSelect={handlePackageSelect}
-            onDataChange={(updates) => setData({ ...data, ...updates })}
+            onDataChange={(updates) => {
+              setData({ ...data, ...updates });
+              // Clear related errors when data changes
+              const errorKeys = Object.keys(updates);
+              const newErrors = { ...fieldErrors };
+              errorKeys.forEach((key) => {
+                if (newErrors[key as keyof FieldErrors]) {
+                  delete newErrors[key as keyof FieldErrors];
+                }
+              });
+              setFieldErrors(newErrors);
+            }}
             extraPriceInput={extraPriceInput}
             packagePriceInput={packagePriceInput}
             paymentAmountInput={paymentAmountInput}
             onExtraPriceInputChange={setExtraPriceInput}
             onPackagePriceInputChange={setPackagePriceInput}
             onPaymentAmountInputChange={setPaymentAmountInput}
+            fieldErrors={{
+              packageName: fieldErrors.packageName,
+              includedCount: fieldErrors.includedCount,
+              extraPriceCents: fieldErrors.extraPriceCents,
+              packagePriceCents: fieldErrors.packagePriceCents,
+              initialPaymentAmountCents: fieldErrors.initialPaymentAmountCents,
+            }}
             onPackageSave={async (packageData) => {
               try {
                 await api.packages.create(packageData);
@@ -415,9 +500,40 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             phone={data.phone}
             nip={data.nip}
             companyName={data.companyName}
-            selectionEnabled={data.selectionEnabled}
+            selectionEnabled={data.selectionEnabled ?? false}
             onClientSelect={handleClientSelect}
-            onDataChange={(updates) => setData({ ...data, ...updates })}
+            onDataChange={(updates) => {
+              setData({ ...data, ...updates });
+              // Clear related errors when data changes
+              const errorKeys = Object.keys(updates);
+              const newErrors = { ...fieldErrors };
+              errorKeys.forEach((key) => {
+                if (newErrors[key as keyof FieldErrors]) {
+                  delete newErrors[key as keyof FieldErrors];
+                }
+              });
+              // When switching between Individual and Company, clear errors for fields that are no longer relevant
+              if (updates.isCompany !== undefined && updates.isCompany !== data.isCompany) {
+                if (updates.isCompany) {
+                  // Switching to Company - clear Individual field errors
+                  delete newErrors.firstName;
+                  delete newErrors.lastName;
+                } else {
+                  // Switching to Individual - clear Company field errors
+                  delete newErrors.companyName;
+                  delete newErrors.nip;
+                }
+              }
+              setFieldErrors(newErrors);
+            }}
+            fieldErrors={{
+              clientEmail: fieldErrors.clientEmail,
+              clientPassword: fieldErrors.clientPassword,
+              firstName: fieldErrors.firstName,
+              lastName: fieldErrors.lastName,
+              companyName: fieldErrors.companyName,
+              nip: fieldErrors.nip,
+            }}
             onClientSave={async (clientData) => {
               try {
                 await api.clients.create(clientData);
@@ -433,7 +549,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       case 5:
         return (
           <SummaryStep
-            selectionEnabled={data.selectionEnabled}
+            selectionEnabled={data.selectionEnabled ?? false}
             galleryName={data.galleryName}
             selectedClientId={data.selectedClientId}
             clientEmail={data.clientEmail}
@@ -451,101 +567,172 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     }
   };
 
+  // Step questions for Typeform-style header
+  const getStepQuestion = (step: number): string => {
+    switch (step) {
+      case 1:
+        return "Wybierz typ galerii";
+      case 2:
+        return "Jaką nazwę ma mieć galeria?";
+      case 3:
+        return "Ustaw pakiet cenowy";
+      case 4:
+        return "Kogo zaprosimy do tej galerii?";
+      case 5:
+        return "Sprawdź podsumowanie";
+      default:
+        return "";
+    }
+  };
+
+  const getStepDescription = (step: number): string | null => {
+    switch (step) {
+      case 1:
+        return "Jak klient będzie korzystał z galerii?";
+      case 2:
+        return "To pomoże Ci łatwo ją znaleźć później";
+      case 3:
+        return "Wybierz istniejący pakiet lub stwórz nowy";
+      case 4:
+        return "Wybierz istniejącego klienta lub dodaj nowego";
+      case 5:
+        return "Wszystko wygląda dobrze? Możesz teraz utworzyć galerię!";
+      default:
+        return null;
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div className="w-full h-[calc(100vh-140px)] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Utwórz galerię</h2>
-        <button
-          onClick={onClose}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          <X className="w-6 h-6 text-gray-500 dark:text-gray-400" strokeWidth={2} />
-        </button>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="px-6 py-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden">
+      {/* Modern Step Indicator - Bigger for better visibility */}
+      <div className="px-6 py-6 md:py-8 bg-gray-50 dark:bg-gray-dark flex-shrink-0">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div key={step} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
-                    step === currentStep
-                      ? "bg-brand-500 text-white shadow-lg scale-110"
-                      : step < currentStep
-                        ? "bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-                        : "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                  }`}
-                >
-                  {step < currentStep ? "✓" : step}
+          {[
+            { num: 1, label: "Typ" },
+            { num: 2, label: "Nazwa" },
+            { num: 3, label: "Pakiet" },
+            { num: 4, label: "Klient" },
+            { num: 5, label: "Podsumowanie" },
+          ].map((step, index) => {
+            const isActive = step.num === currentStep;
+            const isCompleted = step.num < currentStep;
+            const isLast = index === 4;
+
+            return (
+              <React.Fragment key={step.num}>
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-sm md:text-base font-semibold transition-all duration-300 ${
+                      isActive
+                        ? "bg-brand-500 text-white scale-110"
+                        : isCompleted
+                          ? "bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <Check className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
+                    ) : (
+                      step.num
+                    )}
+                  </div>
+                  <span
+                    className={`mt-3 text-xs md:text-sm font-medium transition-colors ${
+                      isActive
+                        ? "text-brand-600 dark:text-brand-400"
+                        : isCompleted
+                          ? "text-gray-600 dark:text-gray-400"
+                          : "text-gray-400 dark:text-gray-500"
+                    }`}
+                  >
+                    {step.label}
+                  </span>
                 </div>
-                <div className="mt-2 text-xs text-center text-gray-600 dark:text-gray-400 font-medium">
-                  {step === 1 && "Typ galerii"}
-                  {step === 2 && "Nazwa"}
-                  {step === 3 && "Pakiet"}
-                  {step === 4 && "Klient"}
-                  {step === 5 && "Podsumowanie"}
-                </div>
-              </div>
-              {step < 5 && (
-                <div
-                  className={`flex-1 h-1 mx-2 rounded-full transition-all duration-300 ${
-                    step < currentStep ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
+                {!isLast && (
+                  <div
+                    className={`flex-1 h-1 mx-3 -mt-7 transition-all duration-300 ${
+                      isCompleted
+                        ? "bg-brand-300 dark:bg-brand-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 
-      {/* Content - Full height with vertical centering */}
-      <div className="flex-1 overflow-y-auto min-h-0 relative">
-        {error && (
-          <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 max-w-4xl w-full px-8">
-            <div className="p-4 bg-error-50 border border-error-200 rounded-xl text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
-              {error}
+      {/* Content - Full height with Typeform-style spacing */}
+      <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50 dark:bg-gray-dark">
+        <div className="min-h-full flex flex-col">
+          {/* Close button - floating top right */}
+          {!devLocked && (
+            <button
+              onClick={onClose}
+              className="absolute top-6 right-6 z-10 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Zamknij"
+            >
+              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" strokeWidth={2} />
+            </button>
+          )}
+
+          {/* Step Content - Better space utilization */}
+          <div className="flex-1 flex items-center justify-center px-6 md:px-8 lg:px-12 relative -mt-[200px]">
+            <div className="w-full max-w-5xl mx-auto">
+              {/* Step Question Header - Typeform style */}
+              <div className={currentStep === 2 ? "mb-0" : currentStep === 4 ? "mb-8 md:mb-12 pt-[150px]" : "mb-8 md:mb-12"}>
+                <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+                  {getStepQuestion(currentStep)} *
+                </div>
+                {getStepDescription(currentStep) && (
+                  <p className="text-base text-gray-500 dark:text-gray-400 italic">
+                    {getStepDescription(currentStep)}
+                  </p>
+                )}
+              </div>
+
+              {/* Step Content */}
+              <div>{renderStep()}</div>
             </div>
           </div>
-        )}
-        <div className="h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-6xl mx-auto">{renderStep()}</div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
-        <Button
-          variant="outline"
-          onClick={currentStep === 1 ? onClose : handleBack}
-          disabled={loading}
-          className="flex-1 flex items-center justify-center gap-2"
-        >
-          {currentStep !== 1 && <ChevronLeft size={16} strokeWidth={1.5} />}
-          {currentStep === 1 ? "Anuluj" : "Wstecz"}
-        </Button>
-        <div className="flex gap-3 flex-1 justify-end">
-          {currentStep < 5 ? (
-            <Button
-              onClick={handleNext}
-              disabled={loading}
-              className="flex-1 flex items-center justify-center gap-2"
-            >
-              Dalej
-              <ChevronRight size={16} strokeWidth={1.5} />
-            </Button>
-          ) : (
-            <Button onClick={handleSubmit} disabled={loading} variant="primary" className="flex-1">
-              {loading ? "Tworzenie..." : "Utwórz galerię"}
-            </Button>
-          )}
-        </div>
+      {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
+      <div className="flex items-center justify-between gap-4 px-6 py-6 bg-gray-50 dark:bg-gray-dark flex-shrink-0 h-24">
+        {currentStep > 1 && (
+          <button
+            onClick={handleBack}
+            disabled={loading}
+            className="px-6 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Wstecz
+          </button>
+        )}
+        {currentStep === 1 && <div />}
+        {currentStep > 1 && (
+          <button
+            onClick={currentStep < 5 ? handleNext : handleSubmit}
+            disabled={loading}
+            className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading
+              ? "Przetwarzanie..."
+              : currentStep < 5
+                ? (
+                    <>
+                      OK <span className="text-lg">✓</span>
+                    </>
+                  )
+                : "Utwórz galerię"}
+          </button>
+        )}
+        {currentStep === 1 && <div />}
       </div>
     </div>
   );

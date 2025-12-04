@@ -15,10 +15,10 @@ import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
-import { invalidateSession, triggerSessionExpired } from "../lib/auth";
 import { clearEphemeralState } from "../store";
 import { useAuthStore } from "../store/authSlice";
 import { useThemeStore } from "../store/themeSlice";
+import { initDevTools } from "../lib/dev-tools";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];
@@ -48,37 +48,10 @@ export default function App({ Component, pageProps }: AppProps) {
   const [swRegistered, setSwRegistered] = useState(false);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
 
-  // Expose test helpers globally in development
+  // Initialize unified dev tools (development only)
   useEffect(() => {
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-      (window as any).testSessionExpiration = {
-        invalidate: () => {
-          invalidateSession();
-          console.log("✅ Session invalidated. Now navigate or refresh to trigger the popup.");
-        },
-        trigger: () => {
-          triggerSessionExpired();
-        },
-        help: () => {
-          console.log(`
-🧪 Session Expiration Test Helpers:
-
-1. testSessionExpiration.invalidate()
-   - Clears all tokens and Cognito session
-   - After this, navigate or refresh the page to trigger the session expired popup
-
-2. testSessionExpiration.trigger()
-   - Directly shows the session expired popup (simulates the event)
-
-Example:
-  testSessionExpiration.invalidate()
-  // Then refresh the page or navigate to trigger API calls
-          `);
-        },
-      };
-      console.log(
-        "🧪 Session expiration test helpers available! Run testSessionExpiration.help() for usage."
-      );
+      initDevTools();
     }
   }, []);
 

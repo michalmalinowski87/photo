@@ -17,6 +17,7 @@ interface InputProps {
   success?: boolean;
   error?: boolean;
   hint?: string;
+  errorMessage?: string;
   required?: boolean;
   autoComplete?: string;
   autoFocus?: boolean;
@@ -38,6 +39,7 @@ const Input: FC<InputProps> = ({
   success = false,
   error = false,
   hint,
+  errorMessage,
   required,
   autoComplete,
   autoFocus,
@@ -75,15 +77,20 @@ const Input: FC<InputProps> = ({
         style={{ minHeight: "44px" }}
       />
 
-      {hint && (
-        <p
-          className={`mt-1.5 text-xs ${
-            error ? "text-error-500" : success ? "text-success-500" : "text-gray-500"
-          }`}
-        >
-          {hint}
-        </p>
-      )}
+      {/* Reserved space for error messages or hints to prevent layout shifts */}
+      <div className="min-h-[20px] mt-1.5">
+        {errorMessage ? (
+          <p className="text-xs text-error-500 opacity-70">{errorMessage}</p>
+        ) : hint ? (
+          <p
+            className={`text-xs ${
+              error ? "text-error-500" : success ? "text-success-500" : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {hint}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 };

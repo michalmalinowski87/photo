@@ -3,15 +3,10 @@ import {
   Image,
   Folder,
   Send,
-  Mail,
   CheckCircle,
-  CheckSquare,
   Edit,
-  MessageSquare,
   Package,
-  Truck,
   CheckCircle2,
-  CircleCheck,
   Plus,
 } from "lucide-react";
 import Link from "next/link";

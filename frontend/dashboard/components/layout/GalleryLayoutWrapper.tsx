@@ -76,19 +76,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     setPublishWizardOpen: setPublishWizardOpenStore,
     sendGalleryLinkToClient,
     sendLinkLoading,
-    galleryUrl,
-    hasDeliveredOrders,
     reloadGallery,
     copyGalleryUrl,
   } = useGalleryStore();
 
   const {
-    currentOrder: order,
     currentOrderId,
     clearCurrentOrder,
     fetchOrder,
     denyLoading,
-    cleanupLoading,
     approveChangeRequest,
     denyChangeRequest,
     markOrderPaid,
@@ -365,13 +361,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
             .then(() => {
               // Sync recalculation completed
             })
-            .catch((err) => {
+            .catch((_err) => {
               // Reset trigger on error so we can retry
               syncRecalcTriggeredRef.current = false;
             });
         }
       })
-      .catch((err) => {
+      .catch((_err) => {
         // Failed to fetch images for check - silently continue
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps

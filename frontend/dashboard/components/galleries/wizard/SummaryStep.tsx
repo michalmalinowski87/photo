@@ -5,6 +5,10 @@ import { formatPrice } from "../../../lib/format-price";
 interface Client {
   clientId: string;
   email?: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  nip?: string;
   [key: string]: unknown;
 }
 
@@ -33,80 +37,111 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
   packagePriceCents,
   initialPaymentAmountCents,
 }) => {
+  const selectedClient = existingClients.find((c) => c.clientId === selectedClientId);
+
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div className="text-center">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Podsumowanie</h3>
-      </div>
-
-      <div className="space-y-4 p-5 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-700">
-        <div className="space-y-3">
-          <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Typ galerii:</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
+    <div className="w-full space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+        {/* Gallery Details */}
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Typ galerii
+            </p>
+            <p className="text-lg text-gray-900 dark:text-white">
               {selectionEnabled ? "Wybór przez klienta" : "Wszystkie zdjęcia"}
-            </span>
-          </div>
-          <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Nazwa galerii:</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {galleryName ?? "Brak"}
-            </span>
-          </div>
-          <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Klient:</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {selectedClientId
-                ? (existingClients.find((c) => c.clientId === selectedClientId)?.email ??
-                  "Nie wybrano")
-                : (clientEmail ?? "Nie podano")}
-            </span>
+            </p>
           </div>
 
-          <div className="pt-3 space-y-2">
-            <div className="text-xs font-semibold text-gray-900 dark:text-white mb-1.5">
-              Pakiet cenowy:
-            </div>
-            <div className="pl-3 space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Nazwa:</span>
-                <span className="font-medium text-gray-900 dark:text-white">{packageName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Liczba zdjęć:</span>
-                <span className="font-medium text-gray-900 dark:text-white">{includedCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Cena za dodatkowe:</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPrice(extraPriceCents)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Cena pakietu:</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {formatPrice(packagePriceCents)}
-                </span>
-              </div>
-              {initialPaymentAmountCents > 0 && (
-                <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    Kwota wpłacona przez klienta:
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {formatPrice(initialPaymentAmountCents)}
-                  </span>
-                </div>
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Nazwa galerii
+            </p>
+            <p className="text-lg text-gray-900 dark:text-white">{galleryName || "Brak"}</p>
+          </div>
+        </div>
+
+        {/* Client Details */}
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Klient
+            </p>
+            <div className="space-y-1">
+              <p className="text-lg text-gray-900 dark:text-white">
+                {selectedClient?.email || clientEmail || "Nie podano"}
+              </p>
+              {selectedClient?.firstName && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {selectedClient.firstName} {selectedClient.lastName}
+                </p>
+              )}
+              {selectedClient?.companyName && (
+                <>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedClient.companyName}
+                  </p>
+                  {selectedClient.nip && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      NIP: {selectedClient.nip}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
+        </div>
 
-          <div className="pt-3 space-y-2 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              Plan galerii zostanie obliczony automatycznie po przesłaniu zdjęć.
+        {/* Package Details */}
+        <div className="space-y-4 md:col-span-2">
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">
+            Pakiet cenowy
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Nazwa:</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {packageName}
+              </span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Liczba zdjęć:</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {includedCount}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Cena za dodatkowe:
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {formatPrice(extraPriceCents)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Cena pakietu:</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {formatPrice(packagePriceCents)}
+              </span>
+            </div>
+            {initialPaymentAmountCents > 0 && (
+              <div className="flex justify-between pt-3 border-t border-gray-200 dark:border-gray-700 md:col-span-2">
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Kwota wpłacona:
+                </span>
+                <span className="text-sm font-bold text-brand-600 dark:text-brand-400">
+                  {formatPrice(initialPaymentAmountCents)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      <div className="pt-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+          Plan galerii zostanie obliczony automatycznie po przesłaniu zdjęć.
+        </p>
       </div>
     </div>
   );
