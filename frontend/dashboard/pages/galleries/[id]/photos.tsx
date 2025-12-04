@@ -228,11 +228,11 @@ export default function GalleryPhotos() {
             // Compare all URL properties to detect any changes
             // Normalize lastModified for comparison (handle string vs number)
             const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-              if (lm === undefined) return undefined;
+              if (lm === undefined) {return undefined;}
               return typeof lm === "string" ? new Date(lm).getTime() : lm;
             };
 
-            const currentLastModified = normalizeLastModified(currentImg.lastModified);
+            const currentLastModified = normalizeLastModified(currentImg?.lastModified);
             const apiLastModified = normalizeLastModified(apiImg.lastModified);
 
             const hasDataChanged =
@@ -324,11 +324,11 @@ export default function GalleryPhotos() {
             // Compare all URL properties to detect any changes
             // Normalize lastModified for comparison (handle string vs number)
             const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-              if (lm === undefined) return undefined;
+              if (lm === undefined) {return undefined;}
               return typeof lm === "string" ? new Date(lm).getTime() : lm;
             };
 
-            const currentLastModified = normalizeLastModified(currentImg.lastModified);
+            const currentLastModified = normalizeLastModified(currentImg?.lastModified);
             const storeLastModified = normalizeLastModified(storeImg.lastModified);
 
             const hasDataChanged =

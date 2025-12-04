@@ -541,7 +541,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             }}
             onClientSave={async (clientData, clientId) => {
               try {
-                if (clientId && clientId.trim()) {
+                if (clientId?.trim()) {
                   // Verify the client exists before updating
                   const clientExists = existingClients.some((c) => c.clientId === clientId);
                   if (clientExists) {

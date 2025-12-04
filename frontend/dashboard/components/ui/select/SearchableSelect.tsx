@@ -48,11 +48,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   // Filter options based on search query
   const filteredOptions = options.filter((option) => {
-    if (!searchQuery.trim()) return true;
+    if (!searchQuery.trim()) {return true;}
     const query = searchQuery.toLowerCase();
     return (
       option.label.toLowerCase().includes(query) ||
-      (option.subLabel && option.subLabel.toLowerCase().includes(query))
+      (option.subLabel?.toLowerCase().includes(query))
     );
   });
 
@@ -100,7 +100,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) return;
+    if (disabled) {return;}
 
     switch (e.key) {
       case "Enter":

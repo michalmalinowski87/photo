@@ -74,7 +74,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   // Normalize URL by removing query parameters for comparison
   // This ensures cache-busting parameters don't cause false positives
   const normalizeUrlForComparison = (url: string | null | undefined): string => {
-    if (!url) return "";
+    if (!url) {return "";}
     try {
       const urlObj = new URL(url);
       return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;

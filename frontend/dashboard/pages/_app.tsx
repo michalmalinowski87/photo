@@ -15,10 +15,10 @@ import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
+import { initDevTools } from "../lib/dev-tools";
 import { clearEphemeralState } from "../store";
 import { useAuthStore } from "../store/authSlice";
 import { useThemeStore } from "../store/themeSlice";
-import { initDevTools } from "../lib/dev-tools";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];
