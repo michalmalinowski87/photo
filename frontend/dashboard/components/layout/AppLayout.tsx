@@ -2,10 +2,10 @@ import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
 import { useSidebar } from "../../hooks/useSidebar";
+import { useGalleryStore } from "../../store";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
-import { useGalleryStore } from "../../store";
 
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
@@ -97,7 +97,9 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
           }`}
         >
           <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
-          <div className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}>
+          <div
+            className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}
+          >
             {wizardOpen ? (
               <CreateGalleryWizard
                 isOpen={wizardOpen}

@@ -1,14 +1,12 @@
 import { useRouter } from "next/router";
-import React, { useState, useEffect, useLayoutEffect, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 
 import { useGalleryData } from "../../hooks/useGalleryData";
 import { useModal } from "../../hooks/useModal";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
-import { useGalleryStore } from "../../store";
-import { useOrderStore } from "../../store";
-import { useUserStore } from "../../store";
+import { useGalleryStore, useOrderStore, useUserStore } from "../../store";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import PaymentConfirmationModal from "../galleries/PaymentConfirmationModal";
 import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
@@ -92,6 +90,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     downloadFinals,
     sendFinalsToClient,
     downloadZip: downloadZipAction,
+    currentOrder,
   } = useOrderStore();
 
   const { walletBalanceCents: walletBalance, refreshWalletBalance } = useUserStore();
@@ -124,18 +123,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     galleryId,
   });
 
-  const loadOrderData = useCallback(async () => {
-    if (!galleryId || !orderId) {
-      return;
-    }
-    try {
-      // Use store action - checks cache first, fetches if needed
-      // Store action automatically updates currentOrder
-      await fetchOrder(galleryId as string, orderId as string);
-    } catch (_err) {
-      // Store action handles errors internally
-    }
-  }, [galleryId, orderId, fetchOrder]);
+  // GalleryLayoutWrapper does NOT load order data - that's handled by the order page component
 
   // Helper function to clean up publish wizard URL params
   const cleanupPublishParams = useCallback(() => {
@@ -245,15 +233,31 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Track if we've already loaded for this galleryId to prevent duplicate loads
   const loadedGalleryIdRef = React.useRef<string | null>(null);
+  // Track previous galleryId to detect navigation between gallery pages vs direct navigation
+  const prevGalleryIdForLoadingRef = React.useRef<string | null>(null);
+  // Track if this is the initial mount (direct navigation) - reset when galleryId changes
+  const isInitialMountRef = React.useRef<boolean>(true);
+  const currentGalleryIdForMountRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     const currentGalleryId = galleryId as string;
+
+    // Reset initial mount flag if galleryId changed (new gallery, treat as direct navigation)
+    if (currentGalleryId && currentGalleryId !== currentGalleryIdForMountRef.current) {
+      isInitialMountRef.current = true;
+      currentGalleryIdForMountRef.current = currentGalleryId;
+      prevGalleryIdForLoadingRef.current = null; // Reset previous galleryId for new gallery
+    }
 
     // Skip if we've already loaded this gallery (unless it's a different gallery)
     if (
       loadedGalleryIdRef.current === currentGalleryId &&
       gallery?.galleryId === currentGalleryId
     ) {
+      // Mark as no longer initial mount once gallery is loaded
+      if (gallery?.galleryId === currentGalleryId) {
+        isInitialMountRef.current = false;
+      }
       return;
     }
 
@@ -263,22 +267,32 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         useGalleryStore.getState();
       const cachedGallery = getGalleryFromCache(currentGalleryId, 60000);
 
-      // If we have cached gallery and it matches, use it immediately (no loading state)
-      if (cachedGallery?.galleryId === currentGalleryId) {
+      // Check if this is direct navigation (initial mount) or navigation between gallery pages
+      const isDirectNavigation = isInitialMountRef.current;
+      const isSameGalleryNavigation = prevGalleryIdForLoadingRef.current === currentGalleryId;
+
+      // If we have cached gallery and it matches, use it immediately
+      // But only skip loading if we're navigating between pages of the same gallery
+      // For direct navigation, always show loading to ensure proper initialization
+      if (cachedGallery?.galleryId === currentGalleryId && isSameGalleryNavigation) {
         setCurrentGallery(cachedGallery);
         setCurrentGalleryId(currentGalleryId);
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
+        isInitialMountRef.current = false; // Mark as no longer initial mount
       }
 
       // Only fetch if gallery doesn't match AND we don't have cache
-      if (gallery?.galleryId !== currentGalleryId && !cachedGallery) {
+      // OR if it's direct navigation (always fetch to ensure fresh data)
+      if ((gallery?.galleryId !== currentGalleryId && !cachedGallery) || isDirectNavigation) {
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loading
         void loadGalleryData(false, true).then(() => {
           // Mark as loaded after fetch completes
           loadedGalleryIdRef.current = currentGalleryId;
+          isInitialMountRef.current = false; // Mark as no longer initial mount once loaded
         }); // Force refresh only if not in cache
       } else if (gallery?.galleryId === currentGalleryId) {
         loadedGalleryIdRef.current = currentGalleryId; // Mark as loaded
+        isInitialMountRef.current = false; // Mark as no longer initial mount
       }
 
       // Refresh wallet balance only when we have a valid token (userSlice handles its own caching)
@@ -287,28 +301,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
       void checkDeliveredOrders();
       void loadGalleryOrders(true); // Force refresh
+
+      // Update previous galleryId for next navigation
+      prevGalleryIdForLoadingRef.current = currentGalleryId;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, apiUrl, idToken, galleryId]); // Removed gallery from deps to prevent loops
 
-  useEffect(() => {
-    if (router.isReady && apiUrl && idToken && galleryId && orderId) {
-      void loadOrderData();
-    }
-  }, [router.isReady, apiUrl, idToken, galleryId, orderId, loadOrderData]);
-
-  // Watch order cache and reload when order updates (Zustand subscriptions)
-  const orderCache = useOrderStore((state) =>
-    orderId ? state.orderCache[orderId as string] : null
-  );
-  useEffect(() => {
-    if (orderId && orderCache) {
-      // Order was updated in store, reload to get latest data
-      void loadOrderData();
-      void checkDeliveredOrders();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, orderCache?.timestamp]);
+  // GalleryLayoutWrapper should NOT load order data - that's the order page's responsibility
+  // We only need to know if order is loading for the loading state calculation
 
   // Auto-detect and fix sync issues: if gallery shows bytes used > 0 but no images exist,
   // automatically trigger forced recalculation to sync database with actual S3 state
@@ -375,14 +376,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   }, [galleryId, gallery, loading]); // Run when gallery data changes
 
   // Order action handlers using store actions directly
+  // Note: Store actions already handle cache invalidation and reloading
   const handleApproveChangeRequest = useCallback(async () => {
     if (!galleryId || !orderId) {
       return;
     }
     await approveChangeRequest(galleryId as string, orderId as string);
-    await loadOrderData();
+    // Store action already reloads order, just refresh gallery orders list
     await loadGalleryOrders(true);
-  }, [galleryId, orderId, approveChangeRequest, loadOrderData, loadGalleryOrders]);
+  }, [galleryId, orderId, approveChangeRequest, loadGalleryOrders]);
 
   const handleDenyChangeRequest = useCallback(() => {
     openDenyModal();
@@ -395,10 +397,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
       await denyChangeRequest(galleryId as string, orderId as string, reason);
       closeDenyModal();
-      await loadOrderData();
+      // Store action already reloads order, just refresh gallery orders list
       await loadGalleryOrders(true);
     },
-    [galleryId, orderId, denyChangeRequest, closeDenyModal, loadOrderData, loadGalleryOrders]
+    [galleryId, orderId, denyChangeRequest, closeDenyModal, loadGalleryOrders]
   );
 
   const handleMarkOrderPaid = useCallback(async () => {
@@ -494,10 +496,10 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         await loadGalleryData(true); // Force refresh
         await refreshWalletBalance();
 
-        // If we're on an order page, reload order data and notify the order page
+        // If we're on an order page, reload order data
+        // The order page component will handle this via store subscriptions
         if (orderId) {
-          await loadOrderData();
-          // Store updates will trigger re-renders automatically via Zustand subscriptions
+          await fetchOrder(galleryId as string, orderId as string, true);
         }
       }
     } catch (err) {
@@ -565,7 +567,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       setCurrentGalleryId(targetId);
     }
   }, [
-    cachedGallery?.galleryId,
+    cachedGallery,
     galleryIdStr,
     currentGalleryId,
     gallery?.galleryId,
@@ -574,31 +576,178 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   ]);
 
   // Gallery selector already includes cache, so use it directly
-  const effectiveGallery = gallery;
+  // But also check cachedGallery as fallback to ensure we have gallery if it's cached
+  const effectiveGallery =
+    gallery ?? (cachedGallery?.galleryId === galleryIdStr ? cachedGallery : null);
+
+  // Check if we're on an order page
+  const orderIdFromQuery = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdStr = typeof orderIdFromQuery === "string" ? orderIdFromQuery : undefined;
+  const isOrderPage = !!orderIdStr;
+
+  // Check if we have the matching order - check currentOrder and orderCache
+  // orderCache is the single source of truth, populated by both fetchOrder and fetchGalleryOrders
+  const orderCache = useOrderStore((state) =>
+    orderIdStr ? state.orderCache[orderIdStr] : null
+  );
+  // Check if order matches - be explicit about the comparison
+  const orderMatches = orderIdStr
+    ? (currentOrder?.orderId === orderIdStr) || 
+      (orderCache?.order?.orderId === orderIdStr)
+    : false;
+  const hasOrder = isOrderPage && orderMatches;
+
+  // Track successfully loaded orderIds to prevent flickering on refreshes
+  const loadedOrderIdsRef = React.useRef<Set<string>>(new Set());
+  
+  // Update the set when we successfully have an order (in store or cache)
+  // This marks that we've loaded this order, so we don't show loading again
+  // NOTE: The order page component will show its own loading while images are loading,
+  // so we can mark as loaded once the order is in cache
+  useEffect(() => {
+    if (isOrderPage && orderIdStr) {
+      // Check if order is in store
+      const orderInStore = currentOrder?.orderId === orderIdStr;
+      // Check if order is in cache
+      const orderInCache = orderCache?.order?.orderId === orderIdStr;
+      
+      // Mark as loaded if we have the order in store or cache
+      // The order page will handle its own loading state for images
+      if (orderInStore || orderInCache) {
+        loadedOrderIdsRef.current.add(orderIdStr);
+      }
+    }
+  }, [isOrderPage, orderIdStr, currentOrder?.orderId, orderCache?.order?.orderId]);
+  
+  // Clear loaded orders when navigating away from order pages
+  useEffect(() => {
+    if (!isOrderPage) {
+      loadedOrderIdsRef.current.clear();
+    }
+  }, [isOrderPage]);
+
+  // Stable loading condition using useMemo to prevent flickering
+  // Order page now owns its loading, so we just check if we have the order
+  // Show loading when:
+  // - We're on an order page AND
+  // - We don't have the order AND we haven't loaded it before (initial load only)
+  // NOTE: The order page component will show its own loading while images are loading,
+  // so we only need to show loading here for the initial order fetch
+  const isOrderLoading = useMemo(() => {
+    if (!isOrderPage || !orderIdStr) {
+      return false;
+    }
+    
+    // Check if order is in store or cache (orderCache is single source of truth)
+    const orderInStore = currentOrder?.orderId === orderIdStr;
+    const orderInCache = orderCache?.order?.orderId === orderIdStr;
+    const hasOrderNow = orderInStore || orderInCache;
+    
+    // If we've successfully loaded this order before, don't show loading during refreshes
+    const hasLoadedBefore = loadedOrderIdsRef.current.has(orderIdStr);
+    
+    // If we have the order, we're not loading (order page will handle its own loading for images)
+    if (hasOrderNow) {
+      return false;
+    }
+    
+    // Show loading only if we don't have the order AND we haven't loaded it before
+    // The order page component will handle its own loading state internally
+    return !hasLoadedBefore;
+  }, [isOrderPage, orderIdStr, currentOrder?.orderId, orderCache?.order?.orderId]);
+
+  // Show loading if:
+  // 1. Gallery is loading AND we don't have gallery (from store or cache)
+  // 2. OR Order is loading (on order page) AND we don't have the matching order yet
+  // Don't show duplicate loading if galleryCreationLoading is already showing
+  // galleryCreationLoading will be shown by the gallery detail/photos page
+  const hasGallery = !!effectiveGallery && effectiveGallery.galleryId === galleryIdStr;
+  const shouldShowLoading =
+    router.isReady && ((loading && !hasGallery) || isOrderLoading) && !galleryCreationLoading;
 
   // Only log when state actually changes to reduce spam
   const prevStateRef = React.useRef({
+    shouldShowLoading: false,
     loading,
-    hasGallery: !!gallery,
-    hasCachedGallery: !!cachedGallery,
+    hasGallery: false,
+    effectiveGalleryId: null as string | null | undefined,
+    isOrderPage: false,
+    orderMatches: false,
+    hasOrder: false,
+    isOrderLoading: false,
   });
-  if (
+  const stateChanged =
+    prevStateRef.current.shouldShowLoading !== shouldShowLoading ||
     prevStateRef.current.loading !== loading ||
-    prevStateRef.current.hasGallery !== !!gallery ||
-    prevStateRef.current.hasCachedGallery !== !!cachedGallery
-  ) {
-    prevStateRef.current = { loading, hasGallery: !!gallery, hasCachedGallery: !!cachedGallery };
+    prevStateRef.current.hasGallery !== hasGallery ||
+    prevStateRef.current.effectiveGalleryId !== effectiveGallery?.galleryId ||
+    prevStateRef.current.isOrderPage !== isOrderPage ||
+    prevStateRef.current.orderMatches !== orderMatches ||
+    prevStateRef.current.hasOrder !== hasOrder ||
+    prevStateRef.current.isOrderLoading !== isOrderLoading;
+
+  if (stateChanged) {
+    prevStateRef.current = {
+      shouldShowLoading,
+      loading,
+      hasGallery,
+      effectiveGalleryId: effectiveGallery?.galleryId,
+      isOrderPage,
+      orderMatches,
+      hasOrder,
+      isOrderLoading,
+    };
   }
 
-  // Only show loading if we're loading AND we don't have gallery (including cached)
-  // Don't show duplicate loading if galleryCreationLoading is already showing
-  // galleryCreationLoading will be shown by the gallery detail/photos page
-  if (loading && !effectiveGallery && !galleryCreationLoading) {
+  if (shouldShowLoading && !galleryCreationLoading) {
+    if (process.env.NODE_ENV === "development" && stateChanged) {
+      // eslint-disable-next-line no-console
+      console.log("[GalleryLayoutWrapper] FullPageLoading: Showing", {
+        galleryId: galleryIdStr,
+        orderId: orderIdStr,
+        loading,
+        isOrderPage,
+        orderMatches,
+        hasOrder,
+        isOrderLoading,
+        effectiveGallery: effectiveGallery ? { galleryId: effectiveGallery.galleryId } : null,
+        currentOrder: currentOrder ? { orderId: currentOrder.orderId } : null,
+        hasGallery,
+        galleryCreationLoading,
+        routerReady: router.isReady,
+        cachedGallery: cachedGallery ? { galleryId: cachedGallery.galleryId } : null,
+        loadedOrderIds: Array.from(loadedOrderIdsRef.current),
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const loadingText =
+      isOrderPage && isOrderLoading ? "Ładowanie zlecenia..." : "Ładowanie galerii...";
     return (
       <GalleryLayout>
-        <FullPageLoading text="Ładowanie galerii..." />
+        <FullPageLoading text={loadingText} />
       </GalleryLayout>
     );
+  }
+
+  if (process.env.NODE_ENV === "development" && !shouldShowLoading && stateChanged) {
+    // eslint-disable-next-line no-console
+    console.log("[GalleryLayoutWrapper] FullPageLoading: Hidden", {
+      galleryId: galleryIdStr,
+      orderId: orderIdStr,
+      loading,
+      isOrderPage,
+      orderMatches,
+      hasOrder,
+      isOrderLoading,
+      effectiveGallery: effectiveGallery ? { galleryId: effectiveGallery.galleryId } : null,
+      currentOrder: currentOrder ? { orderId: currentOrder.orderId } : null,
+      hasGallery,
+      galleryCreationLoading,
+      routerReady: router.isReady,
+      cachedGallery: cachedGallery ? { galleryId: cachedGallery.galleryId } : null,
+      loadedOrderIds: Array.from(loadedOrderIdsRef.current),
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Defensive check: Only show error if we've tried to load and failed (not during initial load)
@@ -634,7 +783,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
               // If we're on an order page, reload order data
               // Store updates will trigger re-renders automatically via Zustand subscriptions
               if (orderId) {
-                await loadOrderData();
+                await fetchOrder(galleryId as string, orderId as string, true);
               }
             }}
           />

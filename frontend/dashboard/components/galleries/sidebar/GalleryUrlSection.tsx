@@ -4,8 +4,7 @@ import React, { useState } from "react";
 
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store";
-import { useOrderStore } from "../../../store";
+import { useGalleryStore, useOrderStore } from "../../../store";
 import Button from "../../ui/button/Button";
 
 interface GalleryUrlSectionProps {
@@ -26,12 +25,9 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const sendLinkLoading = useGalleryStore((state) => state.sendLinkLoading);
   const galleryUrl = useGalleryStore((state) => state.galleryUrl);
   const copyGalleryUrl = useGalleryStore((state) => state.copyGalleryUrl);
-  // Subscribe to galleryOrders state (always current for the current gallery)
-  const galleryOrdersState = useGalleryStore((state) => state.galleryOrders);
-  // Also subscribe to cache entry to trigger re-render when cache is updated
-  const galleryOrdersCacheEntry = useGalleryStore((state) =>
-    galleryIdStr ? state.galleryOrdersCache[galleryIdStr] : null
-  );
+  // Get orders from orderCache (single source of truth)
+  const { getOrdersByGalleryId } = useOrderStore();
+  const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : [];
 
   const order = useOrderStore((state) => state.currentOrder);
   const { showToast } = useToast();
@@ -100,27 +96,13 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     }
   };
 
-  // Get gallery orders - use cache entry if available (it's kept fresh by fetchGalleryOrders)
-  // The cache is invalidated and refetched when sendGalleryLinkToClient is called, so it should be current
-  // We check both the cache entry (for reactivity) and the state (as fallback)
-  const galleryOrders: unknown[] | null = galleryOrdersCacheEntry
-    ? (galleryOrdersCacheEntry.orders as unknown[])
-    : galleryOrdersState && Array.isArray(galleryOrdersState) && galleryOrdersState.length > 0
-      ? (galleryOrdersState as unknown[])
-      : null;
-
   // Check if gallery has a CLIENT_SELECTING order
-  const hasClientSelectingOrder =
-    galleryOrders &&
-    Array.isArray(galleryOrders) &&
-    galleryOrders.some((o: unknown) => {
-      const orderObj = o as { deliveryStatus?: string };
-      return orderObj.deliveryStatus === "CLIENT_SELECTING";
-    });
+  const hasClientSelectingOrder = galleryOrders.some(
+    (o) => o.deliveryStatus === "CLIENT_SELECTING"
+  );
 
   // Check if gallery has any existing orders (for determining button text)
-  const hasExistingOrders =
-    galleryOrders && Array.isArray(galleryOrders) && galleryOrders.length > 0;
+  const hasExistingOrders = galleryOrders.length > 0;
 
   const orderDeliveryStatus =
     order && typeof order === "object" && "deliveryStatus" in order

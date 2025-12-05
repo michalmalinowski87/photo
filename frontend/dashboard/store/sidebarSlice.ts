@@ -68,6 +68,5 @@ export const createSidebarSlice: StateCreator<
       undefined,
       "sidebar/_setIsMobile"
     );
-      },
+  },
 });
-

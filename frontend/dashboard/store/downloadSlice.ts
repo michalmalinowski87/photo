@@ -85,6 +85,5 @@ export const createDownloadSlice: StateCreator<
       undefined,
       "download/clearCompletedDownloads"
     );
-      },
+  },
 });
-

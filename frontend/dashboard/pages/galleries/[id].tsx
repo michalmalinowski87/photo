@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
@@ -16,8 +16,7 @@ import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore } from "../../store";
-import { useUserStore } from "../../store";
+import { useGalleryStore, useOrderStore, useUserStore } from "../../store";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -245,10 +244,30 @@ export default function GalleryDetail() {
     useGalleryStore();
   const { refreshWalletBalance } = useUserStore();
   const { isNonSelectionGallery } = useGalleryType();
-  // Subscribe to gallery orders cache to trigger re-render when orders are updated
-  const galleryOrdersCacheEntry = useGalleryStore((state) =>
-    galleryId ? state.galleryOrdersCache[galleryId as string] : null
-  );
+  // Subscribe to orderCache keys for this gallery to get reactive updates
+  // Use a selector that returns orderIds as a string for stable comparison
+  const galleryOrderIdsStr = useOrderStore((state) => {
+    if (!galleryId) {
+      return "";
+    }
+    const galleryIdStr = galleryId as string;
+    const now = Date.now();
+    const maxAge = 30000;
+    const orderIds: string[] = [];
+
+    // Iterate through orderCache and filter by galleryId
+    for (const [orderId, cached] of Object.entries(state.orderCache)) {
+      if (cached.order.galleryId === galleryIdStr) {
+        const age = now - cached.timestamp;
+        if (age <= maxAge) {
+          orderIds.push(orderId);
+        }
+      }
+    }
+
+    // Return sorted orderIds as string for stable comparison
+    return orderIds.sort().join(",");
+  });
 
   const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
   const [orders, setOrders] = useState<Order[]>([]);
@@ -404,13 +423,23 @@ export default function GalleryDetail() {
   }, [galleryId, router.isReady, router.query, gallery]);
 
   // Watch gallery orders cache and update local state when it changes (Zustand subscriptions)
+  // Use orderIds string for stable comparison (prevents infinite loops from array reference changes)
+  const prevOrderIdsRef = useRef<string>("");
+  const { getOrdersByGalleryId } = useOrderStore();
   useEffect(() => {
-    if (galleryId && galleryOrdersCacheEntry) {
-      const cachedOrders = galleryOrdersCacheEntry.orders as Order[];
-      setOrders(cachedOrders);
+    if (!galleryId) {
+      return;
+    }
+    
+    // Only update if orderIds actually changed (using stable string comparison)
+    if (galleryOrderIdsStr !== prevOrderIdsRef.current) {
+      prevOrderIdsRef.current = galleryOrderIdsStr;
+      // Get orders from cache when orderIds change
+      const galleryOrdersFromCache = getOrdersByGalleryId(galleryId as string);
+      setOrders(galleryOrdersFromCache);
       setLoading(false);
     }
-  }, [galleryId, galleryOrdersCacheEntry]);
+  }, [galleryId, galleryOrderIdsStr, getOrdersByGalleryId]);
 
   // Redirect non-selection galleries to order view
   useEffect(() => {

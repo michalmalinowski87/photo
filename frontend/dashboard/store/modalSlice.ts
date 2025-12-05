@@ -59,4 +59,3 @@ export const createModalSlice: StateCreator<
     set({ modals: {} }, undefined, "modal/closeAllModals");
   },
 });
-

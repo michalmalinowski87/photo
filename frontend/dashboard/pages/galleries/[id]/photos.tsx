@@ -1,6 +1,6 @@
 import { Plus, ChevronDown, Image, Upload } from "lucide-react";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
@@ -70,11 +70,19 @@ export default function GalleryPhotos() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { fetchGalleryImages, fetchGalleryOrders, currentGallery, galleryCreationLoading, setGalleryCreationLoading } = useGalleryStore();
+  const {
+    fetchGalleryImages,
+    fetchGalleryOrders,
+    galleryCreationLoading,
+    setGalleryCreationLoading,
+  } = useGalleryStore();
   // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
+  // Initialize hasInitialized to false - only skip loading when navigating between same gallery pages
+  // For direct navigation, always show loading to ensure proper initialization
   const [hasInitialized, setHasInitialized] = useState<boolean>(false);
+  const prevGalleryIdRef = useRef<string | string[] | undefined>(undefined);
   interface GalleryOrder {
     orderId?: string;
     orderNumber?: string | number;
@@ -147,16 +155,11 @@ export default function GalleryPhotos() {
   }, [galleryId]);
 
   // Use hook for deletion logic
-  const {
-    deleteImage,
-    handleDeleteImageClick,
-    deletingImages,
-    deletingImagesRef,
-    deletedImageKeysRef,
-  } = useOriginalImageDelete({
-    galleryId,
-    setImages,
-  });
+  const { deleteImage, handleDeleteImageClick, deletingImages, deletingImagesRef } =
+    useOriginalImageDelete({
+      galleryId,
+      setImages,
+    });
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -467,7 +470,59 @@ export default function GalleryPhotos() {
     if (galleryCreationLoading && !galleryLoading && hasInitialized && gallery && !loading) {
       setGalleryCreationLoading(false);
     }
-  }, [galleryCreationLoading, galleryLoading, hasInitialized, gallery, loading, setGalleryCreationLoading]);
+  }, [
+    galleryCreationLoading,
+    galleryLoading,
+    hasInitialized,
+    gallery,
+    loading,
+    setGalleryCreationLoading,
+  ]);
+
+  // Synchronously check if we're navigating between pages of the same gallery
+  // Set hasInitialized immediately if gallery is already loaded to prevent flash
+  // This prevents flash when navigating between gallery pages, but shows loading on direct navigation
+  // Use galleryId from gallery object instead of entire gallery object to prevent infinite loops
+  const currentGalleryId = gallery?.galleryId;
+  useLayoutEffect(() => {
+    if (!galleryId) {
+      return;
+    }
+
+    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+    const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
+      ? prevGalleryIdRef.current[0]
+      : prevGalleryIdRef.current;
+    const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
+
+    // If same gallery AND gallery is loaded (even if not yet initialized), set initialized immediately
+    // This prevents the flash of FullPageLoading when navigating between pages of the same gallery
+    if (isSameGallery && !galleryLoading && !!gallery && currentGalleryId === galleryIdStr) {
+      // Set initialized immediately to prevent flash - gallery is already loaded
+      if (!hasInitialized) {
+        setHasInitialized(true);
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.log(
+            "[GalleryPhotos] useLayoutEffect: Setting hasInitialized=true (same gallery, already loaded)",
+            {
+              galleryId: galleryIdStr,
+              prevGalleryId,
+              galleryLoading,
+              hasInitialized: false,
+            }
+          );
+        }
+      }
+      prevGalleryIdRef.current = galleryId;
+      return;
+    }
+
+    // Direct navigation or different gallery - reset initialized state
+    // Don't set hasInitialized here - let the useEffect handle it after loading completes
+    prevGalleryIdRef.current = galleryId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, galleryLoading, currentGalleryId]); // Use currentGalleryId instead of entire gallery object
 
   // Initialize auth and load data
   useEffect(() => {
@@ -476,7 +531,33 @@ export default function GalleryPhotos() {
       return;
     }
 
-    setHasInitialized(false);
+    // Check if galleryId changed - if same gallery AND already initialized, skip loading
+    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+    const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
+      ? prevGalleryIdRef.current[0]
+      : prevGalleryIdRef.current;
+    const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
+
+    // Only skip loading if: same gallery AND we were already initialized AND gallery is loaded
+    // This means we're navigating between pages of the same gallery (e.g., photos -> settings)
+    // For direct navigation or different gallery, always show loading
+    if (isSameGallery && hasInitialized && !galleryLoading && !!gallery) {
+      // Keep initialized state and load silently - we're just navigating between pages
+      void loadPhotos(true).then(() => {
+        setHasInitialized(true);
+      });
+      void loadApprovedSelections(false);
+      prevGalleryIdRef.current = galleryId;
+      return;
+    }
+
+    // Different gallery, direct navigation, or not loaded yet - show loading and fetch
+    // Only reset hasInitialized if it's actually a different gallery or direct navigation
+    // If useLayoutEffect already set it to true (same gallery navigation), don't reset it
+    prevGalleryIdRef.current = galleryId;
+    if (!isSameGallery || !gallery || galleryLoading) {
+      setHasInitialized(false);
+    }
     initializeAuth(
       () => {
         if (galleryId) {
@@ -551,14 +632,61 @@ export default function GalleryPhotos() {
 
   // Show loading if galleryId is not yet available from router (prevents flash of empty state)
   if (!galleryId) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.log("[GalleryPhotos] FullPageLoading: No galleryId", {
+        galleryId,
+        routerQuery: router.query,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return <FullPageLoading text="Ładowanie..." />;
   }
+
+  // Check synchronously if gallery is already loaded from store (regardless of hasInitialized state)
+  // This prevents flash when navigating between pages of the same gallery
+  // If gallery is loaded and matches current galleryId, skip loading screen even if hasInitialized is false
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIsLoaded = !galleryLoading && !!gallery && gallery.galleryId === galleryIdStr;
+
+  // Also check if we're navigating between pages of the same gallery (using ref as additional check)
+  const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
+    ? prevGalleryIdRef.current[0]
+    : prevGalleryIdRef.current;
+  const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
+  const shouldSkipLoading = galleryIsLoaded || (isSameGallery && !galleryLoading && !!gallery);
 
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
   // galleryCreationLoading is handled at AppLayout level to persist across navigation
   // Only show regular loading here
-  if (galleryLoading || !hasInitialized) {
+  // Skip loading if gallery is already loaded (prevents flash when navigating between pages)
+  if ((galleryLoading || !hasInitialized) && !shouldSkipLoading) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.log("[GalleryPhotos] FullPageLoading: Gallery loading or not initialized", {
+        galleryId,
+        galleryLoading,
+        hasInitialized,
+        gallery: gallery ? { galleryId: gallery.galleryId } : null,
+        prevGalleryId: prevGalleryIdRef.current,
+        galleryIsLoaded,
+        isSameGallery,
+        shouldSkipLoading,
+        timestamp: new Date().toISOString(),
+      });
+    }
     return <FullPageLoading text="Ładowanie galerii..." />;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    // eslint-disable-next-line no-console
+    console.log("[GalleryPhotos] FullPageLoading: Hidden - Gallery ready", {
+      galleryId,
+      galleryLoading,
+      hasInitialized,
+      gallery: gallery ? { galleryId: gallery.galleryId } : null,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   if (!gallery) {

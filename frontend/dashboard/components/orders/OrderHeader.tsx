@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-import { useGalleryStore } from "../../store";
-import { useOrderStore } from "../../store";
+import { useGalleryStore, useOrderStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 

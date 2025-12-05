@@ -31,9 +31,19 @@ import { useUnifiedStore } from "./unifiedStore";
 
 export const clearEphemeralState = () => {
   const store = useUnifiedStore.getState();
-  if (store.clearCurrentGallery) {store.clearCurrentGallery();}
-  if (store.clearOrderList) {store.clearOrderList();}
-  if (store.clearCurrentOrder) {store.clearCurrentOrder();}
-  if (store.clearCompletedUploads) {store.clearCompletedUploads();}
-  if (store.clearCompletedDownloads) {store.clearCompletedDownloads();}
+  if (store.clearCurrentGallery) {
+    store.clearCurrentGallery();
+  }
+  if (store.clearOrderList) {
+    store.clearOrderList();
+  }
+  if (store.clearCurrentOrder) {
+    store.clearCurrentOrder();
+  }
+  if (store.clearCompletedUploads) {
+    store.clearCompletedUploads();
+  }
+  if (store.clearCompletedDownloads) {
+    store.clearCompletedDownloads();
+  }
 };

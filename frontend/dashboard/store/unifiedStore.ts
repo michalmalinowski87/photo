@@ -45,22 +45,22 @@ export const useUnifiedStore = create<UnifiedStore>()(
         ...createUserSlice(...args),
         ...createUISlice(...args),
       }),
-          {
-            name: "app-storage",
-            partialize: (state) => ({
-              // Persist user identity
-              userId: state.userId,
-              email: state.email,
-              username: state.username,
-              // Persist UI preferences
-              tablePreferences: state.tablePreferences,
-              // Persist theme
-              theme: state.theme,
-              // Persist overlay state to prevent flash on navigation
-              nextStepsVisible: state.nextStepsVisible,
-              nextStepsExpanded: state.nextStepsExpanded,
-              nextStepsOverlayExpanded: state.nextStepsOverlayExpanded,
-            }),
+      {
+        name: "app-storage",
+        partialize: (state) => ({
+          // Persist user identity
+          userId: state.userId,
+          email: state.email,
+          username: state.username,
+          // Persist UI preferences
+          tablePreferences: state.tablePreferences,
+          // Persist theme
+          theme: state.theme,
+          // Persist overlay state to prevent flash on navigation
+          nextStepsVisible: state.nextStepsVisible,
+          nextStepsExpanded: state.nextStepsExpanded,
+          nextStepsOverlayExpanded: state.nextStepsOverlayExpanded,
+        }),
         onRehydrateStorage: () => (state) => {
           // Initialize theme on rehydration
           if (state && typeof window !== "undefined") {
@@ -72,7 +72,7 @@ export const useUnifiedStore = create<UnifiedStore>()(
                 const nextStepsVisible = parsed.state?.nextStepsVisible;
                 const nextStepsExpanded = parsed.state?.nextStepsExpanded;
                 const nextStepsOverlayExpanded = parsed.state?.nextStepsOverlayExpanded;
-                
+
                 console.log("[UnifiedStore] Rehydrating state", {
                   theme,
                   nextStepsVisible,
@@ -80,9 +80,9 @@ export const useUnifiedStore = create<UnifiedStore>()(
                   nextStepsOverlayExpanded,
                   fullState: parsed.state,
                 });
-                
+
                 state.setTheme(theme);
-                
+
                 // Restore overlay state if it exists
                 if (nextStepsVisible !== undefined) {
                   state.setNextStepsVisible(nextStepsVisible);
@@ -142,4 +142,3 @@ if (typeof window !== "undefined") {
   // Run on next tick to ensure store is ready
   setTimeout(initializeTheme, 0);
 }
-

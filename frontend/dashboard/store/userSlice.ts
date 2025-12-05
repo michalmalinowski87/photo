@@ -33,13 +33,21 @@ export const createUserSlice: StateCreator<
       currentState.username === username
     ) {
       if (process.env.NODE_ENV === "development") {
-        console.log("[UserSlice] setUser: Skipping - values unchanged", { userId, email, username });
+        console.log("[UserSlice] setUser: Skipping - values unchanged", {
+          userId,
+          email,
+          username,
+        });
       }
       return;
     }
     if (process.env.NODE_ENV === "development") {
       console.log("[UserSlice] setUser: Updating", {
-        old: { userId: currentState.userId, email: currentState.email, username: currentState.username },
+        old: {
+          userId: currentState.userId,
+          email: currentState.email,
+          username: currentState.username,
+        },
         new: { userId, email, username },
       });
     }
@@ -89,4 +97,3 @@ export const createUserSlice: StateCreator<
     }
   },
 });
-

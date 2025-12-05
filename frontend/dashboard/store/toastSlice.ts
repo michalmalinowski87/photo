@@ -60,4 +60,3 @@ export const createToastSlice: StateCreator<
     set({ toasts: [] }, undefined, "toast/clearAllToasts");
   },
 });
-

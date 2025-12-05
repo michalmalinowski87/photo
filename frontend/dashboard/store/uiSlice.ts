@@ -13,12 +13,9 @@ export interface UISlice {
   clearTablePreferences: (tableId?: string) => void;
 }
 
-export const createUISlice: StateCreator<
-  UISlice,
-  [["zustand/devtools", never]],
-  [],
-  UISlice
-> = (set) => ({
+export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]], [], UISlice> = (
+  set
+) => ({
   tablePreferences: {},
 
   setTablePreferences: (tableId: string, preferences: TablePreferences) => {
@@ -46,7 +43,6 @@ export const createUISlice: StateCreator<
       );
     } else {
       set({ tablePreferences: {} }, undefined, "ui/clearTablePreferences/all");
-      }
-    },
+    }
+  },
 });
-

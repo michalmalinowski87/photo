@@ -23,16 +23,10 @@ export const createOverlaySlice: StateCreator<
   nextStepsCollapsedWidth: 64, // w-16 = 4rem = 64px
 
   setNextStepsVisible: (visible: boolean) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[OverlaySlice] setNextStepsVisible", visible, new Error().stack);
-    }
     set({ nextStepsVisible: visible }, undefined, "overlay/setNextStepsVisible");
   },
 
   setNextStepsExpanded: (expanded: boolean) => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[OverlaySlice] setNextStepsExpanded", expanded, new Error().stack);
-    }
     set({ nextStepsExpanded: expanded }, undefined, "overlay/setNextStepsExpanded");
   },
 
@@ -44,4 +38,3 @@ export const createOverlaySlice: StateCreator<
     set({ nextStepsCollapsedWidth: width }, undefined, "overlay/setNextStepsCollapsedWidth");
   },
 });
-

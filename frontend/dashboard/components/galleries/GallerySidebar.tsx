@@ -3,8 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
-import { useGalleryStore } from "../../store";
-import { useOrderStore } from "../../store";
+import { useGalleryStore, useOrderStore } from "../../store";
 
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";

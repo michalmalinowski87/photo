@@ -22,9 +22,7 @@ import api, { formatApiError } from "../../../../lib/api-service";
 import { initializeAuth, redirectToLandingSignIn } from "../../../../lib/auth-init";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { useGalleryStore } from "../../../../store";
-import { useOrderStore } from "../../../../store";
-import { useUserStore } from "../../../../store";
+import { useGalleryStore, useOrderStore, useUserStore } from "../../../../store";
 
 interface GalleryImage {
   id?: string;
@@ -85,6 +83,7 @@ export default function OrderDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const loadingOrderDataRef = useRef<boolean>(false); // Ref to prevent concurrent loadOrderData calls
+  const orderDataLoadedRef = useRef<boolean>(false); // Track if we've successfully loaded order data
   // Refs for tracking deleted images (initialized early for use in loadOrderData)
   const deletingImagesRefForLoad = useRef<Set<string>>(new Set());
   const deletedImageKeysRefForLoad = useRef<Set<string>>(new Set());
@@ -176,7 +175,7 @@ export default function OrderDetail() {
               ...orderData,
               deliveryStatus: currentOrderInStore.deliveryStatus,
               paymentStatus: currentOrderInStore.paymentStatus,
-              updatedAt: currentOrderInStore.updatedAt,
+              updatedAt: currentOrderInStore.updatedAt as string | undefined,
             });
           } else {
             // Update store with fresh order data
@@ -203,6 +202,7 @@ export default function OrderDetail() {
         setOriginalImages(apiImages);
 
         // Always try to load final images (for viewing) - upload restrictions are handled separately
+        // Keep loading state true while loading final images
         try {
           const finalResponse = await api.orders.getFinalImages(
             galleryId as string,
@@ -274,6 +274,11 @@ export default function OrderDetail() {
       } finally {
         setLoading(false);
         loadingOrderDataRef.current = false;
+        // Mark as loaded if we got the order
+        const finalOrder = useOrderStore.getState().currentOrder;
+        if (finalOrder && finalOrder.orderId === orderId) {
+          orderDataLoadedRef.current = true;
+        }
       }
     },
     [galleryId, orderId, showToast]
@@ -317,7 +322,6 @@ export default function OrderDetail() {
     deletedImageKeysRefForLoad.current = deletedImageKeysRef.current;
   }, [deletedImageKeysRef]);
 
-  const { refreshOrderStatus } = useOrderStatusRefresh();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Check for recovery state and auto-open modal
@@ -437,12 +441,22 @@ export default function OrderDetail() {
     }
   }, [galleryId, orderId, deletingImagesRef, deletedImageKeysRef]);
 
+  // Track if we've loaded order data for this orderId to prevent duplicate loads
+  const loadedOrderIdRef = useRef<string | null>(null);
+
+  // Load order data once when component mounts or orderId changes
   useEffect(() => {
     initializeAuth(
       () => {
         if (galleryId && orderId) {
-          void loadOrderData();
-          void loadWalletBalance();
+          const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId);
+          
+          // Only load if we haven't loaded this order yet
+          if (loadedOrderIdRef.current !== orderIdStr) {
+            loadedOrderIdRef.current = orderIdStr;
+            void loadOrderData();
+            void loadWalletBalance();
+          }
         }
       },
       () => {
@@ -452,31 +466,20 @@ export default function OrderDetail() {
       }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, orderId]); // Removed loadOrderData and loadWalletBalance from deps to avoid infinite loops
+  }, [galleryId, orderId]);
 
-  // Watch order and gallery state for updates (Zustand subscriptions)
-  const orderCache = useOrderStore((state) =>
-    orderId ? state.orderCache[orderId as string] : null
-  );
-  const currentGallery = useGalleryStore((state) => state.currentGallery);
-
+  // Reset loaded flag when orderId changes
   useEffect(() => {
-    if (orderId && orderCache) {
-      // Order was updated in store, reload to get latest data
-      void loadOrderData();
+    const orderIdStr = Array.isArray(orderId) ? orderId[0] : (orderId as string);
+    if (loadedOrderIdRef.current !== orderIdStr) {
+      loadedOrderIdRef.current = null;
+      orderDataLoadedRef.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, orderCache?.timestamp]);
-
-  useEffect(() => {
-    if (galleryId && currentGallery?.galleryId === galleryId) {
-      // Gallery was updated (e.g., payment completed), reload order data
-      void loadOrderData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, currentGallery?.isPaid, currentGallery?.state]);
+  }, [orderId]);
 
   // Listen for finals uploads to update gallery's finalsBytesUsed reactively with optimistic updates
+  // Use gallery?.galleryId instead of entire gallery object to prevent infinite loops
+  const currentGalleryId = gallery?.galleryId;
   useEffect(() => {
     if (!galleryId) {
       return undefined;
@@ -509,6 +512,7 @@ export default function OrderDetail() {
 
         // Update optimistic state to match store (store has the latest optimistic value)
         // Only update if we don't already have this value (avoid unnecessary re-renders)
+        // Using functional update prevents need for optimisticFinalsBytes in dependencies
         setOptimisticFinalsBytes((prev) => {
           if (prev !== newFinalsBytes) {
             return newFinalsBytes;
@@ -532,9 +536,13 @@ export default function OrderDetail() {
     return () => {
       unsubscribe();
     };
-  }, [galleryId, gallery, optimisticFinalsBytes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryId, currentGalleryId]); // Use currentGalleryId instead of entire gallery object to prevent infinite loops
 
   // Auto-set to finals tab if selection is disabled (non-selection galleries)
+  // Use stable identifiers instead of entire objects to prevent infinite loops
+  const gallerySelectionEnabled = gallery?.selectionEnabled;
+  const orderIdForTab = order?.orderId;
   useEffect(() => {
     if (!order || !gallery) {
       return;
@@ -543,7 +551,8 @@ export default function OrderDetail() {
     if (gallery.selectionEnabled === false) {
       setActiveTab("finals");
     }
-  }, [gallery, order]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gallerySelectionEnabled, orderIdForTab]); // Use stable identifiers instead of entire objects
 
   // For non-selection galleries, always show finals tab (no tab switcher)
   const shouldShowTabs = !isNonSelectionGallery;
@@ -644,16 +653,25 @@ export default function OrderDetail() {
     [galleryId, orderId, denyChangeRequest, loadOrderData, reloadGallery]
   );
 
-  if (loading && !order) {
+  // Show loading state while loading order data or images
+  // This ensures we don't show empty sidebar while data is loading
+  // Also show loading if we have order but no images yet (images are still loading)
+  if (loading || (order && originalImages.length === 0 && !error)) {
     return <FullPageLoading text="Ładowanie zlecenia..." />;
   }
 
-  if (!order) {
+  // Only show error state if we have an error and no order after loading completed
+  if (!order && error) {
     return (
       <div className="p-4">
         <div>{error ?? "Nie znaleziono zlecenia"}</div>
       </div>
     );
+  }
+
+  // If we don't have an order yet, show loading (shouldn't happen but safety check)
+  if (!order) {
+    return <FullPageLoading text="Ładowanie zlecenia..." />;
   }
 
   // Normalize selectedKeys - handle both array and string formats
