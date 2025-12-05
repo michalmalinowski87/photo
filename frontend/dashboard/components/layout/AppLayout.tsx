@@ -51,10 +51,14 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
     }
 
     const handleOpenWizard = () => {
-      const shouldLock = (window as any).__galleryWizardDevLocked === true;
+      interface WindowWithDevFlag extends Window {
+        __galleryWizardDevLocked?: boolean;
+      }
+      const windowWithDevFlag = window as WindowWithDevFlag;
+      const shouldLock = windowWithDevFlag.__galleryWizardDevLocked === true;
       if (shouldLock) {
         setDevLocked(true);
-        (window as any).__galleryWizardDevLocked = false; // Reset flag
+        windowWithDevFlag.__galleryWizardDevLocked = false; // Reset flag
       }
       if (!wizardOpen) {
         setWizardOpen(true);

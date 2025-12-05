@@ -1,25 +1,10 @@
-import { useRouter } from "next/router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 import { usePageLogger } from "../hooks/usePageLogger";
 import api, { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { formatPrice } from "../lib/format-price";
-import { useGalleryStore } from "../store";
-
-interface Order {
-  orderId: string;
-  deliveryStatus?: string;
-  paymentStatus?: string;
-  selectedCount?: number;
-  overageCents?: number;
-  [key: string]: unknown;
-}
-
-interface Gallery {
-  selectionEnabled?: boolean;
-  [key: string]: unknown;
-}
+import type { Gallery, Order } from "../types";
 
 interface OrdersResponse {
   items?: Order[];
@@ -27,14 +12,8 @@ interface OrdersResponse {
   [key: string]: unknown;
 }
 
-interface ErrorResponse {
-  error?: string;
-  message?: string;
-}
-
 export default function Orders() {
-  const router = useRouter();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: "Orders",
   });
   const [apiUrl, setApiUrl] = useState<string>("");
@@ -142,12 +121,12 @@ export default function Orders() {
       if (result.blob) {
         // Binary blob response
         blob = result.blob;
-        filename = result.filename || `${orderId}.zip`;
+        filename = result.filename ?? `${orderId}.zip`;
       } else if (result.zip) {
         // Base64 ZIP response (backward compatibility)
         const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
         blob = new Blob([zipBlob], { type: "application/zip" });
-        filename = result.filename || `${orderId}.zip`;
+        filename = result.filename ?? `${orderId}.zip`;
       } else {
         setMessage("No ZIP file available");
         return;

@@ -197,33 +197,12 @@ GitHub Actions workflow `.github/workflows/ci.yml` installs deps, runs basic scr
 
 - [Architecture Overview](docs/arch.md) - System architecture and components
 - [User Flows](docs/user-flows.md) - Detailed user workflows and order lifecycle
-- [Frontend Architecture](docs/frontend-architecture.md) - Frontend component structure and patterns
-- [Cognito Domain Setup](docs/cognito-domain.md) - Cognito Hosted UI configuration
-- [Stripe Setup](docs/stripe-setup.md) - Payment integration setup
-- [Stripe Local Testing](docs/stripe-local-testing.md) - Testing payments locally
-
-## Testing
-
-See [docs/testing.md](docs/testing.md) for comprehensive testing instructions covering:
-- Infrastructure deployment
-- Frontend setup
-- Authentication flow
-- Gallery creation & wallet management
-- Image upload & processing
-- Client selection workflow
-- Email notifications
-- GDPR deletion
-- API testing with curl
-
-Quick test checklist:
-- [ ] Deploy infrastructure (`cd infra && yarn deploy`)
-- [ ] Configure frontend environment variables
-- [ ] Create Cognito user and login
-- [ ] Create gallery (with wallet top-up)
-- [ ] Upload images and verify processing
-- [ ] Test client gallery access
-- [ ] Complete selection & approval flow
-- [ ] Verify order creation and ZIP generation
+- [Upload Flow](docs/upload-flow-documentation.md) - Image upload and processing flow
+- [Stripe Payment Integration](docs/stripe-payment-integration.md) - Payment integration details
+- [Payment Page Security](docs/payment-page-security.md) - Security implementation for payment pages
+- [Authentication Architecture](docs/authentication-architecture.md) - Authentication and authorization
+- [Silent OAuth Implementation](docs/silent-oauth-implementation.md) - OAuth flow details
+- [Three-Tier Image Optimization](docs/three-tier-image-optimization-strategy.md) - Image optimization strategy
 
 ## Roadmap (from plan)
 - Phase 1: MVP – gallery creation/payment, uploads, selection flow, final delivery, emails. ✅

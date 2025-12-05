@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 
-import { ImageFallbackUrls, ImageSize, getNextFallbackUrl } from "../../lib/image-fallback";
+import {
+  ImageFallbackUrls,
+  ImageSize,
+  getNextFallbackUrl,
+  getInitialImageUrl,
+} from "../../lib/image-fallback";
 
 interface RetryableImageProps {
   src: string;
@@ -21,7 +26,6 @@ interface RetryableImageProps {
  *
  * This ensures robust, fail-free image loading even when CloudFront returns 403 errors.
  */
-import { getInitialImageUrl } from "../../lib/image-fallback";
 
 export const RetryableImage: React.FC<RetryableImageProps> = ({
   src,

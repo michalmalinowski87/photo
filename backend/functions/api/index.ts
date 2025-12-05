@@ -91,7 +91,8 @@ app.use((req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: any, req: Request, res: Response, next: any) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.use((err: any, req: Request, res: Response, _next: any) => {
 	console.error('Unhandled error:', err);
 	res.status(500).json({ error: 'Internal server error', message: err.message });
 });

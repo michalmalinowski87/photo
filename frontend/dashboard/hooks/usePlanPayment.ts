@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 
-import { useToast } from "./useToast";
 import api, { formatApiError } from "../lib/api-service";
 import { getPlan, type PlanKey } from "../lib/pricing-plans";
+
+import { useToast } from "./useToast";
 
 interface SelectedPlan {
   planKey: PlanKey;

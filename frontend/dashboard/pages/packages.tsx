@@ -31,7 +31,7 @@ interface PackageFormData {
 
 export default function Packages() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: "Packages",
   });
   const [loading, setLoading] = useState<boolean>(true);

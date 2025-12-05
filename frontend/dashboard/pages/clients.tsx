@@ -41,7 +41,7 @@ interface PageHistoryItem {
 
 export default function Clients() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+  const { logDataLoad, logDataLoaded } = usePageLogger({
     pageName: "Clients",
   });
   const [loading, setLoading] = useState<boolean>(true);

@@ -25,7 +25,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
   // Get first order ID - use URL orderId if available, otherwise use first order from store
   // This is computed directly from reactive store subscriptions, no need for state
   const firstOrderId =
-    orderIdFromUrl ||
+    orderIdFromUrl ??
     (galleryOrders && galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
 
   // Fetch orders if not available

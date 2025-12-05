@@ -25,8 +25,9 @@ export function OrderHeader() {
     ? galleryId[0]
     : (galleryId ?? currentGallery?.galleryId ?? "");
 
-  const displayOrderNumber =
-    order.orderNumber ?? (order.orderId ? order.orderId.slice(-8) : galleryIdStr.slice(-8));
+  const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
+  const orderNumber = (order.orderNumber as string | number | undefined) ?? undefined;
+  const displayOrderNumber = orderNumber ?? (orderId ? orderId.slice(-8) : galleryIdStr.slice(-8));
 
   return (
     <div className="flex items-center justify-between">

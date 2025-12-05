@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
+import { useEffect, useState, useCallback } from "react";
 
 interface UploadState {
   galleryId: string;
@@ -16,7 +16,9 @@ const getStorageKey = (galleryId: string, type: "originals" | "finals"): string 
 };
 
 const getAllUploadStates = (): Array<{ key: string; state: UploadState }> => {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") {
+    return [];
+  }
 
   const states: Array<{ key: string; state: UploadState }> = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -36,7 +38,9 @@ const getAllUploadStates = (): Array<{ key: string; state: UploadState }> => {
 };
 
 const clearUploadState = (galleryId: string, type: "originals" | "finals"): void => {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   const key = getStorageKey(galleryId, type);
   localStorage.removeItem(key);
 };
@@ -47,7 +51,9 @@ export function useUploadRecovery() {
   const [showModal, setShowModal] = useState(false);
 
   const checkForRecovery = useCallback(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const states = getAllUploadStates();
     if (states.length > 0) {
@@ -82,7 +88,9 @@ export function useUploadRecovery() {
   }, [checkForRecovery]);
 
   const handleResume = useCallback(() => {
-    if (!recoveryState) return;
+    if (!recoveryState) {
+      return;
+    }
 
     setShowModal(false);
     // Redirect to the stored URL
@@ -93,7 +101,9 @@ export function useUploadRecovery() {
   }, [recoveryState, router]);
 
   const handleClear = useCallback(() => {
-    if (!recoveryState) return;
+    if (!recoveryState) {
+      return;
+    }
 
     // Clear localStorage state
     clearUploadState(recoveryState.galleryId, recoveryState.type);

@@ -67,7 +67,7 @@ export function wrapHandler(handler: Handler) {
 			if (result && typeof result === 'object') {
 				const statusCode = result.statusCode || 200;
 				const headers = result.headers || {};
-				let body = result.body || '';
+				const body = result.body || '';
 
 				// Handle base64-encoded binary responses
 				if (result.isBase64Encoded && typeof body === 'string') {

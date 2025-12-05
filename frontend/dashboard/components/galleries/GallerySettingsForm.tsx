@@ -132,14 +132,22 @@ export function GallerySettingsForm({
   // Gallery data comes from GalleryContext - initialize form when gallery loads
   useEffect(() => {
     if (gallery) {
+      const pricingPackage = gallery.pricingPackage as
+        | {
+            packageName?: string;
+            includedCount?: number;
+            extraPriceCents?: number;
+            packagePriceCents?: number;
+          }
+        | undefined;
       setSettingsForm({
         galleryName: gallery.galleryName ?? "",
-        clientEmail: gallery.clientEmail ?? "",
+        clientEmail: (gallery.clientEmail as string | undefined) ?? "",
         clientPassword: "",
-        packageName: gallery.pricingPackage?.packageName ?? "",
-        includedCount: gallery.pricingPackage?.includedCount ?? 0,
-        extraPriceCents: gallery.pricingPackage?.extraPriceCents ?? 0,
-        packagePriceCents: gallery.pricingPackage?.packagePriceCents ?? 0,
+        packageName: pricingPackage?.packageName ?? "",
+        includedCount: pricingPackage?.includedCount ?? 0,
+        extraPriceCents: pricingPackage?.extraPriceCents ?? 0,
+        packagePriceCents: pricingPackage?.packagePriceCents ?? 0,
       });
       setExtraPriceInput(null);
       setPackagePriceInput(null);
@@ -164,15 +172,25 @@ export function GallerySettingsForm({
       }
 
       // Update pricing package if changed
+      const currentPkg = gallery?.pricingPackage as
+        | {
+            packageName?: string;
+            includedCount?: number;
+            extraPriceCents?: number;
+            packagePriceCents?: number;
+          }
+        | undefined;
       const pkgChanged =
-        settingsForm.packageName !== gallery?.pricingPackage?.packageName ||
-        settingsForm.includedCount !== gallery?.pricingPackage?.includedCount ||
-        settingsForm.extraPriceCents !== gallery?.pricingPackage?.extraPriceCents ||
-        settingsForm.packagePriceCents !== gallery?.pricingPackage?.packagePriceCents;
+        settingsForm.packageName !== currentPkg?.packageName ||
+        settingsForm.includedCount !== currentPkg?.includedCount ||
+        settingsForm.extraPriceCents !== currentPkg?.extraPriceCents ||
+        settingsForm.packagePriceCents !== currentPkg?.packagePriceCents;
 
       if (pkgChanged) {
         // Ensure all required fields are present and valid
-        const packageName = settingsForm.packageName?.trim() || undefined;
+        const trimmedPackageName = settingsForm.packageName?.trim();
+        const packageName =
+          trimmedPackageName && trimmedPackageName.length > 0 ? trimmedPackageName : undefined;
         const includedCount = Number(settingsForm.includedCount) || 0;
         const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
         const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;

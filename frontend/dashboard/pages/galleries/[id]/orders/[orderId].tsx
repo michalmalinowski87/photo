@@ -21,34 +21,9 @@ import api, { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import { useGalleryStore, useOrderStore, useUserStore } from "../../../../store";
-
-interface GalleryImage {
-  id?: string;
-  key?: string;
-  filename?: string;
-  url?: string;
-  thumbUrl?: string;
-  previewUrl?: string;
-  finalUrl?: string;
-  isPlaceholder?: boolean;
-  uploadTimestamp?: number;
-  uploadIndex?: number;
-  size?: number;
-  [key: string]: unknown;
-}
+import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from orderSlice store (single source of truth)
-
-interface Gallery {
-  galleryId: string;
-  ownerId?: string;
-  name?: string;
-  clientEmail?: string;
-  selectionEnabled?: boolean;
-  state?: string;
-  isPaid?: boolean;
-  [key: string]: unknown;
-}
 
 interface PaymentDetails {
   totalAmountCents: number;
@@ -61,15 +36,13 @@ export default function OrderDetail() {
   const { showToast } = useToast();
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction, logSkippedLoad } = usePageLogger(
-    {
-      pageName: "OrderDetail",
-    }
-  );
+  const { logSkippedLoad } = usePageLogger({
+    pageName: "OrderDetail",
+  });
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
   const { isNonSelectionGallery } = useGalleryType();
-  const [loading, setLoading] = useState<boolean>(false); // Only for image loading, not order loading
+  const [, setLoading] = useState<boolean>(false); // Only for image loading, not order loading
   const [error, setError] = useState<string>("");
   // Use Zustand store as single source of truth for order data (shared with sidebar and top bar)
   const order = useOrderStore((state) => state.currentOrder);
@@ -80,7 +53,7 @@ export default function OrderDetail() {
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [originalImages, setOriginalImages] = useState<GalleryImage[]>([]);
   const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
-  const [optimisticFinalsBytes, setOptimisticFinalsBytes] = useState<number | null>(null);
+  const [, setOptimisticFinalsBytes] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const loadingOrderDataRef = useRef<boolean>(false); // Ref to prevent concurrent loadOrderData calls
@@ -119,7 +92,7 @@ export default function OrderDetail() {
       setError("");
 
       try {
-        const { fetchGalleryImages, currentGallery } = useGalleryStore.getState();
+        const { fetchGalleryImages } = useGalleryStore.getState();
         const apiImages = await fetchGalleryImages(galleryId as string).catch((err) => {
           console.error("Failed to load gallery images:", err);
           return [];
@@ -184,7 +157,7 @@ export default function OrderDetail() {
     try {
       // Use store actions - they check cache first and fetch if needed
       const { fetchOrder } = useOrderStore.getState();
-      const { fetchGalleryImages, currentGallery } = useGalleryStore.getState();
+      const { fetchGalleryImages } = useGalleryStore.getState();
 
       // Fetch order and images in parallel
       // NOTE: Don't fetch gallery data here - it would overwrite accurate bytes values
@@ -285,11 +258,12 @@ export default function OrderDetail() {
       loadingOrderDataRef.current = false;
       // Mark as loaded if we got the order
       const finalOrder = useOrderStore.getState().currentOrder;
-      if (finalOrder?.orderId === orderId) {
+      const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+      if (finalOrder?.orderId === orderIdStr) {
         orderDataLoadedRef.current = true;
       }
     }
-  }, [galleryId, orderId, showToast]);
+  }, [galleryId, orderId, showToast, logSkippedLoad, setCurrentOrder]);
 
   // Use hooks for order actions and amount editing (after state declarations)
   const {
@@ -303,7 +277,7 @@ export default function OrderDetail() {
   } = useOrderAmountEdit({
     galleryId,
     orderId,
-    currentTotalCents: order?.totalCents ?? 0,
+    currentTotalCents: (order?.totalCents as number | undefined) ?? 0,
     onSave: loadOrderData,
   });
 
@@ -337,7 +311,7 @@ export default function OrderDetail() {
       return;
     }
 
-    const storageKey = `uppy_upload_state_${galleryId}_finals`;
+    const storageKey = `uppy_upload_state_${Array.isArray(galleryId) ? galleryId[0] : galleryId}_finals`;
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
@@ -369,7 +343,7 @@ export default function OrderDetail() {
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
     if (galleryId && orderId && typeof window !== "undefined") {
-      const storageKey = `uppy_upload_state_${galleryId}_finals`;
+      const storageKey = `uppy_upload_state_${Array.isArray(galleryId) ? galleryId[0] : galleryId}_finals`;
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         try {
@@ -487,9 +461,9 @@ export default function OrderDetail() {
       // Only fire if value actually changed and it's our gallery
       if (currentFinalsBytes !== undefined && currentFinalsBytes !== prevFinalsBytes) {
         prevFinalsBytes = currentFinalsBytes;
-        setOptimisticFinalsBytes((prev) => {
+        setOptimisticFinalsBytes((prev: number | null) => {
           if (prev !== currentFinalsBytes) {
-            return currentFinalsBytes;
+            return currentFinalsBytes ?? null;
           }
           return prev;
         });
@@ -519,16 +493,6 @@ export default function OrderDetail() {
 
   // For non-selection galleries, always show finals tab (no tab switcher)
   const shouldShowTabs = !isNonSelectionGallery;
-
-  const handlePayClick = (): void => {
-    if (!galleryId || paymentLoading) {
-      return;
-    }
-    // Navigate to gallery page with publish param - GalleryLayoutWrapper will handle opening wizard
-    void router.push(
-      `/galleries/${galleryId as string}?publish=true&galleryId=${galleryId as string}`
-    );
-  };
 
   const handlePaymentConfirm = async (): Promise<void> => {
     if (!galleryId || !paymentDetails) {

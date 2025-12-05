@@ -301,7 +301,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 
 		// Check for sync issue: no images but originalsBytesUsed > 0
-		// Note: Storage recalculation is now handled automatically by S3 events (onS3StorageChange Lambda)
+		// Note: Storage recalculation is now handled on-demand when needed (pay, validateUploadLimits, etc.)
 		if (images.length === 0 && (gallery.originalsBytesUsed || 0) > 0) {
 			logger.info('Detected sync issue: no images but originalsBytesUsed > 0, S3 events will handle recalculation', {
 				galleryId,

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
+import { useCallback, useEffect, useRef } from "react";
 
 import { storeLogger } from "../lib/store-logger";
 

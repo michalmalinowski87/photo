@@ -1,7 +1,7 @@
 import { StateCreator } from "zustand";
 
 import api from "../lib/api-service";
-import { storeLogger } from "../lib/store-logger";
+
 import type { Order } from "./orderSlice";
 
 export interface Gallery {
@@ -40,7 +40,7 @@ export interface GallerySlice {
   setGalleryImages: (galleryId: string, images: any[]) => void;
   fetchGallery: (galleryId: string) => Promise<Gallery | null>;
   fetchGalleryImages: (galleryId: string) => Promise<any[]>;
-  fetchGalleryOrders: (galleryId: string) => Promise<any[]>;
+  fetchGalleryOrders: (galleryId: string) => Promise<Order[]>;
   sendGalleryLinkToClient: (galleryId: string) => Promise<{ isReminder: boolean }>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;

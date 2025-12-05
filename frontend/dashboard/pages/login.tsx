@@ -108,7 +108,7 @@ export default function Login() {
     };
 
     void checkExistingSession();
-  }, [router]);
+  }, [router, setSessionExpired]);
 
   const handleSignIn = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

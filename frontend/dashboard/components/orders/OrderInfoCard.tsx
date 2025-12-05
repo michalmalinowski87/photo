@@ -42,9 +42,9 @@ export function OrderInfoCard({
   }
 
   // Get data from order
-  const totalCents = order.totalCents ?? 0;
-  const createdAt = order.createdAt;
-  const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
+  const totalCents = (typeof order.totalCents === "number" ? order.totalCents : 0) ?? 0;
+  const createdAt = typeof order.createdAt === "string" ? order.createdAt : undefined;
+  const selectedKeys = normalizeSelectedKeys(order.selectedKeys as string[] | string | undefined);
   const selectedKeysCount = selectedKeys.length;
   const selectionEnabled = gallery?.selectionEnabled !== false;
   return (
@@ -90,7 +90,7 @@ export function OrderInfoCard({
             ) : (
               <>
                 <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {formatPrice(totalCents)}
+                  {formatPrice(totalCents as number | null | undefined)}
                 </span>
                 <button
                   onClick={onStartEdit}
@@ -106,7 +106,9 @@ export function OrderInfoCard({
         <div className="text-right">
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Data utworzenia</div>
           <div className="text-lg font-semibold text-gray-900 dark:text-white">
-            {createdAt ? new Date(createdAt).toLocaleDateString("pl-PL") : "-"}
+            {createdAt
+              ? new Date(createdAt as string | number | Date).toLocaleDateString("pl-PL")
+              : "-"}
           </div>
         </div>
         {selectionEnabled && selectedKeysCount !== undefined && (

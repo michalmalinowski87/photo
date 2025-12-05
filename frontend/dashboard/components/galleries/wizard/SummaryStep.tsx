@@ -50,7 +50,8 @@ export const SummaryStep: React.FC<SummaryStepProps> = ({
           <div className="relative p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-50 dark:bg-brand-500/10">
-                <Image className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image className="w-5 h-5 text-brand-600 dark:text-brand-400" aria-hidden="true" />
               </div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Galeria</h3>
             </div>

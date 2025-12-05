@@ -52,7 +52,6 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
   - Automatically sets order status to `PREPARING_DELIVERY` when first photo uploaded
 - `orders/downloadZip.ts` - Get presigned download URL for order ZIP (generates on-demand, one-time use - deleted after download)
 - `orders/downloadFinalZip.ts` - Download final ZIP for an order (supports both owner and client access)
-- `orders/regenerateZip.ts` - Regenerate ZIP for an order
 - `orders/sendFinalLink.ts` - Send final delivery link to client
 - `orders/approveChangeRequest.ts` - Approve client change requests (restores order to CLIENT_SELECTING)
 - `orders/markPaid.ts` - Mark order as paid

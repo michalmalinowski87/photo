@@ -6,22 +6,8 @@ import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 import { useGalleryStore, useOrderStore, useOverlayStore } from "../../store";
+import type { Gallery, Order } from "../../types";
 import { useGalleryType } from "../hocs/withGalleryType";
-
-interface Gallery {
-  galleryId: string;
-  originalsBytesUsed?: number;
-  paymentStatus?: string;
-  state?: string;
-  selectionEnabled?: boolean;
-  nextStepsCompleted?: boolean;
-  [key: string]: unknown;
-}
-
-interface Order {
-  orderId: string;
-  [key: string]: unknown;
-}
 
 interface NextStepsOverlayProps {
   gallery: Gallery | null;
@@ -66,7 +52,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const { getOrdersByGalleryId } = useOrderStore();
-  const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : [];
+  const galleryOrders = useMemo(
+    () => (galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : []),
+    [galleryIdStr, getOrdersByGalleryId]
+  );
   const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
   const { isNonSelectionGallery } = useGalleryType();
   const { fetchGalleryOrders } = useGalleryStore();
@@ -571,9 +560,12 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       try {
         // Fetch gallery orders to get the order ID
         const orders = await fetchGalleryOrders(gallery.galleryId);
-        if (orders && orders.length > 0 && orders[0]?.orderId) {
-          // Navigate to order view
-          void router.push(`/galleries/${gallery.galleryId}/orders/${orders[0].orderId}`);
+        if (orders?.length > 0) {
+          const firstOrder = orders[0];
+          if (firstOrder?.orderId) {
+            // Navigate to order view
+            void router.push(`/galleries/${gallery.galleryId}/orders/${firstOrder.orderId}`);
+          }
         } else {
           // If no orders found, still open publish wizard as fallback
           void router.push(
@@ -606,7 +598,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       try {
         await sendGalleryLinkToClient(gallery.galleryId);
         showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
-      } catch (err) {
+      } catch (_err) {
         showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");
       }
     }
@@ -687,7 +679,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                       if (step.id === "upload") {
                         handleUploadClick();
                       } else if (step.id === "publish") {
-                        handlePublishClick();
+                        void handlePublishClick();
                       } else if (step.id === "send") {
                         void handleSendClick();
                       }

@@ -8,43 +8,20 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading";
+import { Loading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGallery } from "../../../hooks/useGallery";
+import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
+import { mergeGalleryImages } from "../../../lib/image-merge-utils";
 import { storeLogger } from "../../../lib/store-logger";
 import { useGalleryStore } from "../../../store";
-
-interface GalleryImage {
-  id?: string;
-  key?: string;
-  filename?: string;
-  url?: string;
-  thumbUrl?: string;
-  thumbUrlFallback?: string;
-  previewUrl?: string;
-  previewUrlFallback?: string;
-  isPlaceholder?: boolean;
-  uploadTimestamp?: number;
-  uploadIndex?: number;
-  size?: number;
-  lastModified?: number;
-  [key: string]: unknown;
-}
-
-interface Gallery {
-  galleryId: string;
-  originalsLimitBytes?: number;
-  finalsLimitBytes?: number;
-  originalsBytesUsed?: number;
-  finalsBytesUsed?: number;
-  [key: string]: unknown;
-}
+import type { Gallery, GalleryImage, Order } from "../../../types";
 
 interface ApiImage {
   key?: string;
@@ -68,38 +45,27 @@ export default function GalleryPhotos() {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction, logSkippedLoad } = usePageLogger(
-    {
-      pageName: "GalleryPhotos",
-    }
-  );
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const { logSkippedLoad } = usePageLogger({
+    pageName: "GalleryPhotos",
+  });
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const {
-    fetchGalleryImages,
-    fetchGalleryOrders,
-    galleryCreationLoading,
-    setGalleryCreationLoading,
-  } = useGalleryStore();
+  const { fetchGalleryImages, galleryCreationLoading, setGalleryCreationLoading } =
+    useGalleryStore();
   // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
-  interface GalleryOrder {
-    orderId?: string;
-    orderNumber?: string | number;
-    deliveryStatus?: string;
-    selectedKeys?: string[] | string;
-    createdAt?: string;
-    deliveredAt?: string;
-    [key: string]: unknown;
-  }
-  const [orders, setOrders] = useState<GalleryOrder[]>([]);
-  const [approvedSelectionKeys, setApprovedSelectionKeys] = useState<Set<string>>(new Set()); // Images in approved/preparing orders (cannot delete)
-  const [allOrderSelectionKeys, setAllOrderSelectionKeys] = useState<Set<string>>(new Set()); // Images in ANY order (show "Selected")
-  const [imageOrderStatus, setImageOrderStatus] = useState<Map<string, string>>(new Map()); // Map image key to order delivery status
+
+  // Use hook for order/image relationship management
+  const {
+    orders,
+    approvedSelectionKeys,
+    allOrderSelectionKeys,
+    imageOrderStatus,
+    loadApprovedSelections,
+  } = useGalleryImageOrders(galleryId);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
@@ -111,7 +77,7 @@ export default function GalleryPhotos() {
       return;
     }
 
-    const storageKey = `uppy_upload_state_${galleryId}_originals`;
+    const storageKey = `uppy_upload_state_${Array.isArray(galleryId) ? galleryId[0] : galleryId}_originals`;
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
@@ -137,15 +103,16 @@ export default function GalleryPhotos() {
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
     if (galleryId && typeof window !== "undefined") {
-      const storageKey = `uppy_upload_state_${galleryId}_originals`;
+      const storageKey = `uppy_upload_state_${Array.isArray(galleryId) ? galleryId[0] : galleryId}_originals`;
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         try {
-          const state = JSON.parse(stored) as {
+          const parsed = JSON.parse(stored) as {
             isActiveUpload?: boolean;
             galleryId: string;
             type: string;
           };
+          const state = parsed;
           if (state.isActiveUpload) {
             // Clear the active flag but keep the state (in case user wants to manually resume later)
             const updatedState = { ...state, isActiveUpload: false };
@@ -205,79 +172,14 @@ export default function GalleryPhotos() {
           url: img.url,
           finalUrl: img.finalUrl,
           size: img.size,
-          lastModified: img.lastModified,
+          lastModified: typeof img.lastModified === "number" ? img.lastModified : undefined,
           isPlaceholder: false,
         }));
 
-        // Preserve images that are currently being deleted (they may not be in API response yet)
-        // Merge deleting images from current state to show deleting overlay
+        // Merge new images with existing, preserving object references when data hasn't changed
         setImages((currentImages) => {
           const deletingImageKeys = Array.from(deletingImagesRef.current);
-          const currentDeletingImages = currentImages.filter((img) => {
-            const imgKey = img.key ?? img.filename;
-            return imgKey && deletingImageKeys.includes(imgKey);
-          });
-
-          // Create a map of current images by key for quick lookup
-          const currentImagesMap = new Map(
-            currentImages.map((img) => [img.key ?? img.filename, img])
-          );
-
-          // Create a map of API images by key
-          const apiImagesMap = new Map(mappedImages.map((img) => [img.key ?? img.filename, img]));
-
-          // Merge: preserve existing image objects when data hasn't changed
-          // This prevents unnecessary re-renders and state resets in LazyRetryableImage
-          const mergedImages: GalleryImage[] = [];
-
-          // Process all images from API (includes new and existing)
-          apiImagesMap.forEach((apiImg, imgKey) => {
-            const currentImg = currentImagesMap.get(imgKey);
-
-            // Check if image data actually changed by comparing URLs and lastModified
-            // Compare all URL properties to detect any changes
-            // Normalize lastModified for comparison (handle string vs number)
-            const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-              if (lm === undefined) {
-                return undefined;
-              }
-              return typeof lm === "string" ? new Date(lm).getTime() : lm;
-            };
-
-            const currentLastModified = normalizeLastModified(currentImg?.lastModified);
-            const apiLastModified = normalizeLastModified(apiImg.lastModified);
-
-            const hasDataChanged =
-              !currentImg ||
-              currentImg.thumbUrl !== apiImg.thumbUrl ||
-              currentImg.thumbUrlFallback !== apiImg.thumbUrlFallback ||
-              currentImg.previewUrl !== apiImg.previewUrl ||
-              currentImg.previewUrlFallback !== apiImg.previewUrlFallback ||
-              currentImg.bigThumbUrl !== apiImg.bigThumbUrl ||
-              currentImg.bigThumbUrlFallback !== apiImg.bigThumbUrlFallback ||
-              currentImg.url !== apiImg.url ||
-              currentImg.finalUrl !== apiImg.finalUrl ||
-              currentLastModified !== apiLastModified;
-
-            // If image exists and data hasn't changed, preserve the existing object
-            // This maintains object reference stability for LazyRetryableImage
-            if (currentImg && !hasDataChanged) {
-              mergedImages.push(currentImg);
-            } else {
-              // New image or data changed - use new object
-              mergedImages.push(apiImg);
-            }
-          });
-
-          // Add deleting images that aren't in API response (they may not be in API response yet)
-          currentDeletingImages.forEach((img) => {
-            const imgKey = img.key ?? img.filename;
-            if (imgKey && !apiImagesMap.has(imgKey)) {
-              mergedImages.push(img);
-            }
-          });
-
-          return mergedImages;
+          return mergeGalleryImages(currentImages, mappedImages, deletingImageKeys);
         });
       } catch (err) {
         if (!silent) {
@@ -291,7 +193,7 @@ export default function GalleryPhotos() {
         }
       }
     },
-    [galleryId, showToast, fetchGalleryImages, deletingImagesRef, gallery]
+    [galleryId, showToast, fetchGalleryImages, deletingImagesRef, logSkippedLoad]
   );
 
   // Reload gallery after upload (simple refetch, no polling)
@@ -302,169 +204,24 @@ export default function GalleryPhotos() {
     }
 
     // Fetch fresh images
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { fetchGalleryImages, galleryImages } = useGalleryStore.getState();
-    await fetchGalleryImages(galleryId as string);
+    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+    if (!galleryIdStr || typeof galleryIdStr !== "string") {
+      return;
+    }
+    await fetchGalleryImages(galleryIdStr);
 
     // Update local state from store
-    const storeImages = galleryImages[galleryId as string] ?? [];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const storeImagesRaw = galleryImages[galleryIdStr] ?? [];
+    const storeImages = storeImagesRaw as GalleryImage[];
 
     setImages((currentImages) => {
       const deletingImageKeys = Array.from(deletingImagesRef.current);
-      const currentDeletingImages = currentImages.filter((img) => {
-        const imgKey = img.key ?? img.filename;
-        return imgKey && deletingImageKeys.includes(imgKey);
-      });
-
-      // Create a map of current images by key for quick lookup
-      const currentImagesMap = new Map(currentImages.map((img) => [img.key ?? img.filename, img]));
-
-      // Create a map of store images by key
-      const storeImagesMap = new Map(storeImages.map((img) => [img.key ?? img.filename, img]));
-
-      // Merge: preserve existing image objects when data hasn't changed
-      // This prevents unnecessary re-renders and state resets in LazyRetryableImage
-      const mergedImages: GalleryImage[] = [];
-
-      // Process all images from store (includes new and existing)
-      storeImagesMap.forEach((storeImg, imgKey) => {
-        const currentImg = currentImagesMap.get(imgKey);
-
-        // Check if image data actually changed by comparing URLs and lastModified
-        // Compare all URL properties to detect any changes
-        // Normalize lastModified for comparison (handle string vs number)
-        const normalizeLastModified = (lm: number | string | undefined): number | undefined => {
-          if (lm === undefined) {
-            return undefined;
-          }
-          return typeof lm === "string" ? new Date(lm).getTime() : lm;
-        };
-
-        const currentLastModified = normalizeLastModified(currentImg?.lastModified);
-        const storeLastModified = normalizeLastModified(storeImg.lastModified);
-
-        const hasDataChanged =
-          !currentImg ||
-          currentImg.thumbUrl !== storeImg.thumbUrl ||
-          currentImg.thumbUrlFallback !== storeImg.thumbUrlFallback ||
-          currentImg.previewUrl !== storeImg.previewUrl ||
-          currentImg.previewUrlFallback !== storeImg.previewUrlFallback ||
-          currentImg.bigThumbUrl !== storeImg.bigThumbUrl ||
-          currentImg.bigThumbUrlFallback !== storeImg.bigThumbUrlFallback ||
-          currentImg.url !== storeImg.url ||
-          currentImg.finalUrl !== storeImg.finalUrl ||
-          currentLastModified !== storeLastModified;
-
-        // If image exists and data hasn't changed, preserve the existing object
-        // This maintains object reference stability for LazyRetryableImage
-        if (currentImg && !hasDataChanged) {
-          mergedImages.push(currentImg);
-        } else {
-          // New image or data changed - use new object
-          mergedImages.push(storeImg);
-        }
-      });
-
-      // Add deleting images that aren't in store (they may not be in API response yet)
-      currentDeletingImages.forEach((img) => {
-        const imgKey = img.key ?? img.filename;
-        if (imgKey && !storeImagesMap.has(imgKey)) {
-          mergedImages.push(img);
-        }
-      });
-
-      return mergedImages;
+      return mergeGalleryImages(currentImages, storeImages, deletingImageKeys);
     });
-  }, [galleryId, deletingImagesRef]);
-
-  const loadApprovedSelections = useCallback(async (): Promise<void> => {
-    if (!galleryId) {
-      logSkippedLoad("loadApprovedSelections", "No galleryId provided", {});
-      return;
-    }
-
-    try {
-      const ordersData = await fetchGalleryOrders(galleryId as string);
-
-      setOrders(ordersData);
-
-      // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
-      const approvedOrders = (ordersData as GalleryOrder[]).filter(
-        (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
-      );
-
-      // Collect all selected keys from approved orders
-      const approvedKeys = new Set<string>();
-      approvedOrders.forEach((order) => {
-        const selectedKeys = Array.isArray(order.selectedKeys)
-          ? order.selectedKeys
-          : typeof order.selectedKeys === "string"
-            ? (JSON.parse(order.selectedKeys) as string[])
-            : [];
-        selectedKeys.forEach((key: string) => approvedKeys.add(key));
-      });
-
-      setApprovedSelectionKeys(approvedKeys);
-
-      // Collect all selected keys from ANY order (for "Selected" display)
-      // Also track order delivery status for each image
-      const allOrderKeys = new Set<string>();
-      const imageStatusMap = new Map<string, string>();
-
-      (ordersData as GalleryOrder[]).forEach((order) => {
-        const selectedKeys = Array.isArray(order.selectedKeys)
-          ? order.selectedKeys
-          : typeof order.selectedKeys === "string"
-            ? (JSON.parse(order.selectedKeys) as string[])
-            : [];
-        const orderStatus = order.deliveryStatus || "";
-
-        selectedKeys.forEach((key: string) => {
-          allOrderKeys.add(key);
-          // Track the highest priority status for each image
-          // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
-          const currentStatus = imageStatusMap.get(key);
-          if (!currentStatus) {
-            imageStatusMap.set(key, orderStatus);
-          } else if (orderStatus === "DELIVERED") {
-            imageStatusMap.set(key, "DELIVERED");
-          } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
-            imageStatusMap.set(key, "PREPARING_DELIVERY");
-          } else if (
-            orderStatus === "PREPARING_FOR_DELIVERY" &&
-            currentStatus !== "DELIVERED" &&
-            currentStatus !== "PREPARING_DELIVERY"
-          ) {
-            imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
-          } else if (
-            orderStatus === "CLIENT_APPROVED" &&
-            currentStatus !== "DELIVERED" &&
-            currentStatus !== "PREPARING_DELIVERY" &&
-            currentStatus !== "PREPARING_FOR_DELIVERY"
-          ) {
-            imageStatusMap.set(key, "CLIENT_APPROVED");
-          }
-        });
-      });
-
-      setAllOrderSelectionKeys(allOrderKeys);
-      setImageOrderStatus(imageStatusMap);
-    } catch (err) {
-      // Check if error is 404 (gallery not found/deleted) - handle silently
-      const apiError = err as { status?: number };
-      if (apiError.status === 404) {
-        // Gallery doesn't exist (deleted) - silently return empty state
-        setOrders([]);
-        setApprovedSelectionKeys(new Set());
-        setAllOrderSelectionKeys(new Set());
-        setImageOrderStatus(new Map());
-        return;
-      }
-
-      // For other errors, log but don't show toast - this is not critical
-      // eslint-disable-next-line no-console
-      console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
-    }
-  }, [galleryId, fetchGalleryOrders]);
+  }, [galleryId, deletingImagesRef, logSkippedLoad]);
 
   // Clear galleryCreationLoading when gallery and images are fully loaded
   useEffect(() => {
@@ -500,13 +257,6 @@ export default function GalleryPhotos() {
 
     // Auth is handled by AuthProvider/ProtectedRoute - just load data
     if (galleryId) {
-      // Check for redirect params (Stripe redirect from wallet top-up or publish wizard)
-      const params = new URLSearchParams(
-        typeof window !== "undefined" ? window.location.search : ""
-      );
-      const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
-      const hasPaymentSuccess = params.get("payment") === "success";
-
       void loadPhotos();
 
       // Load orders
@@ -565,6 +315,7 @@ export default function GalleryPhotos() {
   const currentGalleryId = gallery?.galleryId ?? "";
 
   const effectiveGallery = gallery;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
   const effectiveGalleryId = effectiveGallery?.galleryId ?? "";
 
   // Gallery is loaded if we have it and IDs match
@@ -618,10 +369,10 @@ export default function GalleryPhotos() {
   // Get order delivery status for an image
   const getImageOrderStatus = (image: GalleryImage): string | null => {
     const imageKey = image.key ?? image.filename;
-    return imageKey ? imageOrderStatus.get(imageKey) || null : null;
+    return imageKey ? (imageOrderStatus.get(imageKey) ?? null) : null;
   };
 
-  // Helper to normalize selectedKeys from order
+  // Helper to normalize selectedKeys from order (used for grouping images by order)
   const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
     if (!selectedKeys) {
       return [];
@@ -631,7 +382,7 @@ export default function GalleryPhotos() {
     }
     if (typeof selectedKeys === "string") {
       try {
-        const parsed = JSON.parse(selectedKeys);
+        const parsed: unknown = JSON.parse(selectedKeys);
         return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
       } catch {
         return [];
@@ -669,7 +420,7 @@ export default function GalleryPhotos() {
   const imagesInOrders = new Set<string>();
 
   deliveredOrders.forEach((order) => {
-    const orderId = order.orderId;
+    const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
     if (!orderId) {
       return;
     }
@@ -840,7 +591,12 @@ export default function GalleryPhotos() {
       {/* Next Steps Overlay */}
       <NextStepsOverlay
         gallery={gallery}
-        orders={orders as unknown as Array<{ orderId: string; [key: string]: unknown }>}
+        orders={
+          orders.map((o) => ({
+            ...o,
+            galleryId: galleryId as string,
+          })) as Order[]
+        }
         galleryLoading={galleryLoading}
       />
 
@@ -878,7 +634,8 @@ export default function GalleryPhotos() {
           </div>
         ) : images.length === 0 ? (
           <EmptyState
-            icon={<Image size={64} />}
+            // eslint-disable-next-line jsx-a11y/alt-text
+            icon={<Image size={64} aria-hidden="true" />}
             title="Brak zdjęć w galerii"
             description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
             actionButton={{
@@ -896,7 +653,7 @@ export default function GalleryPhotos() {
                 return null;
               }
 
-              const orderImages = imagesByOrder.get(orderId) || [];
+              const orderImages = imagesByOrder.get(orderId) ?? [];
               if (orderImages.length === 0) {
                 return null;
               }

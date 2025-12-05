@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
@@ -16,7 +16,8 @@ import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore, useOrderStore, useUserStore } from "../../store";
+import { useGalleryStore, useOrderStore } from "../../store";
+import type { Gallery } from "../../types";
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [
@@ -27,12 +28,6 @@ const FILTER_ROUTES = [
   "dostarczone",
   "robocze",
 ];
-
-interface Gallery {
-  galleryId: string;
-  state?: string;
-  [key: string]: unknown;
-}
 
 interface PaymentDetails {
   totalAmountCents: number;
@@ -105,7 +100,7 @@ function cleanUrlParams(preserveParams: {
  * Handles wallet top-up success: refreshes balance, reloads orders, shows toast
  */
 async function handleWalletTopUpSuccess(
-  galleryIdStr: string,
+  _galleryIdStr: string,
   loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void,
   preserveParams: { publish?: string | null; galleryId?: string | null }
@@ -125,7 +120,7 @@ async function handleWalletTopUpSuccess(
  * Polls for gallery payment status and reloads data when confirmed
  */
 async function pollGalleryPaymentStatus(
-  galleryIdStr: string,
+  _galleryIdStr: string,
   initialGalleryState: string | undefined,
   reloadGallery: (() => Promise<void>) | undefined,
   loadOrders: () => Promise<void>,
@@ -243,6 +238,11 @@ export default function GalleryDetail() {
     walletAmountCents: 0,
     stripeAmountCents: 0,
   });
+
+  // Check if we're coming from gallery creation - show loading overlay until fully loaded
+  // Move hooks before conditional return to avoid React Hooks rules violation
+  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
+  const setGalleryCreationLoading = useGalleryStore((state) => state.setGalleryCreationLoading);
 
   const loadOrders = async (): Promise<void> => {
     if (!galleryId) {
@@ -366,12 +366,19 @@ export default function GalleryDetail() {
         try {
           const galleryIdStr = galleryId as string;
           const cachedOrders = getOrdersByGalleryId(galleryIdStr);
-          if (cachedOrders && cachedOrders.length > 0 && cachedOrders[0]?.orderId) {
-            void router.replace(`/galleries/${galleryIdStr}/orders/${cachedOrders[0].orderId}`);
+          if (cachedOrders && cachedOrders.length > 0) {
+            const firstOrder = cachedOrders[0];
+            const orderId = firstOrder?.orderId;
+            if (orderId && typeof orderId === "string") {
+              void router.replace(`/galleries/${galleryIdStr}/orders/${orderId}`);
+            }
           } else {
             const orders = await fetchGalleryOrders(galleryIdStr);
-            if (orders && orders.length > 0 && orders[0]?.orderId) {
-              void router.replace(`/galleries/${galleryIdStr}/orders/${orders[0].orderId}`);
+            if (orders?.length > 0) {
+              const firstOrder = orders[0];
+              if (firstOrder?.orderId) {
+                void router.replace(`/galleries/${galleryIdStr}/orders/${firstOrder.orderId}`);
+              }
             }
           }
         } catch (err) {
@@ -549,22 +556,18 @@ export default function GalleryDetail() {
     );
   };
 
-  // Don't render gallery detail if this is a filter route - let Next.js handle static routes
-  // Check this AFTER hooks to avoid conditional hook call
-  if (isFilterRoute) {
-    return null;
-  }
-
-  // Check if we're coming from gallery creation - show loading overlay until fully loaded
-  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
-  const setGalleryCreationLoading = useGalleryStore((state) => state.setGalleryCreationLoading);
-
   // Hide creation loading when gallery is fully loaded and orders are loaded
   useEffect(() => {
     if (galleryCreationLoading && !galleryLoading && !orderLoading && gallery) {
       setGalleryCreationLoading(false);
     }
   }, [galleryCreationLoading, galleryLoading, orderLoading, gallery, setGalleryCreationLoading]);
+
+  // Don't render gallery detail if this is a filter route - let Next.js handle static routes
+  // Check this AFTER hooks to avoid conditional hook call
+  if (isFilterRoute) {
+    return null;
+  }
 
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
   // Show loading only for orders, not gallery (gallery loading is handled by wrapper)
@@ -653,20 +656,30 @@ export default function GalleryDetail() {
                       className="hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        #{order.orderNumber ?? order.orderId.slice(-8)}
+                        #
+                        {order.orderNumber ??
+                          (typeof order.orderId === "string" ? order.orderId.slice(-8) : "")}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">
-                        {getDeliveryStatusBadge(order.deliveryStatus)}
+                        {getDeliveryStatusBadge(
+                          typeof order.deliveryStatus === "string"
+                            ? order.deliveryStatus
+                            : undefined
+                        )}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">
                         {getPaymentStatusBadge(order.paymentStatus)}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {formatPrice(order.totalCents)}
+                        {formatPrice(
+                          typeof order.totalCents === "number" ? order.totalCents : null
+                        )}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                         {order.createdAt
-                          ? new Date(order.createdAt).toLocaleDateString("pl-PL")
+                          ? new Date(order.createdAt as string | number | Date).toLocaleDateString(
+                              "pl-PL"
+                            )
                           : "-"}
                       </TableCell>
                       <TableCell className="px-4 py-3">

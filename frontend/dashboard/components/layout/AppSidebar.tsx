@@ -32,7 +32,8 @@ const navItems: NavItem[] = [
     path: "/",
   },
   {
-    icon: <Image size={20} />,
+    // eslint-disable-next-line jsx-a11y/alt-text
+    icon: <Image size={20} aria-hidden="true" />,
     name: "Galerie",
     subItems: [
       { name: "Wersje robocze", path: "/galleries/robocze" },
@@ -162,10 +163,7 @@ const AppSidebar: React.FC = () => {
           ) : (
             nav.path &&
             (nav.external ? (
-              <a
-                href={nav.path}
-                className="menu-item group menu-item-inactive"
-              >
+              <a href={nav.path} className="menu-item group menu-item-inactive">
                 <span className="menu-item-icon-size menu-item-icon-inactive">{nav.icon}</span>
                 {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
               </a>

@@ -32,12 +32,14 @@ export function initDevTools(): void {
     session: {
       invalidate: () => {
         invalidateSession();
+        // eslint-disable-next-line no-console
         console.log("✅ Session invalidated. Now navigate or refresh to trigger the popup.");
       },
       trigger: () => {
         triggerSessionExpired();
       },
       help: () => {
+        // eslint-disable-next-line no-console
         console.log(`
 🧪 Session Expiration Test Helpers:
 
@@ -56,13 +58,16 @@ Example:
     },
     wizard: {
       open: () => {
+        // eslint-disable-next-line no-console
         console.log("🧪 Gallery wizard dev mode: Wizard will be locked open on next open.");
         // Set a flag that AppLayout can read to lock the wizard
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
         (window as any).__galleryWizardDevLocked = true;
         // Trigger wizard open by dispatching a custom event
         window.dispatchEvent(new CustomEvent("openGalleryWizard"));
       },
       help: () => {
+        // eslint-disable-next-line no-console
         console.log(`
 🧪 Gallery Wizard Dev Helpers:
 
@@ -78,6 +83,7 @@ Example:
       },
     },
     help: () => {
+      // eslint-disable-next-line no-console
       console.log(`
 🧪 PhotoCloud Development Tools
 
@@ -100,9 +106,11 @@ Quick Examples:
   };
 
   // Expose globally
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   (window as any).devTools = devTools;
 
   // Backward compatibility: Keep old testSessionExpiration for existing scripts/docs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
   (window as any).testSessionExpiration = {
     invalidate: devTools.session.invalidate,
     trigger: devTools.session.trigger,
@@ -110,7 +118,9 @@ Quick Examples:
   };
 
   // Show welcome message
+  // eslint-disable-next-line no-console
   console.log(`%c🧪 PhotoCloud Dev Tools`, "color: #10b981; font-weight: bold; font-size: 14px;");
+  // eslint-disable-next-line no-console
   console.log(
     "Run %cdevTools.help()%c for available commands.",
     "color: #3b82f6; font-weight: bold;",
@@ -125,6 +135,7 @@ export function isDevToolsAvailable(): boolean {
   return (
     typeof window !== "undefined" &&
     process.env.NODE_ENV === "development" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     typeof (window as any).devTools !== "undefined"
   );
 }

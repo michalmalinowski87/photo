@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import { useCallback } from "react";
 
-import { useGalleryStore, useOrderStore, type Gallery } from "../store";
+import { useGalleryStore, useOrderStore } from "../store";
 
 /**
  * Hook for accessing gallery data from Zustand store
@@ -32,7 +32,7 @@ export const useGallery = () => {
   }, [galleryId, orderId, fetchOrder]);
 
   return {
-    gallery: currentGallery as Gallery | null,
+    gallery: currentGallery,
     loading: isLoading,
     error,
     galleryId: galleryId as string | undefined,

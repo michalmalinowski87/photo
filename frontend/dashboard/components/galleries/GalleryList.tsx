@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
+import type { Gallery } from "../../types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
@@ -24,23 +25,6 @@ import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
 import { PublishGalleryWizard } from "./PublishGalleryWizard";
-
-interface Gallery {
-  galleryId: string;
-  galleryName?: string;
-  state?: string;
-  isPaid?: boolean;
-  paymentStatus?: string;
-  plan?: string;
-  priceCents?: number;
-  orderCount?: number;
-  createdAt?: string;
-  originalsLimitBytes?: number;
-  finalsLimitBytes?: number;
-  originalsBytesUsed?: number;
-  finalsBytesUsed?: number;
-  [key: string]: unknown;
-}
 
 interface GalleryListProps {
   filter?:
@@ -220,7 +204,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
   const getEmptyStateConfig = () => {
     const handleCreateGallery = () => {
-      router.push("/galleries/robocze");
+      void router.push("/galleries/robocze");
     };
 
     switch (filter) {
@@ -283,7 +267,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
         };
       default:
         return {
-          icon: <Image size={64} />,
+          // eslint-disable-next-line jsx-a11y/alt-text
+          icon: <Image size={64} aria-hidden="true" />,
           title: "Brak galerii do wyświetlenia",
           description: "Nie znaleziono galerii spełniających kryteria filtrowania.",
         };
@@ -375,7 +360,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                             }
                           }}
                         >
-                          {gallery.galleryName ?? gallery.galleryId}
+                          {(gallery.galleryName ?? gallery.galleryId) as string}
                         </Link>
                         {!gallery.galleryName && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -409,7 +394,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                       </TableCell>
                       <TableCell className="px-4 py-3">{getStateBadge(gallery)}</TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {gallery.orderCount ?? 0}
+                        {(gallery.orderCount ?? 0) as number}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                         {gallery.createdAt
@@ -474,7 +459,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
             }}
             onConfirm={handleDeleteConfirm}
             title="Usuń galerię"
-            message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName ?? galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+            message={`Czy na pewno chcesz usunąć galerię "${String(galleryToDelete?.galleryName) || String(galleryToDelete?.galleryId) || ""}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
             confirmText="Usuń galerię"
             cancelText="Anuluj"
             variant="danger"
@@ -494,7 +479,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
         }}
         onConfirm={handleDeleteConfirm}
         title="Usuń galerię"
-        message={`Czy na pewno chcesz usunąć galerię "${galleryToDelete?.galleryName ?? galleryToDelete?.galleryId}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        message={`Czy na pewno chcesz usunąć galerię "${String(galleryToDelete?.galleryName) || String(galleryToDelete?.galleryId) || ""}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
         confirmText="Usuń galerię"
         cancelText="Anuluj"
         variant="danger"

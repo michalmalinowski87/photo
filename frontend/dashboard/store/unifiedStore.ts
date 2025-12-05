@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
+
 import { createAuthSlice, AuthSlice } from "./authSlice";
 import { createDownloadSlice, DownloadSlice } from "./downloadSlice";
 import { createGallerySlice, GallerySlice } from "./gallerySlice";
@@ -9,9 +10,9 @@ import { createOverlaySlice, OverlaySlice } from "./overlaySlice";
 import { createSidebarSlice, SidebarSlice } from "./sidebarSlice";
 import { createThemeSlice, ThemeSlice } from "./themeSlice";
 import { createToastSlice, ToastSlice } from "./toastSlice";
+import { createUISlice, UISlice } from "./uiSlice";
 import { createUploadSlice, UploadSlice } from "./uploadSlice";
 import { createUserSlice, UserSlice } from "./userSlice";
-import { createUISlice, UISlice } from "./uiSlice";
 
 // Combined store type
 export type UnifiedStore = AuthSlice &

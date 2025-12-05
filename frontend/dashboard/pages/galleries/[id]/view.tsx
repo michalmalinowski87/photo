@@ -4,26 +4,14 @@ import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store";
+import { useGalleryStore, type Order } from "../../../store";
+import type { GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {
   token: string;
   ownerId: string;
   galleryId: string | string[] | undefined;
   mode: "owner";
-}
-
-interface GalleryImage {
-  key: string;
-  url?: string;
-  [key: string]: unknown;
-}
-
-interface Order {
-  orderId: string;
-  deliveryStatus?: string;
-  selectedKeys?: string[];
-  [key: string]: unknown;
 }
 
 function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
@@ -89,7 +77,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
 
         // Find active order (approved, preparing delivery, or changes requested)
         const activeOrder = ordersList.find((o): o is Order => {
-          if (!o || typeof o !== "object" || !("deliveryStatus" in o)) {
+          if (!o || typeof o !== "object" || !("deliveryStatus" in o) || !("orderId" in o)) {
             return false;
           }
           const status = (o as { deliveryStatus?: unknown }).deliveryStatus;
@@ -282,7 +270,9 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                 }
               } else if (relativeUrl.includes("/final/zip") && options.method === "POST") {
                 // POST /galleries/{galleryId}/orders/{orderId}/final/zip
-                const match = relativeUrl.match(/\/galleries\/([^/]+)\/orders\/([^/]+)\/final\/zip/);
+                const match = relativeUrl.match(
+                  /\/galleries\/([^/]+)\/orders\/([^/]+)\/final\/zip/
+                );
                 if (match) {
                   const [, galleryId, orderId] = match;
                   const result = await api.orders.downloadFinalZip(galleryId, orderId);
@@ -290,21 +280,25 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                   if (result.zip) {
                     return {
                       data: { zip: result.zip, filename: result.filename },
-                      response: new Response(JSON.stringify({ zip: result.zip, filename: result.filename }), {
-                        status: 200,
-                      }),
+                      response: new Response(
+                        JSON.stringify({ zip: result.zip, filename: result.filename }),
+                        {
+                          status: 200,
+                        }
+                      ),
                     };
                   } else if (result.blob) {
                     // Convert blob to base64 for backward compatibility
                     const arrayBuffer = await result.blob.arrayBuffer();
-                    const base64 = btoa(
-                      String.fromCharCode(...new Uint8Array(arrayBuffer))
-                    );
+                    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
                     return {
                       data: { zip: base64, filename: result.filename },
-                      response: new Response(JSON.stringify({ zip: base64, filename: result.filename }), {
-                        status: 200,
-                      }),
+                      response: new Response(
+                        JSON.stringify({ zip: base64, filename: result.filename }),
+                        {
+                          status: 200,
+                        }
+                      ),
                     };
                   }
                 }

@@ -39,7 +39,7 @@ export const NavigationLink: React.FC<NavigationLinkProps> = ({
       }
 
       // Get target URL
-      const targetUrl = typeof href === "string" ? href : href.pathname || router.asPath;
+      const targetUrl = typeof href === "string" ? href : (href.pathname ?? router.asPath);
 
       // Clear state explicitly based on where we're going
       const currentUrl = router.asPath || router.pathname;

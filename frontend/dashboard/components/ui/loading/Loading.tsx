@@ -85,7 +85,7 @@ export const FullPageLoading: React.FC<{ text?: string; logo?: React.ReactNode }
 
       {/* Welcoming message */}
       <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">
-        {text || defaultMessage}
+        {text ?? defaultMessage}
       </p>
 
       {/* Subtle loading indicator */}
@@ -157,7 +157,7 @@ export const ContentViewLoading: React.FC<{ text?: string; logo?: React.ReactNod
 
         {/* Welcoming message */}
         <p className="text-base text-gray-500 dark:text-gray-400 font-medium">
-          {text || defaultMessage}
+          {text ?? defaultMessage}
         </p>
 
         {/* Subtle loading indicator */}

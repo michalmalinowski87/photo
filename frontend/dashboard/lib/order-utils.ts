@@ -6,6 +6,7 @@ export const normalizeSelectedKeys = (selectedKeys: unknown): string[] => {
     return [];
   }
   if (Array.isArray(selectedKeys)) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return selectedKeys;
   }
   if (typeof selectedKeys === "string") {
@@ -16,7 +17,7 @@ export const normalizeSelectedKeys = (selectedKeys: unknown): string[] => {
       return [selectedKeys];
     }
   }
-  return [];
+  return [] as string[];
 };
 
 /**

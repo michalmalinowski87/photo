@@ -27,7 +27,7 @@ interface PageHistoryItem {
 
 export default function Wallet() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: "Wallet",
   });
   const [loading, setLoading] = useState<boolean>(true);

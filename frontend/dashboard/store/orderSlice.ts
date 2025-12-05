@@ -3,6 +3,8 @@ import { StateCreator } from "zustand";
 import api, { formatApiError } from "../lib/api-service";
 import { storeLogger } from "../lib/store-logger";
 
+import { useUnifiedStore } from "./unifiedStore";
+
 export interface Order {
   orderId: string;
   galleryId: string;
@@ -134,20 +136,15 @@ export const createOrderSlice: StateCreator<
   approveChangeRequest: async (galleryId: string, orderId: string) => {
     const state = get();
     try {
-      const response = await api.orders.approveChangeRequest(galleryId, orderId);
+      await api.orders.approveChangeRequest(galleryId, orderId);
 
-      // Merge state update instead of reloading
+      // Reload order to get updated data
       if (state.currentOrder?.orderId === orderId) {
-        state.setCurrentOrder({
-          ...state.currentOrder,
-          deliveryStatus: response.deliveryStatus ?? state.currentOrder.deliveryStatus,
-          // Update any other fields from response
-          ...(response as Partial<Order>),
-        });
+        await state.fetchOrder(galleryId, orderId);
       }
 
       // Update orders list if needed
-      const galleryStore = useGalleryStore.getState();
+      const galleryStore = useUnifiedStore.getState();
       await galleryStore.fetchGalleryOrders(galleryId);
 
       // Show toast
@@ -176,20 +173,15 @@ export const createOrderSlice: StateCreator<
     set({ denyLoading: true }, undefined, "order/denyChangeRequest/start");
 
     try {
-      const response = await api.orders.denyChangeRequest(galleryId, orderId, reason);
+      await api.orders.denyChangeRequest(galleryId, orderId, reason);
 
-      // Merge state update instead of reloading
+      // Reload order to get updated data
       if (state.currentOrder?.orderId === orderId) {
-        state.setCurrentOrder({
-          ...state.currentOrder,
-          deliveryStatus: response.deliveryStatus ?? state.currentOrder.deliveryStatus,
-          // Update any other fields from response
-          ...(response as Partial<Order>),
-        });
+        await state.fetchOrder(galleryId, orderId);
       }
 
       // Update orders list if needed
-      const galleryStore = useGalleryStore.getState();
+      const galleryStore = useUnifiedStore.getState();
       await galleryStore.fetchGalleryOrders(galleryId);
 
       // Show toast

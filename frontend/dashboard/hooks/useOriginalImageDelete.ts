@@ -2,15 +2,9 @@ import { useState, useRef, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store";
+import type { GalleryImage } from "../types";
 
 import { useToast } from "./useToast";
-
-interface GalleryImage {
-  key?: string;
-  filename?: string;
-  size?: number;
-  [key: string]: unknown;
-}
 
 interface UseOriginalImageDeleteOptions {
   galleryId: string | string[] | undefined;

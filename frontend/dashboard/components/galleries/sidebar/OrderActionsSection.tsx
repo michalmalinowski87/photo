@@ -70,7 +70,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     try {
       await markOrderPaid(galleryId, orderId);
       setShowMarkPaidDialog(false);
-    } catch (err) {
+    } catch (_err) {
       // Error handling is done in the store action
     } finally {
       setMarkPaidLoading(false);
@@ -97,7 +97,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     try {
       await sendFinalsToClient(galleryId, orderId);
       setShowSendFinalsDialog(false);
-    } catch (err) {
+    } catch (_err) {
       // Error handling is done in the store action
     } finally {
       setSendFinalsLoading(false);

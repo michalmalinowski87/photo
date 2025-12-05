@@ -8,7 +8,6 @@ import * as galleriesList from '../../../functions/galleries/list';
 import * as galleriesCreate from '../../../functions/galleries/create';
 import * as galleriesUpdate from '../../../functions/galleries/update';
 import * as galleriesDelete from '../../../functions/galleries/delete';
-import * as galleriesListImages from '../../../functions/galleries/listImages';
 import * as galleriesPay from '../../../functions/galleries/pay';
 import * as galleriesCancelTransaction from '../../../functions/galleries/cancelTransaction';
 import * as galleriesSetSelectionMode from '../../../functions/galleries/setSelectionMode';
@@ -19,7 +18,6 @@ import * as galleriesDeletePhotosBatch from '../../../functions/galleries/delete
 import * as galleriesCalculatePlan from '../../../functions/galleries/calculatePlan';
 import * as galleriesValidateUploadLimits from '../../../functions/galleries/validateUploadLimits';
 import * as galleriesUpgradePlan from '../../../functions/galleries/upgradePlan';
-import * as galleriesClientLogin from '../../../functions/galleries/clientLogin';
 import * as galleriesSendToClient from '../../../functions/galleries/sendGalleryToClient';
 import * as galleriesExport from '../../../functions/galleries/export';
 

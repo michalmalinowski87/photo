@@ -23,7 +23,7 @@ interface BusinessForm {
 
 export default function Settings() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+  const { logDataLoad, logDataLoaded } = usePageLogger({
     pageName: "Settings",
   });
   const [loading, setLoading] = useState<boolean>(true);
@@ -77,7 +77,7 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
-  }, [loginEmail]);
+  }, [loginEmail, logDataLoad, logDataLoaded]);
 
   useEffect(() => {
     // Auth is handled by AuthProvider/ProtectedRoute - get email from user context

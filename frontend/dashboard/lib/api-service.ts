@@ -80,6 +80,9 @@ interface Gallery {
   [key: string]: any;
 }
 
+// Note: Client, Package, and Order types are now defined in types/index.ts
+// Keeping these here for backward compatibility with existing code
+// TODO: Migrate to use types from types/index.ts
 interface Client {
   clientId: string;
   email?: string;
@@ -1120,9 +1123,7 @@ class ApiService {
         const contentDisposition = response.headers.get("content-disposition");
         let filename = `${orderId}.zip`;
         if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(
-            /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-          );
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch?.[1]) {
             filename = filenameMatch[1].replace(/['"]/g, "");
           }
@@ -1184,9 +1185,7 @@ class ApiService {
         const contentDisposition = response.headers.get("content-disposition");
         let filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
         if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(
-            /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-          );
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch?.[1]) {
             filename = filenameMatch[1].replace(/['"]/g, "");
           }

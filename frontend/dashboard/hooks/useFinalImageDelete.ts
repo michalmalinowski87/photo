@@ -1,17 +1,10 @@
 import { useState, useRef, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore } from "../store";
+import { useGalleryStore, useOrderStore } from "../store";
+import type { GalleryImage } from "../types";
 
-import { useOrderStore } from "../store";
 import { useToast } from "./useToast";
-
-interface GalleryImage {
-  key?: string;
-  filename?: string;
-  size?: number;
-  [key: string]: unknown;
-}
 
 interface UseFinalImageDeleteOptions {
   galleryId: string | string[] | undefined;
