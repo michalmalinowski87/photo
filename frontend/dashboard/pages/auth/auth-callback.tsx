@@ -1,14 +1,14 @@
 import { useRouter } from "next/router";
 import React, { useEffect, useRef } from "react";
 
+import { useAuth } from "../../context/AuthProvider";
 import { exchangeCodeForTokens } from "../../lib/auth";
-import { useAuthStore } from "../../store";
 
 export default function AuthCallback() {
   const router = useRouter();
   const hasRedirected = useRef<boolean>(false);
   const hasProcessed = useRef<boolean>(false);
-  const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+  const { setSessionExpired } = useAuth();
 
   useEffect(() => {
     // Wait for router to be ready (query params are populated asynchronously)
@@ -108,7 +108,8 @@ export default function AuthCallback() {
         : "/";
       window.location.href = `${dashboardUrl}/login?returnUrl=${encodeURIComponent(returnUrl)}`;
     }
-  }, [router, router.isReady, router.query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, router.asPath, setSessionExpired]);
 
   return (
     <div style={{ padding: 24, textAlign: "center" }}>

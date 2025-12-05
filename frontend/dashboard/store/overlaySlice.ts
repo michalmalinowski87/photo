@@ -3,10 +3,12 @@ import { StateCreator } from "zustand";
 export interface OverlaySlice {
   nextStepsVisible: boolean;
   nextStepsExpanded: boolean;
+  nextStepsOverlayExpanded: boolean;
   nextStepsWidth: number;
   nextStepsCollapsedWidth: number;
   setNextStepsVisible: (visible: boolean) => void;
   setNextStepsExpanded: (expanded: boolean) => void;
+  setNextStepsOverlayExpanded: (expanded: boolean) => void;
   setNextStepsWidth: (width: number) => void;
   setNextStepsCollapsedWidth: (width: number) => void;
 }
@@ -19,6 +21,7 @@ export const createOverlaySlice: StateCreator<
 > = (set) => ({
   nextStepsVisible: false,
   nextStepsExpanded: true,
+  nextStepsOverlayExpanded: true,
   nextStepsWidth: 384, // w-96 = 384px
   nextStepsCollapsedWidth: 64, // w-16 = 4rem = 64px
 
@@ -28,6 +31,10 @@ export const createOverlaySlice: StateCreator<
 
   setNextStepsExpanded: (expanded: boolean) => {
     set({ nextStepsExpanded: expanded }, undefined, "overlay/setNextStepsExpanded");
+  },
+
+  setNextStepsOverlayExpanded: (expanded: boolean) => {
+    set({ nextStepsOverlayExpanded: expanded }, undefined, "overlay/setNextStepsOverlayExpanded");
   },
 
   setNextStepsWidth: (width: number) => {

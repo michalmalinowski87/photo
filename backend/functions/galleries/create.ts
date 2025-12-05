@@ -185,6 +185,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						galleryId,
 						orderId,
 						orderNumber,
+						ownerId: requester, // Denormalize ownerId for efficient querying
 						deliveryStatus: 'AWAITING_FINAL_PHOTOS', // Start with AWAITING_FINAL_PHOTOS - photographer can upload finals and manage payment
 						paymentStatus: orderPaymentStatus,
 						selectedKeys: [], // Empty means all photos

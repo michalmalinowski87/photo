@@ -4,9 +4,12 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
-import { useGalleryStore } from "../store";
 
 import { useToast } from "./useToast";
+
+// Type alias for UppyFile with required type parameters
+// Using 'any' to be compatible with Uppy's internal type system
+type UppyFileType = UppyFile<any, any>;
 
 export interface UseUppyUploadConfig {
   galleryId: string;
@@ -45,7 +48,7 @@ interface UploadProgressState {
 
 async function validateStorageLimits(
   galleryId: string,
-  files: UppyFile[],
+  files: UppyFileType[],
   onValidationNeeded?: UseUppyUploadConfig["onValidationNeeded"]
 ): Promise<boolean> {
   try {
@@ -138,12 +141,9 @@ async function handlePostUploadActions(
   galleryId: string,
   orderId: string | undefined,
   type: UploadType,
-  expectedSuccessfulCount: number,
+  _expectedSuccessfulCount: number,
   reloadGallery?: () => Promise<void>
 ): Promise<void> {
-  const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-  await refreshGalleryBytesOnly(galleryId, true);
-
   if (type === "finals" && orderId) {
     try {
       // Wait a bit for backend to finalize uploads before marking complete
@@ -159,14 +159,9 @@ async function handlePostUploadActions(
     // generating thumbnails, or updating the database
     // Wait 1.5 seconds before fetching to give backend processing time
     await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Invalidate cache so reloadGallery will fetch fresh images
-    const { invalidateGalleryImagesCache } = useGalleryStore.getState();
-    invalidateGalleryImagesCache(galleryId);
   }
 
   // Reload gallery UI - this will fetch images and update state
-  // We don't fetch here to avoid duplicate requests - let reloadGallery handle it
   // The delay above ensures backend has processed files before reloadGallery fetches
   if (reloadGallery) {
     await reloadGallery();
@@ -184,7 +179,8 @@ function checkIfAnyFileIsPaused(uppy: Uppy | null): boolean {
   // Trust Uppy's file state - it manages isPaused internally
   const files = Object.values(uppy.getFiles());
   return files.some(
-    (f: UppyFile) => f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
+    (f: UppyFileType) =>
+      f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
   );
 }
 
@@ -229,7 +225,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       galleryId: config.galleryId,
       orderId: config.orderId,
       type: config.type,
-      onBeforeUpload: async (files: UppyFile[]) => {
+      onBeforeUpload: async (files: UppyFileType[]) => {
         if (configRef.current.type === "originals") {
           try {
             const isValid = await validateStorageLimits(
@@ -375,7 +371,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // Get all files from Uppy's current state - check all files that have s3KeyShort
     // This is simpler and more robust - we don't need to track anything
     const allFiles = Object.values(uppyRef.current.getFiles());
-    const filesWithS3Key = allFiles.filter((file: UppyFile) => {
+    const filesWithS3Key = allFiles.filter((file: UppyFileType) => {
       const s3KeyShort = file.meta?.s3KeyShort as string | undefined;
       return !!s3KeyShort;
     });
@@ -400,7 +396,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         // Extract filenames from s3KeyShort for all files
         // Format: originals/{filename} or final/{orderId}/{filename}
         const filenames = filesWithS3Key
-          .map((file: UppyFile) => {
+          .map((file: UppyFileType) => {
             const s3KeyShort = file.meta?.s3KeyShort as string;
             if (!s3KeyShort) {
               return null;
@@ -497,7 +493,6 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     if (!uppyRef.current) {
       return;
     }
-    const file = uppyRef.current.getFile(fileId);
     uppyRef.current.pauseResume(fileId);
   }, []);
 

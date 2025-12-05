@@ -211,6 +211,7 @@ async function processCheckoutSession(
 								galleryId,
 								orderId,
 								orderNumber,
+								ownerId: gallery.ownerId, // Denormalize ownerId for efficient querying
 								deliveryStatus: 'AWAITING_FINAL_PHOTOS',
 								paymentStatus: 'UNPAID',
 								selectedKeys: [],

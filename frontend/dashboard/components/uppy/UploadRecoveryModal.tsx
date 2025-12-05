@@ -20,9 +20,9 @@ export const UploadRecoveryModal: React.FC<UploadRecoveryModalProps> = ({
   onResume,
   onClear,
   fileCount,
-  galleryId,
+  galleryId: _galleryId,
   type,
-  orderId,
+  orderId: _orderId,
 }) => {
   const typeLabel = type === "finals" ? "zdjęć finalnych" : "zdjęć";
 

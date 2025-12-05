@@ -20,14 +20,14 @@ export const useGallery = () => {
 
   const reloadGallery = useCallback(async () => {
     if (galleryId && typeof galleryId === "string") {
-      await fetchGallery(galleryId, true); // Force refresh
+      await fetchGallery(galleryId);
     }
   }, [galleryId, fetchGallery]);
 
   // Get reloadOrder from useOrderStore if orderId exists
   const reloadOrder = useCallback(async () => {
     if (galleryId && orderId && typeof galleryId === "string" && typeof orderId === "string") {
-      await fetchOrder(galleryId, orderId, true); // Force refresh
+      await fetchOrder(galleryId, orderId);
     }
   }, [galleryId, orderId, fetchOrder]);
 

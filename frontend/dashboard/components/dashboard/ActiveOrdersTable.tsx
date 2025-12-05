@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
@@ -14,6 +13,7 @@ interface Order {
   orderId?: string;
   galleryId?: string;
   galleryName?: string;
+  gallerySelectionEnabled?: boolean;
   orderNumber?: string;
   deliveryStatus?: string;
   paymentStatus?: string;
@@ -75,73 +75,36 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
   onViewAllClick,
 }) => {
   const router = useRouter();
-  const { fetchGallery } = useGalleryStore();
   const [navigatingGalleryId, setNavigatingGalleryId] = useState<string | null>(null);
-  const [galleryTypes, setGalleryTypes] = useState<Record<string, boolean>>({});
 
-  // Load gallery types for all orders
-  React.useEffect(() => {
-    const loadGalleryTypes = async () => {
-      const types: Record<string, boolean> = {};
-      for (const order of orders) {
-        const orderObj: Order = order;
-        const galleryId = typeof orderObj.galleryId === "string" ? orderObj.galleryId : "";
-        if (galleryId && !(galleryId in galleryTypes)) {
-          try {
-            const gallery = await fetchGallery(galleryId, false);
-            types[galleryId] = gallery?.selectionEnabled === false;
-          } catch {
-            types[galleryId] = false;
-          }
-        }
-      }
-      if (Object.keys(types).length > 0) {
-        setGalleryTypes((prev) => ({ ...prev, ...types }));
-      }
-    };
-    void loadGalleryTypes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, fetchGallery]);
-
-  const handleGalleryClick = async (
+  const handleGalleryClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
     galleryId: string,
-    orderId: string
+    orderId: string,
+    isNonSelection: boolean
   ) => {
     e.preventDefault();
 
-    // Check if this is a non-selection gallery
-    try {
-      const gallery = await fetchGallery(galleryId, false);
-      const isNonSelection = gallery?.selectionEnabled === false;
+    setNavigatingGalleryId(galleryId);
 
-      // Update gallery types cache
-      setGalleryTypes((prev) => ({ ...prev, [galleryId]: isNonSelection }));
+    const handleNavigation = () => {
+      setNavigatingGalleryId(null);
+    };
 
-      if (isNonSelection) {
-        // For non-selection galleries, navigate to order view
-        setNavigatingGalleryId(galleryId);
-        void router.push(`/galleries/${galleryId}/orders/${orderId}`);
-      } else {
-        // For selection galleries, navigate to gallery view
-        setNavigatingGalleryId(galleryId);
-        // Store current page as referrer when navigating to gallery
-        if (typeof window !== "undefined" && galleryId) {
-          const referrerKey = `gallery_referrer_${galleryId}`;
-          sessionStorage.setItem(referrerKey, window.location.pathname);
-        }
-        void router.push(`/galleries/${galleryId}`);
-      }
-    } catch (err) {
-      // On error, fall back to gallery view
-      console.error("Failed to fetch gallery:", err);
+    if (isNonSelection) {
+      // For non-selection galleries, navigate to order view
+      router
+        .push(`/galleries/${galleryId}/orders/${orderId}`)
+        .then(handleNavigation)
+        .catch(handleNavigation);
+    } else {
+      // For selection galleries, navigate to gallery view
+      // Store current page as referrer when navigating to gallery
       if (typeof window !== "undefined" && galleryId) {
         const referrerKey = `gallery_referrer_${galleryId}`;
         sessionStorage.setItem(referrerKey, window.location.pathname);
       }
-      void router.push(`/galleries/${galleryId}`);
-    } finally {
-      setNavigatingGalleryId(null);
+      router.push(`/galleries/${galleryId}`).then(handleNavigation).catch(handleNavigation);
     }
   };
 
@@ -223,6 +186,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                 const totalCents =
                   typeof orderObj.totalCents === "number" ? orderObj.totalCents : null;
                 const createdAt = orderObj.createdAt;
+                const isNonSelectionGallery = orderObj.gallerySelectionEnabled === false;
 
                 return (
                   <TableRow
@@ -235,7 +199,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                         className="text-brand-500 hover:text-brand-600"
                         onClick={(e) => {
                           if (galleryId && orderId) {
-                            void handleGalleryClick(e, galleryId, orderId);
+                            handleGalleryClick(e, galleryId, orderId, isNonSelectionGallery);
                           }
                         }}
                       >
@@ -254,7 +218,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                       </Link>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
-                      {getDeliveryStatusBadge(deliveryStatus, galleryTypes[galleryId] ?? false)}
+                      {getDeliveryStatusBadge(deliveryStatus, isNonSelectionGallery)}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
                       {getPaymentStatusBadge(paymentStatus)}

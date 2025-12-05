@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
+import { usePageLogger } from "../hooks/usePageLogger";
 import api, { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatPrice } from "../lib/format-price";
 import { useGalleryStore } from "../store";
 
@@ -34,6 +34,9 @@ interface ErrorResponse {
 
 export default function Orders() {
   const router = useRouter();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "Orders",
+  });
   const [apiUrl, setApiUrl] = useState<string>("");
   const [galleryId, setGalleryId] = useState<string>("");
   const [idToken, setIdToken] = useState<string>("");
@@ -44,18 +47,7 @@ export default function Orders() {
   const [uploadingFinal, setUploadingFinal] = useState<Record<string, boolean>>({});
   const [finalFiles, setFinalFiles] = useState<Record<string, File[]>>({});
 
-  useEffect(() => {
-    // Initialize auth with token sharing
-    initializeAuth(
-      (_token: string) => {
-        // Token is handled by api-service automatically
-      },
-      () => {
-        // No token found, redirect to landing sign-in
-        redirectToLandingSignIn(router.asPath);
-      }
-    );
-  }, [router]);
+  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
 
   async function loadOrders(): Promise<void> {
     setMessage("");
@@ -63,6 +55,7 @@ export default function Orders() {
       setMessage("Need Gallery ID");
       return;
     }
+    logDataLoad("orders", { galleryId });
     try {
       const response = await api.orders.getByGallery(galleryId);
       const parsedData: OrdersResponse = {
@@ -74,6 +67,7 @@ export default function Orders() {
       const galleryData = parsedData?.gallery;
 
       if (Array.isArray(ordersData)) {
+        logDataLoaded("orders", ordersData, { count: ordersData.length, galleryId });
         setOrders(ordersData);
         setGallery(galleryData ?? null);
         if (ordersData.length === 0) {
@@ -82,10 +76,13 @@ export default function Orders() {
           setMessage(`Loaded ${ordersData.length} order(s)`);
         }
       } else {
-        setMessage(`Unexpected response format. Expected items array, got: ${typeof ordersData}`);
+        const errorMsg = `Unexpected response format. Expected items array, got: ${typeof ordersData}`;
+        logDataError("orders", errorMsg);
+        setMessage(errorMsg);
         setOrders([]);
       }
     } catch (error) {
+      logDataError("orders", error);
       setMessage(formatApiError(error));
       setOrders([]);
     }
@@ -130,40 +127,44 @@ export default function Orders() {
       return;
     }
     try {
-      // Use api-service for token, but fetch directly for blob handling
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
-      const { getValidToken } = await import("../lib/api");
-      const token: string = await getValidToken();
-      const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const result = await api.orders.downloadZip(galleryId, orderId);
 
-      if (response.headers.get("content-type")?.includes("application/zip")) {
-        // Binary ZIP response - trigger download
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${orderId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        // Check if it's one-time use from response headers or try to get from JSON
-        const oneTimeUse = response.headers.get("x-one-time-use") === "true";
-        setMessage(`Download started for order ${orderId}${oneTimeUse ? " (one-time use)" : ""}`);
-        await loadOrders(); // Reload to refresh order state
-      } else {
-        // JSON response (fallback or error)
-        const data = (await response.json()) as ErrorResponse;
-        if (data.error) {
-          setMessage(`Error: ${data.error}`);
-        } else {
-          setMessage("No ZIP file available");
-        }
+      // Handle 202 - ZIP is being generated (shouldn't happen in this context, but handle it)
+      if (result.status === 202 || result.generating) {
+        setMessage("ZIP is being generated, please wait...");
+        // Could implement polling here if needed
+        return;
       }
+
+      let blob: Blob;
+      let filename: string;
+
+      if (result.blob) {
+        // Binary blob response
+        blob = result.blob;
+        filename = result.filename || `${orderId}.zip`;
+      } else if (result.zip) {
+        // Base64 ZIP response (backward compatibility)
+        const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
+        blob = new Blob([zipBlob], { type: "application/zip" });
+        filename = result.filename || `${orderId}.zip`;
+      } else {
+        setMessage("No ZIP file available");
+        return;
+      }
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setMessage(`Download started for order ${orderId}`);
+      await loadOrders(); // Reload to refresh order state
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
@@ -187,10 +188,6 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markPaid(galleryId, orderId);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId);
 
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
@@ -219,10 +216,6 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.markCanceled(galleryId, orderId);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId);
 
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
@@ -260,10 +253,6 @@ export default function Orders() {
     try {
       const response = await api.orders.markRefunded(galleryId, orderId);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId);
-
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -300,10 +289,6 @@ export default function Orders() {
     try {
       const response = await api.orders.markPartiallyPaid(galleryId, orderId);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId);
-
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -330,10 +315,6 @@ export default function Orders() {
     }
     try {
       const response = await api.orders.sendFinalLink(galleryId, orderId);
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId);
 
       // Merge lightweight response into orders array instead of refetching
       setOrders((prevOrders) =>

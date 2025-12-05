@@ -6,6 +6,10 @@ import ThumbnailGenerator from "@uppy/thumbnail-generator";
 import api from "./api-service";
 import { ThumbnailUploadPlugin } from "./uppy-thumbnail-upload-plugin";
 
+// Type alias for UppyFile with required type parameters
+// Using 'any' to be compatible with Uppy's internal type system
+type UppyFileType = UppyFile<any, any>;
+
 export type UploadType = "originals" | "finals";
 
 // Uppy's recommended default: use multipart only for files larger than 100 MiB
@@ -220,15 +224,15 @@ export interface UppyConfigOptions {
   galleryId: string;
   orderId?: string; // Required for 'finals' type
   type: UploadType;
-  onBeforeUpload?: (files: UppyFile[]) => Promise<boolean>;
+  onBeforeUpload?: (files: UppyFileType[]) => Promise<boolean>;
   onUploadProgress?: (progress: {
     current: number;
     total: number;
     bytesUploaded?: number;
     bytesTotal?: number;
   }) => void;
-  onComplete?: (result: { successful: UppyFile[]; failed: UppyFile[] }) => void;
-  onError?: (error: Error, file?: UppyFile) => void;
+  onComplete?: (result: { successful: UppyFileType[]; failed: UppyFileType[] }) => void;
+  onError?: (error: Error, file?: UppyFileType) => void;
 }
 
 /**
@@ -253,12 +257,12 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   });
 
   // Listen for file removal events
-  uppy.on("file-removed", (_file: UppyFile, _reason?: string) => {
+  uppy.on("file-removed", (_file: UppyFileType, _reason?: string) => {
     // File removed event handler
   });
 
   // Listen for restriction failures
-  uppy.on("restriction-failed", (_file: UppyFile, _error: Error) => {
+  uppy.on("restriction-failed", (_file: UppyFileType | undefined, _error: Error) => {
     // Restriction failed event handler
   });
 
@@ -275,20 +279,21 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   });
 
   // Add custom thumbnail upload plugin to upload generated thumbnails to S3
+  // @ts-ignore - ThumbnailUploadPlugin type compatibility issue with Uppy's strict typing
   uppy.use(ThumbnailUploadPlugin);
 
   // Add AWS S3 plugin with custom getUploadParameters and multipart support
   uppy.use(AwsS3, {
     id: "aws-s3",
     limit: 5, // Upload 5 files concurrently (adjust based on performance)
-    shouldUseMultipart: (file: UppyFile) => {
+    shouldUseMultipart: (file: UppyFileType) => {
       // Use multipart only for files larger than 100 MiB (Uppy's recommended default)
       // For smaller files, simple PUT uploads are more efficient (1 API call vs 4+ for multipart)
       // This reduces API Gateway load and prevents 503 errors from request overflow
       // See: https://uppy.io/docs/aws-s3/#shouldusemultipartfile
       return (file.size || 0) > MULTIPART_THRESHOLD;
     },
-    getUploadParameters: async (file: UppyFile) => {
+    getUploadParameters: async (file: UppyFileType) => {
       // Only used for simple PUT uploads (small files)
       // Multipart uploads use createMultipartUpload instead
       const galleryId = config.galleryId;
@@ -331,7 +336,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         throw new Error(errorMessage);
       }
     },
-    createMultipartUpload: async (file: UppyFile) => {
+    createMultipartUpload: async (file: UppyFileType) => {
       // Called by AwsS3 plugin when shouldUseMultipart returns true
       // For multipart, we also batch requests to reduce API calls
       const galleryId = config.galleryId;
@@ -457,7 +462,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         }
       });
     },
-    listParts: async (file: UppyFile, { uploadId, key }: { uploadId: string; key: string }) => {
+    listParts: async (file: UppyFileType, opts: any) => {
+      const { uploadId, key } = opts;
       // List existing parts for resume
       // If this fails (e.g., 503 errors), return empty array to allow upload to continue
       // This prevents resume failures from blocking uploads
@@ -476,7 +482,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
             PartNumber: part.partNumber,
             ETag: part.etag,
             Size: part.size,
-          }));
+          })) as any;
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -496,9 +502,9 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
 
       // Return empty array - Uppy will treat this as a fresh upload
       // This ensures resume can proceed even when listParts fails
-      return [];
+      return [] as any;
     },
-    prepareUploadPart: async (file: UppyFile, part: { number: number; chunk: Blob }) => {
+    prepareUploadPart: async (file: UppyFileType, part: { number: number; chunk: Blob }) => {
       // Get presigned URL for this specific part
       const parts = file.meta?.multipartParts as
         | Array<{ partNumber: number; url: string }>
@@ -517,7 +523,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       };
     },
     completeMultipartUpload: async (
-      file: UppyFile,
+      file: UppyFileType,
       {
         uploadId,
         key,
@@ -541,7 +547,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       };
     },
     abortMultipartUpload: async (
-      file: UppyFile,
+      file: UppyFileType,
       { uploadId, key }: { uploadId: string; key: string }
     ) => {
       // Abort the multipart upload
@@ -557,7 +563,9 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   // Preprocessors execute before upload begins, perfect for validation
   if (config.onBeforeUpload) {
     uppy.addPreProcessor(async (fileIds) => {
-      const files = fileIds.map((id) => uppy.getFile(id)).filter((f): f is UppyFile => f !== null);
+      const files = fileIds
+        .map((id) => uppy.getFile(id))
+        .filter((f): f is UppyFileType => f !== null);
 
       try {
         const shouldProceed = await config.onBeforeUpload?.(files);

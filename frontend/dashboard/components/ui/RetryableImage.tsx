@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-import {
-  ImageFallbackUrls,
-  ImageSize,
-  getNextFallbackUrl,
-  createImageErrorHandler,
-} from "../../lib/image-fallback";
+import { ImageFallbackUrls, ImageSize, getNextFallbackUrl } from "../../lib/image-fallback";
 
 interface RetryableImageProps {
   src: string;

@@ -26,7 +26,7 @@ export const normalizeSelectedKeys = (selectedKeys: unknown): string[] => {
  */
 export const filterDeletedImages = <T extends { key?: string; filename?: string }>(
   images: T[],
-  deletingImages: Set<string>,
+  _deletingImages: Set<string>,
   deletedImageKeys: Set<string>
 ): T[] => {
   return images.filter((img) => {

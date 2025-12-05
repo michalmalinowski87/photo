@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 
-import { useGalleryStore } from "../../store";
+import { usePageLogger } from "../../hooks/usePageLogger";
 import { FullPageLoading } from "../ui/loading/Loading";
 
 import GalleryList from "./GalleryList";
@@ -26,9 +26,10 @@ export default function GalleryFilterPage({
   filter,
   loadingText = "Ładowanie galerii...",
 }: GalleryFilterPageProps) {
+  usePageLogger({ pageName: `GalleryFilterPage-${filter}`, logRouteChanges: false });
   const [loading, setLoading] = useState<boolean>(true);
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
-  const { publishWizardOpen, setPublishWizardOpen } = useGalleryStore();
+  const [publishWizardOpen, setPublishWizardOpen] = useState<boolean>(false);
 
   // Check if URL params indicate wizard should open (prevents showing FullPageLoading)
   const shouldOpenWizardFromUrl = useMemo(() => {
@@ -44,20 +45,9 @@ export default function GalleryFilterPage({
     if (shouldOpenWizardFromUrl && !publishWizardOpen && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const galleryParam = params.get("galleryId");
-      const durationParam = params.get("duration");
-      const planKeyParam = params.get("planKey");
 
       if (galleryParam) {
-        setPublishWizardOpen(
-          true,
-          galleryParam,
-          durationParam || planKeyParam
-            ? {
-                duration: durationParam || undefined,
-                planKey: planKeyParam || undefined,
-              }
-            : null
-        );
+        setPublishWizardOpen(true);
 
         // Clear URL params after reading them
         setTimeout(() => {

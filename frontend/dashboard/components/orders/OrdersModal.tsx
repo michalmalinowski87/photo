@@ -2,7 +2,6 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 
 import api, { formatApiError } from "../../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
@@ -97,16 +96,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
     }
   };
 
-  useEffect(() => {
-    initializeAuth(
-      () => {
-        // Token is handled by api-service automatically
-      },
-      () => {
-        redirectToLandingSignIn(typeof window !== "undefined" ? window.location.pathname : "/");
-      }
-    );
-  }, []);
+  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
 
   useEffect(() => {
     if (isOpen) {

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect } from "react";
 
-import { useGalleryStore } from "../../../store";
+import { useGalleryStore, useOrderStore } from "../../../store";
 
 interface NonSelectionGalleryNavigationProps {
   galleryId: string;
@@ -32,7 +32,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
   useEffect(() => {
     if (!firstOrderId && galleryOrders.length === 0) {
       const { fetchGalleryOrders } = useGalleryStore.getState();
-      void fetchGalleryOrders(galleryId, false);
+      void fetchGalleryOrders(galleryId);
     }
   }, [galleryId, firstOrderId, galleryOrders.length]);
 
@@ -41,7 +41,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
       e.preventDefault();
       // Fetch orders and navigate
       const { fetchGalleryOrders } = useGalleryStore.getState();
-      const orders = await fetchGalleryOrders(galleryId, false);
+      const orders = await fetchGalleryOrders(galleryId);
       if (orders && orders.length > 0) {
         const firstOrder = orders[0] as { orderId?: string } | undefined;
         if (firstOrder?.orderId) {

@@ -62,7 +62,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     // For non-selection galleries, navigate to order view after payment
     if (isNonSelectionGallery) {
       try {
-        const orders = await fetchGalleryOrders(galleryId, false);
+        const orders = await fetchGalleryOrders(galleryId);
         if (orders && orders.length > 0) {
           const firstOrder = orders[0] as { orderId?: string };
           if (firstOrder?.orderId) {

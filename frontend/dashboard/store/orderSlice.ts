@@ -1,6 +1,7 @@
 import { StateCreator } from "zustand";
 
 import api, { formatApiError } from "../lib/api-service";
+import { storeLogger } from "../lib/store-logger";
 
 export interface Order {
   orderId: string;
@@ -15,26 +16,15 @@ export interface Order {
 export interface OrderSlice {
   currentOrder: Order | null;
   orderList: Order[];
-  currentOrderId: string | null;
-  currentGalleryId: string | null;
-  // Cache for orders (keyed by orderId)
-  orderCache: Record<string, { order: Order; timestamp: number }>;
+  ordersByGalleryId: Record<string, Order[]>; // Simple map of galleryId to orders array
   isLoading: boolean;
   error: string | null;
   // Loading states for order actions
   denyLoading: boolean;
-  cleanupLoading: boolean;
   setCurrentOrder: (order: Order | null) => void;
   setOrderList: (orders: Order[]) => void;
-  setCurrentOrderId: (orderId: string | null) => void;
-  setCurrentGalleryId: (galleryId: string | null) => void;
-  getCachedOrder: (orderId: string, maxAge?: number) => Order | null;
-  isOrderStale: (orderId: string, maxAge?: number) => boolean;
-  invalidateOrderCache: (orderId: string) => void;
-  invalidateGalleryOrdersCache: (galleryId: string) => void;
-  fetchOrder: (galleryId: string, orderId: string, forceRefresh?: boolean) => Promise<Order | null>;
-  updateOrderFields: (orderId: string, fields: Partial<Order>) => void;
-  updateOrderInList: (orderId: string, fields: Partial<Order>) => void;
+  setOrdersByGalleryId: (galleryId: string, orders: Order[]) => void;
+  fetchOrder: (galleryId: string, orderId: string) => Promise<Order | null>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearCurrentOrder: () => void;
@@ -50,10 +40,8 @@ export interface OrderSlice {
   // Computed selectors
   hasFinals: (orderId: string) => boolean;
   canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => boolean;
-  // Get all orders for a gallery from cache
-  getOrdersByGalleryId: (galleryId: string, maxAge?: number) => Order[];
-  // Add multiple orders to cache (used by fetchGalleryOrders)
-  addOrdersToCache: (orders: Order[]) => void;
+  // Get all orders for a gallery
+  getOrdersByGalleryId: (galleryId: string) => Order[];
 }
 
 export const createOrderSlice: StateCreator<
@@ -64,146 +52,43 @@ export const createOrderSlice: StateCreator<
 > = (set, get) => ({
   currentOrder: null,
   orderList: [],
-  currentOrderId: null,
-  currentGalleryId: null,
-  orderCache: {},
+  ordersByGalleryId: {},
   isLoading: false,
   error: null,
   denyLoading: false,
-  cleanupLoading: false,
 
   setCurrentOrder: (order: Order | null) => {
-    if (order) {
-      set(
-        (state) => ({
-          currentOrder: order,
-          currentOrderId: order.orderId,
-          currentGalleryId: order.galleryId,
-          orderCache: {
-            ...state.orderCache,
-            [order.orderId]: {
-              order,
-              timestamp: Date.now(),
-            },
-          },
-        }),
-        undefined,
-        "order/setCurrentOrder"
-      );
-    } else {
-      set(
-        {
-          currentOrder: null,
-          currentOrderId: null,
-        },
-        undefined,
-        "order/clearCurrentOrder"
-      );
-    }
+    set({ currentOrder: order }, undefined, "order/setCurrentOrder");
   },
 
   setOrderList: (orders: Order[]) => {
     set({ orderList: orders }, undefined, "order/setOrderList");
   },
 
-  setCurrentOrderId: (orderId: string | null) => {
-    set({ currentOrderId: orderId }, undefined, "order/setCurrentOrderId");
-  },
-
-  setCurrentGalleryId: (galleryId: string | null) => {
-    set({ currentGalleryId: galleryId }, undefined, "order/setCurrentGalleryId");
-  },
-
-  getCachedOrder: (orderId: string, maxAge: number = 30000) => {
-    const state = get();
-    const cached = state.orderCache[orderId];
-    if (!cached) {
-      return null;
-    }
-
-    const age = Date.now() - cached.timestamp;
-    if (age > maxAge) {
-      return null; // Cache expired
-    }
-
-    return cached.order;
-  },
-
-  isOrderStale: (orderId: string, maxAge: number = 30000) => {
-    const state = get();
-    const cached = state.orderCache[orderId];
-    if (!cached) {
-      return true;
-    }
-
-    const age = Date.now() - cached.timestamp;
-    return age > maxAge;
-  },
-
-  invalidateOrderCache: (orderId: string) => {
+  setOrdersByGalleryId: (galleryId: string, orders: Order[]) => {
     set(
-      (state) => {
-        const newCache = { ...state.orderCache };
-        delete newCache[orderId];
-        return {
-          orderCache: newCache,
-          // Also clear current order if it matches
-          currentOrder: state.currentOrderId === orderId ? null : state.currentOrder,
-          currentOrderId: state.currentOrderId === orderId ? null : state.currentOrderId,
-        };
-      },
+      (state) => ({
+        ordersByGalleryId: {
+          ...state.ordersByGalleryId,
+          [galleryId]: orders,
+        },
+      }),
       undefined,
-      "order/invalidateOrderCache"
+      "order/setOrdersByGalleryId"
     );
   },
 
-  invalidateGalleryOrdersCache: (galleryId: string) => {
-    set(
-      (state) => {
-        // Remove all orders for this gallery from cache
-        const newCache: Record<string, { order: Order; timestamp: number }> = {};
-        Object.entries(state.orderCache).forEach(([orderId, cached]) => {
-          if (cached.order.galleryId !== galleryId) {
-            newCache[orderId] = cached;
-          }
-        });
-        return {
-          orderCache: newCache,
-          // Clear current order if it belongs to this gallery
-          currentOrder: state.currentGalleryId === galleryId ? null : state.currentOrder,
-          currentOrderId: state.currentGalleryId === galleryId ? null : state.currentOrderId,
-        };
-      },
-      undefined,
-      "order/invalidateGalleryOrdersCache"
-    );
-  },
-
-  fetchOrder: async (galleryId: string, orderId: string, forceRefresh = false) => {
+  fetchOrder: async (galleryId: string, orderId: string) => {
+    // If we already have this order, return it
     const state = get();
-
-    // Check cache first if not forcing refresh
-    if (!forceRefresh) {
-      if (!state.isOrderStale(orderId, 30000)) {
-        const cached = state.getCachedOrder(orderId, 30000);
-        if (cached) {
-          // Update current order if it matches
-          if (state.currentOrderId !== orderId) {
-            state.setCurrentOrder(cached);
-          }
-          return cached;
-        }
-      }
+    if (state.currentOrder?.orderId === orderId) {
+      return state.currentOrder;
     }
 
-    // Fetch from API
     set({ isLoading: true, error: null }, undefined, "order/fetchOrder/start");
     try {
       const orderData = await api.orders.get(galleryId, orderId);
-
-      // Update store
       state.setCurrentOrder(orderData as Order);
-
       set({ isLoading: false }, undefined, "order/fetchOrder/success");
       return orderData as Order;
     } catch (err) {
@@ -213,56 +98,8 @@ export const createOrderSlice: StateCreator<
     }
   },
 
-  updateOrderFields: (orderId: string, fields: Partial<Order>) => {
-    set(
-      (state) => {
-        // Update cache if order exists in cache
-        const cached = state.orderCache[orderId];
-        if (cached) {
-          const updatedOrder = { ...cached.order, ...fields };
-          const newCache = {
-            ...state.orderCache,
-            [orderId]: {
-              order: updatedOrder,
-              timestamp: Date.now(), // Update timestamp to keep cache fresh
-            },
-          };
-
-          // Update current order if it matches
-          const newCurrentOrder =
-            state.currentOrderId === orderId ? updatedOrder : state.currentOrder;
-
-          return {
-            orderCache: newCache,
-            currentOrder: newCurrentOrder,
-          };
-        }
-
-        // If not in cache, just return state as-is
-        return state;
-      },
-      undefined,
-      "order/updateOrderFields"
-    );
-  },
-
-  updateOrderInList: (orderId: string, fields: Partial<Order>) => {
-    set(
-      (state) => {
-        const updatedList = state.orderList.map((order) =>
-          order.orderId === orderId ? { ...order, ...fields } : order
-        );
-
-        return {
-          orderList: updatedList,
-        };
-      },
-      undefined,
-      "order/updateOrderInList"
-    );
-  },
-
   setLoading: (loading: boolean) => {
+    storeLogger.logLoadingState("order", "setLoading", loading);
     set({ isLoading: loading }, undefined, "order/setLoading");
   },
 
@@ -271,7 +108,7 @@ export const createOrderSlice: StateCreator<
   },
 
   clearCurrentOrder: () => {
-    set({ currentOrder: null, currentOrderId: null }, undefined, "order/clearCurrentOrder");
+    set({ currentOrder: null }, undefined, "order/clearCurrentOrder");
   },
 
   clearOrderList: () => {
@@ -283,13 +120,10 @@ export const createOrderSlice: StateCreator<
       {
         currentOrder: null,
         orderList: [],
-        currentOrderId: null,
-        currentGalleryId: null,
-        orderCache: {},
+        ordersByGalleryId: {},
         isLoading: false,
         error: null,
         denyLoading: false,
-        cleanupLoading: false,
       },
       undefined,
       "order/clearAll"
@@ -300,13 +134,21 @@ export const createOrderSlice: StateCreator<
   approveChangeRequest: async (galleryId: string, orderId: string) => {
     const state = get();
     try {
-      await api.orders.approveChangeRequest(galleryId, orderId);
+      const response = await api.orders.approveChangeRequest(galleryId, orderId);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      state.invalidateOrderCache(orderId);
-      const { useGalleryStore } = await import("./hooks");
-      useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
-      state.invalidateGalleryOrdersCache(galleryId);
+      // Merge state update instead of reloading
+      if (state.currentOrder?.orderId === orderId) {
+        state.setCurrentOrder({
+          ...state.currentOrder,
+          deliveryStatus: response.deliveryStatus ?? state.currentOrder.deliveryStatus,
+          // Update any other fields from response
+          ...(response as Partial<Order>),
+        });
+      }
+
+      // Update orders list if needed
+      const galleryStore = useGalleryStore.getState();
+      await galleryStore.fetchGalleryOrders(galleryId);
 
       // Show toast
       const { useToastStore } = await import("./hooks");
@@ -317,11 +159,6 @@ export const createOrderSlice: StateCreator<
           "Sukces",
           "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
         );
-
-      // Reload order and gallery orders
-      await state.fetchOrder(galleryId, orderId, true);
-      const galleryStore = useGalleryStore.getState();
-      await galleryStore.fetchGalleryOrders(galleryId, true);
     } catch (err) {
       const { useToastStore } = await import("./hooks");
       useToastStore
@@ -339,13 +176,21 @@ export const createOrderSlice: StateCreator<
     set({ denyLoading: true }, undefined, "order/denyChangeRequest/start");
 
     try {
-      await api.orders.denyChangeRequest(galleryId, orderId, reason);
+      const response = await api.orders.denyChangeRequest(galleryId, orderId, reason);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      state.invalidateOrderCache(orderId);
-      const { useGalleryStore } = await import("./hooks");
-      useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
-      state.invalidateGalleryOrdersCache(galleryId);
+      // Merge state update instead of reloading
+      if (state.currentOrder?.orderId === orderId) {
+        state.setCurrentOrder({
+          ...state.currentOrder,
+          deliveryStatus: response.deliveryStatus ?? state.currentOrder.deliveryStatus,
+          // Update any other fields from response
+          ...(response as Partial<Order>),
+        });
+      }
+
+      // Update orders list if needed
+      const galleryStore = useGalleryStore.getState();
+      await galleryStore.fetchGalleryOrders(galleryId);
 
       // Show toast
       const { useToastStore } = await import("./hooks");
@@ -356,11 +201,6 @@ export const createOrderSlice: StateCreator<
           "Sukces",
           "Prośba o zmiany została odrzucona. Zlecenie zostało przywrócone do poprzedniego statusu."
         );
-
-      // Reload order and gallery orders
-      await state.fetchOrder(galleryId, orderId, true);
-      const galleryStore = useGalleryStore.getState();
-      await galleryStore.fetchGalleryOrders(galleryId, true);
     } catch (err) {
       const { useToastStore } = await import("./hooks");
       useToastStore
@@ -376,18 +216,18 @@ export const createOrderSlice: StateCreator<
   },
 
   markOrderPaid: async (galleryId: string, orderId: string) => {
-    const state = get();
     try {
       const response = await api.orders.markPaid(galleryId, orderId);
-      // Merge lightweight response into cached order instead of refetching
-      state.updateOrderFields(orderId, {
-        paymentStatus: response.paymentStatus,
-        paidAt: response.paidAt,
-      });
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { useGalleryStore } = await import("./hooks");
-      useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
-      state.invalidateGalleryOrdersCache(galleryId);
+
+      // Update current order if it matches
+      const state = get();
+      if (state.currentOrder?.orderId === orderId) {
+        state.setCurrentOrder({
+          ...state.currentOrder,
+          paymentStatus: response.paymentStatus,
+          paidAt: response.paidAt,
+        });
+      }
 
       // Show toast
       const { useToastStore } = await import("./hooks");
@@ -401,7 +241,6 @@ export const createOrderSlice: StateCreator<
   },
 
   downloadFinals: async (galleryId: string, orderId: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
     const { useDownloadStore } = await import("./hooks");
     const { addDownload, updateDownload, removeDownload } = useDownloadStore.getState();
 
@@ -415,17 +254,10 @@ export const createOrderSlice: StateCreator<
 
     const pollForZip = async (): Promise<void> => {
       try {
-        // Get valid token (will refresh if needed)
-        const { getValidToken } = await import("../lib/api-service");
-        const idToken = await getValidToken();
-
-        const endpoint = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`;
-        const response = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
+        const result = await api.orders.downloadFinalZip(galleryId, orderId);
 
         // Handle 202 - ZIP is being generated
-        if (response.status === 202) {
+        if (result.status === 202 || result.generating) {
           updateDownload(downloadId, { status: "generating" });
           setTimeout(() => {
             pollForZip();
@@ -433,67 +265,38 @@ export const createOrderSlice: StateCreator<
           return;
         }
 
-        // Handle 200 - ZIP is ready
-        if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
-          updateDownload(downloadId, { status: "downloading" });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
+        // Handle successful download
+        updateDownload(downloadId, { status: "downloading" });
 
-          const contentDisposition = response.headers.get("content-disposition");
-          let finalFilename = `order-${orderId}-finals.zip`;
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(
-              /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-            );
-            if (filenameMatch && filenameMatch[1]) {
-              finalFilename = filenameMatch[1].replace(/['"]/g, "");
-            }
-          }
+        let blob: Blob;
+        let filename: string;
 
-          a.download = finalFilename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          updateDownload(downloadId, { status: "success" });
-          setTimeout(() => {
-            removeDownload(downloadId);
-          }, 3000);
-        } else if (response.ok) {
-          const data = await response.json();
-          if (data.zip) {
-            updateDownload(downloadId, { status: "downloading" });
-            const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
-            const blob = new Blob([zipBlob], { type: "application/zip" });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = data.filename || `order-${orderId}-finals.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            updateDownload(downloadId, { status: "success" });
-            setTimeout(() => {
-              removeDownload(downloadId);
-            }, 3000);
-          } else {
-            const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-            updateDownload(downloadId, { status: "error", error: errorMsg });
-          }
+        if (result.blob) {
+          // Binary blob response
+          blob = result.blob;
+          filename = result.filename || `order-${orderId}-finals.zip`;
+        } else if (result.zip) {
+          // Base64 ZIP response (backward compatibility)
+          const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
+          blob = new Blob([zipBlob], { type: "application/zip" });
+          filename = result.filename || `order-${orderId}-finals.zip`;
         } else {
-          const errorData = await response.json().catch(() => ({
-            error: "Nie udało się pobrać pliku ZIP",
-          }));
-          updateDownload(downloadId, {
-            status: "error",
-            error: errorData.error || "Nie udało się pobrać pliku ZIP",
-          });
+          throw new Error("No ZIP data available");
         }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        updateDownload(downloadId, { status: "success" });
+        setTimeout(() => {
+          removeDownload(downloadId);
+        }, 3000);
       } catch (err) {
         const errorMsg = formatApiError(err);
         updateDownload(downloadId, { status: "error", error: errorMsg });
@@ -505,7 +308,6 @@ export const createOrderSlice: StateCreator<
 
   sendFinalsToClient: async (galleryId: string, orderId: string) => {
     const state = get();
-    set({ cleanupLoading: true }, undefined, "order/sendFinalsToClient/start");
 
     try {
       const response = await api.orders.sendFinalLink(galleryId, orderId);
@@ -515,25 +317,21 @@ export const createOrderSlice: StateCreator<
         .getState()
         .showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
 
-      // Merge lightweight response into cached order instead of refetching
-      state.updateOrderFields(orderId, {
-        deliveryStatus: "DELIVERED",
-        deliveredAt: response.deliveredAt,
-      });
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { useGalleryStore } = await import("./hooks");
-      useGalleryStore.getState().invalidateAllGalleryCaches(galleryId);
-      state.invalidateGalleryOrdersCache(galleryId);
+      // Update current order if it matches
+      if (state.currentOrder?.orderId === orderId) {
+        state.setCurrentOrder({
+          ...state.currentOrder,
+          deliveryStatus: "DELIVERED",
+          deliveredAt: response.deliveredAt,
+        });
+      }
     } catch (err) {
       const { useToastStore } = await import("./hooks");
       useToastStore.getState().showToast("error", "Błąd", formatApiError(err));
-    } finally {
-      set({ cleanupLoading: false }, undefined, "order/sendFinalsToClient/complete");
     }
   },
 
   downloadZip: async (galleryId: string, orderId: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
     const { useDownloadStore } = await import("./hooks");
     const { addDownload, updateDownload, removeDownload } = useDownloadStore.getState();
 
@@ -547,17 +345,10 @@ export const createOrderSlice: StateCreator<
 
     const pollForZip = async (): Promise<void> => {
       try {
-        // Get valid token (will refresh if needed)
-        const { getValidToken } = await import("../lib/api-service");
-        const idToken = await getValidToken();
-
-        const endpoint = `${apiUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
-        const response = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
+        const result = await api.orders.downloadZip(galleryId, orderId);
 
         // Handle 202 - ZIP is being generated
-        if (response.status === 202) {
+        if (result.status === 202 || result.generating) {
           updateDownload(downloadId, { status: "generating" });
           setTimeout(() => {
             pollForZip();
@@ -565,67 +356,38 @@ export const createOrderSlice: StateCreator<
           return;
         }
 
-        // Handle 200 - ZIP is ready
-        if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
-          updateDownload(downloadId, { status: "downloading" });
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
+        // Handle successful download
+        updateDownload(downloadId, { status: "downloading" });
 
-          const contentDisposition = response.headers.get("content-disposition");
-          let finalFilename = `${orderId}.zip`;
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(
-              /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-            );
-            if (filenameMatch && filenameMatch[1]) {
-              finalFilename = filenameMatch[1].replace(/['"]/g, "");
-            }
-          }
+        let blob: Blob;
+        let filename: string;
 
-          a.download = finalFilename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          updateDownload(downloadId, { status: "success" });
-          setTimeout(() => {
-            removeDownload(downloadId);
-          }, 3000);
-        } else if (response.ok) {
-          const data = await response.json();
-          if (data.zip) {
-            updateDownload(downloadId, { status: "downloading" });
-            const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
-            const blob = new Blob([zipBlob], { type: "application/zip" });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = data.filename || `${orderId}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            updateDownload(downloadId, { status: "success" });
-            setTimeout(() => {
-              removeDownload(downloadId);
-            }, 3000);
-          } else {
-            const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-            updateDownload(downloadId, { status: "error", error: errorMsg });
-          }
+        if (result.blob) {
+          // Binary blob response
+          blob = result.blob;
+          filename = result.filename || `${orderId}.zip`;
+        } else if (result.zip) {
+          // Base64 ZIP response (backward compatibility)
+          const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
+          blob = new Blob([zipBlob], { type: "application/zip" });
+          filename = result.filename || `${orderId}.zip`;
         } else {
-          const errorData = await response.json().catch(() => ({
-            error: "Nie udało się pobrać pliku ZIP",
-          }));
-          updateDownload(downloadId, {
-            status: "error",
-            error: errorData.error || "Nie udało się pobrać pliku ZIP",
-          });
+          throw new Error("No ZIP data available");
         }
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        updateDownload(downloadId, { status: "success" });
+        setTimeout(() => {
+          removeDownload(downloadId);
+        }, 3000);
       } catch (err) {
         const errorMsg = formatApiError(err);
         updateDownload(downloadId, { status: "error", error: errorMsg });
@@ -638,23 +400,8 @@ export const createOrderSlice: StateCreator<
   // Computed selectors
   hasFinals: (orderId: string) => {
     const state = get();
-    // Check if this is the current order
-    if (state.currentOrderId !== orderId) {
-      // Try cache
-      const cached = state.orderCache[orderId];
-      if (!cached) {
-        return false;
-      }
-      const order = cached.order;
-      return (
-        order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
-        order.deliveryStatus === "PREPARING_DELIVERY" ||
-        order.deliveryStatus === "DELIVERED"
-      );
-    }
-    // Use current order
     const order = state.currentOrder;
-    if (!order) {
+    if (!order || order.orderId !== orderId) {
       return false;
     }
     return (
@@ -667,29 +414,10 @@ export const createOrderSlice: StateCreator<
   canDownloadZip: (orderId: string, gallerySelectionEnabled?: boolean) => {
     const state = get();
     const selectionEnabled = gallerySelectionEnabled !== false;
-
-    // Check if this is the current order
-    if (state.currentOrderId !== orderId) {
-      // Try cache
-      const cached = state.orderCache[orderId];
-      if (!cached) {
-        return false;
-      }
-      const order = cached.order;
-      // Allow downloads for selection galleries with valid statuses (not CANCELLED)
-      return (
-        selectionEnabled &&
-        order.deliveryStatus !== "CANCELLED" &&
-        order.selectedKeys &&
-        (Array.isArray(order.selectedKeys) ? order.selectedKeys.length > 0 : true)
-      );
-    }
-    // Use current order
     const order = state.currentOrder;
-    if (!order) {
+    if (!order || order.orderId !== orderId) {
       return false;
     }
-    // Allow downloads for selection galleries with valid statuses (not CANCELLED)
     return (
       selectionEnabled &&
       order.deliveryStatus !== "CANCELLED" &&
@@ -698,20 +426,9 @@ export const createOrderSlice: StateCreator<
     );
   },
 
-  getOrdersByGalleryId: (galleryId: string, maxAge: number = 30000) => {
+  getOrdersByGalleryId: (galleryId: string) => {
     const state = get();
-    const now = Date.now();
-    const orders: Order[] = [];
-
-    // Iterate through orderCache and filter by galleryId
-    for (const [orderId, cached] of Object.entries(state.orderCache)) {
-      if (cached.order.galleryId === galleryId) {
-        const age = now - cached.timestamp;
-        if (age <= maxAge) {
-          orders.push(cached.order);
-        }
-      }
-    }
+    const orders = state.ordersByGalleryId[galleryId] || [];
 
     // Sort by orderNumber if available, otherwise by createdAt
     return orders.sort((a, b) => {
@@ -723,23 +440,5 @@ export const createOrderSlice: StateCreator<
       }
       return 0;
     });
-  },
-
-  addOrdersToCache: (orders: Order[]) => {
-    const state = get();
-    const now = Date.now();
-    const newCache: Record<string, { order: Order; timestamp: number }> = { ...state.orderCache };
-
-    // Add each order to cache
-    for (const order of orders) {
-      if (order && order.orderId) {
-        newCache[order.orderId] = {
-          order,
-          timestamp: now,
-        };
-      }
-    }
-
-    set({ orderCache: newCache }, undefined, "order/addOrdersToCache");
   },
 });

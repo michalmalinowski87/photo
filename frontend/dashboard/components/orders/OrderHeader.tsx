@@ -13,7 +13,7 @@ export function OrderHeader() {
 
   // Subscribe to stores for order and gallery data
   const order = useOrderStore((state) => state.currentOrder);
-  const currentGalleryId = useGalleryStore((state) => state.currentGalleryId);
+  const currentGallery = useGalleryStore((state) => state.currentGallery);
   const { isNonSelectionGallery, gallery } = useGalleryType();
 
   // Defensive check: don't render until order is loaded
@@ -23,7 +23,7 @@ export function OrderHeader() {
 
   const galleryIdStr = Array.isArray(galleryId)
     ? galleryId[0]
-    : (galleryId ?? currentGalleryId ?? "");
+    : (galleryId ?? currentGallery?.galleryId ?? "");
 
   const displayOrderNumber =
     order.orderNumber ?? (order.orderId ? order.orderId.slice(-8) : galleryIdStr.slice(-8));

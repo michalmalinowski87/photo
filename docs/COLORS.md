@@ -1186,7 +1186,7 @@ useEffect(() => {
 
 4. **Testing**: After making changes, test in incognito/private mode to ensure default theme works correctly.
 
-5. **Build Process**: Run `npm run build` to ensure Tailwind compiles correctly with your changes.
+5. **Build Process**: Run `yarn build` to ensure Tailwind compiles correctly with your changes.
 
 ---
 

@@ -12,7 +12,11 @@ import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
 
-export default function GallerySidebar() {
+interface GallerySidebarProps {
+  setPublishWizardOpen?: (open: boolean) => void;
+}
+
+export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarProps) {
   const router = useRouter();
   const { orderId: orderIdFromQuery } = router.query;
   // Get orderId from query param
@@ -24,35 +28,28 @@ export default function GallerySidebar() {
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
 
-  // Use selector that includes cache - ensures gallery is always available if cached
+  // Check store directly first to avoid subscription timing issues
+  const storeGallery = useGalleryStore.getState().currentGallery;
+  const storeIsLoading = useGalleryStore.getState().isLoading;
+
+  // Use selector for reactivity, but check store directly for loading state
   const gallery = useGalleryStore((state) => {
     const storeGallery = state.currentGallery;
     // If store has gallery and it matches, use it
     if (storeGallery?.galleryId === galleryIdStr) {
       return storeGallery;
     }
-    // Otherwise check cache - also subscribe to cache entry to make it reactive
-    if (galleryIdStr && typeof galleryIdStr === "string") {
-      const cacheEntry = state.galleryCache[galleryIdStr];
-      if (cacheEntry) {
-        const age = Date.now() - cacheEntry.timestamp;
-        if (age < 60000) {
-          // Cache TTL: 60 seconds
-          const cached = cacheEntry.gallery;
-          if (cached?.galleryId === galleryIdStr) {
-            return cached;
-          }
-        }
-      }
-    }
     return storeGallery;
   });
 
-  const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
 
-  // Gallery now includes cache, so use it directly
-  const effectiveGallery = gallery;
+  // Use gallery from store directly if available, fallback to subscription
+  const effectiveGallery = storeGallery?.galleryId === galleryIdStr ? storeGallery : gallery;
+
+  // Only show loading if store is actively loading AND we don't have gallery
+  // Check store directly to avoid race conditions
+  const shouldShowLoading = (storeIsLoading && !storeGallery) || (!storeGallery && galleryIdStr);
 
   const prevStateRef = React.useRef({ hasGallery: !!gallery });
   if (prevStateRef.current.hasGallery !== !!gallery) {
@@ -115,7 +112,7 @@ export default function GallerySidebar() {
       </div>
 
       {/* Gallery Info */}
-      {!isLoading && effectiveGallery ? (
+      {!shouldShowLoading && effectiveGallery ? (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">
           <Link
             href={`/galleries/${effectiveGallery.galleryId}`}
@@ -124,11 +121,11 @@ export default function GallerySidebar() {
             {effectiveGallery.galleryName ?? "Galeria"}
           </Link>
         </div>
-      ) : (
+      ) : shouldShowLoading ? (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">
           <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">Ładowanie...</div>
         </div>
-      )}
+      ) : null}
 
       <CoverPhotoUpload />
 
@@ -138,7 +135,9 @@ export default function GallerySidebar() {
 
       <GalleryNavigation />
 
-      {orderId && order && <OrderActionsSection orderId={orderId} />}
+      {orderId && order && (
+        <OrderActionsSection orderId={orderId} setPublishWizardOpen={setPublishWizardOpen} />
+      )}
 
       <DeleteGalleryButton
         galleryId={effectiveGallery?.galleryId ?? ""}

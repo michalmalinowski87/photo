@@ -1,6 +1,6 @@
 import React, { ComponentType, useCallback } from "react";
 
-import { formatApiError } from "../lib/api-service";
+import api, { formatApiError } from "../lib/api-service";
 import { useDownloadStore } from "../store";
 
 interface ZipDownloadConfig {
@@ -53,16 +53,14 @@ export function withZipDownload<P extends object>(
 
         const pollForZip = async (): Promise<void> => {
           try {
-            // Get valid token (will refresh if needed) - using getValidToken for special 202 handling
-            const { getValidToken } = await import("../lib/api-service");
-            const idToken = await getValidToken();
-
-            const response = await fetch(endpoint, {
-              headers: { Authorization: `Bearer ${idToken}` },
-            });
+            // Determine which API method to use based on endpoint
+            const isFinalZip = endpoint.includes("/final/zip");
+            const result = isFinalZip
+              ? await api.orders.downloadFinalZip(galleryId, orderId)
+              : await api.orders.downloadZip(galleryId, orderId);
 
             // Handle 202 - ZIP is being generated
-            if (response.status === 202) {
+            if (result.status === 202 || result.generating) {
               updateDownload(downloadId, { status: "generating" });
               // Retry after delay
               setTimeout(() => {
@@ -71,72 +69,39 @@ export function withZipDownload<P extends object>(
               return;
             }
 
-            // Handle 200 - ZIP is ready
-            if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
-              updateDownload(downloadId, { status: "downloading" });
-              const blob = await response.blob();
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
+            // Handle successful download
+            updateDownload(downloadId, { status: "downloading" });
 
-              // Try to get filename from Content-Disposition header or use provided/default
-              const contentDisposition = response.headers.get("content-disposition");
-              let finalFilename = filename;
-              if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(
-                  /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-                );
-                if (filenameMatch && filenameMatch[1]) {
-                  finalFilename = filenameMatch[1].replace(/['"]/g, "");
-                }
-              }
+            let blob: Blob;
+            let finalFilename: string;
 
-              a.download = finalFilename;
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              document.body.removeChild(a);
-
-              updateDownload(downloadId, { status: "success" });
-              // Auto-dismiss after 3 seconds
-              setTimeout(() => {
-                removeDownload(downloadId);
-              }, 3000);
-            } else if (response.ok) {
-              // JSON response (error or other status) - handle base64 ZIP for backward compatibility
-              const data = await response.json();
-              if (data.zip) {
-                // Backward compatibility: handle base64 ZIP response
-                updateDownload(downloadId, { status: "downloading" });
-                const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
-                const blob = new Blob([zipBlob], { type: "application/zip" });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = data.filename || filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                updateDownload(downloadId, { status: "success" });
-                setTimeout(() => {
-                  removeDownload(downloadId);
-                }, 3000);
-              } else {
-                const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-                updateDownload(downloadId, { status: "error", error: errorMsg });
-              }
+            if (result.blob) {
+              // Binary blob response
+              blob = result.blob;
+              finalFilename = result.filename || filename;
+            } else if (result.zip) {
+              // Base64 ZIP response (backward compatibility)
+              const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
+              blob = new Blob([zipBlob], { type: "application/zip" });
+              finalFilename = result.filename || filename;
             } else {
-              // Error response
-              const errorData = await response.json().catch(() => ({
-                error: "Nie udało się pobrać pliku ZIP",
-              }));
-              updateDownload(downloadId, {
-                status: "error",
-                error: errorData.error || "Nie udało się pobrać pliku ZIP",
-              });
+              throw new Error("No ZIP data available");
             }
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = finalFilename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            updateDownload(downloadId, { status: "success" });
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => {
+              removeDownload(downloadId);
+            }, 3000);
           } catch (err) {
             const errorMsg = formatApiError(err);
             updateDownload(downloadId, { status: "error", error: errorMsg });
@@ -184,16 +149,14 @@ export function useZipDownload() {
 
       const pollForZip = async (): Promise<void> => {
         try {
-          // Get valid token (will refresh if needed)
-          const { getValidToken } = await import("../lib/api-service");
-          const idToken = await getValidToken();
-
-          const response = await fetch(endpoint, {
-            headers: { Authorization: `Bearer ${idToken}` },
-          });
+          // Determine which API method to use based on endpoint
+          const isFinalZip = endpoint.includes("/final/zip");
+          const result = isFinalZip
+            ? await api.orders.downloadFinalZip(galleryId, orderId)
+            : await api.orders.downloadZip(galleryId, orderId);
 
           // Handle 202 - ZIP is being generated
-          if (response.status === 202) {
+          if (result.status === 202 || result.generating) {
             updateDownload(downloadId, { status: "generating" });
             setTimeout(() => {
               pollForZip();
@@ -201,67 +164,38 @@ export function useZipDownload() {
             return;
           }
 
-          // Handle 200 - ZIP is ready
-          if (response.ok && response.headers.get("content-type")?.includes("application/zip")) {
-            updateDownload(downloadId, { status: "downloading" });
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
+          // Handle successful download
+          updateDownload(downloadId, { status: "downloading" });
 
-            const contentDisposition = response.headers.get("content-disposition");
-            let finalFilename = filename;
-            if (contentDisposition) {
-              const filenameMatch = contentDisposition.match(
-                /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-              );
-              if (filenameMatch && filenameMatch[1]) {
-                finalFilename = filenameMatch[1].replace(/['"]/g, "");
-              }
-            }
+          let blob: Blob;
+          let finalFilename: string;
 
-            a.download = finalFilename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            updateDownload(downloadId, { status: "success" });
-            setTimeout(() => {
-              removeDownload(downloadId);
-            }, 3000);
-          } else if (response.ok) {
-            const data = await response.json();
-            if (data.zip) {
-              updateDownload(downloadId, { status: "downloading" });
-              const zipBlob = Uint8Array.from(atob(data.zip), (c) => c.charCodeAt(0));
-              const blob = new Blob([zipBlob], { type: "application/zip" });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = data.filename || filename;
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              document.body.removeChild(a);
-
-              updateDownload(downloadId, { status: "success" });
-              setTimeout(() => {
-                removeDownload(downloadId);
-              }, 3000);
-            } else {
-              const errorMsg = data.error || "Nie udało się pobrać pliku ZIP";
-              updateDownload(downloadId, { status: "error", error: errorMsg });
-            }
+          if (result.blob) {
+            // Binary blob response
+            blob = result.blob;
+            finalFilename = result.filename || filename;
+          } else if (result.zip) {
+            // Base64 ZIP response (backward compatibility)
+            const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
+            blob = new Blob([zipBlob], { type: "application/zip" });
+            finalFilename = result.filename || filename;
           } else {
-            const errorData = await response.json().catch(() => ({
-              error: "Nie udało się pobrać pliku ZIP",
-            }));
-            updateDownload(downloadId, {
-              status: "error",
-              error: errorData.error || "Nie udało się pobrać pliku ZIP",
-            });
+            throw new Error("No ZIP data available");
           }
+
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = finalFilename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          updateDownload(downloadId, { status: "success" });
+          setTimeout(() => {
+            removeDownload(downloadId);
+          }, 3000);
         } catch (err) {
           const errorMsg = formatApiError(err);
           updateDownload(downloadId, { status: "error", error: errorMsg });

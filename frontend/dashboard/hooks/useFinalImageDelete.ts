@@ -3,7 +3,7 @@ import { useState, useRef, useCallback } from "react";
 import api, { formatApiError } from "../lib/api-service";
 import { useGalleryStore } from "../store";
 
-import { useOrderStatusRefresh } from "./useOrderStatusRefresh";
+import { useOrderStore } from "../store";
 import { useToast } from "./useToast";
 
 interface GalleryImage {
@@ -27,7 +27,7 @@ export const useFinalImageDelete = ({
   setOptimisticFinalsBytes,
 }: UseFinalImageDeleteOptions) => {
   const { showToast } = useToast();
-  const { refreshOrderStatus } = useOrderStatusRefresh();
+  const fetchOrder = useOrderStore((state) => state.fetchOrder);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -104,15 +104,15 @@ export const useFinalImageDelete = ({
           });
         }
 
-        // If this was the last image, call /status endpoint
+        // If this was the last image, refresh order to get updated status
         if (wasLastImage) {
           void (async () => {
             try {
-              await refreshOrderStatus(galleryIdStr, orderIdStr);
+              await fetchOrder(galleryIdStr, orderIdStr);
             } catch (statusErr) {
               // eslint-disable-next-line no-console
               console.error(
-                "[useFinalImageDelete] Failed to refresh order status after last image deleted:",
+                "[useFinalImageDelete] Failed to refresh order after last image deleted:",
                 statusErr
               );
             }
@@ -128,10 +128,6 @@ export const useFinalImageDelete = ({
 
         // Mark as successfully deleted
         setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-
-        // Refresh bytes only (this will update Zustand store with actual server value)
-        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-        void refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
 
         // Clear deleted key after 30 seconds to allow eventual consistency
         setTimeout(() => {
@@ -198,7 +194,7 @@ export const useFinalImageDelete = ({
       setOptimisticFinalsBytes,
       deletingImages,
       deletedImageKeys,
-      refreshOrderStatus,
+      fetchOrder,
       showToast,
     ]
   );

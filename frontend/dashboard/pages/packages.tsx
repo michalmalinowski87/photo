@@ -7,9 +7,9 @@ import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { usePageLogger } from "../hooks/usePageLogger";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../lib/currency";
 import { formatPrice } from "../lib/format-price";
 
@@ -31,6 +31,9 @@ interface PackageFormData {
 
 export default function Packages() {
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "Packages",
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -49,33 +52,30 @@ export default function Packages() {
   const [priceInput, setPriceInput] = useState<string | null>(null);
 
   const loadPackages = useCallback(async (): Promise<void> => {
+    logDataLoad("packages", {});
     setLoading(true);
     setError("");
 
     try {
       const data = await api.packages.list();
-
-      setPackages((data.items ?? []) as PricingPackage[]);
+      const packagesData = (data.items ?? []) as PricingPackage[];
+      logDataLoaded("packages", packagesData, { count: packagesData.length });
+      setPackages(packagesData);
 
       if (initialLoad) {
         setInitialLoad(false);
       }
     } catch (err) {
+      logDataError("packages", err);
       setError(formatApiError(err as Error));
     } finally {
       setLoading(false);
     }
-  }, [initialLoad]);
+  }, [initialLoad, logDataLoad, logDataLoaded, logDataError]);
 
   useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadPackages();
-      },
-      () => {
-        redirectToLandingSignIn("/packages");
-      }
-    );
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    void loadPackages();
   }, [loadPackages]);
 
   const handleCreate = (): void => {

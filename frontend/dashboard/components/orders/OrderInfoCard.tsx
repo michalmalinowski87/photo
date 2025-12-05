@@ -1,6 +1,6 @@
 import { Check, X, Pencil } from "lucide-react";
 
-import { formatCurrencyInput, centsToPlnString } from "../../lib/currency";
+import { formatCurrencyInput } from "../../lib/currency";
 import { formatPrice } from "../../lib/format-price";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
 import { useGalleryStore, useOrderStore } from "../../store";

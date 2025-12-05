@@ -3,6 +3,7 @@ import {
   Image,
   Users,
   Package,
+  Globe,
   Wallet,
   Settings,
   ChevronDown,
@@ -20,6 +21,7 @@ type NavItem = {
   name: string;
   icon: React.ReactNode;
   path?: string;
+  external?: boolean;
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
@@ -60,6 +62,12 @@ const navItems: NavItem[] = [
     name: "Ustawienia",
     icon: <Settings size={20} />,
     path: "/settings",
+  },
+  {
+    name: "Strona główna",
+    icon: <Globe size={20} />,
+    path: process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002",
+    external: true,
   },
 ];
 
@@ -152,7 +160,16 @@ const AppSidebar: React.FC = () => {
               )}
             </button>
           ) : (
-            nav.path && (
+            nav.path &&
+            (nav.external ? (
+              <a
+                href={nav.path}
+                className="menu-item group menu-item-inactive"
+              >
+                <span className="menu-item-icon-size menu-item-icon-inactive">{nav.icon}</span>
+                {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
+              </a>
+            ) : (
               <Link
                 href={nav.path}
                 className={`menu-item group ${
@@ -168,7 +185,7 @@ const AppSidebar: React.FC = () => {
                 </span>
                 {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
               </Link>
-            )
+            ))
           )}
           {nav.subItems && (isExpanded || isMobileOpen) && (
             <div

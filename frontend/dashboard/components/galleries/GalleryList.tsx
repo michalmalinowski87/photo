@@ -11,16 +11,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
+import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
-import { useGalleryStore, useUserStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { EmptyState } from "../ui/empty-state/EmptyState";
+import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
 import { PublishGalleryWizard } from "./PublishGalleryWizard";
@@ -60,12 +60,16 @@ const GalleryList: React.FC<GalleryListProps> = ({
   onWizardOpenChange,
 }) => {
   const router = useRouter();
-  const publishWizardOpen = useGalleryStore((state) => state.publishWizardOpen);
-  const publishWizardGalleryId = useGalleryStore((state) => state.publishWizardGalleryId);
-  const publishWizardState = useGalleryStore((state) => state.publishWizardState);
-  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
+  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
+    pageName: `GalleryList-${filter}`,
+    logMount: false,
+    logUnmount: false,
+  });
+  const [publishWizardOpen, setPublishWizardOpen] = useState(false);
+  const [publishWizardGalleryId, setPublishWizardGalleryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
+  const initialLoadRef = useRef(true);
   const [error, setError] = useState("");
 
   const [galleries, setGalleries] = useState<Gallery[]>([]);
@@ -77,18 +81,14 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
-  const { refreshWalletBalance } = useUserStore();
-
-  const loadWalletBalance = useCallback(async () => {
-    try {
-      await refreshWalletBalance();
-    } catch (_err) {
-      // Ignore wallet errors, default to 0
-    }
-  }, [refreshWalletBalance]);
+  // Removed wallet balance refresh - only refresh on wallet page and publish wizard
 
   const loadGalleries = useCallback(async () => {
-    if (onLoadingChange && initialLoad) {
+    logDataLoad("galleries", { filter });
+    const isInitialLoad = initialLoadRef.current;
+
+    if (onLoadingChange && isInitialLoad) {
+      initialLoadRef.current = false;
       setInitialLoad(false);
       setLoading(false);
       onLoadingChange(false, false);
@@ -97,33 +97,30 @@ const GalleryList: React.FC<GalleryListProps> = ({
     setLoading(true);
     setError("");
 
-    if (onLoadingChange && initialLoad) {
+    if (onLoadingChange && isInitialLoad) {
       onLoadingChange(true, true);
     }
 
     try {
-      const response = await api.galleries.list();
+      // Pass filter to API for server-side filtering
+      const response = await api.galleries.list(filter);
       const galleriesList = Array.isArray(response) ? response : (response.items ?? []);
 
-      // Apply filter client-side
-      let filteredGalleries = galleriesList;
-      if (filter) {
-        filteredGalleries = galleriesList.filter((gallery: Gallery) => {
-          if (filter === "unpaid") {
-            return gallery.isPaid === false;
-          }
-          return true;
-        });
-      }
+      logDataLoaded("galleries", galleriesList, {
+        count: galleriesList.length,
+        filter,
+      });
+      setGalleries(galleriesList);
 
-      setGalleries(filteredGalleries);
-
-      if (initialLoad) {
+      if (isInitialLoad) {
+        initialLoadRef.current = false;
         setInitialLoad(false);
       }
     } catch (err) {
+      logDataError("galleries", err);
       setError(formatApiError(err));
-      if (initialLoad) {
+      if (isInitialLoad) {
+        initialLoadRef.current = false;
         setInitialLoad(false);
       }
     } finally {
@@ -132,48 +129,15 @@ const GalleryList: React.FC<GalleryListProps> = ({
         onLoadingChange(false, false);
       }
     }
-  }, [filter, initialLoad, onLoadingChange]);
+  }, [filter, onLoadingChange, logDataLoad, logDataLoaded, logDataError]);
 
-  useEffect(() => {
-    initializeAuth(
-      () => {
-        // Token is handled by api-service automatically
-      },
-      () => {
-        redirectToLandingSignIn(
-          typeof window !== "undefined" ? window.location.pathname : "/galleries"
-        );
-        if (onLoadingChange) {
-          setInitialLoad(false);
-          setLoading(false);
-          onLoadingChange(false, false);
-        }
-      }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoadingChange is a prop callback that shouldn't change
-  }, []);
+  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
 
   useEffect(() => {
     void loadGalleries();
-    void loadWalletBalance();
-  }, [filter, loadGalleries, loadWalletBalance]);
+  }, [filter, loadGalleries]);
 
-  // Close wizard when navigating away
-  useEffect(() => {
-    if (!publishWizardOpen || !router.events) {
-      return;
-    }
-
-    const handleRouteChange = () => {
-      setPublishWizardOpen(false);
-      onWizardOpenChange?.(false);
-    };
-
-    router.events.on("routeChangeStart", handleRouteChange);
-    return () => {
-      router.events.off("routeChangeStart", handleRouteChange);
-    };
-  }, [publishWizardOpen, router.events, setPublishWizardOpen, onWizardOpenChange]);
+  // Removed reactive wizard closing - handle explicitly in navigation handlers
 
   // Notify parent of loading state changes
   useEffect(() => {
@@ -185,14 +149,15 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
   const handlePayClick = (galleryId: string) => {
     setSelectedGalleryIdForLoading(galleryId);
-    setPublishWizardOpen(true, galleryId);
+    setPublishWizardGalleryId(galleryId);
+    setPublishWizardOpen(true);
     onWizardOpenChange?.(true);
   };
 
   const handlePaymentComplete = async () => {
-    // Reload galleries and wallet balance after payment
+    // Reload galleries after payment
+    // Wallet balance is refreshed by PublishGalleryWizard
     await loadGalleries();
-    await loadWalletBalance();
   };
 
   const handleDeleteClick = (gallery: Gallery) => {
@@ -339,14 +304,15 @@ const GalleryList: React.FC<GalleryListProps> = ({
           galleryId={publishWizardGalleryId}
           onSuccess={handlePaymentComplete}
           renderAsModal={false}
-          initialState={publishWizardState}
         />
       )}
       {!publishWizardOpen && (
         <div className="space-y-4">
           {error && <div>{error}</div>}
 
-          {galleries.length === 0 ? (
+          {loading ? (
+            <InlineLoading text="Ładowanie galerii..." />
+          ) : galleries.length === 0 ? (
             <EmptyState {...getEmptyStateConfig()} />
           ) : (
             <div className="overflow-x-auto">

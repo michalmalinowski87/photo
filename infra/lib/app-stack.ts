@@ -64,6 +64,12 @@ export class AppStack extends Stack {
 			partitionKey: { name: 'ownerId', type: AttributeType.STRING },
 			sortKey: { name: 'createdAt', type: AttributeType.STRING }
 		});
+		// GSI for finding DRAFT galleries older than X days (for expiry cleanup)
+		galleries.addGlobalSecondaryIndex({
+			indexName: 'state-createdAt-index',
+			partitionKey: { name: 'state', type: AttributeType.STRING },
+			sortKey: { name: 'createdAt', type: AttributeType.STRING }
+		});
 		
 		// Enable TTL on the galleries table using the 'ttl' attribute
 		// This allows DynamoDB to automatically delete expired items (typically within 48 hours)
@@ -97,6 +103,18 @@ export class AppStack extends Stack {
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
 	});
+	// GSI for querying orders by owner (for dashboard stats)
+	orders.addGlobalSecondaryIndex({
+		indexName: 'ownerId-deliveryStatus-index',
+		partitionKey: { name: 'ownerId', type: AttributeType.STRING },
+		sortKey: { name: 'deliveryStatus', type: AttributeType.STRING }
+	});
+	// GSI for filtering orders by delivery status within a gallery
+	orders.addGlobalSecondaryIndex({
+		indexName: 'galleryId-deliveryStatus-index',
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'deliveryStatus', type: AttributeType.STRING }
+	});
 
 	const transactions = new Table(this, 'TransactionsTable', {
 		partitionKey: { name: 'userId', type: AttributeType.STRING },
@@ -109,6 +127,21 @@ export class AppStack extends Stack {
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'status', type: AttributeType.STRING }
 	});
+	// GSI for finding expired wallet top-ups (status + createdAt, filter by type)
+	transactions.addGlobalSecondaryIndex({
+		indexName: 'status-createdAt-index',
+		partitionKey: { name: 'status', type: AttributeType.STRING },
+		sortKey: { name: 'createdAt', type: AttributeType.STRING }
+	});
+	// GSI for filtering transactions by status and type for a user
+	// Uses composite sort key: "STATUS#TYPE" (e.g., "UNPAID#WALLET_TOPUP")
+	// NOTE: This requires adding statusType field to transactions (composite: "STATUS#TYPE")
+	// For now, keeping commented as it requires code changes to populate statusType field
+	// transactions.addGlobalSecondaryIndex({
+	// 	indexName: 'userId-statusType-index',
+	// 	partitionKey: { name: 'userId', type: AttributeType.STRING },
+	// 	sortKey: { name: 'statusType', type: AttributeType.STRING }
+	// });
 
 	const clients = new Table(this, 'ClientsTable', {
 		partitionKey: { name: 'clientId', type: AttributeType.STRING },
@@ -274,7 +307,7 @@ export class AppStack extends Stack {
 				minify: true,
 				treeShaking: true,
 				sourceMap: false,
-				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: envVars
 		});

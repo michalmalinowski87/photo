@@ -4,10 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
+import { useAuth } from "../context/AuthProvider";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
-import { useAuthStore } from "../store";
 
 interface CognitoError extends Error {
   code?: string;
@@ -21,7 +21,7 @@ export default function Login() {
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const hasRedirected = useRef<boolean>(false);
-  const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+  const { setSessionExpired } = useAuth();
 
   useEffect(() => {
     // Setup auth status listener for landing page

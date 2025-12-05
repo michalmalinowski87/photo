@@ -1,6 +1,6 @@
 import { Plus, ChevronDown, Image, Upload } from "lucide-react";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
@@ -12,11 +12,12 @@ import { FullPageLoading, Loading } from "../../../components/ui/loading/Loading
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGallery } from "../../../hooks/useGallery";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
+import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../../../lib/auth-init";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
+import { storeLogger } from "../../../lib/store-logger";
 import { useGalleryStore } from "../../../store";
 
 interface GalleryImage {
@@ -67,6 +68,11 @@ export default function GalleryPhotos() {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction, logSkippedLoad } = usePageLogger(
+    {
+      pageName: "GalleryPhotos",
+    }
+  );
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
@@ -79,10 +85,8 @@ export default function GalleryPhotos() {
   // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
-  // Initialize hasInitialized to false - only skip loading when navigating between same gallery pages
-  // For direct navigation, always show loading to ensure proper initialization
-  const [hasInitialized, setHasInitialized] = useState<boolean>(false);
-  const prevGalleryIdRef = useRef<string | string[] | undefined>(undefined);
+  // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
+  const loadedGalleryIdRef = useRef<string>("");
   interface GalleryOrder {
     orderId?: string;
     orderNumber?: string | number;
@@ -175,6 +179,7 @@ export default function GalleryPhotos() {
   const loadPhotos = useCallback(
     async (silent: boolean = false): Promise<void> => {
       if (!galleryId) {
+        logSkippedLoad("photos", "No galleryId provided", { silent });
         return;
       }
 
@@ -292,17 +297,16 @@ export default function GalleryPhotos() {
   // Reload gallery after upload (simple refetch, no polling)
   const reloadGalleryAfterUpload = useCallback(async () => {
     if (!galleryId) {
+      logSkippedLoad("reloadGalleryAfterUpload", "No galleryId provided", {});
       return;
     }
 
-    // Invalidate cache and fetch fresh images
-    const { invalidateGalleryImagesCache, fetchGalleryImages } = useGalleryStore.getState();
-    invalidateGalleryImagesCache(galleryId as string);
-    await fetchGalleryImages(galleryId as string, true); // Force refresh
+    // Fetch fresh images
+    const { fetchGalleryImages, galleryImages } = useGalleryStore.getState();
+    await fetchGalleryImages(galleryId as string);
 
     // Update local state from store
-    const { getGalleryImages } = useGalleryStore.getState();
-    const storeImages = getGalleryImages(galleryId as string) ?? [];
+    const storeImages = galleryImages[galleryId as string] ?? [];
 
     setImages((currentImages) => {
       const deletingImageKeys = Array.from(deletingImagesRef.current);
@@ -372,223 +376,142 @@ export default function GalleryPhotos() {
     });
   }, [galleryId, deletingImagesRef]);
 
-  const loadApprovedSelections = useCallback(
-    async (forceRefresh = false): Promise<void> => {
-      if (!galleryId) {
+  const loadApprovedSelections = useCallback(async (): Promise<void> => {
+    if (!galleryId) {
+      logSkippedLoad("loadApprovedSelections", "No galleryId provided", {});
+      return;
+    }
+
+    try {
+      const ordersData = await fetchGalleryOrders(galleryId as string);
+
+      setOrders(ordersData);
+
+      // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
+      const approvedOrders = (ordersData as GalleryOrder[]).filter(
+        (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
+      );
+
+      // Collect all selected keys from approved orders
+      const approvedKeys = new Set<string>();
+      approvedOrders.forEach((order) => {
+        const selectedKeys = Array.isArray(order.selectedKeys)
+          ? order.selectedKeys
+          : typeof order.selectedKeys === "string"
+            ? (JSON.parse(order.selectedKeys) as string[])
+            : [];
+        selectedKeys.forEach((key: string) => approvedKeys.add(key));
+      });
+
+      setApprovedSelectionKeys(approvedKeys);
+
+      // Collect all selected keys from ANY order (for "Selected" display)
+      // Also track order delivery status for each image
+      const allOrderKeys = new Set<string>();
+      const imageStatusMap = new Map<string, string>();
+
+      (ordersData as GalleryOrder[]).forEach((order) => {
+        const selectedKeys = Array.isArray(order.selectedKeys)
+          ? order.selectedKeys
+          : typeof order.selectedKeys === "string"
+            ? (JSON.parse(order.selectedKeys) as string[])
+            : [];
+        const orderStatus = order.deliveryStatus || "";
+
+        selectedKeys.forEach((key: string) => {
+          allOrderKeys.add(key);
+          // Track the highest priority status for each image
+          // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
+          const currentStatus = imageStatusMap.get(key);
+          if (!currentStatus) {
+            imageStatusMap.set(key, orderStatus);
+          } else if (orderStatus === "DELIVERED") {
+            imageStatusMap.set(key, "DELIVERED");
+          } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
+            imageStatusMap.set(key, "PREPARING_DELIVERY");
+          } else if (
+            orderStatus === "PREPARING_FOR_DELIVERY" &&
+            currentStatus !== "DELIVERED" &&
+            currentStatus !== "PREPARING_DELIVERY"
+          ) {
+            imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
+          } else if (
+            orderStatus === "CLIENT_APPROVED" &&
+            currentStatus !== "DELIVERED" &&
+            currentStatus !== "PREPARING_DELIVERY" &&
+            currentStatus !== "PREPARING_FOR_DELIVERY"
+          ) {
+            imageStatusMap.set(key, "CLIENT_APPROVED");
+          }
+        });
+      });
+
+      setAllOrderSelectionKeys(allOrderKeys);
+      setImageOrderStatus(imageStatusMap);
+    } catch (err) {
+      // Check if error is 404 (gallery not found/deleted) - handle silently
+      const apiError = err as { status?: number };
+      if (apiError.status === 404) {
+        // Gallery doesn't exist (deleted) - silently return empty state
+        setOrders([]);
+        setApprovedSelectionKeys(new Set());
+        setAllOrderSelectionKeys(new Set());
+        setImageOrderStatus(new Map());
         return;
       }
 
-      try {
-        // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
-        const ordersData = await fetchGalleryOrders(galleryId as string, forceRefresh);
-
-        setOrders(ordersData);
-
-        // Find orders with CLIENT_APPROVED or PREPARING_DELIVERY status (cannot delete)
-        const approvedOrders = (ordersData as GalleryOrder[]).filter(
-          (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
-        );
-
-        // Collect all selected keys from approved orders
-        const approvedKeys = new Set<string>();
-        approvedOrders.forEach((order) => {
-          const selectedKeys = Array.isArray(order.selectedKeys)
-            ? order.selectedKeys
-            : typeof order.selectedKeys === "string"
-              ? (JSON.parse(order.selectedKeys) as string[])
-              : [];
-          selectedKeys.forEach((key: string) => approvedKeys.add(key));
-        });
-
-        setApprovedSelectionKeys(approvedKeys);
-
-        // Collect all selected keys from ANY order (for "Selected" display)
-        // Also track order delivery status for each image
-        const allOrderKeys = new Set<string>();
-        const imageStatusMap = new Map<string, string>();
-
-        (ordersData as GalleryOrder[]).forEach((order) => {
-          const selectedKeys = Array.isArray(order.selectedKeys)
-            ? order.selectedKeys
-            : typeof order.selectedKeys === "string"
-              ? (JSON.parse(order.selectedKeys) as string[])
-              : [];
-          const orderStatus = order.deliveryStatus || "";
-
-          selectedKeys.forEach((key: string) => {
-            allOrderKeys.add(key);
-            // Track the highest priority status for each image
-            // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
-            const currentStatus = imageStatusMap.get(key);
-            if (!currentStatus) {
-              imageStatusMap.set(key, orderStatus);
-            } else if (orderStatus === "DELIVERED") {
-              imageStatusMap.set(key, "DELIVERED");
-            } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
-              imageStatusMap.set(key, "PREPARING_DELIVERY");
-            } else if (
-              orderStatus === "PREPARING_FOR_DELIVERY" &&
-              currentStatus !== "DELIVERED" &&
-              currentStatus !== "PREPARING_DELIVERY"
-            ) {
-              imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
-            } else if (
-              orderStatus === "CLIENT_APPROVED" &&
-              currentStatus !== "DELIVERED" &&
-              currentStatus !== "PREPARING_DELIVERY" &&
-              currentStatus !== "PREPARING_FOR_DELIVERY"
-            ) {
-              imageStatusMap.set(key, "CLIENT_APPROVED");
-            }
-          });
-        });
-
-        setAllOrderSelectionKeys(allOrderKeys);
-        setImageOrderStatus(imageStatusMap);
-      } catch (err) {
-        // Check if error is 404 (gallery not found/deleted) - handle silently
-        const apiError = err as { status?: number };
-        if (apiError.status === 404) {
-          // Gallery doesn't exist (deleted) - silently return empty state
-          setOrders([]);
-          setApprovedSelectionKeys(new Set());
-          setAllOrderSelectionKeys(new Set());
-          setImageOrderStatus(new Map());
-          return;
-        }
-
-        // For other errors, log but don't show toast - this is not critical
-        // eslint-disable-next-line no-console
-        console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
-      }
-    },
-    [galleryId, fetchGalleryOrders]
-  );
+      // For other errors, log but don't show toast - this is not critical
+      // eslint-disable-next-line no-console
+      console.error("[GalleryPhotos] loadApprovedSelections: Error", err);
+    }
+  }, [galleryId, fetchGalleryOrders]);
 
   // Clear galleryCreationLoading when gallery and images are fully loaded
   useEffect(() => {
-    if (galleryCreationLoading && !galleryLoading && hasInitialized && gallery && !loading) {
+    if (galleryCreationLoading && !galleryLoading && gallery && !loading) {
       setGalleryCreationLoading(false);
     }
-  }, [
-    galleryCreationLoading,
-    galleryLoading,
-    hasInitialized,
-    gallery,
-    loading,
-    setGalleryCreationLoading,
-  ]);
+  }, [galleryCreationLoading, galleryLoading, gallery, loading, setGalleryCreationLoading]);
 
-  // Synchronously check if we're navigating between pages of the same gallery
-  // Set hasInitialized immediately if gallery is already loaded to prevent flash
-  // This prevents flash when navigating between gallery pages, but shows loading on direct navigation
-  // Use galleryId from gallery object instead of entire gallery object to prevent infinite loops
-  const currentGalleryId = gallery?.galleryId;
-  useLayoutEffect(() => {
-    if (!galleryId) {
-      return;
-    }
-
-    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-    const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
-      ? prevGalleryIdRef.current[0]
-      : prevGalleryIdRef.current;
-    const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
-
-    // If same gallery AND gallery is loaded (even if not yet initialized), set initialized immediately
-    // This prevents the flash of FullPageLoading when navigating between pages of the same gallery
-    if (isSameGallery && !galleryLoading && !!gallery && currentGalleryId === galleryIdStr) {
-      // Set initialized immediately to prevent flash - gallery is already loaded
-      if (!hasInitialized) {
-        setHasInitialized(true);
-        if (process.env.NODE_ENV === "development") {
-          // eslint-disable-next-line no-console
-          console.log(
-            "[GalleryPhotos] useLayoutEffect: Setting hasInitialized=true (same gallery, already loaded)",
-            {
-              galleryId: galleryIdStr,
-              prevGalleryId,
-              galleryLoading,
-              hasInitialized: false,
-            }
-          );
-        }
-      }
-      prevGalleryIdRef.current = galleryId;
-      return;
-    }
-
-    // Direct navigation or different gallery - reset initialized state
-    // Don't set hasInitialized here - let the useEffect handle it after loading completes
-    prevGalleryIdRef.current = galleryId;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, galleryLoading, currentGalleryId]); // Use currentGalleryId instead of entire gallery object
+  // Removed: useLayoutEffect with hasInitialized workaround
+  // Now using stable galleryId comparison in the loading check above
 
   // Initialize auth and load data
   useEffect(() => {
     // Don't initialize until galleryId is available from router
     if (!galleryId) {
+      logSkippedLoad("initializeAuth", "No galleryId from router", {});
       return;
     }
 
-    // Check if galleryId changed - if same gallery AND already initialized, skip loading
     const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-    const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
-      ? prevGalleryIdRef.current[0]
-      : prevGalleryIdRef.current;
-    const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
+    const isNewGallery = loadedGalleryIdRef.current !== galleryIdStr;
 
-    // Only skip loading if: same gallery AND we were already initialized AND gallery is loaded
-    // This means we're navigating between pages of the same gallery (e.g., photos -> settings)
-    // For direct navigation or different gallery, always show loading
-    if (isSameGallery && hasInitialized && !galleryLoading && !!gallery) {
-      // Keep initialized state and load silently - we're just navigating between pages
-      void loadPhotos(true).then(() => {
-        setHasInitialized(true);
+    // Only load if it's a new gallery (not already loaded)
+    // GalleryLayoutWrapper handles gallery loading, we just need to load photos
+    if (isNewGallery) {
+      loadedGalleryIdRef.current = galleryIdStr;
+    } else {
+      logSkippedLoad("loadPhotos", "Gallery already loaded (not new)", {
+        galleryId: galleryIdStr,
+        loadedGalleryId: loadedGalleryIdRef.current,
       });
-      void loadApprovedSelections(false);
-      prevGalleryIdRef.current = galleryId;
-      return;
     }
 
-    // Different gallery, direct navigation, or not loaded yet - show loading and fetch
-    // Only reset hasInitialized if it's actually a different gallery or direct navigation
-    // If useLayoutEffect already set it to true (same gallery navigation), don't reset it
-    prevGalleryIdRef.current = galleryId;
-    if (!isSameGallery || !gallery || galleryLoading) {
-      setHasInitialized(false);
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    if (galleryId) {
+      // Check for redirect params (Stripe redirect from wallet top-up or publish wizard)
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : ""
+      );
+      const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
+      const hasPaymentSuccess = params.get("payment") === "success";
+
+      void loadPhotos();
+
+      // Load orders
+      void loadApprovedSelections();
     }
-    initializeAuth(
-      () => {
-        if (galleryId) {
-          // Check for redirect params (Stripe redirect from wallet top-up or publish wizard)
-          const params = new URLSearchParams(
-            typeof window !== "undefined" ? window.location.search : ""
-          );
-          const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
-          const hasPaymentSuccess = params.get("payment") === "success";
-
-          void loadPhotos().then(() => {
-            setHasInitialized(true);
-          });
-
-          // If we have redirect params (Stripe redirect), force refresh orders
-          if (hasRedirectParams || hasPaymentSuccess) {
-            const { invalidateGalleryOrdersCache } = useGalleryStore.getState();
-            invalidateGalleryOrdersCache(galleryId as string);
-            void loadApprovedSelections(true);
-          } else {
-            void loadApprovedSelections(false);
-          }
-        }
-      },
-      () => {
-        const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-        if (galleryIdStr) {
-          redirectToLandingSignIn(`/galleries/${galleryIdStr}/photos`);
-        }
-      }
-    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
@@ -632,64 +555,53 @@ export default function GalleryPhotos() {
 
   // Show loading if galleryId is not yet available from router (prevents flash of empty state)
   if (!galleryId) {
-    if (process.env.NODE_ENV === "development") {
-      // eslint-disable-next-line no-console
-      console.log("[GalleryPhotos] FullPageLoading: No galleryId", {
-        galleryId,
-        routerQuery: router.query,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    return <FullPageLoading text="Ładowanie..." />;
+    // Return null to let GalleryLayoutWrapper handle the loading overlay
+    // This ensures the sidebar is visible during loading
+    return null;
   }
 
-  // Check synchronously if gallery is already loaded from store (regardless of hasInitialized state)
-  // This prevents flash when navigating between pages of the same gallery
-  // If gallery is loaded and matches current galleryId, skip loading screen even if hasInitialized is false
+  // Use stable galleryId comparison instead of object references
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  const galleryIsLoaded = !galleryLoading && !!gallery && gallery.galleryId === galleryIdStr;
+  const currentGalleryId = gallery?.galleryId ?? "";
 
-  // Also check if we're navigating between pages of the same gallery (using ref as additional check)
-  const prevGalleryId = Array.isArray(prevGalleryIdRef.current)
-    ? prevGalleryIdRef.current[0]
-    : prevGalleryIdRef.current;
-  const isSameGallery = prevGalleryId === galleryIdStr && prevGalleryId !== undefined;
-  const shouldSkipLoading = galleryIsLoaded || (isSameGallery && !galleryLoading && !!gallery);
+  const effectiveGallery = gallery;
+  const effectiveGalleryId = effectiveGallery?.galleryId ?? "";
 
-  // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
-  // galleryCreationLoading is handled at AppLayout level to persist across navigation
-  // Only show regular loading here
-  // Skip loading if gallery is already loaded (prevents flash when navigating between pages)
-  if ((galleryLoading || !hasInitialized) && !shouldSkipLoading) {
-    if (process.env.NODE_ENV === "development") {
-      // eslint-disable-next-line no-console
-      console.log("[GalleryPhotos] FullPageLoading: Gallery loading or not initialized", {
-        galleryId,
-        galleryLoading,
-        hasInitialized,
-        gallery: gallery ? { galleryId: gallery.galleryId } : null,
-        prevGalleryId: prevGalleryIdRef.current,
-        galleryIsLoaded,
-        isSameGallery,
-        shouldSkipLoading,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    return <FullPageLoading text="Ładowanie galerii..." />;
+  // Gallery is loaded if we have it and IDs match
+  const isGalleryLoaded = !!effectiveGallery && effectiveGalleryId === galleryIdStr;
+
+  // Update loaded galleryId when gallery is loaded
+  if (isGalleryLoaded && loadedGalleryIdRef.current !== galleryIdStr) {
+    loadedGalleryIdRef.current = galleryIdStr;
   }
 
-  if (process.env.NODE_ENV === "development") {
-    // eslint-disable-next-line no-console
-    console.log("[GalleryPhotos] FullPageLoading: Hidden - Gallery ready", {
-      galleryId,
-      galleryLoading,
-      hasInitialized,
-      gallery: gallery ? { galleryId: gallery.galleryId } : null,
-      timestamp: new Date().toISOString(),
-    });
+  // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
+  // This ensures the sidebar is visible during loading
+  // Return empty content (not null) so the layout still renders
+  if (!isGalleryLoaded) {
+    storeLogger.log(
+      "GalleryPhotos",
+      "Waiting for gallery - GalleryLayoutWrapper will show loading",
+      {
+        galleryId: galleryIdStr,
+        hasGallery: !!gallery,
+        currentGalleryId,
+        effectiveGalleryId,
+      }
+    );
+    // Return empty div so layout still renders (sidebar will show loading state)
+    return <div />;
   }
 
-  if (!gallery) {
+  storeLogger.log("GalleryPhotos", "Gallery ready - rendering content", {
+    galleryId: galleryIdStr,
+    effectiveGalleryId,
+  });
+
+  // Use effectiveGallery (from store or cache) for rendering
+  // Fallback to gallery from hook if effectiveGallery is not available
+  const galleryToRender = (effectiveGallery || gallery) as Gallery | null;
+  if (!galleryToRender) {
     return null; // Error is handled by GalleryLayoutWrapper
   }
 

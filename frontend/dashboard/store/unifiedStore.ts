@@ -109,13 +109,30 @@ export const useUnifiedStore = create<UnifiedStore>()(
 );
 
 // Initialize sidebar mobile state on client side
+// Only update when width changes by 40px or more to avoid excessive updates
 if (typeof window !== "undefined") {
+  let lastWidth = window.innerWidth;
+  const THRESHOLD = 40; // Only update when width changes by 40px or more
+
   const handleResize = () => {
-    const mobile = window.innerWidth < 768;
-    useUnifiedStore.getState()._setIsMobile(mobile);
+    const currentWidth = window.innerWidth;
+    const widthDiff = Math.abs(currentWidth - lastWidth);
+
+    // Only update if width changed by threshold or more, or if crossing mobile breakpoint
+    const wasMobile = lastWidth < 768;
+    const isMobile = currentWidth < 768;
+    const crossedBreakpoint = wasMobile !== isMobile;
+
+    if (widthDiff >= THRESHOLD || crossedBreakpoint) {
+      lastWidth = currentWidth;
+      useUnifiedStore.getState()._setIsMobile(isMobile);
+    }
   };
 
-  handleResize();
+  // Initialize on mount
+  const initialMobile = window.innerWidth < 768;
+  useUnifiedStore.getState()._setIsMobile(initialMobile);
+
   window.addEventListener("resize", handleResize);
 }
 

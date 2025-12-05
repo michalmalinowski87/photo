@@ -12,9 +12,9 @@ import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
 import { useGallery } from "../../hooks/useGallery";
+import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../../lib/auth-init";
 import { formatPrice } from "../../lib/format-price";
 import { useGalleryStore, useOrderStore, useUserStore } from "../../store";
 
@@ -27,16 +27,6 @@ const FILTER_ROUTES = [
   "dostarczone",
   "robocze",
 ];
-
-interface Order {
-  orderId: string;
-  orderNumber?: string;
-  deliveryStatus?: string;
-  paymentStatus?: string;
-  totalCents?: number;
-  createdAt?: string;
-  [key: string]: unknown;
-}
 
 interface Gallery {
   galleryId: string;
@@ -116,25 +106,19 @@ function cleanUrlParams(preserveParams: {
  */
 async function handleWalletTopUpSuccess(
   galleryIdStr: string,
-  refreshWalletBalance: () => Promise<void>,
-  invalidateGalleryOrdersCache: (galleryId: string) => void,
-  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void,
   preserveParams: { publish?: string | null; galleryId?: string | null }
 ): Promise<void> {
   showToast("success", "Sukces", "Portfel został doładowany pomyślnie!");
 
-  // Refresh wallet balance
-  await refreshWalletBalance();
-
-  // Invalidate gallery orders cache to force reload
-  invalidateGalleryOrdersCache(galleryIdStr);
-
-  // Force reload gallery orders (bypass cache) - ensure orders are loaded
-  await loadOrders(true);
+  // Reload gallery orders
+  await loadOrders();
 
   // Clean URL params but preserve publish/galleryId if present
   cleanUrlParams(preserveParams);
+
+  // Note: Wallet balance is only refreshed on wallet page and publish wizard
 }
 
 /**
@@ -143,9 +127,8 @@ async function handleWalletTopUpSuccess(
 async function pollGalleryPaymentStatus(
   galleryIdStr: string,
   initialGalleryState: string | undefined,
-  refreshGalleryStatusOnly: (galleryId: string) => Promise<void>,
   reloadGallery: (() => Promise<void>) | undefined,
-  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void
 ): Promise<void> {
   let pollAttempts = 0;
@@ -154,26 +137,21 @@ async function pollGalleryPaymentStatus(
 
   const poll = async (): Promise<void> => {
     try {
-      // Use micro endpoint to check payment status (lightweight)
-      try {
-        await refreshGalleryStatusOnly(galleryIdStr);
+      // Reload gallery to check payment status
+      if (reloadGallery) {
+        await reloadGallery();
+      }
 
-        // Get updated gallery from store to check state
-        const updatedGallery = useGalleryStore.getState().currentGallery;
+      // Get updated gallery from store to check state
+      const updatedGallery = useGalleryStore.getState().currentGallery;
 
-        // Check if gallery state changed from DRAFT to PAID_ACTIVE
-        if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
-          // Payment confirmed! Stop polling
-          if (reloadGallery) {
-            await reloadGallery();
-          }
-          await loadOrders(false);
-          showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
-          window.history.replaceState({}, "", window.location.pathname);
-          return;
-        }
-      } catch (apiError) {
-        console.error("Error fetching gallery status:", apiError);
+      // Check if gallery state changed from DRAFT to PAID_ACTIVE
+      if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
+        // Payment confirmed! Stop polling
+        await loadOrders();
+        showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
       }
 
       pollAttempts++;
@@ -184,7 +162,7 @@ async function pollGalleryPaymentStatus(
         if (reloadGallery) {
           await reloadGallery();
         }
-        await loadOrders(false);
+        await loadOrders();
         showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
         window.history.replaceState({}, "", window.location.pathname);
       } else {
@@ -197,7 +175,7 @@ async function pollGalleryPaymentStatus(
       if (reloadGallery) {
         await reloadGallery();
       }
-      await loadOrders(false);
+      await loadOrders();
       window.history.replaceState({}, "", window.location.pathname);
     }
   };
@@ -212,9 +190,8 @@ async function pollGalleryPaymentStatus(
 async function handleGalleryPaymentSuccess(
   galleryIdStr: string,
   gallery: Gallery,
-  refreshGalleryStatusOnly: (galleryId: string) => Promise<void>,
   reloadGallery: (() => Promise<void>) | undefined,
-  loadOrders: (forceRefresh: boolean) => Promise<void>,
+  loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void
 ): Promise<void> {
   showToast("success", "Sukces", "Płatność zakończona pomyślnie! Weryfikowanie statusu...");
@@ -225,7 +202,6 @@ async function handleGalleryPaymentSuccess(
   await pollGalleryPaymentStatus(
     galleryIdStr,
     initialGalleryState,
-    refreshGalleryStatusOnly,
     reloadGallery,
     loadOrders,
     showToast
@@ -236,41 +212,25 @@ export default function GalleryDetail() {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "GalleryDetail",
+  });
   const galleryContext = useGallery();
   const gallery = galleryContext.gallery as Gallery | null;
   const galleryLoading = galleryContext.loading;
   const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders, refreshGalleryStatusOnly, invalidateGalleryOrdersCache } =
-    useGalleryStore();
-  const { refreshWalletBalance } = useUserStore();
+  const { fetchGalleryOrders } = useGalleryStore();
   const { isNonSelectionGallery } = useGalleryType();
-  // Subscribe to orderCache keys for this gallery to get reactive updates
-  // Use a selector that returns orderIds as a string for stable comparison
-  const galleryOrderIdsStr = useOrderStore((state) => {
+
+  // Use store state directly - no local state needed!
+  const { getOrdersByGalleryId, isLoading: orderLoading } = useOrderStore();
+  const orders = useOrderStore((_state) => {
     if (!galleryId) {
-      return "";
+      return [];
     }
-    const galleryIdStr = galleryId as string;
-    const now = Date.now();
-    const maxAge = 30000;
-    const orderIds: string[] = [];
-
-    // Iterate through orderCache and filter by galleryId
-    for (const [orderId, cached] of Object.entries(state.orderCache)) {
-      if (cached.order.galleryId === galleryIdStr) {
-        const age = now - cached.timestamp;
-        if (age <= maxAge) {
-          orderIds.push(orderId);
-        }
-      }
-    }
-
-    // Return sorted orderIds as string for stable comparison
-    return orderIds.sort().join(",");
+    return getOrdersByGalleryId(galleryId as string);
   });
 
-  const [loading, setLoading] = useState<boolean>(true); // Start with true to prevent flicker
-  const [orders, setOrders] = useState<Order[]>([]);
   const [showSendLinkModal, setShowSendLinkModal] = useState<boolean>(false);
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [walletBalance, _setWalletBalance] = useState<number>(0);
@@ -284,24 +244,26 @@ export default function GalleryDetail() {
     stripeAmountCents: 0,
   });
 
-  const loadOrders = async (forceRefresh = false): Promise<void> => {
+  const loadOrders = async (): Promise<void> => {
     if (!galleryId) {
       return;
     }
 
-    setLoading(true);
+    const galleryIdStr = galleryId as string;
+    logDataLoad("orders", { galleryId: galleryIdStr });
 
     try {
-      // Use store action - checks cache first, fetches if needed (unless forceRefresh is true)
-      const orders = await fetchGalleryOrders(galleryId as string, forceRefresh);
-      setOrders(orders);
+      const loadedOrders = await fetchGalleryOrders(galleryIdStr);
+      logDataLoaded("orders", loadedOrders, {
+        count: loadedOrders.length,
+        galleryId: galleryIdStr,
+      });
     } catch (err) {
+      logDataError("orders", err);
       // Check if error is 404 (gallery not found/deleted) - handle silently
       const apiError = err as { status?: number };
       if (apiError.status === 404) {
-        // Gallery doesn't exist (deleted) - silently set empty orders
-        setOrders([]);
-        setLoading(false);
+        // Gallery doesn't exist (deleted) - silently continue
         return;
       }
 
@@ -309,8 +271,6 @@ export default function GalleryDetail() {
       // eslint-disable-next-line no-console
       console.error("[GalleryDetail] loadOrders: Error", err);
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -352,17 +312,10 @@ export default function GalleryDetail() {
       }
     }
 
-    initializeAuth(
-      () => {
-        if (galleryId) {
-          void loadOrders();
-        }
-      },
-      () => {
-        const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
-        redirectToLandingSignIn(`/galleries/${galleryIdStr}`);
-      }
-    );
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    if (galleryId) {
+      void loadOrders();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, router.isReady, router.asPath]);
 
@@ -377,69 +330,29 @@ export default function GalleryDetail() {
 
     // Handle wallet top-up success (will load orders with fresh data)
     if (paymentDetection.isWalletTopUp) {
-      void handleWalletTopUpSuccess(
-        galleryIdStr,
-        refreshWalletBalance,
-        invalidateGalleryOrdersCache,
-        loadOrders,
-        showToast,
-        {
+      void (async () => {
+        await handleWalletTopUpSuccess(galleryIdStr, loadOrders, showToast, {
           publish: paymentDetection.publishParam,
           galleryId: paymentDetection.galleryIdParam,
-        }
-      );
+        });
+      })();
       return;
     }
 
     // Handle gallery payment success (will load orders immediately and during polling)
     if (paymentDetection.isGalleryPayment && gallery) {
       // Load orders immediately to ensure they're available
-      void loadOrders(false);
+      void loadOrders();
       // Start polling for payment status confirmation
-      void handleGalleryPaymentSuccess(
-        galleryIdStr,
-        gallery,
-        refreshGalleryStatusOnly,
-        reloadGallery,
-        loadOrders,
-        showToast
-      );
+      void handleGalleryPaymentSuccess(galleryIdStr, gallery, reloadGallery, loadOrders, showToast);
       return;
     }
 
     // Always ensure orders are loaded (regardless of payment status)
     // This ensures "Ukoncz Konfiguracje" overlay works correctly
-    // Check if we have redirect params (publish/galleryId) - force refresh in that case
-    const hasRedirectParams = params.get("publish") === "true" || params.get("galleryId");
-
-    // If we have redirect params, invalidate cache and force refresh
-    if (hasRedirectParams) {
-      invalidateGalleryOrdersCache(galleryIdStr);
-      void loadOrders(true);
-    } else {
-      void loadOrders(false);
-    }
+    void loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, router.isReady, router.query, gallery]);
-
-  // Watch gallery orders cache and update local state when it changes (Zustand subscriptions)
-  // Use orderIds string for stable comparison (prevents infinite loops from array reference changes)
-  const prevOrderIdsRef = useRef<string>("");
-  const { getOrdersByGalleryId } = useOrderStore();
-  useEffect(() => {
-    if (!galleryId) {
-      return;
-    }
-    
-    // Only update if orderIds actually changed (using stable string comparison)
-    if (galleryOrderIdsStr !== prevOrderIdsRef.current) {
-      prevOrderIdsRef.current = galleryOrderIdsStr;
-      // Get orders from cache when orderIds change
-      const galleryOrdersFromCache = getOrdersByGalleryId(galleryId as string);
-      setOrders(galleryOrdersFromCache);
-      setLoading(false);
-    }
-  }, [galleryId, galleryOrderIdsStr, getOrdersByGalleryId]);
+  }, [galleryId, router.isReady, router.asPath, gallery]);
 
   // Redirect non-selection galleries to order view
   useEffect(() => {
@@ -451,9 +364,15 @@ export default function GalleryDetail() {
     if (router.pathname === "/galleries/[id]" && !router.asPath.includes("/orders/")) {
       const redirectToOrder = async () => {
         try {
-          const orders = await fetchGalleryOrders(galleryId as string, false);
-          if (orders && orders.length > 0 && orders[0]?.orderId) {
-            void router.replace(`/galleries/${galleryId}/orders/${orders[0].orderId}`);
+          const galleryIdStr = galleryId as string;
+          const cachedOrders = getOrdersByGalleryId(galleryIdStr);
+          if (cachedOrders && cachedOrders.length > 0 && cachedOrders[0]?.orderId) {
+            void router.replace(`/galleries/${galleryIdStr}/orders/${cachedOrders[0].orderId}`);
+          } else {
+            const orders = await fetchGalleryOrders(galleryIdStr);
+            if (orders && orders.length > 0 && orders[0]?.orderId) {
+              void router.replace(`/galleries/${galleryIdStr}/orders/${orders[0].orderId}`);
+            }
           }
         } catch (err) {
           console.error("Failed to fetch orders for redirect:", err);
@@ -461,13 +380,24 @@ export default function GalleryDetail() {
       };
       void redirectToOrder();
     }
-  }, [galleryId, gallery, isNonSelectionGallery, router, fetchGalleryOrders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    galleryId,
+    gallery,
+    isNonSelectionGallery,
+    router.isReady,
+    router.pathname,
+    router.asPath,
+    fetchGalleryOrders,
+    getOrdersByGalleryId,
+  ]);
 
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {
     if (!galleryId || !orderId) {
       return;
     }
 
+    logUserAction("approveChangeRequest", { galleryId, orderId });
     try {
       await api.orders.approveChangeRequest(galleryId as string, orderId);
 
@@ -487,6 +417,7 @@ export default function GalleryDetail() {
   };
 
   const handleDenyChangeRequest = (orderId: string): void => {
+    logUserAction("denyChangeRequest", { galleryId, orderId });
     setDenyOrderId(orderId);
     setDenyModalOpen(true);
   };
@@ -529,17 +460,13 @@ export default function GalleryDetail() {
       // Call pay endpoint without dryRun to actually process payment
       const data = await api.galleries.pay(galleryId as string, {});
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
-
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else if (data.paid) {
         showToast("success", "Sukces", "Galeria została opłacona z portfela!");
-        // Refresh gallery status using micro endpoint (lightweight, synchronous)
-        if (galleryId) {
-          void refreshGalleryStatusOnly(galleryId as string);
+        // Reload gallery to get updated status
+        if (galleryId && reloadGallery) {
+          void reloadGallery();
         }
       }
     } catch (err) {
@@ -561,10 +488,6 @@ export default function GalleryDetail() {
     try {
       const responseData = await api.galleries.sendToClient(galleryId as string);
       const isReminderResponse = responseData.isReminder ?? isReminder;
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryId as string);
 
       showToast(
         "success",
@@ -638,10 +561,10 @@ export default function GalleryDetail() {
 
   // Hide creation loading when gallery is fully loaded and orders are loaded
   useEffect(() => {
-    if (galleryCreationLoading && !galleryLoading && !loading && gallery) {
+    if (galleryCreationLoading && !galleryLoading && !orderLoading && gallery) {
       setGalleryCreationLoading(false);
     }
-  }, [galleryCreationLoading, galleryLoading, loading, gallery, setGalleryCreationLoading]);
+  }, [galleryCreationLoading, galleryLoading, orderLoading, gallery, setGalleryCreationLoading]);
 
   // Gallery data comes from GalleryContext (provided by GalleryLayoutWrapper)
   // Show loading only for orders, not gallery (gallery loading is handled by wrapper)
@@ -667,14 +590,14 @@ export default function GalleryDetail() {
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Zlecenia</h2>
-            {!loading && (
+            {!orderLoading && (
               <Badge color="info" variant="light">
                 {orders.length} {orders.length === 1 ? "zlecenie" : "zleceń"}
               </Badge>
             )}
           </div>
 
-          {loading ? (
+          {orderLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-500 dark:text-gray-400">Ładowanie zleceń...</div>
             </div>

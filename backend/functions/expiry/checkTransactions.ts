@@ -41,14 +41,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Query galleries with DRAFT state older than 3 days
 		// Then check if they have unpaid transactions
 		if (galleriesTable) {
-			// Use Scan to find DRAFT galleries older than 3 days
-			// Note: This is expensive but acceptable for a daily job
-			// In production, consider adding a GSI on state+createdAt
+			// Use GSI to efficiently query DRAFT galleries older than 3 days
 			let lastEvaluatedKey: any = undefined;
 			do {
-				const scanResult = await ddb.send(new ScanCommand({
+				const queryResult = await ddb.send(new QueryCommand({
 					TableName: galleriesTable,
-					FilterExpression: '#state = :s AND createdAt < :cutoff',
+					IndexName: 'state-createdAt-index',
+					KeyConditionExpression: '#state = :s AND createdAt < :cutoff',
 					ExpressionAttributeValues: {
 						':s': 'DRAFT',
 						':cutoff': cutoffDateISO
@@ -60,7 +59,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Limit: 100
 				}));
 
-				const draftGalleries = scanResult.Items || [];
+				const draftGalleries = queryResult.Items || [];
 				
 				for (const gallery of draftGalleries) {
 					const galleryId = gallery.galleryId;
@@ -139,45 +138,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Check for expired wallet top-up transactions (15 minutes)
 		if (transactionsTable) {
 			try {
-				// Scan all UNPAID WALLET_TOPUP transactions
-				// Note: This is a simplified approach - in production, consider using a GSI on status+type+createdAt
+				// Use GSI to efficiently query UNPAID transactions older than 15 minutes
+				// Then filter by type in memory (or use FilterExpression)
 				let lastEvaluatedKey: any = undefined;
 				do {
-					const scanParams: any = {
+					const queryParams: any = {
 						TableName: transactionsTable,
-						FilterExpression: '#status = :status AND #type = :type',
+						IndexName: 'status-createdAt-index',
+						KeyConditionExpression: '#status = :status AND createdAt < :cutoff',
+						FilterExpression: '#type = :type',
 						ExpressionAttributeNames: {
 							'#status': 'status',
 							'#type': 'type'
 						},
 						ExpressionAttributeValues: {
 							':status': 'UNPAID',
+							':cutoff': walletTopupCutoffDateISO,
 							':type': 'WALLET_TOPUP'
 						}
 					};
 					if (lastEvaluatedKey) {
-						scanParams.ExclusiveStartKey = lastEvaluatedKey;
+						queryParams.ExclusiveStartKey = lastEvaluatedKey;
 					}
 					
-					const scanResult = await ddb.send(new ScanCommand(scanParams));
-					const unpaidTopups = scanResult.Items || [];
+					const queryResult = await ddb.send(new QueryCommand(queryParams));
+					const unpaidTopups = queryResult.Items || [];
 					
 					for (const tx of unpaidTopups) {
+						// All transactions in result are already older than cutoff, so process them all
+						// Cancel expired wallet top-up transaction
+						await updateTransactionStatus(tx.userId, tx.transactionId, 'CANCELED');
+						expiredWalletTopupsCount++;
 						const createdAt = new Date(tx.createdAt);
-						if (createdAt < walletTopupCutoffDate) {
-							// Cancel expired wallet top-up transaction
-							await updateTransactionStatus(tx.userId, tx.transactionId, 'CANCELED');
-							expiredWalletTopupsCount++;
-							logger?.info('Wallet top-up transaction expired and canceled', {
-								transactionId: tx.transactionId,
-								userId: tx.userId,
-								createdAt: tx.createdAt,
-								ageMinutes: Math.round((Date.now() - createdAt.getTime()) / 60000)
-							});
-						}
+						logger?.info('Wallet top-up transaction expired and canceled', {
+							transactionId: tx.transactionId,
+							userId: tx.userId,
+							createdAt: tx.createdAt,
+							ageMinutes: Math.round((Date.now() - createdAt.getTime()) / 60000)
+						});
 					}
 					
-					lastEvaluatedKey = scanResult.LastEvaluatedKey;
+					lastEvaluatedKey = queryResult.LastEvaluatedKey;
 				} while (lastEvaluatedKey);
 			} catch (topupErr: any) {
 				logger?.error('Failed to check wallet top-up transactions expiry', {

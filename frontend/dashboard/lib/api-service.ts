@@ -392,9 +392,11 @@ class ApiService {
   galleries = {
     /**
      * List all galleries
+     * @param filter - Optional filter: 'unpaid', 'wyslano', 'wybrano', 'prosba-o-zmiany', 'gotowe-do-wysylki', 'dostarczone'
      */
-    list: async (): Promise<ListResponse<Gallery> | Gallery[]> => {
-      return await this._request("/galleries");
+    list: async (filter?: string): Promise<ListResponse<Gallery> | Gallery[]> => {
+      const url = filter ? `/galleries?filter=${encodeURIComponent(filter)}` : "/galleries";
+      return await this._request(url);
     },
 
     /**
@@ -1075,19 +1077,25 @@ class ApiService {
 
     /**
      * Download order ZIP (returns URL or handles 202 for async generation)
+     * Supports polling for 202 status codes
      */
     downloadZip: async (
       galleryId: string,
       orderId: string
-    ): Promise<{ status?: number; generating?: boolean; blob?: Blob; url?: string }> => {
+    ): Promise<{
+      status?: number;
+      generating?: boolean;
+      blob?: Blob;
+      url?: string;
+      filename?: string;
+      zip?: string; // Base64 ZIP for backward compatibility
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
       if (!orderId) {
         throw new Error("Order ID is required");
       }
-      // For ZIP downloads with 202 handling, we need to use fetch directly
-      // but still get token through service
       const token = await getValidToken();
       const url = `${this.baseUrl}/galleries/${galleryId}/orders/${orderId}/zip`;
       const response = await fetch(url, {
@@ -1104,8 +1112,97 @@ class ApiService {
         throw error;
       }
 
-      const blob = await response.blob();
-      return { blob, url: URL.createObjectURL(blob) };
+      const contentType = response.headers.get("content-type");
+      const isZip = contentType?.includes("application/zip") ?? false;
+
+      if (isZip) {
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = `${orderId}.zip`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(
+            /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+          );
+          if (filenameMatch?.[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, "");
+          }
+        }
+        return { blob, url: URL.createObjectURL(blob), filename };
+      } else {
+        // JSON response (backward compatibility with base64 ZIP)
+        const data = (await response.json()) as { zip?: string; filename?: string };
+        if (data.zip) {
+          return { zip: data.zip, filename: data.filename ?? `${orderId}.zip` };
+        }
+        throw new Error("No ZIP data available");
+      }
+    },
+
+    /**
+     * Download final images ZIP for an order
+     * Supports polling for 202 status codes
+     */
+    downloadFinalZip: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      status?: number;
+      generating?: boolean;
+      blob?: Blob;
+      url?: string;
+      filename?: string;
+      zip?: string; // Base64 ZIP for backward compatibility
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      const token = await getValidToken();
+      const url = `${this.baseUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 202) {
+        return { status: 202, generating: true };
+      }
+
+      if (!response.ok) {
+        const error: ApiError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        error.status = response.status;
+        throw error;
+      }
+
+      const contentType = response.headers.get("content-type");
+      const isZip = contentType?.includes("application/zip") ?? false;
+
+      if (isZip) {
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get("content-disposition");
+        let filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(
+            /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+          );
+          if (filenameMatch?.[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, "");
+          }
+        }
+        return { blob, url: URL.createObjectURL(blob), filename };
+      } else {
+        // JSON response (backward compatibility with base64 ZIP)
+        const data = (await response.json()) as { zip?: string; filename?: string };
+        if (data.zip) {
+          return {
+            zip: data.zip,
+            filename: data.filename ?? `gallery-${galleryId}-order-${orderId}-final.zip`,
+          };
+        }
+        throw new Error("No ZIP data available");
+      }
     },
   };
 
@@ -1254,6 +1351,22 @@ class ApiService {
       const queryString = new URLSearchParams(params as Record<string, string>).toString();
       const endpoint = queryString ? `/wallet/transactions?${queryString}` : "/wallet/transactions";
       return await this._request(endpoint);
+    },
+  };
+
+  // ==================== DASHBOARD ====================
+
+  dashboard = {
+    /**
+     * Get dashboard statistics
+     */
+    getStats: async (): Promise<{
+      deliveredOrders: number;
+      clientSelectingOrders: number;
+      readyToShipOrders: number;
+      totalRevenue: number;
+    }> => {
+      return await this._request("/dashboard/stats");
     },
   };
 

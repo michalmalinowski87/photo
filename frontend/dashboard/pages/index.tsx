@@ -6,27 +6,19 @@ import { DenyChangeRequestModal } from "../components/orders/DenyChangeRequestMo
 import { OrdersModal } from "../components/orders/OrdersModal";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import api, { formatApiError } from "../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatPriceNumber } from "../lib/format-price";
+import { storeLogger } from "../lib/store-logger";
 
 interface Order {
   orderId?: string;
   galleryId?: string;
   galleryName?: string;
+  gallerySelectionEnabled?: boolean;
   orderNumber?: string;
   deliveryStatus?: string;
   paymentStatus?: string;
   totalCents?: number;
   createdAt?: string | number | Date;
-  [key: string]: unknown;
-}
-
-interface Gallery {
-  galleryId?: string;
-  pricingPackage?: {
-    packagePriceCents?: number;
-    [key: string]: unknown;
-  };
   [key: string]: unknown;
 }
 
@@ -56,81 +48,27 @@ export default function Dashboard() {
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
 
   const loadDashboardData = async () => {
+    storeLogger.logAction("dashboard", "loadDashboardData", {}, {});
+    storeLogger.logLoadingState("dashboard", "loadDashboardData", true);
     setLoading(true);
     setError("");
 
     try {
-      // Load all orders for statistics (get enough to calculate stats accurately)
-      const statsData = await api.orders.list({ page: 1, itemsPerPage: 1000 });
+      storeLogger.log("dashboard", "Loading dashboard stats", {});
+      // Load dashboard statistics (computed on backend)
+      const statsData = await api.dashboard.getStats();
 
+      storeLogger.log("dashboard", "Loading active orders", {
+        excludeDeliveryStatus: "DELIVERED",
+        page: 1,
+        itemsPerPage: 5,
+      });
       // Load active orders (non-delivered) with pagination
       const activeOrdersData = await api.orders.list({
         excludeDeliveryStatus: "DELIVERED",
         page: 1,
         itemsPerPage: 5,
       });
-
-      // Load galleries to get plan prices for total revenue calculation
-      const galleriesData = await api.galleries.list();
-
-      // Extract orders for statistics
-      let allOrders = [];
-      if (Array.isArray(statsData)) {
-        allOrders = statsData;
-      } else if (statsData && Array.isArray(statsData.items)) {
-        allOrders = statsData.items;
-      } else {
-        setError("Nieprawidłowy format odpowiedzi z API");
-        return;
-      }
-
-      // Extract galleries
-      let allGalleries: Gallery[] = [];
-      if (Array.isArray(galleriesData)) {
-        allGalleries = galleriesData as Gallery[];
-      } else if (
-        galleriesData &&
-        typeof galleriesData === "object" &&
-        "items" in galleriesData &&
-        Array.isArray(galleriesData.items)
-      ) {
-        allGalleries = galleriesData.items as Gallery[];
-      }
-
-      // Aggregate statistics from all orders
-      let deliveredCount = 0;
-      let clientSelectingCount = 0;
-      let readyToShipCount = 0;
-      let totalRevenueCents = 0;
-
-      // Sum revenue from orders (additional photos)
-      for (const order of allOrders) {
-        if (order && typeof order === "object") {
-          const orderObj = order as Order;
-          if (orderObj.deliveryStatus === "DELIVERED") {
-            deliveredCount++;
-          } else if (orderObj.deliveryStatus === "CLIENT_SELECTING") {
-            clientSelectingCount++;
-          } else if (orderObj.deliveryStatus === "PREPARING_FOR_DELIVERY") {
-            readyToShipCount++;
-          }
-
-          totalRevenueCents += typeof orderObj.totalCents === "number" ? orderObj.totalCents : 0;
-        }
-      }
-
-      // Add photography package prices to total revenue
-      for (const gallery of allGalleries) {
-        if (
-          gallery &&
-          typeof gallery === "object" &&
-          gallery.pricingPackage &&
-          typeof gallery.pricingPackage === "object"
-        ) {
-          const packagePriceCents = gallery.pricingPackage.packagePriceCents;
-          totalRevenueCents += typeof packagePriceCents === "number" ? packagePriceCents : 0;
-        }
-      }
 
       // Extract active orders from paginated response
       let activeOrders: Order[] = [];
@@ -145,40 +83,52 @@ export default function Dashboard() {
         activeOrders = activeOrdersData.items as Order[];
       }
 
+      // Set stats from API response
       setStats({
-        deliveredOrders: deliveredCount,
-        clientSelectingOrders: clientSelectingCount,
-        readyToShipOrders: readyToShipCount,
-        totalRevenue: totalRevenueCents,
+        deliveredOrders: statsData.deliveredOrders || 0,
+        clientSelectingOrders: statsData.clientSelectingOrders || 0,
+        readyToShipOrders: statsData.readyToShipOrders || 0,
+        totalRevenue: statsData.totalRevenue || 0,
       });
-
       setActiveOrders(activeOrders);
+
+      storeLogger.log("dashboard", "Dashboard data loaded", {
+        activeOrdersCount: activeOrders.length,
+        stats: statsData,
+      });
     } catch (err) {
-      setError(formatApiError(err));
+      const errorMsg = formatApiError(err);
+      storeLogger.log("dashboard", "Error loading dashboard data", { error: errorMsg }, "error");
+      setError(errorMsg);
     } finally {
+      storeLogger.logLoadingState("dashboard", "loadDashboardData", false);
       setLoading(false);
     }
   };
 
   const loadWalletBalance = async () => {
+    storeLogger.logAction("dashboard", "loadWalletBalance", {}, {});
+    storeLogger.log("dashboard", "Loading wallet balance", {});
     try {
       const data = await api.wallet.getBalance();
-      setWalletBalance(data.balanceCents || 0);
-    } catch (_err) {
+      const balance = data.balanceCents || 0;
+      storeLogger.log("dashboard", "Wallet balance loaded", {
+        balanceCents: balance,
+        balancePLN: (balance / 100).toFixed(2),
+      });
+      setWalletBalance(balance);
+    } catch (err) {
+      storeLogger.log("dashboard", "Error loading wallet balance", { error: String(err) }, "warn");
       // Ignore wallet errors
     }
   };
 
   useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadDashboardData();
-        void loadWalletBalance();
-      },
-      () => {
-        redirectToLandingSignIn("/");
-      }
-    );
+    storeLogger.log("dashboard", "Dashboard component mounted", {});
+    storeLogger.log("dashboard", "Loading dashboard data", {});
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    void loadDashboardData();
+    void loadWalletBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

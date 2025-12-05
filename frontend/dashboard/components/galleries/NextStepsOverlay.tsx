@@ -5,7 +5,7 @@ import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMe
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
-import { useGalleryStore, useOrderStore } from "../../store";
+import { useGalleryStore, useOrderStore, useOverlayStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 
 interface Gallery {
@@ -50,23 +50,23 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     overlayContext;
   // Read current overlay state immediately to prevent flash
   const currentOverlayVisible = overlayContext.nextStepsVisible;
-  const galleryStore = useGalleryStore();
-  // Use type assertions to fix Zustand type inference issues
-  const nextStepsOverlayExpanded = (galleryStore as { nextStepsOverlayExpanded: boolean })
-    .nextStepsOverlayExpanded;
-  const setNextStepsOverlayExpanded = (
-    galleryStore as { setNextStepsOverlayExpanded: (expanded: boolean) => void }
-  ).setNextStepsOverlayExpanded;
-  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
-  const publishWizardOpen = useGalleryStore(
-    (state) => state.publishWizardOpen && state.publishWizardGalleryId === gallery?.galleryId
-  );
+  const nextStepsOverlayExpanded = useOverlayStore((state) => state.nextStepsOverlayExpanded);
+  const setNextStepsOverlayExpanded = useOverlayStore((state) => state.setNextStepsOverlayExpanded);
+
+  // Check if publish wizard should be open based on URL params (since it's now local state in GalleryLayoutWrapper)
+  const publishWizardOpen = useMemo(() => {
+    if (!gallery?.galleryId) {
+      return false;
+    }
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    return params.get("publish") === "true" && params.get("galleryId") === gallery.galleryId;
+  }, [gallery?.galleryId]);
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
   // Get orders from orderCache (single source of truth)
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const { getOrdersByGalleryId } = useOrderStore();
-  const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr as string) : [];
+  const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : [];
   const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
   const { isNonSelectionGallery } = useGalleryType();
   const { fetchGalleryOrders } = useGalleryStore();
@@ -483,10 +483,6 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
             nextStepsCompleted: true,
           });
 
-          // Invalidate all caches to ensure fresh data on next fetch
-          const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-          invalidateAllGalleryCaches(gallery.galleryId);
-
           // Manually update the gallery in the store to avoid triggering full fetch and events
           // This prevents infinite loops while still updating the UI immediately
           const { setCurrentGallery, currentGallery } = useGalleryStore.getState();
@@ -574,22 +570,28 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     if (isNonSelectionGallery) {
       try {
         // Fetch gallery orders to get the order ID
-        const orders = await fetchGalleryOrders(gallery.galleryId, false);
+        const orders = await fetchGalleryOrders(gallery.galleryId);
         if (orders && orders.length > 0 && orders[0]?.orderId) {
           // Navigate to order view
           void router.push(`/galleries/${gallery.galleryId}/orders/${orders[0].orderId}`);
         } else {
           // If no orders found, still open publish wizard as fallback
-          setPublishWizardOpen(true, gallery.galleryId);
+          void router.push(
+            `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
+          );
         }
       } catch (err) {
         // On error, fall back to opening publish wizard
         console.error("Failed to fetch orders for non-selection gallery:", err);
-        setPublishWizardOpen(true, gallery.galleryId);
+        void router.push(
+          `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
+        );
       }
     } else {
       // For selection galleries, open publish wizard as before
-      setPublishWizardOpen(true, gallery.galleryId);
+      void router.push(
+        `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
+      );
     }
   };
 

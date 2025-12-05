@@ -15,7 +15,7 @@ Landing page to publiczna strona marketingowa PhotoCloud, która służy jako pu
 ## Wymagania
 
 - Node.js 18+ 
-- Yarn (lub npm)
+- Yarn
 - Konto AWS z skonfigurowanym Cognito User Pool
 
 ## Instalacja
@@ -28,10 +28,6 @@ Landing page to publiczna strona marketingowa PhotoCloud, która służy jako pu
 2. **Zainstaluj zależności:**
    ```bash
    yarn install
-   ```
-   lub
-   ```bash
-   npm install
    ```
 
 ## Konfiguracja
@@ -61,12 +57,6 @@ NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 
 ```bash
 yarn dev
-```
-
-lub
-
-```bash
-npm run dev
 ```
 
 Aplikacja będzie dostępna pod adresem: **http://localhost:3000**

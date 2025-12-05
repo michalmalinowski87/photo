@@ -8,15 +8,17 @@ import "../styles/globals.css";
 import "../styles/auth.css";
 import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
 import AuthLayout from "../components/auth/AuthLayout";
+import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
+import { AuthProvider } from "../context/AuthProvider";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
-import { clearEphemeralState, useAuthStore, useThemeStore } from "../store";
+import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback"];
@@ -58,10 +60,10 @@ export default function App({ Component, pageProps }: AppProps) {
     if (typeof window !== "undefined" && "serviceWorker" in navigator && !swRegistered) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
-        .then((registration) => {
+        .then(() => {
           setSwRegistered(true);
         })
-        .catch((error) => {
+        .catch(() => {
           // Continue without Service Worker (fallback to IndexedDB only)
         });
     }
@@ -124,20 +126,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [isAuthRoute, router.asPath]);
 
-  // Clear ephemeral state on route changes (but not on initial load)
-  useEffect(() => {
-    const handleRouteChange = (url: string) => {
-      // Don't clear on gallery route changes (they share state)
-      if (!url.startsWith("/galleries/") || url.includes("/orders/")) {
-        clearEphemeralState();
-      }
-    };
-
-    router.events.on("routeChangeStart", handleRouteChange);
-    return () => {
-      router.events.off("routeChangeStart", handleRouteChange);
-    };
-  }, [router.events]);
+  // Removed reactive cleanup - navigation utility handles cleanup explicitly on user clicks
 
   // Restore theme and clear session expired state when on non-auth routes
   useEffect(() => {
@@ -183,64 +172,43 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [router.isReady, router.pathname, router.events, setSessionExpired]);
 
-  // Use AuthLayout for authentication pages
-  if (isAuthRoute) {
-    return (
-      <WebPCompatibilityCheck>
-        <AuthLayout>
-          <Component {...pageProps} />
-        </AuthLayout>
-      </WebPCompatibilityCheck>
-    );
-  }
-
-  // Gallery routes handle their own layout
-  if (isGalleryRoute) {
-    return (
-      <WebPCompatibilityCheck>
-        <SessionExpiredModalWrapper />
-        <ToastContainer />
-        <ZipDownloadContainer />
-        {recoveryState && (
-          <UploadRecoveryModal
-            isOpen={showModal}
-            onClose={handleClear}
-            onResume={handleResume}
-            onClear={handleClear}
-            fileCount={recoveryState.fileCount}
-            galleryId={recoveryState.galleryId}
-            type={recoveryState.type}
-            orderId={recoveryState.orderId}
-          />
-        )}
-        <GalleryLayoutWrapper>
-          <Component {...pageProps} />
-        </GalleryLayoutWrapper>
-      </WebPCompatibilityCheck>
-    );
-  }
-
-  // Other dashboard pages use AppLayout
   return (
     <WebPCompatibilityCheck>
-      <SessionExpiredModalWrapper />
-      <ToastContainer />
-      <ZipDownloadContainer />
-      {recoveryState && (
-        <UploadRecoveryModal
-          isOpen={showModal}
-          onClose={handleClear}
-          onResume={handleResume}
-          onClear={handleClear}
-          fileCount={recoveryState.fileCount}
-          galleryId={recoveryState.galleryId}
-          type={recoveryState.type}
-          orderId={recoveryState.orderId}
-        />
-      )}
-      <AppLayout>
-        <Component {...pageProps} />
-      </AppLayout>
+      <AuthProvider>
+        {/* Auth routes don't need protection */}
+        {isAuthRoute ? (
+          <AuthLayout>
+            <Component {...pageProps} />
+          </AuthLayout>
+        ) : (
+          <ProtectedRoute>
+            <SessionExpiredModalWrapper />
+            <ToastContainer />
+            <ZipDownloadContainer />
+            {recoveryState && (
+              <UploadRecoveryModal
+                isOpen={showModal}
+                onClose={handleClear}
+                onResume={handleResume}
+                onClear={handleClear}
+                fileCount={recoveryState.fileCount}
+                galleryId={recoveryState.galleryId}
+                type={recoveryState.type}
+                orderId={recoveryState.orderId}
+              />
+            )}
+            {isGalleryRoute ? (
+              <GalleryLayoutWrapper>
+                <Component {...pageProps} />
+              </GalleryLayoutWrapper>
+            ) : (
+              <AppLayout>
+                <Component {...pageProps} />
+              </AppLayout>
+            )}
+          </ProtectedRoute>
+        )}
+      </AuthProvider>
     </WebPCompatibilityCheck>
   );
 }

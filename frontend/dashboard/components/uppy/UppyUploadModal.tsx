@@ -17,6 +17,10 @@ import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUplo
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 
+// Type alias for UppyFile with required type parameters
+// Using 'any' to be compatible with Uppy's internal type system
+type UppyFileType = UppyFile<any, any>;
+
 interface UppyUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,11 +77,13 @@ function formatTimeRemaining(seconds: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-function getFileProgress(file: UppyFile): number {
+function getFileProgress(file: UppyFileType): number {
   return file.progress?.percentage ?? 0;
 }
 
-function getFileStatus(file: UppyFile): "completed" | "uploading" | "paused" | "error" | "pending" {
+function getFileStatus(
+  file: UppyFileType
+): "completed" | "uploading" | "paused" | "error" | "pending" {
   if (file.progress?.uploadComplete) {
     return "completed";
   }
@@ -151,7 +157,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     resetUploadState,
   } = useUppyUpload(config);
 
-  const [files, setFiles] = useState<UppyFile[]>([]);
+  const [files, setFiles] = useState<UppyFileType[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number>(0);
@@ -215,7 +221,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       }
       // Get current files from Uppy - this is the source of truth
       const uppyFiles = Object.values(uppy.getFiles());
-      const currentFileIds = uppyFiles.map((f: UppyFile) => f.id).sort();
+      const currentFileIds = uppyFiles.map((f: UppyFileType) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
 
       // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
@@ -400,7 +406,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
    * - Blob URLs are the fastest and most responsive option
    * - Uppy's ThumbnailGenerator already provides optimized thumbnails
    */
-  const getThumbnail = (file: UppyFile): string | undefined => {
+  const getThumbnail = (file: UppyFileType): string | undefined => {
     // Priority 1: Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
     // This is the fastest option - generated locally, no network request
     if (file.preview) {
@@ -500,8 +506,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                     type="file"
                     multiple
                     accept="image/*"
-                    webkitdirectory=""
-                    directory=""
+                    {...({
+                      webkitdirectory: "",
+                      directory: "",
+                    } as React.InputHTMLAttributes<HTMLInputElement>)}
                     onChange={handleFileInputChange}
                     className="hidden"
                     disabled={uploading || uploadComplete}
@@ -526,8 +534,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   type="file"
                   multiple
                   accept="image/*"
-                  webkitdirectory=""
-                  directory=""
+                  {...({
+                    webkitdirectory: "",
+                    directory: "",
+                  } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={handleFileInputChange}
                   className="hidden"
                   disabled={uploading || uploadComplete}
@@ -639,9 +649,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                             {status === "error" && freshFile.error && (
                               <p
                                 className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
-                                title={freshFile.error.message}
+                                title={String(freshFile.error)}
                               >
-                                {freshFile.error.message}
+                                {String(freshFile.error)}
                               </p>
                             )}
                           </div>

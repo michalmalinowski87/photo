@@ -88,8 +88,8 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           if (wasLastImage) {
             void (async () => {
               try {
-                const { refreshGalleryStatusOnly } = useGalleryStore.getState();
-                await refreshGalleryStatusOnly(galleryIdStr);
+                const { reloadGallery } = useGalleryStore.getState();
+                await reloadGallery(galleryIdStr);
               } catch (statusErr) {
                 // eslint-disable-next-line no-console
                 console.error(
@@ -112,10 +112,6 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
 
         // Mark as successfully deleted
         setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
-
-        // Refresh bytes only (this will update Zustand store with actual server value)
-        const { refreshGalleryBytesOnly } = useGalleryStore.getState();
-        void refreshGalleryBytesOnly(galleryIdStr, true); // forceRecalc = true
 
         // Clear deleted key after 30 seconds to allow eventual consistency
         setTimeout(() => {

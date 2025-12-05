@@ -2,8 +2,6 @@ import { useState, useCallback } from "react";
 
 import api, { formatApiError } from "../lib/api-service";
 import { plnToCents, centsToPlnString } from "../lib/currency";
-import { useGalleryStore } from "../store";
-import { useOrderStore } from "../store";
 import { useToast } from "./useToast";
 
 interface UseOrderAmountEditOptions {
@@ -46,12 +44,6 @@ export const useOrderAmountEdit = ({
       await api.orders.update(galleryId as string, orderId as string, {
         totalCents: newTotalCents,
       });
-
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateOrderCache } = useOrderStore.getState();
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateOrderCache(orderId as string);
-      invalidateAllGalleryCaches(galleryId as string);
 
       if (onSave) {
         await onSave();

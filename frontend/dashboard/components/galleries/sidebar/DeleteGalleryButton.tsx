@@ -1,7 +1,7 @@
 import { Trash2 } from "lucide-react";
-import { useRouter } from "next/router";
 import React, { useState } from "react";
 
+import { useNavigation } from "../../../hooks/useNavigation";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { useGalleryStore } from "../../../store";
@@ -17,9 +17,9 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
   galleryId,
   galleryName,
 }) => {
-  const router = useRouter();
+  const { replace } = useNavigation();
   const { showToast } = useToast();
-  const { invalidateAllGalleryCaches, clearCurrentGallery } = useGalleryStore();
+  const { clearCurrentGallery } = useGalleryStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -43,13 +43,11 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
     try {
       await api.galleries.delete(galleryId);
 
-      // Clear gallery state immediately to prevent component from rendering stale data
+      // Clear gallery state explicitly before navigation
       clearCurrentGallery();
-      // Invalidate caches immediately
-      invalidateAllGalleryCaches(galleryId);
 
-      // Navigate immediately - route change handler will also clear state as backup
-      void router.replace("/");
+      // Navigate with explicit cleanup (navigation utility handles additional cleanup)
+      void replace("/");
 
       // Show toast after navigation starts
       showToast("success", "Sukces", "Galeria została usunięta");

@@ -1,4 +1,4 @@
-import { Plus, Trash2, Sparkles, Star } from "lucide-react";
+import { Plus, Trash2, Sparkles } from "lucide-react";
 
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
@@ -19,68 +19,54 @@ interface GalleryImage {
   [key: string]: unknown;
 }
 
-interface Gallery {
-  finalsLimitBytes?: number;
-  finalsBytesUsed?: number;
-  [key: string]: unknown;
-}
-
 interface FinalsTabProps {
   images: GalleryImage[];
-  gallery: Gallery | null;
   canUpload: boolean;
-  isGalleryPaid: boolean;
-  optimisticFinalsBytes: number | null;
   deletingImages: Set<string>;
-  loading: boolean;
   onUploadClick: () => void;
   onDeleteImage: (image: GalleryImage) => void;
-  onPayClick: () => void;
-  paymentLoading: boolean;
-  isNonSelectionGallery?: boolean;
+  isGalleryPaid?: boolean;
   orderDeliveryStatus?: string;
+  isNonSelectionGallery?: boolean;
 }
 
 export function FinalsTab({
   images,
-  gallery: _gallery,
   canUpload,
-  isGalleryPaid,
-  optimisticFinalsBytes: _optimisticFinalsBytes,
   deletingImages,
-  loading: _loading,
   onUploadClick,
   onDeleteImage,
-  onPayClick,
-  paymentLoading,
-  isNonSelectionGallery = false,
+  isGalleryPaid = true,
   orderDeliveryStatus,
+  isNonSelectionGallery = false,
 }: FinalsTabProps) {
-  // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
-  const shouldShowPublishButton =
-    isNonSelectionGallery && orderDeliveryStatus === "AWAITING_FINAL_PHOTOS" && !isGalleryPaid;
+  // Determine why upload is disabled and show appropriate message
+  const getUploadDisabledMessage = (): string | null => {
+    if (canUpload) {
+      return null;
+    }
+
+    if (!isGalleryPaid) {
+      return "Aby przesłać zdjęcia finalne, galeria musi być opublikowana.";
+    }
+
+    if (orderDeliveryStatus === "CANCELLED") {
+      return "Nie można przesłać zdjęć finalnych dla anulowanego zlecenia.";
+    }
+
+    if (isNonSelectionGallery) {
+      // For non-selection galleries, uploads are allowed when order is in specific statuses
+      // If we get here and gallery is paid, it means order status is not in the allowed list
+      return "Aby przesłać zdjęcia finalne, zlecenie musi być w statusie oczekiwania na zdjęcia finalne (AWAITING_FINAL_PHOTOS) lub przygotowania do dostawy. Sprawdź status zlecenia i poczekaj na odpowiedni moment w procesie.";
+    }
+
+    return "Aby przesłać zdjęcia finalne, zlecenie musi być w odpowiednim statusie (zatwierdzone przez klienta lub przygotowywane do dostawy).";
+  };
+
+  const uploadDisabledMessage = getUploadDisabledMessage();
 
   return (
     <div className="space-y-4">
-      {/* Show publish button for non-selection galleries when appropriate */}
-      {shouldShowPublishButton && (
-        <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-warning-800 dark:text-warning-200 mb-1">
-                Opublikuj galerię
-              </div>
-              <div className="text-xs text-warning-600 dark:text-warning-400">
-                Opublikuj galerię aby kontynuować z procesem.
-              </div>
-            </div>
-            <Button size="sm" variant="primary" onClick={onPayClick} disabled={paymentLoading}>
-              {paymentLoading ? "Przetwarzanie..." : "Opublikuj galerię"}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {canUpload && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -96,7 +82,11 @@ export function FinalsTab({
         <EmptyState
           icon={<Sparkles size={64} />}
           title="Brak zdjęć finalnych"
-          description="Prześlij zdjęcia finalne dla tego zlecenia. Zdjęcia finalne to wersje gotowe do dostarczenia klientowi."
+          description={
+            canUpload
+              ? "Prześlij zdjęcia finalne dla tego zlecenia. Zdjęcia finalne to wersje gotowe do dostarczenia klientowi."
+              : (uploadDisabledMessage ?? "Nie można przesłać zdjęć finalnych w tym momencie.")
+          }
           actionButton={
             canUpload
               ? {

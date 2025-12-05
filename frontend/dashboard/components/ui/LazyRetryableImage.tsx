@@ -5,7 +5,6 @@ import {
   ImageSize,
   getInitialImageUrl,
   getNextFallbackUrl,
-  isFinalUrl,
 } from "../../lib/image-fallback";
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
 
@@ -136,12 +135,6 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
     imageData.finalUrl,
     imageData.lastModified,
   ]);
-
-  // Compute initial URL from imageData (cache busting applied automatically)
-  // Use useMemo to avoid recomputing on every render
-  const initialSrc = useMemo(() => {
-    return getInitialImageUrl(imageData, preferredSize);
-  }, [imageData, preferredSize]);
 
   // Reset state only when actual image data changes (not just object reference)
   useEffect(() => {

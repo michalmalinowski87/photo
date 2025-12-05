@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
+import { useAuth } from "../context/AuthProvider";
+import { usePageLogger } from "../hooks/usePageLogger";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 
 interface PasswordForm {
   currentPassword: string;
@@ -22,6 +23,9 @@ interface BusinessForm {
 
 export default function Settings() {
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "Settings",
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [passwordLoading, setPasswordLoading] = useState<boolean>(false);
@@ -39,23 +43,16 @@ export default function Settings() {
     nip: "",
   });
 
-  const decodeTokenEmail = (token: string): string | null => {
-    try {
-      const parts = token.split(".");
-      if (parts.length !== 3) {
-        return null;
-      }
-      const payload = JSON.parse(atob(parts[1])) as { email?: string };
-      return payload.email ?? null;
-    } catch (_e) {
-      return null;
-    }
-  };
+  const { user } = useAuth();
 
   const loadBusinessInfo = useCallback(async (): Promise<void> => {
+    logDataLoad("businessInfo", {});
     try {
       const data = await api.auth.getBusinessInfo();
-
+      logDataLoaded("businessInfo", data, {
+        hasEmail: !!data.email,
+        hasBusinessName: !!data.businessName,
+      });
       setBusinessForm({
         businessName: data.businessName ?? "",
         email: data.email ?? "",
@@ -83,19 +80,12 @@ export default function Settings() {
   }, [loginEmail]);
 
   useEffect(() => {
-    initializeAuth(
-      async (token: string) => {
-        const email = decodeTokenEmail(token);
-        if (email) {
-          setLoginEmail(email);
-        }
-        await loadBusinessInfo();
-      },
-      () => {
-        redirectToLandingSignIn("/settings");
-      }
-    );
-  }, [loadBusinessInfo]);
+    // Auth is handled by AuthProvider/ProtectedRoute - get email from user context
+    if (user?.email) {
+      setLoginEmail(user.email);
+    }
+    void loadBusinessInfo();
+  }, [user?.email, loadBusinessInfo]);
 
   const handlePasswordChange = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

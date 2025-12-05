@@ -21,7 +21,7 @@
     "noPropertyAccessFromIndexSignature": false,
     "exactOptionalPropertyTypes": false,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,

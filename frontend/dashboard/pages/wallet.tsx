@@ -4,9 +4,9 @@ import Badge from "../components/ui/badge/Badge";
 import Button from "../components/ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
+import { usePageLogger } from "../hooks/usePageLogger";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 import { formatPrice } from "../lib/format-price";
 
 interface Transaction {
@@ -27,6 +27,9 @@ interface PageHistoryItem {
 
 export default function Wallet() {
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "Wallet",
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -38,13 +41,21 @@ export default function Wallet() {
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
 
   const loadBalance = async (): Promise<void> => {
+    logDataLoad("walletBalance", {});
     setLoading(true);
     setError("");
 
     try {
       const data = await api.wallet.getBalance();
-      setBalance(data.balanceCents ?? 0);
+      const balanceCents = data.balanceCents ?? 0;
+      logDataLoaded(
+        "walletBalance",
+        { balanceCents },
+        { balancePLN: (balanceCents / 100).toFixed(2) }
+      );
+      setBalance(balanceCents);
     } catch (err) {
+      logDataError("walletBalance", err);
       setError(formatApiError(err as Error));
     } finally {
       setLoading(false);
@@ -52,6 +63,7 @@ export default function Wallet() {
   };
 
   const loadTransactions = async (page: number, lastKey: string | null): Promise<void> => {
+    logDataLoad("transactions", { page, lastKey });
     setTransactionsLoading(true);
     setError("");
 
@@ -62,7 +74,13 @@ export default function Wallet() {
       }
 
       const data = await api.wallet.getTransactions(params);
-      setTransactions((data.transactions ?? []) as Transaction[]);
+      const transactionsData = (data.transactions ?? []) as Transaction[];
+      logDataLoaded("transactions", transactionsData, {
+        count: transactionsData.length,
+        page,
+        hasMore: data.hasMore,
+      });
+      setTransactions(transactionsData);
       setHasMore(data.hasMore ?? false);
       const newCursor = data.lastKey ?? null;
       setPaginationCursor(newCursor);
@@ -86,15 +104,9 @@ export default function Wallet() {
   };
 
   useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadBalance();
-        void loadTransactions(1, null);
-      },
-      () => {
-        redirectToLandingSignIn("/wallet");
-      }
-    );
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    void loadBalance();
+    void loadTransactions(1, null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -1,5 +1,6 @@
-import { CheckCircle2, XCircle, AlertTriangle, Info } from "lucide-react";
 import Link from "next/link";
+
+import { Icons } from "../icons";
 
 interface AlertProps {
   variant: "success" | "error" | "warning" | "info"; // Alert type
@@ -41,12 +42,12 @@ const Alert: React.FC<AlertProps> = ({
     },
   };
 
-  // Icon for each variant
+  // Icon for each variant from icons library
   const icons = {
-    success: <CheckCircle2 size={24} className="fill-current" />,
-    error: <XCircle size={24} className="fill-current" />,
-    warning: <AlertTriangle size={24} className="fill-current" />,
-    info: <Info size={24} className="fill-current" />,
+    success: <Icons.success size={24} />,
+    error: <Icons.error size={24} />,
+    warning: <Icons.warning size={24} />,
+    info: <Icons.info size={24} />,
   };
 
   return (

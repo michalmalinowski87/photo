@@ -18,13 +18,18 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
 
-  const gallery = useGalleryStore((state) => state.currentGallery);
+  // Use cache-aware selector to get gallery (same as GallerySidebar)
+  const gallery = useGalleryStore((state) => {
+    const storeGallery = state.currentGallery;
+    // If store has gallery and it matches, use it
+    if (storeGallery?.galleryId === galleryIdStr) {
+      return storeGallery;
+    }
+    return storeGallery;
+  });
+
   const isLoading = useGalleryStore((state) => state.isLoading);
-  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
   const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
-  const sendLinkLoading = useGalleryStore((state) => state.sendLinkLoading);
-  const galleryUrl = useGalleryStore((state) => state.galleryUrl);
-  const copyGalleryUrl = useGalleryStore((state) => state.copyGalleryUrl);
   // Get orders from orderCache (single source of truth)
   const { getOrdersByGalleryId } = useOrderStore();
   const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : [];
@@ -33,6 +38,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
+  const [sendLinkLoading, setSendLinkLoading] = useState(false); // Local UI state
 
   // Early return: don't render if gallery doesn't exist or should hide
   // Check gallery FIRST to prevent any computation or rendering with stale data
@@ -43,12 +49,11 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     return null;
   }
 
-  // Use galleryUrl from store, fallback to computed if not set
+  // Compute gallery URL from galleryId
   const displayGalleryUrl =
-    galleryUrl ||
-    (typeof window !== "undefined" && galleryIdStr
+    typeof window !== "undefined" && galleryIdStr
       ? `${window.location.origin}/gallery/${galleryIdStr}`
-      : "");
+      : "";
 
   const isPaid = gallery?.isPaid ?? false;
   const hasPhotos = (gallery?.originalsBytesUsed ?? 0) > 0;
@@ -60,19 +65,14 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   }
 
   const handleCopyClick = () => {
-    if (galleryIdStr) {
-      copyGalleryUrl(galleryIdStr);
+    if (displayGalleryUrl && typeof window !== "undefined") {
+      void navigator.clipboard.writeText(displayGalleryUrl).catch(() => {
+        // Ignore clipboard errors
+      });
       setUrlCopied(true);
       setTimeout(() => {
         setUrlCopied(false);
       }, 2500);
-    }
-  };
-
-  const handlePublishClick = () => {
-    if (galleryIdStr) {
-      // Open publish wizard directly via Zustand store
-      setPublishWizardOpen(true, galleryIdStr);
     }
   };
 
@@ -81,6 +81,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       return;
     }
 
+    setSendLinkLoading(true);
     try {
       const result = await sendGalleryLinkToClient(galleryIdStr);
 
@@ -93,7 +94,17 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       );
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
+    } finally {
+      setSendLinkLoading(false);
     }
+  };
+
+  const handlePublishClick = () => {
+    if (!galleryIdStr) {
+      return;
+    }
+    // Navigate to gallery page with publish param - GalleryLayoutWrapper will handle opening wizard
+    void router.push(`/galleries/${galleryIdStr}?publish=true&galleryId=${galleryIdStr}`);
   };
 
   // Check if gallery has a CLIENT_SELECTING order

@@ -7,9 +7,9 @@ import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { usePageLogger } from "../hooks/usePageLogger";
 import { useToast } from "../hooks/useToast";
 import api, { formatApiError } from "../lib/api-service";
-import { initializeAuth, redirectToLandingSignIn } from "../lib/auth-init";
 
 interface Client {
   clientId: string;
@@ -41,6 +41,9 @@ interface PageHistoryItem {
 
 export default function Clients() {
   const { showToast } = useToast();
+  const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
+    pageName: "Clients",
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [initialLoad, setInitialLoad] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
@@ -69,6 +72,7 @@ export default function Clients() {
     lastKey: string | null,
     search: string
   ): Promise<void> => {
+    logDataLoad("clients", { page, lastKey, search });
     setLoading(true);
     setError("");
 
@@ -87,7 +91,13 @@ export default function Clients() {
       }
 
       const data = await api.clients.list(params);
-      setClients(data.items ?? []);
+      const clientsData = data.items ?? [];
+      logDataLoaded("clients", clientsData, {
+        count: clientsData.length,
+        page,
+        hasMore: data.hasMore,
+      });
+      setClients(clientsData);
       setHasMore(data.hasMore ?? false);
       const newCursor = data.lastKey ?? null;
       setPaginationCursor(newCursor);
@@ -115,14 +125,8 @@ export default function Clients() {
   };
 
   useEffect(() => {
-    initializeAuth(
-      () => {
-        void loadClients(1, null, "");
-      },
-      () => {
-        redirectToLandingSignIn("/clients");
-      }
-    );
+    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    void loadClients(1, null, "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -2,7 +2,6 @@ import { useCallback } from "react";
 
 import { useZipDownload as useZipDownloadHook } from "../hocs/withZipDownload";
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore } from "../store";
 import { useOrderStore } from "../store";
 
 import { useToast } from "./useToast";
@@ -19,18 +18,18 @@ interface UseOrderActionsOptions {
   orderId: string | string[] | undefined;
   gallery?: Gallery | null;
   loadOrderData: () => Promise<void>;
-  loadGalleryOrders: (forceRefresh?: boolean) => Promise<void>;
+  loadGalleryOrders: () => Promise<void>;
   openDenyModal: () => void;
   closeDenyModal: () => void;
   setDenyLoading: (loading: boolean) => void;
 }
 
 export const useOrderActions = ({
-  apiUrl,
-  idToken,
+  apiUrl: _apiUrl,
+  idToken: _idToken,
   galleryId,
   orderId,
-  gallery,
+  gallery: _gallery,
   loadOrderData,
   loadGalleryOrders,
   openDenyModal,
@@ -39,12 +38,7 @@ export const useOrderActions = ({
 }: UseOrderActionsOptions) => {
   const { showToast } = useToast();
   const { downloadZip } = useZipDownloadHook();
-  const { invalidateGalleryOrdersCache, invalidateAllGalleryCaches } = useGalleryStore();
-  const { invalidateOrderCache } = useOrderStore();
-  const invalidateOrderStoreGalleryCache = useOrderStore(
-    (state) => state.invalidateGalleryOrdersCache
-  );
-  const updateOrderFields = useOrderStore((state) => state.updateOrderFields);
+  const { setCurrentOrder } = useOrderStore();
 
   const handleApproveChangeRequest = useCallback(async () => {
     if (!galleryId || !orderId) {
@@ -54,18 +48,13 @@ export const useOrderActions = ({
     try {
       await api.orders.approveChangeRequest(galleryId as string, orderId as string);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      invalidateOrderCache(orderId as string);
-      invalidateAllGalleryCaches(galleryId as string);
-      invalidateOrderStoreGalleryCache(galleryId as string);
-
       showToast(
         "success",
         "Sukces",
         "Prośba o zmiany została zatwierdzona. Klient może teraz modyfikować wybór."
       );
       await loadOrderData();
-      await loadGalleryOrders(true); // Force refresh
+      await loadGalleryOrders();
     } catch (err) {
       showToast(
         "error",
@@ -73,16 +62,7 @@ export const useOrderActions = ({
         formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
       );
     }
-  }, [
-    galleryId,
-    orderId,
-    invalidateOrderCache,
-    invalidateGalleryOrdersCache,
-    invalidateOrderStoreGalleryCache,
-    showToast,
-    loadOrderData,
-    loadGalleryOrders,
-  ]);
+  }, [galleryId, orderId, showToast, loadOrderData, loadGalleryOrders]);
 
   const handleDenyChangeRequest = useCallback(() => {
     openDenyModal();
@@ -99,11 +79,6 @@ export const useOrderActions = ({
       try {
         await api.orders.denyChangeRequest(galleryId as string, orderId as string, reason);
 
-        // Invalidate all caches to ensure fresh data on next fetch
-        invalidateOrderCache(orderId as string);
-        invalidateAllGalleryCaches(galleryId as string);
-        invalidateOrderStoreGalleryCache(galleryId as string);
-
         showToast(
           "success",
           "Sukces",
@@ -111,7 +86,7 @@ export const useOrderActions = ({
         );
         closeDenyModal();
         await loadOrderData();
-        await loadGalleryOrders(true); // Force refresh
+        await loadGalleryOrders();
       } catch (err: unknown) {
         showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany");
       } finally {
@@ -121,9 +96,6 @@ export const useOrderActions = ({
     [
       galleryId,
       orderId,
-      invalidateOrderCache,
-      invalidateGalleryOrdersCache,
-      invalidateOrderStoreGalleryCache,
       showToast,
       closeDenyModal,
       loadOrderData,
@@ -138,27 +110,22 @@ export const useOrderActions = ({
     }
     try {
       const response = await api.orders.markPaid(galleryId as string, orderId as string);
-      // Merge lightweight response into cached order instead of refetching
-      updateOrderFields(orderId as string, {
-        paymentStatus: response.paymentStatus,
-        paidAt: response.paidAt,
-      });
-      // Invalidate all caches to ensure fresh data on next fetch
-      invalidateAllGalleryCaches(galleryId as string);
-      invalidateOrderStoreGalleryCache(galleryId as string);
+
+      // Update current order if it matches
+      const currentOrder = useOrderStore.getState().currentOrder;
+      if (currentOrder?.orderId === orderId) {
+        setCurrentOrder({
+          ...currentOrder,
+          paymentStatus: response.paymentStatus,
+          paidAt: response.paidAt,
+        });
+      }
+
       showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
-      // Store update will trigger re-renders automatically via Zustand subscriptions
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
-  }, [
-    galleryId,
-    orderId,
-    updateOrderFields,
-    invalidateGalleryOrdersCache,
-    invalidateOrderStoreGalleryCache,
-    showToast,
-  ]);
+  }, [galleryId, orderId, setCurrentOrder, showToast]);
 
   const handleDownloadFinals = useCallback(async () => {
     if (!galleryId || !orderId) {
@@ -185,26 +152,19 @@ export const useOrderActions = ({
 
       showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
 
-      // Merge lightweight response into cached order instead of refetching
-      updateOrderFields(orderId as string, {
-        deliveryStatus: "DELIVERED",
-        deliveredAt: response.deliveredAt,
-      });
-      // Invalidate all caches to ensure fresh data on next fetch
-      invalidateAllGalleryCaches(galleryId as string);
-      invalidateOrderStoreGalleryCache(galleryId as string);
-      // Store update will trigger re-renders automatically via Zustand subscriptions
+      // Update current order if it matches
+      const currentOrder = useOrderStore.getState().currentOrder;
+      if (currentOrder?.orderId === orderId) {
+        setCurrentOrder({
+          ...currentOrder,
+          deliveryStatus: "DELIVERED",
+          deliveredAt: response.deliveredAt,
+        });
+      }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
-  }, [
-    galleryId,
-    orderId,
-    updateOrderFields,
-    invalidateGalleryOrdersCache,
-    invalidateOrderStoreGalleryCache,
-    showToast,
-  ]);
+  }, [galleryId, orderId, setCurrentOrder, showToast]);
 
   return {
     handleApproveChangeRequest,

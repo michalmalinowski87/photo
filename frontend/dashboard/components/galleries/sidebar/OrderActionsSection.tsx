@@ -9,16 +9,18 @@ import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
 interface OrderActionsSectionProps {
   orderId: string;
+  setPublishWizardOpen?: (open: boolean) => void;
 }
 
-export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderId }) => {
+export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
+  orderId,
+  setPublishWizardOpen,
+}) => {
   // Subscribe directly to store
   const gallery = useGalleryStore((state) => state.currentGallery);
   const isLoading = useGalleryStore((state) => state.isLoading);
   const order = useOrderStore((state) => state.currentOrder);
-  const currentOrderId = useOrderStore((state) => state.currentOrderId);
   const { isNonSelectionGallery } = useGalleryType();
-  const setPublishWizardOpen = useGalleryStore((state) => state.setPublishWizardOpen);
 
   // Get store actions
   const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
@@ -110,13 +112,13 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }, [galleryId, orderId, downloadZip]);
 
   const handlePublishClick = useCallback(() => {
-    if (gallery?.galleryId) {
-      setPublishWizardOpen(true, gallery.galleryId);
+    if (setPublishWizardOpen) {
+      setPublishWizardOpen(true);
     }
-  }, [gallery?.galleryId, setPublishWizardOpen]);
+  }, [setPublishWizardOpen]);
 
   // Defensive check: don't render until required data is loaded
-  if (!orderId || !order || currentOrderId !== orderId) {
+  if (!orderId || order?.orderId !== orderId) {
     return null;
   }
 

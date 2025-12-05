@@ -142,10 +142,6 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     try {
       await api.galleries.deleteImage(galleryIdStr, filename);
 
-      // Invalidate all caches to ensure fresh data on next fetch
-      const { invalidateAllGalleryCaches } = useGalleryStore.getState();
-      invalidateAllGalleryCaches(galleryIdStr);
-
       setMessage("Photo deleted.");
       // Reload gallery to refresh images and storage
       void loadGallery();
@@ -253,22 +249,88 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
             setFinalImages(images);
           }}
           apiFetch={async (url: string, options: RequestInit) => {
-            // ProcessedPhotosView expects apiFetchWithAuth signature - compatibility wrapper
-            const { getValidToken } = await import("../../../lib/api-service");
-            const token = await getValidToken();
+            // ProcessedPhotosView expects apiFetchWithAuth signature - route to API service
             const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
             const fullUrl = url.startsWith("http") ? url : `${apiUrl}${url}`;
-            const response = await fetch(fullUrl, {
-              ...options,
-              headers: {
-                ...options.headers,
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            const contentType = response.headers.get("content-type");
-            const isJson = contentType?.includes("application/json") ?? false;
-            const body: unknown = isJson ? await response.json() : await response.text();
-            return { data: body, response };
+            const relativeUrl = url.startsWith("http") ? new URL(url).pathname : url;
+
+            try {
+              // Route to appropriate API service method based on URL pattern
+              if (relativeUrl.includes("/orders/delivered")) {
+                // GET /galleries/{galleryId}/orders/delivered
+                const galleryIdMatch = relativeUrl.match(/\/galleries\/([^/]+)\/orders\/delivered/);
+                if (galleryIdMatch) {
+                  const galleryId = galleryIdMatch[1];
+                  const data = await api.galleries.checkDeliveredOrders(galleryId);
+                  return {
+                    data: { items: Array.isArray(data) ? data : data.items || [] },
+                    response: new Response(JSON.stringify(data), { status: 200 }),
+                  };
+                }
+              } else if (relativeUrl.includes("/final/images")) {
+                // GET /galleries/{galleryId}/orders/{orderId}/final/images
+                const match = relativeUrl.match(
+                  /\/galleries\/([^/]+)\/orders\/([^/]+)\/final\/images/
+                );
+                if (match) {
+                  const [, galleryId, orderId] = match;
+                  const data = await api.orders.getFinalImages(galleryId, orderId);
+                  return {
+                    data,
+                    response: new Response(JSON.stringify(data), { status: 200 }),
+                  };
+                }
+              } else if (relativeUrl.includes("/final/zip") && options.method === "POST") {
+                // POST /galleries/{galleryId}/orders/{orderId}/final/zip
+                const match = relativeUrl.match(/\/galleries\/([^/]+)\/orders\/([^/]+)\/final\/zip/);
+                if (match) {
+                  const [, galleryId, orderId] = match;
+                  const result = await api.orders.downloadFinalZip(galleryId, orderId);
+                  // Convert to expected format (base64 ZIP for backward compatibility)
+                  if (result.zip) {
+                    return {
+                      data: { zip: result.zip, filename: result.filename },
+                      response: new Response(JSON.stringify({ zip: result.zip, filename: result.filename }), {
+                        status: 200,
+                      }),
+                    };
+                  } else if (result.blob) {
+                    // Convert blob to base64 for backward compatibility
+                    const arrayBuffer = await result.blob.arrayBuffer();
+                    const base64 = btoa(
+                      String.fromCharCode(...new Uint8Array(arrayBuffer))
+                    );
+                    return {
+                      data: { zip: base64, filename: result.filename },
+                      response: new Response(JSON.stringify({ zip: base64, filename: result.filename }), {
+                        status: 200,
+                      }),
+                    };
+                  }
+                }
+              }
+
+              // Fallback: use direct fetch for any other endpoints
+              const { getValidToken } = await import("../../../lib/api-service");
+              const token = await getValidToken();
+              const response = await fetch(fullUrl, {
+                ...options,
+                headers: {
+                  ...options.headers,
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+              const contentType = response.headers.get("content-type");
+              const isJson = contentType?.includes("application/json") ?? false;
+              const body: unknown = isJson ? await response.json() : await response.text();
+              return { data: body, response };
+            } catch (error) {
+              // Return error in expected format
+              const errorResponse = new Response(JSON.stringify({ error: String(error) }), {
+                status: 500,
+              });
+              return { data: { error: String(error) }, response: errorResponse };
+            }
           }}
         />
       )}

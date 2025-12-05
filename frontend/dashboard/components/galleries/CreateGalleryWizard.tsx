@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
-import { initializeAuth } from "../../lib/auth-init";
 import { useGalleryStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import { FullPageLoading } from "../ui/loading/Loading";
@@ -147,18 +146,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     if (isOpen) {
       if (!dataLoadedRef.current) {
         dataLoadedRef.current = true;
-        initializeAuth(
-          () => {
-            // Token is handled by api-service automatically
-            void loadExistingPackages();
-            void loadExistingClients();
-          },
-          () => {
-            if (typeof window !== "undefined") {
-              window.location.href = `/login?returnUrl=${encodeURIComponent(window.location.pathname)}`;
-            }
-          }
-        );
+        // Auth is handled by AuthProvider/ProtectedRoute - just load data
+        void loadExistingPackages();
+        void loadExistingClients();
       }
       setCurrentStep(1);
       setFieldErrors({});
