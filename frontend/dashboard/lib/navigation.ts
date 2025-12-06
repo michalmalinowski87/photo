@@ -1,6 +1,6 @@
 import { NextRouter } from "next/router";
 
-import { useGalleryStore, useOrderStore, clearEphemeralState } from "../store";
+import { clearEphemeralState } from "../store";
 
 /**
  * Determines if a URL is a gallery route
@@ -56,28 +56,15 @@ export const isNavigatingToDifferentGallery = (currentUrl: string, targetUrl: st
  * This is called BEFORE navigation happens (on user click)
  */
 export const clearStateForNavigation = (currentUrl: string, targetUrl: string): void => {
-  // If navigating away from gallery routes entirely, clear gallery and order state
+  // React Query handles cache invalidation automatically based on query keys
+  // Only clear UI state like uploads/downloads when navigating away from galleries
   if (isNavigatingAwayFromGallery(currentUrl, targetUrl)) {
-    const { clearCurrentGallery } = useGalleryStore.getState();
-    const { clearCurrentOrder } = useOrderStore.getState();
-    clearCurrentGallery();
-    clearCurrentOrder();
     clearEphemeralState();
     return;
   }
 
-  // If navigating to a different gallery, clear current gallery and order
-  if (isNavigatingToDifferentGallery(currentUrl, targetUrl)) {
-    const { clearCurrentGallery } = useGalleryStore.getState();
-    const { clearCurrentOrder } = useOrderStore.getState();
-    clearCurrentGallery();
-    clearCurrentOrder();
-    // Don't clear ephemeral state (uploads/downloads) when switching galleries
-    return;
-  }
-
-  // If navigating within the same gallery (e.g., /galleries/[id] -> /galleries/[id]/photos)
-  // Don't clear anything - state should persist
+  // If navigating to a different gallery or within the same gallery
+  // React Query cache is managed automatically, no manual clearing needed
 };
 
 /**

@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
-import { useGalleryStore, useOrderStore } from "../../store";
+import { useGallery } from "../../hooks/queries/useGalleries";
+import { useOrder } from "../../hooks/queries/useOrders";
 
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";
@@ -24,32 +25,21 @@ export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarP
     ? orderIdFromQuery[0]
     : orderIdFromQuery;
 
-  // Subscribe directly to store - use selector that includes cache as fallback
+  // Get galleryId from router
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  // Check store directly first to avoid subscription timing issues
-  const storeGallery = useGalleryStore.getState().currentGallery;
-  const storeIsLoading = useGalleryStore.getState().isLoading;
+  // Use React Query hooks for data
+  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
+  const { data: order } = useOrder(galleryIdForQuery, orderId);
 
-  // Use selector for reactivity, but check store directly for loading state
-  const gallery = useGalleryStore((state) => {
-    const storeGallery = state.currentGallery;
-    // If store has gallery and it matches, use it
-    if (storeGallery?.galleryId === galleryIdStr) {
-      return storeGallery;
-    }
-    return storeGallery;
-  });
+  // Use gallery from React Query
+  const effectiveGallery = gallery;
 
-  const order = useOrderStore((state) => state.currentOrder);
-
-  // Use gallery from store directly if available, fallback to subscription
-  const effectiveGallery = storeGallery?.galleryId === galleryIdStr ? storeGallery : gallery;
-
-  // Only show loading if store is actively loading AND we don't have gallery
-  // Check store directly to avoid race conditions
-  const shouldShowLoading = (storeIsLoading && !storeGallery) || (!storeGallery && galleryIdStr);
+  // Show loading if React Query is loading
+  const shouldShowLoading = galleryLoading && !gallery;
 
   const prevStateRef = React.useRef({ hasGallery: !!gallery });
   if (prevStateRef.current.hasGallery !== !!gallery) {

@@ -2,10 +2,12 @@ import { Check, ChevronRight, ChevronLeft } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 
+import { useSendGalleryToClient } from "../../hooks/mutations/useGalleryMutations";
+import { useOrders } from "../../hooks/queries/useOrders";
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
-import { useGalleryStore, useOrderStore, useOverlayStore } from "../../store";
+import { useGalleryStore, useOverlayStore } from "../../store";
 import type { Gallery, Order } from "../../types";
 import { useGalleryType } from "../hocs/withGalleryType";
 
@@ -47,18 +49,15 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     return params.get("publish") === "true" && params.get("galleryId") === gallery.galleryId;
   }, [gallery?.galleryId]);
-  const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
-  // Get orders from orderCache (single source of truth)
+  const sendGalleryLinkToClientMutation = useSendGalleryToClient();
+  // Get orders from React Query
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  const { getOrdersByGalleryId } = useOrderStore();
-  const galleryOrders = useMemo(
-    () => (galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : []),
-    [galleryIdStr, getOrdersByGalleryId]
-  );
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
   const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
   const { isNonSelectionGallery } = useGalleryType();
-  const { fetchGalleryOrders } = useGalleryStore();
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
@@ -472,15 +471,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
             nextStepsCompleted: true,
           });
 
-          // Manually update the gallery in the store to avoid triggering full fetch and events
-          // This prevents infinite loops while still updating the UI immediately
-          const { setCurrentGallery, currentGallery } = useGalleryStore.getState();
-          if (currentGallery?.galleryId === gallery.galleryId) {
-            setCurrentGallery({
-              ...currentGallery,
-              nextStepsCompleted: true,
-            });
-          }
+          // React Query will automatically refetch and update the cache
+          // No need for manual optimistic updates
         } catch (error) {
           console.error("Failed to mark gallery setup as completed:", error);
           // Reset flag on error so user can retry
@@ -550,7 +542,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     ? gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE"
     : false;
 
-  const handlePublishClick = async () => {
+  const handlePublishClick = () => {
     if (!gallery?.galleryId) {
       return;
     }
@@ -559,7 +551,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     if (isNonSelectionGallery) {
       try {
         // Fetch gallery orders to get the order ID
-        const orders = await fetchGalleryOrders(gallery.galleryId);
+        // Orders are already loaded from React Query
+        const orders = galleryOrders;
         if (orders?.length > 0) {
           const firstOrder = orders[0];
           if (firstOrder?.orderId) {
@@ -596,7 +589,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const handleSendClick = async () => {
     if (gallery?.galleryId && isPaid) {
       try {
-        await sendGalleryLinkToClient(gallery.galleryId);
+        await sendGalleryLinkToClientMutation.mutateAsync(gallery.galleryId);
         showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
       } catch (_err) {
         showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");

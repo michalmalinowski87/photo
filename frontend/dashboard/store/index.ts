@@ -31,15 +31,8 @@ import { useUnifiedStore } from "./unifiedStore";
 
 export const clearEphemeralState = () => {
   const store = useUnifiedStore.getState();
-  if (store.clearCurrentGallery) {
-    store.clearCurrentGallery();
-  }
-  if (store.clearOrderList) {
-    store.clearOrderList();
-  }
-  if (store.clearCurrentOrder) {
-    store.clearCurrentOrder();
-  }
+  // React Query handles cache invalidation automatically
+  // Only clear UI state like uploads/downloads
   if (store.clearCompletedUploads) {
     store.clearCompletedUploads();
   }

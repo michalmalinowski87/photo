@@ -1,9 +1,14 @@
 import { useCallback } from "react";
 
 import { useZipDownload as useZipDownloadHook } from "../hocs/withZipDownload";
-import api, { formatApiError } from "../lib/api-service";
-import { useOrderStore } from "../store";
+import { formatApiError } from "../lib/api-service";
 
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+  useMarkOrderPaid,
+  useSendFinalLink,
+} from "./mutations/useOrderMutations";
 import { useToast } from "./useToast";
 
 interface Gallery {
@@ -38,15 +43,25 @@ export const useOrderActions = ({
 }: UseOrderActionsOptions) => {
   const { showToast } = useToast();
   const { downloadZip } = useZipDownloadHook();
-  const { setCurrentOrder } = useOrderStore();
+
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+
+  const approveChangeRequestMutation = useApproveChangeRequest();
+  const denyChangeRequestMutation = useDenyChangeRequest();
+  const markOrderPaidMutation = useMarkOrderPaid();
+  const sendFinalLinkMutation = useSendFinalLink();
 
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!galleryId || !orderId) {
+    if (!galleryIdStr || !orderIdStr) {
       return;
     }
 
     try {
-      await api.orders.approveChangeRequest(galleryId as string, orderId as string);
+      await approveChangeRequestMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        orderId: orderIdStr,
+      });
 
       showToast(
         "success",
@@ -62,7 +77,14 @@ export const useOrderActions = ({
         formatApiError(err) ?? "Nie udało się zatwierdzić prośby o zmiany"
       );
     }
-  }, [galleryId, orderId, showToast, loadOrderData, loadGalleryOrders]);
+  }, [
+    galleryIdStr,
+    orderIdStr,
+    approveChangeRequestMutation,
+    showToast,
+    loadOrderData,
+    loadGalleryOrders,
+  ]);
 
   const handleDenyChangeRequest = useCallback(() => {
     openDenyModal();
@@ -70,14 +92,18 @@ export const useOrderActions = ({
 
   const handleDenyConfirm = useCallback(
     async (reason?: string) => {
-      if (!galleryId || !orderId) {
+      if (!galleryIdStr || !orderIdStr) {
         return;
       }
 
       setDenyLoading(true);
 
       try {
-        await api.orders.denyChangeRequest(galleryId as string, orderId as string, reason);
+        await denyChangeRequestMutation.mutateAsync({
+          galleryId: galleryIdStr,
+          orderId: orderIdStr,
+          reason,
+        });
 
         showToast(
           "success",
@@ -94,8 +120,9 @@ export const useOrderActions = ({
       }
     },
     [
-      galleryId,
-      orderId,
+      galleryIdStr,
+      orderIdStr,
+      denyChangeRequestMutation,
       showToast,
       closeDenyModal,
       loadOrderData,
@@ -105,27 +132,20 @@ export const useOrderActions = ({
   );
 
   const handleMarkOrderPaid = useCallback(async () => {
-    if (!galleryId || !orderId) {
+    if (!galleryIdStr || !orderIdStr) {
       return;
     }
     try {
-      const response = await api.orders.markPaid(galleryId as string, orderId as string);
-
-      // Update current order if it matches
-      const currentOrder = useOrderStore.getState().currentOrder;
-      if (currentOrder?.orderId === orderId) {
-        setCurrentOrder({
-          ...currentOrder,
-          paymentStatus: response.paymentStatus,
-          paidAt: response.paidAt,
-        });
-      }
+      await markOrderPaidMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        orderId: orderIdStr,
+      });
 
       showToast("success", "Sukces", "Zlecenie zostało oznaczone jako opłacone");
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
-  }, [galleryId, orderId, setCurrentOrder, showToast]);
+  }, [galleryIdStr, orderIdStr, markOrderPaidMutation, showToast]);
 
   const handleDownloadFinals = useCallback(async () => {
     if (!galleryId || !orderId) {
@@ -143,28 +163,21 @@ export const useOrderActions = ({
   }, [galleryId, orderId, downloadZip]);
 
   const handleSendFinalsToClient = useCallback(async () => {
-    if (!galleryId || !orderId) {
+    if (!galleryIdStr || !orderIdStr) {
       return;
     }
 
     try {
-      const response = await api.orders.sendFinalLink(galleryId as string, orderId as string);
+      await sendFinalLinkMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        orderId: orderIdStr,
+      });
 
       showToast("success", "Sukces", "Link do zdjęć finalnych został wysłany do klienta");
-
-      // Update current order if it matches
-      const currentOrder = useOrderStore.getState().currentOrder;
-      if (currentOrder?.orderId === orderId) {
-        setCurrentOrder({
-          ...currentOrder,
-          deliveryStatus: "DELIVERED",
-          deliveredAt: response.deliveredAt,
-        });
-      }
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
     }
-  }, [galleryId, orderId, setCurrentOrder, showToast]);
+  }, [galleryIdStr, orderIdStr, sendFinalLinkMutation, showToast]);
 
   return {
     handleApproveChangeRequest,

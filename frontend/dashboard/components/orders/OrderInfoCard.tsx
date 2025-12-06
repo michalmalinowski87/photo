@@ -1,9 +1,11 @@
 import { Check, X, Pencil } from "lucide-react";
+import { useRouter } from "next/router";
 
+import { useGallery } from "../../hooks/queries/useGalleries";
+import { useOrder } from "../../hooks/queries/useOrders";
 import { formatCurrencyInput } from "../../lib/currency";
 import { formatPrice } from "../../lib/format-price";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
-import { useGalleryStore, useOrderStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Loading } from "../ui/loading/Loading";
 
@@ -26,9 +28,18 @@ export function OrderInfoCard({
   onSave,
   onAmountChange,
 }: OrderInfoCardProps) {
-  // Subscribe to stores for order and gallery data
-  const order = useOrderStore((state) => state.currentOrder);
-  const gallery = useGalleryStore((state) => state.currentGallery);
+  const router = useRouter();
+  const { id: galleryId, orderId } = router.query;
+
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
+
+  // Use React Query for order and gallery data
+  const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
+  const { data: gallery } = useGallery(galleryIdForQuery);
   const { isNonSelectionGallery } = useGalleryType();
 
   // Defensive check: don't render until order is loaded

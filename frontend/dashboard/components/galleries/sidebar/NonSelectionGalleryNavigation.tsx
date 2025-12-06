@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useEffect } from "react";
 
-import { useGalleryStore, useOrderStore } from "../../../store";
+import { useOrders } from "../../../hooks/queries/useOrders";
 
 interface NonSelectionGalleryNavigationProps {
   galleryId: string;
@@ -17,31 +17,27 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
   const { orderId } = router.query;
   const orderIdFromUrl: string | undefined = Array.isArray(orderId) ? orderId[0] : orderId;
 
-  // Subscribe to gallery orders from store - use both cache and state
-  // Get orders from orderCache (single source of truth)
-  const { getOrdersByGalleryId } = useOrderStore();
-  const galleryOrders = galleryId ? getOrdersByGalleryId(galleryId) : [];
+  // Use React Query for orders
+  const { data: galleryOrders = [], refetch: refetchOrders } = useOrders(galleryId);
 
-  // Get first order ID - use URL orderId if available, otherwise use first order from store
-  // This is computed directly from reactive store subscriptions, no need for state
+  // Get first order ID - use URL orderId if available, otherwise use first order from React Query
   const firstOrderId =
     orderIdFromUrl ??
     (galleryOrders && galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
 
-  // Fetch orders if not available
+  // Refetch orders if not available
   useEffect(() => {
     if (!firstOrderId && galleryOrders.length === 0) {
-      const { fetchGalleryOrders } = useGalleryStore.getState();
-      void fetchGalleryOrders(galleryId);
+      void refetchOrders();
     }
-  }, [galleryId, firstOrderId, galleryOrders.length]);
+  }, [galleryId, firstOrderId, galleryOrders.length, refetchOrders]);
 
   const handlePhotosClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!firstOrderId) {
       e.preventDefault();
-      // Fetch orders and navigate
-      const { fetchGalleryOrders } = useGalleryStore.getState();
-      const orders = await fetchGalleryOrders(galleryId);
+      // Refetch orders and navigate
+      const result = await refetchOrders();
+      const orders = result.data || [];
       if (orders && orders.length > 0) {
         const firstOrder = orders[0] as { orderId?: string } | undefined;
         if (firstOrder?.orderId) {

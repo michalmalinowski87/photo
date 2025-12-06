@@ -1,5 +1,7 @@
+import { useRouter } from "next/router";
+
+import { useOrder } from "../../hooks/queries/useOrders";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
-import { useOrderStore } from "../../store";
 
 interface OrderTabsProps {
   activeTab: "originals" | "finals";
@@ -8,8 +10,17 @@ interface OrderTabsProps {
 }
 
 export function OrderTabs({ activeTab, onTabChange, finalsCount }: OrderTabsProps) {
-  // Get order from store to calculate originals count
-  const order = useOrderStore((state) => state.currentOrder);
+  const router = useRouter();
+  const { id: galleryId, orderId: orderIdFromQuery } = router.query;
+
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const orderIdStr = Array.isArray(orderIdFromQuery) ? orderIdFromQuery[0] : orderIdFromQuery;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
+
+  // Get order from React Query
+  const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
 
   // Defensive check: don't render until order is loaded
   if (!order) {

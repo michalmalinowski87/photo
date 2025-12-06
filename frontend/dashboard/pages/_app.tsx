@@ -1,3 +1,5 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -18,6 +20,7 @@ import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { AuthProvider } from "../context/AuthProvider";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
+import { queryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -173,42 +176,45 @@ export default function App({ Component, pageProps }: AppProps) {
   }, [router.isReady, router.pathname, router.events, setSessionExpired]);
 
   return (
-    <WebPCompatibilityCheck>
-      <AuthProvider>
-        {/* Auth routes don't need protection */}
-        {isAuthRoute ? (
-          <AuthLayout>
-            <Component {...pageProps} />
-          </AuthLayout>
-        ) : (
-          <ProtectedRoute>
-            <SessionExpiredModalWrapper />
-            <ToastContainer />
-            <ZipDownloadContainer />
-            {recoveryState && (
-              <UploadRecoveryModal
-                isOpen={showModal}
-                onClose={handleClear}
-                onResume={handleResume}
-                onClear={handleClear}
-                fileCount={recoveryState.fileCount}
-                galleryId={recoveryState.galleryId}
-                type={recoveryState.type}
-                orderId={recoveryState.orderId}
-              />
-            )}
-            {isGalleryRoute ? (
-              <GalleryLayoutWrapper>
-                <Component {...pageProps} />
-              </GalleryLayoutWrapper>
-            ) : (
-              <AppLayout>
-                <Component {...pageProps} />
-              </AppLayout>
-            )}
-          </ProtectedRoute>
-        )}
-      </AuthProvider>
-    </WebPCompatibilityCheck>
+    <QueryClientProvider client={queryClient}>
+      <WebPCompatibilityCheck>
+        <AuthProvider>
+          {/* Auth routes don't need protection */}
+          {isAuthRoute ? (
+            <AuthLayout>
+              <Component {...pageProps} />
+            </AuthLayout>
+          ) : (
+            <ProtectedRoute>
+              <SessionExpiredModalWrapper />
+              <ToastContainer />
+              <ZipDownloadContainer />
+              {recoveryState && (
+                <UploadRecoveryModal
+                  isOpen={showModal}
+                  onClose={handleClear}
+                  onResume={handleResume}
+                  onClear={handleClear}
+                  fileCount={recoveryState.fileCount}
+                  galleryId={recoveryState.galleryId}
+                  type={recoveryState.type}
+                  orderId={recoveryState.orderId}
+                />
+              )}
+              {isGalleryRoute ? (
+                <GalleryLayoutWrapper>
+                  <Component {...pageProps} />
+                </GalleryLayoutWrapper>
+              ) : (
+                <AppLayout>
+                  <Component {...pageProps} />
+                </AppLayout>
+              )}
+            </ProtectedRoute>
+          )}
+        </AuthProvider>
+      </WebPCompatibilityCheck>
+      {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   );
 }

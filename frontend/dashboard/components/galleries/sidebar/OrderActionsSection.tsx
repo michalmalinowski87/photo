@@ -1,8 +1,16 @@
 import { Home, Download, CheckCircle2, XCircle, Check, Send } from "lucide-react";
+import { useRouter } from "next/router";
 import React, { useCallback, useState } from "react";
 
+import {
+  useApproveChangeRequest,
+  useMarkOrderPaid,
+  useSendFinalLink,
+} from "../../../hooks/mutations/useOrderMutations";
+import { useGallery } from "../../../hooks/queries/useGalleries";
+import { useOrder } from "../../../hooks/queries/useOrders";
 import { useModal } from "../../../hooks/useModal";
-import { useGalleryStore, useOrderStore } from "../../../store";
+import { useOrderStore } from "../../../store";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
@@ -16,20 +24,26 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   orderId,
   setPublishWizardOpen,
 }) => {
-  // Subscribe directly to store
-  const gallery = useGalleryStore((state) => state.currentGallery);
-  const isLoading = useGalleryStore((state) => state.isLoading);
-  const order = useOrderStore((state) => state.currentOrder);
+  const router = useRouter();
+  const { id: galleryId } = router.query;
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+
+  // Use React Query for data
+  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
+  const { data: order } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
 
-  // Get store actions
-  const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
-  const markOrderPaid = useOrderStore((state) => state.markOrderPaid);
+  // Use React Query mutations
+  const approveChangeRequestMutation = useApproveChangeRequest();
+  const markOrderPaidMutation = useMarkOrderPaid();
+  const sendFinalsToClientMutation = useSendFinalLink();
+
+  // Download actions - these will be moved to utility/hook later
+  // For now, we'll need to implement these using the download store or API directly
   const downloadFinals = useOrderStore((state) => state.downloadFinals);
-  const sendFinalsToClient = useOrderStore((state) => state.sendFinalsToClient);
   const downloadZip = useOrderStore((state) => state.downloadZip);
-  const hasFinals = useOrderStore((state) => state.hasFinals);
-  const canDownloadZip = useOrderStore((state) => state.canDownloadZip);
 
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
@@ -40,18 +54,34 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   const [sendFinalsLoading, setSendFinalsLoading] = useState(false);
   const [markPaidLoading, setMarkPaidLoading] = useState(false);
 
-  // Get computed values from store (before conditional returns)
-  const orderHasFinals = hasFinals(orderId);
-  const canDownloadZipValue = canDownloadZip(orderId, gallery?.selectionEnabled);
-  const galleryId = gallery?.galleryId;
+  // Compute values from React Query data
+  const orderHasFinals = order
+    ? order.deliveryStatus === "PREPARING_FOR_DELIVERY" ||
+      order.deliveryStatus === "PREPARING_DELIVERY" ||
+      order.deliveryStatus === "DELIVERED"
+    : false;
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const selectedKeys: unknown = order?.selectedKeys;
+  const hasSelectedKeys =
+    selectedKeys && Array.isArray(selectedKeys) ? selectedKeys.length > 0 : Boolean(selectedKeys);
+
+  const canDownloadZipValue =
+    gallery?.selectionEnabled !== false &&
+    order &&
+    order.deliveryStatus !== "CANCELLED" &&
+    hasSelectedKeys;
 
   // Action handlers - must be defined before any conditional returns
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdStr) {
       return;
     }
-    await approveChangeRequest(galleryId, orderId);
-  }, [galleryId, orderId, approveChangeRequest]);
+    await approveChangeRequestMutation.mutateAsync({
+      galleryId: galleryIdStr,
+      orderId,
+    });
+  }, [galleryIdStr, orderId, approveChangeRequestMutation]);
 
   const handleDenyChangeRequest = useCallback(() => {
     openDenyModal();
@@ -62,54 +92,60 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   }, []);
 
   const handleMarkOrderPaidConfirm = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdStr) {
       setShowMarkPaidDialog(false);
       return;
     }
     setMarkPaidLoading(true);
     try {
-      await markOrderPaid(galleryId, orderId);
+      await markOrderPaidMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        orderId,
+      });
       setShowMarkPaidDialog(false);
     } catch (_err) {
-      // Error handling is done in the store action
+      // Error handling is done in the mutation
     } finally {
       setMarkPaidLoading(false);
     }
-  }, [galleryId, orderId, markOrderPaid]);
+  }, [galleryIdStr, orderId, markOrderPaidMutation]);
 
   const handleDownloadFinals = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdStr) {
       return;
     }
-    await downloadFinals(galleryId, orderId);
-  }, [galleryId, orderId, downloadFinals]);
+    await downloadFinals(galleryIdStr, orderId);
+  }, [galleryIdStr, orderId, downloadFinals]);
 
   const handleSendFinalsToClientClick = useCallback(() => {
     setShowSendFinalsDialog(true);
   }, []);
 
   const handleSendFinalsToClientConfirm = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdStr) {
       setShowSendFinalsDialog(false);
       return;
     }
     setSendFinalsLoading(true);
     try {
-      await sendFinalsToClient(galleryId, orderId);
+      await sendFinalsToClientMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        orderId,
+      });
       setShowSendFinalsDialog(false);
     } catch (_err) {
-      // Error handling is done in the store action
+      // Error handling is done in the mutation
     } finally {
       setSendFinalsLoading(false);
     }
-  }, [galleryId, orderId, sendFinalsToClient]);
+  }, [galleryIdStr, orderId, sendFinalsToClientMutation]);
 
   const handleDownloadZip = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdStr) {
       return;
     }
-    await downloadZip(galleryId, orderId);
-  }, [galleryId, orderId, downloadZip]);
+    await downloadZip(galleryIdStr, orderId);
+  }, [galleryIdStr, orderId, downloadZip]);
 
   const handlePublishClick = useCallback(() => {
     if (setPublishWizardOpen) {

@@ -3,8 +3,10 @@ import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
+import { useGallery, useGalleryImages } from "../../../hooks/queries/useGalleries";
+import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore, type Order } from "../../../store";
+import type { Order } from "../../../store";
 import type { GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {
@@ -16,7 +18,13 @@ interface OwnerGalleryViewProps {
 
 function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const router = useRouter();
-  const { fetchGallery, fetchGalleryImages, fetchGalleryOrders } = useGalleryStore();
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+
+  const { data: gallery } = useGallery(galleryIdForQuery);
+  const { data: imagesFromQuery = [] } = useGalleryImages(galleryIdForQuery, "thumb");
+  const { data: orders = [] } = useOrders(galleryIdForQuery);
   const [galleryName, setGalleryName] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -45,66 +53,47 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   async function loadGallery(): Promise<void> {
     setMessage("");
     setLoading(true);
-    if (!galleryId) {
+    if (!galleryIdForQuery) {
       setLoading(false);
       return;
     }
-    const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
     try {
-      // Use store actions - checks cache first, fetches if needed
-      const [apiImages, deliveredOrdersResponse, orders] = await Promise.allSettled([
-        fetchGalleryImages(galleryIdStr),
-        api.galleries.checkDeliveredOrders(galleryIdStr),
-        fetchGalleryOrders(galleryIdStr),
-      ]);
-
-      if (apiImages.status === "fulfilled") {
-        setImages(apiImages.value);
-      }
+      // Use React Query data - it's already fetched
+      setImages(imagesFromQuery);
 
       // Check if there are delivered orders
-      if (deliveredOrdersResponse.status === "fulfilled") {
-        const ordersData = deliveredOrdersResponse.value;
-        const hasOrders = (ordersData.items?.length ?? 0) > 0;
+      try {
+        const deliveredOrdersResponse = await api.galleries.checkDeliveredOrders(galleryIdForQuery);
+        const hasOrders = (deliveredOrdersResponse.items?.length ?? 0) > 0;
         setHasDeliveredOrders(hasOrders);
-      } else {
+      } catch {
         setHasDeliveredOrders(false);
       }
 
       // Get selected keys from active order (CLIENT_APPROVED, PREPARING_DELIVERY, or CHANGES_REQUESTED)
-      if (orders.status === "fulfilled") {
-        const ordersList = orders.value;
+      const ordersList = orders;
 
-        // Find active order (approved, preparing delivery, or changes requested)
-        const activeOrder = ordersList.find((o): o is Order => {
-          if (!o || typeof o !== "object" || !("deliveryStatus" in o) || !("orderId" in o)) {
-            return false;
-          }
-          const status = (o as { deliveryStatus?: unknown }).deliveryStatus;
-          return (
-            status === "CLIENT_APPROVED" ||
-            status === "PREPARING_DELIVERY" ||
-            status === "CHANGES_REQUESTED"
-          );
-        });
-
-        if (activeOrder?.selectedKeys && Array.isArray(activeOrder.selectedKeys)) {
-          setSelectedKeys(new Set(activeOrder.selectedKeys));
-        } else {
-          setSelectedKeys(new Set());
+      // Find active order (approved, preparing delivery, or changes requested)
+      const activeOrder = ordersList.find((o): o is Order => {
+        if (!o || typeof o !== "object" || !("deliveryStatus" in o) || !("orderId" in o)) {
+          return false;
         }
+        const status = (o as { deliveryStatus?: unknown }).deliveryStatus;
+        return (
+          status === "CLIENT_APPROVED" ||
+          status === "PREPARING_DELIVERY" ||
+          status === "CHANGES_REQUESTED"
+        );
+      });
+
+      if (activeOrder?.selectedKeys && Array.isArray(activeOrder.selectedKeys)) {
+        setSelectedKeys(new Set(activeOrder.selectedKeys));
       } else {
         setSelectedKeys(new Set());
       }
 
-      // Try to get gallery name from gallery info
-      try {
-        const gallery = await fetchGallery(galleryIdStr);
-        setGalleryName(gallery?.galleryName ?? galleryIdStr);
-      } catch (_e) {
-        // Gallery info not available, that's OK
-        setGalleryName(galleryIdStr);
-      }
+      // Get gallery name from React Query data
+      setGalleryName(gallery?.galleryName ?? galleryIdForQuery);
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {

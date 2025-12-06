@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
@@ -12,6 +12,12 @@ import { OrderTabs } from "../../../../components/orders/OrderTabs";
 import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
 import { UppyUploadModal } from "../../../../components/uppy/UppyUploadModal";
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+} from "../../../../hooks/mutations/useOrderMutations";
+import { useGalleryImages } from "../../../../hooks/queries/useGalleries";
+import { useOrder, useOrderFinalImages } from "../../../../hooks/queries/useOrders";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
@@ -20,7 +26,7 @@ import { useToast } from "../../../../hooks/useToast";
 import api, { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { useGalleryStore, useOrderStore, useUserStore } from "../../../../store";
+import { useUserStore } from "../../../../store";
 import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from orderSlice store (single source of truth)
@@ -42,25 +48,91 @@ export default function OrderDetail() {
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
   const { isNonSelectionGallery } = useGalleryType();
-  const [, setLoading] = useState<boolean>(false); // Only for image loading, not order loading
+
+  // Get gallery and order from React Query
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
+
+  const { gallery } = useGallery();
+  const { data: order, refetch: refetchOrder } = useOrder(galleryIdForQuery, orderIdForQuery);
+  
+  // Use React Query hooks to automatically load images
+  const { data: galleryImagesData = [] } = useGalleryImages(galleryIdForQuery, "thumb");
+  const originalImages = (galleryImagesData || []) as GalleryImage[];
+  
+  // Use React Query hook to automatically load final images (removes duplicated manual loading)
+  const { data: finalImagesData = [], refetch: refetchFinalImages } = useOrderFinalImages(
+    galleryIdForQuery,
+    orderIdForQuery
+  );
+
   const [error, setError] = useState<string>("");
-  // Use Zustand store as single source of truth for order data (shared with sidebar and top bar)
-  const order = useOrderStore((state) => state.currentOrder);
-  const setCurrentOrder = useOrderStore((state) => state.setCurrentOrder);
-  // Use Zustand store for gallery data
-  const gallery = useGalleryStore((state) => state.currentGallery);
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
-  const [originalImages, setOriginalImages] = useState<GalleryImage[]>([]);
-  const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
   const [, setOptimisticFinalsBytes] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  const loadingOrderDataRef = useRef<boolean>(false); // Ref to prevent concurrent loadOrderData calls
-  const orderDataLoadedRef = useRef<boolean>(false); // Track if we've successfully loaded order data
-  // Refs for tracking deleted images (initialized early for use in loadOrderData)
-  const deletingImagesRefForLoad = useRef<Set<string>>(new Set());
-  const deletedImageKeysRefForLoad = useRef<Set<string>>(new Set());
+  
+  // Local state for optimistic updates during deletion (used by useFinalImageDelete hook)
+  const [optimisticFinalImages, setOptimisticFinalImages] = useState<GalleryImage[]>([]);
+  
+  // Define hook early so derived state can use its refs
+  const {
+    deleteImage,
+    handleDeleteImageClick,
+    deletingImages,
+    deletingImagesRef,
+    deletedImageKeysRef,
+  } = useFinalImageDelete({
+    galleryId,
+    orderId,
+    setFinalImages: setOptimisticFinalImages, // Use optimistic state for hook compatibility
+    setOptimisticFinalsBytes,
+  });
+  
+  // Derived/computed final images: Combine React Query data with deleting state
+  // Maps URLs, filters deleted images, and merges with deleting images
+  const finalImages = useMemo(() => {
+    // Start with React Query data
+    const baseImages = (finalImagesData || []) as GalleryImage[];
+    
+    // Map URLs: prioritize thumbUrl/previewUrl for display, keep finalUrl for download
+    const mappedImages = baseImages.map((img: GalleryImage) => ({
+      ...img,
+      url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
+      finalUrl: img.finalUrl ?? img.url ?? "",
+    }));
+    
+    // Filter out successfully deleted images
+    const validImages = filterDeletedImages(
+      mappedImages,
+      deletingImagesRef.current,
+      deletedImageKeysRef.current
+    );
+    
+    // Merge with optimistic updates (images being deleted)
+    if (optimisticFinalImages.length > 0) {
+      const validImagesMap = new Map<string, GalleryImage>(
+        validImages.map((img) => [img.key ?? img.filename ?? "", img])
+      );
+      
+      // Add optimistic images that aren't in the valid list
+      optimisticFinalImages.forEach((img) => {
+        const imgKey = img.key ?? img.filename;
+        if (imgKey && !validImagesMap.has(imgKey)) {
+          validImagesMap.set(imgKey, img);
+        }
+      });
+      
+      return Array.from(validImagesMap.values());
+    }
+    
+    return validImages;
+  }, [finalImagesData, optimisticFinalImages, deletingImagesRef, deletedImageKeysRef]);
+  
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] = useState<boolean>(false);
@@ -68,202 +140,35 @@ export default function OrderDetail() {
   // Get wallet balance directly from store - no local state needed
   const walletBalance = useUserStore((state) => state.walletBalanceCents ?? 0);
 
+  // Simplified: Only refetch order if needed - images are automatically loaded via React Query hooks
   const loadOrderData = useCallback(async (): Promise<void> => {
     if (!galleryId || !orderId) {
       logSkippedLoad("orderData", "Missing galleryId or orderId", { galleryId, orderId });
       return;
     }
 
-    // Prevent concurrent calls
-    if (loadingOrderDataRef.current) {
-      logSkippedLoad("orderData", "Concurrent call prevented", { galleryId, orderId });
-      return;
-    }
-
-    // Check if we already have the order in the store before fetching
-    // This prevents unnecessary loading states when navigating between tabs
-    const orderStore = useOrderStore.getState();
-    const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
-    if (orderStore.currentOrder?.orderId === orderIdStr) {
-      // Order is already in store - just load images (no need to set loading state for order)
-      // Only set loading for images, not for order (which is already loaded)
-      loadingOrderDataRef.current = true;
-      setLoading(true);
-      setError("");
-
-      try {
-        const { fetchGalleryImages } = useGalleryStore.getState();
-        const apiImages = await fetchGalleryImages(galleryId as string).catch((err) => {
-          console.error("Failed to load gallery images:", err);
-          return [];
-        });
-
-        setOriginalImages(apiImages);
-
-        // Load final images
-        try {
-          const finalResponse = await api.orders.getFinalImages(
-            galleryId as string,
-            orderId as string
-          );
-          const imagesWithCacheBusting = finalResponse.images ?? [];
-          const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
-            ...img,
-            url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
-            finalUrl: img.finalUrl ?? img.url ?? "",
-          }));
-
-          const validApiImages = filterDeletedImages(
-            mappedFinalImages,
-            deletingImagesRefForLoad.current,
-            deletedImageKeysRefForLoad.current
-          );
-
-          setFinalImages((currentImages) => {
-            const deletingImageKeys = Array.from(deletingImagesRefForLoad.current);
-            const currentDeletingImages = currentImages.filter((img) => {
-              const imgKey = img.key ?? img.filename;
-              return imgKey && deletingImageKeys.includes(imgKey);
-            });
-
-            const apiImagesMap = new Map<string, GalleryImage>(
-              validApiImages.map((img) => [img.key ?? img.filename ?? "", img])
-            );
-
-            currentDeletingImages.forEach((img) => {
-              const imgKey = img.key ?? img.filename;
-              if (imgKey && !apiImagesMap.has(imgKey) && img.url && img.finalUrl) {
-                apiImagesMap.set(imgKey, img);
-              }
-            });
-
-            return Array.from(apiImagesMap.values());
-          });
-        } catch (_err) {
-          setFinalImages([]);
-        }
-      } finally {
-        setLoading(false);
-        loadingOrderDataRef.current = false;
-        orderDataLoadedRef.current = true;
-      }
-      return;
-    }
-
-    loadingOrderDataRef.current = true;
-    setLoading(true);
-    setError("");
-
     try {
-      // Use store actions - they check cache first and fetch if needed
-      const { fetchOrder } = useOrderStore.getState();
-      const { fetchGalleryImages } = useGalleryStore.getState();
-
-      // Fetch order and images in parallel
-      // NOTE: Don't fetch gallery data here - it would overwrite accurate bytes values
-      // Gallery bytes are managed by recalculation, not by reloading gallery data
-      const [orderData, apiImages] = await Promise.all([
-        fetchOrder(galleryId as string, orderId as string).catch((err) => {
-          console.error("Failed to load order:", err);
-          return null;
-        }),
-        fetchGalleryImages(galleryId as string).catch((err) => {
-          console.error("Failed to load gallery images:", err);
-          return [];
-        }),
-      ]);
-
-      if (orderData) {
-        // Update store with fresh order data
-        setCurrentOrder(orderData);
-      }
-
-      // Don't fetch gallery here - GalleryLayoutWrapper handles gallery fetching
-      // Gallery should already be in store from GalleryLayoutWrapper
-
-      setOriginalImages(apiImages);
-
-      // Always try to load final images (for viewing) - upload restrictions are handled separately
-      // Keep loading state true while loading final images
-      try {
-        const finalResponse = await api.orders.getFinalImages(
-          galleryId as string,
-          orderId as string
-        );
-        // Cache busting is handled automatically by LazyRetryableImage component
-        // using S3 lastModified timestamp (changes automatically when new photos are uploaded)
-        const imagesWithCacheBusting = finalResponse.images ?? [];
-        // Map final images - keep finalUrl for download, use thumbUrl/previewUrl for display
-        // Image loading priority: CloudFront thumb → CloudFront preview → S3 full (last resort only)
-        // We NEVER fetch full S3 images (finalUrl) if thumbnails/previews are available
-        const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
-          ...img,
-          url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "", // Prioritize thumb/preview
-          finalUrl: img.finalUrl ?? img.url ?? "", // Keep original for download (not for display)
-        }));
-
-        // Filter out deleted images from API response
-        const validApiImages = filterDeletedImages(
-          mappedFinalImages,
-          deletingImagesRefForLoad.current,
-          deletedImageKeysRefForLoad.current
-        );
-
-        // Preserve images that are currently being deleted (they may not be in API response yet)
-        // Merge deleting images from current state to show deleting overlay
-        setFinalImages((currentImages) => {
-          const deletingImageKeys = Array.from(deletingImagesRefForLoad.current);
-          const currentDeletingImages = currentImages.filter((img) => {
-            const imgKey = img.key ?? img.filename;
-            return imgKey && deletingImageKeys.includes(imgKey);
-          });
-
-          // Create a map of valid API images by key for deduplication
-          const apiImagesMap = new Map<string, GalleryImage>(
-            validApiImages.map((img) => [img.key ?? img.filename ?? "", img])
-          );
-
-          // Add deleting images that aren't already in API response
-          currentDeletingImages.forEach((img) => {
-            const imgKey = img.key ?? img.filename;
-            if (imgKey && !apiImagesMap.has(imgKey) && img.url && img.finalUrl) {
-              // Ensure required fields exist before adding
-              apiImagesMap.set(imgKey, img);
-            }
-          });
-
-          // Return merged array (API images + preserved deleting images)
-          return Array.from(apiImagesMap.values());
-        });
-      } catch (_err) {
-        // Final images might not exist yet - set empty array
-        setFinalImages([]);
-      }
+      // Refetch order if needed - images are automatically loaded via React Query hooks
+      await refetchOrder().catch((err: unknown) => {
+        console.error("Failed to load order:", err);
+        const errorMsg = formatApiError(err);
+        setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
+        showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
+      });
     } catch (err) {
-      // Handle CORS and network errors gracefully
+      // Handle errors gracefully
       const error = err as Error & { status?: number; originalError?: Error };
       const isCorsError =
         error.message?.includes("CORS") || error.message?.includes("Failed to fetch");
       const isNetworkError = error.message?.includes("Network error");
 
-      if (isCorsError || isNetworkError) {
-        // Don't set error state for CORS errors - they're usually temporary
-      } else {
+      if (!isCorsError && !isNetworkError) {
         const errorMsg = formatApiError(err);
         setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
         showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
       }
-    } finally {
-      setLoading(false);
-      loadingOrderDataRef.current = false;
-      // Mark as loaded if we got the order
-      const finalOrder = useOrderStore.getState().currentOrder;
-      const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
-      if (finalOrder?.orderId === orderIdStr) {
-        orderDataLoadedRef.current = true;
-      }
     }
-  }, [galleryId, orderId, showToast, logSkippedLoad, setCurrentOrder]);
+  }, [galleryId, orderId, showToast, logSkippedLoad, refetchOrder]);
 
   // Use hooks for order actions and amount editing (after state declarations)
   const {
@@ -280,28 +185,6 @@ export default function OrderDetail() {
     currentTotalCents: (order?.totalCents as number | undefined) ?? 0,
     onSave: loadOrderData,
   });
-
-  const {
-    deleteImage,
-    handleDeleteImageClick,
-    deletingImages,
-    deletingImagesRef,
-    deletedImageKeysRef,
-  } = useFinalImageDelete({
-    galleryId,
-    orderId,
-    setFinalImages,
-    setOptimisticFinalsBytes,
-  });
-
-  // Sync refs for use in loadOrderData
-  useEffect(() => {
-    deletingImagesRefForLoad.current = deletingImagesRef.current;
-  }, [deletingImagesRef]);
-
-  useEffect(() => {
-    deletedImageKeysRefForLoad.current = deletedImageKeysRef.current;
-  }, [deletedImageKeysRef]);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
@@ -365,116 +248,42 @@ export default function OrderDetail() {
     }
   }, [galleryId, orderId]);
 
-  // Reload final images after upload (simple refetch, no polling)
+  // Reload final images after upload - use React Query refetch (removes duplicated manual loading)
   const reloadFinalImagesAfterUpload = useCallback(async () => {
-    if (!galleryId || !orderId) {
+    if (!galleryIdForQuery || !orderIdForQuery) {
       return;
     }
-
-    try {
-      const finalResponse = await api.orders.getFinalImages(galleryId as string, orderId as string);
-      // Cache busting is handled automatically by LazyRetryableImage component
-      // using S3 lastModified timestamp (changes automatically when new photos are uploaded)
-      const imagesWithCacheBusting = finalResponse.images ?? [];
-      const mappedFinalImages = imagesWithCacheBusting.map((img: GalleryImage) => ({
-        ...img,
-        url: img.previewUrl ?? img.thumbUrl ?? img.finalUrl ?? img.url ?? "",
-        finalUrl: img.finalUrl ?? img.url ?? "",
-      }));
-      const validApiImages = filterDeletedImages(
-        mappedFinalImages as Array<{
-          url: string;
-          finalUrl: string;
-          id?: string;
-          key?: string;
-          filename?: string;
-          thumbUrl?: string;
-          previewUrl?: string;
-          isPlaceholder?: boolean;
-          uploadTimestamp?: number;
-          uploadIndex?: number;
-          size?: number;
-        }>,
-        deletingImagesRef.current,
-        deletedImageKeysRef.current
-      );
-
-      // Update local state
-      setFinalImages((currentImages) => {
-        const deletingImageKeys = Array.from(deletingImagesRef.current);
-        const currentDeletingImages = currentImages.filter((img) => {
-          const imgKey = img.key ?? img.filename;
-          return imgKey && deletingImageKeys.includes(imgKey);
-        });
-        const updatedImagesMap = new Map<string, GalleryImage>(
-          validApiImages.map((img) => [img.key ?? img.filename ?? "", img])
-        );
-        currentDeletingImages.forEach((img) => {
-          const imgKey = img.key ?? img.filename;
-          if (imgKey && !updatedImagesMap.has(imgKey) && img.url && img.finalUrl) {
-            updatedImagesMap.set(imgKey, img);
-          }
-        });
-        return Array.from(updatedImagesMap.values());
-      });
-    } catch (err) {
-      console.error("[OrderDetail] Failed to reload final images:", err);
-    }
-  }, [galleryId, orderId, deletingImagesRef, deletedImageKeysRef]);
+    // React Query automatically handles caching and refetching
+    await refetchFinalImages();
+  }, [galleryIdForQuery, orderIdForQuery, refetchFinalImages]);
 
   // Load order data once when component mounts or orderId changes
-  // Auth is handled by AuthProvider/ProtectedRoute - just load data
+  // Images are automatically loaded via React Query hooks - no manual loading needed
   useEffect(() => {
     if (galleryId && orderId) {
-      const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
-
-      // Check store first - if order is already there, don't fetch
-      const storeOrder = useOrderStore.getState().currentOrder;
-      if (storeOrder?.orderId === orderIdStr) {
-        // Order is already in store - just load images if needed
-        return;
-      }
-
-      // Order not in store - load it
-      if (!loadingOrderDataRef.current) {
-        void loadOrderData();
-      }
+      void loadOrderData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, orderId]);
 
-  // Listen for finals uploads to update optimistic finals bytes from store
+  // Update optimistic finals bytes when gallery data changes
   useEffect(() => {
-    if (!galleryId || !gallery) {
-      return undefined;
+    if (!gallery) {
+      return;
     }
 
-    // Subscribe to Zustand store changes for finals bytes (handles optimistic updates)
-    let prevFinalsBytes: number | undefined = gallery.finalsBytesUsed as number | undefined;
-    const unsubscribe = useGalleryStore.subscribe((state) => {
-      const currentGallery = state.currentGallery;
-      const currentFinalsBytes =
-        currentGallery?.galleryId === galleryId
-          ? (currentGallery.finalsBytesUsed as number | undefined)
-          : undefined;
-
-      // Only fire if value actually changed and it's our gallery
-      if (currentFinalsBytes !== undefined && currentFinalsBytes !== prevFinalsBytes) {
-        prevFinalsBytes = currentFinalsBytes;
-        setOptimisticFinalsBytes((prev: number | null) => {
-          if (prev !== currentFinalsBytes) {
-            return currentFinalsBytes ?? null;
-          }
-          return prev;
-        });
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
+    // Track finals bytes from React Query gallery data (handles optimistic updates)
+    const currentFinalsBytes = gallery?.finalsBytesUsed as number | undefined;
+    if (currentFinalsBytes !== undefined) {
+      setOptimisticFinalsBytes((prev: number | null) => {
+        if (prev !== currentFinalsBytes) {
+          return currentFinalsBytes ?? null;
+        }
+        return prev;
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, gallery?.galleryId]); // Use galleryId to prevent infinite loops
+  }, [gallery?.finalsBytesUsed]); // Update when finals bytes change
 
   // Auto-set to finals tab if selection is disabled (non-selection galleries)
   // Use stable identifiers instead of entire objects to prevent infinite loops
@@ -547,21 +356,24 @@ export default function OrderDetail() {
     }
   };
 
-  // Use store actions directly
-  const approveChangeRequest = useOrderStore((state) => state.approveChangeRequest);
-  const denyChangeRequest = useOrderStore((state) => state.denyChangeRequest);
-  const denyLoading = useOrderStore((state) => state.denyLoading);
+  // Use React Query mutations
+  const approveChangeRequestMutation = useApproveChangeRequest();
+  const denyChangeRequestMutation = useDenyChangeRequest();
+  const denyLoading = denyChangeRequestMutation.isPending;
 
   const handleApproveChangeRequest = useCallback(async () => {
-    if (!galleryId || !orderId) {
+    if (!galleryIdForQuery || !orderIdForQuery) {
       return;
     }
-    await approveChangeRequest(galleryId as string, orderId as string);
+    await approveChangeRequestMutation.mutateAsync({
+      galleryId: galleryIdForQuery,
+      orderId: orderIdForQuery,
+    });
     await loadOrderData();
     if (reloadGallery) {
       await reloadGallery();
     }
-  }, [galleryId, orderId, approveChangeRequest, loadOrderData, reloadGallery]);
+  }, [galleryIdForQuery, orderIdForQuery, approveChangeRequestMutation, loadOrderData, reloadGallery]);
 
   const handleDenyChangeRequest = useCallback(() => {
     setDenyModalOpen(true);
@@ -569,17 +381,21 @@ export default function OrderDetail() {
 
   const handleDenyConfirm = useCallback(
     async (reason?: string) => {
-      if (!galleryId || !orderId) {
+      if (!galleryIdForQuery || !orderIdForQuery) {
         return;
       }
-      await denyChangeRequest(galleryId as string, orderId as string, reason);
+      await denyChangeRequestMutation.mutateAsync({
+        galleryId: galleryIdForQuery,
+        orderId: orderIdForQuery,
+        reason,
+      });
       setDenyModalOpen(false);
       await loadOrderData();
       if (reloadGallery) {
         await reloadGallery();
       }
     },
-    [galleryId, orderId, denyChangeRequest, loadOrderData, reloadGallery]
+    [galleryIdForQuery, orderIdForQuery, denyChangeRequestMutation, loadOrderData, reloadGallery]
   );
 
   // GalleryLayoutWrapper handles order loading - we only handle image loading here

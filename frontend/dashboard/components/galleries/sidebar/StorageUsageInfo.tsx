@@ -1,14 +1,20 @@
+import { useRouter } from "next/router";
 import React from "react";
 
-import { useGalleryStore } from "../../../store";
+import { useGallery } from "../../../hooks/queries/useGalleries";
 
 interface StorageUsageInfoProps {
   orderId?: string;
 }
 
 export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) => {
-  const currentGallery = useGalleryStore((state) => state.currentGallery);
-  const galleryLoading = useGalleryStore((state) => state.isLoading);
+  const router = useRouter();
+  const { id: galleryId } = router.query;
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+
+  const { data: currentGallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
 
   const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {

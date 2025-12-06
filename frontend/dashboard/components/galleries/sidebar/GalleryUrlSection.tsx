@@ -2,9 +2,11 @@ import { Plus, Share2, Copy } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 
+import { useSendGalleryToClient } from "../../../hooks/mutations/useGalleryMutations";
+import { useGallery } from "../../../hooks/queries/useGalleries";
+import { useOrder, useOrders } from "../../../hooks/queries/useOrders";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore, useOrderStore } from "../../../store";
 import Button from "../../ui/button/Button";
 
 interface GalleryUrlSectionProps {
@@ -15,26 +17,19 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   shouldHideSecondaryElements,
 }) => {
   const router = useRouter();
-  const { id: galleryId } = router.query;
+  const { id: galleryId, orderId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
-  // Use cache-aware selector to get gallery (same as GallerySidebar)
-  const gallery = useGalleryStore((state) => {
-    const storeGallery = state.currentGallery;
-    // If store has gallery and it matches, use it
-    if (storeGallery?.galleryId === galleryIdStr) {
-      return storeGallery;
-    }
-    return storeGallery;
-  });
+  // Use React Query hooks
+  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
+  const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
+  const sendGalleryLinkToClientMutation = useSendGalleryToClient();
+  const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
 
-  const isLoading = useGalleryStore((state) => state.isLoading);
-  const sendGalleryLinkToClient = useGalleryStore((state) => state.sendGalleryLinkToClient);
-  // Get orders from orderCache (single source of truth)
-  const { getOrdersByGalleryId } = useOrderStore();
-  const galleryOrders = galleryIdStr ? getOrdersByGalleryId(galleryIdStr) : [];
-
-  const order = useOrderStore((state) => state.currentOrder);
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
@@ -83,7 +78,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
 
     setSendLinkLoading(true);
     try {
-      const result = await sendGalleryLinkToClient(galleryIdStr);
+      const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
 
       showToast(
         "success",

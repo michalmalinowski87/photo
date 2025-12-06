@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
+import { useOrders } from "../../hooks/queries/useOrders";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
@@ -16,7 +17,7 @@ import {
   type Duration,
   type PlanKey,
 } from "../../lib/pricing-plans";
-import { useGalleryStore, useUserStore } from "../../store";
+import { useUserStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 
@@ -48,7 +49,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   const { showToast } = useToast();
   const router = useRouter();
   const { walletBalanceCents, refreshWalletBalance } = useUserStore();
-  const { fetchGalleryOrders } = useGalleryStore();
+  const { refetch: refetchOrders } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,9 +63,11 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     // For non-selection galleries, navigate to order view after payment
     if (isNonSelectionGallery) {
       try {
-        const orders = await fetchGalleryOrders(galleryId);
-        if (orders && orders.length > 0) {
-          const firstOrder = orders[0] as { orderId?: string };
+        // Refetch orders to get the latest
+        const result = await refetchOrders();
+        const fetchedOrders = result.data || [];
+        if (fetchedOrders && fetchedOrders.length > 0) {
+          const firstOrder = fetchedOrders[0] as { orderId?: string };
           if (firstOrder?.orderId) {
             void router.push(`/galleries/${galleryId}/orders/${firstOrder.orderId}`);
             return;
@@ -80,7 +83,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       // For selection galleries, just close the wizard
       onClose();
     }
-  }, [isNonSelectionGallery, galleryId, fetchGalleryOrders, router, onSuccess, onClose]);
+  }, [isNonSelectionGallery, galleryId, refetchOrders, router, onSuccess, onClose]);
 
   const { handleSelectPlan, isProcessing, showRedirectOverlay, redirectInfo } = usePlanPayment({
     galleryId,

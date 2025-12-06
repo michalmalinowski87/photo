@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore } from "../store";
+import { queryKeys } from "../lib/react-query";
 import type { GalleryImage } from "../types";
 
 import { useToast } from "./useToast";
@@ -13,6 +14,7 @@ interface UseOriginalImageDeleteOptions {
 
 export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImageDeleteOptions) => {
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -68,22 +70,20 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
             (img) => (img.key ?? img.filename) !== imageKey
           );
 
-          // Check if this was the last image - if so, we need to call /status
+          // Check if this was the last image - if so, we need to invalidate gallery queries
           const wasLastImage = remainingImages.length === 0;
 
-          // Update Zustand store optimistically (side panel will pull from here)
-          const { currentGallery, updateOriginalsBytesUsed } = useGalleryStore.getState();
-          if (currentGallery && image.size) {
-            // Optimistically subtract the image size
-            updateOriginalsBytesUsed(-(image.size || 0));
-          }
-
-          // If this was the last image, call /status endpoint to update gallery state
-          if (wasLastImage) {
+          // If this was the last image, invalidate gallery queries to refresh state
+          if (wasLastImage && galleryIdStr) {
             void (async () => {
               try {
-                const { reloadGallery } = useGalleryStore.getState();
-                await reloadGallery(galleryIdStr);
+                // Invalidate gallery queries to refetch
+                await queryClient.invalidateQueries({
+                  queryKey: queryKeys.galleries.detail(galleryIdStr),
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: queryKeys.galleries.status(galleryIdStr),
+                });
               } catch (statusErr) {
                 // eslint-disable-next-line no-console
                 console.error(
@@ -165,7 +165,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
         throw err;
       }
     },
-    [galleryId, setImages, deletingImages, showToast]
+    [galleryId, setImages, deletingImages, showToast, queryClient]
   );
 
   const handleDeleteImageClick = useCallback(

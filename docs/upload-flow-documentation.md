@@ -18,10 +18,10 @@ The upload system uses a **simple, debounced approach** with no polling:
 - Generates client-side thumbnails (preview and thumbnail versions)
 - Triggers refetch after successful uploads
 
-### 2. **Gallery Store** (`frontend/dashboard/store/gallerySlice.ts`)
-- Manages image state in Zustand store
-- `fetchGalleryImages()` always bypasses cache when `forceRefresh = true`
-- Applies cache-busting query parameters to image URLs
+### 2. **React Query Image Fetching** (`frontend/dashboard/hooks/queries/useGalleries.ts`)
+- Uses React Query (`useGalleryImages`) for image data fetching and caching
+- Automatic cache management and invalidation
+- Refetch triggers image reload after uploads
 
 ### 3. **LazyRetryableImage Component** (`frontend/dashboard/components/ui/LazyRetryableImage.tsx`)
 - Handles individual image loading state with lazy loading (Intersection Observer)
@@ -83,13 +83,12 @@ After ALL uploads complete:
 
 #### Step 6: Image Refetch
 ```
-fetchGalleryImages() called
-├─ invalidateGalleryImagesCache(galleryId) // Clear cache
+React Query refetch triggered
+├─ queryClient.invalidateQueries(['galleries', galleryId, 'images', 'thumb']) // Invalidate cache
 ├─ API call: GET /api/galleries/{galleryId}/images
 ├─ Backend verifies file existence (HEAD requests) before generating presigned URLs
 ├─ Backend returns images with lastModified timestamps and verified presigned URLs
-├─ setGalleryImages() called → applies cache-busting
-└─ Returns images with cache-busting: ?t={lastModified}
+└─ React Query caches images and triggers re-render
 ```
 
 **Note**: We only fetch images, NOT the full gallery. Gallery metadata (bytes, settings) is updated separately via `refreshGalleryBytesOnly()`.
@@ -125,7 +124,7 @@ All uploads complete → onComplete callback triggered
 ```
 After all uploads complete:
 ├─ refreshGalleryBytesOnly() called (updates storage)
-├─ fetchGalleryImages() called ONCE
+├─ React Query invalidates and refetches images ONCE
 └─ All 10 images fetched in single API call
 ```
 
@@ -147,7 +146,7 @@ Client-side thumbnail generation (Uppy plugin)
 #### Step 5: Debounced Fetch
 ```
 After 2 seconds:
-├─ fetchGalleryImages() called with forceRefresh = true
+├─ React Query invalidates and refetches images
 ├─ API returns images with NEW lastModified timestamps
 ├─ Cache-busting applied: ?t={newLastModified} (S3 lastModified changes automatically)
 └─ Old cached image URLs become invalid
@@ -201,7 +200,7 @@ LazyRetryableImage receives src="https://s3.../image.jpg"
 #### Step 9: Preview Becomes Available (Later)
 ```
 User refreshes or navigates away and back:
-├─ fetchGalleryImages() called
+├─ React Query refetches images (or uses stale-while-revalidate)
 ├─ API now returns:
 │  {
 │    previewUrl: "https://cdn.../preview.webp",  // ✅ Now available
@@ -254,29 +253,24 @@ User refreshes or navigates away and back:
 - **Automatic**: Handled by unified image loading strategy in `image-fallback.ts`
 - **Simple**: Single timestamp parameter (`t`) instead of multiple
 
-## No Cache Policy
+## React Query Cache Management
 
 ### After Uploads
 
 ```typescript
-// gallerySlice.ts - fetchGalleryImages()
-fetchGalleryImages: async (galleryId: string, forceRefresh = false) => {
-  if (forceRefresh) {
-    // Clear cache when force refreshing
-    state.invalidateGalleryImagesCache(galleryId);
-  }
-  
-  // Always fetch fresh - no cache to avoid old state
-  const response = await api.galleries.getImages(galleryId);
-  // ...
-}
+// React Query automatically handles cache invalidation
+queryClient.invalidateQueries({
+  queryKey: queryKeys.galleries.images(galleryId, 'thumb')
+});
+// React Query refetches automatically after invalidation
 ```
 
-### Why No Cache?
+### Cache Strategy
 
-- **Prevents stale state**: After upload, we want fresh images immediately
-- **Handles replacements**: Old cached images won't show up
-- **Simpler logic**: No need to compare cached vs fresh data
+- **Automatic invalidation**: React Query invalidates stale queries after mutations
+- **Stale-while-revalidate**: Shows cached data while fetching fresh data in background
+- **Smart refetching**: Only refetches when data is stale or invalidated
+- **Prevents stale state**: Invalidation ensures fresh images after uploads
 
 ## Upload Completion Handling
 
@@ -290,8 +284,10 @@ uppy.on('complete', async (result) => {
     // Update storage bytes
     await refreshGalleryBytesOnly(galleryId, true);
     
-    // Refetch images
-    await fetchGalleryImages(galleryId, true);
+    // Invalidate and refetch images via React Query
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.galleries.images(galleryId, 'thumb')
+    });
     
     // Show success notification
     toast.success('Zdjęcia zostały przesłane pomyślnie');
@@ -306,7 +302,7 @@ T=0s:   Upload 1 succeeds → ThumbnailUploadPlugin generates previews/thumbs
 T=0.5s: Upload 2 succeeds → ThumbnailUploadPlugin generates previews/thumbs
 T=1s:   Upload 3 succeeds → ThumbnailUploadPlugin generates previews/thumbs
 T=1.5s: Upload 4 succeeds → ThumbnailUploadPlugin generates previews/thumbs
-T=2s:   All uploads complete → onComplete callback → fetchGalleryImages() executes ONCE
+T=2s:   All uploads complete → onComplete callback → React Query invalidates and refetches ONCE
 ```
 
 ## RetryableImage Component
@@ -378,10 +374,10 @@ Step 3: S3 Upload fails
 ### Scenario 2: API Fetch Fails
 
 ```
-Step 6: fetchGalleryImages() fails
+Step 6: React Query fetch fails
 ├─ Error logged to console
-├─ Returns empty array []
-├─ Existing images remain visible
+├─ React Query shows error state
+├─ Existing cached images remain visible (if available)
 └─ RetryableImage will retry individual images
 ```
 
@@ -442,12 +438,11 @@ Step 7: RetryableImage retries 30 times
    - Key function: `useUppyUpload()` - Manages upload lifecycle
    - Post-upload: `onComplete` callback handles storage update and image refetch
 
-3. **gallerySlice.ts**
-   - Location: `frontend/dashboard/store/gallerySlice.ts`
-   - Cache-busting: `addCacheBustingToUrl()` (lines 11-49)
-   - Image processing: `applyCacheBustingToImage()` (lines 52-77)
-   - Fetch function: `fetchGalleryImages()` (lines 462-487)
-   - Cache invalidation: `invalidateGalleryImagesCache()` (line ~290)
+3. **useGalleryImages Hook**
+   - Location: `frontend/dashboard/hooks/queries/useGalleries.ts`
+   - React Query hook: `useGalleryImages()` for fetching and caching images
+   - Automatic cache management via React Query
+   - Query key: `['galleries', galleryId, 'images', type]`
 
 4. **photos.tsx** (Originals)
    - Location: `frontend/dashboard/pages/galleries/[id]/photos.tsx`
@@ -456,8 +451,8 @@ Step 7: RetryableImage retries 30 times
 
 5. **orders/[orderId].tsx** (Finals)
    - Location: `frontend/dashboard/pages/galleries/[id]/orders/[orderId].tsx`
-   - Reload function: `reloadGallery()` (lines 354-359)
-   - Image loading: `loadOrderData()` (lines 127-280)
+   - Image loading: Uses React Query hooks for data fetching
+   - Cache invalidation: Uses `queryClient.invalidateQueries()` after uploads
 
 6. **LazyRetryableImage.tsx**
    - Location: `frontend/dashboard/components/ui/LazyRetryableImage.tsx`

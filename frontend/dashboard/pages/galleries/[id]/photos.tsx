@@ -10,6 +10,7 @@ import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
+import { useGalleryImages } from "../../../hooks/queries/useGalleries";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
@@ -50,8 +51,11 @@ export default function GalleryPhotos() {
   });
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { fetchGalleryImages, galleryCreationLoading, setGalleryCreationLoading } =
-    useGalleryStore();
+  const { galleryCreationLoading, setGalleryCreationLoading } = useGalleryStore();
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const { refetch: refetchGalleryImages } = useGalleryImages(galleryIdForQuery, "thumb");
   // Don't start loading until galleryId is available from router
   const [loading, setLoading] = useState<boolean>(true);
   const [images, setImages] = useState<GalleryImage[]>([]);
@@ -155,8 +159,9 @@ export default function GalleryPhotos() {
       }
 
       try {
-        // Use store action - checks cache first, fetches if needed
-        const apiImages = await fetchGalleryImages(galleryId as string);
+        // Refetch images from React Query
+        const result = await refetchGalleryImages();
+        const apiImages = (result.data || []) as ApiImage[];
 
         // Map images to GalleryImage format
         // Include all properties from API response to ensure proper fallback handling
@@ -193,35 +198,25 @@ export default function GalleryPhotos() {
         }
       }
     },
-    [galleryId, showToast, fetchGalleryImages, deletingImagesRef, logSkippedLoad]
+    [galleryIdForQuery, showToast, refetchGalleryImages, deletingImagesRef, logSkippedLoad]
   );
 
   // Reload gallery after upload (simple refetch, no polling)
   const reloadGalleryAfterUpload = useCallback(async () => {
-    if (!galleryId) {
+    if (!galleryIdForQuery) {
       logSkippedLoad("reloadGalleryAfterUpload", "No galleryId provided", {});
       return;
     }
 
-    // Fetch fresh images
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const { fetchGalleryImages, galleryImages } = useGalleryStore.getState();
-    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-    if (!galleryIdStr || typeof galleryIdStr !== "string") {
-      return;
-    }
-    await fetchGalleryImages(galleryIdStr);
-
-    // Update local state from store
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const storeImagesRaw = galleryImages[galleryIdStr] ?? [];
-    const storeImages = storeImagesRaw as GalleryImage[];
+    // Refetch fresh images from React Query
+    const result = await refetchGalleryImages();
+    const storeImages = (result.data || []) as GalleryImage[];
 
     setImages((currentImages) => {
       const deletingImageKeys = Array.from(deletingImagesRef.current);
       return mergeGalleryImages(currentImages, storeImages, deletingImageKeys);
     });
-  }, [galleryId, deletingImagesRef, logSkippedLoad]);
+  }, [galleryIdForQuery, refetchGalleryImages, deletingImagesRef, logSkippedLoad]);
 
   // Clear galleryCreationLoading when gallery and images are fully loaded
   useEffect(() => {
@@ -241,12 +236,11 @@ export default function GalleryPhotos() {
       return;
     }
 
-    const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
     const isNewGallery = loadedGalleryIdRef.current !== galleryIdStr;
 
     // Only load if it's a new gallery (not already loaded)
     // GalleryLayoutWrapper handles gallery loading, we just need to load photos
-    if (isNewGallery) {
+    if (isNewGallery && galleryIdStr) {
       loadedGalleryIdRef.current = galleryIdStr;
     } else {
       logSkippedLoad("loadPhotos", "Gallery already loaded (not new)", {
@@ -311,7 +305,6 @@ export default function GalleryPhotos() {
   }
 
   // Use stable galleryId comparison instead of object references
-  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const currentGalleryId = gallery?.galleryId ?? "";
 
   const effectiveGallery = gallery;

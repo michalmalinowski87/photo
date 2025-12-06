@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
@@ -11,12 +11,13 @@ import Button from "../../components/ui/button/Button";
 import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
-import { useGallery } from "../../hooks/useGallery";
+import { useGallery } from "../../hooks/queries/useGalleries";
+import { useOrders } from "../../hooks/queries/useOrders";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore, useOrderStore } from "../../store";
+import { useGalleryStore } from "../../store";
 import type { Gallery } from "../../types";
 
 // List of filter route names that should not be treated as gallery IDs
@@ -122,7 +123,7 @@ async function handleWalletTopUpSuccess(
 async function pollGalleryPaymentStatus(
   _galleryIdStr: string,
   initialGalleryState: string | undefined,
-  reloadGallery: (() => Promise<void>) | undefined,
+  reloadGallery: (() => Promise<Gallery | null | undefined>) | undefined,
   loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void
 ): Promise<void> {
@@ -133,12 +134,7 @@ async function pollGalleryPaymentStatus(
   const poll = async (): Promise<void> => {
     try {
       // Reload gallery to check payment status
-      if (reloadGallery) {
-        await reloadGallery();
-      }
-
-      // Get updated gallery from store to check state
-      const updatedGallery = useGalleryStore.getState().currentGallery;
+      const updatedGallery = reloadGallery ? await reloadGallery() : null;
 
       // Check if gallery state changed from DRAFT to PAID_ACTIVE
       if (updatedGallery?.state === "PAID_ACTIVE" && initialGalleryState === "DRAFT") {
@@ -157,6 +153,7 @@ async function pollGalleryPaymentStatus(
         if (reloadGallery) {
           await reloadGallery();
         }
+        return;
         await loadOrders();
         showToast("success", "Sukces", "Płatność zakończona pomyślnie!");
         window.history.replaceState({}, "", window.location.pathname);
@@ -185,7 +182,7 @@ async function pollGalleryPaymentStatus(
 async function handleGalleryPaymentSuccess(
   galleryIdStr: string,
   gallery: Gallery,
-  reloadGallery: (() => Promise<void>) | undefined,
+  reloadGallery: (() => Promise<Gallery | null | undefined>) | undefined,
   loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void
 ): Promise<void> {
@@ -210,21 +207,23 @@ export default function GalleryDetail() {
   const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
     pageName: "GalleryDetail",
   });
-  const galleryContext = useGallery();
-  const gallery = galleryContext.gallery as Gallery | null;
-  const galleryLoading = galleryContext.loading;
-  const reloadGallery = galleryContext.reloadGallery;
-  const { fetchGalleryOrders } = useGalleryStore();
-  const { isNonSelectionGallery } = useGalleryType();
-
-  // Use store state directly - no local state needed!
-  const { getOrdersByGalleryId, isLoading: orderLoading } = useOrderStore();
-  const orders = useOrderStore((_state) => {
-    if (!galleryId) {
-      return [];
+  // Use React Query hook for gallery data
+  const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const {
+    data: gallery,
+    isLoading: galleryLoading,
+    refetch: refetchGallery,
+  } = useGallery(galleryIdForQuery);
+  const reloadGallery = useCallback(async (): Promise<Gallery | null | undefined> => {
+    if (galleryIdStr) {
+      const result = await refetchGallery();
+      return result.data ?? null;
     }
-    return getOrdersByGalleryId(galleryId as string);
-  });
+    return null;
+  }, [galleryIdStr, refetchGallery]);
+  const { isNonSelectionGallery } = useGalleryType();
 
   const [showSendLinkModal, setShowSendLinkModal] = useState<boolean>(false);
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
@@ -244,19 +243,25 @@ export default function GalleryDetail() {
   const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
   const setGalleryCreationLoading = useGalleryStore((state) => state.setGalleryCreationLoading);
 
+  const {
+    data: orders = [],
+    isLoading: orderLoading,
+    refetch: refetchOrders,
+  } = useOrders(galleryIdForQuery);
+
   const loadOrders = async (): Promise<void> => {
-    if (!galleryId) {
+    if (!galleryIdForQuery) {
       return;
     }
 
-    const galleryIdStr = galleryId as string;
-    logDataLoad("orders", { galleryId: galleryIdStr });
+    logDataLoad("orders", { galleryId: galleryIdForQuery });
 
     try {
-      const loadedOrders = await fetchGalleryOrders(galleryIdStr);
+      const result = await refetchOrders();
+      const loadedOrders = result.data || [];
       logDataLoaded("orders", loadedOrders, {
         count: loadedOrders.length,
-        galleryId: galleryIdStr,
+        galleryId: galleryIdForQuery,
       });
     } catch (err) {
       logDataError("orders", err);
@@ -276,7 +281,6 @@ export default function GalleryDetail() {
 
   // Don't render gallery detail if this is a filter route - let Next.js handle static routes
   // Check this AFTER hooks to avoid conditional hook call
-  const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
   const isFilterRoute = router.isReady && galleryId && FILTER_ROUTES.includes(String(galleryId));
 
   useEffect(() => {
@@ -356,47 +360,47 @@ export default function GalleryDetail() {
 
   // Redirect non-selection galleries to order view
   useEffect(() => {
-    if (!galleryId || !gallery || !isNonSelectionGallery || !router.isReady) {
+    if (!galleryIdForQuery || !gallery || !isNonSelectionGallery || !router.isReady) {
       return;
     }
 
     // Only redirect if we're on the gallery detail page (not already on order page)
     if (router.pathname === "/galleries/[id]" && !router.asPath.includes("/orders/")) {
-      const redirectToOrder = async () => {
-        try {
-          const galleryIdStr = galleryId as string;
-          const cachedOrders = getOrdersByGalleryId(galleryIdStr);
-          if (cachedOrders && cachedOrders.length > 0) {
-            const firstOrder = cachedOrders[0];
-            const orderId = firstOrder?.orderId;
-            if (orderId && typeof orderId === "string") {
-              void router.replace(`/galleries/${galleryIdStr}/orders/${orderId}`);
-            }
-          } else {
-            const orders = await fetchGalleryOrders(galleryIdStr);
-            if (orders?.length > 0) {
-              const firstOrder = orders[0];
+      // Use orders from React Query
+      if (orders.length > 0) {
+        const firstOrder = orders[0];
+        if (firstOrder?.orderId) {
+          void router.replace(`/galleries/${galleryIdForQuery}/orders/${firstOrder.orderId}`);
+        }
+      } else {
+        // If no orders in cache, refetch and redirect
+        const redirectToOrder = async () => {
+          try {
+            const result = await refetchOrders();
+            const fetchedOrders = result.data || [];
+            if (fetchedOrders.length > 0) {
+              const firstOrder = fetchedOrders[0];
               if (firstOrder?.orderId) {
-                void router.replace(`/galleries/${galleryIdStr}/orders/${firstOrder.orderId}`);
+                void router.replace(`/galleries/${galleryIdForQuery}/orders/${firstOrder.orderId}`);
               }
             }
+          } catch (err) {
+            console.error("Failed to fetch orders for redirect:", err);
           }
-        } catch (err) {
-          console.error("Failed to fetch orders for redirect:", err);
-        }
-      };
-      void redirectToOrder();
+        };
+        void redirectToOrder();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    galleryId,
+    galleryIdForQuery,
     gallery,
     isNonSelectionGallery,
     router.isReady,
     router.pathname,
     router.asPath,
-    fetchGalleryOrders,
-    getOrdersByGalleryId,
+    orders,
+    refetchOrders,
   ]);
 
   const handleApproveChangeRequest = async (orderId: string): Promise<void> => {

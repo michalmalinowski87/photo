@@ -11,11 +11,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
+import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
+import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import type { Gallery } from "../../types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
@@ -51,85 +53,60 @@ const GalleryList: React.FC<GalleryListProps> = ({
   });
   const [publishWizardOpen, setPublishWizardOpen] = useState(false);
   const [publishWizardGalleryId, setPublishWizardGalleryId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
   const initialLoadRef = useRef(true);
-  const [error, setError] = useState("");
-
-  const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedGalleryIdForLoading, setSelectedGalleryIdForLoading] = useState<string | null>(
     null
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useToast();
-  // Removed wallet balance refresh - only refresh on wallet page and publish wizard
 
-  const loadGalleries = useCallback(async () => {
-    logDataLoad("galleries", { filter });
-    const isInitialLoad = initialLoadRef.current;
+  // Use React Query hook for galleries
+  const {
+    data: galleries = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useGalleries(filter);
 
-    if (onLoadingChange && isInitialLoad) {
-      initialLoadRef.current = false;
-      setInitialLoad(false);
-      setLoading(false);
-      onLoadingChange(false, false);
+  // Track initial load for onLoadingChange callback
+  const initialLoad = loading && initialLoadRef.current;
+
+  // Log data loading
+  useEffect(() => {
+    if (loading) {
+      logDataLoad("galleries", { filter });
     }
-
-    setLoading(true);
-    setError("");
-
-    if (onLoadingChange && isInitialLoad) {
-      onLoadingChange(true, true);
-    }
-
-    try {
-      // Pass filter to API for server-side filtering
-      const response = await api.galleries.list(filter);
-      const galleriesList = Array.isArray(response) ? response : (response.items ?? []);
-
-      logDataLoaded("galleries", galleriesList, {
-        count: galleriesList.length,
-        filter,
-      });
-      setGalleries(galleriesList);
-
-      if (isInitialLoad) {
-        initialLoadRef.current = false;
-        setInitialLoad(false);
-      }
-    } catch (err) {
-      logDataError("galleries", err);
-      setError(formatApiError(err));
-      if (isInitialLoad) {
-        initialLoadRef.current = false;
-        setInitialLoad(false);
-      }
-    } finally {
-      setLoading(false);
-      if (onLoadingChange) {
-        onLoadingChange(false, false);
-      }
-    }
-  }, [filter, onLoadingChange, logDataLoad, logDataLoaded, logDataError]);
-
-  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
+  }, [loading, filter, logDataLoad]);
 
   useEffect(() => {
-    void loadGalleries();
-  }, [filter, loadGalleries]);
+    if (!loading && galleries.length > 0) {
+      logDataLoaded("galleries", galleries, {
+        count: galleries.length,
+        filter,
+      });
+      if (initialLoadRef.current) {
+        initialLoadRef.current = false;
+      }
+    }
+  }, [loading, galleries, filter, logDataLoaded]);
 
-  // Removed reactive wizard closing - handle explicitly in navigation handlers
+  useEffect(() => {
+    if (queryError) {
+      logDataError("galleries", queryError);
+    }
+  }, [queryError, logDataError]);
 
   // Notify parent of loading state changes
   useEffect(() => {
     if (onLoadingChange) {
       onLoadingChange(loading, initialLoad);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, initialLoad]);
+  }, [loading, initialLoad, onLoadingChange]);
+
+  // Delete mutation
+  const deleteGalleryMutation = useDeleteGallery();
 
   const handlePayClick = (galleryId: string) => {
     setSelectedGalleryIdForLoading(galleryId);
@@ -141,7 +118,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const handlePaymentComplete = async () => {
     // Reload galleries after payment
     // Wallet balance is refreshed by PublishGalleryWizard
-    await loadGalleries();
+    await refetch();
   };
 
   const handleDeleteClick = (gallery: Gallery) => {
@@ -154,22 +131,16 @@ const GalleryList: React.FC<GalleryListProps> = ({
       return;
     }
 
-    setDeleteLoading(true);
-
     try {
-      await api.galleries.delete(galleryToDelete.galleryId);
+      await deleteGalleryMutation.mutateAsync(galleryToDelete.galleryId);
 
       showToast("success", "Sukces", "Galeria została usunięta");
       setShowDeleteDialog(false);
       setGalleryToDelete(null);
-
-      // Reload galleries list
-      await loadGalleries();
+      // React Query will automatically refetch galleries list due to invalidation
     } catch (err) {
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
-    } finally {
-      setDeleteLoading(false);
     }
   };
 
@@ -293,7 +264,9 @@ const GalleryList: React.FC<GalleryListProps> = ({
       )}
       {!publishWizardOpen && (
         <div className="space-y-4">
-          {error && <div>{error}</div>}
+          {queryError && (
+            <div className="text-red-600 dark:text-red-400">{formatApiError(queryError)}</div>
+          )}
 
           {loading ? (
             <InlineLoading text="Ładowanie galerii..." />
@@ -360,7 +333,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                             }
                           }}
                         >
-                          {(gallery.galleryName ?? gallery.galleryId) as string}
+                          {gallery.galleryName ?? gallery.galleryId}
                         </Link>
                         {!gallery.galleryName && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -433,7 +406,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                             size="sm"
                             variant="outline"
                             onClick={() => handleDeleteClick(gallery)}
-                            disabled={deleteLoading}
+                            disabled={deleteGalleryMutation.isPending}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
                             startIcon={<Trash2 size={16} />}
                           >
@@ -452,7 +425,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
           <ConfirmDialog
             isOpen={showDeleteDialog}
             onClose={() => {
-              if (!deleteLoading) {
+              if (!deleteGalleryMutation.isPending) {
                 setShowDeleteDialog(false);
                 setGalleryToDelete(null);
               }
@@ -463,7 +436,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
             confirmText="Usuń galerię"
             cancelText="Anuluj"
             variant="danger"
-            loading={deleteLoading}
+            loading={deleteGalleryMutation.isPending}
           />
         </div>
       )}
@@ -472,7 +445,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => {
-          if (!deleteLoading) {
+          if (!deleteGalleryMutation.isPending) {
             setShowDeleteDialog(false);
             setGalleryToDelete(null);
           }
@@ -483,7 +456,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
         confirmText="Usuń galerię"
         cancelText="Anuluj"
         variant="danger"
-        loading={deleteLoading}
+        loading={deleteGalleryMutation.isPending}
       />
     </>
   );

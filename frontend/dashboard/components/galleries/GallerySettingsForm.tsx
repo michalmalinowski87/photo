@@ -2,11 +2,11 @@ import { AlertTriangle, Save } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback } from "react";
 
+import { useGallery } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/currency";
 import { generatePassword } from "../../lib/password";
-import { useGalleryStore } from "../../store";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
 
@@ -36,57 +36,15 @@ export function GallerySettingsForm({
   const router = useRouter();
   const { showToast } = useToast();
 
-  // Get gallery from store
-  const isLoading = useGalleryStore((state) => state.isLoading);
-  const fetchGallery = useGalleryStore((state) => state.fetchGallery);
-
-  // Use selector to get gallery
-  const gallery = useGalleryStore((state) => {
-    const storeGallery = state.currentGallery;
-    const storeGalleryId = storeGallery?.galleryId;
-
-    // Determine which galleryId to use - prefer URL, fallback to store
-    const targetGalleryId = galleryId ?? storeGalleryId;
-
-    if (targetGalleryId) {
-      // If store has gallery and it matches target, use it
-      if (storeGallery?.galleryId === targetGalleryId) {
-        return storeGallery;
-      }
-    }
-
-    // Fallback to store gallery (might be from previous route during navigation)
-    return storeGallery;
-  });
-
-  // Only show loading if store is actively loading AND we don't have gallery (including cached)
-  const galleryLoading = isLoading && !gallery;
-
-  // Only log when state actually changes to reduce spam
-  const prevStateRef = React.useRef({
-    galleryId,
-    hasGallery: !!gallery,
-    isLoading,
-  });
-
-  if (
-    prevStateRef.current.galleryId !== galleryId ||
-    prevStateRef.current.hasGallery !== !!gallery ||
-    prevStateRef.current.isLoading !== isLoading
-  ) {
-    prevStateRef.current = {
-      galleryId,
-      hasGallery: !!gallery,
-      isLoading,
-    };
-  }
+  // Use React Query hooks
+  const { data: gallery, isLoading: galleryLoading, refetch: refetchGallery } = useGallery(galleryId);
 
   // Reload gallery function
   const reloadGallery = useCallback(async () => {
     if (galleryId) {
-      await fetchGallery(galleryId);
+      await refetchGallery();
     }
-  }, [galleryId, fetchGallery]);
+  }, [galleryId, refetchGallery]);
 
   // Don't fetch gallery here - GalleryLayoutWrapper handles all gallery fetching
   // This component should only read from the store, not trigger fetches
@@ -204,6 +162,7 @@ export function GallerySettingsForm({
       }
 
       showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
+      // Invalidate and refetch gallery data
       await reloadGallery();
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));

@@ -1,42 +1,55 @@
 import { useRouter } from "next/router";
 import { useCallback } from "react";
 
-import { useGalleryStore, useOrderStore } from "../store";
+import { useGallery as useGalleryQuery } from "./queries/useGalleries";
+import { useOrder as useOrderQuery } from "./queries/useOrders";
 
 /**
- * Hook for accessing gallery data from Zustand store
- * This replaces useGallery from GalleryContext
+ * Hook for accessing gallery data from React Query
+ * This replaces the old Zustand-based useGallery hook
  *
  * @returns Object with gallery, loading, error, galleryId, reloadGallery, reloadOrder
  */
 export const useGallery = () => {
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
-  const currentGallery = useGalleryStore((state) => state.currentGallery);
-  const isLoading = useGalleryStore((state) => state.isLoading);
-  const error = useGalleryStore((state) => state.error);
-  const fetchGallery = useGalleryStore((state) => state.fetchGallery);
-  const fetchOrder = useOrderStore((state) => state.fetchOrder);
+
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
+
+  const {
+    data: gallery,
+    isLoading,
+    error,
+    refetch: refetchGallery,
+  } = useGalleryQuery(galleryIdForQuery);
+
+  const { refetch: refetchOrder } = useOrderQuery(galleryIdForQuery, orderIdForQuery, {
+    enabled: false,
+  });
 
   const reloadGallery = useCallback(async () => {
-    if (galleryId && typeof galleryId === "string") {
-      await fetchGallery(galleryId);
+    if (galleryIdForQuery) {
+      await refetchGallery();
     }
-  }, [galleryId, fetchGallery]);
+  }, [galleryIdForQuery, refetchGallery]);
 
-  // Get reloadOrder from useOrderStore if orderId exists
   const reloadOrder = useCallback(async () => {
-    if (galleryId && orderId && typeof galleryId === "string" && typeof orderId === "string") {
-      await fetchOrder(galleryId, orderId);
+    if (galleryIdForQuery && orderIdForQuery) {
+      await refetchOrder();
     }
-  }, [galleryId, orderId, fetchOrder]);
+  }, [galleryIdForQuery, orderIdForQuery, refetchOrder]);
 
   return {
-    gallery: currentGallery,
+    gallery: gallery ?? null,
     loading: isLoading,
-    error,
-    galleryId: galleryId as string | undefined,
+    error: error ? (error instanceof Error ? error.message : String(error)) : null,
+    galleryId: galleryIdForQuery,
     reloadGallery,
-    reloadOrder: orderId ? reloadOrder : undefined,
+    reloadOrder: orderIdForQuery ? reloadOrder : undefined,
   };
 };

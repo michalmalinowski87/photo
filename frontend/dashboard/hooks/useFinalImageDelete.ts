@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import api, { formatApiError } from "../lib/api-service";
-import { useGalleryStore, useOrderStore } from "../store";
+import { queryKeys } from "../lib/react-query";
 import type { GalleryImage } from "../types";
 
 import { useToast } from "./useToast";
@@ -20,7 +21,10 @@ export const useFinalImageDelete = ({
   setOptimisticFinalsBytes,
 }: UseFinalImageDeleteOptions) => {
   const { showToast } = useToast();
-  const fetchOrder = useOrderStore((state) => state.fetchOrder);
+  const queryClient = useQueryClient();
+  
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -72,7 +76,6 @@ export const useFinalImageDelete = ({
         }
 
         // Optimistically remove image from list immediately after successful delete
-        const imageSize = image.size || 0;
         let wasLastImage = false;
 
         setFinalImages((prevImages) => {
@@ -87,21 +90,14 @@ export const useFinalImageDelete = ({
           return remainingImages;
         });
 
-        // Update Zustand store optimistically after state update (side panel will pull from here)
-        // Do this after setState to avoid React warning about setState during render
-        const { currentGallery, updateFinalsBytesUsed } = useGalleryStore.getState();
-        if (currentGallery && imageSize > 0) {
-          // Use requestAnimationFrame to schedule after current render cycle
-          requestAnimationFrame(() => {
-            updateFinalsBytesUsed(-imageSize);
-          });
-        }
-
         // If this was the last image, refresh order to get updated status
-        if (wasLastImage) {
+        if (wasLastImage && galleryIdStr && orderIdStr) {
           void (async () => {
             try {
-              await fetchOrder(galleryIdStr, orderIdStr);
+              // Invalidate order query to refetch
+              await queryClient.invalidateQueries({
+                queryKey: queryKeys.orders.detail(galleryIdStr, orderIdStr),
+              });
             } catch (statusErr) {
               // eslint-disable-next-line no-console
               console.error(
@@ -187,7 +183,9 @@ export const useFinalImageDelete = ({
       setOptimisticFinalsBytes,
       deletingImages,
       deletedImageKeys,
-      fetchOrder,
+      queryClient,
+      galleryIdStr,
+      orderIdStr,
       showToast,
     ]
   );

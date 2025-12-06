@@ -2,9 +2,10 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useRef } from "react";
 
+import { useUpdateGallery } from "../../../hooks/mutations/useGalleryMutations";
+import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store";
 import { RetryableImage } from "../../ui/RetryableImage";
 
 export const CoverPhotoUpload: React.FC = () => {
@@ -12,11 +13,9 @@ export const CoverPhotoUpload: React.FC = () => {
   const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const galleryId = typeof galleryIdParam === "string" ? galleryIdParam : undefined;
 
-  // Subscribe directly to store
-  const gallery = useGalleryStore((state) => state.currentGallery);
-  const isLoading = useGalleryStore((state) => state.isLoading);
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return
-  const updateCoverPhotoUrl = useGalleryStore((state) => state.updateCoverPhotoUrl);
+  // Use React Query hooks
+  const { data: gallery, isLoading } = useGallery(galleryId);
+  const updateGalleryMutation = useUpdateGallery();
 
   const coverPhotoUrl = gallery?.coverPhotoUrl ?? null;
   const { showToast } = useToast();
@@ -91,9 +90,13 @@ export const CoverPhotoUpload: React.FC = () => {
             !fetchedUrl.includes(".s3.") &&
             !fetchedUrl.includes("s3.amazonaws.com")
           ) {
-            // Update store directly - no full gallery reload needed
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            updateCoverPhotoUrl(fetchedUrl);
+            // Update gallery via mutation (will invalidate cache)
+            if (galleryId) {
+              await updateGalleryMutation.mutateAsync({
+                galleryId,
+                data: { coverPhotoUrl: fetchedUrl },
+              });
+            }
             setProcessingCover(false);
             showToast("success", "Sukces", "Okładka galerii została przesłana");
             return;
@@ -134,12 +137,16 @@ export const CoverPhotoUpload: React.FC = () => {
     try {
       // Remove cover photo by setting coverPhotoUrl to null
       await api.galleries.update(galleryId, {
-        coverPhotoUrl: null,
+        coverPhotoUrl: undefined,
       });
 
-      // Update store directly - no full gallery reload needed
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      updateCoverPhotoUrl(null);
+      // Update gallery via mutation (will invalidate cache)
+      if (galleryId) {
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: { coverPhotoUrl: undefined },
+        });
+      }
       showToast("success", "Sukces", "Okładka galerii została usunięta");
     } catch (err: unknown) {
       showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");

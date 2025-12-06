@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { useNavigation } from "../../../hooks/useNavigation";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
-import { useGalleryStore } from "../../../store";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
@@ -19,7 +18,6 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
 }) => {
   const { replace } = useNavigation();
   const { showToast } = useToast();
-  const { clearCurrentGallery } = useGalleryStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -43,10 +41,8 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
     try {
       await api.galleries.delete(galleryId);
 
-      // Clear gallery state explicitly before navigation
-      clearCurrentGallery();
-
       // Navigate with explicit cleanup (navigation utility handles additional cleanup)
+      // React Query cache will be invalidated automatically on navigation
       void replace("/");
 
       // Show toast after navigation starts

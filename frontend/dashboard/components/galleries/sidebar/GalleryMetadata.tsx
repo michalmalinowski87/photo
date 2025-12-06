@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import React from "react";
 
-import { useGalleryStore } from "../../../store";
+import { useGallery } from "../../../hooks/queries/useGalleries";
 
 interface GalleryMetadataProps {
   shouldHideSecondaryElements: boolean;
@@ -10,21 +10,14 @@ interface GalleryMetadataProps {
 export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
   shouldHideSecondaryElements,
 }) => {
-  // Use cache-aware selector to get gallery (same as GallerySidebar)
+  // Use React Query hook for gallery data
   const router = useRouter();
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  const gallery = useGalleryStore((state) => {
-    const storeGallery = state.currentGallery;
-    // If store has gallery and it matches, use it
-    if (storeGallery?.galleryId === galleryIdStr) {
-      return storeGallery;
-    }
-    return storeGallery;
-  });
-
-  const isLoading = useGalleryStore((state) => state.isLoading);
+  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
 
   // Don't render until gallery data is loaded
   if (isLoading || !gallery || shouldHideSecondaryElements) {
