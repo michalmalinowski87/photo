@@ -4,7 +4,7 @@ import { formatBytes } from "../../utils/format-bytes";
 
 interface StorageDisplayProps {
   /** Current bytes used */
-  bytesUsed: number;
+  bytes: number;
   /** Limit bytes (optional - if not provided, only shows used) */
   limitBytes?: number;
   /** Label for the storage type (e.g., "Oryginały", "Finalne") */
@@ -18,19 +18,19 @@ interface StorageDisplayProps {
  * Used in upload zones and other places where storage needs to be shown
  */
 export const StorageDisplay: React.FC<StorageDisplayProps> = ({
-  bytesUsed,
+  bytes,
   limitBytes,
   label,
   isLoading = false,
 }) => {
-  const usagePercentage = limitBytes ? (bytesUsed / limitBytes) * 100 : 0;
+  const usagePercentage = limitBytes ? (bytes / limitBytes) * 100 : 0;
   const isWarning = usagePercentage > 75 && usagePercentage <= 90;
   const isError = usagePercentage > 90;
 
   return (
     <div>
       <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-        {label}: {formatBytes(bytesUsed)}
+        {label}: {formatBytes(bytes)}
         {limitBytes !== undefined && (
           <span className="text-gray-500"> / {formatBytes(limitBytes)}</span>
         )}

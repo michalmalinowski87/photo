@@ -8,14 +8,14 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 /**
  * S3 event handler for PUT operations (file uploads)
- * Updates bytesUsed atomically when files are uploaded to S3
+ * Updates storage usage atomically when files are uploaded to S3
  * 
  * Handles:
  * - Original images: galleries/{galleryId}/originals/{filename}
  * - Final images: galleries/{galleryId}/final/{orderId}/{filename}
  * 
  * Ignores:
- * - Thumbnails, previews, bigthumbs (not counted in bytesUsed)
+ * - Thumbnails, previews, bigthumbs (not counted in storage usage)
  * - Other paths
  */
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -61,7 +61,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const originalsMatch = objectKey.match(/^galleries\/([^\/]+)\/originals\/(.+)$/);
 			const finalsMatch = objectKey.match(/^galleries\/([^\/]+)\/final\/[^\/]+\/(.+)$/);
 
-			// Skip thumbnails, previews, bigthumbs (not counted in bytesUsed)
+			// Skip thumbnails, previews, bigthumbs (not counted in storage usage)
 			if (objectKey.includes('/thumbs/') || 
 			    objectKey.includes('/previews/') || 
 			    objectKey.includes('/bigthumbs/')) {
@@ -133,7 +133,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Update bytesUsed atomically for all affected galleries
+	// Update storage usage atomically for all affected galleries
 	for (const [galleryId, uploads] of galleryUploads.entries()) {
 		try {
 			const updateExpressions: string[] = [];
@@ -149,13 +149,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				expressionValues[':finalsSize'] = uploads.finals;
 			}
 
-			// Also update bytesUsed for backward compatibility (sum of both)
-			if (uploads.originals > 0 || uploads.finals > 0) {
-				const totalSize = uploads.originals + uploads.finals;
-				updateExpressions.push('bytesUsed :totalSize');
-				expressionValues[':totalSize'] = totalSize;
-			}
-
 			if (updateExpressions.length > 0) {
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
@@ -164,7 +157,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					ExpressionAttributeValues: expressionValues
 				}));
 
-				logger?.info('Updated gallery bytesUsed after S3 PUT (atomic)', {
+				logger?.info('Updated gallery storage usage after S3 PUT (atomic)', {
 					galleryId,
 					originalsAdded: uploads.originals,
 					finalsAdded: uploads.finals,
@@ -172,13 +165,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				});
 			}
 		} catch (updateErr: any) {
-			logger?.warn('Failed to update gallery bytesUsed after S3 PUT', {
+			logger?.warn('Failed to update gallery storage usage after S3 PUT', {
 				error: updateErr.message,
 				galleryId,
 				originalsAdded: uploads.originals,
 				finalsAdded: uploads.finals
 			});
-			// Don't fail the entire batch - bytesUsed update is important but not critical
+			// Don't fail the entire batch - storage update is important but not critical
 		}
 	}
 

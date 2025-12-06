@@ -243,9 +243,6 @@ export function useDeleteFinalImage() {
       await queryClient.cancelQueries({
         queryKey: queryKeys.galleries.detail(galleryId),
       });
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.galleries.bytesUsed(galleryId),
-      });
 
       // Snapshot previous values
       interface FinalImage {
@@ -259,10 +256,6 @@ export function useDeleteFinalImage() {
         queryKeys.orders.finalImages(galleryId, orderId)
       );
       const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
-      const previousBytesUsed = queryClient.getQueryData<{
-        originalsBytesUsed: number;
-        finalsBytesUsed: number;
-      }>(queryKeys.galleries.bytesUsed(galleryId));
 
       // Get file size from image cache before removing it
       const imageToDelete = previousFinalImages?.find(
@@ -279,30 +272,20 @@ export function useDeleteFinalImage() {
       );
 
       // Optimistically decrease finalsBytesUsed if we have file size
+      // Backend handles setting storage to 0 when no images remain (safety check in onS3DeleteBatch)
       if (fileSize > 0) {
-        queryClient.setQueryData<{
-          originalsBytesUsed: number;
-          finalsBytesUsed: number;
-        }>(queryKeys.galleries.bytesUsed(galleryId), (old) => {
-          const current = old || { originalsBytesUsed: 0, finalsBytesUsed: 0 };
-          return {
-            originalsBytesUsed: current.originalsBytesUsed, // Only finals are deleted here
-            finalsBytesUsed: Math.max(0, current.finalsBytesUsed - fileSize),
-          };
-        });
-
-        // Also update bytesUsed in gallery detail if it exists
+        // Update storage usage in gallery detail if it exists
         queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
           if (!old) return old;
           return {
             ...old,
             finalsBytesUsed: Math.max(0, (old.finalsBytesUsed || 0) - fileSize),
-            bytesUsed: Math.max(0, (old.bytesUsed || 0) - fileSize),
+            // Total storage is computed dynamically: originalsBytesUsed + finalsBytesUsed
           };
         });
       }
 
-      return { previousFinalImages, previousGallery, previousBytesUsed, fileSize };
+      return { previousFinalImages, previousGallery, fileSize };
     },
     onError: (_err, variables, context) => {
       // Rollback on error
@@ -318,12 +301,6 @@ export function useDeleteFinalImage() {
           context.previousGallery
         );
       }
-      if (context?.previousBytesUsed) {
-        queryClient.setQueryData(
-          queryKeys.galleries.bytesUsed(variables.galleryId),
-          context.previousBytesUsed
-        );
-      }
       // On error, invalidate to refetch and ensure consistency
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
@@ -331,12 +308,9 @@ export function useDeleteFinalImage() {
     },
     onSuccess: (_data, variables) => {
       // On success, optimistic update is already applied
-      // After a delay, invalidate bytesUsed to get real value from backend
+      // After a delay, invalidate storage usage to get real value from backend
       // This reconciles any differences between optimistic and actual values
       setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
-        });
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.detail(variables.galleryId),
         });
@@ -420,9 +394,6 @@ export function useDeleteFinalImagesBatch() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
-      });
     },
   });
 }
@@ -442,9 +413,6 @@ export function useCleanupOriginals() {
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "originals"),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
       });
     },
   });
@@ -636,9 +604,6 @@ export function useUploadFinalPhotos() {
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
       });
     },
   });

@@ -171,12 +171,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		type,
 		originalsBytesUsed: updatedGallery.Item?.originalsBytesUsed,
 		finalsBytesUsed: updatedGallery.Item?.finalsBytesUsed,
-		bytesUsed: updatedGallery.Item?.bytesUsed,
 	});
 
 	if (type === 'final') {
 		const updatedFinalsBytesUsed = Math.max(updatedGallery.Item?.finalsBytesUsed || 0, 0);
-		const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0);
 		const finalsLimitBytes = updatedGallery.Item?.finalsLimitBytes || 0;
 
 		return {
@@ -188,7 +186,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				orderId,
 				count: filenames.length,
 				finalsBytesUsed: updatedFinalsBytesUsed,
-				bytesUsed: updatedBytesUsed,
 				finalsLimitBytes,
 				finalsUsedMB: (updatedFinalsBytesUsed / (1024 * 1024)).toFixed(2),
 				finalsLimitMB: (finalsLimitBytes / (1024 * 1024)).toFixed(2)
@@ -196,7 +193,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	} else {
 		const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
-		const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0); // Backward compatibility
 		const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
 
 		return {
@@ -207,7 +203,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleryId,
 				count: filenames.length,
 				originalsBytesUsed: updatedOriginalsBytesUsed,
-				bytesUsed: updatedBytesUsed, // Backward compatibility
 				originalsLimitBytes,
 				originalsUsedMB: (updatedOriginalsBytesUsed / (1024 * 1024)).toFixed(2),
 				originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2)

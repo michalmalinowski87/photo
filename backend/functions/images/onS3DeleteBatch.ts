@@ -17,7 +17,7 @@ function getWebpFilename(fname: string): string {
 
 /**
  * Process a single delete operation
- * Returns file size for bytesUsed update (only for original/final files, not thumbnails)
+ * Returns file size for storage update (only for original/final files, not thumbnails)
  */
 async function processDelete(
 	deleteRequest: {
@@ -33,7 +33,7 @@ async function processDelete(
 	const { type, galleryId, orderId, filename, originalKey } = deleteRequest;
 	
 	try {
-		// Get file size BEFORE deletion for bytesUsed update (only count original/final, not thumbnails)
+		// Get file size BEFORE deletion for storage update (only count original/final, not thumbnails)
 		let fileSize = 0;
 		try {
 			const headResponse = await s3.send(new HeadObjectCommand({
@@ -179,14 +179,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			batch.map(deleteReq => processDelete(deleteReq, bucket, logger))
 		);
 
-		// Collect gallery IDs, track final image deletes, and accumulate file sizes for bytesUsed updates
+		// Collect gallery IDs, track final image deletes, and accumulate file sizes for storage updates
 		results.forEach((result, index) => {
 			if (result.status === 'fulfilled' && result.value?.success) {
 				const deleteReq = batch[index];
 				const deleteResult = result.value;
 				processedGalleries.add(deleteResult.galleryId);
 				
-				// Accumulate file sizes for bytesUsed updates (only count original/final files, not thumbnails)
+				// Accumulate file sizes for storage updates (only count original/final files, not thumbnails)
 				if (deleteResult.fileSize && deleteResult.fileSize > 0) {
 					const galleryId = deleteResult.galleryId;
 					if (!galleryBytesToSubtract.has(galleryId)) {
@@ -215,7 +215,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 
-	// Update bytesUsed atomically for all affected galleries
+	// Update storage usage atomically for all affected galleries
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	if (galleriesTable && galleryBytesToSubtract.size > 0) {
 		for (const [galleryId, bytes] of galleryBytesToSubtract.entries()) {
@@ -235,12 +235,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					expressionValues[':negativeFinalsSize'] = -bytes.finals;
 				}
 				
-				// Also update bytesUsed for backward compatibility (sum of both)
-				if (bytes.originals > 0 || bytes.finals > 0) {
-					const totalNegativeSize = -(bytes.originals + bytes.finals);
-					updateExpressions.push('bytesUsed :negativeTotalSize');
-					expressionValues[':negativeTotalSize'] = totalNegativeSize;
-				}
 				
 				if (updateExpressions.length > 0) {
 					await ddb.send(new UpdateCommand({
@@ -258,15 +252,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					
 					const updatedOriginalsBytesUsed = updatedGallery.Item?.originalsBytesUsed || 0;
 					const updatedFinalsBytesUsed = updatedGallery.Item?.finalsBytesUsed || 0;
-					const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
 					
 					// If value went negative (shouldn't happen, but handle edge cases), set to 0
-					if (updatedOriginalsBytesUsed < 0 || updatedFinalsBytesUsed < 0 || updatedBytesUsed < 0) {
-						logger?.warn('bytesUsed went negative after atomic delete update, correcting', {
+					if (updatedOriginalsBytesUsed < 0 || updatedFinalsBytesUsed < 0) {
+						logger?.warn('Storage usage went negative after atomic delete update, correcting', {
 							galleryId,
 							updatedOriginalsBytesUsed,
 							updatedFinalsBytesUsed,
-							updatedBytesUsed,
 							originalsRemoved: bytes.originals,
 							finalsRemoved: bytes.finals
 						});
@@ -282,10 +274,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							setExpressions.push('finalsBytesUsed = :zero');
 							setValues[':zero'] = 0;
 						}
-						if (updatedBytesUsed < 0) {
-							setExpressions.push('bytesUsed = :zero');
-							setValues[':zero'] = 0;
-						}
 						
 						if (setExpressions.length > 0) {
 							await ddb.send(new UpdateCommand({
@@ -297,24 +285,117 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}
 					}
 					
-					logger?.info('Updated gallery bytesUsed after batch delete (atomic)', {
+					// Safety check: Verify if gallery has any remaining images in S3
+					// If no images remain, ensure storage usage fields are set to 0
+					// This catches edge cases where storage might be slightly above 0 when it should be 0
+					try {
+						const originalsPrefix = `galleries/${galleryId}/originals/`;
+						const finalsPrefix = `galleries/${galleryId}/final/`;
+						
+						// Check originals directory (only count actual image files, not thumbnails/previews)
+						const originalsList = await s3.send(new ListObjectsV2Command({
+							Bucket: bucket,
+							Prefix: originalsPrefix,
+							MaxKeys: 1 // Only need to check if any files exist
+						}));
+						const hasOriginals = (originalsList.Contents || []).some(obj => {
+							const key = obj.Key || '';
+							// Only count files directly under originals/, not subdirectories
+							return key.startsWith(originalsPrefix) &&
+								key !== originalsPrefix &&
+								!key.substring(originalsPrefix.length).includes('/');
+						});
+						
+						// Check finals directory (only count actual image files, not thumbnails/previews)
+						const finalsList = await s3.send(new ListObjectsV2Command({
+							Bucket: bucket,
+							Prefix: finalsPrefix,
+							MaxKeys: 100 // Need to check multiple files to find actual images
+						}));
+						const hasFinals = (finalsList.Contents || []).some(obj => {
+							const key = obj.Key || '';
+							// Only count files directly under final/{orderId}/, not subdirectories
+							// Match pattern: galleries/{galleryId}/final/{orderId}/{filename}
+							// Exclude: previews/, thumbs/, bigthumbs/ subdirectories
+							if (!key.startsWith(finalsPrefix) || key === finalsPrefix) {
+								return false;
+							}
+							const relativePath = key.substring(finalsPrefix.length);
+							// Should match: {orderId}/{filename} (exactly 2 path segments)
+							// Exclude subdirectories like previews/, thumbs/, bigthumbs/
+							const pathParts = relativePath.split('/').filter(p => p.length > 0);
+							return pathParts.length === 2 &&
+								pathParts[0] !== 'previews' &&
+								pathParts[0] !== 'thumbs' &&
+								pathParts[0] !== 'bigthumbs';
+						});
+						
+						// If no images remain, set storage usage fields to 0
+						if (!hasOriginals && !hasFinals) {
+							logger?.info('No images remaining in gallery, setting storage usage to 0', {
+								galleryId,
+								previousOriginalsBytesUsed: updatedOriginalsBytesUsed,
+								previousFinalsBytesUsed: updatedFinalsBytesUsed
+							});
+							
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId },
+								UpdateExpression: 'SET originalsBytesUsed = :zero, finalsBytesUsed = :zero',
+								ExpressionAttributeValues: { ':zero': 0 }
+							}));
+						} else if (!hasOriginals && updatedOriginalsBytesUsed > 0) {
+							// If no originals but originalsBytesUsed > 0, set to 0
+							logger?.info('No originals remaining but originalsBytesUsed > 0, correcting', {
+								galleryId,
+								previousOriginalsBytesUsed: updatedOriginalsBytesUsed
+							});
+							
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId },
+								UpdateExpression: 'SET originalsBytesUsed = :zero',
+								ExpressionAttributeValues: { ':zero': 0 }
+							}));
+						} else if (!hasFinals && updatedFinalsBytesUsed > 0) {
+							// If no finals but finalsBytesUsed > 0, set to 0
+							logger?.info('No finals remaining but finalsBytesUsed > 0, correcting', {
+								galleryId,
+								previousFinalsBytesUsed: updatedFinalsBytesUsed
+							});
+							
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId },
+								UpdateExpression: 'SET finalsBytesUsed = :zero',
+								ExpressionAttributeValues: { ':zero': 0 }
+							}));
+						}
+					} catch (s3CheckErr: any) {
+						// Log but don't fail - this is a safety check, not critical
+						logger?.warn('Failed to verify remaining images in S3 for storage correction', {
+							error: s3CheckErr.message,
+							galleryId
+						});
+					}
+					
+					logger?.info('Updated gallery storage usage after batch delete (atomic)', {
 						galleryId,
 						originalsRemoved: bytes.originals,
 						finalsRemoved: bytes.finals,
 						totalRemoved: bytes.originals + bytes.finals,
 						updatedOriginalsBytesUsed: Math.max(0, updatedOriginalsBytesUsed),
-						updatedFinalsBytesUsed: Math.max(0, updatedFinalsBytesUsed),
-						updatedBytesUsed: Math.max(0, updatedBytesUsed)
+						updatedFinalsBytesUsed: Math.max(0, updatedFinalsBytesUsed)
 					});
 				}
 			} catch (updateErr: any) {
-				logger?.warn('Failed to update gallery bytesUsed after batch delete', {
+				logger?.warn('Failed to update gallery storage usage after batch delete', {
 					error: updateErr.message,
 					galleryId,
 					originalsRemoved: bytes.originals,
 					finalsRemoved: bytes.finals
 				});
-				// Don't fail the entire batch - bytesUsed update is important but not critical
+				// Don't fail the entire batch - storage update is important but not critical
 			}
 		}
 	}
@@ -418,10 +499,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// bytesUsed is now updated atomically above using ADD operations
+	// Storage usage is now updated atomically above using ADD operations
 	// This provides robust race condition protection and immediate accuracy
 	// Storage recalculation (recalculateBytesUsed) is still available for on-demand recalculation
-	// and will use the updated bytesUsed values as a starting point
 
 	logger?.info('Batch delete processing completed', {
 		totalDeletes: deletes.length,

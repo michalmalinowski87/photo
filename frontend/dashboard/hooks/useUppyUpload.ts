@@ -142,7 +142,7 @@ async function handlePostUploadActions(
   type: UploadType,
   successfulFiles: UppyFile[],
   reloadGallery?: () => Promise<void>
-): Promise<() => void> {
+): Promise<void> {
   // Calculate total file sizes from successful uploads for optimistic update
   // Validate file sizes - only count files with valid, positive sizes
   // This prevents inaccurate optimistic updates from corrupted or missing file size data
@@ -159,7 +159,7 @@ async function handlePostUploadActions(
     );
   }
   
-  // Optimistically update bytesUsed for immediate UI feedback
+  // Optimistically update storage usage for immediate UI feedback
   // The backend S3 events will update the real value, and we'll reconcile after a delay
   if (totalSize > 0) {
     const originalsSize = type === "originals" ? totalSize : 0;
@@ -168,70 +168,35 @@ async function handlePostUploadActions(
     try {
       // Cancel any outgoing queries to prevent race conditions
       await queryClient.cancelQueries({
-        queryKey: queryKeys.galleries.bytesUsed(galleryId),
-      });
-      await queryClient.cancelQueries({
         queryKey: queryKeys.galleries.detail(galleryId),
       });
 
-      // Snapshot previous values for potential rollback
-      const previousBytesUsed = queryClient.getQueryData<{
-        originalsBytesUsed: number;
-        finalsBytesUsed: number;
-      }>(queryKeys.galleries.bytesUsed(galleryId));
-
-      // Optimistically update bytesUsed cache
-      queryClient.setQueryData<{
-        originalsBytesUsed: number;
-        finalsBytesUsed: number;
-      }>(queryKeys.galleries.bytesUsed(galleryId), (old) => {
-        const current = old || { originalsBytesUsed: 0, finalsBytesUsed: 0 };
-        return {
-          originalsBytesUsed: Math.max(0, current.originalsBytesUsed + originalsSize),
-          finalsBytesUsed: Math.max(0, current.finalsBytesUsed + finalsSize),
-        };
-      });
-
-      // Also update bytesUsed in gallery detail if it exists
+      // Optimistically update storage usage in gallery detail
       queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
-        if (!old) return old;
+        if (!old) {return old;}
         const currentOriginals = old.originalsBytesUsed || 0;
         const currentFinals = old.finalsBytesUsed || 0;
         return {
           ...old,
           originalsBytesUsed: Math.max(0, currentOriginals + originalsSize),
           finalsBytesUsed: Math.max(0, currentFinals + finalsSize),
-          bytesUsed: Math.max(0, (old.bytesUsed || 0) + totalSize),
+          // Total storage is computed dynamically: originalsBytesUsed + finalsBytesUsed
         };
       });
 
       // After a delay, invalidate to get real value from backend (S3 events will have processed)
       // This reconciles any differences between optimistic and actual values
-      // Return cleanup function to allow cancellation
-      const timeoutId = setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.bytesUsed(galleryId),
-        });
+      // Note: React Query's invalidateQueries is safe to call even after component unmount
+      setTimeout(() => {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.detail(galleryId),
         });
       }, 2000); // 2 seconds - enough time for S3 events to process
-
-      // Return cleanup function
-      return () => {
-        clearTimeout(timeoutId);
-      };
     } catch (error) {
       // If optimistic update fails, log but don't throw - backend will still update
-      console.error("[handlePostUploadActions] Failed to optimistically update bytesUsed:", error);
-      // Return no-op cleanup function
-      return () => {};
+      console.error("[handlePostUploadActions] Failed to optimistically update storage usage:", error);
     }
   }
-
-  // Return no-op cleanup function if no update needed
-  return () => {};
-}
 
   if (type === "finals" && orderId) {
     try {

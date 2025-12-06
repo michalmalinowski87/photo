@@ -60,30 +60,7 @@ export const useOriginalImageDelete = ({ galleryId }: UseOriginalImageDeleteOpti
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
 
-        // Check if this was the last image - if so, we need to invalidate gallery queries
-        const currentImages = queryClient.getQueryData<any[]>(
-          queryKeys.galleries.images(galleryIdStr, "thumb")
-        );
-        const wasLastImage = !currentImages || currentImages.length === 0;
-
-        // If this was the last image, invalidate status query to refresh gallery state
-        // Do NOT invalidate galleries.detail as it would invalidate child queries (images) causing refetch
-        if (wasLastImage && galleryIdStr) {
-          void (async () => {
-            try {
-              // Only invalidate status, not detail (which would invalidate images)
-              await queryClient.invalidateQueries({
-                queryKey: queryKeys.galleries.status(galleryIdStr),
-              });
-            } catch (statusErr) {
-              // eslint-disable-next-line no-console
-              console.error(
-                "[useOriginalImageDelete] Failed to refresh status after last image deleted:",
-                statusErr
-              );
-            }
-          })();
-        }
+        // Image deletion is complete - React Query optimistic updates handle cache refresh
 
         // Mark as successfully deleted (image will be removed from UI by React Query cache update)
         setDeletedImageKeys((prev) => new Set(prev).add(imageKey));

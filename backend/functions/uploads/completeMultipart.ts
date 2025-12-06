@@ -91,7 +91,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	try {
 		const response = await s3.send(completeCmd);
 		
-		// Get file size after completion to update bytesUsed atomically
+		// Get file size after completion to update storage usage atomically
 		let fileSize = 0;
 		try {
 			const headResponse = await s3.send(new HeadObjectCommand({
@@ -109,7 +109,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
-		// Update bytesUsed atomically if file size was retrieved
+		// Update storage usage atomically if file size was retrieved
 		if (fileSize > 0) {
 			const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 			if (galleriesTable) {
@@ -133,10 +133,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							expressionValues[':finalsSize'] = fileSize;
 						}
 						
-						// Also update bytesUsed for backward compatibility (sum of both)
-						updateExpressions.push('bytesUsed :totalSize');
-						expressionValues[':totalSize'] = fileSize;
-						
 						await ddb.send(new UpdateCommand({
 							TableName: galleriesTable,
 							Key: { galleryId },
@@ -145,7 +141,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}));
 						
 						const logger = (context as any)?.logger;
-						logger?.info('Updated gallery bytesUsed after multipart upload (atomic)', {
+						logger?.info('Updated gallery storage usage after multipart upload (atomic)', {
 							galleryId,
 							key,
 							fileSize,
@@ -153,9 +149,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						});
 					}
 				} catch (updateErr: any) {
-					// Log but don't fail - upload was successful, bytesUsed update can be recalculated later
+					// Log but don't fail - upload was successful, storage update can be recalculated later
 					const logger = (context as any)?.logger;
-					logger?.warn('Failed to update gallery bytesUsed after multipart upload', {
+					logger?.warn('Failed to update gallery storage usage after multipart upload', {
 						error: updateErr.message,
 						galleryId,
 						key,

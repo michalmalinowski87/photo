@@ -213,7 +213,6 @@ export async function recalculateStorageInternal(
 						galleryId,
 						originalsBytesUsed: gallery.originalsBytesUsed || 0,
 						finalsBytesUsed: gallery.finalsBytesUsed || 0,
-						bytesUsed: (gallery.originalsBytesUsed || 0) + (gallery.finalsBytesUsed || 0),
 						originalsLimitBytes: gallery.originalsLimitBytes || 0,
 						finalsLimitBytes: gallery.finalsLimitBytes || 0,
 						storageLimitBytes: gallery.storageLimitBytes || 0,
@@ -275,7 +274,6 @@ export async function recalculateStorageInternal(
 	}
 
 	// Update gallery with both originalsBytesUsed and finalsBytesUsed, and record recalculation timestamp
-	// Also keep bytesUsed for backward compatibility (sum of both)
 	const totalBytesUsed = originalsSize + finalsSize;
 	const newTimestamp = new Date().toISOString();
 	
@@ -290,14 +288,13 @@ export async function recalculateStorageInternal(
 		await ddb.send(new UpdateCommand({
 			TableName: galleriesTable,
 			Key: { galleryId },
-			UpdateExpression: 'SET originalsBytesUsed = :originalsSize, finalsBytesUsed = :finalsSize, bytesUsed = :totalSize, lastBytesUsedRecalculatedAt = :timestamp',
+			UpdateExpression: 'SET originalsBytesUsed = :originalsSize, finalsBytesUsed = :finalsSize, lastBytesUsedRecalculatedAt = :timestamp',
 			ConditionExpression: currentTimestamp 
 				? 'lastBytesUsedRecalculatedAt < :timestamp OR attribute_not_exists(lastBytesUsedRecalculatedAt)'
 				: 'attribute_not_exists(lastBytesUsedRecalculatedAt) OR lastBytesUsedRecalculatedAt < :timestamp',
 			ExpressionAttributeValues: {
 				':originalsSize': originalsSize,
 				':finalsSize': finalsSize,
-				':totalSize': totalBytesUsed,
 				':timestamp': newTimestamp
 			}
 		}));
@@ -307,7 +304,7 @@ export async function recalculateStorageInternal(
 			newOriginalsBytesUsed: originalsSize,
 			oldFinalsBytesUsed: gallery.finalsBytesUsed || 0,
 			newFinalsBytesUsed: finalsSize,
-			oldBytesUsed: gallery.bytesUsed || 0,
+			oldBytesUsed: (gallery.originalsBytesUsed || 0) + (gallery.finalsBytesUsed || 0),
 			newBytesUsed: totalBytesUsed,
 			timestamp: newTimestamp
 		});
@@ -360,12 +357,11 @@ export async function recalculateStorageInternal(
 						await ddb.send(new UpdateCommand({
 							TableName: galleriesTable,
 							Key: { galleryId },
-							UpdateExpression: 'SET originalsBytesUsed = :originalsSize, finalsBytesUsed = :finalsSize, bytesUsed = :totalSize, lastBytesUsedRecalculatedAt = :timestamp',
+							UpdateExpression: 'SET originalsBytesUsed = :originalsSize, finalsBytesUsed = :finalsSize, lastBytesUsedRecalculatedAt = :timestamp',
 							ConditionExpression: 'lastBytesUsedRecalculatedAt < :timestamp OR attribute_not_exists(lastBytesUsedRecalculatedAt)',
 							ExpressionAttributeValues: {
 								':originalsSize': retryOriginalsSize,
 								':finalsSize': retryFinalsSize,
-								':totalSize': retryTotalBytes,
 								':timestamp': retryTimestamp
 							}
 						}));
@@ -410,7 +406,6 @@ export async function recalculateStorageInternal(
 					galleryId,
 					originalsBytesUsed: finalGallery.Item?.originalsBytesUsed || 0,
 					finalsBytesUsed: finalGallery.Item?.finalsBytesUsed || 0,
-					bytesUsed: finalGallery.Item?.bytesUsed || 0,
 					skipped: true
 				})
 			};
@@ -438,7 +433,6 @@ export async function recalculateStorageInternal(
 
 	const updatedOriginalsBytesUsed = updatedGallery.Item?.originalsBytesUsed || 0;
 	const updatedFinalsBytesUsed = updatedGallery.Item?.finalsBytesUsed || 0;
-	const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
 	const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
 	const finalsLimitBytes = updatedGallery.Item?.finalsLimitBytes || 0;
 	const storageLimitBytes = updatedGallery.Item?.storageLimitBytes || 0; // Backward compatibility
@@ -453,8 +447,6 @@ export async function recalculateStorageInternal(
 			originalsBytesUsed: updatedOriginalsBytesUsed,
 			oldFinalsBytesUsed: gallery.finalsBytesUsed || 0,
 			finalsBytesUsed: updatedFinalsBytesUsed,
-			oldBytesUsed: gallery.bytesUsed || 0,
-			bytesUsed: updatedBytesUsed, // Backward compatibility
 			originalsLimitBytes,
 			finalsLimitBytes,
 			storageLimitBytes, // Backward compatibility
@@ -462,7 +454,7 @@ export async function recalculateStorageInternal(
 			originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2),
 			finalsUsedMB: (updatedFinalsBytesUsed / (1024 * 1024)).toFixed(2),
 			finalsLimitMB: (finalsLimitBytes / (1024 * 1024)).toFixed(2),
-			storageUsedMB: (updatedBytesUsed / (1024 * 1024)).toFixed(2),
+			storageUsedMB: ((updatedOriginalsBytesUsed + updatedFinalsBytesUsed) / (1024 * 1024)).toFixed(2),
 			storageLimitMB: (storageLimitBytes / (1024 * 1024)).toFixed(2)
 		})
 	};

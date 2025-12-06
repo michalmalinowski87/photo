@@ -101,7 +101,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 
 	const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
-	const updatedBytesUsed = Math.max(updatedGallery.Item?.bytesUsed || 0, 0); // Backward compatibility
 	const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
 
 	return {
@@ -112,7 +111,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId,
 			filename,
 			originalsBytesUsed: updatedOriginalsBytesUsed,
-			bytesUsed: updatedBytesUsed, // Backward compatibility
 			originalsLimitBytes,
 			originalsUsedMB: (updatedOriginalsBytesUsed / (1024 * 1024)).toFixed(2),
 			originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2)

@@ -682,8 +682,8 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleriesBucket.grantReadWrite(deleteBatchFn);
-		// Grant permissions to read galleries/orders and update order status after directory checks
-		galleries.grantReadData(deleteBatchFn);
+		// Grant permissions to read/write galleries (for storage usage updates) and orders (for order status updates)
+		galleries.grantReadWriteData(deleteBatchFn);
 		orders.grantReadWriteData(deleteBatchFn);
 		// Storage recalculation is now on-demand - no need to invoke Lambda after deletes
 		
@@ -710,7 +710,7 @@ export class AppStack extends Stack {
 		apiFn.addEnvironment('DELETE_BATCH_FN_NAME', deleteBatchFn.functionName);
 
 		// Lambda function to handle S3 PUT events (file uploads)
-		// Updates bytesUsed atomically when files are uploaded to S3
+		// Updates storage usage atomically when files are uploaded to S3
 		const s3PutFn = new NodejsFunction(this, 'ImagesOnS3PutFn', {
 			entry: path.join(__dirname, '../../../backend/functions/images/onS3Put.ts'),
 			handler: 'handler',
@@ -727,7 +727,7 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleriesBucket.grantRead(s3PutFn);
-		// Grant permissions to update gallery bytesUsed
+		// Grant permissions to update gallery storage usage
 		galleries.grantReadWriteData(s3PutFn);
 		
 		// Configure S3 bucket to send PUT events to Lambda

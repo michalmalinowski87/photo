@@ -190,7 +190,6 @@ export const handler = lambdaLogger(async (event: any) => {
 				originalsBytesUsed: g.originalsBytesUsed || 0,
 				finalsBytesUsed: g.finalsBytesUsed || 0,
 				storageLimitBytes: g.storageLimitBytes,
-				bytesUsed: g.bytesUsed || 0,
 				expiresAt: g.expiresAt,
 				createdAt: g.createdAt,
 				updatedAt: g.updatedAt,

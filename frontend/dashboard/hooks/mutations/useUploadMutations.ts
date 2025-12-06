@@ -9,10 +9,7 @@ export function useValidateUploadLimits() {
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.validateUploadLimits(galleryId),
     onSuccess: (_, galleryId) => {
-      // Invalidate gallery bytes used and detail to reflect updated limits
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(galleryId),
-      });
+      // Invalidate gallery detail to reflect updated limits
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(galleryId),
       });
@@ -39,9 +36,6 @@ export function useMarkFinalUploadComplete() {
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
       });
     },
   });

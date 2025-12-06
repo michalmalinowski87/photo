@@ -430,43 +430,6 @@ class ApiService {
     },
 
     /**
-     * Get only the bytes used for a gallery (lightweight endpoint)
-     */
-    getBytesUsed: async (
-      galleryId: string,
-      forceRecalc = false
-    ): Promise<{
-      originalsBytesUsed: number;
-      finalsBytesUsed: number;
-    }> => {
-      if (!galleryId) {
-        throw new Error("Gallery ID is required");
-      }
-      const url = forceRecalc
-        ? `/galleries/${galleryId}/bytes-used?force=true`
-        : `/galleries/${galleryId}/bytes-used`;
-      return await this._request<{ originalsBytesUsed: number; finalsBytesUsed: number }>(url);
-    },
-
-    /**
-     * Get only the status for a gallery (lightweight endpoint)
-     */
-    getStatus: async (
-      galleryId: string
-    ): Promise<{
-      state: string;
-      paymentStatus: string;
-      isPaid: boolean;
-    }> => {
-      if (!galleryId) {
-        throw new Error("Gallery ID is required");
-      }
-      return await this._request<{ state: string; paymentStatus: string; isPaid: boolean }>(
-        `/galleries/${galleryId}/status`
-      );
-    },
-
-    /**
      * Create a new gallery
      */
     create: async (data: Partial<Gallery>): Promise<Gallery> => {
@@ -546,7 +509,6 @@ class ApiService {
       message: string;
       count: number;
       originalsBytesUsed: number;
-      bytesUsed: number;
       originalsLimitBytes: number;
       originalsUsedMB: string;
       originalsLimitMB: string;
@@ -892,7 +854,6 @@ class ApiService {
       orderId: string;
       count: number;
       finalsBytesUsed: number;
-      bytesUsed: number;
       finalsLimitBytes: number;
       finalsUsedMB: string;
       finalsLimitMB: string;
@@ -930,7 +891,6 @@ class ApiService {
       orderId: string;
       count: number;
       finalsBytesUsed: number;
-      bytesUsed: number;
       finalsLimitBytes: number;
       finalsUsedMB: string;
       finalsLimitMB: string;

@@ -145,19 +145,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Update gallery originalsBytesUsed by subtracting deleted originals size
-		// Also update bytesUsed for backward compatibility
 		// Use atomic ADD operation to prevent race conditions with concurrent deletions
 		if (totalOriginalsSize > 0) {
 			try {
 				const currentOriginalsBytesUsed = gallery.originalsBytesUsed || 0;
-				const currentBytesUsed = gallery.bytesUsed || 0;
 				
 				// Use atomic ADD with negative value to handle concurrent deletions safely
 				// This prevents race conditions where cleanup and single deletions happen simultaneously
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'ADD originalsBytesUsed :negativeSize, bytesUsed :negativeSize',
+					UpdateExpression: 'ADD originalsBytesUsed :negativeSize',
 					ExpressionAttributeValues: {
 						':negativeSize': -totalOriginalsSize
 					}
@@ -170,15 +168,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 				
 				const updatedOriginalsBytesUsed = updatedGallery.Item?.originalsBytesUsed || 0;
-				const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
 				
 				// If value went negative (shouldn't happen, but handle edge cases), set to 0
-				if (updatedOriginalsBytesUsed < 0 || updatedBytesUsed < 0) {
+				if (updatedOriginalsBytesUsed < 0) {
 					logger?.warn('originalsBytesUsed went negative after atomic cleanup update, correcting', {
 						galleryId,
 						orderId,
 						updatedOriginalsBytesUsed,
-						updatedBytesUsed,
 						sizeRemoved: totalOriginalsSize,
 						previousOriginalsBytesUsed: currentOriginalsBytesUsed
 					});
@@ -186,7 +182,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					await ddb.send(new UpdateCommand({
 						TableName: galleriesTable,
 						Key: { galleryId },
-						UpdateExpression: 'SET originalsBytesUsed = :zero, bytesUsed = :zero',
+						UpdateExpression: 'SET originalsBytesUsed = :zero',
 						ExpressionAttributeValues: {
 							':zero': 0
 						}

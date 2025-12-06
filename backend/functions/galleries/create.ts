@@ -91,7 +91,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		ttl: ttlExpiresAt,
 		originalsBytesUsed: 0,
 		finalsBytesUsed: 0,
-		bytesUsed: 0,
 		selectionEnabled: !!body.selectionEnabled,
 		selectionStatus: 'DISABLED',
 		version: 1,

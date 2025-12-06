@@ -38,7 +38,6 @@ export interface GalleryRecord {
 	plan?: string;
 	priceCents?: number;
 	storageLimitBytes?: number;
-	bytesUsed?: number;
 	expiresAt?: string;
 	expiryWarning7dSent?: boolean;
 	expiryWarning24hSent?: boolean;

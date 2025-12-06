@@ -639,9 +639,9 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                             {status === "error" && freshFile.error && (
                               <p
                                 className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
-                                title={freshFile.error.message}
+                                title={String(freshFile.error)}
                               >
-                                {freshFile.error.message}
+                                {String(freshFile.error)}
                               </p>
                             )}
                           </div>

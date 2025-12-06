@@ -82,25 +82,6 @@ export function useGalleryImages(
   });
 }
 
-export function useGalleryStatus(galleryId: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.galleries.status(galleryId!),
-    queryFn: () => api.galleries.getStatus(galleryId!),
-    enabled: !!galleryId,
-    staleTime: 10 * 1000,
-    networkMode: "offlineFirst",
-  });
-}
-
-export function useGalleryBytesUsed(galleryId: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.galleries.bytesUsed(galleryId!),
-    queryFn: () => api.galleries.getBytesUsed(galleryId!),
-    enabled: !!galleryId,
-    staleTime: 30 * 1000,
-  });
-}
-
 export function useGalleryCoverPhoto(galleryId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.galleries.coverPhoto(galleryId!),
