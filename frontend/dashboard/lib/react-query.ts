@@ -1,5 +1,17 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import {
+  clientOptions,
+  dashboardStatsOptions,
+  galleryDetailOptions,
+  galleryListOptions,
+  orderDetailOptions,
+  orderListOptions,
+  packageOptions,
+  presignedUrlOptions,
+  walletBalanceOptions,
+} from "./react-query-config";
+
 interface PaginationParams {
   limit?: string | number;
   offset?: string | number;
@@ -67,6 +79,11 @@ export const queryKeys = {
     all: ["auth"] as const,
     businessInfo: () => [...queryKeys.auth.all, "businessInfo"] as const,
   },
+  uploads: {
+    all: ["uploads"] as const,
+    presignedUrl: (galleryId: string, key: string, orderId?: string) =>
+      [...queryKeys.uploads.all, "presigned-url", galleryId, key, orderId] as const,
+  },
 };
 
 // QueryClient configuration with best practices
@@ -95,3 +112,16 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Apply optimized query-specific defaults
+// These override the global defaults for specific query types
+// Note: setQueryDefaults uses query key prefixes, so we set defaults for the base keys
+queryClient.setQueryDefaults(queryKeys.galleries.details(), galleryDetailOptions);
+queryClient.setQueryDefaults(queryKeys.galleries.lists(), galleryListOptions);
+queryClient.setQueryDefaults(queryKeys.orders.lists(), orderListOptions);
+queryClient.setQueryDefaults(queryKeys.orders.details(), orderDetailOptions);
+queryClient.setQueryDefaults(queryKeys.wallet.balance(), walletBalanceOptions);
+queryClient.setQueryDefaults(queryKeys.uploads.all, presignedUrlOptions);
+queryClient.setQueryDefaults(queryKeys.dashboard.stats(), dashboardStatsOptions);
+queryClient.setQueryDefaults(queryKeys.packages.lists(), packageOptions);
+queryClient.setQueryDefaults(queryKeys.clients.lists(), clientOptions);

@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Gallery } from "../../store/gallerySlice";
+import type { Gallery } from "../../types";
 
 export function useCreateGallery() {
   const queryClient = useQueryClient();
@@ -24,15 +24,74 @@ export function useUpdateGallery() {
   return useMutation({
     mutationFn: ({ galleryId, data }: { galleryId: string; data: Partial<Gallery> }) =>
       api.galleries.update(galleryId, data),
+    onMutate: async ({ galleryId, data }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.lists(),
+      });
+
+      // Snapshot previous values
+      const previousGallery = queryClient.getQueryData<Gallery>(
+        queryKeys.galleries.detail(galleryId)
+      );
+      const previousGalleryList = queryClient.getQueryData<Gallery[]>(
+        queryKeys.galleries.lists()
+      );
+
+      // Optimistically update gallery detail
+      queryClient.setQueryData<Gallery>(
+        queryKeys.galleries.detail(galleryId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            ...data,
+          };
+        }
+      );
+
+      // Optimistically update gallery in list if it exists
+      if (previousGalleryList) {
+        queryClient.setQueryData<Gallery[]>(
+          queryKeys.galleries.lists(),
+          (old) => {
+            if (!old) return old;
+            return old.map((gallery) =>
+              gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
+            );
+          }
+        );
+      }
+
+      return { previousGallery, previousGalleryList };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+      if (context?.previousGalleryList) {
+        queryClient.setQueryData(queryKeys.galleries.lists(), context.previousGalleryList);
+      }
+    },
     onSuccess: (data, variables) => {
+      // Update cache with response data if available (more accurate than optimistic update)
       if (data) {
         queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
-      } else {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(variables.galleryId),
-        });
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure consistency
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
 }

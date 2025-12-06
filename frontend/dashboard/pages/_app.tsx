@@ -21,6 +21,7 @@ import { AuthProvider } from "../context/AuthProvider";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
 import { queryClient } from "../lib/react-query";
+import { initCacheLogger } from "../lib/react-query-cache-logger";
 import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -55,6 +56,8 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
       initDevTools();
+      // Initialize React Query cache logger for monitoring
+      initCacheLogger(queryClient);
     }
   }, []);
 

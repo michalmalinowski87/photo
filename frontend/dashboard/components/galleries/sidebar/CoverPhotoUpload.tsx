@@ -1,11 +1,12 @@
 import { Plus } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 import { useUpdateGallery } from "../../../hooks/mutations/useGalleryMutations";
 import { useGallery, useGalleryCoverPhoto } from "../../../hooks/queries/useGalleries";
+import { usePresignedUrl } from "../../../hooks/queries/usePresignedUrl";
 import { useToast } from "../../../hooks/useToast";
-import api, { formatApiError } from "../../../lib/api-service";
+import { formatApiError } from "../../../lib/api-service";
 import { RetryableImage } from "../../ui/RetryableImage";
 
 export const CoverPhotoUpload: React.FC = () => {
@@ -24,6 +25,129 @@ export const CoverPhotoUpload: React.FC = () => {
   const [processingCover, setProcessingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [presignParams, setPresignParams] = useState<{
+    key: string;
+    contentType: string;
+    fileSize: number;
+    file: File;
+  } | null>(null);
+
+  // Use presigned URL hook when params are set
+  const {
+    data: presignResponse,
+    isLoading: presignLoading,
+    error: presignError,
+  } = usePresignedUrl({
+    galleryId: galleryId ?? "",
+    key: presignParams?.key ?? "",
+    contentType: presignParams?.contentType ?? "",
+    fileSize: presignParams?.fileSize ?? 0,
+    enabled: !!presignParams && !!galleryId,
+  });
+
+  // Handle upload once presigned URL is available
+  useEffect(() => {
+    if (!presignParams || !presignResponse?.url || presignLoading) {
+      return;
+    }
+
+    const performUpload = async (): Promise<void> => {
+      if (!galleryId || !presignParams) {
+        return;
+      }
+
+      try {
+        // Upload file to S3
+        await fetch(presignResponse.url, {
+          method: "PUT",
+          body: presignParams.file,
+          headers: {
+            "Content-Type": presignParams.contentType,
+          },
+        });
+
+        // Update gallery in backend with S3 URL - backend will convert it to CloudFront
+        const s3Url = presignResponse.url.split("?")[0]; // Remove query params
+
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: { coverPhotoUrl: s3Url },
+        });
+
+        // Switch to processing state and poll for processed CloudFront URL
+        setUploadingCover(false);
+        setProcessingCover(true);
+
+        // Poll the lightweight cover photo endpoint until we get a CloudFront URL
+        let attempts = 0;
+        const maxAttempts = 30;
+        const pollInterval = 1000;
+
+        while (attempts < maxAttempts) {
+          attempts++;
+
+          try {
+            // Refetch cover photo using React Query
+            const refetchResult = await refetchCoverPhoto();
+            const fetchedUrl = refetchResult.data?.coverPhotoUrl;
+
+            // Check if we have a CloudFront URL (not S3, not null)
+            if (
+              fetchedUrl &&
+              typeof fetchedUrl === "string" &&
+              !fetchedUrl.includes(".s3.") &&
+              !fetchedUrl.includes("s3.amazonaws.com")
+            ) {
+              // Update gallery via mutation (will invalidate cache)
+              if (galleryId) {
+                await updateGalleryMutation.mutateAsync({
+                  galleryId,
+                  data: { coverPhotoUrl: fetchedUrl },
+                });
+              }
+              setProcessingCover(false);
+              showToast("success", "Sukces", "Okładka galerii została przesłana");
+              setPresignParams(null); // Reset params
+              return;
+            }
+
+            // Wait before next poll
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          } catch (pollErr) {
+            console.error("Failed to poll for cover photo URL:", pollErr);
+            // Continue polling on error
+            await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          }
+        }
+
+        // Max attempts reached
+        setProcessingCover(false);
+        showToast(
+          "warning",
+          "Ostrzeżenie",
+          "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle"
+        );
+        setPresignParams(null); // Reset params
+      } catch (err: unknown) {
+        setUploadingCover(false);
+        setProcessingCover(false);
+        setPresignParams(null); // Reset params on error
+        showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
+      }
+    };
+
+    void performUpload();
+  }, [presignResponse, presignLoading, presignParams, galleryId, updateGalleryMutation, refetchCoverPhoto, showToast]);
+
+  // Handle presign errors
+  useEffect(() => {
+    if (presignError && presignParams) {
+      setUploadingCover(false);
+      setProcessingCover(false);
+      setPresignParams(null);
+      showToast("error", "Błąd", formatApiError(presignError as Error) ?? "Nie udało się uzyskać URL do przesłania");
+    }
+  }, [presignError, presignParams, showToast]);
 
   const handleCoverPhotoUpload = async (file: File): Promise<void> => {
     if (!file || !galleryId || typeof galleryId !== "string") {
@@ -38,92 +162,19 @@ export const CoverPhotoUpload: React.FC = () => {
 
     setUploadingCover(true);
 
-    try {
-      // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
-      const timestamp = Date.now();
-      const fileExtension = file.name.split(".").pop() ?? "jpg";
-      const key = `cover_${timestamp}.${fileExtension}`;
-      const presignResponse = await api.uploads.getPresignedUrl({
-        galleryId,
-        key,
-        contentType: file.type ?? "image/jpeg",
-        fileSize: file.size,
-      });
+    // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
+    const timestamp = Date.now();
+    const fileExtension = file.name.split(".").pop() ?? "jpg";
+    const key = `cover_${timestamp}.${fileExtension}`;
 
-      // Upload file to S3
-      await fetch(presignResponse.url, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type ?? "image/jpeg",
-        },
-      });
-
-      // Update gallery in backend with S3 URL - backend will convert it to CloudFront
-      const s3Url = presignResponse.url.split("?")[0]; // Remove query params
-
-      await updateGalleryMutation.mutateAsync({
-        galleryId,
-        data: { coverPhotoUrl: s3Url },
-      });
-
-      // Switch to processing state and poll for processed CloudFront URL
-      setUploadingCover(false);
-      setProcessingCover(true);
-
-      // Poll the lightweight cover photo endpoint until we get a CloudFront URL
-      let attempts = 0;
-      const maxAttempts = 30;
-      const pollInterval = 1000;
-
-      while (attempts < maxAttempts) {
-        attempts++;
-
-        try {
-          // Refetch cover photo using React Query
-          const refetchResult = await refetchCoverPhoto();
-          const fetchedUrl = refetchResult.data?.coverPhotoUrl;
-
-          // Check if we have a CloudFront URL (not S3, not null)
-          if (
-            fetchedUrl &&
-            typeof fetchedUrl === "string" &&
-            !fetchedUrl.includes(".s3.") &&
-            !fetchedUrl.includes("s3.amazonaws.com")
-          ) {
-            // Update gallery via mutation (will invalidate cache)
-            if (galleryId) {
-              await updateGalleryMutation.mutateAsync({
-                galleryId,
-                data: { coverPhotoUrl: fetchedUrl },
-              });
-            }
-            setProcessingCover(false);
-            showToast("success", "Sukces", "Okładka galerii została przesłana");
-            return;
-          }
-
-          // Wait before next poll
-          await new Promise((resolve) => setTimeout(resolve, pollInterval));
-        } catch (pollErr) {
-          console.error("Failed to poll for cover photo URL:", pollErr);
-          // Continue polling on error
-          await new Promise((resolve) => setTimeout(resolve, pollInterval));
-        }
-      }
-
-      // Max attempts reached
-      setProcessingCover(false);
-      showToast(
-        "warning",
-        "Ostrzeżenie",
-        "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle"
-      );
-    } catch (err: unknown) {
-      setUploadingCover(false);
-      setProcessingCover(false);
-      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
-    }
+    // Set params to trigger presigned URL query
+    // The useEffect will handle the actual upload once the URL is available
+    setPresignParams({
+      key,
+      contentType: file.type ?? "image/jpeg",
+      fileSize: file.size,
+      file,
+    });
   };
 
   const handleRemoveCoverPhoto = async (e: React.MouseEvent): Promise<void> => {

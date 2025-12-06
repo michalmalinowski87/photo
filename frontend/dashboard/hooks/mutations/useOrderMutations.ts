@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+import type { Order } from "../../types";
 
 export function useApproveChangeRequest() {
   const queryClient = useQueryClient();
@@ -58,18 +59,89 @@ export function useMarkOrderPaid() {
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markPaid(galleryId, orderId),
+    onMutate: async ({ galleryId, orderId }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.detail(galleryId, orderId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.byGallery(galleryId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+
+      // Snapshot previous values
+      const previousOrder = queryClient.getQueryData<Order>(
+        queryKeys.orders.detail(galleryId, orderId)
+      );
+      const previousOrderList = queryClient.getQueryData<Order[]>(
+        queryKeys.orders.byGallery(galleryId)
+      );
+      const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
+
+      // Optimistically update order payment status
+      queryClient.setQueryData<Order>(
+        queryKeys.orders.detail(galleryId, orderId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            paymentStatus: "PAID",
+          };
+        }
+      );
+
+      // Optimistically update order in list if it exists
+      if (previousOrderList) {
+        queryClient.setQueryData<Order[]>(
+          queryKeys.orders.byGallery(galleryId),
+          (old) => {
+            if (!old) return old;
+            return old.map((order) =>
+              order.orderId === orderId ? { ...order, paymentStatus: "PAID" } : order
+            );
+          }
+        );
+      }
+
+      return { previousOrder, previousOrderList, previousGallery };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousOrder) {
+        queryClient.setQueryData(
+          queryKeys.orders.detail(variables.galleryId, variables.orderId),
+          context.previousOrder
+        );
+      }
+      if (context?.previousOrderList) {
+        queryClient.setQueryData(
+          queryKeys.orders.byGallery(variables.galleryId),
+          context.previousOrderList
+        );
+      }
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+    },
     onSuccess: (data, variables) => {
-      // Update cache directly with response data if available
+      // Update cache with response data if available (more accurate than optimistic update)
       if (data) {
         queryClient.setQueryData(
           queryKeys.orders.detail(variables.galleryId, variables.orderId),
           data
         );
-      } else {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-        });
       }
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure consistency
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.byGallery(variables.galleryId),
       });
