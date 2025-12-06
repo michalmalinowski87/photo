@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 
+import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { FullPageLoading } from "../ui/loading/Loading";
 
@@ -27,9 +28,18 @@ export default function GalleryFilterPage({
   loadingText = "Ładowanie galerii...",
 }: GalleryFilterPageProps) {
   usePageLogger({ pageName: `GalleryFilterPage-${filter}`, logRouteChanges: false });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [initialLoad, setInitialLoad] = useState<boolean>(true);
   const [publishWizardOpen, setPublishWizardOpen] = useState<boolean>(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState<boolean>(false);
+
+  // Use React Query to get loading state
+  const { isLoading: loading } = useGalleries(filter);
+
+  // Track initial load
+  useEffect(() => {
+    if (!loading && !hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true);
+    }
+  }, [loading, hasInitiallyLoaded]);
 
   // Check if URL params indicate wizard should open (prevents showing FullPageLoading)
   const shouldOpenWizardFromUrl = useMemo(() => {
@@ -63,18 +73,13 @@ export default function GalleryFilterPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLoadingChange = useCallback((isLoading: boolean, isInitialLoad: boolean) => {
-    setLoading(isLoading);
-    setInitialLoad(isInitialLoad);
-  }, []);
-
   const handleWizardOpenChange = useCallback((_isOpen: boolean) => {
     // Store state is managed separately
   }, []);
 
   // Don't show FullPageLoading if wizard should open from URL (prevents layout issues)
   const showFullPageLoading =
-    loading && initialLoad && !publishWizardOpen && !shouldOpenWizardFromUrl;
+    loading && !hasInitiallyLoaded && !publishWizardOpen && !shouldOpenWizardFromUrl;
 
   return (
     <>
@@ -85,7 +90,6 @@ export default function GalleryFilterPage({
         )}
         <GalleryList
           filter={filter}
-          onLoadingChange={handleLoadingChange}
           onWizardOpenChange={handleWizardOpenChange}
         />
       </div>

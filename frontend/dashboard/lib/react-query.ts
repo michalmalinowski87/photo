@@ -23,6 +23,7 @@ export const queryKeys = {
     status: (id: string) => [...queryKeys.galleries.detail(id), "status"] as const,
     bytesUsed: (id: string) => [...queryKeys.galleries.detail(id), "bytes-used"] as const,
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
+    deliveredOrders: (id: string) => [...queryKeys.galleries.detail(id), "delivered-orders"] as const,
   },
   orders: {
     all: ["orders"] as const,
@@ -54,6 +55,16 @@ export const queryKeys = {
     list: (params?: PaginationParams) => [...queryKeys.clients.lists(), params] as const,
     details: () => [...queryKeys.clients.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.clients.details(), id] as const,
+  },
+  dashboard: {
+    all: ["dashboard"] as const,
+    stats: () => [...queryKeys.dashboard.all, "stats"] as const,
+    activeOrders: (params?: PaginationParams) =>
+      [...queryKeys.dashboard.all, "activeOrders", params] as const,
+  },
+  auth: {
+    all: ["auth"] as const,
+    businessInfo: () => [...queryKeys.auth.all, "businessInfo"] as const,
   },
 };
 

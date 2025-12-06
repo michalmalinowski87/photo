@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { useAuth } from "../context/AuthProvider";
-import { usePageLogger } from "../hooks/usePageLogger";
+import { useChangePassword, useUpdateBusinessInfo } from "../hooks/mutations/useAuthMutations";
+import { useBusinessInfo } from "../hooks/queries/useAuth";
 import { useToast } from "../hooks/useToast";
-import api, { formatApiError } from "../lib/api-service";
+import { formatApiError } from "../lib/api-service";
 
 interface PasswordForm {
   currentPassword: string;
@@ -23,13 +24,17 @@ interface BusinessForm {
 
 export default function Settings() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded } = usePageLogger({
-    pageName: "Settings",
-  });
-  const [loading, setLoading] = useState<boolean>(true);
+  const { user } = useAuth();
+
+  // React Query hooks
+  const {
+    data: businessInfo,
+    isLoading: loading,
+  } = useBusinessInfo();
+  const changePasswordMutation = useChangePassword();
+  const updateBusinessInfoMutation = useUpdateBusinessInfo();
+
   const [loginEmail, setLoginEmail] = useState<string>("");
-  const [passwordLoading, setPasswordLoading] = useState<boolean>(false);
-  const [businessInfoLoading, setBusinessInfoLoading] = useState<boolean>(false);
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
     currentPassword: "",
     newPassword: "",
@@ -43,49 +48,32 @@ export default function Settings() {
     nip: "",
   });
 
-  const { user } = useAuth();
-
-  const loadBusinessInfo = useCallback(async (): Promise<void> => {
-    logDataLoad("businessInfo", {});
-    try {
-      const data = await api.auth.getBusinessInfo();
-      logDataLoaded("businessInfo", data, {
-        hasEmail: !!data.email,
-        hasBusinessName: !!data.businessName,
-      });
-      setBusinessForm({
-        businessName: data.businessName ?? "",
-        email: data.email ?? "",
-        phone: data.phone ?? "",
-        address: data.address ?? "",
-        nip: data.nip ?? "",
-      });
-
-      if (!data.email && loginEmail) {
-        setBusinessForm((prev) => ({
-          ...prev,
-          email: loginEmail,
-        }));
-      }
-    } catch (_err) {
-      if (loginEmail) {
-        setBusinessForm((prev) => ({
-          ...prev,
-          email: loginEmail,
-        }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [loginEmail, logDataLoad, logDataLoaded]);
-
+  // Update form when business info loads
   useEffect(() => {
-    // Auth is handled by AuthProvider/ProtectedRoute - get email from user context
+    if (businessInfo) {
+      setBusinessForm({
+        businessName: businessInfo.businessName ?? "",
+        email: businessInfo.email ?? "",
+        phone: businessInfo.phone ?? "",
+        address: businessInfo.address ?? "",
+        nip: businessInfo.nip ?? "",
+      });
+    }
+  }, [businessInfo]);
+
+  // Set login email from user context
+  useEffect(() => {
     if (user?.email) {
       setLoginEmail(user.email);
+      // If business info doesn't have email, use login email
+      if (!businessInfo?.email && user.email) {
+        setBusinessForm((prev) => ({
+          ...prev,
+          email: user.email ?? prev.email,
+        }));
+      }
     }
-    void loadBusinessInfo();
-  }, [user?.email, loadBusinessInfo]);
+  }, [user?.email, businessInfo?.email]);
 
   const handlePasswordChange = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -100,15 +88,11 @@ export default function Settings() {
       return;
     }
 
-    if (passwordForm.newPassword.length < 8) {
-      showToast("error", "Błąd", "Hasło musi mieć co najmniej 8 znaków");
-      return;
-    }
-
-    setPasswordLoading(true);
-
     try {
-      await api.auth.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      await changePasswordMutation.mutateAsync({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
 
       showToast("success", "Sukces", "Hasło zostało zmienione pomyślnie");
       setPasswordForm({
@@ -118,24 +102,18 @@ export default function Settings() {
       });
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
-    } finally {
-      setPasswordLoading(false);
     }
   };
 
   const handleBusinessInfoUpdate = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
-    setBusinessInfoLoading(true);
-
     try {
-      await api.auth.updateBusinessInfo(businessForm);
+      await updateBusinessInfoMutation.mutateAsync(businessForm);
 
       showToast("success", "Sukces", "Informacje biznesowe zostały zaktualizowane");
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
-    } finally {
-      setBusinessInfoLoading(false);
     }
   };
 
@@ -228,8 +206,12 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" variant="primary" disabled={passwordLoading}>
-                  {passwordLoading ? "Zapisywanie..." : "Zmień hasło"}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={changePasswordMutation.isPending}
+                >
+                  {changePasswordMutation.isPending ? "Zapisywanie..." : "Zmień hasło"}
                 </Button>
               </div>
             </form>
@@ -327,8 +309,12 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" variant="primary" disabled={businessInfoLoading}>
-                  {businessInfoLoading ? "Zapisywanie..." : "Zapisz informacje"}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={updateBusinessInfoMutation.isPending}
+                >
+                  {updateBusinessInfoMutation.isPending ? "Zapisywanie..." : "Zapisz informacje"}
                 </Button>
               </div>
             </form>

@@ -12,6 +12,7 @@ import { OrderTabs } from "../../../../components/orders/OrderTabs";
 import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
 import { UppyUploadModal } from "../../../../components/uppy/UppyUploadModal";
+import { usePayGallery } from "../../../../hooks/mutations/useGalleryMutations";
 import {
   useApproveChangeRequest,
   useDenyChangeRequest,
@@ -23,7 +24,7 @@ import { useGallery } from "../../../../hooks/useGallery";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
 import { usePageLogger } from "../../../../hooks/usePageLogger";
 import { useToast } from "../../../../hooks/useToast";
-import api, { formatApiError } from "../../../../lib/api-service";
+import { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import { useUserStore } from "../../../../store";
@@ -101,7 +102,8 @@ export default function OrderDetail() {
     return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeysRef.current);
   }, [finalImagesData, deletingImagesRef, deletedImageKeysRef]);
 
-  const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
+  // Payment mutation
+  const payGalleryMutation = usePayGallery();
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] = useState<boolean>(false);
 
@@ -276,12 +278,12 @@ export default function OrderDetail() {
       return;
     }
 
-    // Payment handled - no need to close wizard (we navigated away)
-    setPaymentLoading(true);
-
     try {
       // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
-      const data = await api.galleries.pay(galleryId as string, {});
+      const data = await payGalleryMutation.mutateAsync({
+        galleryId: galleryId as string,
+        options: {},
+      });
 
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
@@ -296,8 +298,6 @@ export default function OrderDetail() {
     } catch (err) {
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg ?? "Nie udało się opłacić galerii");
-    } finally {
-      setPaymentLoading(false);
     }
   };
 
@@ -528,7 +528,7 @@ export default function OrderDetail() {
           walletBalanceCents={walletBalance}
           walletAmountCents={paymentDetails.walletAmountCents}
           stripeAmountCents={paymentDetails.stripeAmountCents}
-          loading={paymentLoading}
+          loading={payGalleryMutation.isPending}
         />
       )}
     </div>

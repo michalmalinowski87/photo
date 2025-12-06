@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import Badge from "../components/ui/badge/Badge";
 import Button from "../components/ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
-import { usePageLogger } from "../hooks/usePageLogger";
-import { useToast } from "../hooks/useToast";
-import api, { formatApiError } from "../lib/api-service";
+import { useWalletBalance, useWalletTransactions } from "../hooks/queries/useWallet";
 import { formatPrice } from "../lib/format-price";
+import { queryKeys } from "../lib/react-query";
 
 interface Transaction {
   transactionId?: string;
@@ -26,94 +26,49 @@ interface PageHistoryItem {
 }
 
 export default function Wallet() {
-  const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
-    pageName: "Wallet",
-  });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [transactionsLoading, setTransactionsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [balance, setBalance] = useState<number | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const queryClient = useQueryClient();
+
+  // React Query hooks
+  const {
+    data: walletBalanceData,
+    isLoading: loading,
+    error: balanceError,
+  } = useWalletBalance();
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState<boolean>(false);
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
 
-  const loadBalance = async (): Promise<void> => {
-    logDataLoad("walletBalance", {});
-    setLoading(true);
-    setError("");
+  const {
+    data: transactionsData,
+    isLoading: transactionsLoading,
+    isFetching: transactionsFetching,
+    error: transactionsError,
+  } = useWalletTransactions(
+    paginationCursor ? { limit: "10", lastKey: paginationCursor } : { limit: "10" }
+  );
 
-    try {
-      const data = await api.wallet.getBalance();
-      const balanceCents = data.balanceCents ?? 0;
-      logDataLoaded(
-        "walletBalance",
-        { balanceCents },
-        { balancePLN: (balanceCents / 100).toFixed(2) }
-      );
-      setBalance(balanceCents);
-    } catch (err) {
-      logDataError("walletBalance", err);
-      setError(formatApiError(err as Error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTransactions = async (page: number, lastKey: string | null): Promise<void> => {
-    logDataLoad("transactions", { page, lastKey });
-    setTransactionsLoading(true);
-    setError("");
-
-    try {
-      const params: Record<string, string> = { limit: "10" };
-      if (lastKey) {
-        params.lastKey = lastKey;
-      }
-
-      const data = await api.wallet.getTransactions(params);
-      const transactionsData = (data.transactions ?? []) as Transaction[];
-      logDataLoaded("transactions", transactionsData, {
-        count: transactionsData.length,
-        page,
-        hasMore: data.hasMore,
-      });
-      setTransactions(transactionsData);
-      setHasMore(data.hasMore ?? false);
-      const newCursor = data.lastKey ?? null;
-      setPaginationCursor(newCursor);
-      setCurrentPage(page);
-
-      const historyIndex = pageHistory.findIndex((h) => h.page === page);
-      if (historyIndex >= 0) {
-        const newHistory = [...pageHistory];
-        newHistory[historyIndex] = { page, cursor: lastKey };
-        setPageHistory(newHistory);
-      } else {
-        setPageHistory([...pageHistory, { page, cursor: lastKey }]);
-      }
-    } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-    } finally {
-      setTransactionsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // Auth is handled by AuthProvider/ProtectedRoute - just load data
-    void loadBalance();
-    void loadTransactions(1, null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const transactions = (transactionsData?.transactions ?? []) as unknown as Transaction[];
+  const hasMore = transactionsData?.hasMore ?? false;
+  const balance = walletBalanceData?.balanceCents ?? 0;
+  const error = balanceError ?? transactionsError;
 
   const handleNextPage = (): void => {
-    if (hasMore && paginationCursor) {
+    if (hasMore && transactionsData?.lastKey) {
       const nextPage = currentPage + 1;
-      void loadTransactions(nextPage, paginationCursor);
+      const newCursor = transactionsData.lastKey;
+      setPaginationCursor(newCursor);
+      setCurrentPage(nextPage);
+
+      // Update page history
+      const historyIndex = pageHistory.findIndex((h) => h.page === nextPage);
+      if (historyIndex >= 0) {
+        const newHistory = [...pageHistory];
+        newHistory[historyIndex] = { page: nextPage, cursor: newCursor };
+        setPageHistory(newHistory);
+      } else {
+        setPageHistory([...pageHistory, { page: nextPage, cursor: newCursor }]);
+      }
     }
   };
 
@@ -122,16 +77,39 @@ export default function Wallet() {
       const previousPage = currentPage - 1;
       const previousPageData = pageHistory.find((h) => h.page === previousPage);
       if (previousPageData) {
-        void loadTransactions(previousPage, previousPageData.cursor);
+        setPaginationCursor(previousPageData.cursor);
+        setCurrentPage(previousPage);
       } else {
-        void loadTransactions(1, null);
+        setPaginationCursor(null);
+        setCurrentPage(1);
       }
     }
   };
 
   const handleTopUpComplete = (): void => {
-    void loadBalance();
-    void loadTransactions(1, null);
+    // Invalidate wallet balance and transactions to refetch
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.all });
+    // Reset to first page
+    setCurrentPage(1);
+    setPaginationCursor(null);
+    setPageHistory([{ page: 1, cursor: null }]);
+  };
+
+  const handleRefresh = (): void => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.wallet.transactions(
+        paginationCursor ? { limit: "10", lastKey: paginationCursor } : { limit: "10" }
+      ),
+    });
+  };
+
+  const handleRefreshTransactions = (): void => {
+    setCurrentPage(1);
+    setPageHistory([{ page: 1, cursor: null }]);
+    setPaginationCursor(null);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.transactions({ limit: "10" }) });
   };
 
   const getTransactionTypeLabel = (type: string): string => {
@@ -168,7 +146,11 @@ export default function Wallet() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Portfel</h1>
 
-      {error && <div>{error}</div>}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+          {error instanceof Error ? error.message : "Wystąpił błąd podczas ładowania danych"}
+        </div>
+      )}
 
       {loading ? (
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[325.33px] animate-fade-in-out"></div>
@@ -178,10 +160,10 @@ export default function Wallet() {
             <div>
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Saldo portfela</div>
               <div className="text-4xl font-bold text-gray-900 dark:text-white">
-                {balance !== null ? formatPrice(balance) : "0.00 PLN"}
+                {formatPrice(balance)}
               </div>
             </div>
-            <Button variant="outline" onClick={loadBalance} disabled={loading}>
+            <Button variant="outline" onClick={handleRefresh} disabled={loading}>
               Odśwież
             </Button>
           </div>
@@ -206,12 +188,8 @@ export default function Wallet() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setCurrentPage(1);
-                setPageHistory([{ page: 1, cursor: null }]);
-                void loadTransactions(1, null);
-              }}
-              disabled={transactionsLoading}
+              onClick={handleRefreshTransactions}
+              disabled={transactionsFetching}
             >
               Odśwież
             </Button>
@@ -335,7 +313,7 @@ export default function Wallet() {
                   variant="outline"
                   size="sm"
                   onClick={handlePreviousPage}
-                  disabled={transactionsLoading || currentPage === 1}
+                  disabled={transactionsFetching || currentPage === 1}
                 >
                   Poprzednia
                 </Button>
@@ -343,7 +321,7 @@ export default function Wallet() {
                   variant="outline"
                   size="sm"
                   onClick={handleNextPage}
-                  disabled={transactionsLoading || !hasMore}
+                  disabled={transactionsFetching || !hasMore}
                 >
                   Następna
                 </Button>

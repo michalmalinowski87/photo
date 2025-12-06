@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 
+import { usePayGallery, useUpdateGallery, useUpgradeGalleryPlan } from "../../hooks/mutations/useGalleryMutations";
+import { useGallery } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import Button from "../ui/button/Button";
 
@@ -36,6 +38,10 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
   onCancel,
 }) => {
   const { showToast } = useToast();
+  const { data: gallery } = useGallery(galleryId);
+  const payGalleryMutation = usePayGallery();
+  const updateGalleryMutation = useUpdateGallery();
+  const upgradeGalleryPlanMutation = useUpgradeGalleryPlan();
   const [isProcessing, setIsProcessing] = useState(false);
 
   if (!isOpen) {
@@ -60,41 +66,58 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
       // If not paid, use regular pay endpoint
       let paymentResult;
       try {
-        const gallery = await api.galleries.get(galleryId);
         const isPaid =
-          gallery.isPaid !== false &&
-          (gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE");
+          gallery?.isPaid !== false &&
+          (gallery?.paymentStatus === "PAID" || gallery?.state === "PAID_ACTIVE");
 
         if (isPaid) {
           // Gallery is paid - use upgrade endpoint (pay difference only)
-          paymentResult = await api.galleries.upgradePlan(galleryId, {
-            plan: nextTierPlan,
+          paymentResult = await upgradeGalleryPlanMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: nextTierPlan,
+            },
           });
         } else {
           // Gallery not paid - update plan and pay full amount
-          await api.galleries.update(galleryId, {
-            plan: nextTierPlan,
-            priceCents: nextTierPriceCents,
-            originalsLimitBytes: nextTierLimitBytes,
-            finalsLimitBytes: nextTierLimitBytes,
+          await updateGalleryMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: nextTierPlan,
+              priceCents: nextTierPriceCents,
+              originalsLimitBytes: nextTierLimitBytes,
+              finalsLimitBytes: nextTierLimitBytes,
+            },
           });
-          paymentResult = await api.galleries.pay(galleryId, {});
+          paymentResult = await payGalleryMutation.mutateAsync({
+            galleryId,
+            options: {},
+          });
         }
       } catch (_galleryError: unknown) {
         // If we can't determine payment status, try upgrade first, fall back to pay
         try {
-          paymentResult = await api.galleries.upgradePlan(galleryId, {
-            plan: nextTierPlan,
+          paymentResult = await upgradeGalleryPlanMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: nextTierPlan,
+            },
           });
-        } catch (_upgradeError) {
+        } catch {
           // Fall back to regular payment flow
-          await api.galleries.update(galleryId, {
-            plan: nextTierPlan,
-            priceCents: nextTierPriceCents,
-            originalsLimitBytes: nextTierLimitBytes,
-            finalsLimitBytes: nextTierLimitBytes,
+          await updateGalleryMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: nextTierPlan,
+              priceCents: nextTierPriceCents,
+              originalsLimitBytes: nextTierLimitBytes,
+              finalsLimitBytes: nextTierLimitBytes,
+            },
           });
-          paymentResult = await api.galleries.pay(galleryId, {});
+          paymentResult = await payGalleryMutation.mutateAsync({
+            galleryId,
+            options: {},
+          });
         }
       }
 

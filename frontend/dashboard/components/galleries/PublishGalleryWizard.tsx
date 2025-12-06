@@ -1,12 +1,14 @@
+import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
+import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { getPricingModalData } from "../../lib/calculate-plan";
 import { formatPrice } from "../../lib/format-price";
 import type { PricingModalData } from "../../lib/plan-types";
@@ -51,8 +53,6 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   const { walletBalanceCents, refreshWalletBalance } = useUserStore();
   const { refetch: refetchOrders } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
@@ -65,7 +65,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       try {
         // Refetch orders to get the latest
         const result = await refetchOrders();
-        const fetchedOrders = result.data || [];
+        const fetchedOrders = result.data ?? [];
         if (fetchedOrders && fetchedOrders.length > 0) {
           const firstOrder = fetchedOrders[0] as { orderId?: string };
           if (firstOrder?.orderId) {
@@ -109,27 +109,34 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       return;
     }
 
-    const loadData = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        // Load pricing data with default duration (1m) - we'll calculate other durations client-side
-        const data = await getPricingModalData(galleryId, "1m");
-        setPricingData(data);
+    // Load wallet balance
+    void refreshWalletBalance();
+  }, [isOpen, galleryId, refreshWalletBalance]);
 
-        // Load wallet balance
-        await refreshWalletBalance();
-      } catch (err) {
-        const errorMsg = formatApiError(err as Error);
-        setError(errorMsg);
-        showToast("error", "Błąd", errorMsg);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Load pricing data with React Query
+  const {
+    data: pricingDataFromQuery,
+    isLoading: pricingLoading,
+    error: pricingError,
+  } = useQuery({
+    queryKey: ["gallery", "pricing", galleryId, "1m"],
+    queryFn: () => getPricingModalData(galleryId, "1m"),
+    enabled: isOpen && !!galleryId,
+    staleTime: 60 * 1000, // Pricing data doesn't change frequently
+  });
 
-    void loadData();
-  }, [isOpen, galleryId, refreshWalletBalance, showToast]);
+  useEffect(() => {
+    if (pricingDataFromQuery) {
+      setPricingData(pricingDataFromQuery);
+    }
+  }, [pricingDataFromQuery]);
+
+  useEffect(() => {
+    if (pricingError) {
+      const errorMsg = formatApiError(pricingError);
+      showToast("error", "Błąd", errorMsg);
+    }
+  }, [pricingError, showToast]);
 
   // Extract storage size from suggested plan
   const suggestedStorage = useMemo(() => {
@@ -207,7 +214,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     void handleSelectPlan(selectedPlan);
   };
 
-  const [isTopUpLoading, setIsTopUpLoading] = useState(false);
+  const createCheckoutMutation = useCreateCheckout();
 
   const handleTopUp = useCallback(
     async (amountCents: number) => {
@@ -216,8 +223,6 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
         return;
       }
 
-      setIsTopUpLoading(true);
-
       try {
         // Construct redirect URL with wizard state
         const redirectUrl =
@@ -225,7 +230,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
             ? `${window.location.origin}${window.location.pathname}?publish=true&galleryId=${galleryId}&duration=${selectedDuration}&planKey=${selectedPlanKey ?? ""}`
             : "";
 
-        const data = await api.payments.createCheckout({
+        const data = await createCheckoutMutation.mutateAsync({
           amountCents,
           type: "wallet_topup",
           redirectUrl,
@@ -235,14 +240,12 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
           window.location.href = data.checkoutUrl;
         } else {
           showToast("error", "Błąd", "Nie otrzymano URL do płatności");
-          setIsTopUpLoading(false);
         }
       } catch (err) {
         showToast("error", "Błąd", formatApiError(err as Error));
-        setIsTopUpLoading(false);
       }
     },
-    [galleryId, selectedDuration, selectedPlanKey, showToast]
+    [galleryId, selectedDuration, selectedPlanKey, showToast, createCheckoutMutation]
   );
 
   const wizardContent = !isOpen ? null : (
@@ -263,15 +266,15 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto min-h-0 relative">
-        {error && (
+        {pricingError && (
           <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 max-w-4xl w-full px-8">
             <div className="p-4 bg-error-50 border border-error-200 rounded-xl text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
-              {error}
+              {formatApiError(pricingError)}
             </div>
           </div>
         )}
 
-        {loading ? (
+        {pricingLoading ? (
           <div className="h-full flex items-center justify-center p-8">
             <div className="w-full max-w-6xl mx-auto space-y-6">
               {/* Wallet Balance Section Skeleton */}
@@ -342,7 +345,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
                             size="sm"
                             variant="primary"
                             onClick={() => void handleTopUp(amountCents)}
-                            disabled={isTopUpLoading}
+                            disabled={createCheckoutMutation.isPending}
                           >
                             +{amountCents / 100} PLN
                           </Button>
@@ -416,7 +419,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
         <Button
           variant="outline"
           onClick={onClose}
-          disabled={isProcessing || loading}
+          disabled={isProcessing || pricingLoading}
           className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
         >
           Anuluj
@@ -424,7 +427,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
         <Button
           variant="primary"
           onClick={handlePublish}
-          disabled={isProcessing || loading || !selectedPlan}
+          disabled={isProcessing || pricingLoading || !selectedPlan}
           className="flex-1"
         >
           {isProcessing

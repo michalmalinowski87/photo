@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 
-import api, { formatApiError } from "../lib/api-service";
+import { usePayGallery, useUpdateGallery } from "./mutations/useGalleryMutations";
+import { formatApiError } from "../lib/api-service";
 import { getPlan, type PlanKey } from "../lib/pricing-plans";
 
 import { useToast } from "./useToast";
@@ -24,6 +25,8 @@ interface RedirectInfo {
 
 export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPaymentOptions) => {
   const { showToast } = useToast();
+  const payGalleryMutation = usePayGallery();
+  const updateGalleryMutation = useUpdateGallery();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRedirectOverlay, setShowRedirectOverlay] = useState(false);
   const [redirectInfo, setRedirectInfo] = useState<RedirectInfo | null>(null);
@@ -45,10 +48,13 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
         }
 
         // First, call dry run to determine payment method
-        const dryRunResult = await api.galleries.pay(galleryId, {
-          dryRun: true,
-          plan: selectedPlan.planKey,
-          priceCents: selectedPlan.priceCents,
+        const dryRunResult = await payGalleryMutation.mutateAsync({
+          galleryId,
+          options: {
+            dryRun: true,
+            plan: selectedPlan.planKey,
+            priceCents: selectedPlan.priceCents,
+          },
         });
 
         // If Stripe will be used, show redirect overlay first
@@ -58,15 +64,21 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
           dryRunResult.stripeAmountCents > 0
         ) {
           // Update gallery first
-          await api.galleries.update(galleryId, {
-            plan: selectedPlan.planKey,
-            priceCents: selectedPlan.priceCents,
-            originalsLimitBytes: planMetadata.storageLimitBytes,
-            finalsLimitBytes: planMetadata.storageLimitBytes,
+          await updateGalleryMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: selectedPlan.planKey,
+              priceCents: selectedPlan.priceCents,
+              originalsLimitBytes: planMetadata.storageLimitBytes,
+              finalsLimitBytes: planMetadata.storageLimitBytes,
+            },
           });
 
           // Get actual payment result
-          const paymentResult = await api.galleries.pay(galleryId, {});
+          const paymentResult = await payGalleryMutation.mutateAsync({
+            galleryId,
+            options: {},
+          });
 
           if (paymentResult.checkoutUrl) {
             setRedirectInfo({
@@ -82,11 +94,14 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
 
         // If wallet payment, proceed directly
         // First, update gallery with the selected plan details
-        await api.galleries.update(galleryId, {
-          plan: selectedPlan.planKey,
-          priceCents: selectedPlan.priceCents,
-          originalsLimitBytes: planMetadata.storageLimitBytes,
-          finalsLimitBytes: planMetadata.storageLimitBytes,
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: {
+            plan: selectedPlan.planKey,
+            priceCents: selectedPlan.priceCents,
+            originalsLimitBytes: planMetadata.storageLimitBytes,
+            finalsLimitBytes: planMetadata.storageLimitBytes,
+          },
         });
 
         // Construct redirect URL back to the current page
@@ -96,8 +111,11 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
             : undefined;
 
         // Now proceed to payment
-        const paymentResult = await api.galleries.pay(galleryId, {
-          redirectUrl,
+        const paymentResult = await payGalleryMutation.mutateAsync({
+          galleryId,
+          options: {
+            redirectUrl,
+          },
         });
 
         if (paymentResult.checkoutUrl) {
@@ -122,7 +140,7 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
         setIsProcessing(false);
       }
     },
-    [galleryId, showToast, onSuccess, onClose]
+    [galleryId, showToast, onSuccess, onClose, payGalleryMutation, updateGalleryMutation]
   );
 
   return {

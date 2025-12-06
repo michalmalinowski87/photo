@@ -1,6 +1,7 @@
 import React, { ComponentType, useCallback } from "react";
 
-import api, { formatApiError } from "../lib/api-service";
+import { useDownloadZip, useDownloadFinalZip } from "../hooks/mutations/useOrderMutations";
+import { formatApiError } from "../lib/api-service";
 import { useDownloadStore } from "../store";
 
 interface ZipDownloadConfig {
@@ -28,6 +29,8 @@ export function withZipDownload<P extends object>(
 ) {
   return function ZipDownloadComponent(props: P & { config?: ZipDownloadConfig }) {
     const { addDownload, updateDownload, removeDownload } = useDownloadStore();
+    const downloadZipMutation = useDownloadZip();
+    const downloadFinalZipMutation = useDownloadFinalZip();
 
     const downloadZip = useCallback(
       async (config: ZipDownloadConfig) => {
@@ -56,8 +59,8 @@ export function withZipDownload<P extends object>(
             // Determine which API method to use based on endpoint
             const isFinalZip = endpoint.includes("/final/zip");
             const result = isFinalZip
-              ? await api.orders.downloadFinalZip(galleryId, orderId)
-              : await api.orders.downloadZip(galleryId, orderId);
+              ? await downloadFinalZipMutation.mutateAsync({ galleryId, orderId })
+              : await downloadZipMutation.mutateAsync({ galleryId, orderId });
 
             // Handle 202 - ZIP is being generated
             if (result.status === 202 || result.generating) {
@@ -111,7 +114,7 @@ export function withZipDownload<P extends object>(
         // Start polling
         pollForZip();
       },
-      [addDownload, updateDownload, removeDownload]
+      [addDownload, updateDownload, removeDownload, downloadZipMutation, downloadFinalZipMutation]
     );
 
     // Pass downloadZip function to wrapped component
@@ -124,6 +127,8 @@ export function withZipDownload<P extends object>(
  */
 export function useZipDownload() {
   const { addDownload, updateDownload, removeDownload } = useDownloadStore();
+  const downloadZipMutation = useDownloadZip();
+  const downloadFinalZipMutation = useDownloadFinalZip();
 
   const downloadZip = useCallback(
     async (config: ZipDownloadConfig) => {
@@ -152,8 +157,8 @@ export function useZipDownload() {
           // Determine which API method to use based on endpoint
           const isFinalZip = endpoint.includes("/final/zip");
           const result = isFinalZip
-            ? await api.orders.downloadFinalZip(galleryId, orderId)
-            : await api.orders.downloadZip(galleryId, orderId);
+            ? await downloadFinalZipMutation.mutateAsync({ galleryId, orderId })
+            : await downloadZipMutation.mutateAsync({ galleryId, orderId });
 
           // Handle 202 - ZIP is being generated
           if (result.status === 202 || result.generating) {
@@ -204,7 +209,7 @@ export function useZipDownload() {
 
       pollForZip();
     },
-    [addDownload, updateDownload, removeDownload]
+    [addDownload, updateDownload, removeDownload, downloadZipMutation, downloadFinalZipMutation]
   );
 
   return { downloadZip };

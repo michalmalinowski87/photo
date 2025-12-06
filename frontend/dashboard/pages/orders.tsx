@@ -1,71 +1,59 @@
 import React, { useState } from "react";
 
-import { usePageLogger } from "../hooks/usePageLogger";
-import api, { formatApiError } from "../lib/api-service";
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+  useDownloadZip,
+  useMarkOrderCanceled,
+  useMarkOrderPaid,
+  useMarkOrderPartiallyPaid,
+  useMarkOrderRefunded,
+  useSendFinalLink,
+  useUploadFinalPhotos,
+} from "../hooks/mutations/useOrderMutations";
+import { useGallery } from "../hooks/queries/useGalleries";
+import { useOrders } from "../hooks/queries/useOrders";
+import { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { formatPrice } from "../lib/format-price";
-import type { Gallery, Order } from "../types";
-
-interface OrdersResponse {
-  items?: Order[];
-  gallery?: Gallery;
-  [key: string]: unknown;
-}
 
 export default function Orders() {
-  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
-    pageName: "Orders",
-  });
   const [apiUrl, setApiUrl] = useState<string>("");
   const [galleryId, setGalleryId] = useState<string>("");
   const [idToken, setIdToken] = useState<string>("");
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [gallery, setGallery] = useState<Gallery | null>(null);
   const [message, setMessage] = useState<string>("");
-  const [downloadingZip, setDownloadingZip] = useState<Record<string, boolean>>({});
-  const [uploadingFinal, setUploadingFinal] = useState<Record<string, boolean>>({});
   const [finalFiles, setFinalFiles] = useState<Record<string, File[]>>({});
 
-  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
+  // Mutations
+  const approveChangeRequestMutation = useApproveChangeRequest();
+  const denyChangeRequestMutation = useDenyChangeRequest();
+  const downloadZipMutation = useDownloadZip();
+  const uploadFinalPhotosMutation = useUploadFinalPhotos();
+  const markOrderPaidMutation = useMarkOrderPaid();
+  const markOrderPartiallyPaidMutation = useMarkOrderPartiallyPaid();
+  const markOrderCanceledMutation = useMarkOrderCanceled();
+  const markOrderRefundedMutation = useMarkOrderRefunded();
+  const sendFinalLinkMutation = useSendFinalLink();
 
-  async function loadOrders(): Promise<void> {
-    setMessage("");
-    if (!galleryId) {
-      setMessage("Need Gallery ID");
-      return;
-    }
-    logDataLoad("orders", { galleryId });
-    try {
-      const response = await api.orders.getByGallery(galleryId);
-      const parsedData: OrdersResponse = {
-        items: Array.isArray(response.items) ? response.items : [],
-      };
+  // Track which order is being processed for per-order loading states
+  const [downloadingZipOrderId, setDownloadingZipOrderId] = useState<string | null>(null);
+  const [uploadingFinalOrderId, setUploadingFinalOrderId] = useState<string | null>(null);
 
-      // Extract items array and gallery metadata
-      const ordersData = parsedData?.items;
-      const galleryData = parsedData?.gallery;
+  // React Query hooks - only fetch when galleryId is provided
+  const {
+    data: ordersData,
+    refetch: refetchOrders,
+  } = useOrders(galleryId, {
+    enabled: !!galleryId,
+  });
 
-      if (Array.isArray(ordersData)) {
-        logDataLoaded("orders", ordersData, { count: ordersData.length, galleryId });
-        setOrders(ordersData);
-        setGallery(galleryData ?? null);
-        if (ordersData.length === 0) {
-          setMessage("No orders found for this gallery");
-        } else {
-          setMessage(`Loaded ${ordersData.length} order(s)`);
-        }
-      } else {
-        const errorMsg = `Unexpected response format. Expected items array, got: ${typeof ordersData}`;
-        logDataError("orders", errorMsg);
-        setMessage(errorMsg);
-        setOrders([]);
-      }
-    } catch (error) {
-      logDataError("orders", error);
-      setMessage(formatApiError(error));
-      setOrders([]);
-    }
-  }
+  const {
+    data: gallery,
+  } = useGallery(galleryId || undefined, {
+    enabled: !!galleryId,
+  });
+
+  const orders = ordersData ?? [];
 
   async function approveChange(orderId: string): Promise<void> {
     setMessage("");
@@ -74,9 +62,9 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.approveChangeRequest(galleryId, orderId);
+      await approveChangeRequestMutation.mutateAsync({ galleryId, orderId });
       setMessage("Change request approved - selection unlocked");
-      await loadOrders();
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -89,9 +77,9 @@ export default function Orders() {
       return;
     }
     try {
-      await api.orders.denyChangeRequest(galleryId, orderId);
+      await denyChangeRequestMutation.mutateAsync({ galleryId, orderId });
       setMessage("Change request denied - order reverted to previous status");
-      await loadOrders();
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -99,55 +87,19 @@ export default function Orders() {
 
   async function downloadZip(orderId: string): Promise<void> {
     setMessage("");
-    setDownloadingZip({ [orderId]: true });
     if (!galleryId) {
       setMessage("Gallery ID required");
-      setDownloadingZip({});
       return;
     }
+    setDownloadingZipOrderId(orderId);
     try {
-      const result = await api.orders.downloadZip(galleryId, orderId);
-
-      // Handle 202 - ZIP is being generated (shouldn't happen in this context, but handle it)
-      if (result.status === 202 || result.generating) {
-        setMessage("ZIP is being generated, please wait...");
-        // Could implement polling here if needed
-        return;
-      }
-
-      let blob: Blob;
-      let filename: string;
-
-      if (result.blob) {
-        // Binary blob response
-        blob = result.blob;
-        filename = result.filename ?? `${orderId}.zip`;
-      } else if (result.zip) {
-        // Base64 ZIP response (backward compatibility)
-        const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-        blob = new Blob([zipBlob], { type: "application/zip" });
-        filename = result.filename ?? `${orderId}.zip`;
-      } else {
-        setMessage("No ZIP file available");
-        return;
-      }
-
-      // Trigger download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
+      await downloadZipMutation.mutateAsync({ galleryId, orderId });
       setMessage(`Download started for order ${orderId}`);
-      await loadOrders(); // Reload to refresh order state
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
-      setDownloadingZip({});
+      setDownloadingZipOrderId(null);
     }
   }
 
@@ -166,17 +118,9 @@ export default function Orders() {
       return;
     }
     try {
-      const response = await api.orders.markPaid(galleryId, orderId);
-
-      // Merge lightweight response into orders array instead of refetching
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === orderId
-            ? { ...order, paymentStatus: response.paymentStatus, paidAt: response.paidAt }
-            : order
-        )
-      );
+      await markOrderPaidMutation.mutateAsync({ galleryId, orderId });
       setMessage("Order marked as paid");
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -194,21 +138,9 @@ export default function Orders() {
       return;
     }
     try {
-      const response = await api.orders.markCanceled(galleryId, orderId);
-
-      // Merge lightweight response into orders array instead of refetching
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === orderId
-            ? {
-                ...order,
-                deliveryStatus: response.deliveryStatus,
-                canceledAt: response.canceledAt,
-              }
-            : order
-        )
-      );
+      await markOrderCanceledMutation.mutateAsync({ galleryId, orderId });
       setMessage("Zlecenie oznaczone jako anulowane");
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -230,21 +162,9 @@ export default function Orders() {
       return;
     }
     try {
-      const response = await api.orders.markRefunded(galleryId, orderId);
-
-      // Merge lightweight response into orders array instead of refetching
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === orderId
-            ? {
-                ...order,
-                paymentStatus: response.paymentStatus,
-                refundedAt: response.refundedAt,
-              }
-            : order
-        )
-      );
+      await markOrderRefundedMutation.mutateAsync({ galleryId, orderId });
       setMessage("Zlecenie oznaczone jako zwrócone");
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -266,21 +186,9 @@ export default function Orders() {
       return;
     }
     try {
-      const response = await api.orders.markPartiallyPaid(galleryId, orderId);
-
-      // Merge lightweight response into orders array instead of refetching
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === orderId
-            ? {
-                ...order,
-                paymentStatus: response.paymentStatus,
-                partiallyPaidAt: response.partiallyPaidAt,
-              }
-            : order
-        )
-      );
+      await markOrderPartiallyPaidMutation.mutateAsync({ galleryId, orderId });
       setMessage("Zlecenie oznaczone jako częściowo opłacone");
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -293,21 +201,9 @@ export default function Orders() {
       return;
     }
     try {
-      const response = await api.orders.sendFinalLink(galleryId, orderId);
-
-      // Merge lightweight response into orders array instead of refetching
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.orderId === orderId
-            ? {
-                ...order,
-                deliveryStatus: response.deliveryStatus,
-                deliveredAt: response.deliveredAt,
-              }
-            : order
-        )
-      );
+      await sendFinalLinkMutation.mutateAsync({ galleryId, orderId });
       setMessage("Final link sent to client");
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     }
@@ -316,6 +212,11 @@ export default function Orders() {
   async function uploadFinalPhotos(orderId: string): Promise<void> {
     if (!finalFiles[orderId] || finalFiles[orderId].length === 0) {
       setMessage("Please select files to upload");
+      return;
+    }
+
+    if (!galleryId) {
+      setMessage("Gallery ID required");
       return;
     }
 
@@ -330,40 +231,22 @@ export default function Orders() {
       }
     }
 
-    setUploadingFinal({ ...uploadingFinal, [orderId]: true });
+    setUploadingFinalOrderId(orderId);
     setMessage("");
     try {
       const files = finalFiles[orderId];
-      for (const file of files) {
-        const fileName = file.name;
-        // Get presigned URL
-        const pr = await api.uploads.getFinalImagePresignedUrl(galleryId, orderId, {
-          key: fileName,
-          contentType: file.type ?? "application/octet-stream",
-        });
-        // Upload file
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
-            }
-          });
-          xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-          xhr.open("PUT", pr.url);
-          xhr.setRequestHeader("Content-Type", file.type ?? "application/octet-stream");
-          xhr.send(file);
-        });
-      }
+      await uploadFinalPhotosMutation.mutateAsync({
+        galleryId,
+        orderId,
+        files,
+      });
       setMessage(`Uploaded ${files.length} file(s) successfully`);
       setFinalFiles({ ...finalFiles, [orderId]: [] });
-      await loadOrders();
+      await refetchOrders();
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
-      setUploadingFinal({ ...uploadingFinal, [orderId]: false });
+      setUploadingFinalOrderId(null);
     }
   }
 
@@ -438,7 +321,7 @@ export default function Orders() {
             onChange={(e) => setGalleryId(e.target.value)}
           />
         </div>
-        <button onClick={() => loadOrders()} disabled={!apiUrl || !galleryId || !idToken}>
+        <button onClick={() => refetchOrders()} disabled={!apiUrl || !galleryId || !idToken}>
           Load Orders
         </button>
       </div>
@@ -481,11 +364,11 @@ export default function Orders() {
                     {o.deliveryStatus === "CLIENT_APPROVED" && (
                       <button
                         onClick={() => downloadZip(o.orderId)}
-                        disabled={downloadingZip[o.orderId]}
+                        disabled={downloadingZipOrderId === o.orderId || downloadZipMutation.isPending}
                         className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Download ZIP file (one-time use)"
                       >
-                        {downloadingZip[o.orderId] ? "Downloading..." : "Download ZIP"}
+                        {downloadingZipOrderId === o.orderId ? "Downloading..." : "Download ZIP"}
                       </button>
                     )}
                     {/* Mark as Paid - available for UNPAID orders */}
@@ -564,12 +447,13 @@ export default function Orders() {
                           disabled={
                             !finalFiles[o.orderId] ||
                             finalFiles[o.orderId].length === 0 ||
-                            uploadingFinal[o.orderId]
+                            uploadingFinalOrderId === o.orderId ||
+                            uploadFinalPhotosMutation.isPending
                           }
-                          className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinal[o.orderId] ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
+                          className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
                           title="Upload processed photos (stored in original, unprocessed format)"
                         >
-                          {uploadingFinal[o.orderId] ? "Uploading..." : "Upload Final Photos"}
+                          {uploadingFinalOrderId === o.orderId ? "Uploading..." : "Upload Final Photos"}
                         </button>
                       </div>
                     )}

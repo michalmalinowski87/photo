@@ -11,11 +11,13 @@ import Button from "../../components/ui/button/Button";
 import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
+import { usePayGallery, useSendGalleryToClient } from "../../hooks/mutations/useGalleryMutations";
+import { useApproveChangeRequest, useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import { useGalleryStore } from "../../store";
 import type { Gallery } from "../../types";
@@ -228,10 +230,14 @@ export default function GalleryDetail() {
   const [showSendLinkModal, setShowSendLinkModal] = useState<boolean>(false);
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [walletBalance, _setWalletBalance] = useState<number>(0);
-  const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
-  const [denyLoading, setDenyLoading] = useState<boolean>(false);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
+
+  // Mutations
+  const payGalleryMutation = usePayGallery();
+  const approveChangeRequestMutation = useApproveChangeRequest();
+  const denyChangeRequestMutation = useDenyChangeRequest();
+  const sendGalleryToClientMutation = useSendGalleryToClient();
   const [paymentDetails, _setPaymentDetails] = useState<PaymentDetails>({
     totalAmountCents: 0,
     walletAmountCents: 0,
@@ -258,7 +264,7 @@ export default function GalleryDetail() {
 
     try {
       const result = await refetchOrders();
-      const loadedOrders = result.data || [];
+      const loadedOrders = result.data ?? [];
       logDataLoaded("orders", loadedOrders, {
         count: loadedOrders.length,
         galleryId: galleryIdForQuery,
@@ -377,7 +383,7 @@ export default function GalleryDetail() {
         const redirectToOrder = async () => {
           try {
             const result = await refetchOrders();
-            const fetchedOrders = result.data || [];
+            const fetchedOrders = result.data ?? [];
             if (fetchedOrders.length > 0) {
               const firstOrder = fetchedOrders[0];
               if (firstOrder?.orderId) {
@@ -410,7 +416,7 @@ export default function GalleryDetail() {
 
     logUserAction("approveChangeRequest", { galleryId, orderId });
     try {
-      await api.orders.approveChangeRequest(galleryId as string, orderId);
+      await approveChangeRequestMutation.mutateAsync({ galleryId: galleryId as string, orderId });
 
       showToast(
         "success",
@@ -438,10 +444,12 @@ export default function GalleryDetail() {
       return;
     }
 
-    setDenyLoading(true);
-
     try {
-      await api.orders.denyChangeRequest(galleryId as string, denyOrderId, reason ?? "");
+      await denyChangeRequestMutation.mutateAsync({
+        galleryId: galleryId as string,
+        orderId: denyOrderId,
+        reason: reason ?? "",
+      });
 
       showToast(
         "success",
@@ -453,8 +461,6 @@ export default function GalleryDetail() {
       await loadOrders();
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się odrzucić prośby o zmiany");
-    } finally {
-      setDenyLoading(false);
     }
   };
 
@@ -464,12 +470,14 @@ export default function GalleryDetail() {
     }
 
     setShowPaymentModal(false);
-    setPaymentLoading(true);
 
     try {
       // Backend will automatically use full Stripe if wallet is insufficient (no partial payments)
       // Call pay endpoint without dryRun to actually process payment
-      const data = await api.galleries.pay(galleryId as string, {});
+      const data = await payGalleryMutation.mutateAsync({
+        galleryId: galleryId as string,
+        options: {},
+      });
 
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
@@ -483,8 +491,6 @@ export default function GalleryDetail() {
     } catch (err) {
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg ?? "Nie udało się opłacić galerii");
-    } finally {
-      setPaymentLoading(false);
     }
   };
 
@@ -497,7 +503,7 @@ export default function GalleryDetail() {
     const isReminder = orders && orders.length > 0;
 
     try {
-      const responseData = await api.galleries.sendToClient(galleryId as string);
+      const responseData = await sendGalleryToClientMutation.mutateAsync(galleryId as string);
       const isReminderResponse = responseData.isReminder ?? isReminder;
 
       showToast(
@@ -754,7 +760,7 @@ export default function GalleryDetail() {
           setDenyOrderId(null);
         }}
         onConfirm={handleDenyConfirm}
-        loading={denyLoading}
+        loading={denyChangeRequestMutation.isPending}
       />
 
       {/* Payment Confirmation Modal */}
@@ -762,14 +768,13 @@ export default function GalleryDetail() {
         isOpen={showPaymentModal}
         onClose={() => {
           setShowPaymentModal(false);
-          setPaymentLoading(false);
         }}
         onConfirm={handlePaymentConfirm}
         totalAmountCents={paymentDetails.totalAmountCents}
         walletBalanceCents={walletBalance}
         walletAmountCents={paymentDetails.walletAmountCents}
         stripeAmountCents={paymentDetails.stripeAmountCents}
-        loading={paymentLoading}
+        loading={payGalleryMutation.isPending}
       />
     </>
   );

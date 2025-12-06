@@ -1,9 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
-import { useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
-import api, { formatApiError } from "../../lib/api-service";
+import { useApproveChangeRequest, useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
+import api from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import { queryKeys } from "../../lib/react-query";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Loading } from "../ui/loading/Loading";
@@ -39,27 +41,26 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   title,
   excludeDeliveryStatus,
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [orders, setOrders] = useState<Order[]>([]);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [hasNextPage, setHasNextPage] = useState(false);
-  const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const itemsPerPage = 20;
   const [denyModalOpen, setDenyModalOpen] = useState(false);
   const [denyGalleryId, setDenyGalleryId] = useState<string | null>(null);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
   
-  // Use React Query mutation for deny change request
+  // Mutations
+  const approveChangeRequestMutation = useApproveChangeRequest();
   const denyChangeRequestMutation = useDenyChangeRequest();
-  const denyLoading = denyChangeRequestMutation.isPending;
 
-  const loadOrders = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
+  // React Query hook with custom params for modal
+  // Using queryKeys factory for proper cache management
+  const {
+    data: ordersData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: [...queryKeys.orders.lists(), "modal", page, itemsPerPage, excludeDeliveryStatus],
+    queryFn: async () => {
       const params: Record<string, string> = {
         page: page.toString(),
         itemsPerPage: itemsPerPage.toString(),
@@ -67,47 +68,26 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
       if (excludeDeliveryStatus) {
         params.excludeDeliveryStatus = excludeDeliveryStatus;
       }
+      return await api.orders.list(params);
+    },
+    enabled: isOpen,
+    staleTime: 30 * 1000,
+  });
 
-      const response = await api.orders.list(params);
+  interface OrdersResponse {
+    items?: Order[];
+    totalPages?: number;
+    hasNextPage?: boolean;
+    hasPreviousPage?: boolean;
+  }
 
-      interface OrdersResponse {
-        items?: Order[];
-        totalPages?: number;
-        hasNextPage?: boolean;
-        hasPreviousPage?: boolean;
-      }
-      let allOrders: Order[] = [];
-      if (Array.isArray(response)) {
-        allOrders = response as Order[];
-      } else {
-        const typedData = response as OrdersResponse;
-        if (typedData && Array.isArray(typedData.items)) {
-          allOrders = typedData.items;
-          setTotalPages(typedData.totalPages ?? 1);
-          setHasNextPage(typedData.hasNextPage ?? false);
-          setHasPreviousPage(typedData.hasPreviousPage ?? false);
-        } else {
-          setError("Nieprawidłowy format odpowiedzi z API");
-          return;
-        }
-      }
-
-      setOrders(allOrders);
-    } catch (err) {
-      setError(formatApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
-
-  useEffect(() => {
-    if (isOpen) {
-      void loadOrders();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, page, excludeDeliveryStatus]);
+  const typedData = ordersData as OrdersResponse | Order[] | undefined;
+  const orders: Order[] = Array.isArray(typedData)
+    ? typedData
+    : typedData?.items ?? [];
+  const totalPages = Array.isArray(typedData) ? 1 : typedData?.totalPages ?? 1;
+  const hasNextPage = Array.isArray(typedData) ? false : typedData?.hasNextPage ?? false;
+  const hasPreviousPage = Array.isArray(typedData) ? false : typedData?.hasPreviousPage ?? false;
 
   const getDeliveryStatusBadge = (status: string) => {
     const statusMap: Record<string, { color: BadgeColor; label: string }> = {
@@ -166,7 +146,11 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
       <div className="p-6 flex-1 overflow-y-auto">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{title}</h2>
 
-        {error && <div>{error}</div>}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+            {error instanceof Error ? error.message : "Wystąpił błąd podczas ładowania danych"}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -282,18 +266,19 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                                     return;
                                   }
                                   try {
-                                    await api.orders.approveChangeRequest(
-                                      order.galleryId,
-                                      order.orderId
-                                    );
-                                    await loadOrders();
-                                  } catch (err) {
-                                    setError(formatApiError(err));
+                                    await approveChangeRequestMutation.mutateAsync({
+                                      galleryId: order.galleryId,
+                                      orderId: order.orderId,
+                                    });
+                                    await refetch();
+                                  } catch {
+                                    // Error handled by React Query
                                   }
                                 }}
+                                disabled={approveChangeRequestMutation.isPending}
                                 className="bg-green-600 hover:bg-green-700 text-white"
                               >
-                                Zatwierdź
+                                {approveChangeRequestMutation.isPending ? "Zatwierdzanie..." : "Zatwierdź"}
                               </Button>
                               <Button
                                 size="sm"
@@ -371,12 +356,12 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
             setDenyModalOpen(false);
             setDenyGalleryId(null);
             setDenyOrderId(null);
-            await loadOrders();
-          } catch (err) {
-            setError(formatApiError(err));
+            await refetch();
+          } catch {
+            // Error handled by React Query
           }
         }}
-        loading={denyLoading}
+        loading={denyChangeRequestMutation.isPending}
       />
     </Modal>
   );

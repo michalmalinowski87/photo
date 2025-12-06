@@ -1,14 +1,14 @@
 import { AlertTriangle, Save } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 
 import {
   useUpdateGalleryClientPassword,
   useUpdateGalleryPricingPackage,
 } from "../../hooks/mutations/useGalleryMutations";
-import { useGallery } from "../../hooks/queries/useGalleries";
+import { useGallery, useGalleryDeliveredOrders } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/currency";
 import { generatePassword } from "../../lib/password";
 import Button from "../ui/button/Button";
@@ -49,8 +49,11 @@ export function GallerySettingsForm({
   // Don't fetch gallery here - GalleryLayoutWrapper handles all gallery fetching
   // This component should only read from the store, not trigger fetches
   // The gallery should already be loaded by GalleryLayoutWrapper before this component renders
-  const [hasDeliveredOrders, setHasDeliveredOrders] = useState<boolean>(false);
-  const [checkingDelivered, setCheckingDelivered] = useState<boolean>(true);
+  const {
+    data: deliveredOrders = [],
+    isLoading: checkingDelivered,
+  } = useGalleryDeliveredOrders(galleryId);
+  const hasDeliveredOrders = deliveredOrders.length > 0;
 
   // Use React Query mutations for data operations
   const updateClientPasswordMutation = useUpdateGalleryClientPassword();
@@ -67,29 +70,6 @@ export function GallerySettingsForm({
   });
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
-
-  const checkDeliveredOrders = useCallback(async (): Promise<void> => {
-    if (!galleryId) {
-      return;
-    }
-    setCheckingDelivered(true);
-    try {
-      const data = await api.galleries.checkDeliveredOrders(galleryId);
-      const items = Array.isArray(data) ? data : (data?.items ?? []);
-      const hasDelivered = Array.isArray(items) && items.length > 0;
-      setHasDeliveredOrders(hasDelivered);
-    } catch (_err) {
-      setHasDeliveredOrders(false);
-    } finally {
-      setCheckingDelivered(false);
-    }
-  }, [galleryId]);
-
-  useEffect(() => {
-    if (galleryId) {
-      void checkDeliveredOrders();
-    }
-  }, [galleryId, checkDeliveredOrders]);
 
   // Gallery data comes from GalleryContext - initialize form when gallery loads
   useEffect(() => {

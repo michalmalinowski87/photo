@@ -7,9 +7,14 @@ import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
-import { usePageLogger } from "../hooks/usePageLogger";
+import {
+  useCreateClient,
+  useDeleteClient,
+  useUpdateClient,
+} from "../hooks/mutations/useClientMutations";
+import { useClients } from "../hooks/queries/useClients";
 import { useToast } from "../hooks/useToast";
-import api, { formatApiError } from "../lib/api-service";
+import { formatApiError } from "../lib/api-service";
 
 interface Client {
   clientId: string;
@@ -41,13 +46,12 @@ interface PageHistoryItem {
 
 export default function Clients() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded } = usePageLogger({
-    pageName: "Clients",
-  });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [initialLoad, setInitialLoad] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [clients, setClients] = useState<Client[]>([]);
+
+  // Mutations
+  const createClientMutation = useCreateClient();
+  const updateClientMutation = useUpdateClient();
+  const deleteClientMutation = useDeleteClient();
+
   const [showForm, setShowForm] = useState<boolean>(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState<ClientFormData>({
@@ -62,83 +66,48 @@ export default function Clients() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState<boolean>(false);
   const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
 
-  const loadClients = async (
-    page: number,
-    lastKey: string | null,
-    search: string
-  ): Promise<void> => {
-    logDataLoad("clients", { page, lastKey, search });
-    setLoading(true);
-    setError("");
-
-    try {
-      const params: Record<string, string> = {};
-      params.limit = "20";
-
-      if (search) {
-        const offset = (page - 1) * 20;
-        params.search = search;
-        params.offset = offset.toString();
-      } else {
-        if (lastKey) {
-          params.lastKey = lastKey;
-        }
+  // Build query params based on search vs pagination
+  const queryParams = searchQuery
+    ? {
+        limit: "20",
+        search: searchQuery,
+        offset: ((currentPage - 1) * 20).toString(),
       }
+    : paginationCursor
+      ? { limit: "20", lastKey: paginationCursor }
+      : { limit: "20" };
 
-      const data = await api.clients.list(params);
-      const clientsData = data.items ?? [];
-      logDataLoaded("clients", clientsData, {
-        count: clientsData.length,
-        page,
-        hasMore: data.hasMore,
-      });
-      setClients(clientsData);
-      setHasMore(data.hasMore ?? false);
-      const newCursor = data.lastKey ?? null;
-      setPaginationCursor(newCursor);
-      setCurrentPage(page);
+  // React Query hook
+  const {
+    data: clientsData,
+    isLoading: loading,
+    isFetching,
+    error,
+  } = useClients(queryParams);
 
-      if (!search) {
-        const historyIndex = pageHistory.findIndex((h) => h.page === page);
-        if (historyIndex >= 0) {
-          const newHistory = [...pageHistory];
-          newHistory[historyIndex] = { page, cursor: lastKey };
-          setPageHistory(newHistory);
-        } else {
-          setPageHistory([...pageHistory, { page, cursor: lastKey }]);
-        }
-      }
+  const clients = clientsData?.items ?? [];
+  const hasMore = clientsData?.hasMore ?? false;
 
-      if (initialLoad) {
-        setInitialLoad(false);
-      }
-    } catch (err) {
-      setError(formatApiError(err as Error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Update pagination cursor when data changes (only for non-search pagination)
   useEffect(() => {
-    // Auth is handled by AuthProvider/ProtectedRoute - just load data
-    void loadClients(1, null, "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!searchQuery && clientsData?.lastKey !== undefined) {
+      setPaginationCursor(clientsData.lastKey);
+    }
+  }, [clientsData?.lastKey, searchQuery]);
 
+  // Handle search query changes with debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       setCurrentPage(1);
       setPageHistory([{ page: 1, cursor: null }]);
-      void loadClients(1, null, searchQuery);
+      setPaginationCursor(null);
     }, 300);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const handleCreate = (): void => {
@@ -170,33 +139,24 @@ export default function Clients() {
   };
 
   const handleSave = async (): Promise<void> => {
-    setLoading(true);
-    setError("");
-
     try {
       if (editingClient) {
-        await api.clients.update(editingClient.clientId, formData);
+        await updateClientMutation.mutateAsync({
+          clientId: editingClient.clientId,
+          data: formData,
+        });
       } else {
-        await api.clients.create(formData);
+        await createClientMutation.mutateAsync(formData);
       }
 
       setShowForm(false);
-      await loadClients(
-        currentPage,
-        pageHistory.find((h) => h.page === currentPage)?.cursor ?? null,
-        searchQuery
-      );
       showToast(
         "success",
         "Sukces",
         editingClient ? "Klient został zaktualizowany" : "Klient został utworzony"
       );
     } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-    } finally {
-      setLoading(false);
+      showToast("error", "Błąd", formatApiError(err as Error));
     }
   };
 
@@ -210,26 +170,14 @@ export default function Clients() {
       return;
     }
 
-    setLoading(true);
-    setError("");
     setDeleteConfirmOpen(false);
 
     try {
-      await api.clients.delete(clientToDelete);
-
-      await loadClients(
-        currentPage,
-        pageHistory.find((h) => h.page === currentPage)?.cursor ?? null,
-        searchQuery
-      );
+      await deleteClientMutation.mutateAsync(clientToDelete);
       showToast("success", "Sukces", "Klient został usunięty");
       setClientToDelete(null);
     } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-    } finally {
-      setLoading(false);
+      showToast("error", "Błąd", formatApiError(err as Error));
     }
   };
 
@@ -237,10 +185,19 @@ export default function Clients() {
     if (hasMore) {
       const nextPage = currentPage + 1;
       if (searchQuery) {
-        void loadClients(nextPage, null, searchQuery);
+        setCurrentPage(nextPage);
       } else {
         if (paginationCursor) {
-          void loadClients(nextPage, paginationCursor, searchQuery);
+          const newCursor = paginationCursor;
+          setCurrentPage(nextPage);
+          const historyIndex = pageHistory.findIndex((h) => h.page === nextPage);
+          if (historyIndex >= 0) {
+            const newHistory = [...pageHistory];
+            newHistory[historyIndex] = { page: nextPage, cursor: newCursor };
+            setPageHistory(newHistory);
+          } else {
+            setPageHistory([...pageHistory, { page: nextPage, cursor: newCursor }]);
+          }
         }
       }
     }
@@ -250,13 +207,15 @@ export default function Clients() {
     if (currentPage > 1) {
       const previousPage = currentPage - 1;
       if (searchQuery) {
-        void loadClients(previousPage, null, searchQuery);
+        setCurrentPage(previousPage);
       } else {
         const previousPageData = pageHistory.find((h) => h.page === previousPage);
         if (previousPageData) {
-          void loadClients(previousPage, previousPageData.cursor, searchQuery);
+          setPaginationCursor(previousPageData.cursor);
+          setCurrentPage(previousPage);
         } else {
-          void loadClients(1, null, searchQuery);
+          setPaginationCursor(null);
+          setCurrentPage(1);
         }
       }
     }
@@ -278,7 +237,7 @@ export default function Clients() {
           </button>
         </div>
 
-        {error && <div>{error}</div>}
+        {error && <div>{formatApiError(error)}</div>}
 
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
@@ -375,8 +334,14 @@ export default function Clients() {
             <Button variant="outline" onClick={() => setShowForm(false)}>
               Anuluj
             </Button>
-            <Button variant="primary" onClick={() => handleSave()} disabled={loading}>
-              {loading ? "Zapisywanie..." : "Zapisz"}
+            <Button
+              variant="primary"
+              onClick={() => handleSave()}
+              disabled={createClientMutation.isPending || updateClientMutation.isPending}
+            >
+              {createClientMutation.isPending || updateClientMutation.isPending
+                ? "Zapisywanie..."
+                : "Zapisz"}
             </Button>
           </div>
         </div>
@@ -384,7 +349,7 @@ export default function Clients() {
     );
   }
 
-  if (loading && initialLoad) {
+  if (loading && !clientsData) {
     return <ContentViewLoading text="Ładowanie klientów..." />;
   }
 
@@ -401,7 +366,7 @@ export default function Clients() {
         </button>
       </div>
 
-      {error && <div>{error}</div>}
+      {error && <div>{formatApiError(error)}</div>}
 
       {(!loading && clients.length > 0) || searchQuery ? (
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
@@ -500,7 +465,7 @@ export default function Clients() {
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {client.createdAt
-                        ? new Date(client.createdAt).toLocaleDateString("pl-PL")
+                        ? new Date(String(client.createdAt)).toLocaleDateString("pl-PL")
                         : "-"}
                     </TableCell>
                     <TableCell className="px-4 py-3">
@@ -534,7 +499,7 @@ export default function Clients() {
                   variant="outline"
                   size="sm"
                   onClick={handlePreviousPage}
-                  disabled={loading || currentPage === 1}
+                  disabled={isFetching || currentPage === 1}
                 >
                   Poprzednia
                 </Button>
@@ -542,7 +507,7 @@ export default function Clients() {
                   variant="outline"
                   size="sm"
                   onClick={handleNextPage}
-                  disabled={loading || !hasMore}
+                  disabled={isFetching || !hasMore}
                 >
                   Następna
                 </Button>
@@ -566,7 +531,7 @@ export default function Clients() {
         confirmText="Usuń"
         cancelText="Anuluj"
         variant="danger"
-        loading={loading}
+        loading={deleteClientMutation.isPending}
       />
     </div>
   );

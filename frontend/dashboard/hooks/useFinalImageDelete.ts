@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import api, { formatApiError } from "../lib/api-service";
+import { useDeleteFinalImage } from "./mutations/useOrderMutations";
+import { formatApiError } from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 import type { GalleryImage } from "../types";
 
@@ -22,6 +23,7 @@ export const useFinalImageDelete = ({
 }: UseFinalImageDeleteOptions) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const deleteFinalImageMutation = useDeleteFinalImage();
 
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
@@ -66,7 +68,11 @@ export const useFinalImageDelete = ({
       // Image will be removed after deletion completes and status/bytes are refreshed
 
       try {
-        await api.orders.deleteFinalImage(galleryIdStr, orderIdStr, imageKey);
+        await deleteFinalImageMutation.mutateAsync({
+          galleryId: galleryIdStr,
+          orderId: orderIdStr,
+          imageKey,
+        });
 
         // Save suppression only after successful deletion
         if (suppressChecked) {
@@ -192,6 +198,7 @@ export const useFinalImageDelete = ({
       galleryIdStr,
       orderIdStr,
       showToast,
+      deleteFinalImageMutation,
     ]
   );
 

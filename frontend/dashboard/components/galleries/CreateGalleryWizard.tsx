@@ -1,8 +1,13 @@
 import { X, Check } from "lucide-react";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 
+import { useUpdateClient, useCreateClient } from "../../hooks/mutations/useClientMutations";
+import { useCreateGallery } from "../../hooks/mutations/useGalleryMutations";
+import { useCreatePackage } from "../../hooks/mutations/usePackageMutations";
+import { useClients } from "../../hooks/queries/useClients";
+import { usePackages } from "../../hooks/queries/usePackages";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { useGalleryStore } from "../../store";
 import Badge from "../ui/badge/Badge";
 import { FullPageLoading } from "../ui/loading/Loading";
@@ -92,17 +97,33 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 }) => {
   const { showToast } = useToast();
   const { setGalleryCreationLoading } = useGalleryStore();
+  const createGalleryMutation = useCreateGallery();
+  const createPackageMutation = useCreatePackage();
+  const updateClientMutation = useUpdateClient();
+  const createClientMutation = useCreateClient();
+  const loading = createGalleryMutation.isPending;
   const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [existingPackages, setExistingPackages] = useState<Package[]>([]);
-  const [existingClients, setExistingClients] = useState<Client[]>([]);
   // Store raw input values to preserve decimal point while typing
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
   const [paymentAmountInput, setPaymentAmountInput] = useState<string | null>(null);
-  // Ref to prevent duplicate API calls
-  const dataLoadedRef = useRef(false);
+
+  // Use React Query hooks for packages and clients
+  const { data: packagesData } = usePackages();
+  const { data: clientsData } = useClients();
+
+  // Extract packages and clients from query responses
+  const existingPackages: Package[] = packagesData
+    ? Array.isArray(packagesData)
+      ? packagesData
+      : packagesData.items ?? []
+    : [];
+  const existingClients: Client[] = clientsData
+    ? Array.isArray(clientsData)
+      ? clientsData
+      : clientsData.items ?? []
+    : [];
 
   const [data, setData] = useState<WizardData>({
     galleryName: "",
@@ -122,34 +143,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     initialPaymentAmountCents: 0,
   });
 
-  const loadExistingPackages = useCallback(async () => {
-    try {
-      const response = await api.packages.list();
-      const packages = Array.isArray(response) ? response : (response.items ?? []);
-      setExistingPackages(packages);
-    } catch (_err) {
-      setExistingPackages([]);
-    }
-  }, []);
-
-  const loadExistingClients = useCallback(async () => {
-    try {
-      const response = await api.clients.list();
-      const clients = response.items ?? [];
-      setExistingClients(clients);
-    } catch (_err) {
-      setExistingClients([]);
-    }
-  }, []);
-
   useEffect(() => {
     if (isOpen) {
-      if (!dataLoadedRef.current) {
-        dataLoadedRef.current = true;
-        // Auth is handled by AuthProvider/ProtectedRoute - just load data
-        void loadExistingPackages();
-        void loadExistingClients();
-      }
       setCurrentStep(1);
       setFieldErrors({});
       // Reset input states
@@ -174,11 +169,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         companyName: "",
         initialPaymentAmountCents: 0,
       });
-    } else {
-      // Reset ref when wizard closes
-      dataLoadedRef.current = false;
     }
-  }, [isOpen, loadExistingPackages, loadExistingClients]);
+  }, [isOpen]);
 
   // Dev tools are initialized centrally in _app.tsx via initDevTools()
   // The wizard.open() command dispatches the 'openGalleryWizard' event
@@ -341,7 +333,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
     // Show loading overlay immediately
     setGalleryCreationLoading(true);
-    setLoading(true);
     setFieldErrors({});
 
     try {
@@ -423,7 +414,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       }
 
-      const response = await api.galleries.create(requestBody);
+      const response = await createGalleryMutation.mutateAsync(requestBody);
 
       if (!response?.galleryId) {
         throw new Error("Brak ID galerii w odpowiedzi");
@@ -443,7 +434,6 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       setGalleryCreationLoading(false);
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg);
-      setLoading(false);
     }
   };
 
@@ -526,9 +516,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
             }}
             onPackageSave={async (packageData) => {
               try {
-                await api.packages.create(packageData);
+                await createPackageMutation.mutateAsync(packageData);
                 showToast("success", "Sukces", "Pakiet został zapisany");
-                await loadExistingPackages();
               } catch (err) {
                 showToast("error", "Błąd", formatApiError(err as Error));
               }
@@ -590,18 +579,17 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
                   // Verify the client exists before updating
                   const clientExists = existingClients.some((c) => c.clientId === clientId);
                   if (clientExists) {
-                    await api.clients.update(clientId, clientData);
+                    await updateClientMutation.mutateAsync({ clientId, data: clientData });
                     showToast("success", "Sukces", "Klient został zaktualizowany");
                   } else {
                     // Client not found, create new instead
-                    await api.clients.create(clientData);
+                    await createClientMutation.mutateAsync(clientData);
                     showToast("success", "Sukces", "Klient został zapisany");
                   }
                 } else {
-                  await api.clients.create(clientData);
+                  await createClientMutation.mutateAsync(clientData);
                   showToast("success", "Sukces", "Klient został zapisany");
                 }
-                await loadExistingClients();
               } catch (err) {
                 showToast("error", "Błąd", formatApiError(err as Error));
               }
@@ -621,7 +609,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   return (
     <>
       {/* Full-screen loading overlay - shows immediately when creating gallery */}
-      {loading && <FullPageLoading text="Tworzenie galerii..." />}
+      {createGalleryMutation.isPending && <FullPageLoading text="Tworzenie galerii..." />}
       <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden relative">
         {/* Close button - top right of main container */}
         <button

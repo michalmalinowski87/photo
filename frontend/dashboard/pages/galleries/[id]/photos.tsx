@@ -55,9 +55,11 @@ export default function GalleryPhotos() {
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
-  const { refetch: refetchGalleryImages } = useGalleryImages(galleryIdForQuery, "thumb");
-  // Don't start loading until galleryId is available from router
-  const [loading, setLoading] = useState<boolean>(true);
+  const {
+    isLoading: imagesLoading,
+    isFetching: imagesFetching,
+    refetch: refetchGalleryImages,
+  } = useGalleryImages(galleryIdForQuery, "thumb");
   const [images, setImages] = useState<GalleryImage[]>([]);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
@@ -154,14 +156,10 @@ export default function GalleryPhotos() {
         return;
       }
 
-      if (!silent) {
-        setLoading(true);
-      }
-
       try {
         // Refetch images from React Query
         const result = await refetchGalleryImages();
-        const apiImages = (result.data || []) as ApiImage[];
+        const apiImages = (result.data ?? []) as ApiImage[];
 
         // Map images to GalleryImage format
         // Include all properties from API response to ensure proper fallback handling
@@ -192,13 +190,9 @@ export default function GalleryPhotos() {
           showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować zdjęć");
         }
         console.error("[GalleryPhotos] Failed to load photos:", err);
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
       }
     },
-    [galleryIdForQuery, showToast, refetchGalleryImages, deletingImagesRef, logSkippedLoad]
+    [galleryId, showToast, refetchGalleryImages, deletingImagesRef, logSkippedLoad]
   );
 
   // Reload gallery after upload (simple refetch, no polling)
@@ -210,7 +204,7 @@ export default function GalleryPhotos() {
 
     // Refetch fresh images from React Query
     const result = await refetchGalleryImages();
-    const storeImages = (result.data || []) as GalleryImage[];
+    const storeImages = (result.data ?? []) as GalleryImage[];
 
     setImages((currentImages) => {
       const deletingImageKeys = Array.from(deletingImagesRef.current);
@@ -220,10 +214,10 @@ export default function GalleryPhotos() {
 
   // Clear galleryCreationLoading when gallery and images are fully loaded
   useEffect(() => {
-    if (galleryCreationLoading && !galleryLoading && gallery && !loading) {
+    if (galleryCreationLoading && !galleryLoading && gallery && !imagesLoading) {
       setGalleryCreationLoading(false);
     }
-  }, [galleryCreationLoading, galleryLoading, gallery, loading, setGalleryCreationLoading]);
+  }, [galleryCreationLoading, galleryLoading, gallery, imagesLoading, setGalleryCreationLoading]);
 
   // Removed: useLayoutEffect with hasInitialized workaround
   // Now using stable galleryId comparison in the loading check above
@@ -599,7 +593,7 @@ export default function GalleryPhotos() {
             Zdjęcia w galerii
           </h1>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {loading ? (
+            {imagesLoading || imagesFetching ? (
               <Loading size="sm" />
             ) : (
               <>
@@ -621,7 +615,7 @@ export default function GalleryPhotos() {
         </div>
 
         {/* Images Grid - Grouped by Orders */}
-        {loading ? (
+        {imagesLoading || imagesFetching ? (
           <div className="p-12 text-center bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <Loading size="lg" text="Ładowanie zdjęć..." />
           </div>

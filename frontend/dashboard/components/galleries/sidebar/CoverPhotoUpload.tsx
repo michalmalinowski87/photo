@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import React, { useState, useRef } from "react";
 
 import { useUpdateGallery } from "../../../hooks/mutations/useGalleryMutations";
-import { useGallery } from "../../../hooks/queries/useGalleries";
+import { useGallery, useGalleryCoverPhoto } from "../../../hooks/queries/useGalleries";
 import { useToast } from "../../../hooks/useToast";
 import api, { formatApiError } from "../../../lib/api-service";
 import { RetryableImage } from "../../ui/RetryableImage";
@@ -16,6 +16,7 @@ export const CoverPhotoUpload: React.FC = () => {
   // Use React Query hooks
   const { data: gallery, isLoading } = useGallery(galleryId);
   const updateGalleryMutation = useUpdateGallery();
+  const { refetch: refetchCoverPhoto } = useGalleryCoverPhoto(galleryId);
 
   const coverPhotoUrl = gallery?.coverPhotoUrl ?? null;
   const { showToast } = useToast();
@@ -79,10 +80,9 @@ export const CoverPhotoUpload: React.FC = () => {
         attempts++;
 
         try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-          const response = await api.galleries.getCoverPhoto(galleryId);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const fetchedUrl = response.coverPhotoUrl;
+          // Refetch cover photo using React Query
+          const refetchResult = await refetchCoverPhoto();
+          const fetchedUrl = refetchResult.data?.coverPhotoUrl;
 
           // Check if we have a CloudFront URL (not S3, not null)
           if (

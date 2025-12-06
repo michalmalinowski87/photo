@@ -27,7 +27,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
   // Get first order ID - use URL orderId if available, otherwise use first order from React Query
   const firstOrderId =
     orderIdFromUrl ??
-    (galleryOrders && galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
+    (galleryOrders?.length > 0 ? galleryOrders[0]?.orderId : null);
 
   // Refetch orders if not available
   useEffect(() => {
@@ -41,7 +41,7 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
       e.preventDefault();
       // Refetch orders and navigate
       const result = await refetchOrders();
-      const orders = result.data || [];
+      const orders = result.data ?? [];
       if (orders && orders.length > 0) {
         const firstOrder = orders[0] as { orderId?: string } | undefined;
         if (firstOrder?.orderId) {

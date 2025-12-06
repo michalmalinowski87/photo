@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import api, { formatApiError } from "../lib/api-service";
+import { useDeleteGalleryImage } from "./mutations/useGalleryMutations";
+import { formatApiError } from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 import type { GalleryImage } from "../types";
 
@@ -15,6 +16,7 @@ interface UseOriginalImageDeleteOptions {
 export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImageDeleteOptions) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const deleteGalleryImageMutation = useDeleteGalleryImage();
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -55,7 +57,10 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
       // Image will be removed after deletion completes and status/bytes are refreshed
 
       try {
-        await api.galleries.deleteImage(galleryIdStr, imageKey);
+        await deleteGalleryImageMutation.mutateAsync({
+          galleryId: galleryIdStr,
+          imageKey,
+        });
 
         // Save suppression only after successful deletion
         if (suppressChecked) {
@@ -165,7 +170,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
         throw err;
       }
     },
-    [galleryId, setImages, deletingImages, showToast, queryClient]
+    [galleryId, setImages, deletingImages, showToast, queryClient, deleteGalleryImageMutation]
   );
 
   const handleDeleteImageClick = useCallback(

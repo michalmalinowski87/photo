@@ -1,5 +1,5 @@
 import { X, Package, Plus } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
@@ -7,9 +7,14 @@ import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
-import { usePageLogger } from "../hooks/usePageLogger";
+import {
+  useCreatePackage,
+  useDeletePackage,
+  useUpdatePackage,
+} from "../hooks/mutations/usePackageMutations";
+import { usePackages } from "../hooks/queries/usePackages";
 import { useToast } from "../hooks/useToast";
-import api, { formatApiError } from "../lib/api-service";
+import { formatApiError } from "../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../lib/currency";
 import { formatPrice } from "../lib/format-price";
 
@@ -31,13 +36,21 @@ interface PackageFormData {
 
 export default function Packages() {
   const { showToast } = useToast();
-  const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
-    pageName: "Packages",
-  });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [initialLoad, setInitialLoad] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [packages, setPackages] = useState<PricingPackage[]>([]);
+
+  // Mutations
+  const createPackageMutation = useCreatePackage();
+  const updatePackageMutation = useUpdatePackage();
+  const deletePackageMutation = useDeletePackage();
+
+  // React Query hook
+  const {
+    data: packagesData,
+    isLoading: loading,
+    error,
+  } = usePackages();
+
+  const packages = (packagesData?.items ?? []) as PricingPackage[];
+
   const [showForm, setShowForm] = useState<boolean>(false);
   const [editingPackage, setEditingPackage] = useState<PricingPackage | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
@@ -50,33 +63,6 @@ export default function Packages() {
   });
   const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string | null>(null);
-
-  const loadPackages = useCallback(async (): Promise<void> => {
-    logDataLoad("packages", {});
-    setLoading(true);
-    setError("");
-
-    try {
-      const data = await api.packages.list();
-      const packagesData = (data.items ?? []) as PricingPackage[];
-      logDataLoaded("packages", packagesData, { count: packagesData.length });
-      setPackages(packagesData);
-
-      if (initialLoad) {
-        setInitialLoad(false);
-      }
-    } catch (err) {
-      logDataError("packages", err);
-      setError(formatApiError(err as Error));
-    } finally {
-      setLoading(false);
-    }
-  }, [initialLoad, logDataLoad, logDataLoaded, logDataError]);
-
-  useEffect(() => {
-    // Auth is handled by AuthProvider/ProtectedRoute - just load data
-    void loadPackages();
-  }, [loadPackages]);
 
   const handleCreate = (): void => {
     setEditingPackage(null);
@@ -105,29 +91,24 @@ export default function Packages() {
   };
 
   const handleSave = async (): Promise<void> => {
-    setLoading(true);
-    setError("");
-
     try {
       if (editingPackage) {
-        await api.packages.update(editingPackage.packageId, formData);
+        await updatePackageMutation.mutateAsync({
+          packageId: editingPackage.packageId,
+          data: formData,
+        });
       } else {
-        await api.packages.create(formData);
+        await createPackageMutation.mutateAsync(formData);
       }
 
       setShowForm(false);
-      await loadPackages();
       showToast(
         "success",
         "Sukces",
         editingPackage ? "Pakiet został zaktualizowany" : "Pakiet został utworzony"
       );
     } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-    } finally {
-      setLoading(false);
+      showToast("error", "Błąd", formatApiError(err as Error));
     }
   };
 
@@ -141,22 +122,14 @@ export default function Packages() {
       return;
     }
 
-    setLoading(true);
-    setError("");
     setDeleteConfirmOpen(false);
 
     try {
-      await api.packages.delete(packageToDelete);
-
-      await loadPackages();
+      await deletePackageMutation.mutateAsync(packageToDelete);
       showToast("success", "Sukces", "Pakiet został usunięty");
       setPackageToDelete(null);
     } catch (err) {
-      const errorMsg = formatApiError(err as Error);
-      setError(errorMsg);
-      showToast("error", "Błąd", errorMsg);
-    } finally {
-      setLoading(false);
+      showToast("error", "Błąd", formatApiError(err as Error));
     }
   };
 
@@ -176,7 +149,7 @@ export default function Packages() {
           </button>
         </div>
 
-        {error && <div>{error}</div>}
+        {error && <div>{formatApiError(error)}</div>}
 
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
@@ -266,8 +239,14 @@ export default function Packages() {
             <Button variant="outline" onClick={() => setShowForm(false)}>
               Anuluj
             </Button>
-            <Button variant="primary" onClick={handleSave} disabled={loading}>
-              {loading ? "Zapisywanie..." : "Zapisz"}
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={createPackageMutation.isPending || updatePackageMutation.isPending}
+            >
+              {createPackageMutation.isPending || updatePackageMutation.isPending
+                ? "Zapisywanie..."
+                : "Zapisz"}
             </Button>
           </div>
         </div>
@@ -275,7 +254,7 @@ export default function Packages() {
     );
   }
 
-  if (loading && initialLoad) {
+  if (loading && !packagesData) {
     return <ContentViewLoading text="Ładowanie pakietów..." />;
   }
 
@@ -292,7 +271,7 @@ export default function Packages() {
         </button>
       </div>
 
-      {error && <div>{error}</div>}
+      {error && <div>{formatApiError(error)}</div>}
 
       {packages.length === 0 ? (
         <EmptyState
@@ -399,7 +378,7 @@ export default function Packages() {
         confirmText="Usuń"
         cancelText="Anuluj"
         variant="danger"
-        loading={loading}
+        loading={deletePackageMutation.isPending}
       />
     </div>
   );

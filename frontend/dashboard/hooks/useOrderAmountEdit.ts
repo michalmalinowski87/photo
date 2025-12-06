@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 
-import api, { formatApiError } from "../lib/api-service";
+import { useUpdateOrder } from "./mutations/useOrderMutations";
+import { formatApiError } from "../lib/api-service";
 import { plnToCents, centsToPlnString } from "../lib/currency";
 
 import { useToast } from "./useToast";
@@ -19,6 +20,7 @@ export const useOrderAmountEdit = ({
   onSave,
 }: UseOrderAmountEditOptions) => {
   const { showToast } = useToast();
+  const updateOrderMutation = useUpdateOrder();
   const [savingAmount, setSavingAmount] = useState<boolean>(false);
   const [isEditingAmount, setIsEditingAmount] = useState<boolean>(false);
   const [editingAmountValue, setEditingAmountValue] = useState<string>("");
@@ -42,8 +44,12 @@ export const useOrderAmountEdit = ({
 
     setSavingAmount(true);
     try {
-      await api.orders.update(galleryId as string, orderId as string, {
-        totalCents: newTotalCents,
+      await updateOrderMutation.mutateAsync({
+        galleryId: galleryId as string,
+        orderId: orderId as string,
+        data: {
+          totalCents: newTotalCents,
+        },
       });
 
       if (onSave) {
@@ -57,7 +63,7 @@ export const useOrderAmountEdit = ({
     } finally {
       setSavingAmount(false);
     }
-  }, [galleryId, orderId, editingAmountValue, onSave, showToast]);
+  }, [galleryId, orderId, editingAmountValue, onSave, showToast, updateOrderMutation]);
 
   return {
     isEditingAmount,

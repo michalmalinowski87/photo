@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 
+import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
 import { useToast } from "../../hooks/useToast";
-import api, { formatApiError } from "../../lib/api-service";
+import { formatApiError } from "../../lib/api-service";
 import { formatCurrencyInput } from "../../lib/currency";
 import { StripeRedirectOverlay } from "../galleries/StripeRedirectOverlay";
 import Button from "../ui/button/Button";
@@ -23,12 +24,12 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
   className = "",
 }) => {
   const { showToast } = useToast();
-  const [isTopUpLoading, setIsTopUpLoading] = useState(false);
+  const createCheckoutMutation = useCreateCheckout();
   const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
   const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
   const [customTopUpAmount, setCustomTopUpAmount] = useState<string>("");
 
-  const isLoading = externalLoading || isTopUpLoading;
+  const isLoading = externalLoading || createCheckoutMutation.isPending;
 
   // Handle payment success redirect
   useEffect(() => {
@@ -54,7 +55,6 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
 
     // Show redirect overlay IMMEDIATELY when button is clicked
     setShowTopUpRedirect(true);
-    setIsTopUpLoading(true);
 
     try {
       // Construct redirect URL back to the current page, preserving existing query parameters
@@ -66,7 +66,7 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
         redirectUrl = url.toString();
       }
 
-      const data = await api.payments.createCheckout({
+      const data = await createCheckoutMutation.mutateAsync({
         amountCents,
         type: "wallet_topup",
         redirectUrl,
@@ -79,13 +79,11 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
         const errorMsg = "Nie otrzymano URL do płatności";
         showToast("error", "Błąd", errorMsg);
         setShowTopUpRedirect(false);
-        setIsTopUpLoading(false);
       }
     } catch (err) {
       const errorMsg = formatApiError(err as Error);
       showToast("error", "Błąd", errorMsg);
       setShowTopUpRedirect(false);
-      setIsTopUpLoading(false);
     }
   };
 

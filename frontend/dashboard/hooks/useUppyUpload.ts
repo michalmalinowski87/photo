@@ -2,7 +2,9 @@ import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
 import { useEffect, useRef, useCallback, useState } from "react";
 
-import api from "../lib/api-service";
+import { useDeleteFinalImagesBatch } from "./mutations/useOrderMutations";
+import { useDeleteGalleryImagesBatch } from "./mutations/useGalleryMutations";
+import { useValidateUploadLimits, useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
 
 import { useToast } from "./useToast";
@@ -45,40 +47,6 @@ interface UploadProgressState {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-async function validateStorageLimits(
-  galleryId: string,
-  files: UppyFileType[],
-  onValidationNeeded?: UseUppyUploadConfig["onValidationNeeded"]
-): Promise<boolean> {
-  try {
-    const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
-    const validationResult = await api.galleries.validateUploadLimits(galleryId);
-
-    if (!validationResult.withinLimit) {
-      const excessBytes =
-        (validationResult.uploadedSizeBytes ?? 0) +
-        totalSize -
-        (validationResult.originalsLimitBytes ?? 0);
-
-      if (excessBytes > 0) {
-        onValidationNeeded?.({
-          uploadedSizeBytes: (validationResult.uploadedSizeBytes ?? 0) + totalSize,
-          originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
-          excessBytes,
-          nextTierPlan: validationResult.nextTierPlan,
-          nextTierPriceCents: validationResult.nextTierPriceCents,
-          nextTierLimitBytes: validationResult.nextTierLimitBytes,
-          isSelectionGallery: validationResult.isSelectionGallery,
-        });
-        return false;
-      }
-    }
-    return true;
-  } catch (error) {
-    throw error;
-  }
-}
 
 function calculateUploadMetrics(
   progress: { bytesUploaded?: number; bytesTotal?: number },
@@ -137,37 +105,6 @@ function showUploadResultToast(
   }
 }
 
-async function handlePostUploadActions(
-  galleryId: string,
-  orderId: string | undefined,
-  type: UploadType,
-  _expectedSuccessfulCount: number,
-  reloadGallery?: () => Promise<void>
-): Promise<void> {
-  if (type === "finals" && orderId) {
-    try {
-      // Wait a bit for backend to finalize uploads before marking complete
-      // This is especially important after pause/resume cycles with multipart uploads
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      await api.uploads.markFinalUploadComplete(galleryId, orderId);
-    } catch (error) {
-      throw error;
-    }
-  } else {
-    // For originals, wait before fetching to ensure backend has processed all files
-    // After pause/resume cycles, backend might still be finalizing multipart uploads,
-    // generating thumbnails, or updating the database
-    // Wait 1.5 seconds before fetching to give backend processing time
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-  }
-
-  // Reload gallery UI - this will fetch images and update state
-  // The delay above ensures backend has processed files before reloadGallery fetches
-  if (reloadGallery) {
-    await reloadGallery();
-  }
-}
-
 /**
  * Check if any file is currently paused
  * Relies on Uppy's native file state - file.isPaused is managed by Uppy
@@ -199,6 +136,10 @@ const INITIAL_PROGRESS: UploadProgressState = {
 
 export function useUppyUpload(config: UseUppyUploadConfig) {
   const { showToast } = useToast();
+  const validateUploadLimitsMutation = useValidateUploadLimits();
+  const markFinalUploadCompleteMutation = useMarkFinalUploadComplete();
+  const deleteFinalImagesBatchMutation = useDeleteFinalImagesBatch();
+  const deleteGalleryImagesBatchMutation = useDeleteGalleryImagesBatch();
   const uppyRef = useRef<Uppy | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -228,12 +169,31 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       onBeforeUpload: async (files: UppyFileType[]) => {
         if (configRef.current.type === "originals") {
           try {
-            const isValid = await validateStorageLimits(
-              configRef.current.galleryId,
-              files,
-              configRef.current.onValidationNeeded
+            const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
+            const validationResult = await validateUploadLimitsMutation.mutateAsync(
+              configRef.current.galleryId
             );
-            return isValid;
+
+            if (!validationResult.withinLimit) {
+              const excessBytes =
+                (validationResult.uploadedSizeBytes ?? 0) +
+                totalSize -
+                (validationResult.originalsLimitBytes ?? 0);
+
+              if (excessBytes > 0) {
+                configRef.current.onValidationNeeded?.({
+                  uploadedSizeBytes: (validationResult.uploadedSizeBytes ?? 0) + totalSize,
+                  originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
+                  excessBytes,
+                  nextTierPlan: validationResult.nextTierPlan,
+                  nextTierPriceCents: validationResult.nextTierPriceCents,
+                  nextTierLimitBytes: validationResult.nextTierLimitBytes,
+                  isSelectionGallery: validationResult.isSelectionGallery,
+                });
+                return false;
+              }
+            }
+            return true;
           } catch {
             showToast("error", "Błąd", "Nie udało się sprawdzić limitów magazynu");
             return false;
@@ -276,13 +236,22 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (successfulCount > 0) {
           try {
-            await handlePostUploadActions(
-              configRef.current.galleryId,
-              configRef.current.orderId,
-              configRef.current.type,
-              successfulCount,
-              configRef.current.reloadGallery
-            );
+            if (configRef.current.type === "finals" && configRef.current.orderId) {
+              // Wait a bit for backend to finalize uploads before marking complete
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+              await markFinalUploadCompleteMutation.mutateAsync({
+                galleryId: configRef.current.galleryId,
+                orderId: configRef.current.orderId,
+              });
+            } else {
+              // For originals, wait before fetching to ensure backend has processed all files
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+
+            // Reload gallery UI - this will fetch images and update state
+            if (configRef.current.reloadGallery) {
+              await configRef.current.reloadGallery();
+            }
           } catch {
             showToast(
               "warning",
@@ -327,7 +296,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       uppyRef.current?.cancelAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.galleryId, config.orderId, config.type]);
+  }, [config.galleryId, config.orderId, config.type, validateUploadLimitsMutation, markFinalUploadCompleteMutation, showToast]);
 
   const startUpload = useCallback(() => {
     if (!uppyRef.current) {
@@ -412,12 +381,19 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (type === "finals" && orderId) {
           // Delete final images in batch
-          await api.orders.deleteFinalImagesBatch(galleryId, orderId, filenames).catch(() => {
+          await deleteFinalImagesBatchMutation.mutateAsync({
+            galleryId,
+            orderId,
+            imageKeys: filenames,
+          }).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });
         } else {
           // Delete original images in batch
-          await api.galleries.deleteImagesBatch(galleryId, filenames).catch(() => {
+          await deleteGalleryImagesBatchMutation.mutateAsync({
+            galleryId,
+            imageKeys: filenames,
+          }).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });
         }
@@ -430,7 +406,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     setTimeout(() => {
       isCancellingRef.current = false;
     }, 100);
-  }, []);
+  }, [deleteFinalImagesBatchMutation, deleteGalleryImagesBatchMutation]);
 
   const pauseUpload = useCallback(() => {
     if (!uppyRef.current || !uploading) {

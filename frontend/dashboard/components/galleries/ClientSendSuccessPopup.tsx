@@ -2,8 +2,9 @@ import { X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useUpdateBusinessInfo } from "../../hooks/mutations/useAuthMutations";
+import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useToast } from "../../hooks/useToast";
-import api from "../../lib/api-service";
 import Button from "../ui/button/Button";
 
 interface ClientSendSuccessPopupProps {
@@ -18,6 +19,8 @@ export const ClientSendSuccessPopup: React.FC<ClientSendSuccessPopupProps> = ({
   galleryName,
 }) => {
   const { showToast } = useToast();
+  const { data: businessInfo } = useBusinessInfo();
+  const updateBusinessInfoMutation = useUpdateBusinessInfo();
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -28,13 +31,12 @@ export const ClientSendSuccessPopup: React.FC<ClientSendSuccessPopupProps> = ({
       return;
     }
 
-    const loadPreference = async () => {
+    const loadPreference = () => {
       try {
-        const businessInfo = await api.auth.getBusinessInfo();
         const disabled =
-          businessInfo.tutorialNextStepsDisabled === true ||
-          businessInfo.tutorialClientSendDisabled === true;
-        setTutorialDisabled(disabled);
+          businessInfo?.tutorialNextStepsDisabled === true ||
+          businessInfo?.tutorialClientSendDisabled === true;
+        setTutorialDisabled(disabled ?? false);
         // If already disabled, don't show popup
         if (disabled) {
           onClose();
@@ -46,15 +48,17 @@ export const ClientSendSuccessPopup: React.FC<ClientSendSuccessPopupProps> = ({
       }
     };
 
-    void loadPreference();
-  }, [isOpen, onClose]);
+    if (businessInfo) {
+      loadPreference();
+    }
+  }, [isOpen, onClose, businessInfo]);
 
   const handleDontShowAgain = async (checked: boolean) => {
     setDontShowAgain(checked);
     if (checked) {
       setIsSavingPreference(true);
       try {
-        await api.auth.updateBusinessInfo({
+        await updateBusinessInfoMutation.mutateAsync({
           tutorialClientSendDisabled: true,
         });
         setTutorialDisabled(true);

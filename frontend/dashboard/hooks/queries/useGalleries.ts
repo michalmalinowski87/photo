@@ -119,3 +119,16 @@ export function useGalleryCoverPhoto(galleryId: string | undefined) {
     staleTime: 30 * 1000,
   });
 }
+
+// Gallery delivered orders
+export function useGalleryDeliveredOrders(galleryId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.galleries.deliveredOrders(galleryId!),
+    queryFn: () => api.galleries.checkDeliveredOrders(galleryId!),
+    enabled: !!galleryId,
+    staleTime: 30 * 1000,
+    select: (data) => {
+      return Array.isArray(data) ? data : data.items || [];
+    },
+  });
+}

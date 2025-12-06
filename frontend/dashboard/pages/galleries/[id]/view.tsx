@@ -3,7 +3,8 @@ import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
-import { useGallery, useGalleryImages } from "../../../hooks/queries/useGalleries";
+import { useDeleteGalleryImage } from "../../../hooks/mutations/useGalleryMutations";
+import { useGallery, useGalleryImages, useGalleryDeliveredOrders } from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
 import type { Order } from "../../../store";
@@ -22,13 +23,27 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  const { data: gallery } = useGallery(galleryIdForQuery);
-  const { data: imagesFromQuery = [] } = useGalleryImages(galleryIdForQuery, "thumb");
-  const { data: orders = [] } = useOrders(galleryIdForQuery);
+  const {
+    data: gallery,
+    isLoading: galleryLoading,
+  } = useGallery(galleryIdForQuery);
+  const {
+    data: imagesFromQuery = [],
+    isLoading: imagesLoading,
+  } = useGalleryImages(galleryIdForQuery, "thumb");
+  const {
+    data: orders = [],
+    isLoading: ordersLoading,
+  } = useOrders(galleryIdForQuery);
+  const {
+    data: deliveredOrders = [],
+  } = useGalleryDeliveredOrders(galleryIdForQuery);
+  const deleteGalleryImageMutation = useDeleteGalleryImage();
   const [galleryName, setGalleryName] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [images, setImages] = useState<GalleryImage[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+
+  const loading = galleryLoading || imagesLoading || ordersLoading;
   const [modalImageIndex, setModalImageIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"purchase" | "processed">("purchase");
   const [finalImages, setFinalImages] = useState<GalleryImage[]>([]);
@@ -50,25 +65,18 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]);
 
-  async function loadGallery(): Promise<void> {
+  function loadGallery(): void {
     setMessage("");
-    setLoading(true);
     if (!galleryIdForQuery) {
-      setLoading(false);
       return;
     }
     try {
       // Use React Query data - it's already fetched
       setImages(imagesFromQuery);
 
-      // Check if there are delivered orders
-      try {
-        const deliveredOrdersResponse = await api.galleries.checkDeliveredOrders(galleryIdForQuery);
-        const hasOrders = (deliveredOrdersResponse.items?.length ?? 0) > 0;
-        setHasDeliveredOrders(hasOrders);
-      } catch {
-        setHasDeliveredOrders(false);
-      }
+      // Check if there are delivered orders (using React Query data)
+      const hasOrders = deliveredOrders.length > 0;
+      setHasDeliveredOrders(hasOrders);
 
       // Get selected keys from active order (CLIENT_APPROVED, PREPARING_DELIVERY, or CHANGES_REQUESTED)
       const ordersList = orders;
@@ -96,8 +104,6 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       setGalleryName(gallery?.galleryName ?? galleryIdForQuery);
     } catch (error) {
       setMessage(formatApiError(error));
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -117,7 +123,10 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     }
     const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
     try {
-      await api.galleries.deleteImage(galleryIdStr, filename);
+      await deleteGalleryImageMutation.mutateAsync({
+        galleryId: galleryIdStr,
+        imageKey: filename,
+      });
 
       setMessage("Photo deleted.");
       // Reload gallery to refresh images and storage

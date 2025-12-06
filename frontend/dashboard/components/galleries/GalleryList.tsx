@@ -55,10 +55,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [publishWizardOpen, setPublishWizardOpen] = useState(false);
   const [publishWizardGalleryId, setPublishWizardGalleryId] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [selectedGalleryIdForLoading, setSelectedGalleryIdForLoading] = useState<string | null>(
-    null
-  );
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const { showToast } = useToast();
@@ -113,7 +109,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const deleteGalleryMutation = useDeleteGallery();
 
   const handlePayClick = (galleryId: string) => {
-    setSelectedGalleryIdForLoading(galleryId);
     setPublishWizardGalleryId(galleryId);
     setPublishWizardOpen(true);
     onWizardOpenChange?.(true);
@@ -258,7 +253,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
           isOpen={publishWizardOpen}
           onClose={() => {
             setPublishWizardOpen(false);
-            setPaymentLoading(false);
             onWizardOpenChange?.(false);
           }}
           galleryId={publishWizardGalleryId}
@@ -385,11 +379,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
                               size="sm"
                               variant="primary"
                               onClick={() => handlePayClick(gallery.galleryId)}
-                              disabled={paymentLoading}
                             >
-                              {paymentLoading && selectedGalleryIdForLoading === gallery.galleryId
-                                ? "Przetwarzanie..."
-                                : "Opłać galerię"}
+                              Opłać galerię
                             </Button>
                           )}
                           <Link
@@ -444,25 +435,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
             loading={deleteGalleryMutation.isPending}
           />
         </div>
-      )}
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={showDeleteDialog}
-        onClose={() => {
-          if (!deleteGalleryMutation.isPending) {
-            setShowDeleteDialog(false);
-            setGalleryToDelete(null);
-          }
-        }}
-        onConfirm={handleDeleteConfirm}
-        title="Usuń galerię"
-        message={`Czy na pewno chcesz usunąć galerię "${String(galleryToDelete?.galleryName) || String(galleryToDelete?.galleryId) || ""}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
-        confirmText="Usuń galerię"
-        cancelText="Anuluj"
-        variant="danger"
-        loading={deleteGalleryMutation.isPending}
-      />
+          )}
     </>
   );
 };

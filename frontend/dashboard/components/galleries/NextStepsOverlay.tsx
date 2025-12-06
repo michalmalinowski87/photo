@@ -2,11 +2,12 @@ import { Check, ChevronRight, ChevronLeft } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 
-import { useSendGalleryToClient } from "../../hooks/mutations/useGalleryMutations";
+import { useUpdateBusinessInfo } from "../../hooks/mutations/useAuthMutations";
+import { useSendGalleryToClient, useUpdateGallery } from "../../hooks/mutations/useGalleryMutations";
+import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
-import api from "../../lib/api-service";
 import { useGalleryStore, useOverlayStore } from "../../store";
 import type { Gallery, Order } from "../../types";
 import { useGalleryType } from "../hocs/withGalleryType";
@@ -28,6 +29,9 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   orders = [],
   galleryLoading = false,
 }) => {
+  const { data: businessInfo } = useBusinessInfo();
+  const updateGalleryMutation = useUpdateGallery();
+  const updateBusinessInfoMutation = useUpdateBusinessInfo();
   const router = useRouter();
   const { showToast } = useToast();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -105,29 +109,28 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   ]);
 
   // Load tutorial preference - deferred until overlay is expanded or user interacts
-  const loadTutorialPreference = useCallback(async () => {
+  const loadTutorialPreference = useCallback(() => {
     // Check if we already have the preference cached
     if (tutorialDisabled !== null) {
       return; // Already loaded
     }
 
     try {
-      const businessInfo = await api.auth.getBusinessInfo();
       const disabled =
-        businessInfo.tutorialNextStepsDisabled === true ||
-        businessInfo.tutorialClientSendDisabled === true;
-      setTutorialDisabled(disabled);
+        businessInfo?.tutorialNextStepsDisabled === true ||
+        businessInfo?.tutorialClientSendDisabled === true;
+      setTutorialDisabled(disabled ?? false);
     } catch (error) {
       console.error("Failed to load tutorial preference:", error);
       // Default to showing if we can't load preference
       setTutorialDisabled(false);
     }
-  }, [tutorialDisabled]);
+  }, [tutorialDisabled, businessInfo]);
 
   // Load preference when overlay is expanded (user shows interest)
   useEffect(() => {
     if (nextStepsOverlayExpanded && tutorialDisabled === null) {
-      void loadTutorialPreference();
+      loadTutorialPreference();
     }
   }, [nextStepsOverlayExpanded, tutorialDisabled, loadTutorialPreference]);
 
@@ -435,6 +438,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     overlayContext,
     galleryCreationLoading,
     calculatedVisibility.intendedVisible,
+    updateGalleryMutation,
   ]);
 
   // Reset optimistic bytes when gallery changes
@@ -467,8 +471,11 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
       const timeoutId = setTimeout(async () => {
         try {
           // Update gallery in database to mark setup as completed
-          await api.galleries.update(gallery.galleryId, {
-            nextStepsCompleted: true,
+          await updateGalleryMutation.mutateAsync({
+            galleryId: gallery.galleryId,
+            data: {
+              nextStepsCompleted: true,
+            },
           });
 
           // React Query will automatically refetch and update the cache
@@ -495,6 +502,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     steps.length,
     setNextStepsOverlayExpanded,
     galleryCompletedSetup,
+    updateGalleryMutation,
   ]);
 
   // Reset update flag when gallery changes
@@ -505,12 +513,12 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const handleDontShowAgain = async (): Promise<void> => {
     // Load preference first if not loaded (needed for update)
     if (tutorialDisabled === null) {
-      await loadTutorialPreference();
+      loadTutorialPreference();
     }
 
     setIsSavingPreference(true);
     try {
-      await api.auth.updateBusinessInfo({
+      await updateBusinessInfoMutation.mutateAsync({
         tutorialNextStepsDisabled: true,
       });
       setTutorialDisabled(true);
