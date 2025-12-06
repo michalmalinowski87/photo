@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
-import type { Gallery } from "../store/gallerySlice";
+import type { Gallery } from "../types";
 
 /**
  * Hook for prefetching gallery data

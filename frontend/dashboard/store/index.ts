@@ -16,8 +16,7 @@ export {
 } from "./hooks";
 
 // Re-export types from slice files
-export type { Gallery, GalleryOrder } from "./gallerySlice";
-// Order type is exported from types/index.ts - import from there instead
+// Gallery and Order types are exported from types/index.ts - import from there instead
 export type { ToastMessage } from "./toastSlice";
 export type { UploadProgress } from "./uploadSlice";
 export type { DownloadProgress } from "./downloadSlice";

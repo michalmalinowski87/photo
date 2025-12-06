@@ -8,7 +8,7 @@ import { useClients } from "../../hooks/queries/useClients";
 import { usePackages } from "../../hooks/queries/usePackages";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
-import { useGalleryStore } from "../../store";
+import type { Gallery } from "../../types";
 import Badge from "../ui/badge/Badge";
 import { FullPageLoading } from "../ui/loading/Loading";
 
@@ -96,12 +96,16 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   devLocked = false,
 }) => {
   const { showToast } = useToast();
-  const { setGalleryCreationLoading } = useGalleryStore();
   const createGalleryMutation = useCreateGallery();
   const createPackageMutation = useCreatePackage();
   const updateClientMutation = useUpdateClient();
   const createClientMutation = useCreateClient();
-  const loading = createGalleryMutation.isPending;
+  // Derive loading state from mutations instead of Zustand
+  const loading =
+    createGalleryMutation.isPending ||
+    createPackageMutation.isPending ||
+    updateClientMutation.isPending ||
+    createClientMutation.isPending;
   const [currentStep, setCurrentStep] = useState(1);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   // Store raw input values to preserve decimal point while typing
@@ -331,8 +335,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       return;
     }
 
-    // Show loading overlay immediately
-    setGalleryCreationLoading(true);
+    // Loading state is now derived from mutation.isPending
     setFieldErrors({});
 
     try {
@@ -414,7 +417,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       }
 
-      const response = await createGalleryMutation.mutateAsync(requestBody);
+      const response = await createGalleryMutation.mutateAsync(requestBody as unknown as Partial<Gallery>);
 
       if (!response?.galleryId) {
         throw new Error("Brak ID galerii w odpowiedzi");
@@ -430,8 +433,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       // Navigate after closing wizard to ensure smooth transition
       onSuccess(response.galleryId);
     } catch (err: unknown) {
-      // Hide loading overlay on error
-      setGalleryCreationLoading(false);
+      // Loading state is automatically handled by mutation.isPending
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg);
     }

@@ -6,7 +6,6 @@ import { useOrder as useOrderQuery } from "./queries/useOrders";
 
 /**
  * Hook for accessing gallery data from React Query
- * This replaces the old Zustand-based useGallery hook
  *
  * @returns Object with gallery, loading, error, galleryId, reloadGallery, reloadOrder
  */

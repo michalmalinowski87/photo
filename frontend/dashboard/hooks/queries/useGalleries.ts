@@ -2,7 +2,7 @@ import { useQuery, useQueryClient, UseQueryOptions } from "@tanstack/react-query
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Gallery } from "../../store/gallerySlice";
+import type { Gallery } from "../../types";
 
 export function useGalleries(
   filter?: string,

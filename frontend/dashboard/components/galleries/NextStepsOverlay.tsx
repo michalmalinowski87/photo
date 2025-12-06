@@ -11,7 +11,8 @@ import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useToast } from "../../hooks/useToast";
-import { useGalleryStore, useOverlayStore } from "../../store";
+import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
+import { useOverlayStore } from "../../store";
 import type { Gallery, Order } from "../../types";
 import { useGalleryType } from "../hocs/withGalleryType";
 
@@ -63,7 +64,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
   const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
-  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
+  const galleryCreationLoading = useGalleryCreationLoading();
   const { isNonSelectionGallery } = useGalleryType();
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);

@@ -4,8 +4,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
+import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { useModal } from "../../hooks/useModal";
-import { useGalleryStore } from "../../store";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
@@ -34,8 +34,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     refetch: refetchGallery,
   } = useGallery(galleryIdStr);
 
-  // Get gallery creation loading from Zustand (UI state only)
-  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
+  // Get gallery creation loading from React Query mutations
+  const galleryCreationLoading = useGalleryCreationLoading();
 
   // Order query
   const orderIdFromQuery = useMemo(

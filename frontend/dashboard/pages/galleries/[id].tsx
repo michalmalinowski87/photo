@@ -20,9 +20,9 @@ import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
+import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
-import { useGalleryStore } from "../../store";
 import type { Gallery } from "../../types";
 
 // List of filter route names that should not be treated as gallery IDs
@@ -249,8 +249,7 @@ export default function GalleryDetail() {
 
   // Check if we're coming from gallery creation - show loading overlay until fully loaded
   // Move hooks before conditional return to avoid React Hooks rules violation
-  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
-  const setGalleryCreationLoading = useGalleryStore((state) => state.setGalleryCreationLoading);
+  const galleryCreationLoading = useGalleryCreationLoading();
 
   const {
     data: orders = [],
@@ -569,12 +568,8 @@ export default function GalleryDetail() {
     );
   };
 
-  // Hide creation loading when gallery is fully loaded and orders are loaded
-  useEffect(() => {
-    if (galleryCreationLoading && !galleryLoading && !orderLoading && gallery) {
-      setGalleryCreationLoading(false);
-    }
-  }, [galleryCreationLoading, galleryLoading, orderLoading, gallery, setGalleryCreationLoading]);
+  // Loading state is now automatically managed by React Query mutations
+  // No need to manually set/unset loading state
 
   // Don't render gallery detail if this is a filter route - let Next.js handle static routes
   // Check this AFTER hooks to avoid conditional hook call

@@ -21,7 +21,6 @@ import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
 import { mergeGalleryImages } from "../../../lib/image-merge-utils";
 import { storeLogger } from "../../../lib/store-logger";
-import { useGalleryStore } from "../../../store";
 import type { Gallery, GalleryImage, Order } from "../../../types";
 
 interface ApiImage {
@@ -51,7 +50,6 @@ export default function GalleryPhotos() {
   });
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
-  const { galleryCreationLoading, setGalleryCreationLoading } = useGalleryStore();
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
@@ -212,12 +210,8 @@ export default function GalleryPhotos() {
     });
   }, [galleryIdForQuery, refetchGalleryImages, deletingImagesRef, logSkippedLoad]);
 
-  // Clear galleryCreationLoading when gallery and images are fully loaded
-  useEffect(() => {
-    if (galleryCreationLoading && !galleryLoading && gallery && !imagesLoading) {
-      setGalleryCreationLoading(false);
-    }
-  }, [galleryCreationLoading, galleryLoading, gallery, imagesLoading, setGalleryCreationLoading]);
+  // Loading state is now automatically managed by React Query mutations
+  // No need to manually set/unset loading state
 
   // Removed: useLayoutEffect with hasInitialized workaround
   // Now using stable galleryId comparison in the loading check above

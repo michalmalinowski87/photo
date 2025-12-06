@@ -1,8 +1,8 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
+import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { useSidebar } from "../../hooks/useSidebar";
-import { useGalleryStore } from "../../store";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -21,7 +21,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [devLocked, setDevLocked] = useState(false);
-  const galleryCreationLoading = useGalleryStore((state) => state.galleryCreationLoading);
+  const galleryCreationLoading = useGalleryCreationLoading();
 
   const handleCreateGallery = () => {
     setWizardOpen(true);
