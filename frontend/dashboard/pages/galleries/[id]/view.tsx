@@ -11,6 +11,7 @@ import {
 } from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
+import { GalleryLoading } from "../../../components/ui/loading/Loading";
 import type { Order, GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {
@@ -325,21 +326,27 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       {/* Purchase Additional Photos View */}
       {viewMode === "purchase" && (
         <div>
-          {/* Image Grid - Owner can view but not select, shows client's selection */}
-          <GalleryThumbnails
-            images={images as unknown as never[]}
-            selectedKeys={selectedKeys}
-            onToggle={null}
-            onDelete={deletePhoto}
-            onImageClick={openModal}
-            canSelect={false}
-            showDeleteButton={true}
-          />
+          {loading && images.length === 0 ? (
+            <GalleryLoading />
+          ) : (
+            <>
+              {/* Image Grid - Owner can view but not select, shows client's selection */}
+              <GalleryThumbnails
+                images={images as unknown as never[]}
+                selectedKeys={selectedKeys}
+                onToggle={null}
+                onDelete={deletePhoto}
+                onImageClick={openModal}
+                canSelect={false}
+                showDeleteButton={true}
+              />
 
-          {images.length === 0 && !loading && galleryId && (
-            <p className="text-gray-500 dark:text-gray-400 mt-6">
-              No images found. Make sure the gallery has uploaded photos.
-            </p>
+              {images.length === 0 && !loading && galleryId && (
+                <p className="text-gray-500 dark:text-gray-400 mt-6">
+                  No images found. Make sure the gallery has uploaded photos.
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

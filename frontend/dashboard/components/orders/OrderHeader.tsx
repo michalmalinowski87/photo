@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
+import { useNavigation } from "../../hooks/useNavigation";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 
@@ -11,6 +11,7 @@ import { StatusBadges } from "./StatusBadges";
 export function OrderHeader() {
   const router = useRouter();
   const { id: galleryId, orderId: orderIdFromQuery } = router.query;
+  const { navigate } = useNavigation();
 
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
@@ -36,15 +37,19 @@ export function OrderHeader() {
   const displayOrderNumber =
     orderNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : effectiveGalleryId.slice(-8));
 
+  const handleBackToGallery = () => {
+    if (effectiveGalleryId) {
+      void navigate(`/galleries/${effectiveGalleryId}`);
+    }
+  };
+
   return (
     <div className="flex items-center justify-between">
       <div>
         {!isNonSelectionGallery && (
-          <Link href={`/galleries/${effectiveGalleryId}`}>
-            <Button variant="outline" size="sm">
-              ← Powrót do galerii
-            </Button>
-          </Link>
+          <Button variant="outline" size="sm" onClick={handleBackToGallery}>
+            ← Powrót do galerii
+          </Button>
         )}
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">
           {isNonSelectionGallery

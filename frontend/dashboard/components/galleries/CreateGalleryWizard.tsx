@@ -417,7 +417,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         }
       }
 
-      const response = await createGalleryMutation.mutateAsync(requestBody as unknown as Partial<Gallery>);
+      const response = await createGalleryMutation.mutateAsync(
+        requestBody as unknown as Partial<Gallery>
+      );
 
       if (!response?.galleryId) {
         throw new Error("Brak ID galerii w odpowiedzi");

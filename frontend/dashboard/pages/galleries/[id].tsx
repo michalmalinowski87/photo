@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
@@ -18,11 +19,12 @@ import {
 } from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders } from "../../hooks/queries/useOrders";
+import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
-import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import { queryKeys } from "../../lib/react-query";
 import type { Gallery } from "../../types";
 
 // List of filter route names that should not be treated as gallery IDs
@@ -208,6 +210,7 @@ async function handleGalleryPaymentSuccess(
 export default function GalleryDetail() {
   const router = useRouter();
   const { id: galleryId } = router.query;
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { logDataLoad, logDataLoaded, logDataError, logUserAction } = usePageLogger({
     pageName: "GalleryDetail",
@@ -325,11 +328,16 @@ export default function GalleryDetail() {
     }
 
     // Auth is handled by AuthProvider/ProtectedRoute - just load data
-    if (galleryId) {
+    if (galleryIdForQuery) {
+      // Invalidate orders query to ensure fresh data when navigating to gallery page
+      // This is especially important when navigating from order detail page
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(galleryIdForQuery),
+      });
       void loadOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, router.isReady, router.asPath]);
+  }, [galleryId, galleryIdForQuery, router.isReady, router.asPath, queryClient]);
 
   // Handle payment redirects (wallet top-up or gallery payment) and ensure orders are always loaded
   useEffect(() => {

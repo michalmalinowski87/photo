@@ -6,11 +6,6 @@ import ThumbnailGenerator from "@uppy/thumbnail-generator";
 import api from "./api-service";
 import { ThumbnailUploadPlugin } from "./uppy-thumbnail-upload-plugin";
 
-// Type alias for UppyFile with required type parameters
-// Using 'any' to be compatible with Uppy's internal type system
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type UppyFileType = UppyFile<any, any>;
-
 export type UploadType = "originals" | "finals";
 
 // Uppy's recommended default: use multipart only for files larger than 100 MiB
@@ -26,7 +21,6 @@ interface PendingFileRequest {
   fileName: string;
   fileSize: number;
   contentType: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resolve: (value: any) => void;
   reject: (error: Error) => void;
 }
@@ -43,7 +37,7 @@ interface BatchQueue {
 const batchQueues = new Map<string, BatchQueue>();
 
 function getQueueKey(galleryId: string, type: UploadType, orderId?: string): string {
-  return `${galleryId}-${type}-${orderId ?? ""}`;
+  return `${galleryId}-${type}-${orderId || ""}`;
 }
 
 function processBatch(queue: BatchQueue): void {
@@ -73,7 +67,6 @@ function processBatch(queue: BatchQueue): void {
       try {
         const response = await api.uploads.getFinalImagePresignedUrlsBatch(
           queue.galleryId,
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           queue.orderId!,
           {
             files: finalsFiles.map((req) => ({
@@ -175,12 +168,7 @@ function queueFileRequest(
   fileName: string,
   fileSize: number,
   contentType: string
-): Promise<{
-  method: string;
-  url: string;
-  headers: Record<string, string>; // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata: any;
-}> {
+): Promise<{ method: string; url: string; headers: Record<string, string>; metadata: any }> {
   return new Promise((resolve, reject) => {
     const queueKey = getQueueKey(galleryId, type, orderId);
     let queue = batchQueues.get(queueKey);
@@ -232,15 +220,15 @@ export interface UppyConfigOptions {
   galleryId: string;
   orderId?: string; // Required for 'finals' type
   type: UploadType;
-  onBeforeUpload?: (files: UppyFileType[]) => Promise<boolean>;
+  onBeforeUpload?: (files: UppyFile[]) => Promise<boolean>;
   onUploadProgress?: (progress: {
     current: number;
     total: number;
     bytesUploaded?: number;
     bytesTotal?: number;
   }) => void;
-  onComplete?: (result: { successful: UppyFileType[]; failed: UppyFileType[] }) => void;
-  onError?: (error: Error, file?: UppyFileType) => void;
+  onComplete?: (result: { successful: UppyFile[]; failed: UppyFile[] }) => void;
+  onError?: (error: Error, file?: UppyFile) => void;
 }
 
 /**
@@ -265,12 +253,12 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   });
 
   // Listen for file removal events
-  uppy.on("file-removed", (_file: UppyFileType, _reason?: string) => {
+  uppy.on("file-removed", (_file: UppyFile, _reason?: string) => {
     // File removed event handler
   });
 
   // Listen for restriction failures
-  uppy.on("restriction-failed", (_file: UppyFileType | undefined, _error: Error) => {
+  uppy.on("restriction-failed", (_file: UppyFile, _error: Error) => {
     // Restriction failed event handler
   });
 
@@ -287,29 +275,27 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   });
 
   // Add custom thumbnail upload plugin to upload generated thumbnails to S3
-  // @ts-expect-error - ThumbnailUploadPlugin type compatibility issue with Uppy's strict typing
   uppy.use(ThumbnailUploadPlugin);
 
   // Add AWS S3 plugin with custom getUploadParameters and multipart support
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   uppy.use(AwsS3, {
     id: "aws-s3",
     limit: 5, // Upload 5 files concurrently (adjust based on performance)
-    shouldUseMultipart: (file: UppyFileType) => {
+    shouldUseMultipart: (file: UppyFile) => {
       // Use multipart only for files larger than 100 MiB (Uppy's recommended default)
       // For smaller files, simple PUT uploads are more efficient (1 API call vs 4+ for multipart)
       // This reduces API Gateway load and prevents 503 errors from request overflow
       // See: https://uppy.io/docs/aws-s3/#shouldusemultipartfile
-      return (file.size ?? 0) > MULTIPART_THRESHOLD;
+      return (file.size || 0) > MULTIPART_THRESHOLD;
     },
-    getUploadParameters: async (file: UppyFileType) => {
+    getUploadParameters: async (file: UppyFile) => {
       // Only used for simple PUT uploads (small files)
       // Multipart uploads use createMultipartUpload instead
       const galleryId = config.galleryId;
       const type = config.type;
       const fileName = file.name;
-      const fileSize = file.size ?? 0;
-      const contentType = file.type ?? "image/jpeg";
+      const fileSize = file.size || 0;
+      const contentType = file.type || "image/jpeg";
 
       if (type === "finals" && !config.orderId) {
         throw new Error("Order ID is required for finals upload");
@@ -328,14 +314,10 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         );
 
         // Store the S3 key and presigned URLs in file metadata for later use
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         file.meta = {
           ...file.meta,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           s3Key: result.metadata.s3Key,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           s3KeyShort: result.metadata.s3KeyShort,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           presignedData: result.metadata.presignedData,
         };
 
@@ -349,14 +331,14 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         throw new Error(errorMessage);
       }
     },
-    createMultipartUpload: async (file: UppyFileType) => {
+    createMultipartUpload: async (file: UppyFile) => {
       // Called by AwsS3 plugin when shouldUseMultipart returns true
       // For multipart, we also batch requests to reduce API calls
       const galleryId = config.galleryId;
       const type = config.type;
       const fileName = file.name;
-      const fileSize = file.size ?? 0;
-      const contentType = file.type ?? "image/jpeg";
+      const fileSize = file.size || 0;
+      const contentType = file.type || "image/jpeg";
 
       if (type === "finals" && !config.orderId) {
         throw new Error("Order ID is required for finals upload");
@@ -384,27 +366,18 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
           fileName,
           fileSize,
           contentType,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           resolve: (result: any) => {
             // Store multipart metadata in file
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             file.meta = {
               ...file.meta,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               s3Key: result.objectKey,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               s3KeyShort: result.key,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               multipartParts: result.parts,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               multipartTotalParts: result.totalParts,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               multipartPartSize: result.partSize,
             };
             resolve({
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               uploadId: result.uploadId,
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
               key: result.objectKey,
             });
           },
@@ -445,17 +418,11 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
                 const upload = multipartResponse.uploads[index];
                 if (upload) {
                   req.resolve({
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     uploadId: upload.uploadId,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     objectKey: upload.objectKey,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     key: upload.key,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     parts: upload.parts,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     totalParts: upload.totalParts,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     partSize: upload.partSize,
                   });
                 } else {
@@ -464,9 +431,9 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
                   );
                 }
               });
-            } catch (_error) {
+            } catch (error) {
               const errorMessage =
-                _error instanceof Error ? _error.message : "Failed to create multipart upload";
+                error instanceof Error ? error.message : "Failed to create multipart upload";
               pendingArray.forEach((req) => {
                 req.reject(new Error(errorMessage));
               });
@@ -490,36 +457,29 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         }
       });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    listParts: async (_file: UppyFileType, opts: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-      const { uploadId, key } = opts;
+    listParts: async (file: UppyFile, { uploadId, key }: { uploadId: string; key: string }) => {
       // List existing parts for resume
       // If this fails (e.g., 503 errors), return empty array to allow upload to continue
       // This prevents resume failures from blocking uploads
       const galleryId = config.galleryId;
       const maxRetries = 2;
+      let lastError: Error | null = null;
+
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const response = await api.uploads.listMultipartParts(galleryId, {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            uploadId: uploadId as string,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            key: key as string,
+            uploadId,
+            key,
           });
 
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const parts = response.parts.map((part) => ({
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+          return response.parts.map((part) => ({
             PartNumber: part.partNumber,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             ETag: part.etag,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
             Size: part.size,
           }));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-          return parts as any;
-        } catch (_error) {
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+
           // If it's a 503 or 500, retry with exponential backoff
           if (attempt < maxRetries) {
             const delay = Math.pow(2, attempt) * 100; // 100ms, 200ms
@@ -536,13 +496,10 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
 
       // Return empty array - Uppy will treat this as a fresh upload
       // This ensures resume can proceed even when listParts fails
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-      return [] as any;
+      return [];
     },
-    // eslint-disable-next-line @typescript-eslint/require-await
-    prepareUploadPart: async (file: UppyFileType, part: { number: number; chunk: Blob }) => {
+    prepareUploadPart: async (file: UppyFile, part: { number: number; chunk: Blob }) => {
       // Get presigned URL for this specific part
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const parts = file.meta?.multipartParts as
         | Array<{ partNumber: number; url: string }>
         | undefined;
@@ -560,7 +517,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       };
     },
     completeMultipartUpload: async (
-      _file: UppyFileType,
+      file: UppyFile,
       {
         uploadId,
         key,
@@ -579,12 +536,12 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       });
 
       return {
-        location: response.location ?? "",
-        etag: response.etag ?? "",
-      } as { location: string; etag: string };
+        location: response.location || "",
+        etag: response.etag || "",
+      };
     },
     abortMultipartUpload: async (
-      _file: UppyFileType,
+      file: UppyFile,
       { uploadId, key }: { uploadId: string; key: string }
     ) => {
       // Abort the multipart upload
@@ -594,16 +551,13 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
         key,
       });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any);
+  });
 
   // Add preprocessor for upload validation (runs before upload starts)
   // Preprocessors execute before upload begins, perfect for validation
   if (config.onBeforeUpload) {
     uppy.addPreProcessor(async (fileIds) => {
-      const files = fileIds
-        .map((id) => uppy.getFile(id))
-        .filter((f): f is UppyFileType => f !== null);
+      const files = fileIds.map((id) => uppy.getFile(id)).filter((f): f is UppyFile => f !== null);
 
       try {
         const shouldProceed = await config.onBeforeUpload?.(files);
@@ -614,10 +568,10 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
           // Don't throw - just cancel silently, validation callback handles UI
           return;
         }
-      } catch (_error) {
+      } catch (error) {
         // If validation throws an error, cancel upload
         uppy.cancelAll();
-        throw _error;
+        throw error;
       }
     });
   }
@@ -646,11 +600,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       let bytesTotal = 0;
       uploadingFiles.forEach((f) => {
         if (f.progress) {
-          const uploaded = f.progress.bytesUploaded;
-          if (typeof uploaded === "number") {
-            bytesUploaded += uploaded;
-          }
-          bytesTotal += f.size ?? 0; // file.size is the original file size
+          bytesUploaded += f.progress.bytesUploaded || 0;
+          bytesTotal += f.size || 0; // file.size is the original file size
         }
       });
 
@@ -667,8 +618,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
   if (config.onComplete) {
     uppy.on("complete", (result) => {
       config.onComplete?.({
-        successful: result.successful ?? [],
-        failed: result.failed ?? [],
+        successful: result.successful || [],
+        failed: result.failed || [],
       });
     });
   }
@@ -679,6 +630,5 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-  return uppy as any;
+  return uppy;
 }

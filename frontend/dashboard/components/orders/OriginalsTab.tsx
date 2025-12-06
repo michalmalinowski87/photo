@@ -1,5 +1,6 @@
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
+import { GalleryLoading } from "../ui/loading/Loading";
 
 interface GalleryImage {
   id?: string;
@@ -59,11 +60,7 @@ export function OriginalsTab({
   // Non-selection gallery: show all images
   if (shouldShowAllImages) {
     if (images.length === 0) {
-      return (
-        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-          <p>Ładowanie zdjęć...</p>
-        </div>
-      );
+      return <GalleryLoading />;
     }
     return <div className="space-y-4">{renderImageGrid(images)}</div>;
   }
@@ -109,11 +106,7 @@ export function OriginalsTab({
   });
 
   if (images.length === 0) {
-    return (
-      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        <p>Ładowanie zdjęć...</p>
-      </div>
-    );
+    return <GalleryLoading />;
   }
 
   if (filteredImages.length === 0) {

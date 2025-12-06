@@ -230,7 +230,6 @@ export const ClientStep: React.FC<ClientStepProps> = ({
     return true;
   }, [isEditMode, canSaveClient, clientEmail, isCompany, companyName, nip, firstName, lastName]);
 
-
   const clientOptions = existingClients.map((client) => ({
     value: client.clientId,
     label: client.isCompany

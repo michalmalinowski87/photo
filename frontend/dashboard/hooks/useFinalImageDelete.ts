@@ -64,8 +64,13 @@ export const useFinalImageDelete = ({
       // Mark image as being deleted (keep it visible with deleting state)
       setDeletingImages((prev) => new Set(prev).add(imageKey));
 
-      // Don't remove image from list yet - keep it visible with "deleting" overlay
-      // Image will be removed after deletion completes and status/bytes are refreshed
+      // Optimistically remove image from local state immediately
+      // The mutation's onMutate also updates React Query cache
+      if (setFinalImages) {
+        setFinalImages((prevImages) => {
+          return prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
+        });
+      }
 
       try {
         await deleteFinalImageMutation.mutateAsync({
@@ -83,17 +88,6 @@ export const useFinalImageDelete = ({
 
         // Clear optimistic bytes state
         setOptimisticFinalsBytes(null);
-
-        // Note: Optimistic updates are now handled by the mutation hook
-        // If setFinalImages is provided (legacy support), update it
-        if (setFinalImages) {
-          setFinalImages((prevImages) => {
-            const remainingImages = prevImages.filter(
-              (img) => (img.key ?? img.filename) !== imageKey
-            );
-            return remainingImages;
-          });
-        }
 
         // Check if this was the last image by querying cache
         const currentImages = queryClient.getQueryData<any[]>(
@@ -156,8 +150,13 @@ export const useFinalImageDelete = ({
           }, 800); // Increased debounce window to catch rapid deletions
         }
       } catch (err) {
-        // On error, image is already in the list (we didn't remove it), just remove deleting state
-        // No optimistic update was applied yet, so no need to revert
+        // On error, rollback optimistic update
+        // The mutation's onError will rollback React Query cache
+        // We need to restore the image in local state if setFinalImages is provided
+        if (setFinalImages) {
+          // React Query cache will be rolled back, and component should sync from it
+          // No need to manually restore here as the component will sync from cache
+        }
 
         // Remove from deleting set
         setDeletingImages((prev) => {

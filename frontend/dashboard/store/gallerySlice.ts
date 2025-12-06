@@ -2,7 +2,7 @@ import { StateCreator } from "zustand";
 
 /**
  * GallerySlice - Empty slice
- * 
+ *
  * All gallery server state has been moved to React Query.
  * This slice is kept for type compatibility with UnifiedStore.
  * Gallery types should be imported from types/index.ts.

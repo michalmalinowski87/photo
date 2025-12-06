@@ -1,20 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
 import { useEffect, useRef, useCallback, useState } from "react";
 
-import { useDeleteFinalImagesBatch } from "./mutations/useOrderMutations";
-import { useDeleteGalleryImagesBatch } from "./mutations/useGalleryMutations";
-import {
-  useValidateUploadLimits,
-  useMarkFinalUploadComplete,
-} from "./mutations/useUploadMutations";
+import api from "../lib/api-service";
+import { queryKeys } from "../lib/react-query";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
 
 import { useToast } from "./useToast";
-
-// Type alias for UppyFile with required type parameters
-// Using 'any' to be compatible with Uppy's internal type system
-type UppyFileType = UppyFile<any, any>;
 
 export interface UseUppyUploadConfig {
   galleryId: string;
@@ -50,6 +43,40 @@ interface UploadProgressState {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+async function validateStorageLimits(
+  galleryId: string,
+  files: UppyFile[],
+  onValidationNeeded?: UseUppyUploadConfig["onValidationNeeded"]
+): Promise<boolean> {
+  try {
+    const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
+    const validationResult = await api.galleries.validateUploadLimits(galleryId);
+
+    if (!validationResult.withinLimit) {
+      const excessBytes =
+        (validationResult.uploadedSizeBytes ?? 0) +
+        totalSize -
+        (validationResult.originalsLimitBytes ?? 0);
+
+      if (excessBytes > 0) {
+        onValidationNeeded?.({
+          uploadedSizeBytes: (validationResult.uploadedSizeBytes ?? 0) + totalSize,
+          originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
+          excessBytes,
+          nextTierPlan: validationResult.nextTierPlan,
+          nextTierPriceCents: validationResult.nextTierPriceCents,
+          nextTierLimitBytes: validationResult.nextTierLimitBytes,
+          isSelectionGallery: validationResult.isSelectionGallery,
+        });
+        return false;
+      }
+    }
+    return true;
+  } catch (error) {
+    throw error;
+  }
+}
 
 function calculateUploadMetrics(
   progress: { bytesUploaded?: number; bytesTotal?: number },
@@ -108,6 +135,142 @@ function showUploadResultToast(
   }
 }
 
+async function handlePostUploadActions(
+  queryClient: ReturnType<typeof useQueryClient>,
+  galleryId: string,
+  orderId: string | undefined,
+  type: UploadType,
+  successfulFiles: UppyFile[],
+  reloadGallery?: () => Promise<void>
+): Promise<() => void> {
+  // Calculate total file sizes from successful uploads for optimistic update
+  // Validate file sizes - only count files with valid, positive sizes
+  // This prevents inaccurate optimistic updates from corrupted or missing file size data
+  const validFiles = successfulFiles.filter((file) => {
+    const size = file.size || 0;
+    return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
+  });
+  const totalSize = validFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+  
+  // Log warning if some files had invalid sizes (for debugging)
+  if (validFiles.length < successfulFiles.length) {
+    console.warn(
+      `[handlePostUploadActions] Some files had invalid sizes: ${successfulFiles.length - validFiles.length} files excluded from optimistic update`
+    );
+  }
+  
+  // Optimistically update bytesUsed for immediate UI feedback
+  // The backend S3 events will update the real value, and we'll reconcile after a delay
+  if (totalSize > 0) {
+    const originalsSize = type === "originals" ? totalSize : 0;
+    const finalsSize = type === "finals" ? totalSize : 0;
+
+    try {
+      // Cancel any outgoing queries to prevent race conditions
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.bytesUsed(galleryId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+
+      // Snapshot previous values for potential rollback
+      const previousBytesUsed = queryClient.getQueryData<{
+        originalsBytesUsed: number;
+        finalsBytesUsed: number;
+      }>(queryKeys.galleries.bytesUsed(galleryId));
+
+      // Optimistically update bytesUsed cache
+      queryClient.setQueryData<{
+        originalsBytesUsed: number;
+        finalsBytesUsed: number;
+      }>(queryKeys.galleries.bytesUsed(galleryId), (old) => {
+        const current = old || { originalsBytesUsed: 0, finalsBytesUsed: 0 };
+        return {
+          originalsBytesUsed: Math.max(0, current.originalsBytesUsed + originalsSize),
+          finalsBytesUsed: Math.max(0, current.finalsBytesUsed + finalsSize),
+        };
+      });
+
+      // Also update bytesUsed in gallery detail if it exists
+      queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
+        if (!old) return old;
+        const currentOriginals = old.originalsBytesUsed || 0;
+        const currentFinals = old.finalsBytesUsed || 0;
+        return {
+          ...old,
+          originalsBytesUsed: Math.max(0, currentOriginals + originalsSize),
+          finalsBytesUsed: Math.max(0, currentFinals + finalsSize),
+          bytesUsed: Math.max(0, (old.bytesUsed || 0) + totalSize),
+        };
+      });
+
+      // After a delay, invalidate to get real value from backend (S3 events will have processed)
+      // This reconciles any differences between optimistic and actual values
+      // Return cleanup function to allow cancellation
+      const timeoutId = setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.bytesUsed(galleryId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(galleryId),
+        });
+      }, 2000); // 2 seconds - enough time for S3 events to process
+
+      // Return cleanup function
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    } catch (error) {
+      // If optimistic update fails, log but don't throw - backend will still update
+      console.error("[handlePostUploadActions] Failed to optimistically update bytesUsed:", error);
+      // Return no-op cleanup function
+      return () => {};
+    }
+  }
+
+  // Return no-op cleanup function if no update needed
+  return () => {};
+}
+
+  if (type === "finals" && orderId) {
+    try {
+      // Wait a bit for backend to finalize uploads before marking complete
+      // This is especially important after pause/resume cycles with multipart uploads
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await api.uploads.markFinalUploadComplete(galleryId, orderId);
+
+      // Invalidate final images cache
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
+      });
+    } catch (error) {
+      throw error;
+    }
+  } else {
+    // For originals, wait before fetching to ensure backend has processed all files
+    // After pause/resume cycles, backend might still be finalizing multipart uploads,
+    // generating thumbnails, or updating the database
+    // Wait 1.5 seconds before fetching to give backend processing time
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Invalidate cache so reloadGallery will fetch fresh images
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.galleries.images(galleryId, "thumb"),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.galleries.images(galleryId, "originals"),
+    });
+  }
+
+  // Reload gallery UI - this will fetch images and update state
+  // We don't fetch here to avoid duplicate requests - let reloadGallery handle it
+  // The delay above ensures backend has processed files before reloadGallery fetches
+  if (reloadGallery) {
+    await reloadGallery();
+  }
+}
+
 /**
  * Check if any file is currently paused
  * Relies on Uppy's native file state - file.isPaused is managed by Uppy
@@ -119,8 +282,7 @@ function checkIfAnyFileIsPaused(uppy: Uppy | null): boolean {
   // Trust Uppy's file state - it manages isPaused internally
   const files = Object.values(uppy.getFiles());
   return files.some(
-    (f: UppyFileType) =>
-      f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
+    (f: UppyFile) => f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
   );
 }
 
@@ -139,10 +301,7 @@ const INITIAL_PROGRESS: UploadProgressState = {
 
 export function useUppyUpload(config: UseUppyUploadConfig) {
   const { showToast } = useToast();
-  const validateUploadLimitsMutation = useValidateUploadLimits();
-  const markFinalUploadCompleteMutation = useMarkFinalUploadComplete();
-  const deleteFinalImagesBatchMutation = useDeleteFinalImagesBatch();
-  const deleteGalleryImagesBatchMutation = useDeleteGalleryImagesBatch();
+  const queryClient = useQueryClient();
   const uppyRef = useRef<Uppy | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -169,34 +328,15 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       galleryId: config.galleryId,
       orderId: config.orderId,
       type: config.type,
-      onBeforeUpload: async (files: UppyFileType[]) => {
+      onBeforeUpload: async (files: UppyFile[]) => {
         if (configRef.current.type === "originals") {
           try {
-            const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
-            const validationResult = await validateUploadLimitsMutation.mutateAsync(
-              configRef.current.galleryId
+            const isValid = await validateStorageLimits(
+              configRef.current.galleryId,
+              files,
+              configRef.current.onValidationNeeded
             );
-
-            if (!validationResult.withinLimit) {
-              const excessBytes =
-                (validationResult.uploadedSizeBytes ?? 0) +
-                totalSize -
-                (validationResult.originalsLimitBytes ?? 0);
-
-              if (excessBytes > 0) {
-                configRef.current.onValidationNeeded?.({
-                  uploadedSizeBytes: (validationResult.uploadedSizeBytes ?? 0) + totalSize,
-                  originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
-                  excessBytes,
-                  nextTierPlan: validationResult.nextTierPlan,
-                  nextTierPriceCents: validationResult.nextTierPriceCents,
-                  nextTierLimitBytes: validationResult.nextTierLimitBytes,
-                  isSelectionGallery: validationResult.isSelectionGallery,
-                });
-                return false;
-              }
-            }
-            return true;
+            return isValid;
           } catch {
             showToast("error", "Błąd", "Nie udało się sprawdzić limitów magazynu");
             return false;
@@ -239,28 +379,22 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (successfulCount > 0) {
           try {
-            if (configRef.current.type === "finals" && configRef.current.orderId) {
-              // Wait a bit for backend to finalize uploads before marking complete
-              await new Promise((resolve) => setTimeout(resolve, 1500));
-              await markFinalUploadCompleteMutation.mutateAsync({
-                galleryId: configRef.current.galleryId,
-                orderId: configRef.current.orderId,
-              });
-            } else {
-              // For originals, wait before fetching to ensure backend has processed all files
-              await new Promise((resolve) => setTimeout(resolve, 1500));
-            }
-
-            // Reload gallery UI - this will fetch images and update state
-            if (configRef.current.reloadGallery) {
-              await configRef.current.reloadGallery();
-            }
-          } catch {
-            showToast(
-              "warning",
-              "Ostrzeżenie",
-              "Zdjęcia zostały przesłane. Jeśli zdjęcia nie pojawiły się, odśwież stronę."
+            // Get successful files for size calculation
+            const successfulFiles = result.successful || [];
+            await handlePostUploadActions(
+              queryClient,
+              configRef.current.galleryId,
+              configRef.current.orderId,
+              configRef.current.type,
+              successfulFiles,
+              configRef.current.reloadGallery
             );
+          } catch (error) {
+            // Only show warning if reloadGallery failed, not for other errors
+            // The images might still appear, so we just log the error silently
+            // and let the cache invalidation handle the refresh
+            console.error("[useUppyUpload] Error in post-upload actions:", error);
+            // Don't show warning - cache invalidation will ensure images are fetched
           }
         }
       },
@@ -299,14 +433,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       uppyRef.current?.cancelAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    config.galleryId,
-    config.orderId,
-    config.type,
-    validateUploadLimitsMutation,
-    markFinalUploadCompleteMutation,
-    showToast,
-  ]);
+  }, [config.galleryId, config.orderId, config.type]);
 
   const startUpload = useCallback(() => {
     if (!uppyRef.current) {
@@ -350,7 +477,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // Get all files from Uppy's current state - check all files that have s3KeyShort
     // This is simpler and more robust - we don't need to track anything
     const allFiles = Object.values(uppyRef.current.getFiles());
-    const filesWithS3Key = allFiles.filter((file: UppyFileType) => {
+    const filesWithS3Key = allFiles.filter((file: UppyFile) => {
       const s3KeyShort = file.meta?.s3KeyShort as string | undefined;
       return !!s3KeyShort;
     });
@@ -375,7 +502,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         // Extract filenames from s3KeyShort for all files
         // Format: originals/{filename} or final/{orderId}/{filename}
         const filenames = filesWithS3Key
-          .map((file: UppyFileType) => {
+          .map((file: UppyFile) => {
             const s3KeyShort = file.meta?.s3KeyShort as string;
             if (!s3KeyShort) {
               return null;
@@ -391,25 +518,14 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (type === "finals" && orderId) {
           // Delete final images in batch
-          await deleteFinalImagesBatchMutation
-            .mutateAsync({
-              galleryId,
-              orderId,
-              imageKeys: filenames,
-            })
-            .catch(() => {
-              // Silently ignore - files might not exist or already deleted
-            });
+          await api.orders.deleteFinalImagesBatch(galleryId, orderId, filenames).catch(() => {
+            // Silently ignore - files might not exist or already deleted
+          });
         } else {
           // Delete original images in batch
-          await deleteGalleryImagesBatchMutation
-            .mutateAsync({
-              galleryId,
-              imageKeys: filenames,
-            })
-            .catch(() => {
-              // Silently ignore - files might not exist or already deleted
-            });
+          await api.galleries.deleteImagesBatch(galleryId, filenames).catch(() => {
+            // Silently ignore - files might not exist or already deleted
+          });
         }
       } catch {
         // Silently ignore all errors
@@ -420,7 +536,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     setTimeout(() => {
       isCancellingRef.current = false;
     }, 100);
-  }, [deleteFinalImagesBatchMutation, deleteGalleryImagesBatchMutation]);
+  }, []);
 
   const pauseUpload = useCallback(() => {
     if (!uppyRef.current || !uploading) {

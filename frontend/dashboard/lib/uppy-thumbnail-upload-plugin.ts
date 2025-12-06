@@ -34,39 +34,26 @@ import imageCompression from "browser-image-compression";
  * - browser-image-compression: Better than raw Canvas API for larger images (simpler, more reliable, handles EXIF)
  * - Both use Canvas API under the hood, but these libraries handle edge cases better
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
+export class ThumbnailUploadPlugin extends BasePlugin {
   static VERSION = "1.0.0";
-  override id: string;
-  override type: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  override uppy: any;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(uppy: any, opts: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     super(uppy, opts);
     this.id = "thumbnail-upload";
     this.type = "modifier";
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    this.uppy = uppy;
   }
 
-  override install() {
+  install() {
     // Listen for thumbnail generation event from Uppy's ThumbnailGenerator
     // We don't need to access the plugin directly - just listen to its events
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
     this.uppy.on("thumbnail:generated", this.handleThumbnailGenerated.bind(this));
 
     // Also listen for upload completion to upload preview (1200px) and ensure thumbnail is uploaded
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
     this.uppy.on("upload-success", this.handleUploadSuccess.bind(this));
   }
 
-  override uninstall() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
+  uninstall() {
     this.uppy.off("thumbnail:generated", this.handleThumbnailGenerated);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
     this.uppy.off("upload-success", this.handleUploadSuccess);
   }
 
@@ -140,9 +127,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    * Event signature: thumbnail:generated(file, preview)
    * If Uppy gives us a blob URL, we convert it to a data URL immediately to avoid future fetch() calls
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async handleThumbnailGenerated(file: UppyFile<any, any>, preview: string) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+  private async handleThumbnailGenerated(file: UppyFile, preview: string) {
     if (!file.meta) {
       file.meta = {};
     }
@@ -157,32 +142,26 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         const dataURL = await this.blobToDataURL(blob);
 
         // Store as data URL for future use (no more fetch() needed!)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         file.meta.thumbnailPreview = dataURL;
 
         // Also cache the blob so we don't need to convert again
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         file.meta.thumbnailBlob = blob;
-      } catch (_error) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      } catch (error) {
         file.meta.thumbnailPreview = preview;
       }
     } else {
       // It's already a data URL - perfect!
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       file.meta.thumbnailPreview = preview;
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async handleUploadSuccess(file: UppyFile<any, any>) {
+  private async handleUploadSuccess(file: UppyFile) {
     // Only process image files
     if (!file.type?.startsWith("image/")) {
       return;
     }
 
     // Get presigned URLs from file metadata (set during getUploadParameters)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const presignedData = file.meta?.presignedData as
       | {
           previewUrl?: string;
@@ -232,7 +211,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    */
   private dataURLtoBlob(dataURL: string): Blob {
     const arr = dataURL.split(",");
-    const mime = arr[0].match(/:(.*?);/)?.[1] ?? "image/webp";
+    const mime = arr[0].match(/:(.*?);/)?.[1] || "image/webp";
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -252,16 +231,10 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    *
    * @param fileSizeMB - Original file size in MB (for adaptive compression if needed)
    */
-  private async getThumbnailBlob(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    file: UppyFile<any, any>,
-    fileSizeMB?: number
-  ): Promise<Blob | null> {
+  private async getThumbnailBlob(file: UppyFile, fileSizeMB?: number): Promise<Blob | null> {
     try {
       // Check if we already cached the blob (avoid re-converting)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (file.meta?.thumbnailBlob && file.meta.thumbnailBlob instanceof Blob) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         const cachedBlob = file.meta.thumbnailBlob as Blob;
         // Check if cached blob exceeds size target and needs re-compression
         const sizeKB = cachedBlob.size / 1024;
@@ -275,45 +248,38 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
 
       // Uppy's ThumbnailGenerator stores the 300px thumbnail in file.preview (data URL)
       // The preview property contains the data URL of the generated thumbnail
-      const fileMeta = file.meta as Record<string, unknown> | undefined;
-      const thumbnailPreview =
-        file.preview ?? (fileMeta?.thumbnailPreview as string | undefined) ?? undefined;
+      const thumbnailPreview = file.preview || file.meta?.thumbnailPreview;
 
       if (!thumbnailPreview) {
         return null;
       }
 
       let blob: Blob;
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const previewStr = thumbnailPreview as string;
 
       // At this point, thumbnailPreview should always be a data URL
       // because we converted blob URLs to data URLs in handleThumbnailGenerated()
       // If it's still a blob URL (shouldn't happen), fetch it but log a warning
-      if (previewStr.startsWith("data:")) {
+      if (thumbnailPreview.startsWith("data:")) {
         // Convert data URL directly to blob WITHOUT fetch (no network request!)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        blob = this.dataURLtoBlob(previewStr);
-      } else if (previewStr.startsWith("blob:")) {
+        blob = this.dataURLtoBlob(thumbnailPreview);
+      } else if (thumbnailPreview.startsWith("blob:")) {
         // This shouldn't happen if handleThumbnailGenerated() ran correctly
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const response = await fetch(previewStr);
+        const response = await fetch(thumbnailPreview);
         blob = await response.blob();
         // Convert to data URL for future use
         const dataURL = await this.blobToDataURL(blob);
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         if (!file.meta) {
           file.meta = {};
         }
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         file.meta.thumbnailPreview = dataURL;
       } else {
-        throw new Error(`Unexpected thumbnail preview format: ${previewStr.substring(0, 20)}...`);
+        throw new Error(
+          `Unexpected thumbnail preview format: ${thumbnailPreview.substring(0, 20)}...`
+        );
       }
 
       // Since we configured thumbnailType: 'image/webp', it should already be WebP
       // But verify and convert if needed
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       if (blob.type !== "image/webp") {
         blob = await this.convertToWebP(blob, 300, 0.8);
       }
@@ -327,15 +293,13 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       }
 
       // Cache the blob to avoid re-converting
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       if (!file.meta) {
         file.meta = {};
       }
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       file.meta.thumbnailBlob = blob;
 
       return blob;
-    } catch (_error) {
+    } catch (error) {
       return null;
     }
   }
@@ -415,8 +379,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    * - Simpler API
    */
   private async generatePreview(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    file: UppyFile<any, any>,
+    file: UppyFile,
     maxWidthOrHeight: number = 1400
   ): Promise<Blob | null> {
     if (!file.data || !(file.data instanceof File)) {
@@ -434,7 +397,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       // - Adaptive quality (0.88-0.92): Adjusts based on original size to hit target
       //   Target: ~0.8-1.2MB per preview
       // - Maintains aspect ratio (not square like thumbnail)
-      const compressedFile = await imageCompression(file.data, {
+      const compressedFile = await imageCompression(file.data as File, {
         maxSizeMB: 5, // Reasonable limit for 1400px preview
         maxWidthOrHeight, // Fit inside 1400px, maintain aspect ratio
         useWebWorker: false, // Simpler, works everywhere
@@ -443,7 +406,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       });
 
       return compressedFile;
-    } catch (_error) {
+    } catch (error) {
       return null;
     }
   }
@@ -461,8 +424,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    * - Optimized for all connection speeds
    */
   private async generateBigThumb(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    file: UppyFile<any, any>,
+    file: UppyFile,
     maxWidthOrHeight: number = 600
   ): Promise<Blob | null> {
     if (!file.data || !(file.data instanceof File)) {
@@ -481,7 +443,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       //   Target: ~80-120KB per BigThumb
       // - Maintains aspect ratio (not square like thumbnail)
       // - Fast loading even on 4G mobile connections
-      const compressedFile = await imageCompression(file.data, {
+      const compressedFile = await imageCompression(file.data as File, {
         maxSizeMB: fileSizeMB > 20 ? 0.16 : 2, // Balanced limit (160KB) between 150KB and 180KB
         maxWidthOrHeight, // Fit inside 600px, maintain aspect ratio
         useWebWorker: false, // Simpler, works everywhere
@@ -490,7 +452,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       });
 
       return compressedFile;
-    } catch (_error) {
+    } catch (error) {
       return null;
     }
   }
@@ -517,7 +479,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       });
 
       return compressedFile;
-    } catch (_error) {
+    } catch (error) {
       return blob; // Fallback to original
     }
   }

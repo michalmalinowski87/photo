@@ -709,6 +709,35 @@ export class AppStack extends Stack {
 		// Update API Lambda environment with DELETE_BATCH_FN_NAME (added after apiFn was created)
 		apiFn.addEnvironment('DELETE_BATCH_FN_NAME', deleteBatchFn.functionName);
 
+		// Lambda function to handle S3 PUT events (file uploads)
+		// Updates bytesUsed atomically when files are uploaded to S3
+		const s3PutFn = new NodejsFunction(this, 'ImagesOnS3PutFn', {
+			entry: path.join(__dirname, '../../../backend/functions/images/onS3Put.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256, // Sufficient for S3 event processing
+			timeout: Duration.minutes(1),
+			bundling: {
+				externalModules: ['aws-sdk'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
+			},
+			environment: envVars
+		});
+		galleriesBucket.grantRead(s3PutFn);
+		// Grant permissions to update gallery bytesUsed
+		galleries.grantReadWriteData(s3PutFn);
+		
+		// Configure S3 bucket to send PUT events to Lambda
+		// Only trigger for originals and finals (not thumbnails/previews)
+		galleriesBucket.addEventNotification(
+			EventType.OBJECT_CREATED_PUT,
+			new LambdaDestination(s3PutFn),
+			{ prefix: 'galleries/', suffix: '' } // Match all files under galleries/
+		);
+
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
 		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)

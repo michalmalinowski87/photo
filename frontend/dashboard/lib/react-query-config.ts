@@ -2,7 +2,7 @@ import type { QueryOptions } from "@tanstack/react-query";
 
 /**
  * Optimized React Query configuration based on data type and usage patterns
- * 
+ *
  * These configurations are applied per-query-type to optimize cache performance,
  * reduce unnecessary refetches, and improve user experience.
  */
@@ -130,4 +130,3 @@ export const defaultQueryOptions: Partial<QueryOptions> = {
   refetchOnWindowFocus: true,
   refetchOnReconnect: false,
 };
-

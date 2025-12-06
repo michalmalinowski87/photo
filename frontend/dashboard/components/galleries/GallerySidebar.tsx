@@ -1,10 +1,10 @@
 import { ChevronLeft } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
+import { useNavigation } from "../../hooks/useNavigation";
 
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";
@@ -19,6 +19,7 @@ interface GallerySidebarProps {
 
 export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarProps) {
   const router = useRouter();
+  const { navigate } = useNavigation();
   const { orderId: orderIdFromQuery } = router.query;
   // Get orderId from query param
   const orderId: string | undefined = Array.isArray(orderIdFromQuery)
@@ -37,6 +38,12 @@ export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarP
 
   // Use gallery from React Query
   const effectiveGallery = gallery;
+
+  const handleGalleryNameClick = () => {
+    if (effectiveGallery?.galleryId) {
+      void navigate(`/galleries/${effectiveGallery.galleryId}`);
+    }
+  };
 
   // Show loading if React Query is loading
   const shouldShowLoading = galleryLoading && !gallery;
@@ -104,12 +111,12 @@ export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarP
       {/* Gallery Info */}
       {!shouldShowLoading && effectiveGallery ? (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">
-          <Link
-            href={`/galleries/${effectiveGallery.galleryId}`}
-            className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+          <button
+            onClick={handleGalleryNameClick}
+            className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer text-left w-full"
           >
             {effectiveGallery.galleryName ?? "Galeria"}
-          </Link>
+          </button>
         </div>
       ) : shouldShowLoading ? (
         <div className="py-6 border-b border-gray-200 dark:border-gray-800">

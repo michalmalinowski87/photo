@@ -3,14 +3,12 @@ import { createPortal } from "react-dom";
 
 interface LoadingProps {
   size?: "sm" | "md" | "lg" | "xl";
-  fullScreen?: boolean;
   text?: string;
   className?: string;
 }
 
 export const Loading: React.FC<LoadingProps> = ({
   size = "md",
-  fullScreen = false,
   text,
   className = "",
 }) => {
@@ -30,29 +28,12 @@ export const Loading: React.FC<LoadingProps> = ({
     </div>
   );
 
-  const content = (
+  return (
     <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
       {spinner}
       {text && <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">{text}</p>}
     </div>
   );
-
-  if (fullScreen) {
-    const loadingOverlay = (
-      <div className="fixed inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50">
-        {content}
-      </div>
-    );
-
-    // Render full-screen loading via portal to document.body to ensure it's above all other content
-    if (typeof window !== "undefined") {
-      return createPortal(loadingOverlay, document.body);
-    }
-
-    return loadingOverlay;
-  }
-
-  return content;
 };
 
 // Full page loading component
@@ -123,6 +104,23 @@ export const FullPageLoading: React.FC<{ text?: string; logo?: React.ReactNode }
 // Inline loading component
 export const InlineLoading: React.FC<{ text?: string }> = ({ text }) => {
   return <Loading size="md" text={text} />;
+};
+
+// Gallery loading component - subtle PhotoHub text fading in/out with "Loading Photos" text
+// Use this for gallery image loading states (originals, user selected, finals)
+export const GalleryLoading: React.FC = () => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
+      <div className="flex flex-col items-center justify-center gap-4">
+        {/* PhotoHub text with subtle fade animation */}
+        <h1 className="text-4xl font-bold text-gray-400 dark:text-gray-600 animate-fade-in-out">
+          PhotoHub
+        </h1>
+        {/* Loading Photos text */}
+        <p className="text-base text-gray-500 dark:text-gray-400 font-medium">Loading Photos</p>
+      </div>
+    </div>
+  );
 };
 
 // Content view loading component - only covers the content area (not sidebar/header)

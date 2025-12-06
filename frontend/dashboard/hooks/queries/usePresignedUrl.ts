@@ -14,12 +14,12 @@ interface UsePresignedUrlParams {
 
 /**
  * Query hook for getting presigned URLs for file uploads
- * 
+ *
  * Features:
  * - 5-minute staleTime (URLs expire after ~5 minutes)
  * - Proper caching to avoid unnecessary refetches
  * - Support for both regular and cover photo uploads
- * 
+ *
  * @param params - Upload parameters including galleryId, key, contentType, fileSize, and optional orderId
  * @returns React Query result with presigned URL data
  */
@@ -45,4 +45,3 @@ export function usePresignedUrl(params: UsePresignedUrlParams) {
     refetchOnReconnect: false, // Don't refetch on reconnect
   });
 }
-

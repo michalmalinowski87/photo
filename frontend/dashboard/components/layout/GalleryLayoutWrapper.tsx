@@ -5,6 +5,7 @@ import { useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
+import { useGalleryRoute } from "../../hooks/useGalleryRoute";
 import { useModal } from "../../hooks/useModal";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
@@ -20,11 +21,10 @@ interface GalleryLayoutWrapperProps {
 
 export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperProps) {
   const router = useRouter();
-  const { id: galleryId, orderId } = router.query;
+  const galleryRoute = useGalleryRoute();
 
-  // Get galleryId from router - handle both string and array cases
-  const galleryIdFromQuery = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  const galleryIdStr = typeof galleryIdFromQuery === "string" ? galleryIdFromQuery : undefined;
+  // Use galleryId from the route hook (already extracted and validated)
+  const galleryIdStr = galleryRoute.galleryId;
 
   // Use React Query hooks for data fetching
   const {
@@ -37,15 +37,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Get gallery creation loading from React Query mutations
   const galleryCreationLoading = useGalleryCreationLoading();
 
-  // Order query
-  const orderIdFromQuery = useMemo(
-    () => (Array.isArray(orderId) ? orderId[0] : orderId),
-    [orderId]
-  );
-  const orderIdStr = useMemo(
-    () => (typeof orderIdFromQuery === "string" ? orderIdFromQuery : undefined),
-    [orderIdFromQuery]
-  );
+  // Use orderId from the route hook (already extracted and validated)
+  const orderIdStr = galleryRoute.orderId;
 
   const { data: currentOrder, isLoading: orderLoading } = useOrder(galleryIdStr, orderIdStr);
 
@@ -64,7 +57,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Helper function to clean up publish wizard URL params
   const cleanupPublishParams = useCallback(() => {
-    if (typeof window === "undefined" || !router.isReady) {
+    if (typeof window === "undefined" || !galleryRoute.isReady) {
       return;
     }
 
@@ -80,13 +73,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       params.delete("planKey");
 
       const newParamsStr = params.toString();
-      const newPath = router.asPath.split("?")[0]; // Get path without query string
+      const newPath = galleryRoute.asPath.split("?")[0]; // Get path without query string
       const newUrl = newParamsStr ? `${newPath}?${newParamsStr}` : newPath;
 
       // Use router.replace() to update Next.js router state properly
       void router.replace(newUrl, undefined, { shallow: true });
     }
-  }, [router]);
+  }, [router, galleryRoute.isReady, galleryRoute.asPath]);
 
   // SIMPLIFIED RULE: Only clear gallery/order when navigating AWAY from gallery routes
   // Examples of when to clear: /dashboard, /wallet, /settings (global), /clients
@@ -124,7 +117,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Check URL params to auto-open wizard (but skip if gallery is already published)
   // This effect should trigger when URL params change (e.g., returning from top-up)
   useEffect(() => {
-    if (typeof window === "undefined" || !galleryId || !router.isReady) {
+    if (typeof window === "undefined" || !galleryIdStr || !galleryRoute.isReady) {
       return;
     }
 
@@ -132,7 +125,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     const publishParam = params.get("publish");
     const galleryParam = params.get("galleryId");
 
-    if (publishParam === "true" && galleryParam === galleryId) {
+    if (publishParam === "true" && galleryParam === galleryIdStr) {
       // If gallery is not loaded yet, wait for it (don't open wizard yet)
       if (!gallery) {
         return;
@@ -151,11 +144,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, router.isReady, router.asPath, gallery, cleanupPublishParams]);
+  }, [galleryIdStr, galleryRoute.isReady, galleryRoute.asPath, gallery, cleanupPublishParams]);
 
   // Clean up URL params when wizard closes (so NextStepsOverlay can show)
   useEffect(() => {
-    if (typeof window !== "undefined" && router.isReady && galleryId) {
+    if (typeof window !== "undefined" && galleryRoute.isReady && galleryIdStr) {
       // Only clean up if wizard is closed and we have publish params in URL
       const params = new URLSearchParams(window.location.search);
       if (!publishWizardOpen && params.get("publish") === "true") {
@@ -163,18 +156,28 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publishWizardOpen, router.isReady, router.asPath, galleryId, cleanupPublishParams]);
+  }, [
+    publishWizardOpen,
+    galleryRoute.isReady,
+    galleryRoute.asPath,
+    galleryIdStr,
+    cleanupPublishParams,
+  ]);
 
   // Payment confirmation is handled by page components (e.g., [orderId].tsx)
   // GalleryLayoutWrapper only handles gallery data loading
 
   // Removed unused handlers - they're handled by child components (GalleryUrlSection, etc.)
 
-  const isOrderPage = useMemo(() => !!orderIdStr, [orderIdStr]);
+  // Use the robust route detection hook instead of manual URL checking
+  const isOrderPage = galleryRoute.isOrderPage;
 
   // SIMPLIFIED: Just use currentOrder?.orderId and currentGallery?.galleryId directly - no derived variables
   const hasGallery = !!gallery && gallery.galleryId === galleryIdStr;
-  const hasOrder = isOrderPage && orderIdStr && currentOrder?.orderId === orderIdStr;
+  // Only consider we have an order if we're actually on an order page AND have the order data
+  // This prevents stale order data from being used when navigating back to gallery page
+  const hasOrder =
+    isOrderPage && !!orderIdStr && !!currentOrder && currentOrder.orderId === orderIdStr;
 
   // Only show loading if we don't have the data and it's actually loading
   const shouldShowOrderLoading = isOrderPage && !hasOrder && orderLoading;
@@ -199,7 +202,8 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       shouldShowOrderLoading,
       shouldShowGalleryLoading,
       shouldShowLoading,
-      routerIsReady: router.isReady,
+      routerIsReady: galleryRoute.isReady,
+      pageType: galleryRoute.pageType,
       galleryCreationLoading,
       loading,
       hasGallery,

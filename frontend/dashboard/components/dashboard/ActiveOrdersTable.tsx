@@ -172,7 +172,8 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                 const galleryName =
                   typeof orderObj.galleryName === "string" ? orderObj.galleryName : "";
                 const orderNumber =
-                  typeof orderObj.orderNumber === "string" || typeof orderObj.orderNumber === "number"
+                  typeof orderObj.orderNumber === "string" ||
+                  typeof orderObj.orderNumber === "number"
                     ? String(orderObj.orderNumber)
                     : "";
                 const deliveryStatus =

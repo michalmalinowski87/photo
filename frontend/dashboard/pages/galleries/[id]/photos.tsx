@@ -1,6 +1,6 @@
 import { Plus, ChevronDown, Image, Upload } from "lucide-react";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
@@ -8,7 +8,7 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { Loading } from "../../../components/ui/loading/Loading";
+import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGalleryImages } from "../../../hooks/queries/useGalleries";
 import { useGallery } from "../../../hooks/useGallery";
@@ -16,10 +16,8 @@ import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
-import { formatApiError } from "../../../lib/api-service";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
-import { mergeGalleryImages } from "../../../lib/image-merge-utils";
 import { storeLogger } from "../../../lib/store-logger";
 import type { Gallery, GalleryImage, Order } from "../../../types";
 
@@ -56,9 +54,9 @@ export default function GalleryPhotos() {
   const {
     isLoading: imagesLoading,
     isFetching: imagesFetching,
+    data: imagesData,
     refetch: refetchGalleryImages,
   } = useGalleryImages(galleryIdForQuery, "thumb");
-  const [images, setImages] = useState<GalleryImage[]>([]);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
 
@@ -130,11 +128,9 @@ export default function GalleryPhotos() {
   }, [galleryId]);
 
   // Use hook for deletion logic
-  const { deleteImage, handleDeleteImageClick, deletingImages, deletingImagesRef } =
-    useOriginalImageDelete({
-      galleryId,
-      setImages,
-    });
+  const { deleteImage, handleDeleteImageClick, deletingImages } = useOriginalImageDelete({
+    galleryId,
+  });
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -145,70 +141,16 @@ export default function GalleryPhotos() {
     isSelectionGallery?: boolean;
   } | null>(null);
 
-  // Define functions first (before useEffect hooks that use them)
-  // Load images from store (checks cache first, fetches if needed)
-  const loadPhotos = useCallback(
-    async (silent: boolean = false): Promise<void> => {
-      if (!galleryId) {
-        logSkippedLoad("photos", "No galleryId provided", { silent });
-        return;
-      }
-
-      try {
-        // Refetch images from React Query
-        const result = await refetchGalleryImages();
-        const apiImages = (result.data ?? []) as ApiImage[];
-
-        // Map images to GalleryImage format
-        // Include all properties from API response to ensure proper fallback handling
-        const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
-          key: img.key,
-          filename: img.filename,
-          thumbUrl: img.thumbUrl,
-          thumbUrlFallback: img.thumbUrlFallback,
-          previewUrl: img.previewUrl,
-          previewUrlFallback: img.previewUrlFallback,
-          bigThumbUrl: img.bigThumbUrl,
-          bigThumbUrlFallback: img.bigThumbUrlFallback,
-          url: img.url,
-          finalUrl: img.finalUrl,
-          size: img.size,
-          lastModified: typeof img.lastModified === "number" ? img.lastModified : undefined,
-          isPlaceholder: false,
-        }));
-
-        // Merge new images with existing, preserving object references when data hasn't changed
-        setImages((currentImages) => {
-          const deletingImageKeys = Array.from(deletingImagesRef.current);
-          return mergeGalleryImages(currentImages, mappedImages, deletingImageKeys);
-        });
-      } catch (err) {
-        if (!silent) {
-          const errorMsg = formatApiError(err);
-          showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować zdjęć");
-        }
-        console.error("[GalleryPhotos] Failed to load photos:", err);
-      }
-    },
-    [galleryId, showToast, refetchGalleryImages, deletingImagesRef, logSkippedLoad]
-  );
-
-  // Reload gallery after upload (simple refetch, no polling)
+  // Reload gallery after upload (simple refetch)
   const reloadGalleryAfterUpload = useCallback(async () => {
     if (!galleryIdForQuery) {
       logSkippedLoad("reloadGalleryAfterUpload", "No galleryId provided", {});
       return;
     }
 
-    // Refetch fresh images from React Query
-    const result = await refetchGalleryImages();
-    const storeImages = (result.data ?? []) as GalleryImage[];
-
-    setImages((currentImages) => {
-      const deletingImageKeys = Array.from(deletingImagesRef.current);
-      return mergeGalleryImages(currentImages, storeImages, deletingImageKeys);
-    });
-  }, [galleryIdForQuery, refetchGalleryImages, deletingImagesRef, logSkippedLoad]);
+    // Refetch fresh images from React Query - it handles cache updates automatically
+    await refetchGalleryImages();
+  }, [galleryIdForQuery, refetchGalleryImages, logSkippedLoad]);
 
   // Loading state is now automatically managed by React Query mutations
   // No need to manually set/unset loading state
@@ -227,7 +169,7 @@ export default function GalleryPhotos() {
     const isNewGallery = loadedGalleryIdRef.current !== galleryIdStr;
 
     // Only load if it's a new gallery (not already loaded)
-    // GalleryLayoutWrapper handles gallery loading, we just need to load photos
+    // GalleryLayoutWrapper handles gallery loading, React Query handles image loading
     if (isNewGallery && galleryIdStr) {
       loadedGalleryIdRef.current = galleryIdStr;
     } else {
@@ -237,15 +179,40 @@ export default function GalleryPhotos() {
       });
     }
 
-    // Auth is handled by AuthProvider/ProtectedRoute - just load data
+    // Auth is handled by AuthProvider/ProtectedRoute - React Query handles image loading
     if (galleryId) {
-      void loadPhotos();
-
       // Load orders
       void loadApprovedSelections();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
+
+  // Convert React Query data to GalleryImage format and filter out deleting images
+  const images = useMemo(() => {
+    if (!imagesData) {
+      return [];
+    }
+    const apiImages = imagesData as ApiImage[];
+    const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
+      key: img.key,
+      filename: img.filename,
+      thumbUrl: img.thumbUrl,
+      thumbUrlFallback: img.thumbUrlFallback,
+      previewUrl: img.previewUrl,
+      previewUrlFallback: img.previewUrlFallback,
+      bigThumbUrl: img.bigThumbUrl,
+      bigThumbUrlFallback: img.bigThumbUrlFallback,
+      url: img.url,
+      finalUrl: img.finalUrl,
+      size: img.size,
+      lastModified: typeof img.lastModified === "number" ? img.lastModified : undefined,
+      isPlaceholder: false,
+    }));
+
+    // Filter out images that are being deleted (they'll show with overlay but not count in list)
+    // Actually, let's keep them in the list so the overlay shows, just mark them
+    return mappedImages;
+  }, [imagesData]);
 
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
@@ -587,12 +554,15 @@ export default function GalleryPhotos() {
             Zdjęcia w galerii
           </h1>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {imagesLoading || imagesFetching ? (
+            {imagesLoading ? (
               <Loading size="sm" />
             ) : (
               <>
                 {images.length}{" "}
                 {images.length === 1 ? "zdjęcie" : images.length < 5 ? "zdjęcia" : "zdjęć"}
+                {imagesFetching && (
+                  <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
+                )}
               </>
             )}
           </div>
@@ -609,10 +579,8 @@ export default function GalleryPhotos() {
         </div>
 
         {/* Images Grid - Grouped by Orders */}
-        {imagesLoading || imagesFetching ? (
-          <div className="p-12 text-center bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <Loading size="lg" text="Ładowanie zdjęć..." />
-          </div>
+        {imagesLoading ? (
+          <GalleryLoading />
         ) : images.length === 0 ? (
           <EmptyState
             // eslint-disable-next-line jsx-a11y/alt-text

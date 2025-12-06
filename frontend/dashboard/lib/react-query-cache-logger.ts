@@ -4,12 +4,12 @@ import { queryKeys } from "./react-query";
 
 /**
  * Development-only cache monitoring utility
- * 
+ *
  * Logs cache metrics including:
  * - Cache size (number of cached queries)
  * - Hit/miss ratio for top query keys
  * - Cache state for frequently used queries
- * 
+ *
  * Only runs in development mode to avoid performance impact in production.
  */
 
@@ -88,7 +88,8 @@ function getCacheMetrics(queryClient: QueryClient): CacheMetrics {
 
     // Calculate hit rate (simplified - assumes queries with data are hits)
     const queriesWithData = matchingQueries.filter((q) => q.state.data !== undefined);
-    const hitRate = matchingQueries.length > 0 ? queriesWithData.length / matchingQueries.length : 0;
+    const hitRate =
+      matchingQueries.length > 0 ? queriesWithData.length / matchingQueries.length : 0;
 
     // Update access tracking
     if (matchingQueries.length > 0) {
@@ -99,20 +100,19 @@ function getCacheMetrics(queryClient: QueryClient): CacheMetrics {
     }
 
     // Calculate data age (time since last fetch)
-    const dataAge = matchingQueries.length > 0
-      ? matchingQueries
-          .map((q) => q.state.dataUpdatedAt)
-          .filter((t) => t > 0)
-          .reduce((max, t) => Math.max(max, t), 0)
-      : undefined;
+    const dataAge =
+      matchingQueries.length > 0
+        ? matchingQueries
+            .map((q) => q.state.dataUpdatedAt)
+            .filter((t) => t > 0)
+            .reduce((max, t) => Math.max(max, t), 0)
+        : undefined;
 
     return {
       key: keyName,
       hits: access.hits,
       misses: access.misses,
-      hitRate: access.hits + access.misses > 0
-        ? access.hits / (access.hits + access.misses)
-        : 0,
+      hitRate: access.hits + access.misses > 0 ? access.hits / (access.hits + access.misses) : 0,
       dataAge: dataAge ? Date.now() - dataAge : undefined,
     };
   });
@@ -149,10 +149,10 @@ function formatMetrics(metrics: CacheMetrics): string {
 
 /**
  * Initialize cache logger (development only)
- * 
+ *
  * Logs cache metrics every 30 seconds to help monitor cache performance
  * and identify optimization opportunities.
- * 
+ *
  * @param queryClient - React Query client instance
  */
 export function initCacheLogger(queryClient: QueryClient): void {
@@ -178,4 +178,3 @@ export function initCacheLogger(queryClient: QueryClient): void {
     });
   }
 }
-

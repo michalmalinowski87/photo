@@ -1,5 +1,5 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
@@ -17,6 +17,7 @@ function getWebpFilename(fname: string): string {
 
 /**
  * Process a single delete operation
+ * Returns file size for bytesUsed update (only for original/final files, not thumbnails)
  */
 async function processDelete(
 	deleteRequest: {
@@ -28,10 +29,31 @@ async function processDelete(
 	},
 	bucket: string,
 	logger: any
-): Promise<{ galleryId: string; success: boolean }> {
+): Promise<{ galleryId: string; success: boolean; fileSize?: number; type: 'original' | 'final' }> {
 	const { type, galleryId, orderId, filename, originalKey } = deleteRequest;
 	
 	try {
+		// Get file size BEFORE deletion for bytesUsed update (only count original/final, not thumbnails)
+		let fileSize = 0;
+		try {
+			const headResponse = await s3.send(new HeadObjectCommand({
+				Bucket: bucket,
+				Key: originalKey
+			}));
+			fileSize = headResponse.ContentLength || 0;
+		} catch (headErr: any) {
+			if (headErr.name !== 'NotFound') {
+				logger?.warn('Failed to get file size before deletion', {
+					error: headErr.message,
+					galleryId,
+					filename,
+					type,
+					originalKey
+				});
+			}
+			// If file not found, continue - it might have been deleted already
+		}
+
 		// Construct S3 keys for all files to delete
 		const webpFilename = getWebpFilename(filename);
 		let previewKey: string;
@@ -46,7 +68,7 @@ async function processDelete(
 			// Final image
 			if (!orderId) {
 				logger?.warn('OrderId required for final image delete', { galleryId, filename });
-				return { galleryId, success: false };
+				return { galleryId, success: false, type };
 			}
 			previewKey = `galleries/${galleryId}/final/${orderId}/previews/${webpFilename}`;
 			thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${webpFilename}`;
@@ -75,10 +97,11 @@ async function processDelete(
 			galleryId,
 			filename,
 			type,
-			orderId
+			orderId,
+			fileSize
 		});
 
-		return { galleryId, success: true };
+		return { galleryId, success: true, fileSize, type };
 	} catch (err: any) {
 		logger?.error('Failed to process delete', {
 			error: err.message,
@@ -87,7 +110,7 @@ async function processDelete(
 			type,
 			orderId
 		});
-		return { galleryId, success: false };
+		return { galleryId, success: false, type };
 	}
 }
 
@@ -148,6 +171,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const BATCH_SIZE = 6;
 	const processedGalleries = new Set<string>();
 	const finalImageDeletes = new Map<string, Array<{ galleryId: string; orderId: string }>>(); // Track final image deletes by galleryId/orderId
+	const galleryBytesToSubtract = new Map<string, { originals: number; finals: number }>(); // Track bytes to subtract per gallery
 
 	for (let i = 0; i < deletes.length; i += BATCH_SIZE) {
 		const batch = deletes.slice(i, i + BATCH_SIZE);
@@ -155,11 +179,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			batch.map(deleteReq => processDelete(deleteReq, bucket, logger))
 		);
 
-		// Collect gallery IDs and track final image deletes
+		// Collect gallery IDs, track final image deletes, and accumulate file sizes for bytesUsed updates
 		results.forEach((result, index) => {
 			if (result.status === 'fulfilled' && result.value?.success) {
 				const deleteReq = batch[index];
-				processedGalleries.add(result.value.galleryId);
+				const deleteResult = result.value;
+				processedGalleries.add(deleteResult.galleryId);
+				
+				// Accumulate file sizes for bytesUsed updates (only count original/final files, not thumbnails)
+				if (deleteResult.fileSize && deleteResult.fileSize > 0) {
+					const galleryId = deleteResult.galleryId;
+					if (!galleryBytesToSubtract.has(galleryId)) {
+						galleryBytesToSubtract.set(galleryId, { originals: 0, finals: 0 });
+					}
+					const bytes = galleryBytesToSubtract.get(galleryId)!;
+					if (deleteResult.type === 'original') {
+						bytes.originals += deleteResult.fileSize;
+					} else if (deleteResult.type === 'final') {
+						bytes.finals += deleteResult.fileSize;
+					}
+				}
 				
 				// Track final image deletes for directory checking
 				if (deleteReq.type === 'final' && deleteReq.orderId) {
@@ -176,14 +215,117 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 
+	// Update bytesUsed atomically for all affected galleries
+	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	if (galleriesTable && galleryBytesToSubtract.size > 0) {
+		for (const [galleryId, bytes] of galleryBytesToSubtract.entries()) {
+			try {
+				// Use atomic ADD operation with negative values to prevent race conditions
+				// This safely handles concurrent deletions and uploads
+				const updateExpressions: string[] = [];
+				const expressionValues: Record<string, number> = {};
+				
+				if (bytes.originals > 0) {
+					updateExpressions.push('originalsBytesUsed :negativeOriginalsSize');
+					expressionValues[':negativeOriginalsSize'] = -bytes.originals;
+				}
+				
+				if (bytes.finals > 0) {
+					updateExpressions.push('finalsBytesUsed :negativeFinalsSize');
+					expressionValues[':negativeFinalsSize'] = -bytes.finals;
+				}
+				
+				// Also update bytesUsed for backward compatibility (sum of both)
+				if (bytes.originals > 0 || bytes.finals > 0) {
+					const totalNegativeSize = -(bytes.originals + bytes.finals);
+					updateExpressions.push('bytesUsed :negativeTotalSize');
+					expressionValues[':negativeTotalSize'] = totalNegativeSize;
+				}
+				
+				if (updateExpressions.length > 0) {
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: `ADD ${updateExpressions.join(', ')}`,
+						ExpressionAttributeValues: expressionValues
+					}));
+					
+					// After atomic update, check if value went negative and correct it if needed
+					const updatedGallery = await ddb.send(new GetCommand({
+						TableName: galleriesTable,
+						Key: { galleryId }
+					}));
+					
+					const updatedOriginalsBytesUsed = updatedGallery.Item?.originalsBytesUsed || 0;
+					const updatedFinalsBytesUsed = updatedGallery.Item?.finalsBytesUsed || 0;
+					const updatedBytesUsed = updatedGallery.Item?.bytesUsed || 0;
+					
+					// If value went negative (shouldn't happen, but handle edge cases), set to 0
+					if (updatedOriginalsBytesUsed < 0 || updatedFinalsBytesUsed < 0 || updatedBytesUsed < 0) {
+						logger?.warn('bytesUsed went negative after atomic delete update, correcting', {
+							galleryId,
+							updatedOriginalsBytesUsed,
+							updatedFinalsBytesUsed,
+							updatedBytesUsed,
+							originalsRemoved: bytes.originals,
+							finalsRemoved: bytes.finals
+						});
+						
+						const setExpressions: string[] = [];
+						const setValues: Record<string, number> = {};
+						
+						if (updatedOriginalsBytesUsed < 0) {
+							setExpressions.push('originalsBytesUsed = :zero');
+							setValues[':zero'] = 0;
+						}
+						if (updatedFinalsBytesUsed < 0) {
+							setExpressions.push('finalsBytesUsed = :zero');
+							setValues[':zero'] = 0;
+						}
+						if (updatedBytesUsed < 0) {
+							setExpressions.push('bytesUsed = :zero');
+							setValues[':zero'] = 0;
+						}
+						
+						if (setExpressions.length > 0) {
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId },
+								UpdateExpression: `SET ${setExpressions.join(', ')}`,
+								ExpressionAttributeValues: setValues
+							}));
+						}
+					}
+					
+					logger?.info('Updated gallery bytesUsed after batch delete (atomic)', {
+						galleryId,
+						originalsRemoved: bytes.originals,
+						finalsRemoved: bytes.finals,
+						totalRemoved: bytes.originals + bytes.finals,
+						updatedOriginalsBytesUsed: Math.max(0, updatedOriginalsBytesUsed),
+						updatedFinalsBytesUsed: Math.max(0, updatedFinalsBytesUsed),
+						updatedBytesUsed: Math.max(0, updatedBytesUsed)
+					});
+				}
+			} catch (updateErr: any) {
+				logger?.warn('Failed to update gallery bytesUsed after batch delete', {
+					error: updateErr.message,
+					galleryId,
+					originalsRemoved: bytes.originals,
+					finalsRemoved: bytes.finals
+				});
+				// Don't fail the entire batch - bytesUsed update is important but not critical
+			}
+		}
+	}
+
 	// Check directories for final image deletes and update order status if needed
 	if (finalImageDeletes.size > 0) {
-		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 		
 		if (galleriesTable && ordersTable) {
 			// Process each unique galleryId/orderId combination
-			for (const [key, deletes] of finalImageDeletes.entries()) {
+			for (const [_key, deletes] of finalImageDeletes.entries()) {
 				if (deletes.length === 0) continue;
 				
 				const { galleryId, orderId } = deletes[0];
@@ -198,9 +340,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}));
 					
 					const remainingFinals = (listResponse.Contents || []).filter(obj => {
-						const key = obj.Key || '';
+						const objKey = obj.Key || '';
 						// Only count files directly under the prefix, not subdirectories
-						return key.startsWith(finalPrefix) && key !== finalPrefix && !key.substring(finalPrefix.length).includes('/');
+						return objKey.startsWith(finalPrefix) && objKey !== finalPrefix && !objKey.substring(finalPrefix.length).includes('/');
 					});
 					
 					// If directory is empty, check if we need to revert order status
@@ -276,15 +418,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Storage recalculation is now on-demand with caching (5-minute TTL)
-	// No need to trigger recalculation here - it will happen automatically when:
-	// 1. Critical operations (pay, validateUploadLimits) force recalculation
-	// 2. Display operations use cached values (acceptable to be slightly stale after deletes)
-	// Cache will naturally expire after 5 minutes, triggering recalculation on next read
+	// bytesUsed is now updated atomically above using ADD operations
+	// This provides robust race condition protection and immediate accuracy
+	// Storage recalculation (recalculateBytesUsed) is still available for on-demand recalculation
+	// and will use the updated bytesUsed values as a starting point
 
 	logger?.info('Batch delete processing completed', {
 		totalDeletes: deletes.length,
 		galleriesProcessed: processedGalleries.size,
+		galleriesWithBytesUpdated: galleryBytesToSubtract.size,
 		finalImageDirectoriesChecked: finalImageDeletes.size
 	});
 });

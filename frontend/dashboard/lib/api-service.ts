@@ -324,14 +324,16 @@ class ApiService {
 
     // Clean up the cache after request completes (success or failure)
     // Use void operator to explicitly indicate we're intentionally not awaiting this cleanup
-    void requestPromise.finally(() => {
-      // Use setTimeout to allow other identical requests to join before cleanup
-      setTimeout(() => {
-        this.pendingRequests.delete(requestKey);
-      }, this.DEDUP_WINDOW_MS);
-    }).catch(() => {
-      // Silently handle any errors in cleanup - this is non-critical cleanup code
-    });
+    void requestPromise
+      .finally(() => {
+        // Use setTimeout to allow other identical requests to join before cleanup
+        setTimeout(() => {
+          this.pendingRequests.delete(requestKey);
+        }, this.DEDUP_WINDOW_MS);
+      })
+      .catch(() => {
+        // Silently handle any errors in cleanup - this is non-critical cleanup code
+      });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return requestPromise;

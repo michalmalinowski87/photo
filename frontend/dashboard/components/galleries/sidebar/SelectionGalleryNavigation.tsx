@@ -1,7 +1,8 @@
 import { FileText, Image as ImageIcon } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/router";
 import React from "react";
+
+import { useGalleryRoute } from "../../../hooks/useGalleryRoute";
+import { useNavigation } from "../../../hooks/useNavigation";
 
 interface SelectionGalleryNavigationProps {
   galleryId: string;
@@ -10,41 +11,50 @@ interface SelectionGalleryNavigationProps {
 export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProps> = ({
   galleryId,
 }) => {
-  const router = useRouter();
+  const galleryRoute = useGalleryRoute();
+  const { navigate } = useNavigation();
+
+  const isOrdersActive = galleryRoute.isGalleryDetail;
+  const isPhotosActive = galleryRoute.isGalleryPhotos;
+
+  const handleOrdersClick = () => {
+    void navigate(`/galleries/${galleryId}`);
+  };
+
+  const handlePhotosClick = () => {
+    void navigate(`/galleries/${galleryId}/photos`);
+  };
 
   return (
     <>
       {/* Orders Link */}
       <li>
-        <Link
-          href={`/galleries/${galleryId}`}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-            router.pathname === `/galleries/[id]` &&
-            !router.asPath.includes("/photos") &&
-            !router.asPath.includes("/settings") &&
-            !router.asPath.includes("/orders/")
+        <button
+          onClick={handleOrdersClick}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left ${
+            isOrdersActive
               ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
               : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
           <FileText size={20} />
           <span>Zlecenia</span>
-        </Link>
+        </button>
       </li>
 
       {/* Photos Link */}
       <li>
-        <Link
-          href={`/galleries/${galleryId}/photos`}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-            router.pathname === `/galleries/[id]/photos`
+        <button
+          onClick={handlePhotosClick}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left ${
+            isPhotosActive
               ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
               : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
           <ImageIcon size={20} />
           <span>Zdjęcia</span>
-        </Link>
+        </button>
       </li>
     </>
   );

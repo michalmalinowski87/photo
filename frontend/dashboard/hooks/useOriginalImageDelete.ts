@@ -10,27 +10,20 @@ import { useToast } from "./useToast";
 
 interface UseOriginalImageDeleteOptions {
   galleryId: string | string[] | undefined;
-  setImages: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
 }
 
-export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImageDeleteOptions) => {
+export const useOriginalImageDelete = ({ galleryId }: UseOriginalImageDeleteOptions) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const deleteGalleryImageMutation = useDeleteGalleryImage();
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
-  const deletingImagesRef = useRef<Set<string>>(new Set());
-  const deletedImageKeysRef = useRef<Set<string>>(new Set());
 
   // Toast batching refs
   const successToastBatchRef = useRef<number>(0);
   const errorToastBatchRef = useRef<number>(0);
   const successToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const errorToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sync refs with state
-  deletingImagesRef.current = deletingImages;
-  deletedImageKeysRef.current = deletedImageKeys;
 
   const deleteImage = useCallback(
     async (image: GalleryImage, suppressChecked?: boolean): Promise<void> => {
@@ -53,9 +46,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
       // Mark image as being deleted (keep it visible with deleting state)
       setDeletingImages((prev) => new Set(prev).add(imageKey));
 
-      // Don't remove image from list yet - keep it visible with "deleting" overlay
-      // Image will be removed after deletion completes and status/bytes are refreshed
-
+      // React Query optimistic update in mutation's onMutate handles cache update
       try {
         await deleteGalleryImageMutation.mutateAsync({
           galleryId: galleryIdStr,
@@ -69,48 +60,43 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
 
-        // Optimistically remove image from list immediately after successful delete
-        setImages((prevImages) => {
-          const remainingImages = prevImages.filter(
-            (img) => (img.key ?? img.filename) !== imageKey
-          );
+        // Check if this was the last image - if so, we need to invalidate gallery queries
+        const currentImages = queryClient.getQueryData<any[]>(
+          queryKeys.galleries.images(galleryIdStr, "thumb")
+        );
+        const wasLastImage = !currentImages || currentImages.length === 0;
 
-          // Check if this was the last image - if so, we need to invalidate gallery queries
-          const wasLastImage = remainingImages.length === 0;
+        // If this was the last image, invalidate status query to refresh gallery state
+        // Do NOT invalidate galleries.detail as it would invalidate child queries (images) causing refetch
+        if (wasLastImage && galleryIdStr) {
+          void (async () => {
+            try {
+              // Only invalidate status, not detail (which would invalidate images)
+              await queryClient.invalidateQueries({
+                queryKey: queryKeys.galleries.status(galleryIdStr),
+              });
+            } catch (statusErr) {
+              // eslint-disable-next-line no-console
+              console.error(
+                "[useOriginalImageDelete] Failed to refresh status after last image deleted:",
+                statusErr
+              );
+            }
+          })();
+        }
 
-          // If this was the last image, invalidate gallery queries to refresh state
-          if (wasLastImage && galleryIdStr) {
-            void (async () => {
-              try {
-                // Invalidate gallery queries to refetch
-                await queryClient.invalidateQueries({
-                  queryKey: queryKeys.galleries.detail(galleryIdStr),
-                });
-                await queryClient.invalidateQueries({
-                  queryKey: queryKeys.galleries.status(galleryIdStr),
-                });
-              } catch (statusErr) {
-                // eslint-disable-next-line no-console
-                console.error(
-                  "[useOriginalImageDelete] Failed to refresh status after last image deleted:",
-                  statusErr
-                );
-              }
-            })();
-          }
-
-          return remainingImages;
-        });
-
-        // Remove from deleting set
-        setDeletingImages((prev) => {
-          const updated = new Set(prev);
-          updated.delete(imageKey);
-          return updated;
-        });
-
-        // Mark as successfully deleted
+        // Mark as successfully deleted (image will be removed from UI by React Query cache update)
         setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
+
+        // Remove from deleting set after a brief delay to ensure smooth transition
+        // The image will disappear from the list due to React Query cache update
+        setTimeout(() => {
+          setDeletingImages((prev) => {
+            const updated = new Set(prev);
+            updated.delete(imageKey);
+            return updated;
+          });
+        }, 100);
 
         // Clear deleted key after 30 seconds to allow eventual consistency
         setTimeout(() => {
@@ -139,8 +125,8 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
           }, 800); // Increased debounce window to catch rapid deletions
         }
       } catch (err) {
-        // On error, image is already in the list (we didn't remove it), just remove deleting state
-        // No optimistic update was applied yet, so no need to revert
+        // On error, the mutation's onError will rollback React Query cache
+        // React Query handles the rollback, component will automatically update
 
         // Remove from deleting set
         setDeletingImages((prev) => {
@@ -170,7 +156,7 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
         throw err;
       }
     },
-    [galleryId, setImages, deletingImages, showToast, queryClient, deleteGalleryImageMutation]
+    [galleryId, deletingImages, showToast, queryClient, deleteGalleryImageMutation]
   );
 
   const handleDeleteImageClick = useCallback(
@@ -212,7 +198,5 @@ export const useOriginalImageDelete = ({ galleryId, setImages }: UseOriginalImag
     handleDeleteImageClick,
     deletingImages,
     deletedImageKeys,
-    deletingImagesRef,
-    deletedImageKeysRef,
   };
 };

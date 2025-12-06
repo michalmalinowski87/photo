@@ -132,12 +132,24 @@ export const CoverPhotoUpload: React.FC = () => {
         setUploadingCover(false);
         setProcessingCover(false);
         setPresignParams(null); // Reset params on error
-        showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się przesłać okładki");
+        showToast(
+          "error",
+          "Błąd",
+          formatApiError(err as Error) ?? "Nie udało się przesłać okładki"
+        );
       }
     };
 
     void performUpload();
-  }, [presignResponse, presignLoading, presignParams, galleryId, updateGalleryMutation, refetchCoverPhoto, showToast]);
+  }, [
+    presignResponse,
+    presignLoading,
+    presignParams,
+    galleryId,
+    updateGalleryMutation,
+    refetchCoverPhoto,
+    showToast,
+  ]);
 
   // Handle presign errors
   useEffect(() => {
@@ -145,7 +157,11 @@ export const CoverPhotoUpload: React.FC = () => {
       setUploadingCover(false);
       setProcessingCover(false);
       setPresignParams(null);
-      showToast("error", "Błąd", formatApiError(presignError as Error) ?? "Nie udało się uzyskać URL do przesłania");
+      showToast(
+        "error",
+        "Błąd",
+        formatApiError(presignError as Error) ?? "Nie udało się uzyskać URL do przesłania"
+      );
     }
   }, [presignError, presignParams, showToast]);
 

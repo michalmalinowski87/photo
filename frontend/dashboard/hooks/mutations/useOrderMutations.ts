@@ -81,28 +81,22 @@ export function useMarkOrderPaid() {
       const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
 
       // Optimistically update order payment status
-      queryClient.setQueryData<Order>(
-        queryKeys.orders.detail(galleryId, orderId),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            paymentStatus: "PAID",
-          };
-        }
-      );
+      queryClient.setQueryData<Order>(queryKeys.orders.detail(galleryId, orderId), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          paymentStatus: "PAID",
+        };
+      });
 
       // Optimistically update order in list if it exists
       if (previousOrderList) {
-        queryClient.setQueryData<Order[]>(
-          queryKeys.orders.byGallery(galleryId),
-          (old) => {
-            if (!old) return old;
-            return old.map((order) =>
-              order.orderId === orderId ? { ...order, paymentStatus: "PAID" } : order
-            );
-          }
-        );
+        queryClient.setQueryData<Order[]>(queryKeys.orders.byGallery(galleryId), (old) => {
+          if (!old) return old;
+          return old.map((order) =>
+            order.orderId === orderId ? { ...order, paymentStatus: "PAID" } : order
+          );
+        });
       }
 
       return { previousOrder, previousOrderList, previousGallery };
@@ -246,17 +240,37 @@ export function useDeleteFinalImage() {
       await queryClient.cancelQueries({
         queryKey: queryKeys.orders.finalImages(galleryId, orderId),
       });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.bytesUsed(galleryId),
+      });
 
       // Snapshot previous values
       interface FinalImage {
         key?: string;
         filename?: string;
+        size?: number;
+        bytes?: number;
         [key: string]: unknown;
       }
       const previousFinalImages = queryClient.getQueryData<FinalImage[]>(
         queryKeys.orders.finalImages(galleryId, orderId)
       );
       const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
+      const previousBytesUsed = queryClient.getQueryData<{
+        originalsBytesUsed: number;
+        finalsBytesUsed: number;
+      }>(queryKeys.galleries.bytesUsed(galleryId));
+
+      // Get file size from image cache before removing it
+      const imageToDelete = previousFinalImages?.find(
+        (img) => (img.key ?? img.filename) === imageKey
+      );
+      const rawFileSize = imageToDelete?.size || imageToDelete?.bytes || 0;
+      // Validate file size - must be positive and reasonable (max 10GB)
+      const fileSize = rawFileSize > 0 && rawFileSize < 10 * 1024 * 1024 * 1024 ? rawFileSize : 0;
 
       // Optimistically remove image from final images list
       queryClient.setQueryData<FinalImage[]>(
@@ -264,7 +278,31 @@ export function useDeleteFinalImage() {
         (old) => old?.filter((img) => (img.key ?? img.filename) !== imageKey) ?? []
       );
 
-      return { previousFinalImages, previousGallery };
+      // Optimistically decrease finalsBytesUsed if we have file size
+      if (fileSize > 0) {
+        queryClient.setQueryData<{
+          originalsBytesUsed: number;
+          finalsBytesUsed: number;
+        }>(queryKeys.galleries.bytesUsed(galleryId), (old) => {
+          const current = old || { originalsBytesUsed: 0, finalsBytesUsed: 0 };
+          return {
+            originalsBytesUsed: current.originalsBytesUsed, // Only finals are deleted here
+            finalsBytesUsed: Math.max(0, current.finalsBytesUsed - fileSize),
+          };
+        });
+
+        // Also update bytesUsed in gallery detail if it exists
+        queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            finalsBytesUsed: Math.max(0, (old.finalsBytesUsed || 0) - fileSize),
+            bytesUsed: Math.max(0, (old.bytesUsed || 0) - fileSize),
+          };
+        });
+      }
+
+      return { previousFinalImages, previousGallery, previousBytesUsed, fileSize };
     },
     onError: (_err, variables, context) => {
       // Rollback on error
@@ -280,24 +318,32 @@ export function useDeleteFinalImage() {
           context.previousGallery
         );
       }
-    },
-    onSettled: (_, __, variables) => {
-      // Refetch to ensure consistency
+      if (context?.previousBytesUsed) {
+        queryClient.setQueryData(
+          queryKeys.galleries.bytesUsed(variables.galleryId),
+          context.previousBytesUsed
+        );
+      }
+      // On error, invalidate to refetch and ensure consistency
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.detail(variables.galleryId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
-      });
+    },
+    onSuccess: (_data, variables) => {
+      // On success, optimistic update is already applied
+      // After a delay, invalidate bytesUsed to get real value from backend
+      // This reconciles any differences between optimistic and actual values
+      setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.bytesUsed(variables.galleryId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(variables.galleryId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+        });
+      }, 2000); // 2 seconds - enough time for backend to process deletion
     },
   });
 }

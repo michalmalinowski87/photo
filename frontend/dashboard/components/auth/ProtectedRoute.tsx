@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useEffect, ReactNode } from "react";
 
 import { useAuth } from "../../context/AuthProvider";
+import { FullPageLoading } from "../ui/loading/Loading";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -24,14 +25,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   // Show loading state while checking authentication
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-16 h-16 relative">
-          <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
+    return <FullPageLoading />;
   }
 
   // Don't render children if not authenticated (redirect will happen)
