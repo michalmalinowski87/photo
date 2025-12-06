@@ -82,12 +82,7 @@ export default function Clients() {
       : { limit: "20" };
 
   // React Query hook
-  const {
-    data: clientsData,
-    isLoading: loading,
-    isFetching,
-    error,
-  } = useClients(queryParams);
+  const { data: clientsData, isLoading: loading, isFetching, error } = useClients(queryParams);
 
   const clients = clientsData?.items ?? [];
   const hasMore = clientsData?.hasMore ?? false;

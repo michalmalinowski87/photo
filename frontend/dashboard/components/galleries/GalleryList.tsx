@@ -429,7 +429,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
             loading={deleteGalleryMutation.isPending}
           />
         </div>
-          )}
+      )}
     </>
   );
 };

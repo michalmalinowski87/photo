@@ -6,7 +6,10 @@ import { StatisticsCard } from "../components/dashboard/StatisticsCard";
 import { DenyChangeRequestModal } from "../components/orders/DenyChangeRequestModal";
 import { OrdersModal } from "../components/orders/OrdersModal";
 import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
-import { useApproveChangeRequest, useDenyChangeRequest } from "../hooks/mutations/useOrderMutations";
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+} from "../hooks/mutations/useOrderMutations";
 import { useActiveOrders, useDashboardStats } from "../hooks/queries/useDashboard";
 import { useWalletBalance } from "../hooks/queries/useWallet";
 import { formatPriceNumber } from "../lib/format-price";
@@ -16,15 +19,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   // React Query hooks for data fetching
-  const {
-    data: stats,
-    isLoading: statsLoading,
-    error: statsError,
-  } = useDashboardStats();
-  const {
-    data: walletBalanceData,
-    isLoading: walletLoading,
-  } = useWalletBalance();
+  const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats();
+  const { data: walletBalanceData, isLoading: walletLoading } = useWalletBalance();
   const {
     data: activeOrders = [],
     isLoading: ordersLoading,
@@ -54,7 +50,11 @@ export default function Dashboard() {
       await approveChangeRequestMutation.mutateAsync({ galleryId, orderId });
       // Invalidate active orders to refetch
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.dashboard.activeOrders({ page: 1, itemsPerPage: 5, excludeDeliveryStatus: "DELIVERED" }),
+        queryKey: queryKeys.dashboard.activeOrders({
+          page: 1,
+          itemsPerPage: 5,
+          excludeDeliveryStatus: "DELIVERED",
+        }),
       });
     } catch {
       // Error is handled by React Query
@@ -80,7 +80,11 @@ export default function Dashboard() {
       });
       // Invalidate active orders to refetch
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.dashboard.activeOrders({ page: 1, itemsPerPage: 5, excludeDeliveryStatus: "DELIVERED" }),
+        queryKey: queryKeys.dashboard.activeOrders({
+          page: 1,
+          itemsPerPage: 5,
+          excludeDeliveryStatus: "DELIVERED",
+        }),
       });
       setDenyModalOpen(false);
       setDenyGalleryId(null);

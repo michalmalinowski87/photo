@@ -12,7 +12,9 @@ interface WelcomePopupWrapperProps {
 
 export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCreateGallery }) => {
   const { data: businessInfo } = useBusinessInfo();
-  const { data: walletTransactionsData, refetch: refetchTransactions } = useWalletTransactions({ limit: "10" });
+  const { data: walletTransactionsData, refetch: refetchTransactions } = useWalletTransactions({
+    limit: "10",
+  });
   const { refetch: refetchBalance } = useWalletBalance();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();
   const [showPopup, setShowPopup] = useState(false);
@@ -46,7 +48,9 @@ export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCrea
         if (welcomeBonusTransaction && transactions.length === 1) {
           const bonusAmount =
             welcomeBonusTransaction.amountCents ??
-            (typeof welcomeBonusTransaction.amount === "number" ? welcomeBonusTransaction.amount * 100 : 900);
+            (typeof welcomeBonusTransaction.amount === "number"
+              ? welcomeBonusTransaction.amount * 100
+              : 900);
           if (typeof bonusAmount === "number") {
             setWelcomeBonusCents(bonusAmount);
           }

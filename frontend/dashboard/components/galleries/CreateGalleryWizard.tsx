@@ -117,12 +117,12 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
   const existingPackages: Package[] = packagesData
     ? Array.isArray(packagesData)
       ? packagesData
-      : packagesData.items ?? []
+      : (packagesData.items ?? [])
     : [];
   const existingClients: Client[] = clientsData
     ? Array.isArray(clientsData)
       ? clientsData
-      : clientsData.items ?? []
+      : (clientsData.items ?? [])
     : [];
 
   const [data, setData] = useState<WizardData>({

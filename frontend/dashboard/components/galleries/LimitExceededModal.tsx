@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 
-import { usePayGallery, useUpdateGallery, useUpgradeGalleryPlan } from "../../hooks/mutations/useGalleryMutations";
+import {
+  usePayGallery,
+  useUpdateGallery,
+  useUpgradeGalleryPlan,
+} from "../../hooks/mutations/useGalleryMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";

@@ -4,7 +4,11 @@ import React, { useEffect, useState } from "react";
 
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
 import { useDeleteGalleryImage } from "../../../hooks/mutations/useGalleryMutations";
-import { useGallery, useGalleryImages, useGalleryDeliveredOrders } from "../../../hooks/queries/useGalleries";
+import {
+  useGallery,
+  useGalleryImages,
+  useGalleryDeliveredOrders,
+} from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
 import type { Order } from "../../../store";
@@ -23,21 +27,13 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  const {
-    data: gallery,
-    isLoading: galleryLoading,
-  } = useGallery(galleryIdForQuery);
-  const {
-    data: imagesFromQuery = [],
-    isLoading: imagesLoading,
-  } = useGalleryImages(galleryIdForQuery, "thumb");
-  const {
-    data: orders = [],
-    isLoading: ordersLoading,
-  } = useOrders(galleryIdForQuery);
-  const {
-    data: deliveredOrders = [],
-  } = useGalleryDeliveredOrders(galleryIdForQuery);
+  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
+  const { data: imagesFromQuery = [], isLoading: imagesLoading } = useGalleryImages(
+    galleryIdForQuery,
+    "thumb"
+  );
+  const { data: orders = [], isLoading: ordersLoading } = useOrders(galleryIdForQuery);
+  const { data: deliveredOrders = [] } = useGalleryDeliveredOrders(galleryIdForQuery);
   const deleteGalleryImageMutation = useDeleteGalleryImage();
   const [galleryName, setGalleryName] = useState<string>("");
   const [message, setMessage] = useState<string>("");

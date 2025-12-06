@@ -88,10 +88,7 @@ export default function GalleryFilterPage({
         {!publishWizardOpen && (
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
         )}
-        <GalleryList
-          filter={filter}
-          onWizardOpenChange={handleWizardOpenChange}
-        />
+        <GalleryList filter={filter} onWizardOpenChange={handleWizardOpenChange} />
       </div>
     </>
   );

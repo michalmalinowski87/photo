@@ -4,7 +4,10 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import { useDeleteFinalImagesBatch } from "./mutations/useOrderMutations";
 import { useDeleteGalleryImagesBatch } from "./mutations/useGalleryMutations";
-import { useValidateUploadLimits, useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
+import {
+  useValidateUploadLimits,
+  useMarkFinalUploadComplete,
+} from "./mutations/useUploadMutations";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
 
 import { useToast } from "./useToast";
@@ -296,7 +299,14 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       uppyRef.current?.cancelAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.galleryId, config.orderId, config.type, validateUploadLimitsMutation, markFinalUploadCompleteMutation, showToast]);
+  }, [
+    config.galleryId,
+    config.orderId,
+    config.type,
+    validateUploadLimitsMutation,
+    markFinalUploadCompleteMutation,
+    showToast,
+  ]);
 
   const startUpload = useCallback(() => {
     if (!uppyRef.current) {
@@ -381,21 +391,25 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (type === "finals" && orderId) {
           // Delete final images in batch
-          await deleteFinalImagesBatchMutation.mutateAsync({
-            galleryId,
-            orderId,
-            imageKeys: filenames,
-          }).catch(() => {
-            // Silently ignore - files might not exist or already deleted
-          });
+          await deleteFinalImagesBatchMutation
+            .mutateAsync({
+              galleryId,
+              orderId,
+              imageKeys: filenames,
+            })
+            .catch(() => {
+              // Silently ignore - files might not exist or already deleted
+            });
         } else {
           // Delete original images in batch
-          await deleteGalleryImagesBatchMutation.mutateAsync({
-            galleryId,
-            imageKeys: filenames,
-          }).catch(() => {
-            // Silently ignore - files might not exist or already deleted
-          });
+          await deleteGalleryImagesBatchMutation
+            .mutateAsync({
+              galleryId,
+              imageKeys: filenames,
+            })
+            .catch(() => {
+              // Silently ignore - files might not exist or already deleted
+            });
         }
       } catch {
         // Silently ignore all errors

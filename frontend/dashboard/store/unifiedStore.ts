@@ -12,7 +12,6 @@ import { createThemeSlice, ThemeSlice } from "./themeSlice";
 import { createToastSlice, ToastSlice } from "./toastSlice";
 import { createUISlice, UISlice } from "./uiSlice";
 import { createUploadSlice, UploadSlice } from "./uploadSlice";
-import { createUserSlice, UserSlice } from "./userSlice";
 
 // Combined store type
 export type UnifiedStore = AuthSlice &
@@ -25,7 +24,6 @@ export type UnifiedStore = AuthSlice &
   ThemeSlice &
   ToastSlice &
   UploadSlice &
-  UserSlice &
   UISlice;
 
 // Unified store with all slices combined
@@ -43,16 +41,11 @@ export const useUnifiedStore = create<UnifiedStore>()(
         ...createThemeSlice(...args),
         ...createToastSlice(...args),
         ...createUploadSlice(...args),
-        ...createUserSlice(...args),
         ...createUISlice(...args),
       }),
       {
         name: "app-storage",
         partialize: (state) => ({
-          // Persist user identity
-          userId: state.userId,
-          email: state.email,
-          username: state.username,
           // Persist UI preferences
           tablePreferences: state.tablePreferences,
           // Persist theme

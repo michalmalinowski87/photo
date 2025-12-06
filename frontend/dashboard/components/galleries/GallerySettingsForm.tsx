@@ -41,18 +41,13 @@ export function GallerySettingsForm({
   const { showToast } = useToast();
 
   // Use React Query hooks
-  const {
-    data: gallery,
-    isLoading: galleryLoading,
-  } = useGallery(galleryId);
+  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryId);
 
   // Don't fetch gallery here - GalleryLayoutWrapper handles all gallery fetching
   // This component should only read from the store, not trigger fetches
   // The gallery should already be loaded by GalleryLayoutWrapper before this component renders
-  const {
-    data: deliveredOrders = [],
-    isLoading: checkingDelivered,
-  } = useGalleryDeliveredOrders(galleryId);
+  const { data: deliveredOrders = [], isLoading: checkingDelivered } =
+    useGalleryDeliveredOrders(galleryId);
   const hasDeliveredOrders = deliveredOrders.length > 0;
 
   // Use React Query mutations for data operations

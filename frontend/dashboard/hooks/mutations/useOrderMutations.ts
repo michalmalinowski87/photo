@@ -14,8 +14,12 @@ export function useApproveChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
     },
   });
 }
@@ -38,8 +42,12 @@ export function useDenyChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
     },
   });
 }
@@ -62,8 +70,12 @@ export function useMarkOrderPaid() {
           queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
     },
   });
 }
@@ -86,7 +98,9 @@ export function useMarkOrderPartiallyPaid() {
           queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -101,7 +115,9 @@ export function useMarkOrderCanceled() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -116,7 +132,9 @@ export function useMarkOrderRefunded() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -131,7 +149,9 @@ export function useSendFinalLink() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -197,7 +217,9 @@ export function useDeleteFinalImage() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
       });
@@ -274,7 +296,9 @@ export function useDeleteFinalImagesBatch() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
       });
@@ -295,7 +319,9 @@ export function useCleanupOriginals() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "originals"),
       });
@@ -333,7 +359,9 @@ export function useUpdateOrder() {
         });
       }
       // Always invalidate lists to ensure consistency
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -380,7 +408,9 @@ export function useDownloadZip() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -403,12 +433,14 @@ export function useDownloadFinalZip() {
 
       if (result.blob) {
         blob = result.blob;
-        filename = result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
+        filename =
+          result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
       } else if (result.zip) {
         // Base64 ZIP response (backward compatibility)
         const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
         blob = new Blob([zipBlob], { type: "application/zip" });
-        filename = result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
+        filename =
+          result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
       } else {
         throw new Error("No ZIP file available");
       }
@@ -427,7 +459,9 @@ export function useDownloadFinalZip() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
     },
   });
 }
@@ -476,7 +510,9 @@ export function useUploadFinalPhotos() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.byGallery(variables.galleryId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });

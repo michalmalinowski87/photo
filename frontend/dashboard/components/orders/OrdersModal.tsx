@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
-import { useApproveChangeRequest, useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+} from "../../hooks/mutations/useOrderMutations";
 import api from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import { queryKeys } from "../../lib/react-query";
@@ -46,7 +49,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   const [denyModalOpen, setDenyModalOpen] = useState(false);
   const [denyGalleryId, setDenyGalleryId] = useState<string | null>(null);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
-  
+
   // Mutations
   const approveChangeRequestMutation = useApproveChangeRequest();
   const denyChangeRequestMutation = useDenyChangeRequest();
@@ -82,12 +85,10 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   }
 
   const typedData = ordersData as OrdersResponse | Order[] | undefined;
-  const orders: Order[] = Array.isArray(typedData)
-    ? typedData
-    : typedData?.items ?? [];
-  const totalPages = Array.isArray(typedData) ? 1 : typedData?.totalPages ?? 1;
-  const hasNextPage = Array.isArray(typedData) ? false : typedData?.hasNextPage ?? false;
-  const hasPreviousPage = Array.isArray(typedData) ? false : typedData?.hasPreviousPage ?? false;
+  const orders: Order[] = Array.isArray(typedData) ? typedData : (typedData?.items ?? []);
+  const totalPages = Array.isArray(typedData) ? 1 : (typedData?.totalPages ?? 1);
+  const hasNextPage = Array.isArray(typedData) ? false : (typedData?.hasNextPage ?? false);
+  const hasPreviousPage = Array.isArray(typedData) ? false : (typedData?.hasPreviousPage ?? false);
 
   const getDeliveryStatusBadge = (status: string) => {
     const statusMap: Record<string, { color: BadgeColor; label: string }> = {
@@ -278,7 +279,9 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                                 disabled={approveChangeRequestMutation.isPending}
                                 className="bg-green-600 hover:bg-green-700 text-white"
                               >
-                                {approveChangeRequestMutation.isPending ? "Zatwierdzanie..." : "Zatwierdź"}
+                                {approveChangeRequestMutation.isPending
+                                  ? "Zatwierdzanie..."
+                                  : "Zatwierdź"}
                               </Button>
                               <Button
                                 size="sm"

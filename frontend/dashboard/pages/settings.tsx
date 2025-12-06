@@ -27,10 +27,7 @@ export default function Settings() {
   const { user } = useAuth();
 
   // React Query hooks
-  const {
-    data: businessInfo,
-    isLoading: loading,
-  } = useBusinessInfo();
+  const { data: businessInfo, isLoading: loading } = useBusinessInfo();
   const changePasswordMutation = useChangePassword();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();
 
@@ -206,11 +203,7 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={changePasswordMutation.isPending}
-                >
+                <Button type="submit" variant="primary" disabled={changePasswordMutation.isPending}>
                   {changePasswordMutation.isPending ? "Zapisywanie..." : "Zmień hasło"}
                 </Button>
               </div>

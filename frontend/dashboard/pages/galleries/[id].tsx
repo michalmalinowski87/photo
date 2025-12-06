@@ -12,7 +12,10 @@ import { FullPageLoading } from "../../components/ui/loading/Loading";
 import { Modal } from "../../components/ui/modal";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
 import { usePayGallery, useSendGalleryToClient } from "../../hooks/mutations/useGalleryMutations";
-import { useApproveChangeRequest, useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
+import {
+  useApproveChangeRequest,
+  useDenyChangeRequest,
+} from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { usePageLogger } from "../../hooks/usePageLogger";

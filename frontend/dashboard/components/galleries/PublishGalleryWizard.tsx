@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
 import { useOrders } from "../../hooks/queries/useOrders";
+import { useWalletBalance } from "../../hooks/queries/useWallet";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -19,7 +20,6 @@ import {
   type Duration,
   type PlanKey,
 } from "../../lib/pricing-plans";
-import { useUserStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 
@@ -50,7 +50,8 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
 }) => {
   const { showToast } = useToast();
   const router = useRouter();
-  const { walletBalanceCents, refreshWalletBalance } = useUserStore();
+  const { data: walletData } = useWalletBalance();
+  const walletBalanceCents = walletData?.balanceCents ?? 0;
   const { refetch: refetchOrders } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
@@ -103,15 +104,8 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     }
   }, [isOpen, initialState]);
 
-  // Load pricing data and photo count - only once when modal opens
-  useEffect(() => {
-    if (!isOpen || !galleryId) {
-      return;
-    }
-
-    // Load wallet balance
-    void refreshWalletBalance();
-  }, [isOpen, galleryId, refreshWalletBalance]);
+  // Wallet balance is automatically loaded by React Query
+  // No need for manual refresh - React Query handles refetching
 
   // Load pricing data with React Query
   const {

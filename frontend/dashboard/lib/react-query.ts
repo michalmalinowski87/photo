@@ -23,7 +23,8 @@ export const queryKeys = {
     status: (id: string) => [...queryKeys.galleries.detail(id), "status"] as const,
     bytesUsed: (id: string) => [...queryKeys.galleries.detail(id), "bytes-used"] as const,
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
-    deliveredOrders: (id: string) => [...queryKeys.galleries.detail(id), "delivered-orders"] as const,
+    deliveredOrders: (id: string) =>
+      [...queryKeys.galleries.detail(id), "delivered-orders"] as const,
   },
   orders: {
     all: ["orders"] as const,

@@ -3,7 +3,10 @@ import { useRouter } from "next/router";
 import React, { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 
 import { useUpdateBusinessInfo } from "../../hooks/mutations/useAuthMutations";
-import { useSendGalleryToClient, useUpdateGallery } from "../../hooks/mutations/useGalleryMutations";
+import {
+  useSendGalleryToClient,
+  useUpdateGallery,
+} from "../../hooks/mutations/useGalleryMutations";
 import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useOrders } from "../../hooks/queries/useOrders";
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";

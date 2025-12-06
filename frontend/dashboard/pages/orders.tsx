@@ -40,16 +40,11 @@ export default function Orders() {
   const [uploadingFinalOrderId, setUploadingFinalOrderId] = useState<string | null>(null);
 
   // React Query hooks - only fetch when galleryId is provided
-  const {
-    data: ordersData,
-    refetch: refetchOrders,
-  } = useOrders(galleryId, {
+  const { data: ordersData, refetch: refetchOrders } = useOrders(galleryId, {
     enabled: !!galleryId,
   });
 
-  const {
-    data: gallery,
-  } = useGallery(galleryId || undefined, {
+  const { data: gallery } = useGallery(galleryId || undefined, {
     enabled: !!galleryId,
   });
 
@@ -364,7 +359,9 @@ export default function Orders() {
                     {o.deliveryStatus === "CLIENT_APPROVED" && (
                       <button
                         onClick={() => downloadZip(o.orderId)}
-                        disabled={downloadingZipOrderId === o.orderId || downloadZipMutation.isPending}
+                        disabled={
+                          downloadingZipOrderId === o.orderId || downloadZipMutation.isPending
+                        }
                         className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Download ZIP file (one-time use)"
                       >
@@ -453,7 +450,9 @@ export default function Orders() {
                           className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
                           title="Upload processed photos (stored in original, unprocessed format)"
                         >
-                          {uploadingFinalOrderId === o.orderId ? "Uploading..." : "Upload Final Photos"}
+                          {uploadingFinalOrderId === o.orderId
+                            ? "Uploading..."
+                            : "Upload Final Photos"}
                         </button>
                       </div>
                     )}

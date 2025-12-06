@@ -29,11 +29,7 @@ export default function Wallet() {
   const queryClient = useQueryClient();
 
   // React Query hooks
-  const {
-    data: walletBalanceData,
-    isLoading: loading,
-    error: balanceError,
-  } = useWalletBalance();
+  const { data: walletBalanceData, isLoading: loading, error: balanceError } = useWalletBalance();
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
@@ -109,7 +105,9 @@ export default function Wallet() {
     setCurrentPage(1);
     setPageHistory([{ page: 1, cursor: null }]);
     setPaginationCursor(null);
-    void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.transactions({ limit: "10" }) });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.wallet.transactions({ limit: "10" }),
+    });
   };
 
   const getTransactionTypeLabel = (type: string): string => {

@@ -19,6 +19,7 @@ import {
 } from "../../../../hooks/mutations/useOrderMutations";
 import { useGalleryImages } from "../../../../hooks/queries/useGalleries";
 import { useOrder, useOrderFinalImages } from "../../../../hooks/queries/useOrders";
+import { useWalletBalance } from "../../../../hooks/queries/useWallet";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
@@ -27,7 +28,6 @@ import { useToast } from "../../../../hooks/useToast";
 import { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { useUserStore } from "../../../../store";
 import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from orderSlice store (single source of truth)
@@ -107,8 +107,9 @@ export default function OrderDetail() {
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] = useState<boolean>(false);
 
-  // Get wallet balance directly from store - no local state needed
-  const walletBalance = useUserStore((state) => state.walletBalanceCents ?? 0);
+  // Get wallet balance from React Query
+  const { data: walletData } = useWalletBalance();
+  const walletBalance = walletData?.balanceCents ?? 0;
 
   // Simplified: Only refetch order if needed - images are automatically loaded via React Query hooks
   const loadOrderData = useCallback(async (): Promise<void> => {

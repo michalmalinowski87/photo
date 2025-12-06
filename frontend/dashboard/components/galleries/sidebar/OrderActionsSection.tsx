@@ -10,7 +10,7 @@ import {
 import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useOrder } from "../../../hooks/queries/useOrders";
 import { useModal } from "../../../hooks/useModal";
-import { useOrderStore } from "../../../store";
+import { downloadFinals, downloadZip } from "../../../lib/download-utils";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
@@ -39,11 +39,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   const approveChangeRequestMutation = useApproveChangeRequest();
   const markOrderPaidMutation = useMarkOrderPaid();
   const sendFinalsToClientMutation = useSendFinalLink();
-
-  // Download actions - these will be moved to utility/hook later
-  // For now, we'll need to implement these using the download store or API directly
-  const downloadFinals = useOrderStore((state) => state.downloadFinals);
-  const downloadZip = useOrderStore((state) => state.downloadZip);
 
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
@@ -108,12 +103,12 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     }
   }, [galleryIdStr, orderId, markOrderPaidMutation]);
 
-  const handleDownloadFinals = useCallback(async () => {
+  const handleDownloadFinals = useCallback(() => {
     if (!galleryIdStr) {
       return;
     }
-    await downloadFinals(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId, downloadFinals]);
+    downloadFinals(galleryIdStr, orderId);
+  }, [galleryIdStr, orderId]);
 
   const handleSendFinalsToClientClick = useCallback(() => {
     setShowSendFinalsDialog(true);
@@ -135,12 +130,12 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     }
   }, [galleryIdStr, orderId, sendFinalsToClientMutation]);
 
-  const handleDownloadZip = useCallback(async () => {
+  const handleDownloadZip = useCallback(() => {
     if (!galleryIdStr) {
       return;
     }
-    await downloadZip(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId, downloadZip]);
+    downloadZip(galleryIdStr, orderId);
+  }, [galleryIdStr, orderId]);
 
   const handlePublishClick = useCallback(() => {
     if (setPublishWizardOpen) {

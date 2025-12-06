@@ -3,18 +3,9 @@
  * Sets up token sharing and checks for authentication
  */
 
-import { useUserStore } from "../store";
-
 import { initAuth, getIdToken } from "./auth";
 import { setupDashboardAuthStatusListener } from "./dashboard-auth-status";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "./token-sharing";
-
-interface TokenPayload {
-  sub?: string;
-  "cognito:username"?: string;
-  email?: string;
-  exp?: number;
-}
 
 /**
  * Initialize authentication and token sharing
@@ -41,31 +32,8 @@ export function initializeAuth(
       initAuth(userPoolId, clientId);
       getIdToken()
         .then((token: string) => {
-          // Extract user data from token and populate Zustand store
-          try {
-            const payload = JSON.parse(atob(token.split(".")[1])) as TokenPayload;
-            const userId = payload.sub ?? payload["cognito:username"] ?? "";
-            const email = payload.email ?? "";
-            const username = payload["cognito:username"] ?? payload.email ?? "";
-
-            // Populate user store (only if values changed)
-            if (typeof window !== "undefined") {
-              const currentUser = useUserStore.getState();
-              // Only set if values are different to prevent duplicate updates
-              if (
-                currentUser.userId !== userId ||
-                currentUser.email !== email ||
-                currentUser.username !== username
-              ) {
-                useUserStore.getState().setUser(userId, email, username);
-              }
-              // Don't refresh wallet balance here - let components handle it when ready
-              // The token might not be persisted to localStorage yet
-            }
-          } catch (_e) {
-            // Failed to parse token, continue anyway
-          }
-
+          // Token found - user identity is extracted on-demand via useUserIdentity hook
+          // No need to populate Zustand store
           if (onTokenFound) {
             onTokenFound(token);
           }
@@ -76,28 +44,10 @@ export function initializeAuth(
           if (stored) {
             // Verify token is not expired
             try {
-              const payload = JSON.parse(atob(stored.split(".")[1])) as TokenPayload;
+              const payload = JSON.parse(atob(stored.split(".")[1])) as { exp?: number };
               const now = Math.floor(Date.now() / 1000);
               if (payload.exp && payload.exp > now) {
-                // Extract user data from token and populate Zustand store
-                const userId = payload.sub ?? payload["cognito:username"] ?? "";
-                const email = payload.email ?? "";
-                const username = payload["cognito:username"] ?? payload.email ?? "";
-
-                // Populate user store (only if values changed)
-                if (typeof window !== "undefined") {
-                  const currentUser = useUserStore.getState();
-                  // Only set if values are different to prevent duplicate updates
-                  if (
-                    currentUser.userId !== userId ||
-                    currentUser.email !== email ||
-                    currentUser.username !== username
-                  ) {
-                    useUserStore.getState().setUser(userId, email, username);
-                  }
-                  // Don't refresh wallet balance here - let components handle it when ready
-                }
-
+                // Token found - user identity is extracted on-demand via useUserIdentity hook
                 if (onTokenFound) {
                   onTokenFound(stored);
                 }
@@ -118,28 +68,10 @@ export function initializeAuth(
       if (stored) {
         // Verify token is not expired
         try {
-          const payload = JSON.parse(atob(stored.split(".")[1])) as TokenPayload;
+          const payload = JSON.parse(atob(stored.split(".")[1])) as { exp?: number };
           const now = Math.floor(Date.now() / 1000);
           if (payload.exp && payload.exp > now) {
-            // Extract user data from token and populate Zustand store
-            const userId = payload.sub ?? payload["cognito:username"] ?? "";
-            const email = payload.email ?? "";
-            const username = payload["cognito:username"] ?? payload.email ?? "";
-
-            // Populate user store (only if values changed)
-            if (typeof window !== "undefined") {
-              const currentUser = useUserStore.getState();
-              // Only set if values are different to prevent duplicate updates
-              if (
-                currentUser.userId !== userId ||
-                currentUser.email !== email ||
-                currentUser.username !== username
-              ) {
-                useUserStore.getState().setUser(userId, email, username);
-              }
-              // Don't refresh wallet balance here - let components handle it when ready
-            }
-
+            // Token found - user identity is extracted on-demand via useUserIdentity hook
             if (onTokenFound) {
               onTokenFound(stored);
             }

@@ -13,7 +13,6 @@ export {
   useThemeStore,
   useToastStore,
   useUploadStore,
-  useUserStore,
   useUIStore,
 } from "./hooks";
 

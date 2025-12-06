@@ -43,11 +43,7 @@ export default function Packages() {
   const deletePackageMutation = useDeletePackage();
 
   // React Query hook
-  const {
-    data: packagesData,
-    isLoading: loading,
-    error,
-  } = usePackages();
+  const { data: packagesData, isLoading: loading, error } = usePackages();
 
   const packages = (packagesData?.items ?? []) as PricingPackage[];
 
