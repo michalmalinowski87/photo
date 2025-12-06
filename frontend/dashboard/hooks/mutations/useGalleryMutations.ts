@@ -32,7 +32,9 @@ export function useUpdateGallery() {
         queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
       } else {
         // Fall back to invalidation if response doesn't contain complete data
-        queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(variables.galleryId),
+        });
       }
       // Always invalidate lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });

@@ -1,11 +1,13 @@
 import { Trash2 } from "lucide-react";
 import React, { useState } from "react";
 
+import { useDeleteGallery } from "../../../hooks/mutations/useGalleryMutations";
 import { useNavigation } from "../../../hooks/useNavigation";
 import { useToast } from "../../../hooks/useToast";
-import api, { formatApiError } from "../../../lib/api-service";
+import { formatApiError } from "../../../lib/api-service";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
+import { FullPageLoading } from "../../ui/loading/Loading";
 
 interface DeleteGalleryButtonProps {
   galleryId: string;
@@ -19,8 +21,10 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
   const { replace } = useNavigation();
   const { showToast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Use React Query mutation for delete operation
+  const deleteGalleryMutation = useDeleteGallery();
 
   const handleDeleteClick = () => {
     setShowDeleteDialog(true);
@@ -34,15 +38,14 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
     // Show redirect overlay FIRST, before any other state changes
     // This ensures it covers everything immediately
     setIsRedirecting(true);
-    setDeleteLoading(true);
     // Close dialog immediately to hide it behind the overlay
     setShowDeleteDialog(false);
 
     try {
-      await api.galleries.delete(galleryId);
+      await deleteGalleryMutation.mutateAsync(galleryId);
 
       // Navigate with explicit cleanup (navigation utility handles additional cleanup)
-      // React Query cache will be invalidated automatically on navigation
+      // React Query cache will be invalidated automatically by the mutation
       void replace("/");
 
       // Show toast after navigation starts
@@ -52,44 +55,30 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
       showToast("error", "Błąd", errorMsg ?? "Nie udało się usunąć galerii");
       // Hide redirect overlay on error so user can see the error
       setIsRedirecting(false);
-    } finally {
-      setDeleteLoading(false);
     }
   };
 
   return (
     <>
-      {isRedirecting && (
-        <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-[9999]">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 relative">
-              <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
-            </div>
-            <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-              Przekierowywanie...
-            </p>
-          </div>
-        </div>
-      )}
+      {isRedirecting && <FullPageLoading text="Usuwanie galerii..." />}
 
       <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
         <Button
           size="sm"
           variant="outline"
           onClick={handleDeleteClick}
-          disabled={deleteLoading}
+          disabled={deleteGalleryMutation.isPending}
           className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
           startIcon={<Trash2 size={16} />}
         >
-          {deleteLoading ? "Usuwanie..." : "Usuń galerię"}
+          {deleteGalleryMutation.isPending ? "Usuwanie..." : "Usuń galerię"}
         </Button>
       </div>
 
       <ConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => {
-          if (!deleteLoading) {
+          if (!deleteGalleryMutation.isPending) {
             setShowDeleteDialog(false);
           }
         }}
@@ -99,7 +88,7 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
         confirmText="Usuń galerię"
         cancelText="Anuluj"
         variant="danger"
-        loading={deleteLoading}
+        loading={deleteGalleryMutation.isPending}
       />
     </>
   );

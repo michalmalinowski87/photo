@@ -20,4 +20,3 @@ export function useGalleryType() {
     isSelectionGallery: !isNonSelectionGallery,
   };
 }
-

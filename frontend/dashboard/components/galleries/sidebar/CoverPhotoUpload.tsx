@@ -61,8 +61,9 @@ export const CoverPhotoUpload: React.FC = () => {
       // Update gallery in backend with S3 URL - backend will convert it to CloudFront
       const s3Url = presignResponse.url.split("?")[0]; // Remove query params
 
-      await api.galleries.update(galleryId, {
-        coverPhotoUrl: s3Url,
+      await updateGalleryMutation.mutateAsync({
+        galleryId,
+        data: { coverPhotoUrl: s3Url },
       });
 
       // Switch to processing state and poll for processed CloudFront URL
@@ -136,17 +137,10 @@ export const CoverPhotoUpload: React.FC = () => {
 
     try {
       // Remove cover photo by setting coverPhotoUrl to null
-      await api.galleries.update(galleryId, {
-        coverPhotoUrl: undefined,
+      await updateGalleryMutation.mutateAsync({
+        galleryId,
+        data: { coverPhotoUrl: undefined },
       });
-
-      // Update gallery via mutation (will invalidate cache)
-      if (galleryId) {
-        await updateGalleryMutation.mutateAsync({
-          galleryId,
-          data: { coverPhotoUrl: undefined },
-        });
-      }
       showToast("success", "Sukces", "Okładka galerii została usunięta");
     } catch (err: unknown) {
       showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");

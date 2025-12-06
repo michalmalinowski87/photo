@@ -2,6 +2,10 @@ import { AlertTriangle, Save } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback } from "react";
 
+import {
+  useUpdateGalleryClientPassword,
+  useUpdateGalleryPricingPackage,
+} from "../../hooks/mutations/useGalleryMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
@@ -37,21 +41,21 @@ export function GallerySettingsForm({
   const { showToast } = useToast();
 
   // Use React Query hooks
-  const { data: gallery, isLoading: galleryLoading, refetch: refetchGallery } = useGallery(galleryId);
-
-  // Reload gallery function
-  const reloadGallery = useCallback(async () => {
-    if (galleryId) {
-      await refetchGallery();
-    }
-  }, [galleryId, refetchGallery]);
+  const {
+    data: gallery,
+    isLoading: galleryLoading,
+  } = useGallery(galleryId);
 
   // Don't fetch gallery here - GalleryLayoutWrapper handles all gallery fetching
   // This component should only read from the store, not trigger fetches
   // The gallery should already be loaded by GalleryLayoutWrapper before this component renders
-  const [saving, setSaving] = useState<boolean>(false);
   const [hasDeliveredOrders, setHasDeliveredOrders] = useState<boolean>(false);
   const [checkingDelivered, setCheckingDelivered] = useState<boolean>(true);
+
+  // Use React Query mutations for data operations
+  const updateClientPasswordMutation = useUpdateGalleryClientPassword();
+  const updatePricingPackageMutation = useUpdateGalleryPricingPackage();
+  const saving = updateClientPasswordMutation.isPending || updatePricingPackageMutation.isPending;
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({
     galleryName: "",
     clientEmail: "",
@@ -117,16 +121,14 @@ export function GallerySettingsForm({
       return;
     }
 
-    setSaving(true);
-
     try {
       // Update client password if provided (requires clientEmail)
       if (settingsForm.clientPassword && settingsForm.clientEmail) {
-        await api.galleries.updateClientPassword(
+        await updateClientPasswordMutation.mutateAsync({
           galleryId,
-          settingsForm.clientPassword,
-          settingsForm.clientEmail
-        );
+          password: settingsForm.clientPassword,
+          clientEmail: settingsForm.clientEmail,
+        });
       }
 
       // Update pricing package if changed
@@ -153,21 +155,21 @@ export function GallerySettingsForm({
         const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
         const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;
 
-        await api.galleries.updatePricingPackage(galleryId, {
-          packageName,
-          includedCount,
-          extraPriceCents,
-          packagePriceCents,
+        await updatePricingPackageMutation.mutateAsync({
+          galleryId,
+          pricingPackage: {
+            packageName,
+            includedCount,
+            extraPriceCents,
+            packagePriceCents,
+          },
         });
       }
 
       showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
-      // Invalidate and refetch gallery data
-      await reloadGallery();
+      // React Query mutations will automatically invalidate and refetch gallery data
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
-    } finally {
-      setSaving(false);
     }
   };
 

@@ -24,7 +24,10 @@ export function useGalleries(
 // Single gallery detail
 export function useGallery(
   galleryId: string | undefined,
-  options?: Omit<UseQueryOptions<Gallery>, "queryKey" | "queryFn" | "placeholderData" | "initialData">
+  options?: Omit<
+    UseQueryOptions<Gallery>,
+    "queryKey" | "queryFn" | "placeholderData" | "initialData"
+  >
 ) {
   const queryClient = useQueryClient();
 

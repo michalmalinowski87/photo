@@ -58,11 +58,11 @@ export default function OrderDetail() {
 
   const { gallery } = useGallery();
   const { data: order, refetch: refetchOrder } = useOrder(galleryIdForQuery, orderIdForQuery);
-  
+
   // Use React Query hooks to automatically load images
   const { data: galleryImagesData = [] } = useGalleryImages(galleryIdForQuery, "thumb");
   const originalImages = (galleryImagesData || []) as GalleryImage[];
-  
+
   // Use React Query hook to automatically load final images (URLs are mapped via select)
   const { data: finalImagesData = [], refetch: refetchFinalImages } = useOrderFinalImages(
     galleryIdForQuery,
@@ -75,7 +75,7 @@ export default function OrderDetail() {
   const [, setOptimisticFinalsBytes] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  
+
   // Define hook early so derived state can use its refs
   // Note: Optimistic updates are now handled in the mutation, so we don't need manual state
   const {
@@ -90,21 +90,17 @@ export default function OrderDetail() {
     setFinalImages: () => {}, // No longer needed - mutation handles optimistic updates
     setOptimisticFinalsBytes,
   });
-  
+
   // Derived/computed final images: Filter deleted images
   // URLs are already mapped via select in useOrderFinalImages
   const finalImages = useMemo(() => {
     // Start with React Query data (already transformed with URLs mapped)
     const baseImages = (finalImagesData || []) as GalleryImage[];
-    
+
     // Filter out successfully deleted images
-    return filterDeletedImages(
-      baseImages,
-      deletingImagesRef.current,
-      deletedImageKeysRef.current
-    );
+    return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeysRef.current);
   }, [finalImagesData, deletingImagesRef, deletedImageKeysRef]);
-  
+
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);
   const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] = useState<boolean>(false);
@@ -345,7 +341,13 @@ export default function OrderDetail() {
     if (reloadGallery) {
       await reloadGallery();
     }
-  }, [galleryIdForQuery, orderIdForQuery, approveChangeRequestMutation, loadOrderData, reloadGallery]);
+  }, [
+    galleryIdForQuery,
+    orderIdForQuery,
+    approveChangeRequestMutation,
+    loadOrderData,
+    reloadGallery,
+  ]);
 
   const handleDenyChangeRequest = useCallback(() => {
     setDenyModalOpen(true);

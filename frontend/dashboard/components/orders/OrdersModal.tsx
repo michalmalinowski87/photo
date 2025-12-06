@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
+import { useDenyChangeRequest } from "../../hooks/mutations/useOrderMutations";
 import api, { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import Badge from "../ui/badge/Badge";
@@ -47,9 +48,12 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const itemsPerPage = 20;
   const [denyModalOpen, setDenyModalOpen] = useState(false);
-  const [denyLoading, setDenyLoading] = useState(false);
   const [denyGalleryId, setDenyGalleryId] = useState<string | null>(null);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
+  
+  // Use React Query mutation for deny change request
+  const denyChangeRequestMutation = useDenyChangeRequest();
+  const denyLoading = denyChangeRequestMutation.isPending;
 
   const loadOrders = async () => {
     setLoading(true);
@@ -358,18 +362,18 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
             return;
           }
 
-          setDenyLoading(true);
-
           try {
-            await api.orders.denyChangeRequest(denyGalleryId, denyOrderId, reason);
+            await denyChangeRequestMutation.mutateAsync({
+              galleryId: denyGalleryId,
+              orderId: denyOrderId,
+              reason,
+            });
             setDenyModalOpen(false);
             setDenyGalleryId(null);
             setDenyOrderId(null);
             await loadOrders();
           } catch (err) {
             setError(formatApiError(err));
-          } finally {
-            setDenyLoading(false);
           }
         }}
         loading={denyLoading}

@@ -22,7 +22,7 @@ export const useFinalImageDelete = ({
 }: UseFinalImageDeleteOptions) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());

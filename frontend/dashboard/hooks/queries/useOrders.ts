@@ -36,9 +36,7 @@ export function useOrder(
     if (!galleryId || !orderId) return undefined;
 
     // Check gallery-specific orders list first
-    const galleryOrdersQuery = queryClient.getQueryData<Order[]>(
-      queryKeys.orders.list(galleryId)
-    );
+    const galleryOrdersQuery = queryClient.getQueryData<Order[]>(queryKeys.orders.list(galleryId));
     if (galleryOrdersQuery) {
       const orderFromList = galleryOrdersQuery.find((o) => o.orderId === orderId);
       if (orderFromList) {

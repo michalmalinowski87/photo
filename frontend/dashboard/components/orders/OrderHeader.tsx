@@ -29,8 +29,7 @@ export function OrderHeader() {
   }
 
   const effectiveGalleryId =
-    galleryIdStr ??
-    (typeof galleryId === "string" ? galleryId : currentGallery?.galleryId ?? "");
+    galleryIdStr ?? (typeof galleryId === "string" ? galleryId : (currentGallery?.galleryId ?? ""));
 
   const effectiveOrderId = typeof order.orderId === "string" ? order.orderId : orderIdForQuery;
   const orderNumber = (order.orderNumber as string | number | undefined) ?? undefined;

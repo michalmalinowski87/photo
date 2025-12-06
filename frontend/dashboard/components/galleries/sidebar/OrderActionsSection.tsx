@@ -51,8 +51,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   // Confirmation dialog states
   const [showSendFinalsDialog, setShowSendFinalsDialog] = useState(false);
   const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
-  const [sendFinalsLoading, setSendFinalsLoading] = useState(false);
-  const [markPaidLoading, setMarkPaidLoading] = useState(false);
+  // Use mutation loading states instead of local state
+  const sendFinalsLoading = sendFinalsToClientMutation.isPending;
+  const markPaidLoading = markOrderPaidMutation.isPending;
 
   // Compute values from React Query data
   const orderHasFinals = order
@@ -96,7 +97,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       setShowMarkPaidDialog(false);
       return;
     }
-    setMarkPaidLoading(true);
     try {
       await markOrderPaidMutation.mutateAsync({
         galleryId: galleryIdStr,
@@ -105,8 +105,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       setShowMarkPaidDialog(false);
     } catch (_err) {
       // Error handling is done in the mutation
-    } finally {
-      setMarkPaidLoading(false);
     }
   }, [galleryIdStr, orderId, markOrderPaidMutation]);
 
@@ -126,7 +124,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       setShowSendFinalsDialog(false);
       return;
     }
-    setSendFinalsLoading(true);
     try {
       await sendFinalsToClientMutation.mutateAsync({
         galleryId: galleryIdStr,
@@ -135,8 +132,6 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       setShowSendFinalsDialog(false);
     } catch (_err) {
       // Error handling is done in the mutation
-    } finally {
-      setSendFinalsLoading(false);
     }
   }, [galleryIdStr, orderId, sendFinalsToClientMutation]);
 
@@ -194,17 +189,21 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Download Selected Originals ZIP */}
-        {!isLoading && !isGalleryFetching && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleDownloadZip}
-            className="w-full justify-start"
-            startIcon={<Download size={16} />}
-          >
-            Pobierz wybrane oryginały (ZIP)
-          </Button>
-        )}
+        {!isLoading &&
+          !isGalleryFetching &&
+          gallery &&
+          gallery.selectionEnabled !== false &&
+          canDownloadZipValue && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadZip}
+              className="w-full justify-start"
+              startIcon={<Download size={16} />}
+            >
+              Pobierz wybrane oryginały (ZIP)
+            </Button>
+          )}
 
         {/* Download Finals - Only show if finals are uploaded */}
         {orderHasFinals && (

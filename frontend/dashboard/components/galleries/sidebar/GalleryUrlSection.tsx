@@ -33,7 +33,8 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
-  const [sendLinkLoading, setSendLinkLoading] = useState(false); // Local UI state
+  // Use mutation loading state instead of local state
+  const sendLinkLoading = sendGalleryLinkToClientMutation.isPending;
 
   // Early return: don't render if gallery doesn't exist or should hide
   // Check gallery FIRST to prevent any computation or rendering with stale data
@@ -76,7 +77,6 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       return;
     }
 
-    setSendLinkLoading(true);
     try {
       const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
 
@@ -89,8 +89,6 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       );
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));
-    } finally {
-      setSendLinkLoading(false);
     }
   };
 
