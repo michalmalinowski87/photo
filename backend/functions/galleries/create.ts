@@ -35,13 +35,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Extract ownerEmail from JWT claims
 	const claims = event?.requestContext?.authorizer?.jwt?.claims || {};
 	const ownerEmail = claims.email || '';
 
 	const body = event?.body ? JSON.parse(event.body) : {};
 	
-	// Get pricingPackage (required for client pricing)
 	const pricingPackage = body?.pricingPackage;
 	if (!pricingPackage) {
 		return {
@@ -63,7 +61,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 	
-	// Package name is optional - use provided name or undefined
 	const finalPackageName = (pricingPackage.packageName && pricingPackage.packageName.trim()) 
 		? pricingPackage.packageName.trim() 
 		: undefined;
@@ -78,44 +75,34 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const now = new Date().toISOString();
 	const galleryId = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 	
-	// NEW LOGIC: UNPAID galleries get 3-day TTL for automatic deletion
-	// TTL attribute for DynamoDB automatic deletion (Unix epoch time in seconds)
-	// DynamoDB will automatically delete the item when TTL expires (typically within 48 hours)
-	// After payment, TTL will be removed and normal expiry (expiresAt) will be used
+	// UNPAID galleries get 3-day TTL for automatic deletion (DynamoDB deletes within 48 hours of expiry)
+	// After payment, TTL is removed and normal expiry (expiresAt) is used
 	const createdAtDate = new Date(now);
-	const ttlExpiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
+	const ttlExpiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000);
 	const ttlExpiresAt = Math.floor(ttlExpiresAtDate.getTime() / 1000);
 
-	// NEW LOGIC: Always create gallery as UNPAID draft (no immediate payment)
-	// Gallery will have 3-day TTL and can be paid later via "Opłać galerię" button
-	// Transaction will be created on-demand when user clicks "Opłać galerię" button
+	// Always create gallery as UNPAID draft - transaction created on-demand when user clicks "Opłać galerię"
 	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
-
-	// Create gallery as UNPAID DRAFT (always, no immediate payment, no plan)
 	const item: any = {
 		galleryId,
 		ownerId,
 		ownerEmail,
-		state: 'DRAFT', // Always DRAFT for new galleries (will become PAID_ACTIVE after payment)
-		// No plan, priceCents, storageLimitBytes, or expiresAt - will be set after plan calculation
-		ttl: ttlExpiresAt, // Unix epoch seconds for DynamoDB TTL automatic deletion (3 days for UNPAID)
+		state: 'DRAFT',
+		ttl: ttlExpiresAt,
 		originalsBytesUsed: 0,
 		finalsBytesUsed: 0,
-		bytesUsed: 0, // Keep for backward compatibility
+		bytesUsed: 0,
 		selectionEnabled: !!body.selectionEnabled,
-		selectionStatus: body.selectionEnabled ? 'DISABLED' : 'DISABLED', // Disabled until paid
-		version: 1, // Optimistic locking version number
+		selectionStatus: 'DISABLED',
+		version: 1,
 		createdAt: now,
 		updatedAt: now
 	};
 	
-	// Add galleryName if provided (optional, for nicer presentation)
 	if (body?.galleryName && typeof body.galleryName === 'string' && body.galleryName.trim()) {
 		item.galleryName = body.galleryName.trim();
 	}
 	
-	// Add pricingPackage (required for client pricing per gallery)
-	// Build pricingPackage object - only include packageName if it exists
 	const pricingPackageItem: {
 		packageName?: string;
 		includedCount: number;
@@ -131,15 +118,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	item.pricingPackage = pricingPackageItem;
 
-	// Always accept clientEmail and clientPassword during creation (regardless of selectionEnabled)
-	// These will be used when sending the final gallery link to the client
 	const clientEmail = body?.clientEmail;
 	const clientPassword = body?.clientPassword;
 	
 	if (clientEmail && typeof clientEmail === 'string' && clientEmail.trim()) {
 		item.clientEmail = clientEmail.trim();
 		
-		// If password is provided, hash it for verification AND store it encrypted for sending emails
 		if (clientPassword && typeof clientPassword === 'string' && clientPassword.trim()) {
 			const passwordPlain = clientPassword.trim();
 			const secrets = hashPassword(passwordPlain);
@@ -147,8 +131,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			item.clientPasswordSalt = secrets.salt;
 			item.clientPasswordIter = secrets.iterations;
 			
-			// Store password encrypted (base64 for now - in production, use proper encryption with KMS)
-			// This allows us to send it via email later
+			// Store password encrypted (base64) to send via email later - in production, use KMS encryption
 			item.clientPasswordEncrypted = Buffer.from(passwordPlain, 'utf-8').toString('base64');
 		}
 	}
@@ -159,44 +142,37 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 
 	// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
-	// This allows photographer to upload finals, manage payment, but not send final link until photos are uploaded
-	// Order is created regardless of payment status so photographer can finalize delivery
-	// Handle initial payment amount from wizard Step 5
-	const initialPaymentAmountCents = body?.initialPaymentAmountCents || 0; // Amount paid by client initially
+	// This allows photographer to upload finals and manage payment, but not send final link until photos are uploaded
+	const initialPaymentAmountCents = body?.initialPaymentAmountCents || 0;
 	let orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
 	
 	if (!body.selectionEnabled) {
 		if (ordersTable) {
 			try {
-				// Determine order payment status based on initial payment amount
-				// Note: totalPriceCents is not available here since plan is not selected yet
-				// For now, treat any payment as PARTIALLY_PAID (will be updated after plan selection)
+				// totalPriceCents not available here since plan is not selected yet - treat any payment as PARTIALLY_PAID
 				if (initialPaymentAmountCents > 0) {
 					orderPaymentStatus = 'PARTIALLY_PAID';
 				}
 				
 				const orderNumber = 1;
 				const orderId = `${orderNumber}-${Date.now()}`;
-				// Create order with all photos (empty selectedKeys means all photos)
-				// We'll need to get image count later, but for now create order with 0 selected
 				await ddb.send(new PutCommand({
 					TableName: ordersTable,
 					Item: {
 						galleryId,
 						orderId,
 						orderNumber,
-						ownerId: requester, // Denormalize ownerId for efficient querying
-						deliveryStatus: 'AWAITING_FINAL_PHOTOS', // Start with AWAITING_FINAL_PHOTOS - photographer can upload finals and manage payment
+						ownerId: requester,
+						deliveryStatus: 'AWAITING_FINAL_PHOTOS',
 						paymentStatus: orderPaymentStatus,
-						selectedKeys: [], // Empty means all photos
-						selectedCount: 0, // Will be updated when photos are processed
+						selectedKeys: [],
+						selectedCount: 0,
 						overageCount: 0,
 						overageCents: 0,
 						totalCents: 0,
 						createdAt: now
 					}
 				}));
-				// Update gallery with order info
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
@@ -209,7 +185,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 				logger.info('Order created immediately for non-selection gallery', { galleryId, orderId, orderPaymentStatus });
 			} catch (orderErr: any) {
-				// Log but don't fail gallery creation if order creation fails
 				logger.error('Failed to create order for non-selection gallery', {
 					error: {
 						name: orderErr.name,
@@ -221,8 +196,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Always return success - gallery created as UNPAID draft
-	// User can pay later via "Opłać galerię" button
 	return {
 		statusCode: 201,
 		headers: { 'content-type': 'application/json' },

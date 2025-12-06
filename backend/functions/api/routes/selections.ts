@@ -6,12 +6,7 @@ import * as selectionsGet from '../../../functions/selections/getSelection';
 
 const router = Router();
 
-// selections/approve route is registered as public route in index.ts (no requireAuth)
-// router.post('/:id/selections/approve', wrapHandler(selectionsApprove.handler));
-// selection-change-request route is registered as public route in index.ts (no requireAuth)
-// router.post('/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
-// selections GET route is registered as public route in index.ts (no requireAuth)
-// router.get('/:id/selections', wrapHandler(selectionsGet.handler));
+// All selection routes are registered as public routes in index.ts (no requireAuth)
 
 export { router as selectionsRoutes };
 

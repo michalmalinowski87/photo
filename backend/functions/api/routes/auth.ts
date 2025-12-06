@@ -9,7 +9,6 @@ const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
 
-// GET /auth/business-info
 router.get('/business-info', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
@@ -53,7 +52,6 @@ router.get('/business-info', async (req: Request, res: Response) => {
 	}
 });
 
-// PUT /auth/business-info
 router.put('/business-info', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
@@ -71,7 +69,6 @@ router.put('/business-info', async (req: Request, res: Response) => {
 
 	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled } = req.body;
 
-	// Validate email format if provided
 	if (email !== undefined && email !== '' && email !== null) {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		if (!emailRegex.test(email)) {
@@ -79,7 +76,6 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		}
 	}
 
-	// Get existing user data to merge updates
 	let existingData: any = {};
 	try {
 		const getResult = await ddb.send(new GetCommand({
@@ -91,7 +87,6 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		logger?.info('User record not found, creating new', { userId });
 	}
 
-	// Build update object
 	const updateData: any = {
 		userId,
 		updatedAt: new Date().toISOString()
@@ -166,7 +161,6 @@ router.put('/business-info', async (req: Request, res: Response) => {
 	}
 });
 
-// POST /auth/change-password
 router.post('/change-password', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
@@ -194,7 +188,6 @@ router.post('/change-password', async (req: Request, res: Response) => {
 	}
 
 	try {
-		// Verify current password
 		try {
 			await cognito.send(new AdminInitiateAuthCommand({
 				UserPoolId: userPoolId,
@@ -212,7 +205,6 @@ router.post('/change-password', async (req: Request, res: Response) => {
 			throw authError;
 		}
 
-		// Set new password
 		await cognito.send(new AdminSetUserPasswordCommand({
 			UserPoolId: userPoolId,
 			Username: userId,

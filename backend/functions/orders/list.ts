@@ -25,8 +25,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		ExpressionAttributeValues: { ':g': galleryId }
 	}));
 
-	// Return orders with gallery metadata (we already fetched gallery for ownership check)
-	// This avoids a separate API call and provides gallery context
+	// Return orders with gallery metadata to avoid a separate API call and provide gallery context
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },

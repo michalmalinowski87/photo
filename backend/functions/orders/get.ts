@@ -16,7 +16,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!galleryId || !orderId) return { statusCode: 400, body: 'missing params' };
 	const requester = getUserIdFromEvent(event);
 
-	// Check authentication first - return 401 if no valid token
 	if (!requester) {
 		return {
 			statusCode: 401,
@@ -35,7 +34,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	const order = o.Item as any;
 	
-	// Log order data for debugging (can be removed in production)
 	if (logger) {
 		logger.info('Order fetched', {
 			orderId,
@@ -48,11 +46,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 	}
 	
-	// Ensure selectedKeys is included in response (handle DynamoDB List type conversion)
 	// DynamoDB might return List type which needs to be explicitly included
 	const orderResponse = {
 		...order,
-		selectedKeys: order.selectedKeys || [] // Ensure selectedKeys is always present, even if empty
+		selectedKeys: order.selectedKeys || []
 	};
 
 	return { 

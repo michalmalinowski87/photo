@@ -26,12 +26,10 @@ const router = Router();
 // Gallery-scoped orders (mounted at root, so paths are relative to root)
 router.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
 // orders/delivered route is registered as public route in index.ts (no requireAuth)
-// router.get('/galleries/:id/orders/delivered', wrapHandler(ordersListDelivered.handler));
 router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
 router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));
 // orders/:orderId/zip route is registered as public route in index.ts (no requireAuth)
-// router.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
 router.post('/galleries/:id/orders/:orderId/mark-paid', wrapHandler(ordersMarkPaid.handler));
 router.post('/galleries/:id/orders/:orderId/mark-partially-paid', wrapHandler(ordersMarkPartiallyPaid.handler));
 router.post('/galleries/:id/orders/:orderId/mark-canceled', wrapHandler(ordersMarkCanceled.handler));
@@ -39,16 +37,14 @@ router.post('/galleries/:id/orders/:orderId/mark-refunded', wrapHandler(ordersMa
 router.post('/galleries/:id/orders/:orderId/approve-change', wrapHandler(ordersApproveChangeRequest.handler));
 router.post('/galleries/:id/orders/:orderId/deny-change', wrapHandler(ordersDenyChangeRequest.handler));
 // final/images and final/zip routes are registered as public routes in index.ts (no requireAuth)
-// router.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
 // Final image deletion now handled by galleries batch delete endpoint: POST /galleries/:id/photos/batch-delete with type='final'
 router.post('/galleries/:id/orders/:orderId/final/upload', wrapHandler(ordersUploadFinal.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload-batch', wrapHandler(ordersUploadFinalBatch.handler));
 router.post('/galleries/:id/orders/:orderId/final/upload-complete', wrapHandler(ordersUploadFinalComplete.handler));
-// router.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
+// final/zip route is registered as public route in index.ts (no requireAuth)
 router.post('/galleries/:id/orders/:orderId/send-final-link', wrapHandler(ordersSendFinalLink.handler));
 router.post('/galleries/:id/orders/:orderId/cleanup-originals', wrapHandler(ordersCleanupOriginals.handler));
 
-// Global orders
 router.get('/orders', wrapHandler(ordersListAll.handler));
 
 export { router as ordersRoutes };

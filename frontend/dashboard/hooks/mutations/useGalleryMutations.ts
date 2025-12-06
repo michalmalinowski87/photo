@@ -10,11 +10,9 @@ export function useCreateGallery() {
   return useMutation({
     mutationFn: (data: Partial<Gallery>) => api.galleries.create(data),
     onSuccess: (data) => {
-      // Update cache with new gallery if response contains data
       if (data?.galleryId) {
         queryClient.setQueryData(queryKeys.galleries.detail(data.galleryId), data);
       }
-      // Invalidate gallery lists to show new gallery
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
@@ -27,16 +25,13 @@ export function useUpdateGallery() {
     mutationFn: ({ galleryId, data }: { galleryId: string; data: Partial<Gallery> }) =>
       api.galleries.update(galleryId, data),
     onSuccess: (data, variables) => {
-      // Update cache directly with response data if available
       if (data) {
         queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
       } else {
-        // Fall back to invalidation if response doesn't contain complete data
         queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.detail(variables.galleryId),
         });
       }
-      // Always invalidate lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
@@ -48,7 +43,6 @@ export function useDeleteGallery() {
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.delete(galleryId),
     onSuccess: (_, galleryId) => {
-      // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
@@ -61,7 +55,6 @@ export function useSendGalleryToClient() {
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.sendToClient(galleryId),
     onSuccess: (_, galleryId) => {
-      // Invalidate gallery detail and orders (new order may have been created)
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(galleryId) });
     },

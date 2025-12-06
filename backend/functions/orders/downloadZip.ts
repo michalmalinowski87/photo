@@ -36,7 +36,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Verify gallery exists
 	const galleryGet = await ddb.send(new GetCommand({
 		TableName: galleriesTable,
 		Key: { galleryId }
@@ -50,7 +49,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Verify access - supports both owner (Cognito) and client (JWT) tokens
+	// Supports both owner (Cognito) and client (JWT) tokens
 	const access = verifyGalleryAccess(event, galleryId, gallery);
 	if (!access.isOwner && !access.isClient) {
 		return {
@@ -60,7 +59,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Get order
 	const orderGet = await ddb.send(new GetCommand({
 		TableName: ordersTable,
 		Key: { galleryId, orderId }
@@ -74,7 +72,6 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Don't allow download of canceled orders
 	if (order.deliveryStatus === 'CANCELLED') {
 		return {
 			statusCode: 400,

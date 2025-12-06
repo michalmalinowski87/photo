@@ -9,7 +9,6 @@ import { getUserIdFromRequest } from '../routes/helpers';
  * OPTIONS requests (CORS preflight) are allowed through without auth
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-	// Allow OPTIONS requests (CORS preflight) to pass through without auth
 	if (req.method === 'OPTIONS') {
 		return next();
 	}
@@ -20,7 +19,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 	const hasJWT = !!requestContext.authorizer?.jwt;
 	const hasClaims = !!requestContext.authorizer?.jwt?.claims;
 	
-	// Debug logging (can be removed in production)
 	if (!userId) {
 		console.log('Auth check failed:', {
 			path: req.path,
@@ -40,7 +38,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 		});
 	}
 	
-	// Attach userId to request for use in handlers
 	(req as any).userId = userId;
 	next();
 }

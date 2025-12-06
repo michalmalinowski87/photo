@@ -59,10 +59,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const { showToast } = useToast();
 
-  // Prefetch hook for gallery details
   const prefetchGallery = usePrefetchGallery();
 
-  // Use React Query hook for galleries
   const {
     data: galleries = [],
     isLoading: loading,
@@ -70,10 +68,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
     refetch,
   } = useGalleries(filter);
 
-  // Track initial load for onLoadingChange callback
   const initialLoad = loading && initialLoadRef.current;
 
-  // Log data loading
   useEffect(() => {
     if (loading) {
       logDataLoad("galleries", { filter });
@@ -98,14 +94,12 @@ const GalleryList: React.FC<GalleryListProps> = ({
     }
   }, [queryError, logDataError]);
 
-  // Notify parent of loading state changes
   useEffect(() => {
     if (onLoadingChange) {
       onLoadingChange(loading, initialLoad);
     }
   }, [loading, initialLoad, onLoadingChange]);
 
-  // Delete mutation
   const deleteGalleryMutation = useDeleteGallery();
 
   const handlePayClick = (galleryId: string) => {

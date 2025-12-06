@@ -81,7 +81,6 @@ export function createServerlessHandler(app: Express) {
 			'Access-Control-Max-Age': '86400',
 		};
 		
-		// Handle OPTIONS preflight requests first
 		const method = getMethod(event);
 		if (isOptionsRequest(method, event.headers)) {
 			return {
@@ -92,13 +91,11 @@ export function createServerlessHandler(app: Express) {
 		}
 		
 		try {
-			// Extract event properties (supports both REST API and HTTP API v2)
 			const path = getPath(event);
 			const rawQueryString = getRawQueryString(event);
 			const queryString = event.queryStringParameters || {};
 			const headers: Record<string, string> = {};
 			
-			// Normalize headers (lowercase keys)
 			Object.keys(event.headers || {}).forEach(key => {
 				headers[key.toLowerCase()] = event.headers![key] || '';
 			});
@@ -106,7 +103,6 @@ export function createServerlessHandler(app: Express) {
 			const body = event.body || '';
 			const pathParameters = event.pathParameters || {};
 
-			// Parse body if JSON
 			let parsedBody: any = {};
 			if (body) {
 				try {
@@ -120,10 +116,8 @@ export function createServerlessHandler(app: Express) {
 				}
 			}
 
-			// Log request for debugging
 			console.log('Lambda handler invoked:', { method, path, hasBody: !!body });
 
-			// Create Express-compatible request stream
 			const reqStream = new Readable();
 			reqStream.push(body || '');
 			reqStream.push(null);
@@ -131,7 +125,6 @@ export function createServerlessHandler(app: Express) {
 			return new Promise<APIGatewayProxyResult>((resolve) => {
 			let resolved = false;
 			
-			// Helper to safely resolve the promise only once
 			const safeResolve = (response: APIGatewayProxyResult) => {
 				if (!resolved) {
 					resolved = true;
@@ -140,7 +133,6 @@ export function createServerlessHandler(app: Express) {
 				}
 			};
 			
-			// Helper to create response with CORS headers
 			const createResponse = (
 				statusCode: number, 
 				body: string, 
@@ -155,7 +147,7 @@ export function createServerlessHandler(app: Express) {
 				};
 			};
 			
-			// Safety timeout - if no response is sent within 25 seconds, return 503
+			// Safety timeout: if no response is sent within 25 seconds, return 503
 			const timeoutId = setTimeout(() => {
 				if (!resolved) {
 					console.error('Lambda handler timeout: No response sent within 25 seconds', { 
@@ -174,7 +166,6 @@ export function createServerlessHandler(app: Express) {
 				}
 			}, 25000);
 
-			// Build query string for URL
 			const queryPart = rawQueryString ? `?${rawQueryString}` : '';
 			const fullUrl = path + queryPart;
 			
@@ -199,10 +190,8 @@ export function createServerlessHandler(app: Express) {
 				secure: true,
 			}) as any;
 
-			// Create minimal response stream for Express compatibility
 			const resStream = new Writable({
 				write(chunk: any, encoding: string, callback: () => void) {
-					// Ignore writes - we handle response in our methods
 					callback();
 				}
 			});
@@ -225,7 +214,6 @@ export function createServerlessHandler(app: Express) {
 				},
 				send: function(data: string | object | Buffer) {
 					if (Buffer.isBuffer(data)) {
-						// Handle binary data - convert to base64 for API Gateway
 						this.body = data.toString('base64');
 						safeResolve(createResponse(this.statusCode, this.body, this.headers, true));
 						return this;
@@ -262,7 +250,6 @@ export function createServerlessHandler(app: Express) {
 				},
 			}) as any;
 
-			// Error handler
 			const next = (err?: any) => {
 				if (err) {
 					console.error('Express error:', err);
@@ -274,7 +261,6 @@ export function createServerlessHandler(app: Express) {
 				}
 			};
 
-			// Attach logger to request (for compatibility with lambdaLogger)
 			(req as any).logger = (context as any).logger || {
 				debug: () => {},
 				info: () => {},
@@ -282,13 +268,10 @@ export function createServerlessHandler(app: Express) {
 				error: () => {},
 			};
 
-			// Execute Express app
 			try {
-				// Handle both sync and async Express handlers
 				// Express app() can return void or Promise, so we need to check
 				const result: any = app(req as Request, res as Response, next);
 				
-				// If Express returns a Promise (async handler), wait for it
 				if (result != null && typeof result === 'object' && typeof result.then === 'function') {
 					result.catch((err: any) => {
 						console.error('Unhandled async error:', err);
@@ -311,7 +294,6 @@ export function createServerlessHandler(app: Express) {
 		} catch (err: any) {
 			console.error('Handler error:', err);
 			
-			// If we can't determine method or it might be OPTIONS, return success for CORS
 			const possibleMethod = getMethod(event);
 			if (isOptionsRequest(possibleMethod, event.headers) || !possibleMethod) {
 				return {
@@ -321,7 +303,6 @@ export function createServerlessHandler(app: Express) {
 				};
 			}
 			
-			// Return error with CORS headers
 			return {
 				statusCode: 500,
 				headers: {

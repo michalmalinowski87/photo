@@ -4,7 +4,6 @@ import { createServerlessHandler } from './serverless';
 import { requireAuth } from './middleware/auth';
 import { wrapHandler } from './routes/handlerWrapper';
 
-// Import route modules
 import { authRoutes } from './routes/auth';
 import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
@@ -30,24 +29,20 @@ import { dashboardRoutes } from './routes/dashboard';
 
 const app = express();
 
-// CORS middleware - set CORS headers on all responses
-// Note: OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
+// OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
 // This middleware only sets CORS headers for actual API responses (GET, POST, etc.)
 app.use((req: Request, res: Response, next) => {
-	// Set CORS headers for all responses
 	res.setHeader('Access-Control-Allow-Origin', '*');
 	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
 	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-	res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+	res.setHeader('Access-Control-Max-Age', '86400');
 	
 	next();
 });
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check (no auth required)
 app.get('/health', (req: Request, res: Response) => {
 	res.json({ ok: true });
 });
@@ -65,12 +60,10 @@ app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.hand
 app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
 app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
 app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
-app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler)); // GET for polling
-app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler)); // POST for backward compatibility
+app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
+app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 
-// API Routes - all require authentication via API Gateway authorizer
-// Note: API Gateway validates tokens before requests reach Lambda,
-// but we also check in middleware for extra safety
+// API Gateway validates tokens before requests reach Lambda, but we also check in middleware for extra safety
 app.use('/auth', requireAuth, authRoutes);
 app.use('/galleries', requireAuth, galleriesRoutes);
 app.use('/clients', requireAuth, clientsRoutes);
@@ -80,23 +73,21 @@ app.use('/transactions', requireAuth, transactionsRoutes);
 app.use('/wallet', requireAuth, walletRoutes);
 app.use('/uploads', requireAuth, uploadsRoutes);
 app.use('/downloads', requireAuth, downloadsRoutes);
-app.use('/', requireAuth, ordersRoutes); // Orders routes handle their own paths (some under /galleries, some under /orders)
-app.use('/galleries', requireAuth, selectionsRoutes); // Selections are under galleries path
-app.use('/galleries', requireAuth, processedRoutes); // Processed routes are under galleries path
+// Orders routes handle their own paths (some under /galleries, some under /orders)
+app.use('/', requireAuth, ordersRoutes);
+app.use('/galleries', requireAuth, selectionsRoutes);
+app.use('/galleries', requireAuth, processedRoutes);
 app.use('/dashboard', requireAuth, dashboardRoutes);
 
-// 404 handler
 app.use((req: Request, res: Response) => {
 	res.status(404).json({ error: 'Not found', path: req.path });
 });
 
-// Error handler
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.use((err: any, req: Request, res: Response, _next: any) => {
 	console.error('Unhandled error:', err);
 	res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
-// Export Lambda handler
 export const handler = lambdaLogger(createServerlessHandler(app));
 

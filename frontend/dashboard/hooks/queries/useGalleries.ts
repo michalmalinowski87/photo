@@ -4,7 +4,6 @@ import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 import type { Gallery } from "../../store/gallerySlice";
 
-// List galleries with optional filter
 export function useGalleries(
   filter?: string,
   options?: Omit<UseQueryOptions<Gallery[]>, "queryKey" | "queryFn">
@@ -21,7 +20,6 @@ export function useGalleries(
   });
 }
 
-// Single gallery detail
 export function useGallery(
   galleryId: string | undefined,
   options?: Omit<
@@ -31,12 +29,10 @@ export function useGallery(
 ) {
   const queryClient = useQueryClient();
 
-  // Try to get gallery from list cache to use as initialData
-  // This provides instant display when navigating from a list
+  // Try to get gallery from list cache to use as initialData for instant display when navigating from a list
   const getInitialData = (): Gallery | undefined => {
     if (!galleryId) return undefined;
 
-    // Check all list queries for this gallery
     const listQueries = queryClient.getQueriesData<Gallery[]>({
       queryKey: queryKeys.galleries.lists(),
     });
@@ -61,17 +57,14 @@ export function useGallery(
       const gallery = await api.galleries.get(galleryId!);
       return gallery as Gallery;
     },
-    enabled: !!galleryId, // Only run if galleryId exists
+    enabled: !!galleryId,
     staleTime: 30 * 1000,
-    // Use data from list cache as initialData for instant display
     initialData,
-    // Keep previous data while loading new gallery for smoother transitions
     placeholderData: (previousData) => previousData,
     ...options,
   });
 }
 
-// Gallery images (originals, finals, or thumbnails)
 export function useGalleryImages(
   galleryId: string | undefined,
   type: "originals" | "finals" | "thumb" = "thumb",
@@ -89,18 +82,16 @@ export function useGalleryImages(
   });
 }
 
-// Gallery status (lightweight)
 export function useGalleryStatus(galleryId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.galleries.status(galleryId!),
     queryFn: () => api.galleries.getStatus(galleryId!),
     enabled: !!galleryId,
-    staleTime: 10 * 1000, // Status changes more frequently
-    networkMode: "offlineFirst", // Use cache if offline
+    staleTime: 10 * 1000,
+    networkMode: "offlineFirst",
   });
 }
 
-// Gallery bytes used
 export function useGalleryBytesUsed(galleryId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.galleries.bytesUsed(galleryId!),
@@ -110,7 +101,6 @@ export function useGalleryBytesUsed(galleryId: string | undefined) {
   });
 }
 
-// Gallery cover photo
 export function useGalleryCoverPhoto(galleryId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.galleries.coverPhoto(galleryId!),
@@ -120,7 +110,6 @@ export function useGalleryCoverPhoto(galleryId: string | undefined) {
   });
 }
 
-// Gallery delivered orders
 export function useGalleryDeliveredOrders(galleryId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.galleries.deliveredOrders(galleryId!),
