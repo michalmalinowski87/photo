@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
+import { queryOrdersByOwnerWithFallback } from '../../lib/src/dynamodb-utils';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -28,65 +29,53 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	try {
-		// Query all orders for this owner using the GSI (single query instead of N+1)
-		// Note: If GSI is not yet populated (during migration), fall back to gallery-based queries
+		// Query orders with pagination to prevent timeout with large datasets
+		// Use reasonable limit per page and aggregate results
+		const maxOrdersToProcess = 10000; // Hard limit to prevent excessive processing
+		const pageSize = 1000; // Items per query page
 		let allOrders: any[] = [];
 		
-		try {
-			const ordersQuery = await ddb.send(new QueryCommand({
-				TableName: ordersTable,
-				IndexName: 'ownerId-deliveryStatus-index',
-				KeyConditionExpression: 'ownerId = :o',
-				ExpressionAttributeValues: {
-					':o': ownerId
+		// Use pagination to fetch orders in batches using the shared utility
+		let lastEvaluatedKey: Record<string, any> | undefined;
+		do {
+			const result = await queryOrdersByOwnerWithFallback(
+				ddb,
+				ownerId,
+				ordersTable,
+				galleriesTable,
+				{
+					limit: pageSize,
+					exclusiveStartKey: lastEvaluatedKey,
+					scanIndexForward: false
 				}
-			}));
-			allOrders = ordersQuery.Items || [];
-		} catch (gsiError: any) {
-			// Fallback: If GSI query fails (e.g., index not ready or orders missing ownerId),
-			// use the old method of querying by galleries
-			console.warn('GSI query failed, falling back to gallery-based queries:', gsiError.message);
+			);
 			
+			allOrders.push(...result.orders);
+			lastEvaluatedKey = result.lastEvaluatedKey;
+			
+			// Stop if we hit the max limit or no more results
+			if (allOrders.length >= maxOrdersToProcess || !lastEvaluatedKey) {
+				break;
+			}
+		} while (lastEvaluatedKey);
+
+		// Get galleries for this owner with pagination
+		const galleries: any[] = [];
+		let galleriesLastKey: Record<string, any> | undefined;
+		do {
 			const galleriesQuery = await ddb.send(new QueryCommand({
 				TableName: galleriesTable,
 				IndexName: 'ownerId-index',
 				KeyConditionExpression: 'ownerId = :o',
 				ExpressionAttributeValues: {
 					':o': ownerId
-				}
+				},
+				Limit: 1000
 			}));
-
-			const galleries = galleriesQuery.Items || [];
 			
-			if (galleries.length > 0) {
-				const orderPromises = galleries.map((gallery: any) =>
-					ddb.send(new QueryCommand({
-						TableName: ordersTable,
-						KeyConditionExpression: 'galleryId = :g',
-						ExpressionAttributeValues: {
-							':g': gallery.galleryId
-						}
-					}))
-				);
-
-				const orderResults = await Promise.all(orderPromises);
-				orderResults.forEach((result) => {
-					allOrders.push(...(result.Items || []));
-				});
-			}
-		}
-
-		// Get all galleries for this owner (for revenue calculation from package prices)
-		const galleriesQuery = await ddb.send(new QueryCommand({
-			TableName: galleriesTable,
-			IndexName: 'ownerId-index',
-			KeyConditionExpression: 'ownerId = :o',
-			ExpressionAttributeValues: {
-				':o': ownerId
-			}
-		}));
-
-		const galleries = galleriesQuery.Items || [];
+			galleries.push(...(galleriesQuery.Items || []));
+			galleriesLastKey = galleriesQuery.LastEvaluatedKey;
+		} while (galleriesLastKey);
 
 		// Aggregate statistics from all orders
 		let deliveredCount = 0;
@@ -133,12 +122,14 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
+		const { sanitizeErrorMessage } = require('../../lib/src/error-utils');
+		const safeMessage = sanitizeErrorMessage(error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				error: 'Failed to get dashboard stats', 
-				message: error.message 
+				message: safeMessage
 			})
 		};
 	}

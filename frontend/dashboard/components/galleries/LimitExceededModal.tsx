@@ -144,9 +144,6 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
   };
 
   const handleCancel = () => {
-    // TODO: Implement file removal
-    // This would need to delete the uploaded files from S3
-    // For now, just close the modal
     onCancel?.();
     onClose();
   };

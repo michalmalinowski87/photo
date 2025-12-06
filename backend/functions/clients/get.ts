@@ -2,10 +2,12 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { LambdaEvent, ClientItem } from '../../lib/src/lambda-types';
+import { createLambdaErrorResponse } from '../../lib/src/error-utils';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: LambdaEvent) => {
 	const envProc = (globalThis as any).process;
 	const clientsTable = envProc?.env?.CLIENTS_TABLE as string;
 	
@@ -49,7 +51,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		const client = result.Item as any;
+		const client = result.Item as ClientItem;
 		requireOwnerOr403(client.ownerId, ownerId);
 
 		return {
@@ -57,12 +59,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ client })
 		};
-	} catch (error: any) {
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to get client', message: error.message })
-		};
+	} catch (error: unknown) {
+		return createLambdaErrorResponse(error, 'Failed to get client', 500);
 	}
 });
 

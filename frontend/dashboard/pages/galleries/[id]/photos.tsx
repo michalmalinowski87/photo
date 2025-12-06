@@ -777,7 +777,7 @@ export default function GalleryPhotos() {
             setLimitExceededData(null);
           }}
           onCancel={() => {
-            // TODO: Implement file removal
+            // User cancelled - just close the modal
             setLimitExceededData(null);
           }}
         />

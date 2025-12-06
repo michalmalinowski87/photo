@@ -65,11 +65,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			transactionId,
 			userId: requester
 		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to get transaction', message: error.message })
-		};
+		const { createLambdaErrorResponse } = require('../../lib/src/error-utils');
+		return createLambdaErrorResponse(error, 'Failed to get transaction', 500);
 	}
 });
 

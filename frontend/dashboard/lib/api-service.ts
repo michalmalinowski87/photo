@@ -80,9 +80,10 @@ interface Gallery {
   [key: string]: any;
 }
 
-// Note: Client, Package, and Order types are now defined in types/index.ts
-// Keeping these here for backward compatibility with existing code
-// TODO: Migrate to use types from types/index.ts
+// Note: Client, Package, and Order types are also defined in types/index.ts
+// These types here are API-specific and include additional fields used by the API service
+// The types in types/index.ts are domain models with a different structure
+// Keeping both for now as they serve different purposes (API contracts vs domain models)
 interface Client {
   clientId: string;
   email?: string;
@@ -322,12 +323,14 @@ class ApiService {
     this.pendingRequests.set(requestKey, requestPromise);
 
     // Clean up the cache after request completes (success or failure)
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    requestPromise.finally(() => {
+    // Use void operator to explicitly indicate we're intentionally not awaiting this cleanup
+    void requestPromise.finally(() => {
       // Use setTimeout to allow other identical requests to join before cleanup
       setTimeout(() => {
         this.pendingRequests.delete(requestKey);
       }, this.DEDUP_WINDOW_MS);
+    }).catch(() => {
+      // Silently handle any errors in cleanup - this is non-critical cleanup code
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return

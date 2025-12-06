@@ -3,7 +3,28 @@ import { createHmac } from 'crypto';
 // Simple JWT implementation using HMAC-SHA256
 // For production, consider using a library like jsonwebtoken or AWS KMS
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+function getJwtSecret(): string {
+	const secret = process.env.JWT_SECRET;
+	const stage = process.env.STAGE || 'dev';
+	
+	// In production, JWT_SECRET must be set
+	if (stage === 'prod' || stage === 'production') {
+		if (!secret) {
+			throw new Error('JWT_SECRET environment variable is required in production');
+		}
+		return secret;
+	}
+	
+	// In development, allow fallback but warn
+	if (!secret) {
+		console.warn('⚠️  JWT_SECRET not set, using insecure default. This should only be used in development.');
+		return 'change-me-in-production';
+	}
+	
+	return secret;
+}
+
+const JWT_SECRET = getJwtSecret();
 
 interface JWTPayload {
 	galleryId: string;

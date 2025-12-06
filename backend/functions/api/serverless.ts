@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { Express, Request, Response } from 'express';
 import { Readable, Writable } from 'stream';
+import { sanitizeErrorMessage } from '../../lib/src/error-utils';
 
 // Type for HTTP API v2 event properties (not in standard APIGatewayProxyEvent)
 interface HttpApiV2Event {
@@ -253,9 +254,10 @@ export function createServerlessHandler(app: Express) {
 			const next = (err?: any) => {
 				if (err) {
 					console.error('Express error:', err);
+					const safeMessage = sanitizeErrorMessage(err);
 					safeResolve(createResponse(
 						500,
-						JSON.stringify({ error: 'Internal server error', message: err.message }),
+						JSON.stringify({ error: 'Internal server error', message: safeMessage }),
 						{ 'content-type': 'application/json' }
 					));
 				}
@@ -275,18 +277,20 @@ export function createServerlessHandler(app: Express) {
 				if (result != null && typeof result === 'object' && typeof result.then === 'function') {
 					result.catch((err: any) => {
 						console.error('Unhandled async error:', err);
+						const safeMessage = sanitizeErrorMessage(err);
 						safeResolve(createResponse(
 							500,
-							JSON.stringify({ error: 'Internal server error', message: err.message }),
+							JSON.stringify({ error: 'Internal server error', message: safeMessage }),
 							{ 'content-type': 'application/json' }
 						));
 					});
 				}
 			} catch (err: any) {
 				console.error('Express app execution error:', err);
+				const safeMessage = sanitizeErrorMessage(err);
 				safeResolve(createResponse(
 					500,
-					JSON.stringify({ error: 'Internal server error', message: err.message }),
+					JSON.stringify({ error: 'Internal server error', message: safeMessage }),
 					{ 'content-type': 'application/json' }
 				));
 			}
@@ -303,6 +307,8 @@ export function createServerlessHandler(app: Express) {
 				};
 			}
 			
+			const safeMessage = sanitizeErrorMessage(err);
+			
 			return {
 				statusCode: 500,
 				headers: {
@@ -311,7 +317,7 @@ export function createServerlessHandler(app: Express) {
 				},
 				body: JSON.stringify({ 
 					error: 'Internal server error', 
-					message: err?.message || 'Unknown error occurred' 
+					message: safeMessage
 				}),
 			};
 		}

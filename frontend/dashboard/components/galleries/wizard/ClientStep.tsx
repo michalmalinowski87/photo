@@ -103,88 +103,46 @@ export const ClientStep: React.FC<ClientStepProps> = ({
   }, [selectedClientId, existingClients, clientEmail]);
 
   // Check if current email matches any existing client (excluding the currently selected client)
-  // eslint-disable-next-line no-console
   const isDuplicateClient = useMemo(() => {
     const trimmedEmail = clientEmail.trim().toLowerCase();
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] isDuplicateClient check:", {
-      trimmedEmail,
-      selectedClientId,
-      existingClientsCount: existingClients.length,
-    });
 
     if (!trimmedEmail) {
-      // eslint-disable-next-line no-console
-      console.log("[DEBUG] No email, returning false");
       return false;
     }
 
     const isDuplicate = existingClients.some((client) => {
       // Skip the currently selected client when checking for duplicates
       if (selectedClientId && client.clientId === selectedClientId) {
-        // eslint-disable-next-line no-console
-        console.log("[DEBUG] Skipping selected client:", client.clientId);
         return false;
       }
       const existingEmail = (client.email ?? "").trim().toLowerCase();
-      const matches = existingEmail === trimmedEmail;
-      if (matches) {
-        // eslint-disable-next-line no-console
-        console.log(
-          "[DEBUG] Found duplicate email:",
-          existingEmail,
-          "for client:",
-          client.clientId
-        );
-      }
-      return matches;
+      return existingEmail === trimmedEmail;
     });
 
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] isDuplicateClient result:", isDuplicate);
     return isDuplicate;
   }, [clientEmail, existingClients, selectedClientId]);
 
   const canSaveClient = useMemo(() => {
     const trimmedEmail = clientEmail.trim();
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] canSaveClient check:", {
-      trimmedEmail: trimmedEmail || "(empty)",
-      isCompany,
-      companyName: companyName.trim() || "(empty)",
-      nip: nip.trim() || "(empty)",
-      firstName: firstName.trim() || "(empty)",
-      lastName: lastName.trim() || "(empty)",
-      isDuplicateClient,
-    });
 
     // Note: We allow saving in edit mode (when email matches selected client)
     // This is handled separately in canSaveClientInEditMode
 
     // Check all required fields (password is NOT required for saving client, only for wizard continuation)
     if (!trimmedEmail) {
-      // eslint-disable-next-line no-console
-      console.log("[DEBUG] ❌ No email");
       return false;
     }
     if (isCompany) {
       if (!companyName.trim() || !nip.trim()) {
-        // eslint-disable-next-line no-console
-        console.log("[DEBUG] ❌ Missing company fields");
         return false;
       }
     } else {
       if (!firstName.trim() || !lastName.trim()) {
-        // eslint-disable-next-line no-console
-        console.log("[DEBUG] ❌ Missing individual fields");
         return false;
       }
     }
     // Enable if email is different from existing clients (not a duplicate)
-    const result = !isDuplicateClient;
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] ✅ canSaveClient result:", result);
-    return result;
+    return !isDuplicateClient;
   }, [clientEmail, isCompany, companyName, nip, firstName, lastName, isDuplicateClient]);
 
   const disabledReason = useMemo(() => {
@@ -272,17 +230,6 @@ export const ClientStep: React.FC<ClientStepProps> = ({
     return true;
   }, [isEditMode, canSaveClient, clientEmail, isCompany, companyName, nip, firstName, lastName]);
 
-  // Debug logging when values change
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] Button state:", {
-      canSaveClient,
-      isSaveDisabled,
-      disabledReason,
-      clientEmail,
-      selectedClientId,
-    });
-  }, [canSaveClient, isSaveDisabled, disabledReason, clientEmail, selectedClientId]);
 
   const clientOptions = existingClients.map((client) => ({
     value: client.clientId,

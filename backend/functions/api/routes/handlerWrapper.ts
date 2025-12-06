@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Handler } from 'aws-lambda';
+import { sanitizeErrorMessage } from '../../../lib/src/error-utils';
 
 /**
  * Wraps an existing Lambda handler to work as an Express route handler
@@ -102,7 +103,8 @@ export function wrapHandler(handler: Handler) {
 			return res.status(500).json({ error: 'Invalid handler response' });
 		} catch (error: any) {
 			console.error('Handler error:', error);
-			return res.status(500).json({ error: 'Internal server error', message: error.message });
+			const safeMessage = sanitizeErrorMessage(error);
+			return res.status(500).json({ error: 'Internal server error', message: safeMessage });
 		}
 	};
 }

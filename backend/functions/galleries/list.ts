@@ -228,8 +228,14 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 		}
 		
-		// Enrich with order summaries and payment status - use Promise.allSettled to handle individual gallery failures gracefully
-		const enrichmentResults = await Promise.allSettled(galleriesToProcess.map(async (g: any) => {
+		// Enrich with order summaries and payment status - use batching to prevent timeout
+		// Process galleries in batches of 50 to avoid overwhelming the system
+		const BATCH_SIZE = 50;
+		const enrichmentResults: Array<PromiseSettledResult<any>> = [];
+		
+		for (let i = 0; i < galleriesToProcess.length; i += BATCH_SIZE) {
+			const batch = galleriesToProcess.slice(i, i + BATCH_SIZE);
+			const batchResults = await Promise.allSettled(batch.map(async (g: any) => {
 			let orderData = { 
 				changeRequestPending: false, 
 				orderCount: 0, 
@@ -309,7 +315,10 @@ export const handler = lambdaLogger(async (event: any) => {
 				isPaid,
 				...orderData
 			};
-		}));
+			}));
+			
+			enrichmentResults.push(...batchResults);
+		}
 		
 		const enrichedGalleries = enrichmentResults
 			.map((result, idx) => {
@@ -379,11 +388,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	} catch (error: any) {
 		console.error('List galleries failed:', error);
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to list galleries', message: error.message })
-	};
+		const { createLambdaErrorResponse } = require('../../lib/src/error-utils');
+		return createLambdaErrorResponse(error, 'Failed to list galleries', 500);
 	}
 });
 
