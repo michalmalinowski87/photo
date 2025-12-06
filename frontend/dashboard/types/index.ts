@@ -38,8 +38,7 @@ export interface Gallery {
   [key: string]: unknown;
 }
 
-// Order type is primarily defined in store/orderSlice.ts and re-exported from store/index.ts
-// This is kept here for reference, but prefer importing from store when possible
+// Order type definition (single source of truth)
 export interface Order {
   orderId: string;
   galleryId: string;

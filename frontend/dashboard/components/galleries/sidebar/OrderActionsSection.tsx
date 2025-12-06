@@ -11,6 +11,7 @@ import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useOrder } from "../../../hooks/queries/useOrders";
 import { useModal } from "../../../hooks/useModal";
 import { downloadFinals, downloadZip } from "../../../lib/download-utils";
+import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
@@ -32,8 +33,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
 
   // Use React Query for data
   const { data: gallery, isLoading, isFetching: isGalleryFetching } = useGallery(galleryIdForQuery);
-  const { data: order } = useOrder(galleryIdForQuery, orderId);
+  const { data: orderData } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
+
+  // Type guard: ensure order is properly typed
+  const order: Order | undefined = orderData;
 
   // Use React Query mutations
   const approveChangeRequestMutation = useApproveChangeRequest();
@@ -57,14 +61,13 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       order.deliveryStatus === "DELIVERED"
     : false;
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const selectedKeys: unknown = order?.selectedKeys;
+  const selectedKeys = order?.selectedKeys;
   const hasSelectedKeys =
     selectedKeys && Array.isArray(selectedKeys) ? selectedKeys.length > 0 : Boolean(selectedKeys);
 
   const canDownloadZipValue =
     gallery?.selectionEnabled !== false &&
-    order &&
+    order !== undefined &&
     order.deliveryStatus !== "CANCELLED" &&
     hasSelectedKeys;
 

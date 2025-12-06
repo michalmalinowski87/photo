@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient, UseQueryOptions } from "@tanstack/react-query";
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Order } from "../../store/orderSlice";
+import type { Order } from "../../types";
 
 export function useOrders(
   galleryId?: string,

@@ -11,8 +11,7 @@ import {
 } from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
-import type { Order } from "../../../store";
-import type { GalleryImage } from "../../../types";
+import type { Order, GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {
   token: string;

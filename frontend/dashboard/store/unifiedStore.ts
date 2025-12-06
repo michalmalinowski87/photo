@@ -5,7 +5,6 @@ import { createAuthSlice, AuthSlice } from "./authSlice";
 import { createDownloadSlice, DownloadSlice } from "./downloadSlice";
 import { createGallerySlice, GallerySlice } from "./gallerySlice";
 import { createModalSlice, ModalSlice } from "./modalSlice";
-import { createOrderSlice, OrderSlice } from "./orderSlice";
 import { createOverlaySlice, OverlaySlice } from "./overlaySlice";
 import { createSidebarSlice, SidebarSlice } from "./sidebarSlice";
 import { createThemeSlice, ThemeSlice } from "./themeSlice";
@@ -18,7 +17,6 @@ export type UnifiedStore = AuthSlice &
   DownloadSlice &
   GallerySlice &
   ModalSlice &
-  OrderSlice &
   OverlaySlice &
   SidebarSlice &
   ThemeSlice &
@@ -35,7 +33,6 @@ export const useUnifiedStore = create<UnifiedStore>()(
         ...createDownloadSlice(...args),
         ...createGallerySlice(...args),
         ...createModalSlice(...args),
-        ...createOrderSlice(...args),
         ...createOverlaySlice(...args),
         ...createSidebarSlice(...args),
         ...createThemeSlice(...args),

@@ -7,7 +7,6 @@ export {
   useDownloadStore,
   useGalleryStore,
   useModalStore,
-  useOrderStore,
   useOverlayStore,
   useSidebarStore,
   useThemeStore,
@@ -18,7 +17,7 @@ export {
 
 // Re-export types from slice files
 export type { Gallery, GalleryOrder } from "./gallerySlice";
-export type { Order } from "./orderSlice";
+// Order type is exported from types/index.ts - import from there instead
 export type { ToastMessage } from "./toastSlice";
 export type { UploadProgress } from "./uploadSlice";
 export type { DownloadProgress } from "./downloadSlice";

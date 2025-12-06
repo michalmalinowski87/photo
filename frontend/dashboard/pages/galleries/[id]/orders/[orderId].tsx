@@ -30,7 +30,7 @@ import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
 import type { GalleryImage } from "../../../../types";
 
-// Order type is imported from orderSlice store (single source of truth)
+// Order type is imported from types/index.ts
 
 interface PaymentDetails {
   totalAmountCents: number;

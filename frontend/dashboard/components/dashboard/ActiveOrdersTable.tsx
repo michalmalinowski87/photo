@@ -3,27 +3,21 @@ import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
+import type { Order } from "../../types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
 type BadgeColor = "info" | "success" | "warning" | "error" | "light";
 
-interface Order {
-  orderId?: string;
-  galleryId?: string;
+interface OrderWithGalleryInfo extends Order {
   galleryName?: string;
   gallerySelectionEnabled?: boolean;
-  orderNumber?: string;
-  deliveryStatus?: string;
-  paymentStatus?: string;
   totalCents?: number;
-  createdAt?: string | number | Date;
-  [key: string]: unknown;
 }
 
 interface ActiveOrdersTableProps {
-  orders: Order[];
+  orders: OrderWithGalleryInfo[];
   onApproveChangeRequest?: (galleryId: string, orderId: string) => void;
   onDenyChangeRequest?: (galleryId: string, orderId: string) => void;
   onViewAllClick?: () => void;
@@ -172,13 +166,15 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
             </TableHeader>
             <TableBody>
               {orders.map((order) => {
-                const orderObj: Order = order;
+                const orderObj: OrderWithGalleryInfo = order;
                 const galleryId = typeof orderObj.galleryId === "string" ? orderObj.galleryId : "";
                 const orderId = typeof orderObj.orderId === "string" ? orderObj.orderId : "";
                 const galleryName =
                   typeof orderObj.galleryName === "string" ? orderObj.galleryName : "";
                 const orderNumber =
-                  typeof orderObj.orderNumber === "string" ? orderObj.orderNumber : "";
+                  typeof orderObj.orderNumber === "string" || typeof orderObj.orderNumber === "number"
+                    ? String(orderObj.orderNumber)
+                    : "";
                 const deliveryStatus =
                   typeof orderObj.deliveryStatus === "string" ? orderObj.deliveryStatus : "";
                 const paymentStatus =
