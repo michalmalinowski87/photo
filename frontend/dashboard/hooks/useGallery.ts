@@ -28,9 +28,8 @@ export const useGallery = () => {
     refetch: refetchGallery,
   } = useGalleryQuery(galleryIdForQuery);
 
-  const { refetch: refetchOrder } = useOrderQuery(galleryIdForQuery, orderIdForQuery, {
-    enabled: false,
-  });
+  // Order query should be enabled when both IDs exist - let React Query handle refetching automatically
+  const { refetch: refetchOrder } = useOrderQuery(galleryIdForQuery, orderIdForQuery);
 
   const reloadGallery = useCallback(async () => {
     if (galleryIdForQuery) {

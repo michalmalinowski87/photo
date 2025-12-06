@@ -44,7 +44,7 @@ export function useClient(
   options?: Omit<UseQueryOptions<Client>, "queryKey" | "queryFn">
 ) {
   return useQuery({
-    queryKey: [...queryKeys.clients.all, "detail", clientId],
+    queryKey: queryKeys.clients.detail(clientId!),
     queryFn: () => api.clients.get(clientId!),
     enabled: !!clientId,
     staleTime: 30 * 1000,

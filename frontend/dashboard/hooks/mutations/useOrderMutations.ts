@@ -49,10 +49,18 @@ export function useMarkOrderPaid() {
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markPaid(galleryId, orderId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
+    onSuccess: (data, variables) => {
+      // Update cache directly with response data if available
+      if (data) {
+        queryClient.setQueryData(
+          queryKeys.orders.detail(variables.galleryId, variables.orderId),
+          data
+        );
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+        });
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
     },
@@ -65,10 +73,18 @@ export function useMarkOrderPartiallyPaid() {
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markPartiallyPaid(galleryId, orderId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
+    onSuccess: (data, variables) => {
+      // Update cache directly with response data if available
+      if (data) {
+        queryClient.setQueryData(
+          queryKeys.orders.detail(variables.galleryId, variables.orderId),
+          data
+        );
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+        });
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
     },
   });
@@ -132,8 +148,43 @@ export function useDeleteFinalImage() {
       orderId: string;
       imageKey: string;
     }) => api.orders.deleteFinalImage(galleryId, orderId, imageKey),
-    onSuccess: (_, variables) => {
-      // Invalidate final images, gallery detail, and bytes used
+    onMutate: async ({ galleryId, orderId, imageKey }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
+      });
+
+      // Snapshot previous values
+      const previousFinalImages = queryClient.getQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId)
+      );
+      const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
+
+      // Optimistically remove image from final images list
+      queryClient.setQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId),
+        (old) => old?.filter((img) => (img.key ?? img.filename) !== imageKey) ?? []
+      );
+
+      return { previousFinalImages, previousGallery };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousFinalImages) {
+        queryClient.setQueryData(
+          queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
+          context.previousFinalImages
+        );
+      }
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure consistency
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });
@@ -164,8 +215,48 @@ export function useDeleteFinalImagesBatch() {
       orderId: string;
       imageKeys: string[];
     }) => api.orders.deleteFinalImagesBatch(galleryId, orderId, imageKeys),
-    onSuccess: (_, variables) => {
-      // Invalidate final images, gallery detail, and bytes used
+    onMutate: async ({ galleryId, orderId, imageKeys }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
+      });
+
+      // Snapshot previous values
+      const previousFinalImages = queryClient.getQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId)
+      );
+      const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
+
+      // Optimistically remove images from final images list
+      const imageKeysSet = new Set(imageKeys);
+      queryClient.setQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId),
+        (old) =>
+          old?.filter((img) => {
+            const imgKey = img.key ?? img.filename;
+            return imgKey && !imageKeysSet.has(imgKey);
+          }) ?? []
+      );
+
+      return { previousFinalImages, previousGallery };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousFinalImages) {
+        queryClient.setQueryData(
+          queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
+          context.previousFinalImages
+        );
+      }
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+    },
+    onSettled: (_, __, variables) => {
+      // Refetch to ensure consistency
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });
@@ -217,10 +308,20 @@ export function useUpdateOrder() {
       orderId: string;
       data: Partial<any>;
     }) => api.orders.update(galleryId, orderId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
+    onSuccess: (data, variables) => {
+      // Update cache directly with response data if available
+      if (data) {
+        queryClient.setQueryData(
+          queryKeys.orders.detail(variables.galleryId, variables.orderId),
+          data
+        );
+      } else {
+        // Fall back to invalidation if response doesn't contain complete data
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+        });
+      }
+      // Always invalidate lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(variables.galleryId) });
     },
   });

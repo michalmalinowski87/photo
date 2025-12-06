@@ -17,8 +17,6 @@ interface Gallery {
 }
 
 interface UseOrderActionsOptions {
-  apiUrl?: string; // Deprecated - kept for backward compatibility but not used
-  idToken?: string; // Deprecated - kept for backward compatibility but not used
   galleryId: string | string[] | undefined;
   orderId: string | string[] | undefined;
   gallery?: Gallery | null;
@@ -30,8 +28,6 @@ interface UseOrderActionsOptions {
 }
 
 export const useOrderActions = ({
-  apiUrl: _apiUrl,
-  idToken: _idToken,
   galleryId,
   orderId,
   gallery: _gallery,

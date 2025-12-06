@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from "react";
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
+import { usePrefetchGallery } from "../../hooks/usePrefetch";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import type { Gallery } from "../../types";
@@ -61,6 +62,9 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
   const { showToast } = useToast();
+
+  // Prefetch hook for gallery details
+  const prefetchGallery = usePrefetchGallery();
 
   // Use React Query hook for galleries
   const {
@@ -390,6 +394,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                           )}
                           <Link
                             href={`/galleries/${gallery.galleryId}`}
+                            onMouseEnter={() => prefetchGallery(gallery.galleryId)}
                             onClick={() => {
                               // Store current page as referrer when navigating to gallery
                               if (typeof window !== "undefined") {

@@ -31,7 +31,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
   // Use React Query for data
-  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
+  const { data: gallery, isLoading, isFetching: isGalleryFetching } = useGallery(galleryIdForQuery);
   const { data: order } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
 
@@ -194,7 +194,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Download Selected Originals ZIP */}
-        {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
+        {!isLoading && !isGalleryFetching && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
           <Button
             size="sm"
             variant="outline"

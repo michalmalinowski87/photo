@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import React, { useEffect } from "react";
 
 import { useOrders } from "../../../hooks/queries/useOrders";
+import { usePrefetchOrder } from "../../../hooks/usePrefetch";
 
 interface NonSelectionGalleryNavigationProps {
   galleryId: string;
@@ -19,6 +20,9 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
 
   // Use React Query for orders
   const { data: galleryOrders = [], refetch: refetchOrders } = useOrders(galleryId);
+
+  // Prefetch hook for order details
+  const prefetchOrder = usePrefetchOrder();
 
   // Get first order ID - use URL orderId if available, otherwise use first order from React Query
   const firstOrderId =
@@ -57,6 +61,11 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
       <li>
         <Link
           href={photosHref}
+          onMouseEnter={() => {
+            if (firstOrderId) {
+              prefetchOrder(galleryId, firstOrderId);
+            }
+          }}
           onClick={handlePhotosClick}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
             isOnOrderPage && !router.asPath.includes("/settings")

@@ -63,7 +63,7 @@ export default function OrderDetail() {
   const { data: galleryImagesData = [] } = useGalleryImages(galleryIdForQuery, "thumb");
   const originalImages = (galleryImagesData || []) as GalleryImage[];
   
-  // Use React Query hook to automatically load final images (removes duplicated manual loading)
+  // Use React Query hook to automatically load final images (URLs are mapped via select)
   const { data: finalImagesData = [], refetch: refetchFinalImages } = useOrderFinalImages(
     galleryIdForQuery,
     orderIdForQuery
@@ -76,10 +76,8 @@ export default function OrderDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   
-  // Local state for optimistic updates during deletion (used by useFinalImageDelete hook)
-  const [optimisticFinalImages, setOptimisticFinalImages] = useState<GalleryImage[]>([]);
-  
   // Define hook early so derived state can use its refs
+  // Note: Optimistic updates are now handled in the mutation, so we don't need manual state
   const {
     deleteImage,
     handleDeleteImageClick,
@@ -89,49 +87,23 @@ export default function OrderDetail() {
   } = useFinalImageDelete({
     galleryId,
     orderId,
-    setFinalImages: setOptimisticFinalImages, // Use optimistic state for hook compatibility
+    setFinalImages: () => {}, // No longer needed - mutation handles optimistic updates
     setOptimisticFinalsBytes,
   });
   
-  // Derived/computed final images: Combine React Query data with deleting state
-  // Maps URLs, filters deleted images, and merges with deleting images
+  // Derived/computed final images: Filter deleted images
+  // URLs are already mapped via select in useOrderFinalImages
   const finalImages = useMemo(() => {
-    // Start with React Query data
+    // Start with React Query data (already transformed with URLs mapped)
     const baseImages = (finalImagesData || []) as GalleryImage[];
     
-    // Map URLs: prioritize thumbUrl/previewUrl for display, keep finalUrl for download
-    const mappedImages = baseImages.map((img: GalleryImage) => ({
-      ...img,
-      url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
-      finalUrl: img.finalUrl ?? img.url ?? "",
-    }));
-    
     // Filter out successfully deleted images
-    const validImages = filterDeletedImages(
-      mappedImages,
+    return filterDeletedImages(
+      baseImages,
       deletingImagesRef.current,
       deletedImageKeysRef.current
     );
-    
-    // Merge with optimistic updates (images being deleted)
-    if (optimisticFinalImages.length > 0) {
-      const validImagesMap = new Map<string, GalleryImage>(
-        validImages.map((img) => [img.key ?? img.filename ?? "", img])
-      );
-      
-      // Add optimistic images that aren't in the valid list
-      optimisticFinalImages.forEach((img) => {
-        const imgKey = img.key ?? img.filename;
-        if (imgKey && !validImagesMap.has(imgKey)) {
-          validImagesMap.set(imgKey, img);
-        }
-      });
-      
-      return Array.from(validImagesMap.values());
-    }
-    
-    return validImages;
-  }, [finalImagesData, optimisticFinalImages, deletingImagesRef, deletedImageKeysRef]);
+  }, [finalImagesData, deletingImagesRef, deletedImageKeysRef]);
   
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
   const [paymentDetails] = useState<PaymentDetails | null>(null);

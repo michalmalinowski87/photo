@@ -1,4 +1,4 @@
-import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+import { useQuery, useQueryClient, UseQueryOptions } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
@@ -24,8 +24,34 @@ export function useGalleries(
 // Single gallery detail
 export function useGallery(
   galleryId: string | undefined,
-  options?: Omit<UseQueryOptions<Gallery>, "queryKey" | "queryFn">
+  options?: Omit<UseQueryOptions<Gallery>, "queryKey" | "queryFn" | "placeholderData" | "initialData">
 ) {
+  const queryClient = useQueryClient();
+
+  // Try to get gallery from list cache to use as initialData
+  // This provides instant display when navigating from a list
+  const getInitialData = (): Gallery | undefined => {
+    if (!galleryId) return undefined;
+
+    // Check all list queries for this gallery
+    const listQueries = queryClient.getQueriesData<Gallery[]>({
+      queryKey: queryKeys.galleries.lists(),
+    });
+
+    for (const [, galleries] of listQueries) {
+      if (galleries) {
+        const galleryFromList = galleries.find((g) => g.galleryId === galleryId);
+        if (galleryFromList) {
+          return galleryFromList;
+        }
+      }
+    }
+
+    return undefined;
+  };
+
+  const initialData = getInitialData();
+
   return useQuery<Gallery>({
     queryKey: queryKeys.galleries.detail(galleryId!),
     queryFn: async () => {
@@ -34,6 +60,10 @@ export function useGallery(
     },
     enabled: !!galleryId, // Only run if galleryId exists
     staleTime: 30 * 1000,
+    // Use data from list cache as initialData for instant display
+    initialData,
+    // Keep previous data while loading new gallery for smoother transitions
+    placeholderData: (previousData) => previousData,
     ...options,
   });
 }
@@ -63,6 +93,7 @@ export function useGalleryStatus(galleryId: string | undefined) {
     queryFn: () => api.galleries.getStatus(galleryId!),
     enabled: !!galleryId,
     staleTime: 10 * 1000, // Status changes more frequently
+    networkMode: "offlineFirst", // Use cache if offline
   });
 }
 

@@ -10,7 +10,7 @@ import { useToast } from "./useToast";
 interface UseFinalImageDeleteOptions {
   galleryId: string | string[] | undefined;
   orderId: string | string[] | undefined;
-  setFinalImages: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
+  setFinalImages?: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
   setOptimisticFinalsBytes: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
@@ -75,20 +75,25 @@ export const useFinalImageDelete = ({
           localStorage.setItem(suppressKey, suppressUntil.toString());
         }
 
-        // Optimistically remove image from list immediately after successful delete
-        let wasLastImage = false;
+        // Clear optimistic bytes state
+        setOptimisticFinalsBytes(null);
 
-        setFinalImages((prevImages) => {
-          const remainingImages = prevImages.filter(
-            (img) => (img.key ?? img.filename) !== imageKey
-          );
-          wasLastImage = remainingImages.length === 0;
+        // Note: Optimistic updates are now handled by the mutation hook
+        // If setFinalImages is provided (legacy support), update it
+        if (setFinalImages) {
+          setFinalImages((prevImages) => {
+            const remainingImages = prevImages.filter(
+              (img) => (img.key ?? img.filename) !== imageKey
+            );
+            return remainingImages;
+          });
+        }
 
-          // Clear optimistic state
-          setOptimisticFinalsBytes(null);
-
-          return remainingImages;
-        });
+        // Check if this was the last image by querying cache
+        const currentImages = queryClient.getQueryData<any[]>(
+          queryKeys.orders.finalImages(galleryIdStr, orderIdStr)
+        );
+        const wasLastImage = !currentImages || currentImages.length <= 1;
 
         // If this was the last image, refresh order to get updated status
         if (wasLastImage && galleryIdStr && orderIdStr) {

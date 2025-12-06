@@ -41,15 +41,19 @@ export const queryKeys = {
     transactions: (params?: PaginationParams) =>
       [...queryKeys.wallet.all, "transactions", params] as const,
   },
-  clients: {
-    all: ["clients"] as const,
-    lists: () => [...queryKeys.clients.all, "list"] as const,
-    list: (params?: PaginationParams) => [...queryKeys.clients.lists(), params] as const,
-  },
   packages: {
     all: ["packages"] as const,
     lists: () => [...queryKeys.packages.all, "list"] as const,
     list: () => [...queryKeys.packages.lists()] as const,
+    details: () => [...queryKeys.packages.all, "detail"] as const,
+    detail: (id: string) => [...queryKeys.packages.details(), id] as const,
+  },
+  clients: {
+    all: ["clients"] as const,
+    lists: () => [...queryKeys.clients.all, "list"] as const,
+    list: (params?: PaginationParams) => [...queryKeys.clients.lists(), params] as const,
+    details: () => [...queryKeys.clients.all, "detail"] as const,
+    detail: (id: string) => [...queryKeys.clients.details(), id] as const,
   },
 };
 
@@ -69,6 +73,9 @@ export const queryClient = new QueryClient({
       retry: 1,
       // Retry delay increases exponentially
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      // Enable structural sharing (default in v5, but explicit is better)
+      // Prevents unnecessary re-renders when data structure changes but values are the same
+      structuralSharing: true,
     },
     mutations: {
       // Retry mutations once on failure

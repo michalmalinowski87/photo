@@ -33,7 +33,7 @@ export function usePackage(
   options?: Omit<UseQueryOptions<Package>, "queryKey" | "queryFn">
 ) {
   return useQuery({
-    queryKey: [...queryKeys.packages.all, "detail", packageId],
+    queryKey: queryKeys.packages.detail(packageId!),
     queryFn: () => api.packages.get(packageId!),
     enabled: !!packageId,
     staleTime: 30 * 1000,
