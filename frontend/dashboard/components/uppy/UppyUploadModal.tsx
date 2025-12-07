@@ -146,6 +146,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     uploadProgress,
     uploadStats,
     isPaused,
+    isFinalizing,
     startUpload,
     cancelUpload,
     pauseUpload,
@@ -488,6 +489,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
           onClose={handleCompletionOverlayClose}
           stats={uploadStats}
           uploadType={config.type}
+          isFinalizing={isFinalizing}
         />
       )}
 

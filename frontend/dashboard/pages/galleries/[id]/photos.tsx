@@ -1,4 +1,4 @@
-import { Plus, ChevronDown, Image, Upload, CheckSquare, Square, Trash2, X, Check } from "lucide-react";
+import { Plus, ChevronDown, Image, Upload, CheckSquare, Square, Trash2, X, Check, ExternalLink } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
@@ -142,13 +142,62 @@ export default function GalleryPhotos() {
     selectedKeys,
     isSelectionMode,
     toggleSelectionMode,
-    handleImageClick: handleSelectionClick,
-    selectAll,
+    handleImageClick: handleSelectionClickBase,
+    selectAll: selectAllBase,
     deselectAll,
     clearSelection,
   } = useImageSelection({
     storageKey: `image_selection_${galleryIdStr || "default"}`,
   });
+
+  // Wrapper to prevent selection of approved images or images in DELIVERED orders
+  const handleSelectionClick = useCallback(
+    (
+      imageKey: string,
+      index: number,
+      event: MouseEvent,
+      imagesToRender: GalleryImage[]
+    ) => {
+      // Prevent selection if image is approved
+      if (approvedSelectionKeys.has(imageKey)) {
+        return;
+      }
+      // Prevent selection if image is in DELIVERED order
+      const img = imagesToRender.find((i) => (i.key ?? i.filename) === imageKey);
+      if (img) {
+        const orderStatus = getImageOrderStatus(img);
+        if (orderStatus === "DELIVERED") {
+          return;
+        }
+      }
+      handleSelectionClickBase(imageKey, index, event, imagesToRender);
+    },
+    [approvedSelectionKeys, handleSelectionClickBase]
+  );
+
+  // Wrapper to exclude approved images and images in DELIVERED orders from selectAll
+  const selectAll = useCallback(
+    (imagesToSelect: GalleryImage[]) => {
+      // Filter out approved images and images in DELIVERED orders
+      const selectableImages = imagesToSelect.filter((img) => {
+        const imageKey = img.key ?? img.filename;
+        // Exclude approved images
+        if (imageKey && approvedSelectionKeys.has(imageKey)) {
+          return false;
+        }
+        // Exclude images in DELIVERED orders (check imageOrderStatus map directly)
+        if (imageKey) {
+          const orderStatus = imageOrderStatus.get(imageKey);
+          if (orderStatus === "DELIVERED") {
+            return false;
+          }
+        }
+        return true;
+      });
+      selectAllBase(selectableImages);
+    },
+    [selectAllBase, approvedSelectionKeys, imageOrderStatus]
+  );
 
   const {
     deleteImages: deleteImagesBulk,
@@ -161,6 +210,8 @@ export default function GalleryPhotos() {
   });
 
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [deleteAllUnselectedOpen, setDeleteAllUnselectedOpen] = useState(false);
+  const [unselectedImagesToDelete, setUnselectedImagesToDelete] = useState<string[]>([]);
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -259,6 +310,46 @@ export default function GalleryPhotos() {
     });
   }, [imagesData, deletedImageKeys, deletedImageKeysBulk]);
 
+  // Automatically deselect non-deletable images (approved or in DELIVERED orders) when they appear in selection
+  // This handles edge cases like range selections that might include non-deletable images
+  const cleaningUpRef = useRef(false);
+  useEffect(() => {
+    if (isSelectionMode && selectedKeys.size > 0 && !cleaningUpRef.current) {
+      const nonDeletableInSelection = Array.from(selectedKeys).filter((key) => {
+        // Check if approved
+        if (approvedSelectionKeys.has(key)) {
+          return true;
+        }
+        // Check if in DELIVERED order
+        const img = images.find((i) => (i.key ?? i.filename) === key);
+        if (img) {
+          const orderStatus = getImageOrderStatus(img);
+          if (orderStatus === "DELIVERED") {
+            return true;
+          }
+        }
+        return false;
+      });
+      
+      if (nonDeletableInSelection.length > 0) {
+        cleaningUpRef.current = true;
+        // Remove non-deletable images from selection by toggling them off
+        nonDeletableInSelection.forEach((key) => {
+          const img = images.find((i) => (i.key ?? i.filename) === key);
+          if (img) {
+            const index = images.indexOf(img);
+            // Toggle off non-deletable images
+            handleSelectionClickBase(key, index, new MouseEvent("click"), images);
+          }
+        });
+        // Reset flag after a brief delay to allow state updates
+        setTimeout(() => {
+          cleaningUpRef.current = false;
+        }, 100);
+      }
+    }
+  }, [isSelectionMode, approvedSelectionKeys, selectedKeys, images, handleSelectionClickBase]);
+
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
 
@@ -272,6 +363,17 @@ export default function GalleryPhotos() {
         "error",
         "Błąd",
         "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
+      );
+      return;
+    }
+
+    // Check if image is in a DELIVERED order
+    const orderStatus = getImageOrderStatus(image);
+    if (orderStatus === "DELIVERED") {
+      showToast(
+        "error",
+        "Błąd",
+        "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"
       );
       return;
     }
@@ -312,15 +414,30 @@ export default function GalleryPhotos() {
       return;
     }
 
-    // Filter out approved selection images
-    const imagesToDelete = selectedArray.filter((key) => !approvedSelectionKeys.has(key));
-    const approvedCount = selectedArray.length - imagesToDelete.length;
+    // Filter out approved selection images and images in DELIVERED orders
+    const imagesToDelete = selectedArray.filter((key) => {
+      // Check if approved
+      if (approvedSelectionKeys.has(key)) {
+        return false;
+      }
+      // Check if in DELIVERED order
+      const img = images.find((i) => (i.key ?? i.filename) === key);
+      if (img) {
+        const orderStatus = getImageOrderStatus(img);
+        if (orderStatus === "DELIVERED") {
+          return false;
+        }
+      }
+      return true;
+    });
+    
+    const blockedCount = selectedArray.length - imagesToDelete.length;
 
-    if (approvedCount > 0) {
+    if (blockedCount > 0) {
       showToast(
         "error",
         "Błąd",
-        `Nie można usunąć ${approvedCount} ${approvedCount === 1 ? "zdjęcia" : "zdjęć"}, które ${approvedCount === 1 ? "jest" : "są"} częścią zatwierdzonej selekcji klienta`
+        `Nie można usunąć ${blockedCount} ${blockedCount === 1 ? "zdjęcia" : "zdjęć"}, które ${blockedCount === 1 ? "jest" : "są"} częścią zatwierdzonej selekcji klienta lub dostarczonego zlecenia`
       );
     }
 
@@ -445,6 +562,28 @@ export default function GalleryPhotos() {
     return imageKey ? (imageOrderStatus.get(imageKey) ?? null) : null;
   };
 
+  // Helper to get selectable images (excluding approved and delivered)
+  const getSelectableImages = useCallback(
+    (imagesToFilter: GalleryImage[]): GalleryImage[] => {
+      return imagesToFilter.filter((img) => {
+        const imageKey = img.key ?? img.filename;
+        if (!imageKey) return false;
+        // Exclude approved images
+        if (approvedSelectionKeys.has(imageKey)) {
+          return false;
+        }
+        // Exclude images in DELIVERED orders
+        const orderStatus = imageOrderStatus.get(imageKey);
+        if (orderStatus === "DELIVERED") {
+          return false;
+        }
+        return true;
+      });
+    },
+    [approvedSelectionKeys, imageOrderStatus]
+  );
+
+
   // Helper to normalize selectedKeys from order (used for grouping images by order)
   const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
     if (!selectedKeys) {
@@ -520,6 +659,60 @@ export default function GalleryPhotos() {
     return imgKey && !imagesInOrders.has(imgKey);
   });
 
+  // Handler for deleting all unselected images
+  const handleDeleteAllUnselectedClick = useCallback(() => {
+    if (unselectedImages.length === 0) {
+      return;
+    }
+
+    // Get all unselected image keys and filter out non-deletable ones
+    const imageKeysToDelete = unselectedImages
+      .map((img) => img.key ?? img.filename)
+      .filter((key): key is string => {
+        if (!key) return false;
+        // Check if approved
+        if (approvedSelectionKeys.has(key)) {
+          return false;
+        }
+        // Check if in DELIVERED order
+        const img = unselectedImages.find((i) => (i.key ?? i.filename) === key);
+        if (img) {
+          const orderStatus = getImageOrderStatus(img);
+          if (orderStatus === "DELIVERED") {
+            return false;
+          }
+        }
+        return true;
+      });
+
+    if (imageKeysToDelete.length === 0) {
+      showToast(
+        "error",
+        "Błąd",
+        "Nie można usunąć żadnych zdjęć - wszystkie są częścią zatwierdzonej selekcji lub dostarczonego zlecenia"
+      );
+      return;
+    }
+
+    setUnselectedImagesToDelete(imageKeysToDelete);
+    setDeleteAllUnselectedOpen(true);
+  }, [unselectedImages, approvedSelectionKeys, getImageOrderStatus, showToast]);
+
+  const handleDeleteAllUnselectedConfirm = async (): Promise<void> => {
+    if (unselectedImagesToDelete.length === 0) {
+      setDeleteAllUnselectedOpen(false);
+      return;
+    }
+
+    try {
+      await deleteImagesBulk(unselectedImagesToDelete);
+      setDeleteAllUnselectedOpen(false);
+      setUnselectedImagesToDelete([]);
+    } catch {
+      // Error already handled in deleteImagesBulk
+    }
+  };
+
   // Toggle section expansion
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) => {
@@ -544,6 +737,8 @@ export default function GalleryPhotos() {
           const isApproved = isImageInApprovedSelection(img);
           const isInAnyOrder = isImageInAnyOrder(img);
           const orderStatus = getImageOrderStatus(img);
+          const isDelivered = orderStatus === "DELIVERED";
+          const isNonDeletable = isApproved || isDelivered;
           // Use stable key/filename as identifier - always prefer key, fallback to filename
           // This ensures React can properly reconcile components when images are reordered
           const imageKey = img.key ?? img.filename ?? "";
@@ -562,43 +757,62 @@ export default function GalleryPhotos() {
                   ? "opacity-60"
                   : isSelected && isSelectionMode
                     ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
-                    : "border-gray-200"
-              }`}
+                    : isNonDeletable && isSelectionMode
+                      ? "opacity-60 border-gray-300 dark:border-gray-600"
+                      : "border-gray-200"
+              } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""}`}
               onMouseDown={(e) => {
-                // Prevent browser text/element selection on SHIFT+click
-                if (isSelectionMode && (e.shiftKey || e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                }
-              }}
-              onSelectStart={(e) => {
-                // Prevent text selection when in selection mode
+                // Prevent browser text/element selection when in selection mode
                 if (isSelectionMode) {
                   e.preventDefault();
+                }
+                // Prevent interaction with non-deletable images in selection mode
+                if (isSelectionMode && isNonDeletable) {
+                  e.stopPropagation();
                 }
               }}
               onClick={(e) => {
-                if (isSelectionMode) {
+                if (isSelectionMode && !isNonDeletable) {
                   handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                } else if (isSelectionMode && isNonDeletable) {
+                  e.stopPropagation();
                 }
               }}
             >
             <div className="aspect-square relative">
               {/* Selection checkbox overlay */}
               {isSelectionMode && (
-                <div className="absolute top-2 left-2 z-30">
+                <div className="absolute top-2 left-2 z-30 group/checkbox">
                   <div
                     className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                      isSelected
-                        ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                        : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                      isNonDeletable
+                        ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
+                        : isSelected
+                          ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                          : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                      if (!isNonDeletable) {
+                        handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                      }
                     }}
                   >
-                    {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                    {isSelected && !isNonDeletable && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                    {isNonDeletable && (
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        <X className="w-3 h-3 text-gray-500 dark:text-gray-400" strokeWidth={3} />
+                      </div>
+                    )}
                   </div>
+                  {isNonDeletable && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover/checkbox:opacity-100 group-hover/checkbox:visible transition-all duration-200 z-50 pointer-events-none">
+                      {isApproved
+                        ? "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
+                        : "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -622,7 +836,9 @@ export default function GalleryPhotos() {
                       } as ImageFallbackUrls & { key?: string; filename?: string }
                     }
                     alt={imageKey}
-                    className="w-full h-full object-cover rounded-lg"
+                    className={`w-full h-full object-cover rounded-lg ${
+                      isNonDeletable && isSelectionMode ? "opacity-60" : ""
+                    }`}
                     preferredSize="thumb"
                   />
                   {orderStatus &&
@@ -669,7 +885,7 @@ export default function GalleryPhotos() {
                       </div>
                     </div>
                   )}
-                  {!isDeleting && !isSelectionMode && (
+                  {!isDeleting && !isSelectionMode && !isDelivered && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
                       {isInAnyOrder ? (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
@@ -681,9 +897,9 @@ export default function GalleryPhotos() {
                             e.stopPropagation();
                             handleDeletePhotoClick(img);
                           }}
-                          disabled={isApproved || allDeletingImages.size > 0}
+                          disabled={isNonDeletable || allDeletingImages.size > 0}
                           className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                            isApproved || allDeletingImages.size > 0
+                            isNonDeletable || allDeletingImages.size > 0
                               ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                               : "bg-error-500 text-white hover:bg-error-600"
                           }`}
@@ -799,7 +1015,10 @@ export default function GalleryPhotos() {
                         : `${selectedKeys.size} zdjęć wybranych`}
                 </span>
                 {(() => {
-                  const allSelected = images.length > 0 && selectedKeys.size === images.length;
+                  // Get count of selectable images (excluding approved and delivered)
+                  const selectableImages = getSelectableImages(images);
+                  const selectableCount = selectableImages.length;
+                  const allSelected = selectableCount > 0 && selectedKeys.size === selectableCount;
                   return (
                     <>
                       <button
@@ -876,18 +1095,25 @@ export default function GalleryPhotos() {
                   ? String(order.orderNumber)
                   : orderId.slice(-8);
 
+              const handleGoToOrder = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                if (galleryIdStr && orderId) {
+                  void router.push(`/galleries/${galleryIdStr}/orders/${orderId}`);
+                }
+              };
+
               return (
                 <div
                   key={orderId}
                   className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
-                  <button
-                    onClick={() => toggleSection(sectionId)}
-                    className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                      isExpanded ? "rounded-t-lg" : "rounded-lg"
-                    }`}
-                  >
-                    <div className="flex-1 text-left flex items-center gap-3 flex-wrap">
+                  <div className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                    isExpanded ? "rounded-t-lg" : "rounded-lg"
+                  }`}>
+                    <button
+                      onClick={() => toggleSection(sectionId)}
+                      className="flex-1 text-left flex items-center gap-3 flex-wrap"
+                    >
                       <div className="font-semibold text-gray-900 dark:text-white">
                         Zlecenie #{orderDisplayNumber}
                       </div>
@@ -909,14 +1135,30 @@ export default function GalleryPhotos() {
                             ? "zdjęcia"
                             : "zdjęć"}
                       </div>
+                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={handleGoToOrder}
+                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                        title="Przejdź do zlecenia"
+                      >
+                        <span>Przejdź do zlecenia</span>
+                        <ExternalLink size={14} />
+                      </button>
+                      <button
+                        onClick={() => toggleSection(sectionId)}
+                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                        aria-label={isExpanded ? "Zwiń sekcję" : "Rozwiń sekcję"}
+                      >
+                        <ChevronDown
+                          size={16}
+                          className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                            isExpanded ? "transform rotate-180" : ""
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <ChevronDown
-                      size={16}
-                      className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
-                        isExpanded ? "transform rotate-180" : ""
-                      }`}
-                    />
-                  </button>
+                  </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg">
                       {renderImageGrid(orderImages)}
@@ -929,13 +1171,13 @@ export default function GalleryPhotos() {
             {/* Unselected Section */}
             {unselectedImages.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-                <button
-                  onClick={() => toggleSection("unselected")}
-                  className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                    expandedSections.has("unselected") ? "rounded-t-lg" : "rounded-lg"
-                  }`}
-                >
-                  <div className="flex-1 text-left flex items-center gap-3">
+                <div className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                  expandedSections.has("unselected") ? "rounded-t-lg" : "rounded-lg"
+                }`}>
+                  <button
+                    onClick={() => toggleSection("unselected")}
+                    className="flex-1 text-left flex items-center gap-3"
+                  >
                     <div className="font-semibold text-gray-900 dark:text-white">Niewybrane</div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">
                       {unselectedImages.length}{" "}
@@ -945,14 +1187,31 @@ export default function GalleryPhotos() {
                           ? "zdjęcia"
                           : "zdjęć"}
                     </div>
+                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={handleDeleteAllUnselectedClick}
+                      disabled={isBulkDeleting}
+                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Usuń wszystkie niewybrane zdjęcia"
+                    >
+                      <Trash2 size={14} />
+                      <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
+                    </button>
+                    <button
+                      onClick={() => toggleSection("unselected")}
+                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                      aria-label={expandedSections.has("unselected") ? "Zwiń sekcję" : "Rozwiń sekcję"}
+                    >
+                      <ChevronDown
+                        size={16}
+                        className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                          expandedSections.has("unselected") ? "transform rotate-180" : ""
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <ChevronDown
-                    size={16}
-                    className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
-                      expandedSections.has("unselected") ? "transform rotate-180" : ""
-                    }`}
-                  />
-                </button>
+                </div>
                 {expandedSections.has("unselected") && (
                   <div className="px-4 pb-4 pt-2 rounded-b-lg">
                     {renderImageGrid(unselectedImages)}
@@ -1051,6 +1310,21 @@ export default function GalleryPhotos() {
         }}
         onConfirm={handleBulkDeleteConfirm}
         count={selectedKeys.size}
+        loading={isBulkDeleting}
+        suppressKey="original_image_delete_confirm_suppress"
+      />
+
+      {/* Delete All Unselected Confirmation Dialog */}
+      <BulkDeleteConfirmDialog
+        isOpen={deleteAllUnselectedOpen}
+        onClose={() => {
+          if (!isBulkDeleting) {
+            setDeleteAllUnselectedOpen(false);
+            setUnselectedImagesToDelete([]);
+          }
+        }}
+        onConfirm={handleDeleteAllUnselectedConfirm}
+        count={unselectedImagesToDelete.length}
         loading={isBulkDeleting}
         suppressKey="original_image_delete_confirm_suppress"
       />

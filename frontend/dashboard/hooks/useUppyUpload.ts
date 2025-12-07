@@ -5,6 +5,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
+import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
 
 import { useToast } from "./useToast";
@@ -150,7 +151,8 @@ async function handlePostUploadActions(
   orderId: string | undefined,
   type: UploadType,
   successfulFiles: UppyFile[],
-  reloadGallery?: () => Promise<void>
+  reloadGallery?: () => Promise<void>,
+  onFinalizingChange?: (isFinalizing: boolean) => void
 ): Promise<void> {
   // Calculate total file sizes from successful uploads for optimistic update
   // Validate file sizes - only count files with valid, positive sizes
@@ -212,41 +214,115 @@ async function handlePostUploadActions(
     }
   }
 
-  if (type === "finals" && orderId) {
-    try {
+  // Set finalizing state at the start
+  onFinalizingChange?.(true);
+
+  try {
+    if (type === "finals" && orderId) {
       // Wait a bit for backend to finalize uploads before marking complete
       // This is especially important after pause/resume cycles with multipart uploads
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       await api.uploads.markFinalUploadComplete(galleryId, orderId);
+
+      // Poll for thumbnail availability to ensure backend processing is complete
+      // This ensures UI is ready when user closes the confirmation modal
+      try {
+        // Fetch final images list to get thumbUrls for uploaded files
+        const finalImagesResponse = await api.orders.getFinalImages(galleryId, orderId);
+        const finalImages = finalImagesResponse?.images || [];
+
+        if (finalImages.length > 0) {
+          // Get the last uploaded file's thumbnail URL (most recently uploaded)
+          // Or use a random one if we can't determine which is last
+          const lastImage = finalImages[finalImages.length - 1];
+          const thumbUrl = lastImage?.thumbUrl;
+
+          if (thumbUrl) {
+            // Poll for thumbnail availability (max 10 attempts, 500ms interval = 5 seconds total)
+            const isAvailable = await pollThumbnailAvailability(thumbUrl, 10, 500);
+
+            if (!isAvailable) {
+              // If polling timed out, wait additional 3 seconds as fallback
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+          } else {
+            // No thumbUrl available, wait 3 seconds as fallback
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        } else {
+          // No images returned yet, wait 3 seconds as fallback
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+      } catch (pollError) {
+        // If polling fails, wait 3 seconds as fallback
+        console.warn("[handlePostUploadActions] Thumbnail polling failed, using fallback delay:", pollError);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
 
       // Invalidate final images cache
       await queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(galleryId, orderId),
       });
-    } catch (error) {
-      throw error;
+    } else {
+      // For originals, poll for thumbnail availability (same process as finals)
+      try {
+        // Wait a bit for backend to process uploads
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Fetch originals images list to get thumbUrls for uploaded files
+        const originalsImagesResponse = await api.galleries.getImages(galleryId, "thumb");
+        const originalsImages = originalsImagesResponse?.images || [];
+
+        if (originalsImages.length > 0) {
+          // Get the last uploaded file's thumbnail URL (most recently uploaded)
+          // Or use a random one if we can't determine which is last
+          const lastImage = originalsImages[originalsImages.length - 1];
+          const thumbUrl = lastImage?.thumbUrl;
+
+          if (thumbUrl) {
+            // Poll for thumbnail availability (max 10 attempts, 500ms interval = 5 seconds total)
+            const isAvailable = await pollThumbnailAvailability(thumbUrl, 10, 500);
+
+            if (!isAvailable) {
+              // If polling timed out, wait additional 3 seconds as fallback
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+          } else {
+            // No thumbUrl available, wait 3 seconds as fallback
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        } else {
+          // No images returned yet, wait 3 seconds as fallback
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+      } catch (pollError) {
+        // If polling fails, wait 3 seconds as fallback
+        console.warn("[handlePostUploadActions] Thumbnail polling failed, using fallback delay:", pollError);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      // Invalidate cache so reloadGallery will fetch fresh images
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.images(galleryId, "thumb"),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.images(galleryId, "originals"),
+      });
     }
-  } else {
-    // For originals, wait before fetching to ensure backend has processed all files
-    // After pause/resume cycles, backend might still be finalizing multipart uploads,
-    // generating thumbnails, or updating the database
-    // Wait 1.5 seconds before fetching to give backend processing time
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Invalidate cache so reloadGallery will fetch fresh images
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.galleries.images(galleryId, "thumb"),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.galleries.images(galleryId, "originals"),
-    });
-  }
+    // Reload gallery UI - this will fetch images and update state
+    // We don't fetch here to avoid duplicate requests - let reloadGallery handle it
+    // The delay above ensures backend has processed files before reloadGallery fetches
+    if (reloadGallery) {
+      await reloadGallery();
+    }
 
-  // Reload gallery UI - this will fetch images and update state
-  // We don't fetch here to avoid duplicate requests - let reloadGallery handle it
-  // The delay above ensures backend has processed files before reloadGallery fetches
-  if (reloadGallery) {
-    await reloadGallery();
+    // Set finalizing state to false after API fetch completes
+    onFinalizingChange?.(false);
+  } catch (error) {
+    // Set finalizing state to false even on error
+    onFinalizingChange?.(false);
+    throw error;
   }
 }
 
@@ -290,6 +366,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState>(INITIAL_PROGRESS);
   const [isPaused, setIsPaused] = useState(false);
   const [uploadStats, setUploadStats] = useState<UploadStats | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const speedCalculationRef = useRef<SpeedCalculationState | null>(null);
   const uploadStartTimeRef = useRef<number | null>(null);
   const isCancellingRef = useRef(false);
@@ -398,7 +475,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
               configRef.current.orderId,
               configRef.current.type,
               successfulFiles,
-              configRef.current.reloadGallery
+              configRef.current.reloadGallery,
+              setIsFinalizing
             );
           } catch (error) {
             // Only show warning if reloadGallery failed, not for other errors
@@ -406,6 +484,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
             // and let the cache invalidation handle the refresh
             console.error("[useUppyUpload] Error in post-upload actions:", error);
             // Don't show warning - cache invalidation will ensure images are fetched
+            setIsFinalizing(false);
           }
         }
       },
@@ -625,6 +704,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     setUploadComplete(false);
     setUploadResult(null);
     setUploadStats(null);
+    setIsFinalizing(false);
     uploadStartTimeRef.current = null;
   }, []);
 
@@ -636,6 +716,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     uploadProgress,
     uploadStats,
     isPaused,
+    isFinalizing,
     startUpload,
     cancelUpload,
     pauseUpload,

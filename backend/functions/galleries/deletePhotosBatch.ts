@@ -46,7 +46,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// For final images, also verify order exists
+	// For final images, also verify order exists and is not DELIVERED
 	if (type === 'final' && ordersTable && orderId) {
 		const orderGet = await ddb.send(new GetCommand({
 			TableName: ordersTable,
@@ -58,6 +58,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				statusCode: 404,
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ error: 'Order not found' })
+			};
+		}
+
+		const order = orderGet.Item as any;
+		// Prevent deletion of final images when order is DELIVERED
+		if (order.deliveryStatus === 'DELIVERED') {
+			return {
+				statusCode: 403,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Cannot delete final images',
+					message: 'Cannot delete final images for delivered orders. The order has already been delivered to the client.'
+				})
 			};
 		}
 	}

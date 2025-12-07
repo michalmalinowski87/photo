@@ -305,6 +305,16 @@ export default function OrderDetail() {
   // handleFileSelect is now provided by usePhotoUploadHandler hook above
 
   const handleDeleteFinalImageClick = (image: GalleryImage): void => {
+    // Prevent deletion if order is DELIVERED
+    if (order?.deliveryStatus === "DELIVERED") {
+      showToast(
+        "error",
+        "Błąd",
+        "Nie można usunąć zdjęć finalnych dla dostarczonego zlecenia. Zlecenie zostało już dostarczone klientowi."
+      );
+      return;
+    }
+
     const imageToDeleteResult = handleDeleteImageClick(image);
     if (imageToDeleteResult) {
       setImageToDelete(imageToDeleteResult);

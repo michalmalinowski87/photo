@@ -1,10 +1,10 @@
 import { Plus, Trash2, Sparkles, CheckSquare, Square, Check, X } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 
-import { BulkDeleteConfirmDialog } from "../dialogs/BulkDeleteConfirmDialog";
+import { useImageSelection } from "../../hooks/useImageSelection";
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
-import { useImageSelection } from "../../hooks/useImageSelection";
+import { BulkDeleteConfirmDialog } from "../dialogs/BulkDeleteConfirmDialog";
 import Button from "../ui/button/Button";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
@@ -59,7 +59,7 @@ export function FinalsTab({
     deselectAll,
     clearSelection,
   } = useImageSelection({
-    storageKey: `final_image_selection_${galleryId || "default"}_${orderId || "default"}`,
+    storageKey: `final_image_selection_${galleryId ?? "default"}_${orderId ?? "default"}`,
   });
 
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -165,7 +165,7 @@ export function FinalsTab({
                 Prześlij zdjęcia finalne
               </Button>
             )}
-            {images.length > 0 && (
+            {images.length > 0 && orderDeliveryStatus !== "DELIVERED" && (
               <button
                 onClick={toggleSelectionMode}
                 className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -239,7 +239,7 @@ export function FinalsTab({
                 );
               })()}
             </div>
-            {onDeleteImagesBatch && (
+            {onDeleteImagesBatch && orderDeliveryStatus !== "DELIVERED" && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleBulkDeleteClick}
@@ -294,20 +294,14 @@ export function FinalsTab({
                       : "border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
                 }`}
                 onMouseDown={(e) => {
-                  // Prevent browser text/element selection on SHIFT+click
-                  if (isSelectionMode && (e.shiftKey || e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                  }
-                }}
-                onSelectStart={(e) => {
-                  // Prevent text selection when in selection mode
+                  // Prevent browser text/element selection when in selection mode
                   if (isSelectionMode) {
                     e.preventDefault();
                   }
                 }}
                 onClick={(e) => {
                   if (isSelectionMode) {
-                    handleSelectionClick(imageKey, idx, e.nativeEvent as MouseEvent, images);
+                    handleSelectionClick(imageKey, idx, e.nativeEvent, images);
                   }
                 }}
               >
@@ -323,7 +317,7 @@ export function FinalsTab({
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleSelectionClick(imageKey, idx, e.nativeEvent as MouseEvent, images);
+                          handleSelectionClick(imageKey, idx, e.nativeEvent, images);
                         }}
                       >
                         {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
@@ -346,8 +340,8 @@ export function FinalsTab({
                       </div>
                     </div>
                   )}
-                  {/* Delete button - show always when canUpload, disable when any deletion is in progress */}
-                  {canUpload && !isDeleting && !isSelectionMode && (
+                  {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
+                  {onDeleteImage && !isDeleting && !isSelectionMode && orderDeliveryStatus !== "DELIVERED" && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
                       <button
                         onClick={(e) => {
