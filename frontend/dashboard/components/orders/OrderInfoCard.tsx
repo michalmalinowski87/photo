@@ -53,9 +53,9 @@ export function OrderInfoCard({
   }
 
   // Get data from order
-  const totalCents = (typeof order.totalCents === "number" ? order.totalCents : 0) ?? 0;
+  const totalCents = typeof order.totalCents === "number" ? order.totalCents : 0;
   const createdAt = typeof order.createdAt === "string" ? order.createdAt : undefined;
-  const selectedKeys = normalizeSelectedKeys(order.selectedKeys as string[] | string | undefined);
+  const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
   const selectedKeysCount = selectedKeys.length;
   const selectionEnabled = gallery?.selectionEnabled !== false;
   return (
@@ -101,7 +101,7 @@ export function OrderInfoCard({
             ) : (
               <>
                 <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {formatPrice(totalCents as number | null | undefined)}
+                  {formatPrice(totalCents)}
                 </span>
                 <button
                   onClick={onStartEdit}

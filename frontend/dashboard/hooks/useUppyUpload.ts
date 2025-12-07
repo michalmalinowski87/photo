@@ -1,12 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
-import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
 import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
-import { createUppyInstance, type UploadType } from "../lib/uppy-config";
+import {
+  createUppyInstance,
+  type UploadType,
+  type TypedUppyFile,
+} from "../lib/uppy-config";
 
 import { useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
 import { useToast } from "./useToast";
@@ -57,7 +60,7 @@ export interface UploadStats {
 
 async function validateStorageLimits(
   galleryId: string,
-  files: UppyFile[],
+  files: TypedUppyFile[],
   onValidationNeeded?: UseUppyUploadConfig["onValidationNeeded"]
 ): Promise<boolean> {
   try {
@@ -153,7 +156,7 @@ async function handlePostUploadActions(
   galleryId: string,
   orderId: string | undefined,
   type: UploadType,
-  successfulFiles: UppyFile[],
+  successfulFiles: TypedUppyFile[],
   reloadGallery?: () => Promise<void>,
   onFinalizingChange?: (isFinalizing: boolean) => void,
   markFinalUploadCompleteMutation?: ReturnType<typeof useMarkFinalUploadComplete>
@@ -162,10 +165,10 @@ async function handlePostUploadActions(
   // Validate file sizes - only count files with valid, positive sizes
   // This prevents inaccurate optimistic updates from corrupted or missing file size data
   const validFiles = successfulFiles.filter((file) => {
-    const size = file.size || 0;
+    const size = file.size ?? 0;
     return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
   });
-  const totalSize = validFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+  const totalSize = validFiles.reduce((sum, file) => sum + (file.size ?? 0), 0);
 
   // Log warning if some files had invalid sizes (for debugging)
   if (validFiles.length < successfulFiles.length) {
@@ -188,12 +191,16 @@ async function handlePostUploadActions(
       });
 
       // Optimistically update storage usage in gallery detail
-      queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
+      queryClient.setQueryData<{
+        originalsBytesUsed?: number;
+        finalsBytesUsed?: number;
+        [key: string]: unknown;
+      }>(queryKeys.galleries.detail(galleryId), (old) => {
         if (!old) {
           return old;
         }
-        const currentOriginals = old.originalsBytesUsed || 0;
-        const currentFinals = old.finalsBytesUsed || 0;
+        const currentOriginals = old.originalsBytesUsed ?? 0;
+        const currentFinals = old.finalsBytesUsed ?? 0;
         return {
           ...old,
           originalsBytesUsed: Math.max(0, currentOriginals + originalsSize),
@@ -246,12 +253,12 @@ async function handlePostUploadActions(
         // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
         // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
         const finalImagesResponse = await api.orders.getFinalImages(galleryId, orderId);
-        const finalImages = finalImagesResponse?.images || [];
+        const finalImages = finalImagesResponse?.images ?? [];
 
         if (finalImages.length > 0) {
           // Get the last uploaded file's thumbnail URL (most recently uploaded)
           // Or use a random one if we can't determine which is last
-          const lastImage = finalImages[finalImages.length - 1];
+          const lastImage = finalImages[finalImages.length - 1] as { thumbUrl?: string } | undefined;
           const thumbUrl = lastImage?.thumbUrl;
 
           if (thumbUrl) {
@@ -290,12 +297,12 @@ async function handlePostUploadActions(
         // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
         // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
         const originalsImagesResponse = await api.galleries.getImages(galleryId, "thumb");
-        const originalsImages = originalsImagesResponse?.images || [];
+        const originalsImages = originalsImagesResponse?.images ?? [];
 
         if (originalsImages.length > 0) {
           // Get the last uploaded file's thumbnail URL (most recently uploaded)
           // Or use a random one if we can't determine which is last
-          const lastImage = originalsImages[originalsImages.length - 1];
+          const lastImage = originalsImages[originalsImages.length - 1] as { thumbUrl?: string } | undefined;
           const thumbUrl = lastImage?.thumbUrl;
 
           if (thumbUrl) {
@@ -356,7 +363,10 @@ function checkIfAnyFileIsPaused(uppy: Uppy | null): boolean {
   // Trust Uppy's file state - it manages isPaused internally
   const files = Object.values(uppy.getFiles());
   return files.some(
-    (f: UppyFile) => f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
+    (f) =>
+      f.progress?.uploadStarted &&
+      !f.progress.uploadComplete &&
+      f.isPaused === true // Uppy manages this property
   );
 }
 
@@ -402,11 +412,12 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const uppy = createUppyInstance({
       galleryId: config.galleryId,
       orderId: config.orderId,
       type: config.type,
-      onBeforeUpload: async (files: UppyFile[]) => {
+      onBeforeUpload: async (files: TypedUppyFile[]) => {
         if (configRef.current.type === "originals") {
           try {
             const isValid = await validateStorageLimits(
@@ -452,10 +463,10 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         // Calculate total bytes from successful files
         const validSuccessfulFiles = result.successful.filter((file) => {
-          const size = file.size || 0;
+          const size = file.size ?? 0;
           return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
         });
-        const totalBytes = validSuccessfulFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+        const totalBytes = validSuccessfulFiles.reduce((sum, file) => sum + (file.size ?? 0), 0);
 
         // Calculate average upload speed (bytes per second)
         const elapsedSeconds = elapsedTimeMs > 0 ? elapsedTimeMs / 1000 : 1; // Avoid division by zero
@@ -515,11 +526,13 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       },
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     uppyRef.current = uppy;
 
     // Track pause state - rely on Uppy's native file.isPaused property
     // Uppy manages pause state internally, we just sync our UI
     const updatePauseState = () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
       const paused = checkIfAnyFileIsPaused(uppy);
       setIsPaused(paused);
     };
@@ -528,18 +541,26 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // upload-progress fires during upload (includes pause state changes)
     // upload fires when upload starts
     // We update pause state on these events to keep UI in sync
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     uppy.on("upload-progress", updatePauseState);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     uppy.on("upload", updatePauseState);
 
     // Also update pause state whenever files change (add/remove)
     // This helps catch state changes after multiple pause/resume cycles
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     uppy.on("file-removed", updatePauseState);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     uppy.on("file-added", updatePauseState);
 
     return () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       uppy.off("upload-progress", updatePauseState);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       uppy.off("upload", updatePauseState);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       uppy.off("file-removed", updatePauseState);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       uppy.off("file-added", updatePauseState);
       uppyRef.current?.cancelAll();
     };
@@ -594,8 +615,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // Get all files from Uppy's current state - check all files that have s3KeyShort
     // This is simpler and more robust - we don't need to track anything
     const allFiles = Object.values(uppyRef.current.getFiles());
-    const filesWithS3Key = allFiles.filter((file: UppyFile) => {
-      const s3KeyShort = file.meta?.s3KeyShort as string | undefined;
+    const filesWithS3Key = allFiles.filter((file) => {
+      const s3KeyShort = file.meta?.s3KeyShort;
       return !!s3KeyShort;
     });
 
@@ -621,9 +642,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         // Extract filenames from s3KeyShort for all files
         // Format: originals/{filename} or final/{orderId}/{filename}
         const filenames = filesWithS3Key
-          .map((file: UppyFile) => {
-            const s3KeyShort = file.meta?.s3KeyShort as string;
-            if (!s3KeyShort) {
+          .map((file) => {
+            const s3KeyShort = file.meta?.s3KeyShort;
+            if (!s3KeyShort || typeof s3KeyShort !== "string") {
               return null;
             }
             const parts = s3KeyShort.split("/");

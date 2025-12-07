@@ -63,7 +63,7 @@ export async function pollThumbnailAvailability(
           if (getResponse.ok || getResponse.status === 206) {
             return true;
           }
-        } catch {
+        } catch (_error) {
           // GET also failed, continue polling
         }
       }
@@ -72,7 +72,7 @@ export async function pollThumbnailAvailability(
       if (attempt < maxAttempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
-    } catch (error) {
+    } catch (_error) {
       // Network error or CORS issue - wait and retry
       if (attempt < maxAttempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, intervalMs));

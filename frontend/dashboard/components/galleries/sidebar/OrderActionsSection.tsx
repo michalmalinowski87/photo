@@ -32,7 +32,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
   // Use React Query for data
-  const { data: gallery, isLoading, isFetching: isGalleryFetching } = useGallery(galleryIdForQuery);
+  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
   const { data: orderData } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
 
@@ -150,6 +150,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   }, [setPublishWizardOpen]);
 
   // Defensive check: don't render until required data is loaded
+  // placeholderData in useOrder hook keeps previous data during refetches to avoid flicker
   if (!orderId || order?.orderId !== orderId) {
     return null;
   }
@@ -190,8 +191,8 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
         )}
 
         {/* Download Selected Originals ZIP */}
+        {/* Don't check isGalleryFetching - placeholderData keeps gallery data during refetches */}
         {!isLoading &&
-          !isGalleryFetching &&
           gallery &&
           gallery.selectionEnabled !== false &&
           canDownloadZipValue && (

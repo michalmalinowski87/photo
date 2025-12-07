@@ -40,22 +40,15 @@ function formatSpeed(bytesPerSecond: number): string {
   return `${formatBytes(bytesPerSecond)}/s`;
 }
 
-function getTypeLabel(type: UploadType): string {
-  return type === "finals" ? "zdjęć finalnych" : "zdjęć";
-}
-
 export const UploadCompletionOverlay: React.FC<UploadCompletionOverlayProps> = ({
   isOpen,
   onClose,
   stats,
-  uploadType,
   isFinalizing = false,
 }) => {
   if (!isOpen) {
     return null;
   }
-
-  const typeLabel = getTypeLabel(uploadType);
 
   const overlayContent = (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">

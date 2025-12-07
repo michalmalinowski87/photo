@@ -128,23 +128,30 @@ export function useMarkOrderPaid() {
     },
     onSuccess: (data, variables) => {
       // Update cache with response data if available (more accurate than optimistic update)
+      // Merge with existing order data to avoid overwriting with partial response
       if (data) {
-        queryClient.setQueryData(
+        queryClient.setQueryData<Order>(
           queryKeys.orders.detail(variables.galleryId, variables.orderId),
-          data
+          (old) => {
+            if (!old) {
+              // If no existing data, we can't merge, so invalidate to fetch full order
+              return undefined;
+            }
+            // Merge partial response with existing order data
+            return {
+              ...old,
+              ...data,
+            };
+          }
         );
       }
-    },
-    onSettled: (_, __, variables) => {
-      // Refetch to ensure consistency
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.byGallery(variables.galleryId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      // Invalidate orders list in background
+      // Note: We don't invalidate gallery query - marking order as paid doesn't affect gallery payment status
+      void Promise.resolve().then(() => {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.byGallery(variables.galleryId),
+          refetchType: "active",
+        });
       });
     },
   });

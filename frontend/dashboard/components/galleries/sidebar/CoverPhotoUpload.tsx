@@ -165,7 +165,7 @@ export const CoverPhotoUpload: React.FC = () => {
     }
   }, [presignError, presignParams, showToast]);
 
-  const handleCoverPhotoUpload = async (file: File): Promise<void> => {
+  const handleCoverPhotoUpload = (file: File): void => {
     if (!file || !galleryId || typeof galleryId !== "string") {
       return;
     }
@@ -219,7 +219,7 @@ export const CoverPhotoUpload: React.FC = () => {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
     if (file?.type.startsWith("image/")) {
-      void handleCoverPhotoUpload(file);
+      handleCoverPhotoUpload(file);
     }
   };
 
@@ -229,7 +229,7 @@ export const CoverPhotoUpload: React.FC = () => {
 
     const file = e.dataTransfer.files?.[0];
     if (file?.type.startsWith("image/")) {
-      void handleCoverPhotoUpload(file);
+      handleCoverPhotoUpload(file);
     }
   };
 

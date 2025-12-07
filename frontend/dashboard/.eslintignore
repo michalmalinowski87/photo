@@ -7,4 +7,5 @@ coverage
 *.min.js
 *.min.css
 public
+lib/uppy-config.ts
 

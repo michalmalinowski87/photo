@@ -1,7 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { queryKeys } from "./react-query";
-
 /**
  * Development-only cache monitoring utility
  *
@@ -88,8 +86,6 @@ function getCacheMetrics(queryClient: QueryClient): CacheMetrics {
 
     // Calculate hit rate (simplified - assumes queries with data are hits)
     const queriesWithData = matchingQueries.filter((q) => q.state.data !== undefined);
-    const hitRate =
-      matchingQueries.length > 0 ? queriesWithData.length / matchingQueries.length : 0;
 
     // Update access tracking
     if (matchingQueries.length > 0) {
@@ -163,11 +159,13 @@ export function initCacheLogger(queryClient: QueryClient): void {
 
   // Log initial metrics
   const initialMetrics = getCacheMetrics(queryClient);
+  // eslint-disable-next-line no-console
   console.log(formatMetrics(initialMetrics));
 
   // Set up periodic logging (every 30 seconds)
   const intervalId = setInterval(() => {
     const metrics = getCacheMetrics(queryClient);
+    // eslint-disable-next-line no-console
     console.log(formatMetrics(metrics));
   }, 30 * 1000); // 30 seconds
 

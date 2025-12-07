@@ -34,6 +34,7 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
     currentGallery?.originalsBytesUsed,
     currentGallery?.finalsBytesUsed,
     currentGallery?.galleryId,
+    currentGallery,
   ]);
 
   const isPaid = currentGallery?.isPaid ?? false;

@@ -84,6 +84,16 @@ export default function GalleryPhotos() {
     imageOrderStatus,
     loadApprovedSelections,
   } = useGalleryImageOrders(galleryId);
+
+  // Get order delivery status for an image (defined early to avoid use-before-define)
+  const getImageOrderStatus = useCallback(
+    (image: GalleryImage): string | null => {
+      const imageKey = image.key ?? image.filename;
+      return imageKey ? (imageOrderStatus.get(imageKey) ?? null) : null;
+    },
+    [imageOrderStatus]
+  );
+
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
@@ -164,7 +174,7 @@ export default function GalleryPhotos() {
     deselectAll,
     clearSelection,
   } = useImageSelection({
-    storageKey: `image_selection_${galleryIdStr || "default"}`,
+    storageKey: `image_selection_${galleryIdStr ?? "default"}`,
   });
 
   // Wrapper to prevent selection of approved images or images in DELIVERED orders
@@ -184,7 +194,7 @@ export default function GalleryPhotos() {
       }
       handleSelectionClickBase(imageKey, index, event, imagesToRender);
     },
-    [approvedSelectionKeys, handleSelectionClickBase]
+    [approvedSelectionKeys, handleSelectionClickBase, getImageOrderStatus]
   );
 
   // Wrapper to exclude approved images and images in DELIVERED orders from selectAll
@@ -392,7 +402,14 @@ export default function GalleryPhotos() {
         }, 100);
       }
     }
-  }, [isSelectionMode, approvedSelectionKeys, selectedKeys, images, handleSelectionClickBase]);
+  }, [
+    isSelectionMode,
+    approvedSelectionKeys,
+    selectedKeys,
+    images,
+    handleSelectionClickBase,
+    getImageOrderStatus,
+  ]);
 
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;
@@ -545,16 +562,7 @@ export default function GalleryPhotos() {
     handleBulkDeleteClick,
   ]);
 
-  // Show loading if galleryId is not yet available from router (prevents flash of empty state)
-  if (!galleryId) {
-    // Return null to let GalleryLayoutWrapper handle the loading overlay
-    // This ensures the sidebar is visible during loading
-    return null;
-  }
-
-  // Use stable galleryId comparison instead of object references
-  const currentGalleryId = gallery?.galleryId ?? "";
-
+  // Calculate effective gallery and gallery ID before early returns
   const effectiveGallery = gallery;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
   const effectiveGalleryId = effectiveGallery?.galleryId ?? "";
@@ -578,21 +586,7 @@ export default function GalleryPhotos() {
     }
   }, [isGalleryLoaded, galleryIdStr, effectiveGalleryId]);
 
-  // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
-  // This ensures the sidebar is visible during loading
-  // Return empty content (not null) so the layout still renders
-  if (!isGalleryLoaded) {
-    // Return empty div so layout still renders (sidebar will show loading state)
-    return <div />;
-  }
-
-  // Use effectiveGallery (from store or cache) for rendering
-  // Fallback to gallery from hook if effectiveGallery is not available
-  const galleryToRender = (effectiveGallery || gallery) as Gallery | null;
-  if (!galleryToRender) {
-    return null; // Error is handled by GalleryLayoutWrapper
-  }
-
+  // Helper functions (must be defined before early returns)
   const isImageInApprovedSelection = (image: GalleryImage): boolean => {
     const imageKey = image.key ?? image.filename;
     return imageKey ? approvedSelectionKeys.has(imageKey) : false;
@@ -601,12 +595,6 @@ export default function GalleryPhotos() {
   const isImageInAnyOrder = (image: GalleryImage): boolean => {
     const imageKey = image.key ?? image.filename;
     return imageKey ? allOrderSelectionKeys.has(imageKey) : false;
-  };
-
-  // Get order delivery status for an image
-  const getImageOrderStatus = (image: GalleryImage): string | null => {
-    const imageKey = image.key ?? image.filename;
-    return imageKey ? (imageOrderStatus.get(imageKey) ?? null) : null;
   };
 
   // Helper to get selectable images (excluding approved and delivered)
@@ -747,6 +735,28 @@ export default function GalleryPhotos() {
     setUnselectedImagesToDelete(imageKeysToDelete);
     setDeleteAllUnselectedOpen(true);
   }, [unselectedImages, approvedSelectionKeys, getImageOrderStatus, showToast]);
+
+  // Show loading if galleryId is not yet available from router (prevents flash of empty state)
+  if (!galleryId) {
+    // Return null to let GalleryLayoutWrapper handle the loading overlay
+    // This ensures the sidebar is visible during loading
+    return null;
+  }
+
+  // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
+  // This ensures the sidebar is visible during loading
+  // Return empty content (not null) so the layout still renders
+  if (!isGalleryLoaded) {
+    // Return empty div so layout still renders (sidebar will show loading state)
+    return <div />;
+  }
+
+  // Use effectiveGallery (from store or cache) for rendering
+  // Fallback to gallery from hook if effectiveGallery is not available
+  const galleryToRender = (effectiveGallery || gallery) as Gallery | null;
+  if (!galleryToRender) {
+    return null; // Error is handled by GalleryLayoutWrapper
+  }
 
   const handleDeleteAllUnselectedConfirm = async (): Promise<void> => {
     if (unselectedImagesToDelete.length === 0) {

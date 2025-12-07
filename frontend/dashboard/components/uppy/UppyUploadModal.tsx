@@ -1,4 +1,3 @@
-import type { UppyFile } from "@uppy/core";
 import Uppy from "@uppy/core";
 import "@uppy/core/css/style.min.css";
 import {
@@ -14,6 +13,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
+import { type TypedUppyFile } from "../../lib/uppy-config";
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 
@@ -30,7 +30,7 @@ interface UppyUploadModalProps {
 // ============================================================================
 
 function isImageFile(file: File | { name: string; type?: string }): boolean {
-  return file.type?.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+  return (file.type?.startsWith("image/") ?? false) || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
 }
 
 function addFileToUppy(uppy: Uppy, file: File): void {
@@ -44,7 +44,7 @@ function addFileToUppy(uppy: Uppy, file: File): void {
       type: file.type || "image/jpeg",
       data: file,
     });
-  } catch (error) {
+  } catch (_error) {
     // Silently fail - file restrictions will be handled by Uppy
   }
 }
@@ -75,11 +75,13 @@ function formatTimeRemaining(seconds: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-function getFileProgress(file: UppyFile): number {
+function getFileProgress(file: TypedUppyFile): number {
   return file.progress?.percentage ?? 0;
 }
 
-function getFileStatus(file: UppyFile): "completed" | "uploading" | "paused" | "error" | "pending" {
+function getFileStatus(
+  file: TypedUppyFile
+): "completed" | "uploading" | "paused" | "error" | "pending" {
   if (file.progress?.uploadComplete) {
     return "completed";
   }
@@ -104,7 +106,7 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
         dirReader.readEntries((results) => {
           if (results.length > 0) {
             entries.push(...results);
-            readEntries().then(resolve);
+            void readEntries().then(resolve);
           } else {
             resolve();
           }
@@ -155,7 +157,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     resetUploadState,
   } = useUppyUpload(config);
 
-  const [files, setFiles] = useState<UppyFile[]>([]);
+  const [files, setFiles] = useState<TypedUppyFile[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -257,7 +259,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       }
       // Get current files from Uppy - this is the source of truth
       const uppyFiles = Object.values(uppy.getFiles());
-      const currentFileIds = uppyFiles.map((f: UppyFile) => f.id).sort();
+      const currentFileIds = uppyFiles.map((f) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
 
       // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
@@ -270,7 +272,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       }
 
       lastSyncedFileIdsRef.current = currentFileIds;
-      setFiles(uppyFiles);
+      setFiles(uppyFiles as TypedUppyFile[]);
     };
 
     // Initial sync - get files that Uppy already has (should be 0 after clear)
@@ -290,7 +292,8 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     ];
 
     eventHandlers.forEach((event) => {
-      uppy.on(event as any, syncFiles);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (uppy.on as any)(event, syncFiles);
     });
 
     // For upload-progress, always force update to show progress overlays
@@ -308,7 +311,8 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     return () => {
       isMountedRef.current = false;
       eventHandlers.forEach((event) => {
-        uppy.off(event as any, syncFiles);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (uppy.off as any)(event, syncFiles);
       });
       uppy.off("upload-progress", handleUploadProgress);
       uppy.off("upload", handleUpload);
@@ -392,7 +396,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     setIsDragging(false);
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -406,7 +410,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.kind === "file") {
-          const entry = (item as any).webkitGetAsEntry?.();
+          const dataTransferItem = item as DataTransferItem & {
+            webkitGetAsEntry?: () => FileSystemEntry | null;
+          };
+          const entry = dataTransferItem.webkitGetAsEntry?.();
           if (entry?.isDirectory) {
             void readDirectoryEntry(entry, uppy);
           } else {
@@ -448,7 +455,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
    * - Blob URLs are the fastest and most responsive option
    * - Uppy's ThumbnailGenerator already provides optimized thumbnails
    */
-  const getThumbnail = (file: UppyFile): string | undefined => {
+  const getThumbnail = (file: TypedUppyFile): string | undefined => {
     // Priority 1: Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
     // This is the fastest option - generated locally, no network request
     if (file.preview) {
@@ -559,8 +566,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                     type="file"
                     multiple
                     accept="image/*"
-                    webkitdirectory=""
-                    directory=""
+                    {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
                     onChange={handleFileInputChange}
                     className="hidden"
                     disabled={uploading || uploadComplete}
@@ -585,8 +591,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   type="file"
                   multiple
                   accept="image/*"
-                  webkitdirectory=""
-                  directory=""
+                  {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={handleFileInputChange}
                   className="hidden"
                   disabled={uploading || uploadComplete}
@@ -604,7 +609,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   >
                     {files.map((file) => {
                       // Get fresh file state from Uppy to ensure we have latest isPaused value
-                      const freshFile = uppy?.getFile(file.id) || file;
+                      const freshFile = (uppy?.getFile(file.id) ?? file) as TypedUppyFile;
                       const status = getFileStatus(freshFile);
                       const progress = getFileProgress(freshFile);
                       const thumbnail = getThumbnail(freshFile);
@@ -616,9 +621,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                         >
                           <div className="aspect-square relative">
                             {thumbnail ? (
+                              // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={thumbnail}
-                                alt={freshFile.name}
+                                alt={freshFile.name ?? "Image"}
                                 className="w-full h-full object-cover"
                               />
                             ) : (
@@ -687,7 +693,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                             </p>
                             <div className="flex items-center justify-between">
                               <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatFileSize(freshFile.size || 0)}
+                                {formatFileSize(freshFile.size ?? 0)}
                               </p>
                               {status === "uploading" && (
                                 <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
