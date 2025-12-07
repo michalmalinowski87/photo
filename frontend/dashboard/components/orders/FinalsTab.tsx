@@ -83,13 +83,14 @@ export function FinalsTab({
       await onDeleteImagesBatch(Array.from(selectedKeys));
       setBulkDeleteConfirmOpen(false);
       clearSelection();
+      toggleSelectionMode();
     } catch (error) {
       // Error handling should be done by parent
       console.error("Bulk delete failed:", error);
     } finally {
       setIsBulkDeleting(false);
     }
-  }, [selectedKeys, onDeleteImagesBatch, clearSelection]);
+  }, [selectedKeys, onDeleteImagesBatch, clearSelection, toggleSelectionMode]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -164,13 +165,15 @@ export function FinalsTab({
                 Prześlij zdjęcia finalne
               </Button>
             )}
-            <button
-              onClick={toggleSelectionMode}
-              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-            >
-              <Square size={20} />
-              Wybierz zdjęcia
-            </button>
+            {images.length > 0 && (
+              <button
+                onClick={toggleSelectionMode}
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                <Square size={20} />
+                Wybierz zdjęcia
+              </button>
+            )}
           </>
         )}
         {isSelectionMode && (

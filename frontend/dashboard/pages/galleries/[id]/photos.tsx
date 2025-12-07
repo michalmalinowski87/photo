@@ -334,6 +334,7 @@ export default function GalleryPhotos() {
       await deleteImagesBulk(imagesToDelete);
       setBulkDeleteConfirmOpen(false);
       clearSelection();
+      toggleSelectionMode();
     } catch {
       // Error already handled in deleteImagesBulk
     }
@@ -751,13 +752,15 @@ export default function GalleryPhotos() {
                 <Plus size={20} />
                 Prześlij zdjęcia
               </button>
-              <button
-                onClick={toggleSelectionMode}
-                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-              >
-                <Square size={20} />
-                Wybierz zdjęcia
-              </button>
+              {images.length > 0 && (
+                <button
+                  onClick={toggleSelectionMode}
+                  className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                >
+                  <Square size={20} />
+                  Wybierz zdjęcia
+                </button>
+              )}
             </>
           )}
           {isSelectionMode && (
