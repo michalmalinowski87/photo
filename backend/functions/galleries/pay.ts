@@ -4,7 +4,6 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand, PutCom
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTransactionsByUser, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { recalculateStorageInternal } from './recalculateBytesUsed';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
@@ -501,41 +500,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// This prevents paying for stale plan if user uploaded more photos or deleted photos
 	// Trigger on-demand recalculation to ensure DB is accurate before payment
 	// This is critical - user may have uploaded/deleted images just before clicking pay
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+	// Trigger on-demand recalculation to get accurate bytes from DB
+	// Direct call bypasses cache for immediate recalculation - critical for payment accuracy
 	let currentUploadedSize = gallery.originalsBytesUsed || 0;
 	
-	if (bucket) {
-		// Trigger on-demand recalculation to get accurate bytes from S3
-		// Direct call bypasses debounce for immediate recalculation
 	try {
 		// Force immediate recalculation (bypasses cache) - critical for payment accuracy
-		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+		if (!bucket) {
+			logger?.warn('GALLERIES_BUCKET not set, skipping recalculation before payment', { galleryId });
+		} else {
+			const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
 			logger?.info('Triggered on-demand storage recalculation before payment', { galleryId });
-			
-			// Extract recalculated value from result
-			if (recalcResult?.body) {
-				try {
-					const body = JSON.parse(recalcResult.body);
-					if (body.originalsBytesUsed !== undefined) {
-						currentUploadedSize = body.originalsBytesUsed;
-						logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
-							galleryId,
-							originalsBytesUsed: currentUploadedSize
-						});
-					}
-				} catch {
-					// If parsing fails, re-fetch gallery to get updated bytes
-					const updatedGalleryGet = await ddb.send(new GetCommand({
-						TableName: galleriesTable,
-						Key: { galleryId }
-					}));
-					if (updatedGalleryGet.Item) {
-						gallery = updatedGalleryGet.Item;
-						currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
-					}
+		
+		// Extract recalculated value from result
+		if (recalcResult?.body) {
+			try {
+				const body = JSON.parse(recalcResult.body);
+				if (body.originalsBytesUsed !== undefined) {
+					currentUploadedSize = body.originalsBytesUsed;
+					logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
+						galleryId,
+						originalsBytesUsed: currentUploadedSize
+					});
 				}
-			} else {
-				// Re-fetch gallery to get updated bytes
+			} catch {
+				// If parsing fails, re-fetch gallery to get updated bytes
 				const updatedGalleryGet = await ddb.send(new GetCommand({
 					TableName: galleriesTable,
 					Key: { galleryId }
@@ -545,30 +535,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
 				}
 			}
-		} catch (recalcErr: any) {
-			logger?.warn('Failed to recalculate storage before payment, falling back to S3 direct calculation', {
-				error: recalcErr.message,
-				galleryId
-			});
-			// Fallback: Calculate directly from S3 if recalculation fails
-			const s3 = new S3Client({});
-			let continuationToken: string | undefined;
-			const prefix = `galleries/${galleryId}/originals/`;
-			
-			do {
-				const listResponse = await s3.send(new ListObjectsV2Command({
-					Bucket: bucket,
-					Prefix: prefix,
-					ContinuationToken: continuationToken
-				}));
-				
-				if (listResponse.Contents) {
-					currentUploadedSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
-				}
-				
-				continuationToken = listResponse.NextContinuationToken;
-			} while (continuationToken);
+		} else {
+			// Re-fetch gallery to get updated bytes
+			const updatedGalleryGet = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			if (updatedGalleryGet.Item) {
+				gallery = updatedGalleryGet.Item;
+				currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
+			}
 		}
+		}
+	} catch (recalcErr: any) {
+		logger?.error('Failed to recalculate storage before payment', {
+			error: recalcErr.message,
+			galleryId
+		});
+		// Use current gallery value - this is acceptable as storage is tracked in real-time
+		currentUploadedSize = gallery.originalsBytesUsed || 0;
 	}
 
 	// Check if uploaded size exceeds plan limit
@@ -592,7 +577,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Check if user is at/near capacity (95%+) - warn but allow payment
-	if (bucket && gallery.originalsLimitBytes) {
+	if (gallery.originalsLimitBytes) {
 		const usagePercentage = (currentUploadedSize / gallery.originalsLimitBytes) * 100;
 		if (usagePercentage >= 95) {
 			logger.warn('User paying for gallery at/near capacity', {

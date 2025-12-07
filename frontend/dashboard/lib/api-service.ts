@@ -1524,6 +1524,7 @@ class ApiService {
       data: {
         uploadId: string;
         key: string;
+        fileSize?: number;
         parts: Array<{ partNumber: number; etag: string }>;
       }
     ): Promise<{
@@ -1544,6 +1545,7 @@ class ApiService {
           galleryId,
           uploadId: data.uploadId,
           key: data.key,
+          fileSize: data.fileSize,
           parts: data.parts,
         }),
       });
@@ -1600,6 +1602,32 @@ class ApiService {
           galleryId,
           uploadId: data.uploadId,
           key: data.key,
+        }),
+      });
+    },
+
+    /**
+     * Complete simple PUT upload (update storage immediately)
+     */
+    completeUpload: async (
+      galleryId: string,
+      data: {
+        key: string;
+        fileSize: number;
+      }
+    ): Promise<{ success: boolean; message?: string; warning?: string }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!data?.key || !data?.fileSize) {
+        throw new Error("key and fileSize are required");
+      }
+      return await this._request("/uploads/complete-upload", {
+        method: "POST",
+        body: JSON.stringify({
+          galleryId,
+          key: data.key,
+          fileSize: data.fileSize,
         }),
       });
     },

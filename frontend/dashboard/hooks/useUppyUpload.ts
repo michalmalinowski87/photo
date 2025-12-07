@@ -8,6 +8,7 @@ import { queryKeys } from "../lib/react-query";
 import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
 import { createUppyInstance, type UploadType } from "../lib/uppy-config";
 
+import { useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
 import { useToast } from "./useToast";
 
 export interface UseUppyUploadConfig {
@@ -152,7 +153,8 @@ async function handlePostUploadActions(
   type: UploadType,
   successfulFiles: UppyFile[],
   reloadGallery?: () => Promise<void>,
-  onFinalizingChange?: (isFinalizing: boolean) => void
+  onFinalizingChange?: (isFinalizing: boolean) => void,
+  markFinalUploadCompleteMutation?: ReturnType<typeof useMarkFinalUploadComplete>
 ): Promise<void> {
   // Calculate total file sizes from successful uploads for optimistic update
   // Validate file sizes - only count files with valid, positive sizes
@@ -171,7 +173,8 @@ async function handlePostUploadActions(
   }
 
   // Optimistically update storage usage for immediate UI feedback
-  // The backend S3 events will update the real value, and we'll reconcile after a delay
+  // The backend updates storage synchronously via completeUpload/completeMultipartUpload endpoints
+  // We invalidate after a short delay to reconcile any differences (backend processing time)
   if (totalSize > 0) {
     const originalsSize = type === "originals" ? totalSize : 0;
     const finalsSize = type === "finals" ? totalSize : 0;
@@ -197,14 +200,12 @@ async function handlePostUploadActions(
         };
       });
 
-      // After a delay, invalidate to get real value from backend (S3 events will have processed)
-      // This reconciles any differences between optimistic and actual values
-      // Note: React Query's invalidateQueries is safe to call even after component unmount
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(galleryId),
-        });
-      }, 2000); // 2 seconds - enough time for S3 events to process
+      // Note: We don't invalidate here because:
+      // 1. Backend updates storage synchronously via completeUpload/completeMultipartUpload
+      // 2. Optimistic update provides immediate UI feedback
+      // 3. The actual storage is updated by backend immediately when files complete upload
+      // 4. Invalidating would cause unnecessary refetch since optimistic update is already accurate
+      // If reconciliation is needed, it happens naturally when gallery data is refetched for other reasons
     } catch (error) {
       // If optimistic update fails, log but don't throw - backend will still update
       console.error(
@@ -222,7 +223,17 @@ async function handlePostUploadActions(
       // Wait a bit for backend to finalize uploads before marking complete
       // This is especially important after pause/resume cycles with multipart uploads
       await new Promise((resolve) => setTimeout(resolve, 500));
-      await api.uploads.markFinalUploadComplete(galleryId, orderId);
+      // Use mutation hook to ensure order detail is invalidated (status may change from CLIENT_APPROVED/AWAITING_FINAL_PHOTOS to PREPARING_DELIVERY)
+      if (markFinalUploadCompleteMutation) {
+        await markFinalUploadCompleteMutation.mutateAsync({ galleryId, orderId });
+      } else {
+        // Fallback to direct API call if mutation not provided (shouldn't happen in normal flow)
+        await api.uploads.markFinalUploadComplete(galleryId, orderId);
+        // Manually invalidate order detail if using fallback
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(galleryId, orderId),
+        });
+      }
 
       // Poll for thumbnail availability to ensure backend processing is complete
       // This ensures UI is ready when user closes the confirmation modal
@@ -357,6 +368,7 @@ const INITIAL_PROGRESS: UploadProgressState = {
 export function useUppyUpload(config: UseUppyUploadConfig) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const markFinalUploadCompleteMutation = useMarkFinalUploadComplete();
   const uppyRef = useRef<Uppy | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -476,7 +488,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
               configRef.current.type,
               successfulFiles,
               configRef.current.reloadGallery,
-              setIsFinalizing
+              setIsFinalizing,
+              markFinalUploadCompleteMutation
             );
           } catch (error) {
             // Only show warning if reloadGallery failed, not for other errors

@@ -16,6 +16,7 @@ import { usePayGallery } from "../../../../hooks/mutations/useGalleryMutations";
 import {
   useApproveChangeRequest,
   useDenyChangeRequest,
+  useDeleteFinalImage,
 } from "../../../../hooks/mutations/useOrderMutations";
 import { useGalleryImages } from "../../../../hooks/queries/useGalleries";
 import { useOrder, useOrderFinalImages } from "../../../../hooks/queries/useOrders";
@@ -85,6 +86,7 @@ export default function OrderDetail() {
     deletingImages,
     deletingImagesRef,
     deletedImageKeysRef,
+    clearDeletedKeysForImages,
   } = useFinalImageDelete({
     galleryId,
     orderId,
@@ -101,6 +103,27 @@ export default function OrderDetail() {
     // Filter out successfully deleted images
     return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeysRef.current);
   }, [finalImagesData, deletingImagesRef, deletedImageKeysRef]);
+
+  // Clear deletedImageKeys for final images that have been re-uploaded
+  // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
+  useEffect(() => {
+    if (!finalImagesData || finalImagesData.length === 0) {
+      return;
+    }
+
+    const currentImageKeys = new Set(
+      finalImagesData.map((img: GalleryImage) => img.key ?? img.filename).filter(Boolean)
+    );
+
+    // Find keys that are in deletedImageKeys but now present in the data (re-uploaded)
+    const reuploadedKeys = Array.from(deletedImageKeysRef.current).filter((key) =>
+      currentImageKeys.has(key)
+    );
+
+    if (reuploadedKeys.length > 0) {
+      clearDeletedKeysForImages(reuploadedKeys);
+    }
+  }, [finalImagesData, deletedImageKeysRef, clearDeletedKeysForImages]);
 
   // Payment mutation
   const payGalleryMutation = usePayGallery();
@@ -244,7 +267,7 @@ export default function OrderDetail() {
     }
 
     // Track finals bytes from React Query gallery data (handles optimistic updates)
-    const currentFinalsBytes = gallery?.finalsBytesUsed as number | undefined;
+    const currentFinalsBytes = gallery?.finalsBytesUsed;
     if (currentFinalsBytes !== undefined) {
       setOptimisticFinalsBytes((prev: number | null) => {
         if (prev !== currentFinalsBytes) {
@@ -334,6 +357,62 @@ export default function OrderDetail() {
       // Error already handled in deleteImage, keep modal open
     }
   };
+
+  // Batch delete handler for final images
+  const deleteFinalImageMutation = useDeleteFinalImage();
+  const handleDeleteFinalImagesBatch = useCallback(
+    async (imageKeys: string[]): Promise<void> => {
+      if (!galleryIdForQuery || !orderIdForQuery || imageKeys.length === 0) {
+        return;
+      }
+
+      // Prevent deletion if order is DELIVERED
+      if (order?.deliveryStatus === "DELIVERED") {
+        showToast(
+          "error",
+          "Błąd",
+          "Nie można usunąć zdjęć finalnych dla dostarczonego zlecenia. Zlecenie zostało już dostarczone klientowi."
+        );
+        return;
+      }
+
+      try {
+        // The mutation handles optimistic updates and cache invalidation
+        await deleteFinalImageMutation.mutateAsync({
+          galleryId: galleryIdForQuery,
+          orderId: orderIdForQuery,
+          imageKeys,
+        });
+
+        // Clear optimistic bytes state
+        setOptimisticFinalsBytes(null);
+
+        // Show success toast
+        if (imageKeys.length === 1) {
+          showToast("success", "Sukces", "Zdjęcie zostało usunięte");
+        } else {
+          showToast("success", "Sukces", `${imageKeys.length} zdjęć zostało usuniętych`);
+        }
+      } catch (err) {
+        // Error handling - mutation's onError will rollback cache
+        const errorMessage = formatApiError(err);
+        if (imageKeys.length === 1) {
+          showToast("error", "Błąd", errorMessage);
+        } else {
+          showToast("error", "Błąd", `Nie udało się usunąć ${imageKeys.length} zdjęć`);
+        }
+        throw err;
+      }
+    },
+    [
+      galleryIdForQuery,
+      orderIdForQuery,
+      order?.deliveryStatus,
+      deleteFinalImageMutation,
+      showToast,
+      setOptimisticFinalsBytes,
+    ]
+  );
 
   // Use React Query mutations
   const approveChangeRequestMutation = useApproveChangeRequest();
@@ -470,9 +549,12 @@ export default function OrderDetail() {
           deletingImages={deletingImages}
           onUploadClick={() => setUploadModalOpen(true)}
           onDeleteImage={handleDeleteFinalImageClick}
+          onDeleteImagesBatch={handleDeleteFinalImagesBatch}
           isGalleryPaid={isGalleryPaid}
           orderDeliveryStatus={order.deliveryStatus}
           isNonSelectionGallery={isNonSelectionGallery}
+          galleryId={galleryIdForQuery}
+          orderId={orderIdForQuery}
         />
       )}
 

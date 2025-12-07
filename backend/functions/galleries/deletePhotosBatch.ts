@@ -128,9 +128,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	});
 
-	// Invoke batch delete Lambda directly
+	// Invoke batch delete Lambda synchronously and wait for completion
 	try {
-		logger.info('Invoking batch delete Lambda', {
+		logger.info('Invoking batch delete Lambda (synchronous)', {
 			galleryId,
 			type,
 			orderId,
@@ -138,21 +138,98 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			deleteBatchFnName
 		});
 
-		await lambda.send(new InvokeCommand({
+		const invokeResponse = await lambda.send(new InvokeCommand({
 			FunctionName: deleteBatchFnName,
-			InvocationType: 'Event', // Async invocation - don't wait for completion
+			InvocationType: 'RequestResponse', // Synchronous invocation - wait for completion
 			Payload: JSON.stringify({
 				isProgrammaticCall: true,
 				deletes
 			})
 		}));
 
-		logger.info('Successfully invoked batch delete Lambda for multiple photo deletions', {
+		// Parse response from Lambda
+		let lambdaResult: any = {};
+		if (invokeResponse.Payload) {
+			try {
+				const payloadString = Buffer.from(invokeResponse.Payload).toString('utf-8');
+				lambdaResult = JSON.parse(payloadString);
+			} catch (parseErr: any) {
+				logger.warn('Failed to parse Lambda response', {
+					error: parseErr.message,
+					galleryId
+				});
+			}
+		}
+
+		// Check if Lambda function errored
+		if (invokeResponse.FunctionError) {
+			logger.error('Batch delete Lambda function error', {
+				error: invokeResponse.FunctionError,
+				galleryId,
+				type,
+				orderId,
+				lambdaResult
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Failed to process deletions',
+					message: lambdaResult.errorMessage || 'Lambda function error'
+				})
+			};
+		}
+
+		logger.info('Successfully completed batch delete Lambda', {
 			galleryId,
 			type,
 			orderId,
-			count: filenames.length
+			count: filenames.length,
+			lambdaResult
 		});
+
+		// Get updated gallery state to return actual values
+		const updatedGallery = await ddb.send(new GetCommand({
+			TableName: galleriesTable,
+			Key: { galleryId }
+		}));
+
+		if (type === 'final') {
+			const updatedFinalsBytesUsed = Math.max(updatedGallery.Item?.finalsBytesUsed || 0, 0);
+			const finalsLimitBytes = updatedGallery.Item?.finalsLimitBytes || 0;
+
+			return {
+				statusCode: 200,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					message: 'Final images deleted successfully',
+					galleryId,
+					orderId,
+					count: filenames.length,
+					finalsBytesUsed: updatedFinalsBytesUsed,
+					finalsLimitBytes,
+					finalsUsedMB: (updatedFinalsBytesUsed / (1024 * 1024)).toFixed(2),
+					finalsLimitMB: (finalsLimitBytes / (1024 * 1024)).toFixed(2)
+				})
+			};
+		} else {
+			const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
+			const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
+
+			return {
+				statusCode: 200,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					message: 'Photos deleted successfully',
+					galleryId,
+					count: filenames.length,
+					originalsBytesUsed: updatedOriginalsBytesUsed,
+					originalsLimitBytes,
+					originalsUsedMB: (updatedOriginalsBytesUsed / (1024 * 1024)).toFixed(2),
+					originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2)
+				})
+			};
+		}
 	} catch (err: any) {
 		logger.error('Failed to invoke batch delete Lambda', {
 			error: err.message,
@@ -165,61 +242,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Failed to process deletions' })
-		};
-	}
-
-	// Get current gallery state to return (recalculation will happen asynchronously)
-	// Note: This returns current DB state, which may not reflect deletions yet (async processing)
-	logger.info('Fetching current gallery state to return', {
-		galleryId,
-		type
-	});
-	const updatedGallery = await ddb.send(new GetCommand({
-		TableName: galleriesTable,
-		Key: { galleryId }
-	}));
-
-	logger.info('Current gallery state from DB', {
-		galleryId,
-		type,
-		originalsBytesUsed: updatedGallery.Item?.originalsBytesUsed,
-		finalsBytesUsed: updatedGallery.Item?.finalsBytesUsed,
-	});
-
-	if (type === 'final') {
-		const updatedFinalsBytesUsed = Math.max(updatedGallery.Item?.finalsBytesUsed || 0, 0);
-		const finalsLimitBytes = updatedGallery.Item?.finalsLimitBytes || 0;
-
-		return {
-			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				message: 'Final images deleted successfully',
-				galleryId,
-				orderId,
-				count: filenames.length,
-				finalsBytesUsed: updatedFinalsBytesUsed,
-				finalsLimitBytes,
-				finalsUsedMB: (updatedFinalsBytesUsed / (1024 * 1024)).toFixed(2),
-				finalsLimitMB: (finalsLimitBytes / (1024 * 1024)).toFixed(2)
-			})
-		};
-	} else {
-		const updatedOriginalsBytesUsed = Math.max(updatedGallery.Item?.originalsBytesUsed || 0, 0);
-		const originalsLimitBytes = updatedGallery.Item?.originalsLimitBytes || 0;
-
-		return {
-			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				message: 'Photos deleted successfully',
-				galleryId,
-				count: filenames.length,
-				originalsBytesUsed: updatedOriginalsBytesUsed,
-				originalsLimitBytes,
-				originalsUsedMB: (updatedOriginalsBytesUsed / (1024 * 1024)).toFixed(2),
-				originalsLimitMB: (originalsLimitBytes / (1024 * 1024)).toFixed(2)
-			})
 		};
 	}
 });

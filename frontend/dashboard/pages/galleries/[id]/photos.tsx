@@ -11,8 +11,8 @@ import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
-import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGalleryImages } from "../../../hooks/queries/useGalleries";
+import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
 import { useImageSelection } from "../../../hooks/useImageSelection";
@@ -133,7 +133,7 @@ export default function GalleryPhotos() {
   }, [galleryId]);
 
   // Use hook for deletion logic
-  const { deleteImage, handleDeleteImageClick, deletingImages, deletedImageKeys } = useOriginalImageDelete({
+  const { deleteImage, handleDeleteImageClick, deletingImages, deletedImageKeys, clearDeletedKeysForImages } = useOriginalImageDelete({
     galleryId,
   });
 
@@ -204,6 +204,7 @@ export default function GalleryPhotos() {
     deletingImages: deletingImagesBulk,
     deletedImageKeys: deletedImageKeysBulk,
     isDeleting: isBulkDeleting,
+    clearDeletedKeysForImages: clearDeletedKeysForImagesBulk,
   } = useBulkImageDelete({
     galleryId,
     imageType: "originals",
@@ -309,6 +310,33 @@ export default function GalleryPhotos() {
       return true;
     });
   }, [imagesData, deletedImageKeys, deletedImageKeysBulk]);
+
+  // Clear deletedImageKeys for images that have been re-uploaded
+  // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
+  useEffect(() => {
+    if (!imagesData || imagesData.length === 0) {
+      return;
+    }
+
+    const currentImageKeys = new Set(
+      imagesData.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
+    );
+
+    // Find keys that are in deletedImageKeys but now present in the data (re-uploaded)
+    const reuploadedKeys = Array.from(deletedImageKeys).filter((key) =>
+      currentImageKeys.has(key)
+    );
+    const reuploadedKeysBulk = Array.from(deletedImageKeysBulk).filter((key) =>
+      currentImageKeys.has(key)
+    );
+
+    if (reuploadedKeys.length > 0) {
+      clearDeletedKeysForImages(reuploadedKeys);
+    }
+    if (reuploadedKeysBulk.length > 0) {
+      clearDeletedKeysForImagesBulk(reuploadedKeysBulk);
+    }
+  }, [imagesData, deletedImageKeys, deletedImageKeysBulk, clearDeletedKeysForImages, clearDeletedKeysForImagesBulk]);
 
   // Automatically deselect non-deletable images (approved or in DELIVERED orders) when they appear in selection
   // This handles edge cases like range selections that might include non-deletable images
@@ -567,7 +595,7 @@ export default function GalleryPhotos() {
     (imagesToFilter: GalleryImage[]): GalleryImage[] => {
       return imagesToFilter.filter((img) => {
         const imageKey = img.key ?? img.filename;
-        if (!imageKey) return false;
+        if (!imageKey) {return false;}
         // Exclude approved images
         if (approvedSelectionKeys.has(imageKey)) {
           return false;
@@ -669,7 +697,7 @@ export default function GalleryPhotos() {
     const imageKeysToDelete = unselectedImages
       .map((img) => img.key ?? img.filename)
       .filter((key): key is string => {
-        if (!key) return false;
+        if (!key) {return false;}
         // Check if approved
         if (approvedSelectionKeys.has(key)) {
           return false;
@@ -773,7 +801,7 @@ export default function GalleryPhotos() {
               }}
               onClick={(e) => {
                 if (isSelectionMode && !isNonDeletable) {
-                  handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                  handleSelectionClick(imageKey, index, e.nativeEvent, imagesToRender);
                 } else if (isSelectionMode && isNonDeletable) {
                   e.stopPropagation();
                 }
@@ -794,7 +822,7 @@ export default function GalleryPhotos() {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isNonDeletable) {
-                        handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                        handleSelectionClick(imageKey, index, e.nativeEvent, imagesToRender);
                       }
                     }}
                   >

@@ -14,7 +14,7 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  const { data: currentGallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
+  const { data: currentGallery, isLoading: galleryLoading, isFetching: galleryFetching } = useGallery(galleryIdForQuery);
 
   // Log when gallery data changes to track if it's being overwritten
   React.useEffect(() => {
@@ -66,10 +66,13 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
   // On order pages, only show finals
   const isOrderPage = !!orderId;
 
+  // Show subtle loading indicator when fetching (but not on initial load)
+  const isUpdating = galleryFetching && !galleryLoading && currentGallery;
+
   return (
     <div className="flex items-center gap-4">
       {!isOrderPage && (
-        <div className="text-sm text-gray-700 dark:text-gray-300">
+        <div className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
             Oryginały:
           </span>
@@ -77,15 +80,21 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
           {originalsLimit !== undefined && (
             <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
           )}
+          {isUpdating && (
+            <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin ml-1" />
+          )}
         </div>
       )}
-      <div className="text-sm text-gray-700 dark:text-gray-300">
+      <div className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
           Finalne:
         </span>
         {formatBytes(finalsBytes)}
         {finalsLimit !== undefined && (
           <span className="text-gray-500"> / {formatBytes(finalsLimit)}</span>
+        )}
+        {isUpdating && (
+          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin ml-1" />
         )}
       </div>
     </div>

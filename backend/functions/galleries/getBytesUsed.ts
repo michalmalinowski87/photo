@@ -14,7 +14,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	
 	const envProc = (globalThis as any).process;
 	const tableName = envProc && envProc.env ? (envProc.env.GALLERIES_TABLE as string) : '';
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	
 	// Check if force recalculation is requested (query parameter)
 	const forceRecalc = event?.queryStringParameters?.force === 'true';
@@ -27,9 +26,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	requireOwnerOr403(gallery.ownerId, requesterId);
 	
 	// If force recalculation is requested, recalculate from S3
-	if (forceRecalc && bucket) {
+	if (forceRecalc) {
 		logger?.info('Force recalculation requested for getBytesUsed', { galleryId: id });
-		const recalcResult = await recalculateStorageInternal(id, tableName, bucket, gallery, logger, true);
+		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+		if (bucket) {
+			const recalcResult = await recalculateStorageInternal(id, tableName, bucket, gallery, logger, true);
 		
 		if (recalcResult.statusCode === 200) {
 			try {
@@ -46,7 +47,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Fall through to cached values if parsing fails
 			}
 		}
-		// Fall through to cached values if recalculation fails
+			// Fall through to cached values if recalculation fails
+		}
 	}
 	
 	// Return cached bytes used fields - lightweight endpoint

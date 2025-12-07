@@ -239,20 +239,117 @@ export function useDeleteFinalImage() {
       orderId: string;
       imageKeys: string[];
     }) => api.orders.deleteFinalImage(galleryId, orderId, imageKeys),
-    onSuccess: (_data, variables) => {
-      // Invalidate final images query immediately - this should be accurate
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
+    onMutate: async ({ galleryId, orderId, imageKeys }) => {
+      // Cancel outgoing queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+
+      // Snapshot previous state
+      const previousFinalImages = queryClient.getQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId)
+      );
+      const previousGallery = queryClient.getQueryData<any>(
+        queryKeys.galleries.detail(galleryId)
+      );
+
+      // Calculate total file size from images being deleted for optimistic storage update
+      let totalBytesToSubtract = 0;
+      if (previousFinalImages) {
+        const imagesToDelete = previousFinalImages.filter(
+          (img: any) => imageKeys.includes(img.key ?? img.filename ?? "")
+        );
+        totalBytesToSubtract = imagesToDelete.reduce(
+          (sum, img: any) => sum + (img.size || 0),
+          0
+        );
+      }
+
+      // Optimistically remove images from cache
+      queryClient.setQueryData<any[]>(
+        queryKeys.orders.finalImages(galleryId, orderId),
+        (old = []) =>
+          old.filter(
+            (img: any) => !imageKeys.includes(img.key ?? img.filename ?? "")
+          )
+      );
+
+      // Optimistically update storage usage for immediate UI feedback
+      if (totalBytesToSubtract > 0 && previousGallery) {
+        queryClient.setQueryData<any>(
+          queryKeys.galleries.detail(galleryId),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            const currentFinals = old.finalsBytesUsed || 0;
+            return {
+              ...old,
+              finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
+            };
+          }
+        );
+      }
+
+      return { previousFinalImages, previousGallery };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousFinalImages) {
+        queryClient.setQueryData(
+          queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
+          context.previousFinalImages
+        );
+      }
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Update gallery detail with API response if available (more accurate than optimistic update)
+      // The backend returns updated storage values synchronously
+      if (data && typeof data === 'object' && 'finalsBytesUsed' in data) {
+        queryClient.setQueryData<any>(
+          queryKeys.galleries.detail(variables.galleryId),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            return {
+              ...old,
+              finalsBytesUsed: data.finalsBytesUsed,
+              finalsLimitBytes: data.finalsLimitBytes ?? old.finalsLimitBytes,
+            };
+          }
+        );
+      }
+      
+      // Invalidate final images query to ensure UI reflects backend state
+      // Backend processes deletion synchronously, so we can invalidate immediately
+      // Use Promise.resolve().then() to let React Query finish processing optimistic updates first
+      void Promise.resolve().then(() => {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
+        });
+        // Invalidate order detail to refresh order status (e.g., when all finals are deleted,
+        // status may revert from PREPARING_DELIVERY to CLIENT_APPROVED or AWAITING_FINAL_PHOTOS)
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+        });
+        // Also invalidate orders list to update status in lists
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.byGallery(variables.galleryId),
+        });
       });
       
-      // Delay gallery detail invalidation to allow async S3 deletion to complete
-      // The backend processes S3 deletion asynchronously, so we wait a bit for
-      // the database to be updated with the correct storage bytes
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(variables.galleryId),
-        });
-      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
+      // Storage is already updated with API response data above, so no need to invalidate
+      // The API response contains the accurate storage values from the synchronous backend
     },
   });
 }

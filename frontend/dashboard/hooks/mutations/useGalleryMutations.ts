@@ -13,7 +13,7 @@ export function useCreateGallery() {
       if (data?.galleryId) {
         queryClient.setQueryData(queryKeys.galleries.detail(data.galleryId), data);
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
 }
@@ -99,7 +99,7 @@ export function useDeleteGallery() {
     mutationFn: (galleryId: string) => api.galleries.delete(galleryId),
     onSuccess: (_, galleryId) => {
       queryClient.removeQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
 }
@@ -110,8 +110,8 @@ export function useSendGalleryToClient() {
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.sendToClient(galleryId),
     onSuccess: (_, galleryId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(galleryId) });
     },
   });
 }
@@ -128,12 +128,12 @@ export function usePayGallery() {
         priceCents?: number;
         redirectUrl?: string;
       };
-    }) => api.galleries.pay(params.galleryId, params.options || {}),
+    }) => api.galleries.pay(params.galleryId, params.options ?? {}),
     onSuccess: (_, variables) => {
       // Invalidate gallery detail (payment status changes) and wallet balance
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
     },
   });
 }
@@ -152,7 +152,7 @@ export function useUpdateGalleryClientPassword() {
       clientEmail: string;
     }) => api.galleries.updateClientPassword(galleryId, password, clientEmail),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
     },
   });
 }
@@ -174,8 +174,8 @@ export function useUpdateGalleryPricingPackage() {
       };
     }) => api.galleries.updatePricingPackage(galleryId, pricingPackage),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
 }
@@ -192,9 +192,9 @@ export function useUpgradeGalleryPlan() {
       data: { plan: string; redirectUrl?: string };
     }) => api.galleries.upgradePlan(galleryId, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
     },
   });
 }
@@ -210,7 +210,6 @@ export function useDeleteGalleryImage() {
     mutationFn: ({ 
       galleryId, 
       imageKeys,
-      imageType = "originals",
     }: { 
       galleryId: string; 
       imageKeys: string[];
@@ -222,12 +221,16 @@ export function useDeleteGalleryImage() {
         queryKey: queryKeys.galleries.images(galleryId, imageType),
       });
       
-      // Also cancel thumb queries if deleting originals
+      // Also cancel thumb queries and gallery detail if deleting originals
       if (imageType === "originals") {
         await queryClient.cancelQueries({
           queryKey: queryKeys.galleries.images(galleryId, "thumb"),
         });
       }
+      
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
 
       // Snapshot previous state
       const previousImages = queryClient.getQueryData<GalleryImage[]>(
@@ -238,6 +241,22 @@ export function useDeleteGalleryImage() {
             queryKeys.galleries.images(galleryId, "thumb")
           )
         : null;
+      const previousGallery = queryClient.getQueryData<Gallery>(
+        queryKeys.galleries.detail(galleryId)
+      );
+
+      // Calculate total file size from images being deleted for optimistic storage update
+      // Only for originals and finals (not thumbs)
+      let totalBytesToSubtract = 0;
+      if ((imageType === "originals" || imageType === "finals") && previousImages) {
+        const imagesToDelete = previousImages.filter(
+          (img) => imageKeys.includes(img.key ?? img.filename ?? "")
+        );
+        totalBytesToSubtract = imagesToDelete.reduce(
+          (sum, img) => sum + (img.size ?? 0),
+          0
+        );
+      }
 
       // Optimistically remove images from cache
       queryClient.setQueryData<GalleryImage[]>(
@@ -259,13 +278,40 @@ export function useDeleteGalleryImage() {
         );
       }
 
-      return { previousImages, previousThumbImages };
+      // Optimistically update storage usage for immediate UI feedback
+      if (totalBytesToSubtract > 0 && previousGallery) {
+        queryClient.setQueryData<Gallery>(
+          queryKeys.galleries.detail(galleryId),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            const currentOriginals = old.originalsBytesUsed ?? 0;
+            const currentFinals = old.finalsBytesUsed ?? 0;
+            
+            if (imageType === "originals") {
+              return {
+                ...old,
+                originalsBytesUsed: Math.max(0, currentOriginals - totalBytesToSubtract),
+              };
+            } else if (imageType === "finals") {
+              return {
+                ...old,
+                finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
+              };
+            }
+            return old;
+          }
+        );
+      }
+
+      return { previousImages, previousThumbImages, previousGallery };
     },
     onError: (_err, variables, context) => {
       // Rollback on error
       if (context?.previousImages) {
         queryClient.setQueryData(
-          queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
+          queryKeys.galleries.images(variables.galleryId, variables.imageType ?? "originals"),
           context.previousImages
         );
       }
@@ -275,16 +321,38 @@ export function useDeleteGalleryImage() {
           context.previousThumbImages
         );
       }
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
     },
-    onSuccess: (_data, variables) => {
-      // Delay invalidation to allow backend to complete deletion processing
-      // This prevents images from temporarily reappearing during refetch
-      // The optimistic update already removed them from cache, and the component
-      // filters out deletedImageKeys to prevent reappearance even if queries refetch early
-      setTimeout(() => {
-        // Invalidate image queries after a short delay - gives backend time to process
+    onSuccess: (data, variables) => {
+      // Update gallery detail with API response if available (more accurate than optimistic update)
+      // The backend returns updated storage values synchronously
+      if (data && typeof data === 'object' && 'originalsBytesUsed' in data) {
+        queryClient.setQueryData<Gallery>(
+          queryKeys.galleries.detail(variables.galleryId),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            return {
+              ...old,
+              originalsBytesUsed: data.originalsBytesUsed,
+              originalsLimitBytes: data.originalsLimitBytes ?? old.originalsLimitBytes,
+            };
+          }
+        );
+      }
+      
+      // Invalidate image queries to ensure UI reflects backend state
+      // Backend processes deletion synchronously, so we can invalidate immediately
+      // Use Promise.resolve().then() to let React Query finish processing optimistic updates first
+      void Promise.resolve().then(() => {
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
+          queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType ?? "originals"),
         });
         
         // Also invalidate thumb queries if deleting originals
@@ -293,16 +361,10 @@ export function useDeleteGalleryImage() {
             queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
           });
         }
-      }, 500); // 500ms delay to let backend complete deletion processing
+      });
       
-      // Delay gallery detail invalidation to allow async S3 deletion to complete
-      // The backend processes S3 deletion asynchronously, so we wait a bit for
-      // the database to be updated with the correct storage bytes
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(variables.galleryId),
-        });
-      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
+      // Storage is already updated with API response data above, so no need to invalidate
+      // The API response contains the accurate storage values from the synchronous backend
     },
   });
 }

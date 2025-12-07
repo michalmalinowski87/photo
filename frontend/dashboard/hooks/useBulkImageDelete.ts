@@ -116,11 +116,21 @@ export const useBulkImageDelete = ({
     [galleryId, deleteBatchMutation, imageType, showToast]
   );
 
+  // Clear deletedImageKeys for images that have been re-uploaded
+  const clearDeletedKeysForImages = useCallback((imageKeys: string[]) => {
+    setDeletedImageKeys((prev) => {
+      const updated = new Set(prev);
+      imageKeys.forEach((key) => updated.delete(key));
+      return updated;
+    });
+  }, []);
+
   return {
     deleteImages,
     deletingImages: new Set<string>(), // Empty set - images are optimistically removed from cache immediately via mutation's onMutate, so no need to track them as "deleting"
     deletedImageKeys, // Track successfully deleted images to filter them out even if they reappear during refetch
     isDeleting,
+    clearDeletedKeysForImages,
   };
 };
 

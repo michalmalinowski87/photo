@@ -64,13 +64,8 @@ export const useFinalImageDelete = ({
       // Mark image as being deleted (keep it visible with deleting state)
       setDeletingImages((prev) => new Set(prev).add(imageKey));
 
-      // Optimistically remove image from local state immediately
-      // The mutation's onMutate also updates React Query cache
-      if (setFinalImages) {
-        setFinalImages((prevImages) => {
-          return prevImages.filter((img) => (img.key ?? img.filename) !== imageKey);
-        });
-      }
+      // The mutation's onMutate handles optimistic updates in React Query cache
+      // No need for manual setFinalImages update - components will sync from React Query
 
       try {
         await deleteFinalImageMutation.mutateAsync({
@@ -89,31 +84,22 @@ export const useFinalImageDelete = ({
         // Clear optimistic bytes state
         setOptimisticFinalsBytes(null);
 
-        // Check if this was the last image by querying cache
+        // Check if this was the last image by querying cache (after optimistic update)
+        // The mutation's onMutate already optimistically removed the image from cache
         const currentImages = queryClient.getQueryData<any[]>(
           queryKeys.orders.finalImages(galleryIdStr, orderIdStr)
         );
-        const wasLastImage = !currentImages || currentImages.length <= 1;
+        const wasLastImage = !currentImages || currentImages.length === 0;
 
-        // If this was the last image, refresh order to get updated status
+        // If this was the last image, invalidate order query to refresh status
+        // The mutation's onSuccess already invalidates finalImages, so we just need to invalidate order
         if (wasLastImage && galleryIdStr && orderIdStr) {
-          void (async () => {
-            try {
-              // Invalidate order query to refetch
-              await queryClient.invalidateQueries({
-                queryKey: queryKeys.orders.detail(galleryIdStr, orderIdStr),
-              });
-            } catch (statusErr) {
-              // eslint-disable-next-line no-console
-              console.error(
-                "[useFinalImageDelete] Failed to refresh order after last image deleted:",
-                statusErr
-              );
-            }
-          })();
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.orders.detail(galleryIdStr, orderIdStr),
+          });
         }
 
-        // Remove from deleting set
+        // Remove from deleting set - deletion is complete (synchronous)
         setDeletingImages((prev) => {
           const updated = new Set(prev);
           updated.delete(imageKey);
@@ -121,6 +107,9 @@ export const useFinalImageDelete = ({
         });
 
         // Mark as successfully deleted
+        // The mutation's optimistic update already removed it from cache, and onSuccess invalidates
+        // queries to refetch. We track deletedImageKeys to filter it out in case it reappears
+        // during refetch before the backend fully processes the deletion.
         setDeletedImageKeys((prev) => new Set(prev).add(imageKey));
 
         // Clear deleted key after 30 seconds to allow eventual consistency
@@ -150,15 +139,10 @@ export const useFinalImageDelete = ({
           }, 800); // Increased debounce window to catch rapid deletions
         }
       } catch (err) {
-        // On error, rollback optimistic update
-        // The mutation's onError will rollback React Query cache
-        // We need to restore the image in local state if setFinalImages is provided
-        if (setFinalImages) {
-          // React Query cache will be rolled back, and component should sync from it
-          // No need to manually restore here as the component will sync from cache
-        }
+        // On error, the mutation's onError will rollback React Query cache
+        // Components will automatically sync from the rolled-back cache
 
-        // Remove from deleting set
+        // Remove from deleting set on error
         setDeletingImages((prev) => {
           const updated = new Set(prev);
           updated.delete(imageKey);
@@ -189,10 +173,8 @@ export const useFinalImageDelete = ({
     [
       galleryId,
       orderId,
-      setFinalImages,
       setOptimisticFinalsBytes,
       deletingImages,
-      deletedImageKeys,
       queryClient,
       galleryIdStr,
       orderIdStr,
@@ -235,6 +217,15 @@ export const useFinalImageDelete = ({
     [deleteImage, deletingImages]
   );
 
+  // Clear deletedImageKeys for images that have been re-uploaded
+  const clearDeletedKeysForImages = useCallback((imageKeys: string[]) => {
+    setDeletedImageKeys((prev) => {
+      const updated = new Set(prev);
+      imageKeys.forEach((key) => updated.delete(key));
+      return updated;
+    });
+  }, []);
+
   return {
     deleteImage,
     handleDeleteImageClick,
@@ -242,5 +233,6 @@ export const useFinalImageDelete = ({
     deletedImageKeys,
     deletingImagesRef,
     deletedImageKeysRef,
+    clearDeletedKeysForImages,
   };
 };

@@ -683,9 +683,11 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     ) => {
       // Complete the multipart upload
       const galleryId = config.galleryId;
+      const fileSize = file.size || 0;
       const response = await api.uploads.completeMultipartUpload(galleryId, {
         uploadId,
         key,
+        fileSize, // Pass fileSize to backend
         parts: parts.map((p) => ({
           partNumber: p.number,
           etag: p.etag,
@@ -771,6 +773,40 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       });
     });
   }
+
+  // Handle simple PUT upload completion (not multipart)
+  // Call completion endpoint to update storage immediately
+  uppy.on("upload-success", async (file, response) => {
+    // Only handle simple PUT uploads (multipart has its own completion handler)
+    // Check if this is a multipart upload by looking for multipart metadata
+    const isMultipart = file.meta?.multipartUploadId !== undefined || 
+                        file.meta?.multipartParts !== undefined ||
+                        file.meta?.multipartTotalParts !== undefined;
+    if (isMultipart) {
+      return; // Multipart completion is handled in completeMultipartUpload
+    }
+
+    // Get S3 key from file metadata (set during getUploadParameters)
+    const s3Key = file.meta?.s3Key as string | undefined;
+    const fileSize = file.size || 0;
+
+    if (!s3Key || fileSize <= 0) {
+      // Skip if we don't have the required info
+      return;
+    }
+
+    // Call completion endpoint to update storage
+    const galleryId = config.galleryId;
+    try {
+      await api.uploads.completeUpload(galleryId, {
+        key: s3Key,
+        fileSize,
+      });
+    } catch (error) {
+      // Log but don't fail - upload was successful, storage can be recalculated
+      console.error("Failed to complete upload (storage update):", error);
+    }
+  });
 
   if (config.onComplete) {
     uppy.on("complete", (result) => {

@@ -23,6 +23,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const uploadId = body?.uploadId;
 	const key = body?.key; // Full S3 key (objectKey)
 	const parts: Part[] = body?.parts || [];
+	const fileSize = body?.fileSize; // File size in bytes (from frontend)
 
 	if (!galleryId || !uploadId || !key || !Array.isArray(parts) || parts.length === 0) {
 		return { 
@@ -91,73 +92,95 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	try {
 		const response = await s3.send(completeCmd);
 		
-		// Get file size after completion to update storage usage atomically
-		let fileSize = 0;
-		try {
-			const headResponse = await s3.send(new HeadObjectCommand({
-				Bucket: bucket,
-				Key: key
-			}));
-			fileSize = headResponse.ContentLength || 0;
-		} catch (headErr: any) {
-			// Log but don't fail - file was uploaded successfully
-			const logger = (context as any)?.logger;
-			logger?.warn('Failed to get file size after multipart completion', {
-				error: headErr.message,
-				galleryId,
-				key
-			});
+		const logger = (context as any)?.logger;
+		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		
+		// Get file size: prefer from request, fallback to HeadObjectCommand
+		let actualFileSize = fileSize;
+		if (!actualFileSize || actualFileSize <= 0) {
+			try {
+				const headResponse = await s3.send(new HeadObjectCommand({
+					Bucket: bucket,
+					Key: key
+				}));
+				actualFileSize = headResponse.ContentLength || 0;
+			} catch (headErr: any) {
+				logger?.warn('Failed to get file size after multipart completion', {
+					error: headErr.message,
+					galleryId,
+					key
+				});
+			}
 		}
 
-		// Update storage usage atomically if file size was retrieved
-		if (fileSize > 0) {
-			const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-			if (galleriesTable) {
-				try {
-					// Determine if this is an original or final upload based on key path
-					const isOriginal = key.includes('/originals/');
-					const isFinal = key.includes('/final/');
-					
-					if (isOriginal || isFinal) {
-						// Use atomic ADD operation to prevent race conditions with concurrent uploads/deletions
-						const updateExpressions: string[] = [];
-						const expressionValues: Record<string, number> = {};
-						
-						if (isOriginal) {
-							updateExpressions.push('originalsBytesUsed :originalsSize');
-							expressionValues[':originalsSize'] = fileSize;
-						}
-						
-						if (isFinal) {
-							updateExpressions.push('finalsBytesUsed :finalsSize');
-							expressionValues[':finalsSize'] = fileSize;
-						}
-						
-						await ddb.send(new UpdateCommand({
-							TableName: galleriesTable,
-							Key: { galleryId },
-							UpdateExpression: `ADD ${updateExpressions.join(', ')}`,
-							ExpressionAttributeValues: expressionValues
-						}));
-						
-						const logger = (context as any)?.logger;
-						logger?.info('Updated gallery storage usage after multipart upload (atomic)', {
-							galleryId,
-							key,
-							fileSize,
-							type: isOriginal ? 'original' : 'final'
-						});
+		// Update storage usage atomically if file size is available
+		if (actualFileSize > 0 && galleriesTable) {
+			try {
+				// Determine if this is an original or final upload based on key path
+				const isOriginal = key.includes('/originals/');
+				const isFinal = key.includes('/final/');
+
+				// For finals, exclude previews/thumbs/bigthumbs subdirectories - only track actual final images
+				// Structure: galleries/{galleryId}/final/{orderId}/{filename} (exactly 2 parts after /final/)
+				// We want to exclude: galleries/{galleryId}/final/{orderId}/previews/... or .../thumbs/... or .../bigthumbs/...
+				let isValidFinal = false;
+				if (isFinal) {
+					const afterFinal = key.split('/final/')[1];
+					const pathParts = afterFinal.split('/');
+					// Should have exactly 2 parts: orderId and filename (no subdirectories)
+					isValidFinal = pathParts.length === 2 && pathParts[0] && pathParts[1];
+				}
+				
+				if (isOriginal || (isFinal && isValidFinal)) {
+					// Extract filename from key for logging (no maps needed - we store only totals)
+					let filename: string;
+					if (isOriginal) {
+						filename = key.split('/originals/')[1];
+					} else {
+						// For finals: galleries/{galleryId}/final/{orderId}/{filename}
+						// We already validated it has exactly 2 parts above
+						const parts = key.split('/final/')[1].split('/');
+						filename = parts[parts.length - 1]; // Get last part (filename)
 					}
-				} catch (updateErr: any) {
-					// Log but don't fail - upload was successful, storage update can be recalculated later
-					const logger = (context as any)?.logger;
-					logger?.warn('Failed to update gallery storage usage after multipart upload', {
-						error: updateErr.message,
+					
+					// Use atomic ADD operation to prevent race conditions with concurrent uploads/deletions
+					// Store only totals - no maps needed (simpler, scales infinitely, avoids 400KB DynamoDB limit)
+					const updateExpressions: string[] = [];
+					const expressionValues: Record<string, any> = {};
+					
+					if (isOriginal) {
+						updateExpressions.push('originalsBytesUsed :originalsSize');
+						expressionValues[':originalsSize'] = actualFileSize;
+					}
+					
+					if (isFinal) {
+						updateExpressions.push('finalsBytesUsed :finalsSize');
+						expressionValues[':finalsSize'] = actualFileSize;
+					}
+					
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: `ADD ${updateExpressions.join(', ')}`,
+						ExpressionAttributeValues: expressionValues
+					}));
+					
+					logger?.info('Updated gallery storage totals after multipart upload (atomic)', {
 						galleryId,
 						key,
-						fileSize
+						filename,
+						fileSize: actualFileSize,
+						type: isOriginal ? 'original' : 'final'
 					});
 				}
+			} catch (updateErr: any) {
+				// Log but don't fail - upload was successful, storage update can be recalculated later
+				logger?.warn('Failed to update gallery storage usage after multipart upload', {
+					error: updateErr.message,
+					galleryId,
+					key,
+					fileSize: actualFileSize
+				});
 			}
 		}
 		

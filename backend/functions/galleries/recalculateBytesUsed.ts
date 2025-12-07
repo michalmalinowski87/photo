@@ -9,13 +9,19 @@ const s3 = new S3Client({});
 
 /**
  * Cache TTL: 5 minutes
- * This balances freshness with cost - S3 ListObjects costs ~$0.005 per 1000 requests
+ * This balances freshness with performance - DB queries are fast but caching reduces load
  * Critical operations (pay, validateUploadLimits) force recalculation (bypass cache)
  * Display operations use cached values (acceptable to be slightly stale)
  */
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function calculateOriginalsSize(bucket: string, galleryId: string): Promise<number> {
+/**
+ * Calculate originals size from S3 by scanning the originals directory
+ * @param bucket - S3 bucket name
+ * @param galleryId - Gallery ID
+ * @returns Total size in bytes of all original images
+ */
+async function calculateOriginalsSizeFromS3(bucket: string, galleryId: string): Promise<number> {
 	let totalSize = 0;
 	let continuationToken: string | undefined;
 	const prefix = `galleries/${galleryId}/originals/`;
@@ -37,12 +43,18 @@ export async function calculateOriginalsSize(bucket: string, galleryId: string):
 	return totalSize;
 }
 
-export async function calculateFinalsSize(bucket: string, galleryId: string, logger?: any): Promise<number> {
+/**
+ * Calculate finals size from S3 by scanning the final directory
+ * Excludes previews/thumbs subdirectories - only counts files directly under order directories
+ * @param bucket - S3 bucket name
+ * @param galleryId - Gallery ID
+ * @param logger - Optional logger instance
+ * @returns Total size in bytes of all final images
+ */
+async function calculateFinalsSizeFromS3(bucket: string, galleryId: string, logger?: any): Promise<number> {
 	let totalSize = 0;
 	let continuationToken: string | undefined;
 	const prefix = `galleries/${galleryId}/final/`;
-	const includedFiles: Array<{ key: string; size: number }> = [];
-	const excludedFiles: Array<{ key: string; size: number; reason: string }> = [];
 
 	do {
 		const listResponse = await s3.send(new ListObjectsV2Command({
@@ -62,20 +74,7 @@ export async function calculateFinalsSize(bucket: string, galleryId: string, log
 				// A valid path should be: {orderId}/{filename} with no additional slashes
 				const pathParts = relativePath.split('/');
 				// Should have exactly 2 parts: orderId and filename
-				const isValid = pathParts.length === 2 && pathParts[0] && pathParts[1];
-				
-				if (obj.Size && obj.Size > 0) {
-					if (isValid) {
-						includedFiles.push({ key, size: obj.Size });
-					} else {
-						excludedFiles.push({ 
-							key, 
-							size: obj.Size, 
-							reason: `pathParts.length=${pathParts.length}, parts: [${pathParts.join(', ')}]` 
-						});
-					}
-				}
-				return isValid;
+				return pathParts.length === 2 && pathParts[0] && pathParts[1];
 			});
 			
 			totalSize += filtered.reduce((sum, obj) => sum + (obj.Size || 0), 0);
@@ -83,21 +82,6 @@ export async function calculateFinalsSize(bucket: string, galleryId: string, log
 
 		continuationToken = listResponse.NextContinuationToken;
 	} while (continuationToken);
-
-	// Log all included and excluded files for debugging
-	logger?.info('calculateFinalsSize - Included files', { 
-		galleryId, 
-		count: includedFiles.length, 
-		files: includedFiles,
-		totalSize 
-	});
-	if (excludedFiles.length > 0) {
-		logger?.info('calculateFinalsSize - Excluded files', { 
-			galleryId, 
-			count: excludedFiles.length, 
-			files: excludedFiles 
-		});
-	}
 
 	return totalSize;
 }
@@ -169,6 +153,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
  * Usage:
  * - Critical operations (pay, validateUploadLimits): forceRecalc = true
  * - Display operations (list galleries, sidebar): forceRecalc = false
+ * 
+ * Note: Recalculation uses S3 ListObjectsV2Command scans. This is acceptable since:
+ * - Recalculation is rare (only when needed for verification/fixing)
+ * - Totals are maintained accurately via atomic ADD/SUBTRACT during uploads/deletes
+ * - Caching prevents excessive scans for display operations
  */
 export async function recalculateStorageInternal(
 	galleryId: string,
@@ -240,38 +229,14 @@ export async function recalculateStorageInternal(
 	});
 	
 	// Calculate actual sizes from S3 for both originals and finals
-	let originalsSize = 0;
-	let finalsSize = 0;
+	const originalsSize = await calculateOriginalsSizeFromS3(bucket, galleryId);
+	const finalsSize = await calculateFinalsSizeFromS3(bucket, galleryId, logger);
 	
-	try {
-		originalsSize = await calculateOriginalsSize(bucket, galleryId);
-		logger?.info('Calculated originals size from S3', { galleryId, originalsSize });
-	} catch (err: any) {
-		logger?.error('Failed to calculate originals size', {
-			error: err.message,
-			galleryId
-		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to calculate originals storage size', message: err.message })
-		};
-	}
-
-	try {
-		finalsSize = await calculateFinalsSize(bucket, galleryId, logger);
-		logger?.info('Calculated finals size from S3', { galleryId, finalsSize, bucket });
-	} catch (err: any) {
-		logger?.error('Failed to calculate finals size', {
-			error: err.message,
-			galleryId
-		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to calculate finals storage size', message: err.message })
-		};
-	}
+	logger?.info('Calculated storage sizes from S3', { 
+		galleryId, 
+		originalsSize, 
+		finalsSize
+	});
 
 	// Update gallery with both originalsBytesUsed and finalsBytesUsed, and record recalculation timestamp
 	const totalBytesUsed = originalsSize + finalsSize;
@@ -284,7 +249,7 @@ export async function recalculateStorageInternal(
 		// Use conditional update to prevent race conditions when multiple recalculations run concurrently:
 		// Only update if our timestamp is newer than existing, or if no timestamp exists
 		// This ensures concurrent recalculations don't overwrite each other
-		// The recalculation with the newest timestamp wins, which is correct (most recent S3 state)
+		// The recalculation with the newest timestamp wins, which is correct (most recent DB state)
 		await ddb.send(new UpdateCommand({
 			TableName: galleriesTable,
 			Key: { galleryId },
@@ -346,9 +311,10 @@ export async function recalculateStorageInternal(
 				}));
 				
 				if (retryGallery.Item) {
-					// Recalculate sizes again (they should be the same, but ensure we have latest)
-					const retryOriginalsSize = await calculateOriginalsSize(bucket, galleryId);
-					const retryFinalsSize = await calculateFinalsSize(bucket, galleryId);
+					// Recalculate sizes from S3 again (they should be the same, but ensure we have latest)
+					const retryGalleryData = retryGallery.Item as any;
+					const retryOriginalsSize = await calculateOriginalsSizeFromS3(bucket, galleryId);
+					const retryFinalsSize = await calculateFinalsSizeFromS3(bucket, galleryId, logger);
 					const retryTotalBytes = retryOriginalsSize + retryFinalsSize;
 					const retryTimestamp = new Date().toISOString();
 					

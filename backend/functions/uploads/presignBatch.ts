@@ -1,5 +1,5 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
@@ -7,28 +7,6 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-async function calculateOriginalsSize(bucket: string, galleryId: string): Promise<number> {
-	let totalSize = 0;
-	let continuationToken: string | undefined;
-	const prefix = `galleries/${galleryId}/originals/`;
-
-	do {
-		const listResponse = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: prefix,
-			ContinuationToken: continuationToken
-		}));
-
-		if (listResponse.Contents) {
-			totalSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
-		}
-
-		continuationToken = listResponse.NextContinuationToken;
-	} while (continuationToken);
-
-	return totalSize;
-}
 
 interface BatchFileRequest {
 	key: string;
@@ -120,7 +98,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Check storage limits BEFORE upload
 		if (!gallery.originalsLimitBytes) {
 			// Draft gallery - limit to largest plan
-			const currentSize = await calculateOriginalsSize(bucket, galleryId);
+			const currentSize = gallery.originalsBytesUsed || 0;
 			if (currentSize + totalFileSize > MAX_DRAFT_SIZE_BYTES) {
 				const usedGB = (currentSize / (1024 * 1024 * 1024)).toFixed(2);
 				const limitGB = (MAX_DRAFT_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(0);
@@ -137,7 +115,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				};
 			}
 		} else {
-			// Paid gallery - check against plan limit
+			// Paid gallery - check against plan limit using DB
 			const currentSize = gallery.originalsBytesUsed || 0;
 			if (currentSize + totalFileSize > gallery.originalsLimitBytes) {
 				const usedMB = (currentSize / (1024 * 1024)).toFixed(2);

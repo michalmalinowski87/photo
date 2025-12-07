@@ -198,7 +198,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Trigger storage recalculation after final uploads complete
 	// This ensures accurate storage values immediately after upload (bypasses 5-minute cache)
 	try {
-		await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+		if (bucket) {
+			await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		}
 		logger?.info('Triggered storage recalculation after final upload completion', { galleryId, orderId });
 	} catch (recalcErr: any) {
 		logger?.warn('Failed to trigger storage recalculation after final upload', {

@@ -18,6 +18,7 @@ function getWebpFilename(fname: string): string {
 /**
  * Process a single delete operation
  * Returns file size for storage update (only for original/final files, not thumbnails)
+ * Uses S3 HeadObjectCommand to get file size (simple, scales infinitely, avoids 400KB DynamoDB limit)
  */
 async function processDelete(
 	deleteRequest: {
@@ -28,30 +29,60 @@ async function processDelete(
 		originalKey: string;
 	},
 	bucket: string,
+	galleriesTable: string,
 	logger: any
-): Promise<{ galleryId: string; success: boolean; fileSize?: number; type: 'original' | 'final' }> {
+): Promise<{ galleryId: string; success: boolean; fileSize?: number; type: 'original' | 'final'; filename: string }> {
 	const { type, galleryId, orderId, filename, originalKey } = deleteRequest;
 	
 	try {
-		// Get file size BEFORE deletion for storage update (only count original/final, not thumbnails)
+		// Get file size from S3 using HeadObjectCommand (simple, scales infinitely, avoids 400KB DynamoDB limit)
+		// HeadObject is cheap ($0.0004 per 1000 requests) and fast (~50ms)
 		let fileSize = 0;
+		
 		try {
 			const headResponse = await s3.send(new HeadObjectCommand({
 				Bucket: bucket,
 				Key: originalKey
 			}));
+			
 			fileSize = headResponse.ContentLength || 0;
-		} catch (headErr: any) {
-			if (headErr.name !== 'NotFound') {
-				logger?.warn('Failed to get file size before deletion', {
-					error: headErr.message,
+			
+			if (fileSize <= 0) {
+				logger?.warn('File size is 0 or negative from S3 HeadObject', {
 					galleryId,
 					filename,
 					type,
-					originalKey
+					key: originalKey
 				});
+				return { galleryId, success: false, type, filename };
 			}
-			// If file not found, continue - it might have been deleted already
+			
+			logger?.info('Retrieved file size from S3 HeadObject', {
+				galleryId,
+				filename,
+				fileSize,
+				type,
+				key: originalKey
+			});
+		} catch (headErr: any) {
+			if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
+				logger?.warn('File not found in S3 during delete', {
+					galleryId,
+					filename,
+					type,
+					key: originalKey
+				});
+				// File doesn't exist - skip storage update but mark as success (idempotent)
+				return { galleryId, success: true, fileSize: 0, type, filename };
+			}
+			logger?.error('Failed to get file size from S3 HeadObject', {
+				error: headErr.message,
+				galleryId,
+				filename,
+				type,
+				key: originalKey
+			});
+			throw headErr;
 		}
 
 		// Construct S3 keys for all files to delete
@@ -101,7 +132,7 @@ async function processDelete(
 			fileSize
 		});
 
-		return { galleryId, success: true, fileSize, type };
+		return { galleryId, success: true, fileSize, type, filename };
 	} catch (err: any) {
 		logger?.error('Failed to process delete', {
 			error: err.message,
@@ -110,7 +141,7 @@ async function processDelete(
 			type,
 			orderId
 		});
-		return { galleryId, success: false, type };
+		return { galleryId, success: false, type, filename };
 	}
 }
 
@@ -173,10 +204,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const finalImageDeletes = new Map<string, Array<{ galleryId: string; orderId: string }>>(); // Track final image deletes by galleryId/orderId
 	const galleryBytesToSubtract = new Map<string, { originals: number; finals: number }>(); // Track bytes to subtract per gallery
 
+	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+
 	for (let i = 0; i < deletes.length; i += BATCH_SIZE) {
 		const batch = deletes.slice(i, i + BATCH_SIZE);
 		const results = await Promise.allSettled(
-			batch.map(deleteReq => processDelete(deleteReq, bucket, logger))
+			batch.map(deleteReq => processDelete(deleteReq, bucket, galleriesTable, logger))
 		);
 
 		// Collect gallery IDs, track final image deletes, and accumulate file sizes for storage updates
@@ -216,14 +249,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Update storage usage atomically for all affected galleries
-	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	// Use atomic SUBTRACT operation with negative values to prevent race conditions
 	if (galleriesTable && galleryBytesToSubtract.size > 0) {
 		for (const [galleryId, bytes] of galleryBytesToSubtract.entries()) {
 			try {
-				// Use atomic ADD operation with negative values to prevent race conditions
-				// This safely handles concurrent deletions and uploads
 				const updateExpressions: string[] = [];
-				const expressionValues: Record<string, number> = {};
+				const expressionValues: Record<string, any> = {};
 				
 				if (bytes.originals > 0) {
 					updateExpressions.push('originalsBytesUsed :negativeOriginalsSize');
@@ -234,7 +265,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					updateExpressions.push('finalsBytesUsed :negativeFinalsSize');
 					expressionValues[':negativeFinalsSize'] = -bytes.finals;
 				}
-				
 				
 				if (updateExpressions.length > 0) {
 					await ddb.send(new UpdateCommand({
@@ -285,101 +315,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}
 					}
 					
-					// Safety check: Verify if gallery has any remaining images in S3
-					// If no images remain, ensure storage usage fields are set to 0
-					// This catches edge cases where storage might be slightly above 0 when it should be 0
-					try {
-						const originalsPrefix = `galleries/${galleryId}/originals/`;
-						const finalsPrefix = `galleries/${galleryId}/final/`;
-						
-						// Check originals directory (only count actual image files, not thumbnails/previews)
-						const originalsList = await s3.send(new ListObjectsV2Command({
-							Bucket: bucket,
-							Prefix: originalsPrefix,
-							MaxKeys: 1 // Only need to check if any files exist
-						}));
-						const hasOriginals = (originalsList.Contents || []).some(obj => {
-							const key = obj.Key || '';
-							// Only count files directly under originals/, not subdirectories
-							return key.startsWith(originalsPrefix) &&
-								key !== originalsPrefix &&
-								!key.substring(originalsPrefix.length).includes('/');
-						});
-						
-						// Check finals directory (only count actual image files, not thumbnails/previews)
-						const finalsList = await s3.send(new ListObjectsV2Command({
-							Bucket: bucket,
-							Prefix: finalsPrefix,
-							MaxKeys: 100 // Need to check multiple files to find actual images
-						}));
-						const hasFinals = (finalsList.Contents || []).some(obj => {
-							const key = obj.Key || '';
-							// Only count files directly under final/{orderId}/, not subdirectories
-							// Match pattern: galleries/{galleryId}/final/{orderId}/{filename}
-							// Exclude: previews/, thumbs/, bigthumbs/ subdirectories
-							if (!key.startsWith(finalsPrefix) || key === finalsPrefix) {
-								return false;
-							}
-							const relativePath = key.substring(finalsPrefix.length);
-							// Should match: {orderId}/{filename} (exactly 2 path segments)
-							// Exclude subdirectories like previews/, thumbs/, bigthumbs/
-							const pathParts = relativePath.split('/').filter(p => p.length > 0);
-							return pathParts.length === 2 &&
-								pathParts[0] !== 'previews' &&
-								pathParts[0] !== 'thumbs' &&
-								pathParts[0] !== 'bigthumbs';
-						});
-						
-						// If no images remain, set storage usage fields to 0
-						if (!hasOriginals && !hasFinals) {
-							logger?.info('No images remaining in gallery, setting storage usage to 0', {
-								galleryId,
-								previousOriginalsBytesUsed: updatedOriginalsBytesUsed,
-								previousFinalsBytesUsed: updatedFinalsBytesUsed
-							});
-							
-							await ddb.send(new UpdateCommand({
-								TableName: galleriesTable,
-								Key: { galleryId },
-								UpdateExpression: 'SET originalsBytesUsed = :zero, finalsBytesUsed = :zero',
-								ExpressionAttributeValues: { ':zero': 0 }
-							}));
-						} else if (!hasOriginals && updatedOriginalsBytesUsed > 0) {
-							// If no originals but originalsBytesUsed > 0, set to 0
-							logger?.info('No originals remaining but originalsBytesUsed > 0, correcting', {
-								galleryId,
-								previousOriginalsBytesUsed: updatedOriginalsBytesUsed
-							});
-							
-							await ddb.send(new UpdateCommand({
-								TableName: galleriesTable,
-								Key: { galleryId },
-								UpdateExpression: 'SET originalsBytesUsed = :zero',
-								ExpressionAttributeValues: { ':zero': 0 }
-							}));
-						} else if (!hasFinals && updatedFinalsBytesUsed > 0) {
-							// If no finals but finalsBytesUsed > 0, set to 0
-							logger?.info('No finals remaining but finalsBytesUsed > 0, correcting', {
-								galleryId,
-								previousFinalsBytesUsed: updatedFinalsBytesUsed
-							});
-							
-							await ddb.send(new UpdateCommand({
-								TableName: galleriesTable,
-								Key: { galleryId },
-								UpdateExpression: 'SET finalsBytesUsed = :zero',
-								ExpressionAttributeValues: { ':zero': 0 }
-							}));
-						}
-					} catch (s3CheckErr: any) {
-						// Log but don't fail - this is a safety check, not critical
-						logger?.warn('Failed to verify remaining images in S3 for storage correction', {
-							error: s3CheckErr.message,
-							galleryId
-						});
-					}
-					
-					logger?.info('Updated gallery storage usage after batch delete (atomic)', {
+					logger?.info('Updated gallery storage totals after batch delete (atomic)', {
 						galleryId,
 						originalsRemoved: bytes.originals,
 						finalsRemoved: bytes.finals,
@@ -413,7 +349,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const finalPrefix = `galleries/${galleryId}/final/${orderId}/`;
 				
 				try {
-					// Check if directory is empty (only count files directly under prefix, not subdirectories)
+					// Check if order has any remaining finals using S3 listing
+					// This is order-specific and only used for status management (not storage calculation)
 					const listResponse = await s3.send(new ListObjectsV2Command({
 						Bucket: bucket,
 						Prefix: finalPrefix,
@@ -494,6 +431,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						orderId
 					});
 					// Don't fail the entire batch - directory check is secondary
+					// Note: This still uses S3 listing for order-specific checks since
+					// we can't easily determine orderId from filename in the DB map.
+					// This is acceptable as it's only for order status management.
 				}
 			}
 		}
