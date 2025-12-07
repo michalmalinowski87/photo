@@ -222,7 +222,66 @@ export function useSendFinalLink() {
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.sendFinalLink(galleryId, orderId),
+    onMutate: async ({ galleryId, orderId }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.detail(galleryId, orderId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.orders.byGallery(galleryId),
+      });
+
+      // Snapshot the previous values
+      const previousOrderDetail = queryClient.getQueryData<Order>(
+        queryKeys.orders.detail(galleryId, orderId)
+      );
+      const previousOrdersList = queryClient.getQueryData<Order[]>(
+        queryKeys.orders.list(galleryId)
+      );
+
+      // Optimistically update the order detail
+      if (previousOrderDetail) {
+        queryClient.setQueryData<Order>(
+          queryKeys.orders.detail(galleryId, orderId),
+          {
+            ...previousOrderDetail,
+            deliveryStatus: "DELIVERED",
+          }
+        );
+      }
+
+      // Optimistically update the order in the list
+      if (previousOrdersList) {
+        queryClient.setQueryData<Order[]>(
+          queryKeys.orders.list(galleryId),
+          previousOrdersList.map((order) =>
+            order.orderId === orderId
+              ? { ...order, deliveryStatus: "DELIVERED" }
+              : order
+          )
+        );
+      }
+
+      // Return context with snapshots for rollback
+      return { previousOrderDetail, previousOrdersList };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback optimistic updates on error
+      if (context?.previousOrderDetail) {
+        queryClient.setQueryData(
+          queryKeys.orders.detail(variables.galleryId, variables.orderId),
+          context.previousOrderDetail
+        );
+      }
+      if (context?.previousOrdersList) {
+        queryClient.setQueryData(
+          queryKeys.orders.list(variables.galleryId),
+          context.previousOrdersList
+        );
+      }
+    },
     onSuccess: (_, variables) => {
+      // Invalidate to refetch and get the real data from server
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
