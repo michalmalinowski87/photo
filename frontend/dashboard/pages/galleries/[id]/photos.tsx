@@ -133,7 +133,7 @@ export default function GalleryPhotos() {
   }, [galleryId]);
 
   // Use hook for deletion logic
-  const { deleteImage, handleDeleteImageClick, deletingImages } = useOriginalImageDelete({
+  const { deleteImage, handleDeleteImageClick, deletingImages, deletedImageKeys } = useOriginalImageDelete({
     galleryId,
   });
 
@@ -153,6 +153,7 @@ export default function GalleryPhotos() {
   const {
     deleteImages: deleteImagesBulk,
     deletingImages: deletingImagesBulk,
+    deletedImageKeys: deletedImageKeysBulk,
     isDeleting: isBulkDeleting,
   } = useBulkImageDelete({
     galleryId,
@@ -216,7 +217,7 @@ export default function GalleryPhotos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
-  // Convert React Query data to GalleryImage format and filter out deleting images
+  // Convert React Query data to GalleryImage format and filter out deleted images
   const images = useMemo(() => {
     if (!imagesData) {
       return [];
@@ -238,10 +239,25 @@ export default function GalleryPhotos() {
       isPlaceholder: false,
     }));
 
-    // Filter out images that are being deleted (they'll show with overlay but not count in list)
-    // Actually, let's keep them in the list so the overlay shows, just mark them
-    return mappedImages;
-  }, [imagesData]);
+    // Filter out successfully deleted images (from both single and bulk delete)
+    // This prevents them from reappearing during refetch before backend completes deletion
+    const allDeletedKeys = new Set([
+      ...Array.from(deletedImageKeys),
+      ...Array.from(deletedImageKeysBulk),
+    ]);
+    
+    return mappedImages.filter((img) => {
+      const imgKey = img.key ?? img.filename;
+      if (!imgKey) {
+        return false;
+      }
+      // Skip if successfully deleted
+      if (allDeletedKeys.has(imgKey)) {
+        return false;
+      }
+      return true;
+    });
+  }, [imagesData, deletedImageKeys, deletedImageKeysBulk]);
 
   const handleDeletePhotoClick = (image: GalleryImage): void => {
     const imageKey = image.key ?? image.filename;

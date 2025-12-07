@@ -300,17 +300,23 @@ export function useDeleteGalleryImagesBatch() {
       }
     },
     onSuccess: (_data, variables) => {
-      // Invalidate image queries immediately - these should be accurate
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
-      });
-      
-      // Also invalidate thumb queries if deleting originals
-      if (variables.imageType === "originals" || !variables.imageType) {
+      // Delay invalidation to allow backend to complete deletion processing
+      // This prevents images from temporarily reappearing during refetch
+      // The optimistic update already removed them from cache, and the component
+      // filters out deletedImageKeys to prevent reappearance even if queries refetch early
+      setTimeout(() => {
+        // Invalidate image queries after a short delay - gives backend time to process
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
+          queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
         });
-      }
+        
+        // Also invalidate thumb queries if deleting originals
+        if (variables.imageType === "originals" || !variables.imageType) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
+          });
+        }
+      }, 500); // 500ms delay to let backend complete deletion processing
       
       // Delay gallery detail invalidation to allow async S3 deletion to complete
       // The backend processes S3 deletion asynchronously, so we wait a bit for

@@ -1,9 +1,6 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
 import { formatApiError } from "../lib/api-service";
-import { queryKeys } from "../lib/react-query";
-import type { GalleryImage } from "../types";
 
 import { useDeleteGalleryImagesBatch } from "./mutations/useGalleryMutations";
 import { useToast } from "./useToast";
@@ -18,9 +15,10 @@ export const useBulkImageDelete = ({
   imageType = "originals",
 }: UseBulkImageDeleteOptions) => {
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
   const deleteBatchMutation = useDeleteGalleryImagesBatch();
-  const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
+  const isDeletingRef = useRef(false);
 
   // Toast batching refs
   const successToastBatchRef = useRef<number>(0);
@@ -41,31 +39,38 @@ export const useBulkImageDelete = ({
       }
 
       // Prevent duplicate deletions
-      const alreadyDeleting = imageKeys.filter((key) => deletingImages.has(key));
-      if (alreadyDeleting.length > 0) {
+      if (isDeletingRef.current) {
         return;
       }
 
-      // Mark images as being deleted
-      setDeletingImages((prev) => {
-        const next = new Set(prev);
-        imageKeys.forEach((key) => next.add(key));
-        return next;
-      });
+      setIsDeleting(true);
+      isDeletingRef.current = true;
 
       try {
         // Optimistic updates are handled in the mutation's onMutate
+        // Images are immediately removed from cache
         await deleteBatchMutation.mutateAsync({
           galleryId: galleryIdStr,
           imageKeys,
           imageType,
         });
 
-        // Remove from deleting set after successful deletion
-        setDeletingImages((prev) => {
+        // Mark images as successfully deleted - they'll be filtered out even if they reappear during refetch
+        setDeletedImageKeys((prev) => {
           const next = new Set(prev);
-          imageKeys.forEach((key) => next.delete(key));
+          imageKeys.forEach((key) => next.add(key));
           return next;
+        });
+
+        // Clear deleted keys after 30 seconds to allow eventual consistency
+        imageKeys.forEach((imageKey) => {
+          setTimeout(() => {
+            setDeletedImageKeys((prev) => {
+              const updated = new Set(prev);
+              updated.delete(imageKey);
+              return updated;
+            });
+          }, 30000);
         });
 
         // Batch success toasts - accumulate count and show single toast
@@ -85,12 +90,6 @@ export const useBulkImageDelete = ({
         }
       } catch (err) {
         // On error, the mutation's onError will rollback React Query cache
-        // Remove from deleting set
-        setDeletingImages((prev) => {
-          const next = new Set(prev);
-          imageKeys.forEach((key) => next.delete(key));
-          return next;
-        });
 
         // Batch error toasts - accumulate count and show single toast
         errorToastBatchRef.current += imageKeys.length;
@@ -109,15 +108,19 @@ export const useBulkImageDelete = ({
           }, 800);
         }
         throw err;
+      } finally {
+        setIsDeleting(false);
+        isDeletingRef.current = false;
       }
     },
-    [galleryId, deletingImages, deleteBatchMutation, imageType, showToast]
+    [galleryId, deleteBatchMutation, imageType, showToast]
   );
 
   return {
     deleteImages,
-    deletingImages,
-    isDeleting: deletingImages.size > 0,
+    deletingImages: new Set<string>(), // Empty set - images are optimistically removed from cache immediately via mutation's onMutate, so no need to track them as "deleting"
+    deletedImageKeys, // Track successfully deleted images to filter them out even if they reappear during refetch
+    isDeleting,
   };
 };
 
