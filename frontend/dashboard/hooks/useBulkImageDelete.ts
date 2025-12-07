@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { formatApiError } from "../lib/api-service";
 
-import { useDeleteGalleryImagesBatch } from "./mutations/useGalleryMutations";
+import { useDeleteGalleryImage } from "./mutations/useGalleryMutations";
 import { useToast } from "./useToast";
 
 interface UseBulkImageDeleteOptions {
@@ -15,7 +15,7 @@ export const useBulkImageDelete = ({
   imageType = "originals",
 }: UseBulkImageDeleteOptions) => {
   const { showToast } = useToast();
-  const deleteBatchMutation = useDeleteGalleryImagesBatch();
+  const deleteBatchMutation = useDeleteGalleryImage();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const isDeletingRef = useRef(false);

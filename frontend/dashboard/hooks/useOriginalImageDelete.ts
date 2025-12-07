@@ -61,7 +61,7 @@ export const useOriginalImageDelete = ({ galleryId }: UseOriginalImageDeleteOpti
       try {
         await deleteGalleryImageMutation.mutateAsync({
           galleryId: galleryIdStr,
-          imageKey,
+          imageKeys: [imageKey],
         });
 
         // Save suppression only after successful deletion

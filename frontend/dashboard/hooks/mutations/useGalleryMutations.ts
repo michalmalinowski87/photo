@@ -199,34 +199,11 @@ export function useUpgradeGalleryPlan() {
   });
 }
 
+/**
+ * Delete gallery images (handles both single and batch operations)
+ * For single deletion, pass an array with one image key: [imageKey]
+ */
 export function useDeleteGalleryImage() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ galleryId, imageKey }: { galleryId: string; imageKey: string }) =>
-      api.galleries.deleteImage(galleryId, imageKey),
-    onSuccess: (_data, variables) => {
-      // Invalidate image queries immediately - these should be accurate
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "originals"),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
-      });
-      
-      // Delay gallery detail invalidation to allow async S3 deletion to complete
-      // The backend processes S3 deletion asynchronously, so we wait a bit for
-      // the database to be updated with the correct storage bytes
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(variables.galleryId),
-        });
-      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
-    },
-  });
-}
-
-export function useDeleteGalleryImagesBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -238,7 +215,7 @@ export function useDeleteGalleryImagesBatch() {
       galleryId: string; 
       imageKeys: string[];
       imageType?: "originals" | "finals" | "thumb";
-    }) => api.galleries.deleteImagesBatch(galleryId, imageKeys),
+    }) => api.galleries.deleteImage(galleryId, imageKeys),
     onMutate: async ({ galleryId, imageKeys, imageType = "originals" }) => {
       // Cancel outgoing queries to avoid overwriting optimistic update
       await queryClient.cancelQueries({

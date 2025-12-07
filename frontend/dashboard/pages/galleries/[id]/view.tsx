@@ -121,7 +121,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
     try {
       await deleteGalleryImageMutation.mutateAsync({
         galleryId: galleryIdStr,
-        imageKey: filename,
+        imageKeys: [filename],
       });
 
       setMessage("Photo deleted.");

@@ -76,7 +76,7 @@ export const useFinalImageDelete = ({
         await deleteFinalImageMutation.mutateAsync({
           galleryId: galleryIdStr,
           orderId: orderIdStr,
-          imageKey,
+          imageKeys: [imageKey],
         });
 
         // Save suppression only after successful deletion

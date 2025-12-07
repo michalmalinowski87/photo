@@ -537,12 +537,12 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (type === "finals" && orderId) {
           // Delete final images in batch
-          await api.orders.deleteFinalImagesBatch(galleryId, orderId, filenames).catch(() => {
+          await api.orders.deleteFinalImage(galleryId, orderId, filenames).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });
         } else {
           // Delete original images in batch
-          await api.galleries.deleteImagesBatch(galleryId, filenames).catch(() => {
+          await api.galleries.deleteImage(galleryId, filenames).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });
         }

@@ -485,35 +485,10 @@ class ApiService {
     },
 
     /**
-     * Delete a gallery image
+     * Delete gallery images (handles both single and batch operations)
+     * For single deletion, pass an array with one image key: [imageKey]
      */
     deleteImage: async (
-      galleryId: string,
-      imageKey: string
-    ): Promise<{
-      message: string;
-      galleryId: string;
-      filename: string;
-      originalsBytesUsed: number;
-      originalsLimitBytes: number;
-      originalsUsedMB: string;
-      originalsLimitMB: string;
-    }> => {
-      if (!galleryId) {
-        throw new Error("Gallery ID is required");
-      }
-      if (!imageKey) {
-        throw new Error("Image key is required");
-      }
-      return await this._request(`/galleries/${galleryId}/photos/${encodeURIComponent(imageKey)}`, {
-        method: "DELETE",
-      });
-    },
-
-    /**
-     * Delete multiple gallery images in batch
-     */
-    deleteImagesBatch: async (
       galleryId: string,
       imageKeys: string[]
     ): Promise<{
@@ -530,6 +505,7 @@ class ApiService {
       if (!Array.isArray(imageKeys) || imageKeys.length === 0) {
         throw new Error("Image keys array is required and must not be empty");
       }
+      // Use batch endpoint (works for both single and batch - backend single delete already uses batch Lambda)
       return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
         method: "POST",
         body: JSON.stringify({ filenames: imageKeys }),
@@ -853,46 +829,10 @@ class ApiService {
     },
 
     /**
-     * Delete a final image (uses batch endpoint)
+     * Delete final images (handles both single and batch operations)
+     * For single deletion, pass an array with one image key: [imageKey]
      */
     deleteFinalImage: async (
-      galleryId: string,
-      orderId: string,
-      imageKey: string
-    ): Promise<{
-      message: string;
-      galleryId: string;
-      orderId: string;
-      count: number;
-      finalsBytesUsed: number;
-      finalsLimitBytes: number;
-      finalsUsedMB: string;
-      finalsLimitMB: string;
-    }> => {
-      if (!galleryId) {
-        throw new Error("Gallery ID is required");
-      }
-      if (!orderId) {
-        throw new Error("Order ID is required");
-      }
-      if (!imageKey) {
-        throw new Error("Image key is required");
-      }
-      // Use batch endpoint for final images
-      return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
-        method: "POST",
-        body: JSON.stringify({
-          filenames: [imageKey],
-          orderId,
-          type: "final",
-        }),
-      });
-    },
-
-    /**
-     * Delete multiple final images in batch
-     */
-    deleteFinalImagesBatch: async (
       galleryId: string,
       orderId: string,
       imageKeys: string[]
@@ -915,7 +855,7 @@ class ApiService {
       if (!Array.isArray(imageKeys) || imageKeys.length === 0) {
         throw new Error("Image keys array is required and must not be empty");
       }
-      // Use batch endpoint for final images
+      // Use batch endpoint for final images (works for both single and batch)
       return await this._request(`/galleries/${galleryId}/photos/batch-delete`, {
         method: "POST",
         body: JSON.stringify({

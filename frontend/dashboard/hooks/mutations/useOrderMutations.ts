@@ -222,38 +222,11 @@ export function useSendFinalLink() {
   });
 }
 
+/**
+ * Delete final images (handles both single and batch operations)
+ * For single deletion, pass an array with one image key: [imageKey]
+ */
 export function useDeleteFinalImage() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      galleryId,
-      orderId,
-      imageKey,
-    }: {
-      galleryId: string;
-      orderId: string;
-      imageKey: string;
-    }) => api.orders.deleteFinalImage(galleryId, orderId, imageKey),
-    onSuccess: (_data, variables) => {
-      // Invalidate final images query immediately - this should be accurate
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
-      });
-      
-      // Delay gallery detail invalidation to allow async S3 deletion to complete
-      // The backend processes S3 deletion asynchronously, so we wait a bit for
-      // the database to be updated with the correct storage bytes
-      setTimeout(() => {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.detail(variables.galleryId),
-        });
-      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
-    },
-  });
-}
-
-export function useDeleteFinalImagesBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -265,7 +238,7 @@ export function useDeleteFinalImagesBatch() {
       galleryId: string;
       orderId: string;
       imageKeys: string[];
-    }) => api.orders.deleteFinalImagesBatch(galleryId, orderId, imageKeys),
+    }) => api.orders.deleteFinalImage(galleryId, orderId, imageKeys),
     onSuccess: (_data, variables) => {
       // Invalidate final images query immediately - this should be accurate
       void queryClient.invalidateQueries({
