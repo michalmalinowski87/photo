@@ -12,8 +12,9 @@ export type UploadType = "originals" | "finals";
 // This reduces API Gateway load for smaller files, which don't benefit from multipart overhead
 // See: https://uppy.io/docs/aws-s3/#shouldusemultipartfile
 const MULTIPART_THRESHOLD = 100 * 2 ** 20; // 100 MiB - Uppy's recommended default
-const BATCH_WINDOW_MS = 100; // Wait up to 100ms to collect files for batching
+const BATCH_WINDOW_MS = 500; // Wait up to 500ms to collect files for batching (increased to reduce request frequency and prevent API Gateway throttling)
 const MAX_BATCH_SIZE = 50; // Maximum files per batch (API limit)
+const MAX_CONCURRENT_BATCHES = 2; // Maximum concurrent batch requests to prevent API Gateway throttling
 
 // Batching queue for upload parameters
 interface PendingFileRequest {
@@ -31,40 +32,100 @@ interface BatchQueue {
   galleryId: string;
   orderId?: string;
   type: UploadType;
+  processingCount: number; // Track how many batch requests are currently in flight
 }
 
 // Map of galleryId+type to batch queue
 const batchQueues = new Map<string, BatchQueue>();
 
+// Global queue for batch requests to prevent too many concurrent requests
+interface BatchRequest {
+  queueKey: string;
+  processFn: () => Promise<void>;
+  resolve: () => void;
+  reject: (error: Error) => void;
+  retryCount: number;
+}
+
+const batchRequestQueue: BatchRequest[] = [];
+let processingBatchRequests = 0;
+
 function getQueueKey(galleryId: string, type: UploadType, orderId?: string): string {
   return `${galleryId}-${type}-${orderId || ""}`;
 }
 
-function processBatch(queue: BatchQueue): void {
-  if (queue.pending.size === 0) {
+/**
+ * Retry helper with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if error is retryable (network/CORS errors)
+      const errorMessage = lastError.message.toLowerCase();
+      const isRetryable =
+        errorMessage.includes("network") ||
+        errorMessage.includes("cors") ||
+        errorMessage.includes("failed to fetch") ||
+        errorMessage.includes("err_failed") ||
+        (lastError as any).status === 503 ||
+        (lastError as any).status === 429 ||
+        (lastError as any).status === 0; // Network error
+      
+      if (!isRetryable || attempt >= maxRetries) {
+        throw lastError;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = initialDelay * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError || new Error("Retry failed");
+}
+
+/**
+ * Process a batch request with retry logic and concurrency control
+ */
+async function processBatchRequest(queue: BatchQueue): Promise<void> {
+  const pendingArray = Array.from(queue.pending.values());
+  if (pendingArray.length === 0) {
     return;
   }
 
-  const pendingArray = Array.from(queue.pending.values());
-  queue.pending.clear();
-  queue.timeout = null;
-
-  // Group by type (finals vs originals) since they use different endpoints
-  const finalsFiles: PendingFileRequest[] = [];
-  const originalsFiles: PendingFileRequest[] = [];
-
+  // Remove from pending before processing to prevent duplicates
   pendingArray.forEach((req) => {
-    if (queue.type === "finals") {
-      finalsFiles.push(req);
-    } else {
-      originalsFiles.push(req);
-    }
+    queue.pending.delete(req.fileId);
   });
 
-  // Process finals batch
-  if (finalsFiles.length > 0 && queue.orderId) {
-    void (async () => {
-      try {
+  queue.timeout = null;
+
+  try {
+    // Group by type (finals vs originals) since they use different endpoints
+    const finalsFiles: PendingFileRequest[] = [];
+    const originalsFiles: PendingFileRequest[] = [];
+
+    pendingArray.forEach((req) => {
+      if (queue.type === "finals") {
+        finalsFiles.push(req);
+      } else {
+        originalsFiles.push(req);
+      }
+    });
+
+    // Process finals batch with retry
+    if (finalsFiles.length > 0 && queue.orderId) {
+      await retryWithBackoff(async () => {
         const response = await api.uploads.getFinalImagePresignedUrlsBatch(
           queue.galleryId,
           queue.orderId!,
@@ -101,20 +162,19 @@ function processBatch(queue: BatchQueue): void {
             req.reject(new Error("No presigned URL returned from server"));
           }
         });
-      } catch (error) {
+      }).catch((error) => {
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
         finalsFiles.forEach((req) => {
           req.reject(new Error(errorMessage));
         });
-      }
-    })();
-  }
+        throw error;
+      });
+    }
 
-  // Process originals batch
-  if (originalsFiles.length > 0) {
-    void (async () => {
-      try {
+    // Process originals batch with retry
+    if (originalsFiles.length > 0) {
+      await retryWithBackoff(async () => {
         const response = await api.uploads.getPresignedUrlsBatch({
           galleryId: queue.galleryId,
           files: originalsFiles.map((req) => ({
@@ -149,15 +209,107 @@ function processBatch(queue: BatchQueue): void {
             req.reject(new Error("No presigned URL returned from server"));
           }
         });
-      } catch (error) {
+      }).catch((error) => {
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
         originalsFiles.forEach((req) => {
           req.reject(new Error(errorMessage));
         });
-      }
-    })();
+        throw error;
+      });
+    }
+  } finally {
+    // Process next batch if any are pending (via queue system for concurrency control)
+    if (queue.pending.size > 0) {
+      // Small delay before next batch to prevent rapid-fire requests
+      setTimeout(() => {
+        void processBatchWithQueue(queue);
+      }, 100);
+    }
   }
+}
+
+/**
+ * Queue and process batch requests with concurrency control
+ */
+async function processBatchWithQueue(queue: BatchQueue): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const queueKey = getQueueKey(queue.galleryId, queue.type, queue.orderId);
+    
+    // If we're at the concurrency limit, queue the request
+    if (processingBatchRequests >= MAX_CONCURRENT_BATCHES) {
+      batchRequestQueue.push({
+        queueKey,
+        processFn: () => processBatchRequest(queue),
+        resolve,
+        reject,
+        retryCount: 0,
+      });
+      return;
+    }
+
+    // Process immediately
+    processingBatchRequests++;
+    processBatchRequest(queue)
+      .then(() => {
+        processingBatchRequests--;
+        resolve();
+        processNextQueuedBatch();
+      })
+      .catch((error) => {
+        processingBatchRequests--;
+        reject(error);
+        processNextQueuedBatch();
+      });
+  });
+}
+
+/**
+ * Process next queued batch request
+ */
+function processNextQueuedBatch(): void {
+  if (processingBatchRequests >= MAX_CONCURRENT_BATCHES || batchRequestQueue.length === 0) {
+    return;
+  }
+
+  const nextRequest = batchRequestQueue.shift();
+  if (!nextRequest) {
+    return;
+  }
+
+  processingBatchRequests++;
+  nextRequest
+    .processFn()
+    .then(() => {
+      processingBatchRequests--;
+      nextRequest.resolve();
+      processNextQueuedBatch();
+    })
+    .catch((error) => {
+      processingBatchRequests--;
+      
+      // Retry with exponential backoff
+      if (nextRequest.retryCount < 3) {
+        nextRequest.retryCount++;
+        const delay = 1000 * Math.pow(2, nextRequest.retryCount - 1); // 1s, 2s, 4s
+        setTimeout(() => {
+          batchRequestQueue.unshift(nextRequest); // Add back to front of queue
+          processNextQueuedBatch();
+        }, delay);
+      } else {
+        nextRequest.reject(error);
+        processNextQueuedBatch();
+      }
+    });
+}
+
+function processBatch(queue: BatchQueue): void {
+  if (queue.pending.size === 0) {
+    return;
+  }
+
+  // Use the queued batch processor
+  void processBatchWithQueue(queue);
 }
 
 function queueFileRequest(
@@ -180,6 +332,7 @@ function queueFileRequest(
         galleryId,
         orderId,
         type,
+        processingCount: 0,
       };
       batchQueues.set(queueKey, queue);
     }
@@ -357,6 +510,7 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
             galleryId,
             orderId: config.orderId,
             type,
+            processingCount: 0,
           };
           batchQueues.set(queueKey, multipartQueue);
         }
@@ -408,9 +562,12 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
                 };
               });
 
-              const multipartResponse = await api.uploads.createMultipartUpload(galleryId, {
-                orderId: config.orderId,
-                files,
+              // Use retry logic for multipart uploads as well
+              const multipartResponse = await retryWithBackoff(async () => {
+                return await api.uploads.createMultipartUpload(galleryId, {
+                  orderId: config.orderId,
+                  files,
+                });
               });
 
               // Map responses back to files

@@ -40,6 +40,15 @@ interface UploadProgressState {
   timeRemaining: number;
 }
 
+export interface UploadStats {
+  elapsedTimeMs: number;
+  totalBytes: number;
+  totalFiles: number;
+  successfulCount: number;
+  failedCount: number;
+  avgSpeedBytesPerSecond: number;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -151,14 +160,14 @@ async function handlePostUploadActions(
     return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
   });
   const totalSize = validFiles.reduce((sum, file) => sum + (file.size || 0), 0);
-  
+
   // Log warning if some files had invalid sizes (for debugging)
   if (validFiles.length < successfulFiles.length) {
     console.warn(
       `[handlePostUploadActions] Some files had invalid sizes: ${successfulFiles.length - validFiles.length} files excluded from optimistic update`
     );
   }
-  
+
   // Optimistically update storage usage for immediate UI feedback
   // The backend S3 events will update the real value, and we'll reconcile after a delay
   if (totalSize > 0) {
@@ -173,7 +182,9 @@ async function handlePostUploadActions(
 
       // Optimistically update storage usage in gallery detail
       queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
-        if (!old) {return old;}
+        if (!old) {
+          return old;
+        }
         const currentOriginals = old.originalsBytesUsed || 0;
         const currentFinals = old.finalsBytesUsed || 0;
         return {
@@ -194,7 +205,10 @@ async function handlePostUploadActions(
       }, 2000); // 2 seconds - enough time for S3 events to process
     } catch (error) {
       // If optimistic update fails, log but don't throw - backend will still update
-      console.error("[handlePostUploadActions] Failed to optimistically update storage usage:", error);
+      console.error(
+        "[handlePostUploadActions] Failed to optimistically update storage usage:",
+        error
+      );
     }
   }
 
@@ -275,7 +289,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   );
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState>(INITIAL_PROGRESS);
   const [isPaused, setIsPaused] = useState(false);
+  const [uploadStats, setUploadStats] = useState<UploadStats | null>(null);
   const speedCalculationRef = useRef<SpeedCalculationState | null>(null);
+  const uploadStartTimeRef = useRef<number | null>(null);
   const isCancellingRef = useRef(false);
   const configRef = useRef(config);
   configRef.current = config;
@@ -330,6 +346,35 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         const successfulCount = result.successful.length;
         const failedCount = result.failed.length;
+        const totalFiles = successfulCount + failedCount;
+
+        // Calculate upload statistics
+        const endTime = Date.now();
+        const startTime = uploadStartTimeRef.current;
+        const elapsedTimeMs = startTime ? endTime - startTime : 0;
+
+        // Calculate total bytes from successful files
+        const validSuccessfulFiles = result.successful.filter((file) => {
+          const size = file.size || 0;
+          return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
+        });
+        const totalBytes = validSuccessfulFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+
+        // Calculate average upload speed (bytes per second)
+        const elapsedSeconds = elapsedTimeMs > 0 ? elapsedTimeMs / 1000 : 1; // Avoid division by zero
+        const avgSpeedBytesPerSecond =
+          totalBytes > 0 && elapsedSeconds > 0 ? totalBytes / elapsedSeconds : 0;
+
+        // Set upload statistics
+        const stats: UploadStats = {
+          elapsedTimeMs,
+          totalBytes,
+          totalFiles,
+          successfulCount,
+          failedCount,
+          avgSpeedBytesPerSecond,
+        };
+        setUploadStats(stats);
 
         // Set complete state FIRST to prevent flash of upload button
         // React will batch these updates together
@@ -339,6 +384,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         setIsPaused(false);
         setUploadProgress(INITIAL_PROGRESS);
         speedCalculationRef.current = null;
+        uploadStartTimeRef.current = null;
 
         showUploadResultToast(showToast, configRef.current.type, successfulCount, failedCount);
 
@@ -425,11 +471,17 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     setIsPaused(false);
     setUploadProgress({ ...INITIAL_PROGRESS, total: files.length });
 
+    // Track upload start time for statistics
+    uploadStartTimeRef.current = Date.now();
+    setUploadStats(null); // Reset stats for new upload
+
     // Start upload - Uppy will manage the upload state
     uppyRef.current.upload().catch(() => {
       // If upload fails to start, reset state
       setUploading(false);
       setIsPaused(false);
+      uploadStartTimeRef.current = null;
+      setUploadStats(null);
       showToast("error", "Błąd", "Nie udało się rozpocząć przesyłania");
     });
   }, [showToast, uploadComplete]);
@@ -457,6 +509,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     setUploadComplete(false);
     setUploadResult(null);
     setUploadProgress(INITIAL_PROGRESS);
+    setUploadStats(null);
+    uploadStartTimeRef.current = null;
 
     // Attempt to delete all files with s3KeyShort from S3
     // Silently ignore errors (files that don't exist, network errors, etc.)
@@ -570,6 +624,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   const resetUploadState = useCallback(() => {
     setUploadComplete(false);
     setUploadResult(null);
+    setUploadStats(null);
+    uploadStartTimeRef.current = null;
   }, []);
 
   return {
@@ -578,6 +634,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     uploadComplete,
     uploadResult,
     uploadProgress,
+    uploadStats,
     isPaused,
     startUpload,
     cancelUpload,

@@ -16,6 +16,18 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
 
   const { data: currentGallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
 
+  // Log when gallery data changes to track if it's being overwritten
+  React.useEffect(() => {
+    if (currentGallery) {
+      // eslint-disable-next-line no-console
+      console.log("[StorageUsageInfo] Gallery data changed:", {
+        galleryId: currentGallery.galleryId,
+        originalsBytesUsed: currentGallery.originalsBytesUsed,
+        finalsBytesUsed: currentGallery.finalsBytesUsed,
+      });
+    }
+  }, [currentGallery?.originalsBytesUsed, currentGallery?.finalsBytesUsed, currentGallery?.galleryId]);
+
   const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {
     if (!bytes || bytes === 0) {

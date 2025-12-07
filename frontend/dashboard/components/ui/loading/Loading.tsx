@@ -7,11 +7,7 @@ interface LoadingProps {
   className?: string;
 }
 
-export const Loading: React.FC<LoadingProps> = ({
-  size = "md",
-  text,
-  className = "",
-}) => {
+export const Loading: React.FC<LoadingProps> = ({ size = "md", text, className = "" }) => {
   const sizeClasses = {
     sm: "w-4 h-4",
     md: "w-8 h-8",

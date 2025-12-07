@@ -487,7 +487,18 @@ class ApiService {
     /**
      * Delete a gallery image
      */
-    deleteImage: async (galleryId: string, imageKey: string): Promise<void> => {
+    deleteImage: async (
+      galleryId: string,
+      imageKey: string
+    ): Promise<{
+      message: string;
+      galleryId: string;
+      filename: string;
+      originalsBytesUsed: number;
+      originalsLimitBytes: number;
+      originalsUsedMB: string;
+      originalsLimitMB: string;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }

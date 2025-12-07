@@ -2,6 +2,7 @@ import { GalleryThumbnails, ProcessedPhotosView, ImageModal } from "@photocloud/
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
+import { GalleryLoading } from "../../../components/ui/loading/Loading";
 import withOwnerAuth from "../../../hocs/withOwnerAuth";
 import { useDeleteGalleryImage } from "../../../hooks/mutations/useGalleryMutations";
 import {
@@ -11,7 +12,6 @@ import {
 } from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
 import api, { formatApiError } from "../../../lib/api-service";
-import { GalleryLoading } from "../../../components/ui/loading/Loading";
 import type { Order, GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {

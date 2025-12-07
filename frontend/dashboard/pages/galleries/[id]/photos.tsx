@@ -47,7 +47,7 @@ export default function GalleryPhotos() {
     pageName: "GalleryPhotos",
   });
   const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
-  const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw as Gallery) : null;
+  const gallery = galleryRaw && typeof galleryRaw === "object" ? (galleryRaw) : null;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
@@ -59,6 +59,8 @@ export default function GalleryPhotos() {
   } = useGalleryImages(galleryIdForQuery, "thumb");
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
+  // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
+  const hasLoggedGalleryReadyRef = useRef<string>("");
 
   // Use hook for order/image relationship management
   const {
@@ -274,28 +276,28 @@ export default function GalleryPhotos() {
     loadedGalleryIdRef.current = galleryIdStr;
   }
 
+  // Log when gallery becomes ready (only once per gallery, not on every render)
+  useEffect(() => {
+    if (
+      isGalleryLoaded &&
+      galleryIdStr &&
+      hasLoggedGalleryReadyRef.current !== galleryIdStr
+    ) {
+      hasLoggedGalleryReadyRef.current = galleryIdStr;
+      storeLogger.log("GalleryPhotos", "Gallery ready - rendering content", {
+        galleryId: galleryIdStr,
+        effectiveGalleryId,
+      });
+    }
+  }, [isGalleryLoaded, galleryIdStr, effectiveGalleryId]);
+
   // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
   // This ensures the sidebar is visible during loading
   // Return empty content (not null) so the layout still renders
   if (!isGalleryLoaded) {
-    storeLogger.log(
-      "GalleryPhotos",
-      "Waiting for gallery - GalleryLayoutWrapper will show loading",
-      {
-        galleryId: galleryIdStr,
-        hasGallery: !!gallery,
-        currentGalleryId,
-        effectiveGalleryId,
-      }
-    );
     // Return empty div so layout still renders (sidebar will show loading state)
     return <div />;
   }
-
-  storeLogger.log("GalleryPhotos", "Gallery ready - rendering content", {
-    galleryId: galleryIdStr,
-    effectiveGalleryId,
-  });
 
   // Use effectiveGallery (from store or cache) for rendering
   // Fallback to gallery from hook if effectiveGallery is not available

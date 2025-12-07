@@ -17,6 +17,8 @@ import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUplo
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 
+import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
+
 interface UppyUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -142,6 +144,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     uploadComplete,
     uploadResult,
     uploadProgress,
+    uploadStats,
     isPaused,
     startUpload,
     cancelUpload,
@@ -153,6 +156,7 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
 
   const [files, setFiles] = useState<UppyFile[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,11 +180,48 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
     };
   }, []);
 
+  // Show completion overlay when upload completes
+  // Listen directly to Uppy's complete event - this is the primary trigger
+  useEffect(() => {
+    if (!uppy || !isOpen) {
+      return;
+    }
+
+    const handleComplete = () => {
+      // Uppy's complete event has fired
+      // The hook's onComplete callback will set uploadComplete and uploadStats synchronously
+      // Wait a moment for React to process the state updates, then show overlay
+      // The fallback effect below will ensure it only shows when stats are actually available
+      setTimeout(() => {
+        if (!showCompletionOverlay) {
+          setShowCompletionOverlay(true);
+        }
+      }, 200);
+    };
+
+    // Listen to Uppy's complete event
+    uppy.on("complete", handleComplete);
+
+    return () => {
+      uppy.off("complete", handleComplete);
+    };
+  }, [uppy, isOpen, showCompletionOverlay]);
+
+  // Show overlay when uploadComplete and uploadStats become available
+  // This is the primary mechanism - ensures overlay only shows when stats are ready
+  // The complete event listener above helps trigger it, but this effect is the gatekeeper
+  useEffect(() => {
+    if (uploadComplete && uploadStats && isOpen && !showCompletionOverlay) {
+      setShowCompletionOverlay(true);
+    }
+  }, [uploadComplete, uploadStats, isOpen, showCompletionOverlay]);
+
   // Reset upload state when modal closes (but don't clear Uppy files - let user see completed uploads)
   // Only reset our UI state, files will be cleared when user explicitly closes after completion
   useEffect(() => {
     if (!isOpen && !uploading) {
       resetUploadState();
+      setShowCompletionOverlay(false);
     }
   }, [isOpen, uploading, resetUploadState]);
 
@@ -298,8 +339,14 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
       }
       // Reset upload state when closing
       resetUploadState();
+      setShowCompletionOverlay(false);
       onClose();
     }
+  };
+
+  const handleCompletionOverlayClose = () => {
+    setShowCompletionOverlay(false);
+    handleClose();
   };
 
   const handleConfirmClose = async () => {
@@ -434,6 +481,16 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
 
   return (
     <>
+      {/* Upload Completion Overlay */}
+      {uploadStats && (
+        <UploadCompletionOverlay
+          isOpen={showCompletionOverlay}
+          onClose={handleCompletionOverlayClose}
+          stats={uploadStats}
+          uploadType={config.type}
+        />
+      )}
+
       {showCloseConfirm && (
         <Modal isOpen={showCloseConfirm} onClose={handleCancelClose} className="max-w-md">
           <div className="p-6">

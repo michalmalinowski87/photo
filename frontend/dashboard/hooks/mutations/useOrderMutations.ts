@@ -82,7 +82,7 @@ export function useMarkOrderPaid() {
 
       // Optimistically update order payment status
       queryClient.setQueryData<Order>(queryKeys.orders.detail(galleryId, orderId), (old) => {
-        if (!old) return old;
+        if (!old) {return old;}
         return {
           ...old,
           paymentStatus: "PAID",
@@ -92,7 +92,7 @@ export function useMarkOrderPaid() {
       // Optimistically update order in list if it exists
       if (previousOrderList) {
         queryClient.setQueryData<Order[]>(queryKeys.orders.byGallery(galleryId), (old) => {
-          if (!old) return old;
+          if (!old) {return old;}
           return old.map((order) =>
             order.orderId === orderId ? { ...order, paymentStatus: "PAID" } : order
           );
@@ -235,89 +235,20 @@ export function useDeleteFinalImage() {
       orderId: string;
       imageKey: string;
     }) => api.orders.deleteFinalImage(galleryId, orderId, imageKey),
-    onMutate: async ({ galleryId, orderId, imageKey }) => {
-      // Cancel outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
-      });
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.galleries.detail(galleryId),
-      });
-
-      // Snapshot previous values
-      interface FinalImage {
-        key?: string;
-        filename?: string;
-        size?: number;
-        bytes?: number;
-        [key: string]: unknown;
-      }
-      const previousFinalImages = queryClient.getQueryData<FinalImage[]>(
-        queryKeys.orders.finalImages(galleryId, orderId)
-      );
-      const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
-
-      // Get file size from image cache before removing it
-      const imageToDelete = previousFinalImages?.find(
-        (img) => (img.key ?? img.filename) === imageKey
-      );
-      const rawFileSize = imageToDelete?.size || imageToDelete?.bytes || 0;
-      // Validate file size - must be positive and reasonable (max 10GB)
-      const fileSize = rawFileSize > 0 && rawFileSize < 10 * 1024 * 1024 * 1024 ? rawFileSize : 0;
-
-      // Optimistically remove image from final images list
-      queryClient.setQueryData<FinalImage[]>(
-        queryKeys.orders.finalImages(galleryId, orderId),
-        (old) => old?.filter((img) => (img.key ?? img.filename) !== imageKey) ?? []
-      );
-
-      // Optimistically decrease finalsBytesUsed if we have file size
-      // Backend handles setting storage to 0 when no images remain (safety check in onS3DeleteBatch)
-      if (fileSize > 0) {
-        // Update storage usage in gallery detail if it exists
-        queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            finalsBytesUsed: Math.max(0, (old.finalsBytesUsed || 0) - fileSize),
-            // Total storage is computed dynamically: originalsBytesUsed + finalsBytesUsed
-          };
-        });
-      }
-
-      return { previousFinalImages, previousGallery, fileSize };
-    },
-    onError: (_err, variables, context) => {
-      // Rollback on error
-      if (context?.previousFinalImages) {
-        queryClient.setQueryData(
-          queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
-          context.previousFinalImages
-        );
-      }
-      if (context?.previousGallery) {
-        queryClient.setQueryData(
-          queryKeys.galleries.detail(variables.galleryId),
-          context.previousGallery
-        );
-      }
-      // On error, invalidate to refetch and ensure consistency
+    onSuccess: (_data, variables) => {
+      // Invalidate final images query immediately - this should be accurate
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });
-    },
-    onSuccess: (_data, variables) => {
-      // On success, optimistic update is already applied
-      // After a delay, invalidate storage usage to get real value from backend
-      // This reconciles any differences between optimistic and actual values
+      
+      // Delay gallery detail invalidation to allow async S3 deletion to complete
+      // The backend processes S3 deletion asynchronously, so we wait a bit for
+      // the database to be updated with the correct storage bytes
       setTimeout(() => {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.detail(variables.galleryId),
         });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-        });
-      }, 2000); // 2 seconds - enough time for backend to process deletion
+      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
     },
   });
 }
@@ -335,65 +266,20 @@ export function useDeleteFinalImagesBatch() {
       orderId: string;
       imageKeys: string[];
     }) => api.orders.deleteFinalImagesBatch(galleryId, orderId, imageKeys),
-    onMutate: async ({ galleryId, orderId, imageKeys }) => {
-      // Cancel outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
-      });
-
-      // Snapshot previous values
-      interface FinalImage {
-        key?: string;
-        filename?: string;
-        [key: string]: unknown;
-      }
-      const previousFinalImages = queryClient.getQueryData<FinalImage[]>(
-        queryKeys.orders.finalImages(galleryId, orderId)
-      );
-      const previousGallery = queryClient.getQueryData(queryKeys.galleries.detail(galleryId));
-
-      // Optimistically remove images from final images list
-      const imageKeysSet = new Set(imageKeys);
-      queryClient.setQueryData<FinalImage[]>(
-        queryKeys.orders.finalImages(galleryId, orderId),
-        (old) =>
-          old?.filter((img) => {
-            const imgKey = img.key ?? img.filename;
-            return imgKey && !imageKeysSet.has(imgKey);
-          }) ?? []
-      );
-
-      return { previousFinalImages, previousGallery };
-    },
-    onError: (_err, variables, context) => {
-      // Rollback on error
-      if (context?.previousFinalImages) {
-        queryClient.setQueryData(
-          queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
-          context.previousFinalImages
-        );
-      }
-      if (context?.previousGallery) {
-        queryClient.setQueryData(
-          queryKeys.galleries.detail(variables.galleryId),
-          context.previousGallery
-        );
-      }
-    },
-    onSettled: (_, __, variables) => {
-      // Refetch to ensure consistency
+    onSuccess: (_data, variables) => {
+      // Invalidate final images query immediately - this should be accurate
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(variables.galleryId, variables.orderId),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.detail(variables.galleryId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
-      });
+      
+      // Delay gallery detail invalidation to allow async S3 deletion to complete
+      // The backend processes S3 deletion asynchronously, so we wait a bit for
+      // the database to be updated with the correct storage bytes
+      setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(variables.galleryId),
+        });
+      }, 1500); // 1.5 seconds - enough time for S3 deletion Lambda to update DB
     },
   });
 }

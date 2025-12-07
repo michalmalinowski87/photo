@@ -160,7 +160,7 @@ export const CoverPhotoUpload: React.FC = () => {
       showToast(
         "error",
         "Błąd",
-        formatApiError(presignError as Error) ?? "Nie udało się uzyskać URL do przesłania"
+        formatApiError(presignError) ?? "Nie udało się uzyskać URL do przesłania"
       );
     }
   }, [presignError, presignParams, showToast]);
