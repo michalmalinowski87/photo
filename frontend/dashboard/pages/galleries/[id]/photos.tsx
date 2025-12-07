@@ -1,7 +1,8 @@
-import { Plus, ChevronDown, Image, Upload } from "lucide-react";
+import { Plus, ChevronDown, Image, Upload, CheckSquare, Square, Trash2, X, Check } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
+import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
 import Badge from "../../../components/ui/badge/Badge";
@@ -10,9 +11,11 @@ import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
+import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGalleryImages } from "../../../hooks/queries/useGalleries";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
+import { useImageSelection } from "../../../hooks/useImageSelection";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
@@ -133,6 +136,30 @@ export default function GalleryPhotos() {
   const { deleteImage, handleDeleteImageClick, deletingImages } = useOriginalImageDelete({
     galleryId,
   });
+
+  // Selection mode and bulk delete
+  const {
+    selectedKeys,
+    isSelectionMode,
+    toggleSelectionMode,
+    handleImageClick: handleSelectionClick,
+    selectAll,
+    deselectAll,
+    clearSelection,
+  } = useImageSelection({
+    storageKey: `image_selection_${galleryIdStr || "default"}`,
+  });
+
+  const {
+    deleteImages: deleteImagesBulk,
+    deletingImages: deletingImagesBulk,
+    isDeleting: isBulkDeleting,
+  } = useBulkImageDelete({
+    galleryId,
+    imageType: "originals",
+  });
+
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [limitExceededData, setLimitExceededData] = useState<{
     uploadedSizeBytes: number;
     originalsLimitBytes: number;
@@ -253,6 +280,85 @@ export default function GalleryPhotos() {
       // Error already handled in deleteImage, keep modal open
     }
   };
+
+  // Bulk delete handlers
+  const handleBulkDeleteClick = useCallback(() => {
+    const selectedArray = Array.from(selectedKeys);
+    if (selectedArray.length === 0) {
+      return;
+    }
+    setBulkDeleteConfirmOpen(true);
+  }, [selectedKeys]);
+
+  const handleBulkDeleteConfirm = async (): Promise<void> => {
+    const selectedArray = Array.from(selectedKeys);
+    if (selectedArray.length === 0) {
+      return;
+    }
+
+    // Filter out approved selection images
+    const imagesToDelete = selectedArray.filter((key) => !approvedSelectionKeys.has(key));
+    const approvedCount = selectedArray.length - imagesToDelete.length;
+
+    if (approvedCount > 0) {
+      showToast(
+        "error",
+        "Błąd",
+        `Nie można usunąć ${approvedCount} ${approvedCount === 1 ? "zdjęcia" : "zdjęć"}, które ${approvedCount === 1 ? "jest" : "są"} częścią zatwierdzonej selekcji klienta`
+      );
+    }
+
+    if (imagesToDelete.length === 0) {
+      setBulkDeleteConfirmOpen(false);
+      clearSelection();
+      return;
+    }
+
+    try {
+      await deleteImagesBulk(imagesToDelete);
+      setBulkDeleteConfirmOpen(false);
+      clearSelection();
+    } catch {
+      // Error already handled in deleteImagesBulk
+    }
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!isSelectionMode) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + A: Select all
+      if ((event.ctrlKey || event.metaKey) && event.key === "a") {
+        event.preventDefault();
+        if (images.length > 0) {
+          selectAll(images);
+        }
+        return;
+      }
+
+      // Delete or Backspace: Delete selected
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedKeys.size > 0) {
+        event.preventDefault();
+        handleBulkDeleteClick();
+        return;
+      }
+
+      // Escape: Exit selection mode
+      if (event.key === "Escape") {
+        event.preventDefault();
+        toggleSelectionMode();
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSelectionMode, selectedKeys, images, selectAll, toggleSelectionMode, handleBulkDeleteClick]);
 
   // Show loading if galleryId is not yet available from router (prevents flash of empty state)
   if (!galleryId) {
@@ -411,26 +517,74 @@ export default function GalleryPhotos() {
   };
 
   // Render image grid
-  const renderImageGrid = (imagesToRender: GalleryImage[]) => (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {imagesToRender.map((img) => {
-        const isApproved = isImageInApprovedSelection(img);
-        const isInAnyOrder = isImageInAnyOrder(img);
-        const orderStatus = getImageOrderStatus(img);
-        // Use stable key/filename as identifier - always prefer key, fallback to filename
-        // This ensures React can properly reconcile components when images are reordered
-        const imageKey = img.key ?? img.filename ?? "";
-        // Check if image has any available URLs
-        const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
+  const renderImageGrid = (imagesToRender: GalleryImage[]) => {
+    // Combine deleting states from both single and bulk delete
+    const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
 
-        return (
-          <div
-            key={imageKey}
-            className={`relative group border border-gray-200 rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-colors ${
-              deletingImages.has(imageKey) ? "opacity-60" : ""
-            }`}
-          >
+    return (
+      <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 ${isSelectionMode ? "select-none" : ""}`}>
+        {imagesToRender.map((img, index) => {
+          const isApproved = isImageInApprovedSelection(img);
+          const isInAnyOrder = isImageInAnyOrder(img);
+          const orderStatus = getImageOrderStatus(img);
+          // Use stable key/filename as identifier - always prefer key, fallback to filename
+          // This ensures React can properly reconcile components when images are reordered
+          const imageKey = img.key ?? img.filename ?? "";
+          // Check if image has any available URLs
+          const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
+          const isSelected = selectedKeys.has(imageKey);
+          const isDeleting = allDeletingImages.has(imageKey);
+
+          return (
+            <div
+              key={imageKey}
+              className={`relative group border rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${
+                isSelectionMode ? "select-none" : ""
+              } ${
+                isDeleting
+                  ? "opacity-60"
+                  : isSelected && isSelectionMode
+                    ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
+                    : "border-gray-200"
+              }`}
+              onMouseDown={(e) => {
+                // Prevent browser text/element selection on SHIFT+click
+                if (isSelectionMode && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                }
+              }}
+              onSelectStart={(e) => {
+                // Prevent text selection when in selection mode
+                if (isSelectionMode) {
+                  e.preventDefault();
+                }
+              }}
+              onClick={(e) => {
+                if (isSelectionMode) {
+                  handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                }
+              }}
+            >
             <div className="aspect-square relative">
+              {/* Selection checkbox overlay */}
+              {isSelectionMode && (
+                <div className="absolute top-2 left-2 z-30">
+                  <div
+                    className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                        : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectionClick(imageKey, index, e.nativeEvent as MouseEvent, imagesToRender);
+                    }}
+                  >
+                    {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                  </div>
+                </div>
+              )}
+
               {isProcessing ? (
                 <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
                   <div className="text-center space-y-2">
@@ -490,7 +644,7 @@ export default function GalleryPhotos() {
                         </div>
                       );
                     })()}
-                  {deletingImages.has(imageKey) && (
+                  {isDeleting && (
                     <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
                       <div className="flex flex-col items-center space-y-2">
                         <Loading size="sm" />
@@ -498,7 +652,7 @@ export default function GalleryPhotos() {
                       </div>
                     </div>
                   )}
-                  {!deletingImages.has(imageKey) && (
+                  {!isDeleting && !isSelectionMode && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
                       {isInAnyOrder ? (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
@@ -510,9 +664,9 @@ export default function GalleryPhotos() {
                             e.stopPropagation();
                             handleDeletePhotoClick(img);
                           }}
-                          disabled={isApproved || deletingImages.size > 0}
+                          disabled={isApproved || allDeletingImages.size > 0}
                           className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                            isApproved || deletingImages.size > 0
+                            isApproved || allDeletingImages.size > 0
                               ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                               : "bg-error-500 text-white hover:bg-error-600"
                           }`}
@@ -533,8 +687,9 @@ export default function GalleryPhotos() {
           </div>
         );
       })}
-    </div>
-  );
+      </div>
+    );
+  };
 
   return (
     <>
@@ -569,16 +724,102 @@ export default function GalleryPhotos() {
             )}
           </div>
         </div>
-        {/* Upload Button */}
-        <div className="mb-4">
-          <button
-            onClick={() => setUploadModalOpen(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Prześlij zdjęcia
-          </button>
+        {/* Action Buttons */}
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
+          {!isSelectionMode && (
+            <>
+              <button
+                onClick={() => setUploadModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Plus size={20} />
+                Prześlij zdjęcia
+              </button>
+              <button
+                onClick={toggleSelectionMode}
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                <Square size={20} />
+                Wybierz zdjęcia
+              </button>
+            </>
+          )}
+          {isSelectionMode && (
+            <>
+              <span className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center" style={{ width: "165.81px" }}>
+                <CheckSquare size={20} />
+                Tryb wyboru
+              </span>
+              <button
+                onClick={() => {
+                  toggleSelectionMode();
+                  clearSelection();
+                }}
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 justify-center"
+                style={{ width: "171.9px" }}
+              >
+                <X size={20} />
+                Anuluj
+              </button>
+            </>
+          )}
         </div>
+
+        {/* Bulk Action Toolbar - Show immediately when selection mode is active */}
+        {isSelectionMode && (
+          <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm -mx-6 px-6 py-2 mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {selectedKeys.size === 0
+                    ? "0 zdjęć wybranych"
+                    : selectedKeys.size === 1
+                      ? "1 zdjęcie wybrane"
+                      : selectedKeys.size < 5
+                        ? `${selectedKeys.size} zdjęcia wybrane`
+                        : `${selectedKeys.size} zdjęć wybranych`}
+                </span>
+                {(() => {
+                  const allSelected = images.length > 0 && selectedKeys.size === images.length;
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (allSelected) {
+                            deselectAll();
+                          } else {
+                            selectAll(images);
+                          }
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        {allSelected ? "Odznacz wszystkie" : "Zaznacz wszystkie"}
+                      </button>
+                      {selectedKeys.size > 0 && (
+                        <button
+                          onClick={clearSelection}
+                          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Anuluj wybór
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBulkDeleteClick}
+                  disabled={isBulkDeleting || selectedKeys.size === 0}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={18} />
+                  Usuń {selectedKeys.size > 0 && `(${selectedKeys.size})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Images Grid - Grouped by Orders */}
         {imagesLoading ? (
@@ -778,6 +1019,20 @@ export default function GalleryPhotos() {
             ? deletingImages.has(imageToDelete.key ?? imageToDelete.filename ?? "")
             : false
         }
+        suppressKey="original_image_delete_confirm_suppress"
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <BulkDeleteConfirmDialog
+        isOpen={bulkDeleteConfirmOpen}
+        onClose={() => {
+          if (!isBulkDeleting) {
+            setBulkDeleteConfirmOpen(false);
+          }
+        }}
+        onConfirm={handleBulkDeleteConfirm}
+        count={selectedKeys.size}
+        loading={isBulkDeleting}
         suppressKey="original_image_delete_confirm_suppress"
       />
 

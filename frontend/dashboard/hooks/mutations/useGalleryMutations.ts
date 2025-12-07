@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Gallery } from "../../types";
+import type { Gallery, GalleryImage } from "../../types";
 
 export function useCreateGallery() {
   const queryClient = useQueryClient();
@@ -230,16 +230,87 @@ export function useDeleteGalleryImagesBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ galleryId, imageKeys }: { galleryId: string; imageKeys: string[] }) =>
-      api.galleries.deleteImagesBatch(galleryId, imageKeys),
+    mutationFn: ({ 
+      galleryId, 
+      imageKeys,
+      imageType = "originals",
+    }: { 
+      galleryId: string; 
+      imageKeys: string[];
+      imageType?: "originals" | "finals" | "thumb";
+    }) => api.galleries.deleteImagesBatch(galleryId, imageKeys),
+    onMutate: async ({ galleryId, imageKeys, imageType = "originals" }) => {
+      // Cancel outgoing queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.images(galleryId, imageType),
+      });
+      
+      // Also cancel thumb queries if deleting originals
+      if (imageType === "originals") {
+        await queryClient.cancelQueries({
+          queryKey: queryKeys.galleries.images(galleryId, "thumb"),
+        });
+      }
+
+      // Snapshot previous state
+      const previousImages = queryClient.getQueryData<GalleryImage[]>(
+        queryKeys.galleries.images(galleryId, imageType)
+      );
+      const previousThumbImages = imageType === "originals"
+        ? queryClient.getQueryData<GalleryImage[]>(
+            queryKeys.galleries.images(galleryId, "thumb")
+          )
+        : null;
+
+      // Optimistically remove images from cache
+      queryClient.setQueryData<GalleryImage[]>(
+        queryKeys.galleries.images(galleryId, imageType),
+        (old = []) =>
+          old.filter(
+            (img) => !imageKeys.includes(img.key ?? img.filename ?? "")
+          )
+      );
+
+      // Also update thumb cache if deleting originals
+      if (imageType === "originals") {
+        queryClient.setQueryData<GalleryImage[]>(
+          queryKeys.galleries.images(galleryId, "thumb"),
+          (old = []) =>
+            old.filter(
+              (img) => !imageKeys.includes(img.key ?? img.filename ?? "")
+            )
+        );
+      }
+
+      return { previousImages, previousThumbImages };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousImages) {
+        queryClient.setQueryData(
+          queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
+          context.previousImages
+        );
+      }
+      if (context?.previousThumbImages && variables.imageType === "originals") {
+        queryClient.setQueryData(
+          queryKeys.galleries.images(variables.galleryId, "thumb"),
+          context.previousThumbImages
+        );
+      }
+    },
     onSuccess: (_data, variables) => {
       // Invalidate image queries immediately - these should be accurate
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "originals"),
+        queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType || "originals"),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
-      });
+      
+      // Also invalidate thumb queries if deleting originals
+      if (variables.imageType === "originals" || !variables.imageType) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
+        });
+      }
       
       // Delay gallery detail invalidation to allow async S3 deletion to complete
       // The backend processes S3 deletion asynchronously, so we wait a bit for
