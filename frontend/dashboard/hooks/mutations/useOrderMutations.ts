@@ -82,7 +82,9 @@ export function useMarkOrderPaid() {
 
       // Optimistically update order payment status
       queryClient.setQueryData<Order>(queryKeys.orders.detail(galleryId, orderId), (old) => {
-        if (!old) {return old;}
+        if (!old) {
+          return old;
+        }
         return {
           ...old,
           paymentStatus: "PAID",
@@ -92,7 +94,9 @@ export function useMarkOrderPaid() {
       // Optimistically update order in list if it exists
       if (previousOrderList) {
         queryClient.setQueryData<Order[]>(queryKeys.orders.byGallery(galleryId), (old) => {
-          if (!old) {return old;}
+          if (!old) {
+            return old;
+          }
           return old.map((order) =>
             order.orderId === orderId ? { ...order, paymentStatus: "PAID" } : order
           );
@@ -252,46 +256,35 @@ export function useDeleteFinalImage() {
       const previousFinalImages = queryClient.getQueryData<any[]>(
         queryKeys.orders.finalImages(galleryId, orderId)
       );
-      const previousGallery = queryClient.getQueryData<any>(
-        queryKeys.galleries.detail(galleryId)
-      );
+      const previousGallery = queryClient.getQueryData<any>(queryKeys.galleries.detail(galleryId));
 
       // Calculate total file size from images being deleted for optimistic storage update
       let totalBytesToSubtract = 0;
       if (previousFinalImages) {
-        const imagesToDelete = previousFinalImages.filter(
-          (img: any) => imageKeys.includes(img.key ?? img.filename ?? "")
+        const imagesToDelete = previousFinalImages.filter((img: any) =>
+          imageKeys.includes(img.key ?? img.filename ?? "")
         );
-        totalBytesToSubtract = imagesToDelete.reduce(
-          (sum, img: any) => sum + (img.size || 0),
-          0
-        );
+        totalBytesToSubtract = imagesToDelete.reduce((sum, img: any) => sum + (img.size || 0), 0);
       }
 
       // Optimistically remove images from cache
       queryClient.setQueryData<any[]>(
         queryKeys.orders.finalImages(galleryId, orderId),
-        (old = []) =>
-          old.filter(
-            (img: any) => !imageKeys.includes(img.key ?? img.filename ?? "")
-          )
+        (old = []) => old.filter((img: any) => !imageKeys.includes(img.key ?? img.filename ?? ""))
       );
 
       // Optimistically update storage usage for immediate UI feedback
       if (totalBytesToSubtract > 0 && previousGallery) {
-        queryClient.setQueryData<any>(
-          queryKeys.galleries.detail(galleryId),
-          (old) => {
-            if (!old) {
-              return old;
-            }
-            const currentFinals = old.finalsBytesUsed || 0;
-            return {
-              ...old,
-              finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
-            };
+        queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
+          if (!old) {
+            return old;
           }
-        );
+          const currentFinals = old.finalsBytesUsed || 0;
+          return {
+            ...old,
+            finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
+          };
+        });
       }
 
       return { previousFinalImages, previousGallery };
@@ -314,22 +307,19 @@ export function useDeleteFinalImage() {
     onSuccess: (data, variables) => {
       // Update gallery detail with API response if available (more accurate than optimistic update)
       // The backend returns updated storage values synchronously
-      if (data && typeof data === 'object' && 'finalsBytesUsed' in data) {
-        queryClient.setQueryData<any>(
-          queryKeys.galleries.detail(variables.galleryId),
-          (old) => {
-            if (!old) {
-              return old;
-            }
-            return {
-              ...old,
-              finalsBytesUsed: data.finalsBytesUsed,
-              finalsLimitBytes: data.finalsLimitBytes ?? old.finalsLimitBytes,
-            };
+      if (data && typeof data === "object" && "finalsBytesUsed" in data) {
+        queryClient.setQueryData<any>(queryKeys.galleries.detail(variables.galleryId), (old) => {
+          if (!old) {
+            return old;
           }
-        );
+          return {
+            ...old,
+            finalsBytesUsed: data.finalsBytesUsed,
+            finalsLimitBytes: data.finalsLimitBytes ?? old.finalsLimitBytes,
+          };
+        });
       }
-      
+
       // Invalidate final images query to ensure UI reflects backend state
       // Backend processes deletion synchronously, so we can invalidate immediately
       // Use Promise.resolve().then() to let React Query finish processing optimistic updates first
@@ -347,7 +337,7 @@ export function useDeleteFinalImage() {
           queryKey: queryKeys.orders.byGallery(variables.galleryId),
         });
       });
-      
+
       // Storage is already updated with API response data above, so no need to invalidate
       // The API response contains the accurate storage values from the synchronous backend
     },

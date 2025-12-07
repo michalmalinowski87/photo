@@ -126,6 +126,8 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
     // Process finals batch with retry
     if (finalsFiles.length > 0 && queue.orderId) {
       await retryWithBackoff(async () => {
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's AwsS3 plugin requires synchronous presigned URL retrieval during upload initialization.
         const response = await api.uploads.getFinalImagePresignedUrlsBatch(
           queue.galleryId,
           queue.orderId!,
@@ -175,6 +177,8 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
     // Process originals batch with retry
     if (originalsFiles.length > 0) {
       await retryWithBackoff(async () => {
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's AwsS3 plugin requires synchronous presigned URL retrieval during upload initialization.
         const response = await api.uploads.getPresignedUrlsBatch({
           galleryId: queue.galleryId,
           files: originalsFiles.map((req) => ({
@@ -564,6 +568,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
 
               // Use retry logic for multipart uploads as well
               const multipartResponse = await retryWithBackoff(async () => {
+                // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+                // Uppy's AwsS3 plugin requires synchronous multipart upload creation during upload initialization.
                 return await api.uploads.createMultipartUpload(galleryId, {
                   orderId: config.orderId,
                   files,
@@ -624,6 +630,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
+          // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+          // Uppy's AwsS3 plugin requires synchronous part listing for resume functionality.
           const response = await api.uploads.listMultipartParts(galleryId, {
             uploadId,
             key,
@@ -684,6 +692,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
       // Complete the multipart upload
       const galleryId = config.galleryId;
       const fileSize = file.size || 0;
+      // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+      // Uppy's AwsS3 plugin requires synchronous multipart completion callback during upload lifecycle.
       const response = await api.uploads.completeMultipartUpload(galleryId, {
         uploadId,
         key,
@@ -705,6 +715,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     ) => {
       // Abort the multipart upload
       const galleryId = config.galleryId;
+      // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+      // Uppy's AwsS3 plugin requires synchronous multipart abort callback during upload cancellation.
       await api.uploads.abortMultipartUpload(galleryId, {
         uploadId,
         key,
@@ -798,6 +810,8 @@ export function createUppyInstance(config: UppyConfigOptions): Uppy {
     // Call completion endpoint to update storage
     const galleryId = config.galleryId;
     try {
+      // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+      // Uppy's upload-success event handler requires synchronous completion callback during upload lifecycle.
       await api.uploads.completeUpload(galleryId, {
         key: s3Key,
         fileSize,

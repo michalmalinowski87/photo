@@ -10,7 +10,7 @@ interface UseBulkImageDeleteOptions {
   imageType?: "originals" | "finals" | "thumb";
 }
 
-export const useBulkImageDelete = ({ 
+export const useBulkImageDelete = ({
   galleryId,
   imageType = "originals",
 }: UseBulkImageDeleteOptions) => {
@@ -133,4 +133,3 @@ export const useBulkImageDelete = ({
     clearDeletedKeysForImages,
   };
 };
-

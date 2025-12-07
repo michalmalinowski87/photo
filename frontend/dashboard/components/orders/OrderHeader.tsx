@@ -33,7 +33,7 @@ export function OrderHeader() {
     galleryIdStr ?? (typeof galleryId === "string" ? galleryId : (currentGallery?.galleryId ?? ""));
 
   const effectiveOrderId = typeof order.orderId === "string" ? order.orderId : orderIdForQuery;
-  const orderNumber = (order.orderNumber) ?? undefined;
+  const orderNumber = order.orderNumber ?? undefined;
   const displayOrderNumber =
     orderNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : effectiveGalleryId.slice(-8));
 

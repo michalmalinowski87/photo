@@ -14,7 +14,11 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
-  const { data: currentGallery, isLoading: galleryLoading, isFetching: galleryFetching } = useGallery(galleryIdForQuery);
+  const {
+    data: currentGallery,
+    isLoading: galleryLoading,
+    isFetching: galleryFetching,
+  } = useGallery(galleryIdForQuery);
 
   // Log when gallery data changes to track if it's being overwritten
   React.useEffect(() => {
@@ -26,7 +30,11 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
         finalsBytesUsed: currentGallery.finalsBytesUsed,
       });
     }
-  }, [currentGallery?.originalsBytesUsed, currentGallery?.finalsBytesUsed, currentGallery?.galleryId]);
+  }, [
+    currentGallery?.originalsBytesUsed,
+    currentGallery?.finalsBytesUsed,
+    currentGallery?.galleryId,
+  ]);
 
   const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {

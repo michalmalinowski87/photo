@@ -9,8 +9,8 @@ import {
 } from "../../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useOrder } from "../../../hooks/queries/useOrders";
+import { useDownloadUtils } from "../../../hooks/useDownloadUtils";
 import { useModal } from "../../../hooks/useModal";
-import { downloadFinals, downloadZip } from "../../../lib/download-utils";
 import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
@@ -43,6 +43,9 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   const approveChangeRequestMutation = useApproveChangeRequest();
   const markOrderPaidMutation = useMarkOrderPaid();
   const sendFinalsToClientMutation = useSendFinalLink();
+
+  // Download utilities
+  const { downloadFinals, downloadZip } = useDownloadUtils();
 
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
@@ -111,7 +114,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       return;
     }
     downloadFinals(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId]);
+  }, [galleryIdStr, orderId, downloadFinals]);
 
   const handleSendFinalsToClientClick = useCallback(() => {
     setShowSendFinalsDialog(true);
@@ -138,7 +141,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
       return;
     }
     downloadZip(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId]);
+  }, [galleryIdStr, orderId, downloadZip]);
 
   const handlePublishClick = useCallback(() => {
     if (setPublishWizardOpen) {
@@ -212,7 +215,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
             className="w-full justify-start"
             startIcon={<Download size={16} />}
           >
-            Pobierz finały
+            Pobierz finały (ZIP)
           </Button>
         )}
 

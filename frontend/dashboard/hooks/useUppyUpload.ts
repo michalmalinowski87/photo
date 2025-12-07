@@ -62,6 +62,8 @@ async function validateStorageLimits(
 ): Promise<boolean> {
   try {
     const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
+    // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+    // Uppy's onBeforeUpload callback requires synchronous validation during upload initialization.
     const validationResult = await api.galleries.validateUploadLimits(galleryId);
 
     if (!validationResult.withinLimit) {
@@ -228,6 +230,8 @@ async function handlePostUploadActions(
         await markFinalUploadCompleteMutation.mutateAsync({ galleryId, orderId });
       } else {
         // Fallback to direct API call if mutation not provided (shouldn't happen in normal flow)
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's onComplete callback requires synchronous finalization during upload completion lifecycle.
         await api.uploads.markFinalUploadComplete(galleryId, orderId);
         // Manually invalidate order detail if using fallback
         await queryClient.invalidateQueries({
@@ -239,6 +243,8 @@ async function handlePostUploadActions(
       // This ensures UI is ready when user closes the confirmation modal
       try {
         // Fetch final images list to get thumbUrls for uploaded files
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
         const finalImagesResponse = await api.orders.getFinalImages(galleryId, orderId);
         const finalImages = finalImagesResponse?.images || [];
 
@@ -281,6 +287,8 @@ async function handlePostUploadActions(
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Fetch originals images list to get thumbUrls for uploaded files
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
         const originalsImagesResponse = await api.galleries.getImages(galleryId, "thumb");
         const originalsImages = originalsImagesResponse?.images || [];
 
@@ -629,11 +637,15 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (type === "finals" && orderId) {
           // Delete final images in batch
+          // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+          // Uppy's cancelUpload requires synchronous cleanup during upload cancellation lifecycle.
           await api.orders.deleteFinalImage(galleryId, orderId, filenames).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });
         } else {
           // Delete original images in batch
+          // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+          // Uppy's cancelUpload requires synchronous cleanup during upload cancellation lifecycle.
           await api.galleries.deleteImage(galleryId, filenames).catch(() => {
             // Silently ignore - files might not exist or already deleted
           });

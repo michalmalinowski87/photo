@@ -38,12 +38,12 @@ export const createToastSlice: StateCreator<
     const existingToast = get().toasts.find(
       (toast) => toast.variant === variant && toast.title === title && toast.message === message
     );
-    
+
     if (existingToast) {
       // Return existing toast ID instead of creating a duplicate
       return existingToast.id;
     }
-    
+
     const id = Math.random().toString(36).substring(7);
     const newToast: ToastMessage = { id, variant, title, message, duration };
     set(

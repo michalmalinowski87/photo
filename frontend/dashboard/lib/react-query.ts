@@ -35,6 +35,8 @@ export const queryKeys = {
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
     deliveredOrders: (id: string) =>
       [...queryKeys.galleries.detail(id), "delivered-orders"] as const,
+    calculatePlan: (id: string, duration: string) =>
+      [...queryKeys.galleries.detail(id), "calculate-plan", duration] as const,
   },
   orders: {
     all: ["orders"] as const,
@@ -81,6 +83,8 @@ export const queryKeys = {
     all: ["uploads"] as const,
     presignedUrl: (galleryId: string, key: string, orderId?: string) =>
       [...queryKeys.uploads.all, "presigned-url", galleryId, key, orderId] as const,
+    multipartParts: (galleryId: string, uploadId: string, key: string) =>
+      [...queryKeys.uploads.all, "multipart-parts", galleryId, uploadId, key] as const,
   },
 };
 

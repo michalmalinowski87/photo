@@ -32,9 +32,7 @@ interface UseImageSelectionReturn {
  * - CTRL/CMD+Click: Toggle single image selection
  * - Normal click: Single selection (clears others)
  */
-export function useImageSelection(
-  options: UseImageSelectionOptions = {}
-): UseImageSelectionReturn {
+export function useImageSelection(options: UseImageSelectionOptions = {}): UseImageSelectionReturn {
   const { storageKey = "image_selection" } = options;
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -97,12 +95,9 @@ export function useImageSelection(
     });
   }, []);
 
-  const getImageKey = useCallback(
-    (image: { key?: string; filename?: string }): string | null => {
-      return image.key ?? image.filename ?? null;
-    },
-    []
-  );
+  const getImageKey = useCallback((image: { key?: string; filename?: string }): string | null => {
+    return image.key ?? image.filename ?? null;
+  }, []);
 
   const toggleImage = useCallback((imageKey: string, index: number) => {
     setSelectedKeys((prev) => {
@@ -118,11 +113,7 @@ export function useImageSelection(
   }, []);
 
   const selectRange = useCallback(
-    (
-      startIndex: number,
-      endIndex: number,
-      images: Array<{ key?: string; filename?: string }>
-    ) => {
+    (startIndex: number, endIndex: number, images: Array<{ key?: string; filename?: string }>) => {
       const start = Math.min(startIndex, endIndex);
       const end = Math.max(startIndex, endIndex);
 
@@ -178,9 +169,7 @@ export function useImageSelection(
 
   const selectAll = useCallback(
     (images: Array<{ key?: string; filename?: string }>) => {
-      const allKeys = images
-        .map(getImageKey)
-        .filter((key): key is string => key !== null);
+      const allKeys = images.map(getImageKey).filter((key): key is string => key !== null);
       setSelectedKeys(new Set(allKeys));
     },
     [getImageKey]
@@ -209,4 +198,3 @@ export function useImageSelection(
     selectRange,
   };
 }
-

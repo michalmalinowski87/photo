@@ -241,7 +241,9 @@ export function useGalleryImageOrders(
       );
       if (
         prevEntries.length === newEntries.length &&
-        prevEntries.every((entry, idx) => entry[0] === newEntries[idx][0] && entry[1] === newEntries[idx][1])
+        prevEntries.every(
+          (entry, idx) => entry[0] === newEntries[idx][0] && entry[1] === newEntries[idx][1]
+        )
       ) {
         return prev; // Return previous Map to maintain reference stability
       }

@@ -102,3 +102,17 @@ export function useGalleryDeliveredOrders(galleryId: string | undefined) {
     },
   });
 }
+
+export function useCalculatePlan(
+  galleryId: string | undefined,
+  duration: string = "1m",
+  options?: Omit<UseQueryOptions<any>, "queryKey" | "queryFn">
+) {
+  return useQuery({
+    queryKey: queryKeys.galleries.calculatePlan(galleryId!, duration),
+    queryFn: () => api.galleries.calculatePlan(galleryId!, duration),
+    enabled: !!galleryId,
+    staleTime: 30 * 1000,
+    ...options,
+  });
+}

@@ -6,7 +6,7 @@
 /**
  * Poll a URL to check if it's available (returns 200)
  * Uses HEAD request to minimize bandwidth
- * 
+ *
  * @param url - The URL to poll (CloudFront thumbnail URL)
  * @param maxAttempts - Maximum number of polling attempts (default: 10)
  * @param intervalMs - Interval between attempts in milliseconds (default: 500)
@@ -83,4 +83,3 @@ export async function pollThumbnailAvailability(
   // Max attempts reached, thumbnail not available yet
   return false;
 }
-

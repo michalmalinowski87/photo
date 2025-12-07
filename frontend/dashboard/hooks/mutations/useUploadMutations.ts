@@ -40,3 +40,106 @@ export function useMarkFinalUploadComplete() {
     },
   });
 }
+
+export function useGetFinalImagePresignedUrlsBatch() {
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      orderId,
+      data,
+    }: {
+      galleryId: string;
+      orderId: string;
+      data: {
+        files: Array<{
+          key: string;
+          contentType?: string;
+          includeThumbnails?: boolean;
+        }>;
+      };
+    }) => api.uploads.getFinalImagePresignedUrlsBatch(galleryId, orderId, data),
+  });
+}
+
+export function useGetPresignedUrlsBatch() {
+  return useMutation({
+    mutationFn: (data: {
+      galleryId: string;
+      files: Array<{
+        key: string;
+        contentType?: string;
+        fileSize?: number;
+        includeThumbnails?: boolean;
+      }>;
+    }) => api.uploads.getPresignedUrlsBatch(data),
+  });
+}
+
+export function useCreateMultipartUpload() {
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      data,
+    }: {
+      galleryId: string;
+      data: {
+        orderId?: string;
+        files: Array<{
+          key: string;
+          contentType?: string;
+          fileSize?: number;
+        }>;
+      };
+    }) => api.uploads.createMultipartUpload(galleryId, data),
+  });
+}
+
+export function useCompleteMultipartUpload() {
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      data,
+    }: {
+      galleryId: string;
+      data: {
+        uploadId: string;
+        key: string;
+        fileSize?: number;
+        parts: Array<{
+          partNumber: number;
+          etag: string;
+        }>;
+      };
+    }) => api.uploads.completeMultipartUpload(galleryId, data),
+  });
+}
+
+export function useAbortMultipartUpload() {
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      data,
+    }: {
+      galleryId: string;
+      data: {
+        uploadId: string;
+        key: string;
+      };
+    }) => api.uploads.abortMultipartUpload(galleryId, data),
+  });
+}
+
+export function useCompleteUpload() {
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      data,
+    }: {
+      galleryId: string;
+      data: {
+        key: string;
+        fileSize: number;
+      };
+    }) => api.uploads.completeUpload(galleryId, data),
+  });
+}

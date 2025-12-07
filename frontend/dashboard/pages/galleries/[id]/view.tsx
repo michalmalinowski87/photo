@@ -1,4 +1,5 @@
 import { GalleryThumbnails, ProcessedPhotosView, ImageModal } from "@photocloud/gallery-components";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
@@ -11,7 +12,8 @@ import {
   useGalleryDeliveredOrders,
 } from "../../../hooks/queries/useGalleries";
 import { useOrders } from "../../../hooks/queries/useOrders";
-import api, { formatApiError } from "../../../lib/api-service";
+import { formatApiError } from "../../../lib/api-service";
+import { queryKeys } from "../../../lib/react-query";
 import type { Order, GalleryImage } from "../../../types";
 
 interface OwnerGalleryViewProps {
@@ -23,6 +25,7 @@ interface OwnerGalleryViewProps {
 
 function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
@@ -243,7 +246,14 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                 const galleryIdMatch = relativeUrl.match(/\/galleries\/([^/]+)\/orders\/delivered/);
                 if (galleryIdMatch) {
                   const galleryId = galleryIdMatch[1];
-                  const data = await api.galleries.checkDeliveredOrders(galleryId);
+                  // Use React Query to fetch delivered orders
+                  const data = await queryClient.fetchQuery({
+                    queryKey: queryKeys.galleries.deliveredOrders(galleryId),
+                    queryFn: async () => {
+                      const api = await import("../../../lib/api-service");
+                      return api.default.galleries.checkDeliveredOrders(galleryId);
+                    },
+                  });
                   return {
                     data: { items: Array.isArray(data) ? data : data.items || [] },
                     response: new Response(JSON.stringify(data), { status: 200 }),
@@ -256,7 +266,15 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                 );
                 if (match) {
                   const [, galleryId, orderId] = match;
-                  const data = await api.orders.getFinalImages(galleryId, orderId);
+                  // Use React Query to fetch final images
+                  const data = await queryClient.fetchQuery({
+                    queryKey: queryKeys.orders.finalImages(galleryId, orderId),
+                    queryFn: async () => {
+                      const api = await import("../../../lib/api-service");
+                      const response = await api.default.orders.getFinalImages(galleryId, orderId);
+                      return response;
+                    },
+                  });
                   return {
                     data,
                     response: new Response(JSON.stringify(data), { status: 200 }),
@@ -269,7 +287,17 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                 );
                 if (match) {
                   const [, galleryId, orderId] = match;
-                  const result = await api.orders.downloadFinalZip(galleryId, orderId);
+                  // Use React Query mutation to download final zip
+                  // Note: The mutation's onSuccess handler triggers the download automatically,
+                  // but we need to return the result for ProcessedPhotosView compatibility
+                  // So we call the API directly but use the mutation's query key for caching
+                  const result = await queryClient.fetchQuery({
+                    queryKey: [...queryKeys.orders.detail(galleryId, orderId), "final-zip"],
+                    queryFn: async () => {
+                      const api = await import("../../../lib/api-service");
+                      return api.default.orders.downloadFinalZip(galleryId, orderId);
+                    },
+                  });
                   // Convert to expected format (base64 ZIP for backward compatibility)
                   if (result.zip) {
                     return {
@@ -300,12 +328,12 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
 
               // Fallback: use direct fetch for any other endpoints
               const { getValidToken } = await import("../../../lib/api-service");
-              const token = await getValidToken();
+              const authToken = await getValidToken();
               const response = await fetch(fullUrl, {
                 ...options,
                 headers: {
                   ...options.headers,
-                  Authorization: `Bearer ${token}`,
+                  Authorization: `Bearer ${authToken}`,
                 },
               });
               const contentType = response.headers.get("content-type");

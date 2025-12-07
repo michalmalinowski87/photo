@@ -2,6 +2,8 @@
  * Reusable utility for calculating and normalizing plan recommendations
  */
 
+import { QueryClient } from "@tanstack/react-query";
+
 import api from "./api-service";
 import type {
   CalculatePlanResponse,
@@ -10,6 +12,7 @@ import type {
   PlanOption,
   NextTierPlan,
 } from "./plan-types";
+import { queryKeys } from "./react-query";
 
 /**
  * Calculate the best plan for a gallery based on uploaded photos
@@ -17,18 +20,26 @@ import type {
  *
  * @param galleryId - The gallery ID
  * @param duration - Plan duration preference ('1m', '3m', or '12m'), defaults to '1m'
+ * @param queryClient - Optional React Query client for caching (if available)
  * @returns Normalized plan recommendation data
  * @throws Error if calculation fails
  */
 export async function calculateBestPlan(
   galleryId: string,
-  duration: string = "1m"
+  duration: string = "1m",
+  queryClient?: QueryClient
 ): Promise<CalculatePlanResponse> {
   if (!galleryId) {
     throw new Error("Gallery ID is required");
   }
 
-  const planResult = await api.galleries.calculatePlan(galleryId, duration);
+  // Use React Query for caching if available
+  const planResult = queryClient
+    ? await queryClient.fetchQuery({
+        queryKey: queryKeys.galleries.calculatePlan(galleryId, duration),
+        queryFn: () => api.galleries.calculatePlan(galleryId, duration),
+      })
+    : await api.galleries.calculatePlan(galleryId, duration);
 
   // Normalize suggestedPlan - ensure it's always a PlanOption object
   let suggestedPlan: PlanOption;
@@ -76,9 +87,10 @@ export async function calculateBestPlan(
  */
 export async function getPlanRecommendation(
   galleryId: string,
-  duration: string = "1m"
+  duration: string = "1m",
+  queryClient?: QueryClient
 ): Promise<PlanRecommendation> {
-  const result = await calculateBestPlan(galleryId, duration);
+  const result = await calculateBestPlan(galleryId, duration, queryClient);
   return {
     suggestedPlan: result.suggestedPlan,
     originalsLimitBytes: result.originalsLimitBytes,
@@ -99,9 +111,10 @@ export async function getPlanRecommendation(
  */
 export async function getPricingModalData(
   galleryId: string,
-  duration: string = "1m"
+  duration: string = "1m",
+  queryClient?: QueryClient
 ): Promise<PricingModalData> {
-  const result = await calculateBestPlan(galleryId, duration);
+  const result = await calculateBestPlan(galleryId, duration, queryClient);
   return {
     suggestedPlan: result.suggestedPlan,
     originalsLimitBytes: result.originalsLimitBytes,
@@ -122,10 +135,11 @@ export async function getPricingModalData(
  */
 export async function calculateBestPlanSafe(
   galleryId: string,
-  duration: string = "1m"
+  duration: string = "1m",
+  queryClient?: QueryClient
 ): Promise<CalculatePlanResponse | null> {
   try {
-    return await calculateBestPlan(galleryId, duration);
+    return await calculateBestPlan(galleryId, duration, queryClient);
   } catch (error) {
     console.error("Failed to calculate plan:", error);
     return null;

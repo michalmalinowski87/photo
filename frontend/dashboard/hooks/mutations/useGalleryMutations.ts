@@ -131,7 +131,9 @@ export function usePayGallery() {
     }) => api.galleries.pay(params.galleryId, params.options ?? {}),
     onSuccess: (_, variables) => {
       // Invalidate gallery detail (payment status changes) and wallet balance
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
     },
@@ -152,7 +154,9 @@ export function useUpdateGalleryClientPassword() {
       clientEmail: string;
     }) => api.galleries.updateClientPassword(galleryId, password, clientEmail),
     onSuccess: (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
     },
   });
 }
@@ -174,7 +178,9 @@ export function useUpdateGalleryPricingPackage() {
       };
     }) => api.galleries.updatePricingPackage(galleryId, pricingPackage),
     onSuccess: (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
@@ -192,7 +198,9 @@ export function useUpgradeGalleryPlan() {
       data: { plan: string; redirectUrl?: string };
     }) => api.galleries.upgradePlan(galleryId, data),
     onSuccess: (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(variables.galleryId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
     },
@@ -207,11 +215,11 @@ export function useDeleteGalleryImage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ 
-      galleryId, 
+    mutationFn: ({
+      galleryId,
       imageKeys,
-    }: { 
-      galleryId: string; 
+    }: {
+      galleryId: string;
       imageKeys: string[];
       imageType?: "originals" | "finals" | "thumb";
     }) => api.galleries.deleteImage(galleryId, imageKeys),
@@ -220,14 +228,14 @@ export function useDeleteGalleryImage() {
       await queryClient.cancelQueries({
         queryKey: queryKeys.galleries.images(galleryId, imageType),
       });
-      
+
       // Also cancel thumb queries and gallery detail if deleting originals
       if (imageType === "originals") {
         await queryClient.cancelQueries({
           queryKey: queryKeys.galleries.images(galleryId, "thumb"),
         });
       }
-      
+
       await queryClient.cancelQueries({
         queryKey: queryKeys.galleries.detail(galleryId),
       });
@@ -236,11 +244,10 @@ export function useDeleteGalleryImage() {
       const previousImages = queryClient.getQueryData<GalleryImage[]>(
         queryKeys.galleries.images(galleryId, imageType)
       );
-      const previousThumbImages = imageType === "originals"
-        ? queryClient.getQueryData<GalleryImage[]>(
-            queryKeys.galleries.images(galleryId, "thumb")
-          )
-        : null;
+      const previousThumbImages =
+        imageType === "originals"
+          ? queryClient.getQueryData<GalleryImage[]>(queryKeys.galleries.images(galleryId, "thumb"))
+          : null;
       const previousGallery = queryClient.getQueryData<Gallery>(
         queryKeys.galleries.detail(galleryId)
       );
@@ -249,60 +256,48 @@ export function useDeleteGalleryImage() {
       // Only for originals and finals (not thumbs)
       let totalBytesToSubtract = 0;
       if ((imageType === "originals" || imageType === "finals") && previousImages) {
-        const imagesToDelete = previousImages.filter(
-          (img) => imageKeys.includes(img.key ?? img.filename ?? "")
+        const imagesToDelete = previousImages.filter((img) =>
+          imageKeys.includes(img.key ?? img.filename ?? "")
         );
-        totalBytesToSubtract = imagesToDelete.reduce(
-          (sum, img) => sum + (img.size ?? 0),
-          0
-        );
+        totalBytesToSubtract = imagesToDelete.reduce((sum, img) => sum + (img.size ?? 0), 0);
       }
 
       // Optimistically remove images from cache
       queryClient.setQueryData<GalleryImage[]>(
         queryKeys.galleries.images(galleryId, imageType),
-        (old = []) =>
-          old.filter(
-            (img) => !imageKeys.includes(img.key ?? img.filename ?? "")
-          )
+        (old = []) => old.filter((img) => !imageKeys.includes(img.key ?? img.filename ?? ""))
       );
 
       // Also update thumb cache if deleting originals
       if (imageType === "originals") {
         queryClient.setQueryData<GalleryImage[]>(
           queryKeys.galleries.images(galleryId, "thumb"),
-          (old = []) =>
-            old.filter(
-              (img) => !imageKeys.includes(img.key ?? img.filename ?? "")
-            )
+          (old = []) => old.filter((img) => !imageKeys.includes(img.key ?? img.filename ?? ""))
         );
       }
 
       // Optimistically update storage usage for immediate UI feedback
       if (totalBytesToSubtract > 0 && previousGallery) {
-        queryClient.setQueryData<Gallery>(
-          queryKeys.galleries.detail(galleryId),
-          (old) => {
-            if (!old) {
-              return old;
-            }
-            const currentOriginals = old.originalsBytesUsed ?? 0;
-            const currentFinals = old.finalsBytesUsed ?? 0;
-            
-            if (imageType === "originals") {
-              return {
-                ...old,
-                originalsBytesUsed: Math.max(0, currentOriginals - totalBytesToSubtract),
-              };
-            } else if (imageType === "finals") {
-              return {
-                ...old,
-                finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
-              };
-            }
+        queryClient.setQueryData<Gallery>(queryKeys.galleries.detail(galleryId), (old) => {
+          if (!old) {
             return old;
           }
-        );
+          const currentOriginals = old.originalsBytesUsed ?? 0;
+          const currentFinals = old.finalsBytesUsed ?? 0;
+
+          if (imageType === "originals") {
+            return {
+              ...old,
+              originalsBytesUsed: Math.max(0, currentOriginals - totalBytesToSubtract),
+            };
+          } else if (imageType === "finals") {
+            return {
+              ...old,
+              finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
+            };
+          }
+          return old;
+        });
       }
 
       return { previousImages, previousThumbImages, previousGallery };
@@ -331,7 +326,7 @@ export function useDeleteGalleryImage() {
     onSuccess: (data, variables) => {
       // Update gallery detail with API response if available (more accurate than optimistic update)
       // The backend returns updated storage values synchronously
-      if (data && typeof data === 'object' && 'originalsBytesUsed' in data) {
+      if (data && typeof data === "object" && "originalsBytesUsed" in data) {
         queryClient.setQueryData<Gallery>(
           queryKeys.galleries.detail(variables.galleryId),
           (old) => {
@@ -346,15 +341,18 @@ export function useDeleteGalleryImage() {
           }
         );
       }
-      
+
       // Invalidate image queries to ensure UI reflects backend state
       // Backend processes deletion synchronously, so we can invalidate immediately
       // Use Promise.resolve().then() to let React Query finish processing optimistic updates first
       void Promise.resolve().then(() => {
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.galleries.images(variables.galleryId, variables.imageType ?? "originals"),
+          queryKey: queryKeys.galleries.images(
+            variables.galleryId,
+            variables.imageType ?? "originals"
+          ),
         });
-        
+
         // Also invalidate thumb queries if deleting originals
         if (variables.imageType === "originals" || !variables.imageType) {
           void queryClient.invalidateQueries({
@@ -362,7 +360,7 @@ export function useDeleteGalleryImage() {
           });
         }
       });
-      
+
       // Storage is already updated with API response data above, so no need to invalidate
       // The API response contains the accurate storage values from the synchronous backend
     },

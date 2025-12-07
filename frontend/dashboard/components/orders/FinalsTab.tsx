@@ -109,7 +109,11 @@ export function FinalsTab({
       }
 
       // Delete or Backspace: Delete selected
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedKeys.size > 0 && onDeleteImagesBatch) {
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedKeys.size > 0 &&
+        onDeleteImagesBatch
+      ) {
         event.preventDefault();
         handleBulkDeleteClick();
         return;
@@ -127,7 +131,15 @@ export function FinalsTab({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isSelectionMode, selectedKeys, images, selectAll, toggleSelectionMode, handleBulkDeleteClick, onDeleteImagesBatch]);
+  }, [
+    isSelectionMode,
+    selectedKeys,
+    images,
+    selectAll,
+    toggleSelectionMode,
+    handleBulkDeleteClick,
+    onDeleteImagesBatch,
+  ]);
   // Determine why upload is disabled and show appropriate message
   const getUploadDisabledMessage = (): string | null => {
     if (canUpload) {
@@ -178,7 +190,10 @@ export function FinalsTab({
         )}
         {isSelectionMode && (
           <>
-            <span className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center" style={{ width: "165.81px" }}>
+            <span
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center"
+              style={{ width: "165.81px" }}
+            >
               <CheckSquare size={20} />
               Tryb wyboru
             </span>
@@ -341,25 +356,28 @@ export function FinalsTab({
                     </div>
                   )}
                   {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
-                  {onDeleteImage && !isDeleting && !isSelectionMode && orderDeliveryStatus !== "DELIVERED" && (
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteImage(img);
-                        }}
-                        disabled={deletingImages.size > 0}
-                        className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
-                          deletingImages.size > 0
-                            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                            : "bg-error-500 text-white hover:bg-error-600"
-                        }`}
-                      >
-                        <Trash2 size={14} />
-                        Usuń
-                      </button>
-                    </div>
-                  )}
+                  {onDeleteImage &&
+                    !isDeleting &&
+                    !isSelectionMode &&
+                    orderDeliveryStatus !== "DELIVERED" && (
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteImage(img);
+                          }}
+                          disabled={deletingImages.size > 0}
+                          className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
+                            deletingImages.size > 0
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                              : "bg-error-500 text-white hover:bg-error-600"
+                          }`}
+                        >
+                          <Trash2 size={14} />
+                          Usuń
+                        </button>
+                      </div>
+                    )}
                 </div>
                 <div className="p-2">
                   <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
