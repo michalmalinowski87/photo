@@ -630,7 +630,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
     } else {
       // For selective galleries
       const isOnPhotosPage = router.pathname === "/galleries/[id]/photos";
-      
+
       if (isOnPhotosPage && galleryIdStr === gallery.galleryId) {
         // Already on photos page - just open the modal via Zustand
         openModal("photos-upload-modal");

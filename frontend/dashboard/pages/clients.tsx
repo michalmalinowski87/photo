@@ -417,19 +417,19 @@ export default function Clients() {
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Telefon
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -462,35 +462,33 @@ export default function Clients() {
                           `${client.firstName} ${client.lastName}`
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
                         {client.phone ?? "-"}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
                         {client.createdAt
                           ? new Date(String(client.createdAt)).toLocaleDateString("pl-PL")
                           : "-"}
                       </TableCell>
-                      <TableCell className="px-3 py-5 align-middle">
-                        <div className="flex gap-2 items-center">
+                      <TableCell className="px-3 py-5 align-middle text-center">
+                        <div className="flex items-center justify-center">
                           <Tooltip content="Edytuj">
-                            <Button
-                              size="sm"
-                              variant="outline"
+                            <button
                               onClick={() => handleEdit(client)}
-                              className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 -mr-4"
+                              className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors mr-0.5"
+                              aria-label="Edytuj"
                             >
                               <Pencil className="w-5 h-5" />
-                            </Button>
+                            </button>
                           </Tooltip>
                           <Tooltip content="Usuń">
-                            <Button
-                              size="sm"
-                              variant="outline"
+                            <button
                               onClick={() => handleDeleteClick(client.clientId)}
-                              className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                              className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                              aria-label="Usuń"
                             >
                               <Trash2 className="w-5 h-5" />
-                            </Button>
+                            </button>
                           </Tooltip>
                         </div>
                       </TableCell>

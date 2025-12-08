@@ -1,8 +1,8 @@
 import { HandHeart } from "lucide-react";
 
 import { ImageFallbackUrls } from "../../lib/image-fallback";
-import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { EmptyState } from "../ui/empty-state/EmptyState";
+import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { GalleryLoading } from "../ui/loading/Loading";
 
 interface GalleryImage {

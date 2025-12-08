@@ -57,8 +57,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
 
   // Compute values from React Query data
   const orderHasFinals = order
-    ? order.deliveryStatus === "PREPARING_DELIVERY" ||
-      order.deliveryStatus === "DELIVERED"
+    ? order.deliveryStatus === "PREPARING_DELIVERY" || order.deliveryStatus === "DELIVERED"
     : false;
 
   const selectedKeys = order?.selectedKeys;

@@ -103,7 +103,7 @@ export default function GalleryPhotos() {
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  
+
   // Get modal state from Zustand
   const zustandModalOpen = useModalStore((state) => state.modals["photos-upload-modal"] || false);
   const openModal = useModalStore((state) => state.openModal);
@@ -1345,7 +1345,9 @@ export default function GalleryPhotos() {
                     onClick={() => toggleSection("unselected")}
                     className="flex-1 text-left flex items-center gap-4"
                   >
-                    <div className="text-lg font-semibold text-gray-900 dark:text-white">Niewybrane</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Niewybrane
+                    </div>
                     <div className="text-sm text-gray-400 dark:text-gray-500">
                       {unselectedImages.length}{" "}
                       {unselectedImages.length === 1

@@ -10,7 +10,14 @@ interface TooltipProps {
   fullWidth?: boolean;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({ content, children, side = "top", align = "center", maxWidth, fullWidth = false }) => {
+export const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  children,
+  side = "top",
+  align = "center",
+  maxWidth,
+  fullWidth = false,
+}) => {
   const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement>(null);
@@ -27,11 +34,11 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, side = "top
     }
 
     const updatePosition = () => {
-      if (!triggerRef.current || !tooltipRef.current) return;
+      if (!triggerRef.current || !tooltipRef.current) {return;}
 
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
-      
+
       let top = 0;
       let left = 0;
 
@@ -122,7 +129,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, side = "top
   };
 
   const wrapperClass = fullWidth ? "group relative block w-full" : "group relative inline-block";
-  
+
   const tooltipContent = isHovered && mounted && (
     <div
       ref={tooltipRef}

@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Plus,
   Menu,
+  Rocket,
+  Eye,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -29,6 +31,7 @@ import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 interface GalleryListProps {
   filter?:
@@ -536,6 +539,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                                 }}
                                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl"
                               >
+                                <Rocket size={16} />
                                 Opublikuj
                               </DropdownItem>
                             )}
@@ -554,6 +558,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                                   gallery.isPaid ? "first:rounded-t-xl" : ""
                                 }`}
                               >
+                                <Eye size={16} />
                                 Szczegóły
                               </DropdownItem>
                             </div>
@@ -576,36 +581,45 @@ const GalleryList: React.FC<GalleryListProps> = ({
                           </Dropdown>
                         </div>
                       ) : (
-                        <div className="flex gap-4 items-center">
+                        <div className="flex items-center">
                           {!gallery.isPaid && (
-                            <button
-                              onClick={() => handlePayClick(gallery.galleryId)}
-                              className="text-base text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
-                            >
-                              Opublikuj
-                            </button>
+                            <Tooltip content="Opublikuj" side="top">
+                              <button
+                                onClick={() => handlePayClick(gallery.galleryId)}
+                                className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5"
+                                aria-label="Opublikuj"
+                              >
+                                <Rocket className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
                           )}
-                          <Link
-                            href={`/galleries/${gallery.galleryId}`}
-                            onMouseEnter={() => prefetchGallery(gallery.galleryId)}
-                            onClick={() => {
-                              // Store current page as referrer when navigating to gallery
-                              if (typeof window !== "undefined") {
-                                const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                                sessionStorage.setItem(referrerKey, window.location.pathname);
-                              }
-                            }}
-                            className="text-base text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 whitespace-nowrap"
-                          >
-                            Szczegóły
-                          </Link>
-                          <button
-                            onClick={() => handleDeleteClick(gallery)}
-                            disabled={deleteGalleryMutation.isPending}
-                            className="text-base text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Usuń
-                          </button>
+                          <Tooltip content="Szczegóły" side="top">
+                            <Link
+                              href={`/galleries/${gallery.galleryId}`}
+                              onMouseEnter={() => prefetchGallery(gallery.galleryId)}
+                              onClick={() => {
+                                // Store current page as referrer when navigating to gallery
+                                if (typeof window !== "undefined") {
+                                  const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                                  sessionStorage.setItem(referrerKey, window.location.pathname);
+                                }
+                              }}
+                              className="flex items-center justify-center w-8 h-8 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mr-0.5"
+                              aria-label="Szczegóły"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </Link>
+                          </Tooltip>
+                          <Tooltip content="Usuń" side="top">
+                            <button
+                              onClick={() => handleDeleteClick(gallery)}
+                              disabled={deleteGalleryMutation.isPending}
+                              className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              aria-label="Usuń"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       )}
                     </TableCell>

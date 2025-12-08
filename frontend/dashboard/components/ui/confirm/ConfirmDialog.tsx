@@ -58,7 +58,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   // Extract warning message if message contains "nieodwracalna" (irreversible)
   const messageParts = message.split("\n\n");
-  const hasWarning = messageParts.length > 1 && messageParts[1].toLowerCase().includes("nieodwracalna");
+  const hasWarning =
+    messageParts.length > 1 && messageParts[1].toLowerCase().includes("nieodwracalna");
   const mainMessage = hasWarning ? messageParts[0] : message;
   const warningMessage = hasWarning ? messageParts.slice(1).join("\n\n") : null;
 
@@ -73,9 +74,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
         {warningMessage && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-              {warningMessage}
-            </p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">{warningMessage}</p>
           </div>
         )}
 
