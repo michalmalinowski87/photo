@@ -43,7 +43,7 @@ export const BulkDeleteConfirmDialog: React.FC<BulkDeleteConfirmDialogProps> = (
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
-      <div className="p-4">
+      <div className="p-6">
         <div className="flex items-start gap-4 mb-5">
           <div className="flex-shrink-0 mt-1">
             <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />

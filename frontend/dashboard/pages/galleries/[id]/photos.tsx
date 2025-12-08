@@ -16,12 +16,12 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
+import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
-import { Tooltip } from "../../../components/ui/tooltip/Tooltip";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGalleryImages } from "../../../hooks/queries/useGalleries";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
@@ -34,6 +34,7 @@ import { useToast } from "../../../hooks/useToast";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
 import { storeLogger } from "../../../lib/store-logger";
+import { useModalStore } from "../../../store";
 import { useUnifiedStore } from "../../../store/unifiedStore";
 import type { Gallery, GalleryImage, Order } from "../../../types";
 
@@ -77,6 +78,8 @@ export default function GalleryPhotos() {
   const loadedGalleryIdRef = useRef<string>("");
   // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
   const hasLoggedGalleryReadyRef = useRef<string>("");
+  // Track if we've already processed the upload query parameter
+  const hasProcessedUploadParamRef = useRef<boolean>(false);
 
   // Use hook for order/image relationship management
   const {
@@ -100,6 +103,11 @@ export default function GalleryPhotos() {
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  
+  // Get modal state from Zustand
+  const zustandModalOpen = useModalStore((state) => state.modals["photos-upload-modal"] || false);
+  const openModal = useModalStore((state) => state.openModal);
+  const closeModal = useModalStore((state) => state.closeModal);
 
   // Check for recovery state and auto-open modal
   useEffect(() => {
@@ -118,17 +126,59 @@ export default function GalleryPhotos() {
         };
         // If there's an active upload state, open the modal to allow recovery
         if (state.isActiveUpload && state.galleryId === galleryId && state.type === "originals") {
-          setUploadModalOpen(true);
+          // Use Zustand to open modal (consistent with other opens)
+          openModal("photos-upload-modal");
         }
       } catch {
         // Ignore invalid entries
       }
     }
+  }, [galleryId, openModal]);
+
+  // Sync local modal state with Zustand state (primary source of truth for internal actions)
+  // Zustand is the source of truth, so always sync from Zustand to local
+  useEffect(() => {
+    if (zustandModalOpen !== uploadModalOpen) {
+      setUploadModalOpen(zustandModalOpen);
+    }
+  }, [zustandModalOpen, uploadModalOpen]);
+
+  // Check for upload query parameter and auto-open modal (fallback for external navigation/sharing)
+  useEffect(() => {
+    if (!router.isReady || typeof window === "undefined" || hasProcessedUploadParamRef.current) {
+      return;
+    }
+
+    // Check both router.query and URL params for the upload parameter
+    const shouldOpenUpload =
+      router.query.upload === "true" ||
+      new URLSearchParams(window.location.search).get("upload") === "true";
+
+    if (shouldOpenUpload) {
+      hasProcessedUploadParamRef.current = true;
+      // Use Zustand to open modal (works even if already on page)
+      const openModal = useUnifiedStore.getState().openModal;
+      openModal("photos-upload-modal");
+
+      // Clear the query parameter from URL after reading it
+      setTimeout(() => {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete("upload");
+        window.history.replaceState({}, "", newUrl.toString());
+      }, 0);
+    }
+  }, [router.isReady, router.query.upload]);
+
+  // Reset the processed flag when galleryId changes (for navigation between galleries)
+  useEffect(() => {
+    hasProcessedUploadParamRef.current = false;
   }, [galleryId]);
 
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
     setUploadModalOpen(false);
+    // Also close the Zustand modal
+    closeModal("photos-upload-modal");
 
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
@@ -725,9 +775,12 @@ export default function GalleryPhotos() {
     }
   };
 
-  // Get delivered orders (DELIVERED or PREPARING_DELIVERY)
+  // Get delivered orders (DELIVERED, PREPARING_DELIVERY, or CLIENT_APPROVED)
   const deliveredOrders = orders.filter(
-    (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+    (o) =>
+      o.deliveryStatus === "DELIVERED" ||
+      o.deliveryStatus === "PREPARING_DELIVERY" ||
+      o.deliveryStatus === "CLIENT_APPROVED"
   );
 
   // Group images by order
@@ -1077,7 +1130,7 @@ export default function GalleryPhotos() {
           {!isSelectionMode && (
             <>
               <button
-                onClick={() => setUploadModalOpen(true)}
+                onClick={() => openModal("photos-upload-modal")}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
               >
                 <Plus size={20} />
@@ -1178,7 +1231,7 @@ export default function GalleryPhotos() {
             description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
             actionButton={{
               label: "Prześlij zdjęcia",
-              onClick: () => setUploadModalOpen(true),
+              onClick: () => openModal("photos-upload-modal"),
               icon: <Upload size={18} />,
             }}
           />
@@ -1227,6 +1280,9 @@ export default function GalleryPhotos() {
                       <div className="text-lg font-semibold text-gray-900 dark:text-white">
                         Zlecenie #{orderDisplayNumber}
                       </div>
+                      {order.deliveryStatus && (
+                        <DeliveryStatusBadge status={order.deliveryStatus} />
+                      )}
                       <div className="text-base text-gray-500 dark:text-gray-400 hidden sm:inline">
                         {order.createdAt && <span>Utworzono: {formatDate(order.createdAt)}</span>}
                         {order.createdAt && order.deliveredAt && <span className="mx-2">•</span>}
@@ -1247,15 +1303,13 @@ export default function GalleryPhotos() {
                       </div>
                     </button>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Tooltip content="Przejdź do zlecenia">
-                        <button
-                          onClick={handleGoToOrder}
-                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                        >
-                          <span>Przejdź do zlecenia</span>
-                          <Link size={16} />
-                        </button>
-                      </Tooltip>
+                      <button
+                        onClick={handleGoToOrder}
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      >
+                        <span>Przejdź do zlecenia</span>
+                        <Link size={16} />
+                      </button>
                       <button
                         onClick={() => toggleSection(sectionId)}
                         className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
@@ -1302,16 +1356,14 @@ export default function GalleryPhotos() {
                     </div>
                   </button>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Tooltip content="Usuń wszystkie niewybrane zdjęcia">
-                      <button
-                        onClick={handleDeleteAllUnselectedClick}
-                        disabled={isBulkDeleting}
-                        className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={16} />
-                        <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
-                      </button>
-                    </Tooltip>
+                    <button
+                      onClick={handleDeleteAllUnselectedClick}
+                      disabled={isBulkDeleting}
+                      className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={16} />
+                      <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
+                    </button>
                     <button
                       onClick={() => toggleSection("unselected")}
                       className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"

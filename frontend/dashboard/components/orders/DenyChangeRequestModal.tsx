@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
 import Button from "../ui/button/Button";
@@ -31,17 +32,23 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} className="max-w-lg">
-      <div className="p-4">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-          Odrzuć prośbę o zmiany
-        </h2>
+    <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
+      <div className="p-6">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="flex-shrink-0 mt-1">
+            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
+              Odrzuć prośbę o zmiany
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">
+              Czy na pewno chcesz odrzucić prośbę klienta o zmiany?
+            </p>
+          </div>
+        </div>
 
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-          Czy na pewno chcesz odrzucić prośbę klienta o zmiany?
-        </p>
-
-        <div className="mb-4">
+        <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Powód odrzucenia{" "}
             <span className="text-gray-500 dark:text-gray-400">(opcjonalne, ale zalecane)</span>
@@ -59,15 +66,20 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
           </p>
         </div>
 
-        <div className="flex gap-3 justify-end">
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={loading}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+          >
             Anuluj
           </Button>
           <Button
             variant="primary"
             onClick={handleConfirm}
             disabled={loading}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Odrzucanie..." : "Odrzuć"}
           </Button>

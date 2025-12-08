@@ -24,7 +24,7 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
 	}
 
-	// Query for DELIVERED or PREPARING_DELIVERY orders
+	// Query for DELIVERED, PREPARING_DELIVERY, or CLIENT_APPROVED orders
 	// Try using GSI first, fall back to query + filter if GSI not available yet
 	let orders: any[] = [];
 	try {
@@ -49,7 +49,17 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 			}
 		}));
 		
-		orders = [...(ordersQuery1.Items || []), ...(ordersQuery2.Items || [])];
+		const ordersQuery3 = await ddb.send(new QueryCommand({
+			TableName: ordersTable,
+			IndexName: 'galleryId-deliveryStatus-index',
+			KeyConditionExpression: 'galleryId = :g AND deliveryStatus = :ds3',
+			ExpressionAttributeValues: {
+				':g': galleryId,
+				':ds3': 'CLIENT_APPROVED'
+			}
+		}));
+		
+		orders = [...(ordersQuery1.Items || []), ...(ordersQuery2.Items || []), ...(ordersQuery3.Items || [])];
 	} catch (gsiError: any) {
 		// Fallback: Query all orders for gallery and filter by status
 		console.warn('GSI not available, using fallback query:', gsiError.message);
@@ -62,7 +72,9 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 		}));
 		
 		orders = (allOrdersQuery.Items || []).filter((order: any) => 
-			order.deliveryStatus === 'DELIVERED' || order.deliveryStatus === 'PREPARING_DELIVERY'
+			order.deliveryStatus === 'DELIVERED' || 
+			order.deliveryStatus === 'PREPARING_DELIVERY' ||
+			order.deliveryStatus === 'CLIENT_APPROVED'
 		);
 	}
 

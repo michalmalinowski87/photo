@@ -14,7 +14,7 @@ import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { usePublishFlow } from "../../hooks/usePublishFlow";
 import { useToast } from "../../hooks/useToast";
-import { useOverlayStore } from "../../store";
+import { useModalStore, useOverlayStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
@@ -597,6 +597,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
     : false;
 
   const { startPublishFlow } = usePublishFlow();
+  const openModal = useModalStore((state) => state.openModal);
 
   const handlePublishClick = () => {
     if (!gallery?.galleryId) {
@@ -627,8 +628,17 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
         }
       }
     } else {
-      // For selective galleries, navigate to photos page
-      void router.push(`/galleries/${gallery.galleryId}/photos`);
+      // For selective galleries
+      const isOnPhotosPage = router.pathname === "/galleries/[id]/photos";
+      
+      if (isOnPhotosPage && galleryIdStr === gallery.galleryId) {
+        // Already on photos page - just open the modal via Zustand
+        openModal("photos-upload-modal");
+      } else {
+        // Navigate to photos page and open modal via Zustand
+        openModal("photos-upload-modal");
+        void router.push(`/galleries/${gallery.galleryId}/photos`);
+      }
     }
   };
 
@@ -670,42 +680,40 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
       {/* Main container with refined shadows and backdrop */}
       <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-theme-xl overflow-hidden transition-all duration-300 hover:shadow-theme-lg">
         {/* Header with refined typography and spacing */}
-        <Tooltip content={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń - Ukończ konfigurację"}>
-          <button
-            onClick={() => {
-              setNextStepsOverlayExpanded(!nextStepsOverlayExpanded);
-            }}
-            className={`w-full flex items-center ${
-              nextStepsOverlayExpanded ? "justify-between px-5" : "justify-center"
-            } py-4 border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
-            aria-label={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń"}
-          >
-            {nextStepsOverlayExpanded ? (
-              <>
-                <h3
-                  className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
-                  style={{
-                    transition: "opacity 200ms ease-out",
-                    opacity: nextStepsOverlayExpanded && widthReached13rem ? 1 : 0,
-                  }}
-                >
-                  Ukończ konfigurację
-                </h3>
-                <ChevronRight
-                  size={16}
-                  className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
-                  strokeWidth={2.5}
-                />
-              </>
-            ) : (
-              <ChevronLeft
-                size={16}
-                className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
+        <button
+          onClick={() => {
+            setNextStepsOverlayExpanded(!nextStepsOverlayExpanded);
+          }}
+          className={`w-full flex items-center ${
+            nextStepsOverlayExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
+          } border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
+          aria-label={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń"}
+        >
+          {nextStepsOverlayExpanded ? (
+            <>
+              <h3
+                className="text-[16px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
+                style={{
+                  transition: "opacity 200ms ease-out",
+                  opacity: nextStepsOverlayExpanded && widthReached13rem ? 1 : 0,
+                }}
+              >
+                Ukończ konfigurację
+              </h3>
+              <ChevronRight
+                size={18}
+                className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400 flex-shrink-0"
                 strokeWidth={2.5}
               />
-            )}
-          </button>
-        </Tooltip>
+            </>
+          ) : (
+            <ChevronLeft
+              size={24}
+              className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
+              strokeWidth={2.5}
+            />
+          )}
+        </button>
 
         {/* Content with refined spacing and visual hierarchy */}
         <div ref={contentRef}>
@@ -717,7 +725,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
 
               const isDisabled = step.id === "send" && !isPaid;
 
-              return (
+              const stepButton = (
                 <button
                   key={step.id}
                   onClick={() => {
@@ -791,6 +799,17 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
                   </div>
                 </button>
               );
+
+              // Wrap with tooltip when collapsed
+              if (!nextStepsOverlayExpanded) {
+                return (
+                  <Tooltip key={step.id} content={step.label} side="top" align="end" fullWidth>
+                    {stepButton}
+                  </Tooltip>
+                );
+              }
+
+              return stepButton;
             })}
           </div>
 

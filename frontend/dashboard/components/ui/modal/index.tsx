@@ -59,17 +59,17 @@ export const Modal: React.FC<ModalProps> = ({
     ? "w-full h-full"
     : "relative w-full mx-4 rounded-3xl bg-white dark:bg-gray-900 shadow-xl";
 
-  // If className is provided, use it; otherwise default to max-w-lg
+  // If className is provided, use it; otherwise default to max-w-2xl
   // If className includes height (h-), add flex flex-col and overflow-hidden for proper layout
   const hasHeight = className?.includes("h-");
   const contentClasses = isFullscreen
     ? baseClasses
     : className
       ? `${baseClasses} ${className}${hasHeight ? " flex flex-col overflow-hidden" : ""}`
-      : `${baseClasses} max-w-lg`;
+      : `${baseClasses} max-w-2xl`;
 
   const modalContent = (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[1000] p-4">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[1000] p-6">
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm z-[999]"

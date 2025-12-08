@@ -259,7 +259,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto min-h-0 relative">
+      <div className="flex-1 min-h-0 relative">
         {pricingError && (
           <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 max-w-4xl w-full px-8">
             <div className="p-4 bg-error-50 border border-error-200 rounded-xl text-error-600 dark:bg-error-500/10 dark:border-error-500/20 dark:text-error-400">
@@ -448,7 +448,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   // If renderAsModal is true, wrap in backdrop and portal covering full page
   if (renderAsModal) {
     const modalContent = (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-6">
         {wizardContent}
       </div>
     );

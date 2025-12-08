@@ -56,14 +56,28 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     onClose();
   };
 
+  // Extract warning message if message contains "nieodwracalna" (irreversible)
+  const messageParts = message.split("\n\n");
+  const hasWarning = messageParts.length > 1 && messageParts[1].toLowerCase().includes("nieodwracalna");
+  const mainMessage = hasWarning ? messageParts[0] : message;
+  const warningMessage = hasWarning ? messageParts.slice(1).join("\n\n") : null;
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
-      <div className="p-4">
-        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-5">{title}</h2>
+      <div className="p-6">
+        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h2>
 
         <p className="text-lg text-gray-600 dark:text-gray-400 mb-6 whitespace-pre-line">
-          {message}
+          {mainMessage}
         </p>
+
+        {warningMessage && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              {warningMessage}
+            </p>
+          </div>
+        )}
 
         {suppressKey && (
           <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -112,10 +126,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             disabled={loading}
             className={
               variant === "danger"
-                ? "bg-red-600 hover:bg-red-700 text-white"
+                ? "bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 : variant === "warning"
-                  ? "bg-green-600 hover:bg-green-700 text-white"
-                  : "bg-green-600 hover:bg-green-700 text-white"
+                  ? "bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             }
           >
             {loading ? "Przetwarzanie..." : confirmText}

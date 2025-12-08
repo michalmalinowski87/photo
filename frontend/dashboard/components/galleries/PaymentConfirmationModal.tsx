@@ -43,9 +43,9 @@ export default function PaymentConfirmationModal({
     (paymentMethod === undefined && stripeAmountCents === totalAmountCents);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+    <Modal isOpen={isOpen} onClose={onClose} showCloseButton={true} className="max-w-2xl">
+      <div className="p-6">
+        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
           Potwierdzenie płatności
         </h2>
 
@@ -97,10 +97,20 @@ export default function PaymentConfirmationModal({
         </div>
 
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={loading}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+          >
             Anuluj
           </Button>
-          <Button variant="primary" onClick={onConfirm} disabled={loading}>
+          <Button
+            variant="primary"
+            onClick={onConfirm}
+            disabled={loading}
+            className="disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             {loading
               ? "Przetwarzanie..."
               : isStripeOnly

@@ -20,7 +20,7 @@ export const WelcomePopup: React.FC<WelcomePopupProps> = ({
 }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[90vh] flex flex-col">
-      <div className="overflow-y-auto flex-1 p-4 md:p-6">
+      <div className="overflow-y-auto flex-1 p-6">
         {/* Header with celebration */}
         <div className="text-center mb-5 md:mb-6">
           <div className="relative inline-flex items-center justify-center mb-4">
