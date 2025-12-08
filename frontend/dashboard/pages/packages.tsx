@@ -1,4 +1,4 @@
-import { X, Package, Plus } from "lucide-react";
+import { X, Package, Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import Button from "../components/ui/button/Button";
@@ -7,6 +7,7 @@ import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
+import { Tooltip } from "../components/ui/tooltip/Tooltip";
 import {
   useCreatePackage,
   useDeletePackage,
@@ -260,7 +261,7 @@ export default function Packages() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pakiety</h1>
         <button
           onClick={handleCreate}
-          className="text-xl font-bold text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
+          className="text-xl text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
         >
           <span className="text-2xl">+</span>
           <span>Dodaj pakiet</span>
@@ -281,7 +282,7 @@ export default function Packages() {
           }}
         />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="w-full">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 dark:bg-gray-900">
@@ -317,7 +318,7 @@ export default function Packages() {
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Akcje
                 </TableCell>
@@ -341,18 +342,28 @@ export default function Packages() {
                   <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                     {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
                   </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(pkg)}>
-                        Edytuj
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteClick(pkg.packageId)}
-                      >
-                        Usuń
-                      </Button>
+                  <TableCell className="px-0 py-3">
+                    <div className="flex gap-0 items-center">
+                      <Tooltip content="Edytuj">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(pkg)}
+                          className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 -mr-4"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Usuń">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteClick(pkg.packageId)}
+                          className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>

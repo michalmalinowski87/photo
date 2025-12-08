@@ -198,9 +198,9 @@ export default function Wallet() {
               <p className="text-gray-500 dark:text-gray-400">Brak transakcji</p>
             </div>
           ) : (
-            <div className="w-full overflow-x-auto">
+            <div className="w-full">
               <div className="h-[530px] overflow-y-auto">
-                <Table className="table-fixed w-full">
+                <Table className="w-full">
                   <TableHeader className="sticky top-0 z-10">
                     <TableRow className="bg-gray-50 dark:bg-gray-900">
                       <TableCell

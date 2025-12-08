@@ -8,6 +8,7 @@ import { formatPrice } from "../../lib/format-price";
 import { normalizeSelectedKeys } from "../../lib/order-utils";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Loading } from "../ui/loading/Loading";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 interface OrderInfoCardProps {
   isEditingAmount: boolean;
@@ -80,22 +81,24 @@ export function OrderInfoCard({
                   disabled={savingAmount}
                 />
                 <span className="text-lg font-semibold text-gray-900 dark:text-white">PLN</span>
-                <button
-                  onClick={onSave}
-                  disabled={savingAmount}
-                  className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Zapisz"
-                >
-                  <Check className="w-5 h-5" strokeWidth={2} />
-                </button>
-                <button
-                  onClick={onCancelEdit}
-                  disabled={savingAmount}
-                  className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Anuluj"
-                >
-                  <X className="w-5 h-5" strokeWidth={2} />
-                </button>
+                <Tooltip content="Zapisz">
+                  <button
+                    onClick={onSave}
+                    disabled={savingAmount}
+                    className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Check className="w-5 h-5" strokeWidth={2} />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Anuluj">
+                  <button
+                    onClick={onCancelEdit}
+                    disabled={savingAmount}
+                    className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <X className="w-5 h-5" strokeWidth={2} />
+                  </button>
+                </Tooltip>
                 {savingAmount && <Loading size="sm" />}
               </>
             ) : (
@@ -103,13 +106,14 @@ export function OrderInfoCard({
                 <span className="text-lg font-semibold text-gray-900 dark:text-white">
                   {formatPrice(totalCents)}
                 </span>
-                <button
-                  onClick={onStartEdit}
-                  className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-                  title="Edytuj kwotę"
-                >
-                  <Pencil className="w-4 h-4" strokeWidth={2} />
-                </button>
+                <Tooltip content="Edytuj kwotę">
+                  <button
+                    onClick={onStartEdit}
+                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+                  >
+                    <Pencil className="w-4 h-4" strokeWidth={2} />
+                  </button>
+                </Tooltip>
               </>
             )}
           </div>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 
+import { Tooltip } from "../components/ui/tooltip/Tooltip";
 import {
   useApproveChangeRequest,
   useDenyChangeRequest,
@@ -321,11 +322,12 @@ export default function Orders() {
         </button>
       </div>
       {message ? <p>{message}</p> : null}
-      <div style={{ overflowX: "auto" }}>
+      <div className="w-full">
         <table
           border={1}
           cellPadding={6}
-          style={{ borderCollapse: "collapse", width: "100%", minWidth: 600 }}
+          style={{ borderCollapse: "collapse", width: "100%" }}
+          className="w-full"
         >
           <thead>
             <tr>
@@ -357,16 +359,17 @@ export default function Orders() {
                   <td>
                     {/* Download ZIP - available for CLIENT_APPROVED orders */}
                     {o.deliveryStatus === "CLIENT_APPROVED" && (
-                      <button
-                        onClick={() => downloadZip(o.orderId)}
-                        disabled={
-                          downloadingZipOrderId === o.orderId || downloadZipMutation.isPending
-                        }
-                        className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Download ZIP file (one-time use)"
-                      >
-                        {downloadingZipOrderId === o.orderId ? "Downloading..." : "Download ZIP"}
-                      </button>
+                      <Tooltip content="Download ZIP file (one-time use)">
+                        <button
+                          onClick={() => downloadZip(o.orderId)}
+                          disabled={
+                            downloadingZipOrderId === o.orderId || downloadZipMutation.isPending
+                          }
+                          className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {downloadingZipOrderId === o.orderId ? "Downloading..." : "Download ZIP"}
+                        </button>
+                      </Tooltip>
                     )}
                     {/* Mark as Paid - available for UNPAID orders */}
                     {o.paymentStatus === "UNPAID" && (
@@ -408,20 +411,22 @@ export default function Orders() {
                     {/* Approve/Deny Change Request - available for CHANGES_REQUESTED orders */}
                     {o.deliveryStatus === "CHANGES_REQUESTED" && (
                       <>
-                        <button
-                          onClick={() => denyChange(o.orderId)}
-                          className="mr-2 px-2 py-1 text-xs bg-error-500 dark:bg-error-500 text-white border-none rounded cursor-pointer"
-                          title="Deny change request and revert to previous status"
-                        >
-                          Deny Change Request
-                        </button>
-                        <button
-                          onClick={() => approveChange(o.orderId)}
-                          className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
-                          title="Approve change request and unlock selection"
-                        >
-                          Approve Change Request
-                        </button>
+                        <Tooltip content="Deny change request and revert to previous status">
+                          <button
+                            onClick={() => denyChange(o.orderId)}
+                            className="mr-2 px-2 py-1 text-xs bg-error-500 dark:bg-error-500 text-white border-none rounded cursor-pointer"
+                          >
+                            Deny Change Request
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="Approve change request and unlock selection">
+                          <button
+                            onClick={() => approveChange(o.orderId)}
+                            className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
+                          >
+                            Approve Change Request
+                          </button>
+                        </Tooltip>
                       </>
                     )}
                     {/* Upload Final Photos - available for CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, or PREPARING_DELIVERY orders */}
@@ -439,34 +444,36 @@ export default function Orders() {
                           }}
                           className="text-xs"
                         />
-                        <button
-                          onClick={() => uploadFinalPhotos(o.orderId)}
-                          disabled={
-                            !finalFiles[o.orderId] ||
-                            finalFiles[o.orderId].length === 0 ||
-                            uploadingFinalOrderId === o.orderId ||
-                            uploadFinalPhotosMutation.isPending
-                          }
-                          className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
-                          title="Upload processed photos (stored in original, unprocessed format)"
-                        >
-                          {uploadingFinalOrderId === o.orderId
-                            ? "Uploading..."
-                            : "Upload Final Photos"}
-                        </button>
+                        <Tooltip content="Upload processed photos (stored in original, unprocessed format)">
+                          <button
+                            onClick={() => uploadFinalPhotos(o.orderId)}
+                            disabled={
+                              !finalFiles[o.orderId] ||
+                              finalFiles[o.orderId].length === 0 ||
+                              uploadingFinalOrderId === o.orderId ||
+                              uploadFinalPhotosMutation.isPending
+                            }
+                            className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
+                          >
+                            {uploadingFinalOrderId === o.orderId
+                              ? "Uploading..."
+                              : "Upload Final Photos"}
+                          </button>
+                        </Tooltip>
                       </div>
                     )}
                     {/* Send Final Link - available for PREPARING_DELIVERY orders with PAID payment */}
                     {/* This action sends the final link email AND marks the order as DELIVERED */}
                     {/* Only available after photos are uploaded (status changed to PREPARING_DELIVERY) */}
                     {o.deliveryStatus === "PREPARING_DELIVERY" && o.paymentStatus === "PAID" && (
-                      <button
-                        onClick={() => sendFinalLink(o.orderId)}
-                        className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
-                        title="Send final link to client, mark as delivered, and clean up originals/thumbs/previews"
-                      >
-                        Send Final Link
-                      </button>
+                      <Tooltip content="Send final link to client, mark as delivered, and clean up originals/thumbs/previews">
+                        <button
+                          onClick={() => sendFinalLink(o.orderId)}
+                          className="mr-2 px-2 py-1 text-xs bg-success-500 dark:bg-success-500 text-white border-none rounded cursor-pointer"
+                        >
+                          Send Final Link
+                        </button>
+                      </Tooltip>
                     )}
                   </td>
                 </tr>

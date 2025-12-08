@@ -8,6 +8,7 @@ import { usePresignedUrl } from "../../../hooks/queries/usePresignedUrl";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import { RetryableImage } from "../../ui/RetryableImage";
+import { Tooltip } from "../../ui/tooltip/Tooltip";
 
 export const CoverPhotoUpload: React.FC = () => {
   const router = useRouter();
@@ -297,9 +298,10 @@ export const CoverPhotoUpload: React.FC = () => {
                 }}
                 disabled={uploadingCover || processingCover}
                 className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Usuń okładkę"
               >
-                Usuń okładkę
+                <Tooltip content="Usuń okładkę">
+                  <span className="cursor-pointer">Usuń okładkę</span>
+                </Tooltip>
               </button>
             </div>
           </>

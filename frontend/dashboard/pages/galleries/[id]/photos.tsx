@@ -21,6 +21,7 @@ import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
+import { Tooltip } from "../../../components/ui/tooltip/Tooltip";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
 import { useGalleryImages } from "../../../hooks/queries/useGalleries";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
@@ -1263,14 +1264,15 @@ export default function GalleryPhotos() {
                       </div>
                     </button>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={handleGoToOrder}
-                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                        title="Przejdź do zlecenia"
-                      >
-                        <span>Przejdź do zlecenia</span>
-                        <ExternalLink size={14} />
-                      </button>
+                      <Tooltip content="Przejdź do zlecenia">
+                        <button
+                          onClick={handleGoToOrder}
+                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                        >
+                          <span>Przejdź do zlecenia</span>
+                          <ExternalLink size={14} />
+                        </button>
+                      </Tooltip>
                       <button
                         onClick={() => toggleSection(sectionId)}
                         className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
@@ -1317,15 +1319,16 @@ export default function GalleryPhotos() {
                     </div>
                   </button>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={handleDeleteAllUnselectedClick}
-                      disabled={isBulkDeleting}
-                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Usuń wszystkie niewybrane zdjęcia"
-                    >
-                      <Trash2 size={14} />
-                      <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
-                    </button>
+                    <Tooltip content="Usuń wszystkie niewybrane zdjęcia">
+                      <button
+                        onClick={handleDeleteAllUnselectedClick}
+                        disabled={isBulkDeleting}
+                        className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={14} />
+                        <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
+                      </button>
+                    </Tooltip>
                     <button
                       onClick={() => toggleSection("unselected")}
                       className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"

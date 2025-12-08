@@ -623,7 +623,7 @@ export default function GalleryDetail() {
           ) : orders.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">Brak zleceń dla tej galerii</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="w-full">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-900">

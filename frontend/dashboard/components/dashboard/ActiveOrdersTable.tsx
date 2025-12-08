@@ -1,3 +1,4 @@
+import { Eye } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
@@ -116,7 +117,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
       {orders.length === 0 ? (
         <p className="text-gray-500 dark:text-gray-400">Brak aktywnych zleceń</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="w-full">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50 dark:bg-gray-900">
@@ -214,7 +215,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                         #{orderNumber}
                       </Link>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm">
+                    <TableCell className="px-4 py-3 text-sm whitespace-nowrap">
                       {getDeliveryStatusBadge(deliveryStatus, isNonSelectionGallery)}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm">
@@ -252,8 +253,13 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                           </>
                         )}
                         <Link href={`/galleries/${galleryId}/orders/${orderId}`}>
-                          <Button variant="outline" size="sm">
-                            Szczegóły
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
+                          >
+                            <Eye className="w-4 h-4 hidden max-[1350px]:block" />
+                            <span className="max-[1350px]:hidden">Szczegóły</span>
                           </Button>
                         </Link>
                       </div>

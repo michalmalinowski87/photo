@@ -11,6 +11,7 @@ import {
   type Duration,
   type PlanKey,
 } from "../../../lib/pricing-plans";
+import { Tooltip } from "../../ui/tooltip/Tooltip";
 
 interface PlanSelectionGridProps {
   suggestedStorage: "1GB" | "3GB" | "10GB";
@@ -126,17 +127,13 @@ export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {photoEstimate.displayText}
                   </p>
-                  <div className="group relative">
+                  <Tooltip content={photoEstimate.tooltipText} side="top" maxWidth="16rem">
                     <Info
                       size={12}
                       className="text-gray-400 dark:text-gray-500 cursor-help"
                       strokeWidth={2}
                     />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                      {photoEstimate.tooltipText}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
-                    </div>
-                  </div>
+                  </Tooltip>
                 </div>
               </div>
 

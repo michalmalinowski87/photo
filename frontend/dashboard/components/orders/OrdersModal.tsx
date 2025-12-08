@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Eye } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -163,7 +164,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto mb-4">
+            <div className="w-full mb-4">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-900">
@@ -241,7 +242,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                           #{typeof order.orderNumber === "string" ? order.orderNumber : ""}
                         </Link>
                       </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
+                      <TableCell className="px-4 py-3 text-sm whitespace-nowrap">
                         {getDeliveryStatusBadge(order.deliveryStatus ?? "")}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-sm">
@@ -297,8 +298,14 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
                             </>
                           )}
                           <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
-                            <Button variant="outline" size="sm" onClick={onClose}>
-                              Szczegóły
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={onClose}
+                              className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
+                            >
+                              <Eye className="w-4 h-4 hidden max-[1350px]:block" />
+                              <span className="max-[1350px]:hidden">Szczegóły</span>
                             </Button>
                           </Link>
                         </div>

@@ -16,6 +16,7 @@ import { usePublishFlow } from "../../hooks/usePublishFlow";
 import { useToast } from "../../hooks/useToast";
 import { useOverlayStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 interface NextStepsOverlayProps {
   // No props needed - component gets all data from React Query stores
@@ -669,41 +670,42 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
       {/* Main container with refined shadows and backdrop */}
       <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-theme-xl overflow-hidden transition-all duration-300 hover:shadow-theme-lg">
         {/* Header with refined typography and spacing */}
-        <button
-          onClick={() => {
-            setNextStepsOverlayExpanded(!nextStepsOverlayExpanded);
-          }}
-          className={`w-full flex items-center ${
-            nextStepsOverlayExpanded ? "justify-between px-5" : "justify-center"
-          } py-4 border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
-          aria-label={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń"}
-          title={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń - Ukończ konfigurację"}
-        >
-          {nextStepsOverlayExpanded ? (
-            <>
-              <h3
-                className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
-                style={{
-                  transition: "opacity 200ms ease-out",
-                  opacity: nextStepsOverlayExpanded && widthReached13rem ? 1 : 0,
-                }}
-              >
-                Ukończ konfigurację
-              </h3>
-              <ChevronRight
+        <Tooltip content={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń - Ukończ konfigurację"}>
+          <button
+            onClick={() => {
+              setNextStepsOverlayExpanded(!nextStepsOverlayExpanded);
+            }}
+            className={`w-full flex items-center ${
+              nextStepsOverlayExpanded ? "justify-between px-5" : "justify-center"
+            } py-4 border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
+            aria-label={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń"}
+          >
+            {nextStepsOverlayExpanded ? (
+              <>
+                <h3
+                  className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
+                  style={{
+                    transition: "opacity 200ms ease-out",
+                    opacity: nextStepsOverlayExpanded && widthReached13rem ? 1 : 0,
+                  }}
+                >
+                  Ukończ konfigurację
+                </h3>
+                <ChevronRight
+                  size={16}
+                  className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
+                  strokeWidth={2.5}
+                />
+              </>
+            ) : (
+              <ChevronLeft
                 size={16}
                 className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
                 strokeWidth={2.5}
               />
-            </>
-          ) : (
-            <ChevronLeft
-              size={16}
-              className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
-              strokeWidth={2.5}
-            />
-          )}
-        </button>
+            )}
+          </button>
+        </Tooltip>
 
         {/* Content with refined spacing and visual hierarchy */}
         <div ref={contentRef}>

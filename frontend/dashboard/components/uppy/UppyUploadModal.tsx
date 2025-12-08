@@ -16,6 +16,7 @@ import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUplo
 import { type TypedUppyFile } from "../../lib/uppy-config";
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
 
@@ -651,13 +652,14 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                                   }}
                                   className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
                                   type="button"
-                                  title={status === "paused" ? "Wznów" : "Wstrzymaj"}
                                 >
-                                  {status === "paused" ? (
-                                    <Play className="w-8 h-8 text-white fill-current" />
-                                  ) : (
-                                    <Pause className="w-8 h-8 text-white fill-current" />
-                                  )}
+                                  <Tooltip content={status === "paused" ? "Wznów" : "Wstrzymaj"}>
+                                    {status === "paused" ? (
+                                      <Play className="w-8 h-8 text-white fill-current" />
+                                    ) : (
+                                      <Pause className="w-8 h-8 text-white fill-current" />
+                                    )}
+                                  </Tooltip>
                                 </button>
                                 <div className="absolute bottom-6 left-0 right-0 text-center z-10">
                                   <p className="text-white text-xs font-bold drop-shadow-lg">
@@ -687,9 +689,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                                 onClick={() => handleRemoveFile(freshFile.id)}
                                 className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
                                 type="button"
-                                title="Usuń"
                               >
-                                <X size={16} />
+                                <Tooltip content="Usuń">
+                                  <X size={16} />
+                                </Tooltip>
                               </button>
                             )}
                           </div>
@@ -743,9 +746,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                       }}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
                       type="button"
-                      title={isPaused ? "Wznów" : "Wstrzymaj"}
                     >
-                      {isPaused ? <Play size={20} /> : <Pause size={20} />}
+                      <Tooltip content={isPaused ? "Wznów" : "Wstrzymaj"}>
+                        {isPaused ? <Play size={20} /> : <Pause size={20} />}
+                      </Tooltip>
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-2">
