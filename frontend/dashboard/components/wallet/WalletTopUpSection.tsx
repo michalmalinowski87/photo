@@ -134,15 +134,18 @@ export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
                   const formatted = formatCurrencyInput(e.target.value);
                   setCustomTopUpAmount(formatted);
                 }}
+                hint="Minimalna kwota doładowania to 20 PLN"
                 className="flex-1"
               />
-              <Button variant="primary" onClick={handleCustomTopUp} disabled={isLoading}>
+              <Button
+                variant="primary"
+                onClick={handleCustomTopUp}
+                disabled={isLoading}
+                className="h-11"
+              >
                 Doładuj
               </Button>
             </div>
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Minimalna kwota doładowania: 20 PLN
-            </p>
           </div>
         )}
       </div>
