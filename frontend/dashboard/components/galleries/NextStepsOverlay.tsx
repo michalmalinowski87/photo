@@ -171,13 +171,13 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
     const currentBytes = optimisticBytesUsed ?? gallery.originalsBytesUsed ?? 0;
     const uploadCompleted = currentBytes > 0;
     const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
-    
+
     // For non-selective galleries, show different steps
     // "Prześlij zdjęcia" checks for final images (not original photos)
     // No separate "Prześlij zdjęcia finalne" step needed
     if (gallery.selectionEnabled === false) {
       const finalUploadCompleted = finalImagesCount > 0;
-      
+
       return [
         {
           id: "upload",
@@ -191,7 +191,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
         },
       ];
     }
-    
+
     // For selective galleries, use original logic
     // Send step is completed when there's any order (gallery has been sent to client)
     // Use galleryOrders from React Query store
@@ -614,7 +614,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
     // For non-selective galleries, navigate to order page (where photos are uploaded)
     if (isNonSelectionGallery) {
       // Use order from URL if available, otherwise get first order from galleryOrders
-      const targetOrderId = orderIdForQuery ?? (galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
+      const targetOrderId =
+        orderIdForQuery ?? (galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
       if (targetOrderId) {
         void router.push(`/galleries/${gallery.galleryId}/orders/${targetOrderId}`);
       } else if (galleryOrders.length > 0) {

@@ -247,6 +247,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         if (!data.galleryName.trim()) {
           errors.galleryName = "Nazwa galerii jest wymagana";
           isValid = false;
+        } else if (data.galleryName.trim().length > 100) {
+          errors.galleryName = "Nazwa galerii nie może przekraczać 100 znaków";
+          isValid = false;
         }
         break;
       case 3:
@@ -446,18 +449,20 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       // If orderId exists, it's definitely non-selective (selectionEnabled = false)
       // If orderId doesn't exist, check response.selectionEnabled, default to true if undefined
       const responseSelectionEnabled = (response as any)?.selectionEnabled;
-      const selectionEnabled = orderId 
-        ? false 
-        : (responseSelectionEnabled !== undefined ? responseSelectionEnabled : true);
-      
-      console.log('Gallery created:', { 
-        galleryId: response.galleryId, 
-        orderId, 
+      const selectionEnabled = orderId
+        ? false
+        : responseSelectionEnabled !== undefined
+          ? responseSelectionEnabled
+          : true;
+
+      console.log("Gallery created:", {
+        galleryId: response.galleryId,
+        orderId,
         selectionEnabled,
         responseSelectionEnabled,
-        fullResponse: response 
+        fullResponse: response,
       });
-      
+
       onSuccess(response.galleryId, orderId, selectionEnabled);
     } catch (err: unknown) {
       // Clear flow on error - overlay should disappear

@@ -80,7 +80,7 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const hasPhotos = isNonSelectionGallery
     ? finalImagesCount > 0
     : (gallery?.originalsBytesUsed ?? 0) > 0;
-  
+
   const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
 
   // Defensive check: don't render if no gallery URL

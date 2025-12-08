@@ -26,6 +26,7 @@ interface TypeformInputProps {
   autoFocus?: boolean;
   label?: string;
   hint?: string;
+  maxLength?: number;
 }
 
 /**
@@ -56,6 +57,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
   autoFocus,
   label,
   hint,
+  maxLength,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +134,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
           required={required}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
+          maxLength={maxLength}
           {...(autoComplete === "off" ? { "data-1p-ignore": "true" } : {})}
           className={`
             w-full bg-transparent

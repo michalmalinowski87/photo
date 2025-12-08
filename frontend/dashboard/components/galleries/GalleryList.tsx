@@ -30,7 +30,6 @@ import { EmptyState } from "../ui/empty-state/EmptyState";
 import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
-
 interface GalleryListProps {
   filter?:
     | "unpaid"
@@ -45,8 +44,42 @@ interface GalleryListProps {
 
 // Helper function to format plan display (e.g., "1GB-12m" -> "1GB 12m")
 const formatPlanDisplay = (plan: string | undefined | null): string => {
-  if (!plan) {return "-";}
+  if (!plan) {
+    return "-";
+  }
   return plan.replace("-", " ");
+};
+
+// Helper function to break text at full words after 50 characters
+// Also truncates to 100 characters max, never returns more than 2 lines
+const breakTextAtWords = (text: string, maxLength: number = 50): string[] => {
+  // Truncate to 100 characters if longer
+  const truncatedText = text.length > 100 ? text.substring(0, 100) : text;
+
+  if (truncatedText.length <= maxLength) {
+    return [truncatedText];
+  }
+
+  // Find the last space before maxLength
+  const firstLine = truncatedText.substring(0, maxLength);
+  const lastSpaceIndex = firstLine.lastIndexOf(" ");
+
+  if (lastSpaceIndex > 0) {
+    const line1 = truncatedText.substring(0, lastSpaceIndex);
+    const remaining = truncatedText.substring(lastSpaceIndex + 1);
+    // Ensure second line doesn't exceed remaining characters (max 100 total)
+    // If remaining is longer than maxLength, truncate it
+    const line2 =
+      remaining.length > maxLength ? `${remaining.substring(0, maxLength - 3)}...` : remaining;
+    return [line1, line2];
+  }
+
+  // If no space found, break at maxLength and truncate second line if needed
+  const line1 = truncatedText.substring(0, maxLength);
+  const remaining = truncatedText.substring(maxLength);
+  const line2 =
+    remaining.length > maxLength ? `${remaining.substring(0, maxLength - 3)}...` : remaining;
+  return [line1, line2];
 };
 
 // Helper function to calculate usage percentage based on gallery type
@@ -57,7 +90,9 @@ const calculateUsagePercentage = (gallery: Gallery): number => {
   const finalsLimit = gallery.finalsLimitBytes ?? 0;
 
   // If no limits, return 0
-  if (!originalsLimit && !finalsLimit) {return 0;}
+  if (!originalsLimit && !finalsLimit) {
+    return 0;
+  }
 
   const isSelectionGallery = gallery.selectionEnabled !== false;
 
@@ -95,11 +130,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
   const prefetchGallery = usePrefetchGallery();
 
-  const {
-    data: galleries = [],
-    isLoading: loading,
-    error: queryError,
-  } = useGalleries(filter);
+  const { data: galleries = [], isLoading: loading, error: queryError } = useGalleries(filter);
 
   const initialLoad = loading && initialLoadRef.current;
 
@@ -136,7 +167,9 @@ const GalleryList: React.FC<GalleryListProps> = ({
   // Detect if we should use hamburger menu based on viewport width
   useEffect(() => {
     const checkViewport = () => {
-      if (typeof window === "undefined") {return;}
+      if (typeof window === "undefined") {
+        return;
+      }
       // Use hamburger menu if viewport is narrow (less than 1300px or when table would scroll)
       const shouldUseHamburger = window.innerWidth < 1350;
       setUseHamburgerMenu(shouldUseHamburger);
@@ -156,7 +189,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
     startPublishFlow(galleryId);
     onWizardOpenChange?.(true);
   };
-
 
   const handleDeleteClick = (gallery: Gallery) => {
     setGalleryToDelete(gallery);
@@ -297,222 +329,250 @@ const GalleryList: React.FC<GalleryListProps> = ({
         <div className="w-full overflow-visible">
           <Table className="w-full relative">
             <TableHeader>
-              <TableRow className="bg-gray-50 dark:bg-gray-900">
+              <TableRow className="bg-gray-100 dark:bg-gray-900">
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[200px]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
                 >
                   Nazwa galerii
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Plan
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Status
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Zlecenia
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Utworzono
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Akcje
                 </TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {galleries.map((gallery) => (
-                <TableRow
-                  key={gallery.galleryId}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <TableCell className="px-4 py-3">
-                    <Link
-                      href={`/galleries/${gallery.galleryId}`}
-                      className="font-medium text-brand-500 hover:text-brand-600 truncate block max-w-full"
-                      onClick={() => {
-                        // Store current page as referrer when navigating to gallery
-                        if (typeof window !== "undefined") {
-                          const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                          sessionStorage.setItem(referrerKey, window.location.pathname);
-                        }
-                      }}
-                      title={String(gallery.galleryName ?? gallery.galleryId ?? "")}
-                    >
-                      {String(gallery.galleryName ?? gallery.galleryId ?? "")}
-                    </Link>
-                    {!gallery.galleryName && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
-                        {gallery.galleryId}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
-                    {(() => {
-                      // Check if plan exists and is a non-empty string
-                      // For non-selective galleries, plan should always be present
-                      const planValue = gallery.plan;
-                      const hasPlan = planValue && (typeof planValue === "string" ? planValue.trim() !== "" : true);
-                      
-                      // Check if limit bytes exist (for non-selective galleries, they might only have finalsLimitBytes)
-                      const hasLimitBytes = !!(gallery.originalsLimitBytes ?? gallery.finalsLimitBytes);
-                      
-                      // Show plan if either plan field exists OR limit bytes exist
-                      // For non-selective galleries, plan should always be shown if it exists
-                      if (hasPlan || hasLimitBytes) {
-                        const planDisplay = planValue ? formatPlanDisplay(String(planValue)) : "-";
-                        return (
-                          <div>
-                            <div className="text-sm font-medium">
-                              {planDisplay}
-                            </div>
-                            {hasLimitBytes ? (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {calculateUsagePercentage(gallery).toFixed(1)}%
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      }
-                      return <span className="text-gray-400">-</span>;
-                    })()}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">{getStateBadge(gallery)}</TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {(gallery.orderCount ?? 0) as number}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                    {gallery.createdAt
-                      ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    {useHamburgerMenu ? (
-                      <div className="relative">
-                        <button
-                          ref={(el) => {
-                            buttonRefs.current[gallery.galleryId] = el;
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const isCurrentlyOpen = openActionMenu === gallery.galleryId;
-                            // Close all menus first, then open this one if it wasn't open
-                            setOpenActionMenu(isCurrentlyOpen ? null : gallery.galleryId);
-                          }}
-                          className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
-                          aria-label="Akcje"
-                        >
-                          <Menu size={16} />
-                        </button>
-                        <Dropdown
-                          isOpen={openActionMenu === gallery.galleryId}
-                          onClose={() => setOpenActionMenu(null)}
-                          triggerRef={
-                            buttonRefs.current[gallery.galleryId]
-                              ? { current: buttonRefs.current[gallery.galleryId] }
-                              : undefined
+              {galleries.map((gallery, index) => {
+                const galleryName =
+                  typeof gallery.galleryName === "string"
+                    ? gallery.galleryName
+                    : typeof gallery.galleryId === "string"
+                      ? gallery.galleryId
+                      : "";
+                const nameLines = breakTextAtWords(galleryName, 50);
+                // First row (index 0) should be light to contrast with dark header
+                // So even indices get light background, odd indices get striped background
+                const isEvenRow = index % 2 === 0;
+
+                return (
+                  <TableRow
+                    key={gallery.galleryId}
+                    className={`h-[80px] ${
+                      isEvenRow
+                        ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                        : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                    }`}
+                  >
+                    <TableCell className="px-4 py-4 align-middle min-w-[400px]">
+                      <Link
+                        href={`/galleries/${gallery.galleryId}`}
+                        className="font-medium text-brand-500 hover:text-brand-600 block max-w-full"
+                        onClick={() => {
+                          // Store current page as referrer when navigating to gallery
+                          if (typeof window !== "undefined") {
+                            const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                            sessionStorage.setItem(referrerKey, window.location.pathname);
                           }
-                          className="w-48 bg-white dark:bg-gray-900 shadow-xl"
-                        >
-                          {!gallery.isPaid && (
+                        }}
+                        title={galleryName}
+                      >
+                        {nameLines.map((line, lineIndex) => (
+                          <span key={lineIndex} className="block">
+                            {line}
+                          </span>
+                        ))}
+                      </Link>
+                      {!gallery.galleryName && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {gallery.galleryId}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-sm text-gray-900 dark:text-white whitespace-nowrap align-middle">
+                      {(() => {
+                        // Check if plan exists and is a non-empty string
+                        // For non-selective galleries, plan should always be present
+                        const planValue = gallery.plan;
+                        const hasPlan =
+                          planValue &&
+                          (typeof planValue === "string" ? planValue.trim() !== "" : true);
+
+                        // Check if limit bytes exist (for non-selective galleries, they might only have finalsLimitBytes)
+                        const hasLimitBytes = !!(
+                          gallery.originalsLimitBytes ?? gallery.finalsLimitBytes
+                        );
+
+                        // Show plan if either plan field exists OR limit bytes exist
+                        // For non-selective galleries, plan should always be shown if it exists
+                        if (hasPlan || hasLimitBytes) {
+                          const planDisplay =
+                            planValue && typeof planValue === "string"
+                              ? formatPlanDisplay(planValue)
+                              : "-";
+                          return (
+                            <div>
+                              <div className="text-sm font-medium">{planDisplay}</div>
+                              {hasLimitBytes ? (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {calculateUsagePercentage(gallery).toFixed(1)}%
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        }
+                        return <span className="text-gray-400">-</span>;
+                      })()}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 align-middle">
+                      {getStateBadge(gallery)}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-sm text-gray-900 dark:text-white align-middle">
+                      {(gallery.orderCount ?? 0) as number}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 align-middle">
+                      {gallery.createdAt
+                        ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 align-middle">
+                      {useHamburgerMenu ? (
+                        <div className="relative">
+                          <button
+                            ref={(el) => {
+                              buttonRefs.current[gallery.galleryId] = el;
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const isCurrentlyOpen = openActionMenu === gallery.galleryId;
+                              // Close all menus first, then open this one if it wasn't open
+                              setOpenActionMenu(isCurrentlyOpen ? null : gallery.galleryId);
+                            }}
+                            className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
+                            aria-label="Akcje"
+                          >
+                            <Menu size={16} />
+                          </button>
+                          <Dropdown
+                            isOpen={openActionMenu === gallery.galleryId}
+                            onClose={() => setOpenActionMenu(null)}
+                            triggerRef={
+                              buttonRefs.current[gallery.galleryId]
+                                ? { current: buttonRefs.current[gallery.galleryId] }
+                                : undefined
+                            }
+                            className="w-48 bg-white dark:bg-gray-900 shadow-xl"
+                          >
+                            {!gallery.isPaid && (
+                              <DropdownItem
+                                onClick={() => {
+                                  handlePayClick(gallery.galleryId);
+                                  setOpenActionMenu(null);
+                                }}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl"
+                              >
+                                Opublikuj
+                              </DropdownItem>
+                            )}
+                            <div onMouseEnter={() => prefetchGallery(gallery.galleryId)}>
+                              <DropdownItem
+                                tag="a"
+                                href={`/galleries/${gallery.galleryId}`}
+                                onItemClick={() => {
+                                  setOpenActionMenu(null);
+                                  if (typeof window !== "undefined") {
+                                    const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                                    sessionStorage.setItem(referrerKey, window.location.pathname);
+                                  }
+                                }}
+                                className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
+                                  gallery.isPaid ? "first:rounded-t-xl" : ""
+                                }`}
+                              >
+                                Szczegóły
+                              </DropdownItem>
+                            </div>
                             <DropdownItem
                               onClick={() => {
-                                handlePayClick(gallery.galleryId);
-                                setOpenActionMenu(null);
-                              }}
-                              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl"
-                            >
-                              Opublikuj
-                            </DropdownItem>
-                          )}
-                          <div
-                            onMouseEnter={() => prefetchGallery(gallery.galleryId)}
-                          >
-                            <DropdownItem
-                              tag="a"
-                              href={`/galleries/${gallery.galleryId}`}
-                              onItemClick={() => {
-                                setOpenActionMenu(null);
-                                if (typeof window !== "undefined") {
-                                  const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                                  sessionStorage.setItem(referrerKey, window.location.pathname);
+                                if (!deleteGalleryMutation.isPending) {
+                                  handleDeleteClick(gallery);
+                                  setOpenActionMenu(null);
                                 }
                               }}
-                              className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
-                                gallery.isPaid ? "first:rounded-t-xl" : ""
+                              className={`flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl ${
+                                deleteGalleryMutation.isPending
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
                               }`}
                             >
-                              Szczegóły
+                              <Trash2 size={16} />
+                              Usuń
                             </DropdownItem>
-                          </div>
-                          <DropdownItem
+                          </Dropdown>
+                        </div>
+                      ) : (
+                        <div className="flex gap-3 items-center">
+                          {!gallery.isPaid && (
+                            <button
+                              onClick={() => handlePayClick(gallery.galleryId)}
+                              className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
+                            >
+                              Opublikuj
+                            </button>
+                          )}
+                          <Link
+                            href={`/galleries/${gallery.galleryId}`}
+                            onMouseEnter={() => prefetchGallery(gallery.galleryId)}
                             onClick={() => {
-                              if (!deleteGalleryMutation.isPending) {
-                                handleDeleteClick(gallery);
-                                setOpenActionMenu(null);
+                              // Store current page as referrer when navigating to gallery
+                              if (typeof window !== "undefined") {
+                                const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                                sessionStorage.setItem(referrerKey, window.location.pathname);
                               }
                             }}
-                            className={`flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl ${
-                              deleteGalleryMutation.isPending ? "opacity-50 cursor-not-allowed" : ""
-                            }`}
+                            className="text-sm text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 whitespace-nowrap"
                           >
-                            <Trash2 size={16} />
-                            Usuń
-                          </DropdownItem>
-                        </Dropdown>
-                      </div>
-                    ) : (
-                      <div className="flex gap-3 items-center">
-                        {!gallery.isPaid && (
+                            Szczegóły
+                          </Link>
                           <button
-                            onClick={() => handlePayClick(gallery.galleryId)}
-                            className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
+                            onClick={() => handleDeleteClick(gallery)}
+                            disabled={deleteGalleryMutation.isPending}
+                            className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Opublikuj
+                            Usuń
                           </button>
-                        )}
-                        <Link
-                          href={`/galleries/${gallery.galleryId}`}
-                          onMouseEnter={() => prefetchGallery(gallery.galleryId)}
-                          onClick={() => {
-                            // Store current page as referrer when navigating to gallery
-                            if (typeof window !== "undefined") {
-                              const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                              sessionStorage.setItem(referrerKey, window.location.pathname);
-                            }
-                          }}
-                          className="text-sm text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 whitespace-nowrap"
-                        >
-                          Szczegóły
-                        </Link>
-                        <button
-                          onClick={() => handleDeleteClick(gallery)}
-                          disabled={deleteGalleryMutation.isPending}
-                          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Usuń
-                        </button>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

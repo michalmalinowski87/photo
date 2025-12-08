@@ -588,23 +588,15 @@ export default function GalleryPhotos() {
   }, [isGalleryLoaded, galleryIdStr, effectiveGalleryId]);
 
   // Clear gallery creation flow when photos page is fully ready
-  const galleryCreationFlowActive = useUnifiedStore(
-    (state) => state.galleryCreationFlowActive
-  );
-  const galleryCreationTargetId = useUnifiedStore(
-    (state) => state.galleryCreationTargetId
-  );
+  const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
+  const galleryCreationTargetId = useUnifiedStore((state) => state.galleryCreationTargetId);
   const setGalleryCreationFlowActive = useUnifiedStore(
     (state) => state.setGalleryCreationFlowActive
   );
 
   useEffect(() => {
     // Only clear if flow is active and we're on the target gallery
-    if (
-      !galleryCreationFlowActive ||
-      !galleryIdStr ||
-      galleryCreationTargetId !== galleryIdStr
-    ) {
+    if (!galleryCreationFlowActive || !galleryIdStr || galleryCreationTargetId !== galleryIdStr) {
       return;
     }
 
@@ -612,8 +604,7 @@ export default function GalleryPhotos() {
     // - Gallery is loaded
     // - Images are loaded (not loading)
     // - Router is ready
-    const isPageReady =
-      isGalleryLoaded && !imagesLoading && router.isReady;
+    const isPageReady = isGalleryLoaded && !imagesLoading && router.isReady;
 
     if (isPageReady) {
       // Clear the flow - overlay will disappear
@@ -654,7 +645,12 @@ export default function GalleryPhotos() {
         setGalleryCreationFlowActive(false);
       }
     };
-  }, [galleryCreationFlowActive, galleryCreationTargetId, galleryIdStr, setGalleryCreationFlowActive]);
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    setGalleryCreationFlowActive,
+  ]);
 
   // Helper functions (must be defined before early returns)
   const isImageInApprovedSelection = (image: GalleryImage): boolean => {

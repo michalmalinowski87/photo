@@ -27,10 +27,16 @@ export const GalleryNameStep: React.FC<GalleryNameStepProps> = ({
         type="text"
         placeholder=""
         value={galleryName}
-        onChange={(e) => onGalleryNameChange(e.target.value)}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value.length <= 100) {
+            onGalleryNameChange(value);
+          }
+        }}
         error={!!error}
         errorMessage={error}
         autoFocus
+        maxLength={100}
       />
     </div>
   );

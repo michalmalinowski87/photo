@@ -22,9 +22,7 @@ interface OrderActionsSectionProps {
   setPublishWizardOpen?: (open: boolean) => void; // Kept for backward compatibility, but not used (we use redirect approach)
 }
 
-export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
-  orderId,
-}) => {
+export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderId }) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
@@ -196,20 +194,17 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
 
         {/* Download Selected Originals ZIP */}
         {/* Don't check isGalleryFetching - placeholderData keeps gallery data during refetches */}
-        {!isLoading &&
-          gallery &&
-          gallery.selectionEnabled !== false &&
-          canDownloadZipValue && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadZip}
-              className="w-full justify-start"
-              startIcon={<Download size={16} />}
-            >
-              Pobierz wybrane oryginały (ZIP)
-            </Button>
-          )}
+        {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownloadZip}
+            className="w-full justify-start"
+            startIcon={<Download size={16} />}
+          >
+            Pobierz wybrane oryginały (ZIP)
+          </Button>
+        )}
 
         {/* Download Finals - Only show if finals are uploaded */}
         {orderHasFinals && (

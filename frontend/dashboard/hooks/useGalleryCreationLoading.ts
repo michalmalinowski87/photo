@@ -16,9 +16,7 @@ export function useGalleryCreationLoading(): boolean {
   const createClientMutation = useCreateClient();
   const updateClientMutation = useUpdateClient();
   const createPackageMutation = useCreatePackage();
-  const galleryCreationFlowActive = useUnifiedStore(
-    (state) => state.galleryCreationFlowActive
-  );
+  const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
 
   return (
     createGalleryMutation.isPending ||

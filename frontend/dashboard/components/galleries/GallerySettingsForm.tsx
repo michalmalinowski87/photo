@@ -55,7 +55,10 @@ export function GallerySettingsForm({
   const updateGalleryMutation = useUpdateGallery();
   const updateClientPasswordMutation = useUpdateGalleryClientPassword();
   const updatePricingPackageMutation = useUpdateGalleryPricingPackage();
-  const saving = updateGalleryMutation.isPending || updateClientPasswordMutation.isPending || updatePricingPackageMutation.isPending;
+  const saving =
+    updateGalleryMutation.isPending ||
+    updateClientPasswordMutation.isPending ||
+    updatePricingPackageMutation.isPending;
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({
     galleryName: "",
     clientEmail: "",
@@ -100,13 +103,19 @@ export function GallerySettingsForm({
 
     try {
       // Update gallery name if changed
-      const currentGalleryName = typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
+      const currentGalleryName =
+        typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
       const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
       if (galleryNameChanged) {
+        const trimmedName = settingsForm.galleryName.trim();
+        if (trimmedName.length > 100) {
+          showToast("error", "Błąd", "Nazwa galerii nie może przekraczać 100 znaków");
+          return;
+        }
         await updateGalleryMutation.mutateAsync({
           galleryId,
           data: {
-            galleryName: settingsForm.galleryName.trim(),
+            galleryName: trimmedName,
           },
         });
       }
@@ -156,7 +165,11 @@ export function GallerySettingsForm({
       }
 
       // Only show success if at least one change was made
-      if (galleryNameChanged || (settingsForm.clientPassword && settingsForm.clientEmail) || pkgChanged) {
+      if (
+        galleryNameChanged ||
+        (settingsForm.clientPassword && settingsForm.clientEmail) ||
+        pkgChanged
+      ) {
         showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
       }
       // React Query mutations will automatically invalidate and refetch gallery data
@@ -345,7 +358,13 @@ export function GallerySettingsForm({
               type="text"
               placeholder="Nazwa galerii"
               value={settingsForm.galleryName}
-              onChange={(e) => setSettingsForm({ ...settingsForm, galleryName: e.target.value })}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.length <= 100) {
+                  setSettingsForm({ ...settingsForm, galleryName: value });
+                }
+              }}
+              maxLength={100}
             />
           </div>
 

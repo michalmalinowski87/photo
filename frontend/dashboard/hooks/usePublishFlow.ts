@@ -9,7 +9,10 @@ interface PublishFlowState {
     duration?: string;
     planKey?: string;
   } | null;
-  startPublishFlow: (galleryId: string, initialState?: { duration?: string; planKey?: string } | null) => void;
+  startPublishFlow: (
+    galleryId: string,
+    initialState?: { duration?: string; planKey?: string } | null
+  ) => void;
   closePublishFlow: () => void;
 }
 
@@ -18,7 +21,10 @@ const usePublishFlowStore = create<PublishFlowState>((set) => ({
   isOpen: false,
   galleryId: null,
   initialState: null,
-  startPublishFlow: (galleryId: string, initialState?: { duration?: string; planKey?: string } | null) => {
+  startPublishFlow: (
+    galleryId: string,
+    initialState?: { duration?: string; planKey?: string } | null
+  ) => {
     set({
       isOpen: true,
       galleryId,
@@ -41,7 +47,8 @@ const usePublishFlowStore = create<PublishFlowState>((set) => ({
  */
 export function usePublishFlow() {
   const router = useRouter();
-  const { isOpen, galleryId, initialState, startPublishFlow, closePublishFlow } = usePublishFlowStore();
+  const { isOpen, galleryId, initialState, startPublishFlow, closePublishFlow } =
+    usePublishFlowStore();
 
   // Check for URL params when returning from payment redirect
   // Only check once on mount to avoid re-triggering
@@ -67,12 +74,13 @@ export function usePublishFlow() {
 
       // Start the publish flow with any preserved state
       // Use the store's startPublishFlow directly to avoid navigation (we're already on the right page)
-      const preservedState = durationParam || planKeyParam
-        ? {
-            duration: durationParam ?? undefined,
-            planKey: planKeyParam ?? undefined,
-          }
-        : null;
+      const preservedState =
+        durationParam || planKeyParam
+          ? {
+              duration: durationParam ?? undefined,
+              planKey: planKeyParam ?? undefined,
+            }
+          : null;
 
       // Use store action directly (don't use hook's startPublishFlow to avoid navigation)
       const store = usePublishFlowStore.getState();
@@ -87,9 +95,14 @@ export function usePublishFlow() {
    * Optionally navigates to gallery page if not already there
    */
   const handleStartPublishFlow = useCallback(
-    (targetGalleryId: string, flowInitialState?: { duration?: string; planKey?: string } | null) => {
+    (
+      targetGalleryId: string,
+      flowInitialState?: { duration?: string; planKey?: string } | null
+    ) => {
       // Get current galleryId from route if available
-      const currentGalleryId = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
+      const currentGalleryId = Array.isArray(router.query.id)
+        ? router.query.id[0]
+        : router.query.id;
 
       // If we're not on the gallery page, navigate there first
       // The wizard will open automatically via the store state
@@ -111,4 +124,3 @@ export function usePublishFlow() {
     closePublishFlow,
   };
 }
-

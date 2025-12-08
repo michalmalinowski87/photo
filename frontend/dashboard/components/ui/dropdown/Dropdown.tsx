@@ -26,19 +26,21 @@ export const Dropdown: React.FC<DropdownProps> = ({
   const positionModeRef = useRef<"top" | "bottom">("bottom");
 
   useEffect(() => {
-    if (!isOpen || !triggerRef?.current) return;
+    if (!isOpen || !triggerRef?.current) {
+      return;
+    }
 
     const updatePosition = () => {
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
-        
+
         // Estimate dropdown height (will be refined after render)
         // Typical dropdown with 2-3 items is ~120-180px
         const estimatedDropdownHeight = 180;
         const spaceBelow = viewportHeight - rect.bottom;
         const spaceAbove = rect.top;
-        
+
         // Position above if there's not enough space below but more space above
         const needsToBeAbove = spaceBelow < estimatedDropdownHeight && spaceAbove > spaceBelow;
 
@@ -63,7 +65,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
     };
 
     updatePosition();
-    
+
     // Refine position after dropdown is rendered and we can measure its actual height
     const refinePosition = () => {
       if (triggerRef.current && dropdownRef.current) {
@@ -72,7 +74,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
         const viewportHeight = window.innerHeight;
         const spaceBelow = viewportHeight - rect.bottom;
         const spaceAbove = rect.top;
-        
+
         // Check again with actual height
         const needsToBeAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
         const currentlyAbove = positionModeRef.current === "top";
@@ -111,7 +113,9 @@ export const Dropdown: React.FC<DropdownProps> = ({
   }, [isOpen, triggerRef]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;

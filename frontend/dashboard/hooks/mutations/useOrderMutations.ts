@@ -241,13 +241,10 @@ export function useSendFinalLink() {
 
       // Optimistically update the order detail
       if (previousOrderDetail) {
-        queryClient.setQueryData<Order>(
-          queryKeys.orders.detail(galleryId, orderId),
-          {
-            ...previousOrderDetail,
-            deliveryStatus: "DELIVERED",
-          }
-        );
+        queryClient.setQueryData<Order>(queryKeys.orders.detail(galleryId, orderId), {
+          ...previousOrderDetail,
+          deliveryStatus: "DELIVERED",
+        });
       }
 
       // Optimistically update the order in the list
@@ -255,9 +252,7 @@ export function useSendFinalLink() {
         queryClient.setQueryData<Order[]>(
           queryKeys.orders.list(galleryId),
           previousOrdersList.map((order) =>
-            order.orderId === orderId
-              ? { ...order, deliveryStatus: "DELIVERED" }
-              : order
+            order.orderId === orderId ? { ...order, deliveryStatus: "DELIVERED" } : order
           )
         );
       }

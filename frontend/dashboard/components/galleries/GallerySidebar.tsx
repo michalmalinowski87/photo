@@ -132,9 +132,7 @@ export default function GallerySidebar() {
 
       <GalleryNavigation />
 
-      {orderId && order && (
-        <OrderActionsSection orderId={orderId} />
-      )}
+      {orderId && order && <OrderActionsSection orderId={orderId} />}
 
       <DeleteGalleryButton
         galleryId={effectiveGallery?.galleryId ?? ""}

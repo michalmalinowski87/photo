@@ -59,7 +59,7 @@ export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]],
         galleryCreationTargetId: active && galleryId ? galleryId : null,
       },
       undefined,
-      `ui/setGalleryCreationFlowActive/${active ? galleryId ?? "true" : "false"}`
+      `ui/setGalleryCreationFlowActive/${active ? (galleryId ?? "true") : "false"}`
     );
   },
 });

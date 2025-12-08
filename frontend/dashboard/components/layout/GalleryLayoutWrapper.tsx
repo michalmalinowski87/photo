@@ -55,7 +55,12 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   const [showClientSendPopup, setShowClientSendPopup] = useState(false);
 
   // Use centralized publish flow hook
-  const { isOpen: publishWizardOpen, galleryId: publishFlowGalleryId, initialState, closePublishFlow } = usePublishFlow();
+  const {
+    isOpen: publishWizardOpen,
+    galleryId: publishFlowGalleryId,
+    initialState,
+    closePublishFlow,
+  } = usePublishFlow();
 
   // Check if gallery is already published before opening wizard
   useEffect(() => {

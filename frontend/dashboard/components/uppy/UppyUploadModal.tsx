@@ -30,7 +30,10 @@ interface UppyUploadModalProps {
 // ============================================================================
 
 function isImageFile(file: File | { name: string; type?: string }): boolean {
-  return (file.type?.startsWith("image/") ?? false) || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+  return (
+    (file.type?.startsWith("image/") ?? false) ||
+    /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
+  );
 }
 
 function addFileToUppy(uppy: Uppy, file: File): void {
@@ -566,7 +569,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                     type="file"
                     multiple
                     accept="image/*"
-                    {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+                    {...({
+                      webkitdirectory: "",
+                      directory: "",
+                    } as React.InputHTMLAttributes<HTMLInputElement>)}
                     onChange={handleFileInputChange}
                     className="hidden"
                     disabled={uploading || uploadComplete}
@@ -591,7 +597,10 @@ export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClos
                   type="file"
                   multiple
                   accept="image/*"
-                  {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+                  {...({
+                    webkitdirectory: "",
+                    directory: "",
+                  } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={handleFileInputChange}
                   className="hidden"
                   disabled={uploading || uploadComplete}

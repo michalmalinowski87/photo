@@ -127,13 +127,13 @@ async function retryWithBackoff<T>(
   initialDelay: number = 1000
 ): Promise<T> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
       // Check if error is retryable (network/CORS errors)
       const errorMessage = lastError.message.toLowerCase();
       const errorWithStatus = lastError as Error & { status?: number };
@@ -145,17 +145,17 @@ async function retryWithBackoff<T>(
         errorWithStatus.status === 503 ||
         errorWithStatus.status === 429 ||
         errorWithStatus.status === 0; // Network error
-      
+
       if (!isRetryable || attempt >= maxRetries) {
         throw lastError;
       }
-      
+
       // Exponential backoff: 1s, 2s, 4s
       const delay = initialDelay * Math.pow(2, attempt);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError ?? new Error("Retry failed");
 }
 
@@ -305,7 +305,7 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
 async function processBatchWithQueue(queue: BatchQueue): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const queueKey = getQueueKey(queue.galleryId, queue.type, queue.orderId);
-    
+
     // If we're at the concurrency limit, queue the request
     if (processingBatchRequests >= MAX_CONCURRENT_BATCHES) {
       batchRequestQueue.push({
@@ -357,7 +357,7 @@ function processNextQueuedBatch(): void {
     })
     .catch((error) => {
       processingBatchRequests--;
-      
+
       // Retry with exponential backoff
       if (nextRequest.retryCount < 3) {
         nextRequest.retryCount++;
@@ -787,7 +787,9 @@ export function createUppyInstance(config: UppyConfigOptions): any {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      const partData = (parts as Array<{ partNumber: number; url: string }>).find((p: { partNumber: number; url: string }) => p.partNumber === part.number);
+      const partData = (parts as Array<{ partNumber: number; url: string }>).find(
+        (p: { partNumber: number; url: string }) => p.partNumber === part.number
+      );
       if (!partData) {
         throw new Error(`Part ${part.number} not found`);
       }
@@ -806,7 +808,11 @@ export function createUppyInstance(config: UppyConfigOptions): any {
         uploadId,
         key,
         parts,
-      }: { uploadId: string; key: string; parts: Array<{ PartNumber: number; ETag: string; Size: number }> }
+      }: {
+        uploadId: string;
+        key: string;
+        parts: Array<{ PartNumber: number; ETag: string; Size: number }>;
+      }
     ) => {
       // Complete the multipart upload
       const galleryId = config.galleryId;
@@ -896,7 +902,8 @@ export function createUppyInstance(config: UppyConfigOptions): any {
       let bytesTotal = 0;
       uploadingFiles.forEach((f) => {
         if (f.progress) {
-          const uploaded = typeof f.progress.bytesUploaded === "number" ? f.progress.bytesUploaded : 0;
+          const uploaded =
+            typeof f.progress.bytesUploaded === "number" ? f.progress.bytesUploaded : 0;
           bytesUploaded += uploaded;
           bytesTotal += f.size ?? 0; // file.size is the original file size
         }

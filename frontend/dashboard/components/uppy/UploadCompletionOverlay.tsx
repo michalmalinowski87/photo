@@ -93,9 +93,7 @@ export const UploadCompletionOverlay: React.FC<UploadCompletionOverlayProps> = (
                 className="min-w-[140px] px-6 py-4 text-base font-semibold shadow-lg"
                 disabled={isFinalizing}
                 startIcon={
-                  isFinalizing ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : undefined
+                  isFinalizing ? <Loader2 size={18} className="animate-spin" /> : undefined
                 }
               >
                 {isFinalizing ? "Przetwarzanie..." : "OK"}
@@ -108,7 +106,10 @@ export const UploadCompletionOverlay: React.FC<UploadCompletionOverlayProps> = (
         {isFinalizing && (
           <div className="px-10 pb-4">
             <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-brand-500 rounded-full animate-pulse" style={{ width: "100%" }} />
+              <div
+                className="h-full bg-brand-500 rounded-full animate-pulse"
+                style={{ width: "100%" }}
+              />
             </div>
           </div>
         )}

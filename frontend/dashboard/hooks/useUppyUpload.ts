@@ -5,11 +5,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
-import {
-  createUppyInstance,
-  type UploadType,
-  type TypedUppyFile,
-} from "../lib/uppy-config";
+import { createUppyInstance, type UploadType, type TypedUppyFile } from "../lib/uppy-config";
 
 import { useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
 import { useToast } from "./useToast";
@@ -258,7 +254,9 @@ async function handlePostUploadActions(
         if (finalImages.length > 0) {
           // Get the last uploaded file's thumbnail URL (most recently uploaded)
           // Or use a random one if we can't determine which is last
-          const lastImage = finalImages[finalImages.length - 1] as { thumbUrl?: string } | undefined;
+          const lastImage = finalImages[finalImages.length - 1] as
+            | { thumbUrl?: string }
+            | undefined;
           const thumbUrl = lastImage?.thumbUrl;
 
           if (thumbUrl) {
@@ -279,7 +277,10 @@ async function handlePostUploadActions(
         }
       } catch (pollError) {
         // If polling fails, wait 3 seconds as fallback
-        console.warn("[handlePostUploadActions] Thumbnail polling failed, using fallback delay:", pollError);
+        console.warn(
+          "[handlePostUploadActions] Thumbnail polling failed, using fallback delay:",
+          pollError
+        );
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
 
@@ -302,7 +303,9 @@ async function handlePostUploadActions(
         if (originalsImages.length > 0) {
           // Get the last uploaded file's thumbnail URL (most recently uploaded)
           // Or use a random one if we can't determine which is last
-          const lastImage = originalsImages[originalsImages.length - 1] as { thumbUrl?: string } | undefined;
+          const lastImage = originalsImages[originalsImages.length - 1] as
+            | { thumbUrl?: string }
+            | undefined;
           const thumbUrl = lastImage?.thumbUrl;
 
           if (thumbUrl) {
@@ -323,7 +326,10 @@ async function handlePostUploadActions(
         }
       } catch (pollError) {
         // If polling fails, wait 3 seconds as fallback
-        console.warn("[handlePostUploadActions] Thumbnail polling failed, using fallback delay:", pollError);
+        console.warn(
+          "[handlePostUploadActions] Thumbnail polling failed, using fallback delay:",
+          pollError
+        );
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
 
@@ -363,10 +369,7 @@ function checkIfAnyFileIsPaused(uppy: Uppy | null): boolean {
   // Trust Uppy's file state - it manages isPaused internally
   const files = Object.values(uppy.getFiles());
   return files.some(
-    (f) =>
-      f.progress?.uploadStarted &&
-      !f.progress.uploadComplete &&
-      f.isPaused === true // Uppy manages this property
+    (f) => f.progress?.uploadStarted && !f.progress.uploadComplete && f.isPaused === true // Uppy manages this property
   );
 }
 
