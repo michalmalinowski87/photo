@@ -833,7 +833,7 @@ Photographers view order details, manage original and final photos, and download
        - "Prześlij" button
        - Uses presigned URLs for upload
      - Delete button on each final photo
-     - Only visible if order is CLIENT_APPROVED, PREPARING_FOR_DELIVERY, or DELIVERED
+     - Only visible if order is CLIENT_APPROVED, PREPARING_DELIVERY, or DELIVERED
 
 4. **ZIP Download**
    - "Pobierz ZIP" button available if:

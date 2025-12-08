@@ -77,7 +77,7 @@ export const handler = lambdaLogger(async (event: any) => {
 					deliveryStatuses.push('CHANGES_REQUESTED');
 					break;
 				case 'gotowe-do-wysylki':
-					deliveryStatuses.push('PREPARING_FOR_DELIVERY');
+					deliveryStatuses.push('PREPARING_DELIVERY');
 					break;
 				case 'dostarczone':
 					deliveryStatuses.push('DELIVERED');
@@ -366,7 +366,9 @@ export const handler = lambdaLogger(async (event: any) => {
 				case 'gotowe-do-wysylki':
 					filteredGalleries = enrichedGalleries.filter((g: any) => {
 						if (!g.orders || g.orders.length === 0) return false;
-						return g.orders.some((o: any) => o.deliveryStatus === 'PREPARING_FOR_DELIVERY');
+						return g.orders.some((o: any) => 
+							o.deliveryStatus === 'PREPARING_DELIVERY'
+						);
 					});
 					break;
 				case 'dostarczone':

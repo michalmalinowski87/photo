@@ -496,9 +496,8 @@ export default function OrderDetail() {
   // - For non-selective galleries: allow even when unpublished (not paid)
   // - For selective galleries: require gallery to be paid
   // Block uploads only for: CANCELLED
-  // Allow uploads for: CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, PREPARING_DELIVERY, PREPARING_FOR_DELIVERY
+  // Allow uploads for: CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, PREPARING_DELIVERY
   // Also allow uploads for non-selection galleries even if deliveryStatus is undefined (legacy orders)
-  // Note: Backend uses PREPARING_DELIVERY (without "FOR")
   const blockedUploadStatuses = ["CANCELLED"];
   const canUploadFinals =
     (!selectionEnabled || isGalleryPaid) && // For non-selective: allow even if not paid. For selective: require paid.
@@ -507,8 +506,7 @@ export default function OrderDetail() {
       !order.deliveryStatus || // Allow if no status set
       order.deliveryStatus === "CLIENT_APPROVED" ||
       order.deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
-      order.deliveryStatus === "PREPARING_DELIVERY" ||
-      order.deliveryStatus === "PREPARING_FOR_DELIVERY");
+      order.deliveryStatus === "PREPARING_DELIVERY");
 
   return (
     <div className="space-y-6">

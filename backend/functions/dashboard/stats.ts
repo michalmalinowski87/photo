@@ -90,7 +90,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				deliveredCount++;
 			} else if (order.deliveryStatus === 'CLIENT_SELECTING') {
 				clientSelectingCount++;
-			} else if (order.deliveryStatus === 'PREPARING_FOR_DELIVERY') {
+			} else if (order.deliveryStatus === 'PREPARING_DELIVERY') {
 				readyToShipCount++;
 			}
 

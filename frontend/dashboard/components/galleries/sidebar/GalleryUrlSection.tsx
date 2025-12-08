@@ -149,7 +149,6 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     typeof gallery.clientEmail === "string" &&
     gallery.clientEmail.length > 0 &&
     orderDeliveryStatus !== "PREPARING_DELIVERY" &&
-    orderDeliveryStatus !== "PREPARING_FOR_DELIVERY" &&
     orderDeliveryStatus !== "DELIVERED";
 
   return (

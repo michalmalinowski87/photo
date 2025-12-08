@@ -990,8 +990,7 @@ export default function GalleryPhotos() {
                           }
                         > = {
                           CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-                          PREPARING_DELIVERY: { color: "info", label: "Oczekuje do wysłania" },
-                          PREPARING_FOR_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+                          PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
                           DELIVERED: { color: "success", label: "Dostarczone" },
                         };
 

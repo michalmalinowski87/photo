@@ -89,7 +89,7 @@ export function useGalleryImageOrders(
       selectedKeys.forEach((key: string) => {
         allOrderKeys.add(key);
         // Track the highest priority status for each image
-        // Priority: DELIVERED > PREPARING_DELIVERY > PREPARING_FOR_DELIVERY > CLIENT_APPROVED
+        // Priority: DELIVERED > PREPARING_DELIVERY > CLIENT_APPROVED
         const currentStatus = imageStatusMap.get(key);
         if (!currentStatus) {
           imageStatusMap.set(key, orderStatus);
@@ -98,16 +98,9 @@ export function useGalleryImageOrders(
         } else if (orderStatus === "PREPARING_DELIVERY" && currentStatus !== "DELIVERED") {
           imageStatusMap.set(key, "PREPARING_DELIVERY");
         } else if (
-          orderStatus === "PREPARING_FOR_DELIVERY" &&
-          currentStatus !== "DELIVERED" &&
-          currentStatus !== "PREPARING_DELIVERY"
-        ) {
-          imageStatusMap.set(key, "PREPARING_FOR_DELIVERY");
-        } else if (
           orderStatus === "CLIENT_APPROVED" &&
           currentStatus !== "DELIVERED" &&
-          currentStatus !== "PREPARING_DELIVERY" &&
-          currentStatus !== "PREPARING_FOR_DELIVERY"
+          currentStatus !== "PREPARING_DELIVERY"
         ) {
           imageStatusMap.set(key, "CLIENT_APPROVED");
         }

@@ -98,8 +98,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 				// Handle different response formats
 				const allOrders = allOrdersData?.items || allOrdersData?.orders || Array.isArray(allOrdersData) ? allOrdersData : [];
 				hasPreparingDelivery = Array.isArray(allOrders) && allOrders.some((order) => 
-					order.deliveryStatus === 'PREPARING_DELIVERY' || 
-					order.deliveryStatus === 'PREPARING_FOR_DELIVERY'
+					order.deliveryStatus === 'PREPARING_DELIVERY'
 				);
 			}
 			setHasPreparingDeliveryOrder(hasPreparingDelivery);
