@@ -8,9 +8,9 @@ import { useClients } from "../../hooks/queries/useClients";
 import { usePackages } from "../../hooks/queries/usePackages";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
+import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
 import Badge from "../ui/badge/Badge";
-import { FullPageLoading } from "../ui/loading/Loading";
 
 import { ClientStep } from "./wizard/ClientStep";
 import { GalleryNameStep } from "./wizard/GalleryNameStep";
@@ -338,6 +338,10 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
     // Loading state is now derived from mutation.isPending
     setFieldErrors({});
 
+    // Activate gallery creation flow immediately - this ensures overlay persists through navigation
+    const setGalleryCreationFlowActive = useUnifiedStore.getState().setGalleryCreationFlowActive;
+    setGalleryCreationFlowActive(true);
+
     try {
       interface CreateGalleryRequestBody {
         selectionEnabled: boolean;
@@ -425,6 +429,9 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         throw new Error("Brak ID galerii w odpowiedzi");
       }
 
+      // Update flow with galleryId - this ensures overlay persists until photos page is ready
+      setGalleryCreationFlowActive(true, response.galleryId);
+
       showToast("success", "Sukces", "Galeria została utworzona pomyślnie");
 
       // Close wizard first for cleaner transition, then navigate
@@ -435,6 +442,8 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       // Navigate after closing wizard to ensure smooth transition
       onSuccess(response.galleryId);
     } catch (err: unknown) {
+      // Clear flow on error - overlay should disappear
+      setGalleryCreationFlowActive(false);
       // Loading state is automatically handled by mutation.isPending
       const errorMsg = formatApiError(err);
       showToast("error", "Błąd", errorMsg);
@@ -612,8 +621,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
 
   return (
     <>
-      {/* Full-screen loading overlay - shows immediately when creating gallery */}
-      {createGalleryMutation.isPending && <FullPageLoading text="Tworzenie galerii..." />}
+      {/* Loading overlay is handled globally by AppLayout - no need for local overlay */}
       <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden relative">
         {/* Close button - top right of main container */}
         <button

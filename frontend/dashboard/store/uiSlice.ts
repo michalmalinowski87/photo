@@ -11,12 +11,18 @@ export interface UISlice {
   tablePreferences: Record<string, TablePreferences>;
   setTablePreferences: (tableId: string, preferences: TablePreferences) => void;
   clearTablePreferences: (tableId?: string) => void;
+  // Gallery creation flow state (persists across navigation)
+  galleryCreationFlowActive: boolean;
+  galleryCreationTargetId: string | null;
+  setGalleryCreationFlowActive: (active: boolean, galleryId?: string) => void;
 }
 
 export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]], [], UISlice> = (
   set
 ) => ({
   tablePreferences: {},
+  galleryCreationFlowActive: false,
+  galleryCreationTargetId: null,
 
   setTablePreferences: (tableId: string, preferences: TablePreferences) => {
     set(
@@ -44,5 +50,16 @@ export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]],
     } else {
       set({ tablePreferences: {} }, undefined, "ui/clearTablePreferences/all");
     }
+  },
+
+  setGalleryCreationFlowActive: (active: boolean, galleryId?: string) => {
+    set(
+      {
+        galleryCreationFlowActive: active,
+        galleryCreationTargetId: active && galleryId ? galleryId : null,
+      },
+      undefined,
+      `ui/setGalleryCreationFlowActive/${active ? galleryId ?? "true" : "false"}`
+    );
   },
 });

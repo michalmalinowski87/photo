@@ -33,6 +33,7 @@ import { useToast } from "../../../hooks/useToast";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
 import { storeLogger } from "../../../lib/store-logger";
+import { useUnifiedStore } from "../../../store/unifiedStore";
 import type { Gallery, GalleryImage, Order } from "../../../types";
 
 interface ApiImage {
@@ -585,6 +586,75 @@ export default function GalleryPhotos() {
       });
     }
   }, [isGalleryLoaded, galleryIdStr, effectiveGalleryId]);
+
+  // Clear gallery creation flow when photos page is fully ready
+  const galleryCreationFlowActive = useUnifiedStore(
+    (state) => state.galleryCreationFlowActive
+  );
+  const galleryCreationTargetId = useUnifiedStore(
+    (state) => state.galleryCreationTargetId
+  );
+  const setGalleryCreationFlowActive = useUnifiedStore(
+    (state) => state.setGalleryCreationFlowActive
+  );
+
+  useEffect(() => {
+    // Only clear if flow is active and we're on the target gallery
+    if (
+      !galleryCreationFlowActive ||
+      !galleryIdStr ||
+      galleryCreationTargetId !== galleryIdStr
+    ) {
+      return;
+    }
+
+    // Check if page is fully ready:
+    // - Gallery is loaded
+    // - Images are loaded (not loading)
+    // - Router is ready
+    const isPageReady =
+      isGalleryLoaded && !imagesLoading && router.isReady;
+
+    if (isPageReady) {
+      // Clear the flow - overlay will disappear
+      setGalleryCreationFlowActive(false);
+    }
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    isGalleryLoaded,
+    imagesLoading,
+    router.isReady,
+    setGalleryCreationFlowActive,
+  ]);
+
+  // Clear flow if user navigates away from target gallery
+  useEffect(() => {
+    if (
+      galleryCreationFlowActive &&
+      galleryCreationTargetId &&
+      galleryIdStr &&
+      galleryCreationTargetId !== galleryIdStr
+    ) {
+      // User navigated to a different gallery - clear the flow
+      setGalleryCreationFlowActive(false);
+    }
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    setGalleryCreationFlowActive,
+  ]);
+
+  // Clear flow on unmount if it's still active (safety cleanup)
+  useEffect(() => {
+    return () => {
+      if (galleryCreationFlowActive && galleryCreationTargetId === galleryIdStr) {
+        setGalleryCreationFlowActive(false);
+      }
+    };
+  }, [galleryCreationFlowActive, galleryCreationTargetId, galleryIdStr, setGalleryCreationFlowActive]);
 
   // Helper functions (must be defined before early returns)
   const isImageInApprovedSelection = (image: GalleryImage): boolean => {
