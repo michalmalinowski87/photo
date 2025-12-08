@@ -1,8 +1,9 @@
-import { FileText, Image as ImageIcon } from "lucide-react";
-import React from "react";
+import { FileText, Image as ImageIcon, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
+import React, { useMemo } from "react";
 
 import { useGalleryRoute } from "../../../hooks/useGalleryRoute";
 import { useNavigation } from "../../../hooks/useNavigation";
+import { useOrders } from "../../../hooks/queries/useOrders";
 
 interface SelectionGalleryNavigationProps {
   galleryId: string;
@@ -13,9 +14,53 @@ export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProp
 }) => {
   const galleryRoute = useGalleryRoute();
   const { navigate } = useNavigation();
+  const { data: orders = [] } = useOrders(galleryId);
 
   const isOrdersActive = galleryRoute.isGalleryDetail;
   const isPhotosActive = galleryRoute.isGalleryPhotos;
+
+  // Calculate order status indicator
+  const orderStatusIndicator = useMemo(() => {
+    if (!orders || orders.length === 0) {
+      return null;
+    }
+
+    // Check if at least one order has CHANGES_REQUESTED status
+    const hasChangesRequested = orders.some(
+      (order) => order.deliveryStatus === "CHANGES_REQUESTED"
+    );
+
+    if (hasChangesRequested) {
+      return (
+        <AlertTriangle
+          size={20}
+          className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+        />
+      );
+    }
+
+    // Check if all orders are delivered
+    const allDelivered = orders.every(
+      (order) => order.deliveryStatus === "DELIVERED"
+    );
+
+    if (allDelivered) {
+      return (
+        <CheckCircle2
+          size={20}
+          className="text-green-500 dark:text-green-400 flex-shrink-0"
+        />
+      );
+    }
+
+    // Not all orders are delivered (but none with CHANGES_REQUESTED)
+    return (
+      <Info
+        size={20}
+        className="text-blue-500 dark:text-blue-400 flex-shrink-0"
+      />
+    );
+  }, [orders]);
 
   const handleOrdersClick = () => {
     void navigate(`/galleries/${galleryId}`);
@@ -37,8 +82,9 @@ export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProp
               : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <FileText size={26} />
-          <span>Zlecenia</span>
+          <FileText size={26} className="flex-shrink-0" />
+          <span className="flex-shrink-0 whitespace-nowrap">Zlecenia</span>
+          {orderStatusIndicator && <span className="ml-auto flex-shrink-0">{orderStatusIndicator}</span>}
         </button>
       </li>
 

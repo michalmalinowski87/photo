@@ -8,11 +8,13 @@ import {
   Settings,
   ChevronDown,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useGalleries } from "../../hooks/queries/useGalleries";
 import { useSidebar } from "../../hooks/useSidebar";
 
 import SidebarWidget from "./SidebarWidget";
@@ -75,6 +77,10 @@ const navItems: NavItem[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
   const router = useRouter();
+
+  // Check if there are galleries with "Prosba o zmiany" status
+  const { data: prosbaOZmianyGalleries = [] } = useGalleries("prosba-o-zmiany");
+  const hasProsbaOZmianyGalleries = prosbaOZmianyGalleries.length > 0;
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main";
@@ -151,13 +157,21 @@ const AppSidebar: React.FC = () => {
               </span>
               {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
               {(isExpanded || isMobileOpen) && (
-                <ChevronDown
-                  className={`ml-auto w-6 h-6 transition-transform duration-200 ${
-                    openSubmenu?.type === "main" && openSubmenu?.index === index
-                      ? "rotate-180 text-brand-500"
-                      : ""
-                  }`}
-                />
+                <div className="ml-auto flex items-center gap-2">
+                  {nav.name === "Galerie" && hasProsbaOZmianyGalleries && (
+                    <AlertTriangle
+                      size={20}
+                      className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+                    />
+                  )}
+                  <ChevronDown
+                    className={`w-6 h-6 transition-transform duration-200 ${
+                      openSubmenu?.type === "main" && openSubmenu?.index === index
+                        ? "rotate-180 text-brand-500"
+                        : ""
+                    }`}
+                  />
+                </div>
               )}
             </button>
           ) : (
@@ -209,7 +223,13 @@ const AppSidebar: React.FC = () => {
                           : "menu-dropdown-item-inactive"
                       }`}
                     >
-                      {subItem.name}
+                      <span>{subItem.name}</span>
+                      {subItem.name === "Prośba o zmiany" && hasProsbaOZmianyGalleries && (
+                        <AlertTriangle
+                          size={18}
+                          className="ml-auto text-orange-500 dark:text-orange-400 flex-shrink-0"
+                        />
+                      )}
                     </Link>
                   </li>
                 ))}

@@ -250,6 +250,7 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                                 size="sm"
                                 variant="outline"
                                 onClick={() => onDenyChangeRequest(galleryId, orderId)}
+                                className="!text-orange-500 hover:!text-orange-600 hover:bg-orange-50 dark:!text-orange-400 dark:hover:!text-orange-300 dark:hover:bg-orange-500/10 !ring-orange-500 dark:!ring-orange-400"
                               >
                                 Odrzuć
                               </Button>

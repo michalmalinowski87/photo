@@ -233,7 +233,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
               size="md"
               variant="outline"
               onClick={handleDenyChangeRequest}
-              className="w-full justify-start"
+              className="w-full !text-orange-500 hover:!text-orange-600 hover:bg-orange-50 dark:!text-orange-400 dark:hover:!text-orange-300 dark:hover:bg-orange-500/10 !ring-orange-500 dark:!ring-orange-400"
               startIcon={<XCircle size={20} strokeWidth={2} />}
             >
               Odrzuć prośbę o zmiany
