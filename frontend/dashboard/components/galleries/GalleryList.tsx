@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
 import { useGalleries } from "../../hooks/queries/useGalleries";
@@ -107,6 +107,34 @@ const calculateUsagePercentage = (gallery: Gallery): number => {
     const limitBytes = originalsLimit || finalsLimit;
     return limitBytes > 0 ? (totalBytesUsed / limitBytes) * 100 : 0;
   }
+};
+
+// Cover photo cell component with error handling
+const CoverPhotoCell: React.FC<{ coverPhotoUrl: string | null | undefined }> = ({
+  coverPhotoUrl,
+}) => {
+  const [imageError, setImageError] = useState(false);
+
+  if (!coverPhotoUrl || imageError) {
+    return (
+      <div className="flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-md">
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <Image className="w-8 h-8 text-gray-400" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={coverPhotoUrl}
+        alt="Okładka galerii"
+        className="w-16 h-16 object-cover rounded-md"
+        onError={() => setImageError(true)}
+      />
+    </div>
+  );
 };
 
 const GalleryList: React.FC<GalleryListProps> = ({
@@ -332,37 +360,43 @@ const GalleryList: React.FC<GalleryListProps> = ({
               <TableRow className="bg-gray-100 dark:bg-gray-900">
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[100px]"
+                >
+                  Okładka
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
                 >
                   Nazwa galerii
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Plan
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Status
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Zlecenia
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Utworzono
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                 >
                   Akcje
                 </TableCell>
@@ -381,6 +415,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
                 // So even indices get light background, odd indices get striped background
                 const isEvenRow = index % 2 === 0;
 
+                const coverPhotoUrl = gallery.coverPhotoUrl as string | null | undefined;
+
                 return (
                   <TableRow
                     key={gallery.galleryId}
@@ -390,10 +426,13 @@ const GalleryList: React.FC<GalleryListProps> = ({
                         : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
                     }`}
                   >
-                    <TableCell className="px-4 py-4 align-middle min-w-[400px]">
+                    <TableCell className="px-4 py-3 align-middle text-center w-[100px]">
+                      <CoverPhotoCell coverPhotoUrl={coverPhotoUrl} />
+                    </TableCell>
+                    <TableCell className="px-4 py-3 align-middle min-w-[400px]">
                       <Link
                         href={`/galleries/${gallery.galleryId}`}
-                        className="font-medium text-brand-500 hover:text-brand-600 block max-w-full"
+                        className="font-medium text-sm text-brand-500 hover:text-brand-600 block max-w-full"
                         onClick={() => {
                           // Store current page as referrer when navigating to gallery
                           if (typeof window !== "undefined") {
@@ -415,7 +454,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-4 text-sm text-gray-900 dark:text-white whitespace-nowrap align-middle">
+                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap align-middle text-center">
                       {(() => {
                         // Check if plan exists and is a non-empty string
                         // For non-selective galleries, plan should always be present
@@ -437,7 +476,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                               ? formatPlanDisplay(planValue)
                               : "-";
                           return (
-                            <div>
+                            <div className="text-center">
                               <div className="text-sm font-medium">{planDisplay}</div>
                               {hasLimitBytes ? (
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -450,18 +489,18 @@ const GalleryList: React.FC<GalleryListProps> = ({
                         return <span className="text-gray-400">-</span>;
                       })()}
                     </TableCell>
-                    <TableCell className="px-4 py-4 align-middle">
+                    <TableCell className="px-4 py-3 align-middle text-center">
                       {getStateBadge(gallery)}
                     </TableCell>
-                    <TableCell className="px-4 py-4 text-sm text-gray-900 dark:text-white align-middle">
+                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white align-middle text-center">
                       {(gallery.orderCount ?? 0) as number}
                     </TableCell>
-                    <TableCell className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 align-middle">
+                    <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 align-middle text-center">
                       {gallery.createdAt
                         ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
                         : "-"}
                     </TableCell>
-                    <TableCell className="px-4 py-4 align-middle">
+                    <TableCell className="px-4 py-3 align-middle text-center">
                       {useHamburgerMenu ? (
                         <div className="relative">
                           <button
