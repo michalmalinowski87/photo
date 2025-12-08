@@ -170,23 +170,23 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   }
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
       <div className="px-3 mb-3">
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+        <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
           Zlecenie
         </div>
-        <div className="text-sm font-medium text-gray-900 dark:text-white">{orderId}</div>
+        <div className="text-base font-medium text-gray-900 dark:text-white">{orderId}</div>
       </div>
 
-      <div className="space-y-2 px-3">
+      <div className="space-y-2.5 px-3">
         {/* Publish Gallery Button for Non-Selection Galleries */}
         {shouldShowPublishButton && (
           <Button
-            size="sm"
+            size="md"
             variant="primary"
             onClick={handlePublishClick}
             className="w-full justify-start"
-            startIcon={<Home size={16} strokeWidth={2} />}
+            startIcon={<Home size={20} strokeWidth={2} />}
           >
             Opublikuj galerię
           </Button>
@@ -196,11 +196,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
         {/* Don't check isGalleryFetching - placeholderData keeps gallery data during refetches */}
         {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
           <Button
-            size="sm"
+            size="md"
             variant="outline"
             onClick={handleDownloadZip}
             className="w-full justify-start"
-            startIcon={<Download size={16} />}
+            startIcon={<Download size={20} />}
           >
             Pobierz wybrane oryginały (ZIP)
           </Button>
@@ -209,11 +209,11 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
         {/* Download Finals - Only show if finals are uploaded */}
         {orderHasFinals && (
           <Button
-            size="sm"
+            size="md"
             variant="outline"
             onClick={handleDownloadFinals}
             className="w-full justify-start"
-            startIcon={<Download size={16} />}
+            startIcon={<Download size={20} />}
           >
             Pobierz finały (ZIP)
           </Button>
@@ -223,20 +223,20 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
         {order.deliveryStatus === "CHANGES_REQUESTED" && (
           <>
             <Button
-              size="sm"
+              size="md"
               variant="primary"
               onClick={handleApproveChangeRequest}
               className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
-              startIcon={<CheckCircle2 size={16} strokeWidth={2} />}
+              startIcon={<CheckCircle2 size={20} strokeWidth={2} />}
             >
               Zatwierdź prośbę o zmiany
             </Button>
             <Button
-              size="sm"
+              size="md"
               variant="outline"
               onClick={handleDenyChangeRequest}
               className="w-full justify-start"
-              startIcon={<XCircle size={16} strokeWidth={2} />}
+              startIcon={<XCircle size={20} strokeWidth={2} />}
             >
               Odrzuć prośbę o zmiany
             </Button>
@@ -246,12 +246,12 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
         {/* Mark Order as Paid */}
         {order.paymentStatus !== "PAID" && (
           <Button
-            size="sm"
+            size="md"
             variant="outline"
             onClick={handleMarkOrderPaidClick}
             disabled={markPaidLoading}
             className="w-full justify-start"
-            startIcon={<Check size={16} />}
+            startIcon={<Check size={20} />}
           >
             Oznacz jako opłacone
           </Button>
@@ -260,12 +260,12 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
         {/* Send Finals to Client - Only show if finals are uploaded */}
         {orderHasFinals && (
           <Button
-            size="sm"
+            size="md"
             variant="outline"
             onClick={handleSendFinalsToClientClick}
             className="w-full justify-start"
             disabled={order.deliveryStatus === "DELIVERED" || sendFinalsLoading}
-            startIcon={<Send size={16} strokeWidth={2} />}
+            startIcon={<Send size={20} strokeWidth={2} />}
           >
             {order.deliveryStatus === "DELIVERED"
               ? "Finały wysłane"

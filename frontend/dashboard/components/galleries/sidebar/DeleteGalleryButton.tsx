@@ -62,14 +62,14 @@ export const DeleteGalleryButton: React.FC<DeleteGalleryButtonProps> = ({
     <>
       {isRedirecting && <FullPageLoading text="Usuwanie galerii..." />}
 
-      <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-800">
+      <div className="mt-auto p-3 border-t border-gray-200 dark:border-gray-800">
         <Button
-          size="sm"
+          size="md"
           variant="outline"
           onClick={handleDeleteClick}
           disabled={deleteGalleryMutation.isPending}
           className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
-          startIcon={<Trash2 size={16} />}
+          startIcon={<Trash2 size={20} />}
         >
           {deleteGalleryMutation.isPending ? "Usuwanie..." : "Usuń galerię"}
         </Button>

@@ -245,8 +245,8 @@ export const CoverPhotoUpload: React.FC = () => {
   };
 
   return (
-    <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-      <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
+    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
       <div
         className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors ${
           isLoading || !gallery

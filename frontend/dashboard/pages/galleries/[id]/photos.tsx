@@ -8,7 +8,7 @@ import {
   Trash2,
   X,
   Check,
-  ExternalLink,
+  Link,
 } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
@@ -1016,28 +1016,22 @@ export default function GalleryPhotos() {
                         </div>
                       </div>
                     )}
-                    {!isDeleting && !isSelectionMode && !isDelivered && (
+                    {!isDeleting && !isSelectionMode && !isDelivered && !isInAnyOrder && (
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                        {isInAnyOrder ? (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md bg-info-500 text-white">
-                            Wybrane
-                          </div>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeletePhotoClick(img);
-                            }}
-                            disabled={isNonDeletable || allDeletingImages.size > 0}
-                            className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                              isNonDeletable || allDeletingImages.size > 0
-                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                : "bg-error-500 text-white hover:bg-error-600"
-                            }`}
-                          >
-                            Usuń
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePhotoClick(img);
+                          }}
+                          disabled={isNonDeletable || allDeletingImages.size > 0}
+                          className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                            isNonDeletable || allDeletingImages.size > 0
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                              : "bg-error-500 text-white hover:bg-error-600"
+                          }`}
+                        >
+                          Usuń
+                        </button>
                       </div>
                     )}
                   </>
@@ -1121,15 +1115,7 @@ export default function GalleryPhotos() {
                 <X size={20} />
                 Anuluj
               </button>
-            </>
-          )}
-        </div>
-
-        {/* Bulk Action Toolbar - Show immediately when selection mode is active */}
-        {isSelectionMode && (
-          <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm -mx-6 px-6 py-2 mb-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 ml-auto">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {selectedKeys.size === 0
                     ? "0 zdjęć wybranych"
@@ -1170,19 +1156,17 @@ export default function GalleryPhotos() {
                   );
                 })()}
               </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleBulkDeleteClick}
-                  disabled={isBulkDeleting || selectedKeys.size === 0}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 size={18} />
-                  Usuń {selectedKeys.size > 0 && `(${selectedKeys.size})`}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              <button
+                onClick={handleBulkDeleteClick}
+                disabled={isBulkDeleting || selectedKeys.size === 0}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={18} />
+                Usuń {selectedKeys.size > 0 && `(${selectedKeys.size})`}
+              </button>
+            </>
+          )}
+        </div>
 
         {/* Images Grid - Grouped by Orders */}
         {imagesLoading ? (
@@ -1233,18 +1217,18 @@ export default function GalleryPhotos() {
                   className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
-                    className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                    className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
                       isExpanded ? "rounded-t-lg" : "rounded-lg"
                     }`}
                   >
                     <button
                       onClick={() => toggleSection(sectionId)}
-                      className="flex-1 text-left flex items-center gap-3 flex-wrap"
+                      className="flex-1 text-left flex items-center gap-4 flex-wrap"
                     >
-                      <div className="font-semibold text-gray-900 dark:text-white">
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
                         Zlecenie #{orderDisplayNumber}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
+                      <div className="text-base text-gray-500 dark:text-gray-400 hidden sm:inline">
                         {order.createdAt && <span>Utworzono: {formatDate(order.createdAt)}</span>}
                         {order.createdAt && order.deliveredAt && <span className="mx-2">•</span>}
                         {order.deliveredAt && (
@@ -1254,7 +1238,7 @@ export default function GalleryPhotos() {
                           <span className="text-gray-400">Brak dat</span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">
+                      <div className="text-sm text-gray-400 dark:text-gray-500">
                         {orderImages.length}{" "}
                         {orderImages.length === 1
                           ? "zdjęcie"
@@ -1267,19 +1251,19 @@ export default function GalleryPhotos() {
                       <Tooltip content="Przejdź do zlecenia">
                         <button
                           onClick={handleGoToOrder}
-                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                         >
                           <span>Przejdź do zlecenia</span>
-                          <ExternalLink size={14} />
+                          <Link size={16} />
                         </button>
                       </Tooltip>
                       <button
                         onClick={() => toggleSection(sectionId)}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                         aria-label={isExpanded ? "Zwiń sekcję" : "Rozwiń sekcję"}
                       >
                         <ChevronDown
-                          size={16}
+                          size={18}
                           className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                             isExpanded ? "transform rotate-180" : ""
                           }`}
@@ -1300,16 +1284,16 @@ export default function GalleryPhotos() {
             {unselectedImages.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
                 <div
-                  className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                  className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
                     expandedSections.has("unselected") ? "rounded-t-lg" : "rounded-lg"
                   }`}
                 >
                   <button
                     onClick={() => toggleSection("unselected")}
-                    className="flex-1 text-left flex items-center gap-3"
+                    className="flex-1 text-left flex items-center gap-4"
                   >
-                    <div className="font-semibold text-gray-900 dark:text-white">Niewybrane</div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                    <div className="text-lg font-semibold text-gray-900 dark:text-white">Niewybrane</div>
+                    <div className="text-sm text-gray-400 dark:text-gray-500">
                       {unselectedImages.length}{" "}
                       {unselectedImages.length === 1
                         ? "zdjęcie"
@@ -1323,21 +1307,21 @@ export default function GalleryPhotos() {
                       <button
                         onClick={handleDeleteAllUnselectedClick}
                         disabled={isBulkDeleting}
-                        className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                         <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
                       </button>
                     </Tooltip>
                     <button
                       onClick={() => toggleSection("unselected")}
-                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                      className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                       aria-label={
                         expandedSections.has("unselected") ? "Zwiń sekcję" : "Rozwiń sekcję"
                       }
                     >
                       <ChevronDown
-                        size={16}
+                        size={18}
                         className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
                           expandedSections.has("unselected") ? "transform rotate-180" : ""
                         }`}

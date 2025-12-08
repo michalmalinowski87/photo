@@ -38,28 +38,28 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onCreateGallery }) => {
 
   return (
     <header className="top-0 flex w-full bg-white border-gray-200 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
-      <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
-        <div className="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
+      <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-8">
+        <div className="flex items-center justify-between w-full gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-6">
           <button
-            className="block w-10 h-10 text-gray-500 lg:hidden dark:text-gray-400"
+            className="block w-12 h-12 text-gray-500 lg:hidden dark:text-gray-400"
             onClick={toggleMobileSidebar}
           >
             {isMobileOpen ? (
-              <X size={24} className="block" />
+              <X size={30} className="block" />
             ) : (
-              <Menu size={16} className="block" />
+              <Menu size={20} className="block" />
             )}
           </button>
 
           <Link href="/" className="lg:hidden">
-            <span className="text-lg font-bold text-brand-500">PhotoCloud</span>
+            <span className="text-xl font-bold text-brand-500">PhotoCloud</span>
           </Link>
 
           <button
             onClick={toggleApplicationMenu}
-            className="flex items-center justify-center w-10 h-10 text-gray-700 rounded-lg z-99999 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
+            className="flex items-center justify-center w-12 h-12 text-gray-700 rounded-lg z-99999 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
           >
-            <MoreVertical size={24} />
+            <MoreVertical size={30} />
           </button>
 
           {/* Search bar - hidden until search/command palette functionality is implemented */}
@@ -94,17 +94,17 @@ const AppHeader: React.FC<AppHeaderProps> = ({ onCreateGallery }) => {
           <div className="flex items-center gap-2 2xsm:gap-3">
             <a
               href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"}
-              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 h-11 w-11 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 h-14 w-14 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Strona główna"
             >
-              <Globe size={20} />
+              <Globe size={26} />
             </a>
             <Link
               href="/wallet"
-              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 h-11 w-11 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 h-14 w-14 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Portfel"
             >
-              <Wallet size={20} />
+              <Wallet size={26} />
             </Link>
             <ThemeToggleButton />
             {/* Notifications - hidden until notification system is implemented */}

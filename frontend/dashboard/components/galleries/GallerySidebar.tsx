@@ -13,10 +13,6 @@ import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
 
-interface GallerySidebarProps {
-  // No props needed - publish flow is managed by usePublishFlow hook
-}
-
 export default function GallerySidebar() {
   const router = useRouter();
   const { navigate } = useNavigation();
@@ -96,21 +92,21 @@ export default function GallerySidebar() {
   };
 
   return (
-    <aside className="fixed flex flex-col top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 w-[380px]">
+    <aside className="fixed flex flex-col top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 w-[494px]">
       {/* Back Button */}
-      <div className="h-[76px] border-b border-gray-200 dark:border-gray-800 flex items-center">
+      <div className="h-[72px] border-b border-gray-200 dark:border-gray-800 flex items-center">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 text-base font-semibold text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-300 transition-colors"
+          className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-300 transition-colors"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={26} />
           Powrót
         </button>
       </div>
 
       {/* Gallery Info */}
       {!shouldShowLoading && effectiveGallery ? (
-        <div className="py-6 border-b border-gray-200 dark:border-gray-800">
+        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
           <button
             onClick={handleGalleryNameClick}
             className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer text-left w-full"
@@ -119,7 +115,7 @@ export default function GallerySidebar() {
           </button>
         </div>
       ) : shouldShowLoading ? (
-        <div className="py-6 border-b border-gray-200 dark:border-gray-800">
+        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
           <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">Ładowanie...</div>
         </div>
       ) : null}

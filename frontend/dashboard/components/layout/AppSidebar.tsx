@@ -27,13 +27,13 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    icon: <LayoutDashboard size={20} />,
+    icon: <LayoutDashboard size={26} />,
     name: "Panel główny",
     path: "/",
   },
   {
     // eslint-disable-next-line jsx-a11y/alt-text
-    icon: <Image size={20} aria-hidden="true" />,
+    icon: <Image size={26} aria-hidden="true" />,
     name: "Galerie",
     subItems: [
       { name: "Wersje robocze", path: "/galleries/robocze" },
@@ -45,28 +45,28 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <Users size={20} />,
+    icon: <Users size={26} />,
     name: "Klienci",
     path: "/clients",
   },
   {
     name: "Pakiety",
-    icon: <Package size={20} />,
+    icon: <Package size={26} />,
     path: "/packages",
   },
   {
     name: "Portfel",
-    icon: <Wallet size={20} />,
+    icon: <Wallet size={26} />,
     path: "/wallet",
   },
   {
     name: "Ustawienia",
-    icon: <Settings size={20} />,
+    icon: <Settings size={26} />,
     path: "/settings",
   },
   {
     name: "Strona główna",
-    icon: <Globe size={20} />,
+    icon: <Globe size={26} />,
     path: process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002",
     external: true,
   },
@@ -128,7 +128,7 @@ const AppSidebar: React.FC = () => {
   };
 
   const renderMenuItems = (items: NavItem[]) => (
-    <ul className="flex flex-col gap-4">
+    <ul className="flex flex-col gap-2">
       {items.map((nav, index) => (
         <li key={nav.name}>
           {nav.subItems ? (
@@ -152,7 +152,7 @@ const AppSidebar: React.FC = () => {
               {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
               {(isExpanded || isMobileOpen) && (
                 <ChevronDown
-                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${
+                  className={`ml-auto w-6 h-6 transition-transform duration-200 ${
                     openSubmenu?.type === "main" && openSubmenu?.index === index
                       ? "rotate-180 text-brand-500"
                       : ""
@@ -223,14 +223,14 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
-        w-[290px]
+      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
+        w-[377px]
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}
     >
-      <div className="py-8 flex justify-start">
+      <div className="py-10 flex justify-start">
         <Link href="/">
-          <span className="text-xl font-bold text-brand-500">PhotoCloud</span>
+          <span className="text-2xl font-bold text-brand-500">PhotoCloud</span>
         </Link>
       </div>
       <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
@@ -262,7 +262,7 @@ const AppSidebar: React.FC = () => {
               }
             }}
           >
-            <LogOut size={20} />
+            <LogOut size={26} />
             <span>Wyloguj</span>
           </Link>
         </div>

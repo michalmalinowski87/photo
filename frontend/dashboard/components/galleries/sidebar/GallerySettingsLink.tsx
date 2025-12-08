@@ -28,8 +28,8 @@ export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
     return (
       <li>
         <Tooltip content="Ustawienia galerii są zablokowane dla dostarczonych galerii">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50">
-            <Settings size={20} />
+          <div className="flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50">
+            <Settings size={26} />
             <span>Ustawienia</span>
           </div>
         </Tooltip>
@@ -41,14 +41,14 @@ export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
     <li>
       <Link
         href={settingsHref}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        className={`flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium transition-colors ${
           router.pathname === `/galleries/[id]/settings` ||
           router.pathname === `/galleries/[id]/orders/[orderId]/settings`
             ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
         }`}
       >
-        <Settings size={20} />
+        <Settings size={26} />
         <span>Ustawienia</span>
       </Link>
     </li>

@@ -53,39 +53,39 @@ export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
 
   const expiryDate = getExpiryDate();
 
-  return (
-    <>
-      {/* Creation Date */}
-      <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Utworzono:</div>
-        <div className="text-sm text-gray-900 dark:text-white">
-          {gallery.createdAt && typeof gallery.createdAt === "string"
-            ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "-"}
-        </div>
-      </div>
+  const formattedCreatedDate =
+    gallery.createdAt && typeof gallery.createdAt === "string"
+      ? new Date(gallery.createdAt).toLocaleDateString("pl-PL", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "-";
 
-      {/* Expiry Date */}
-      <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Ważna do:</div>
-        <div className="text-sm text-gray-900 dark:text-white">
-          {expiryDate
-            ? expiryDate.toLocaleDateString("pl-PL", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "-"}
+  const formattedExpiryDate = expiryDate
+    ? expiryDate.toLocaleDateString("pl-PL", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "-";
+
+  return (
+    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-start gap-4">
+        <div className="flex-1">
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Utworzono:</div>
+          <div className="text-base text-gray-900 dark:text-white">{formattedCreatedDate}</div>
+        </div>
+        <div className="flex-1">
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Ważna do:</div>
+          <div className="text-base text-gray-900 dark:text-white">{formattedExpiryDate}</div>
         </div>
       </div>
-    </>
+    </div>
   );
 };

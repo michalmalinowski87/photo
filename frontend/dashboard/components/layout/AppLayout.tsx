@@ -105,7 +105,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
           <Backdrop />
         </div>
         <div
-          className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[290px] ${
+          className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[377px] ${
             isMobileOpen ? "ml-0" : ""
           }`}
         >

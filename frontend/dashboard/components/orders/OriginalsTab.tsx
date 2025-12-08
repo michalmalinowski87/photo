@@ -1,5 +1,8 @@
+import { HandHeart } from "lucide-react";
+
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
+import { EmptyState } from "../ui/empty-state/EmptyState";
 import { GalleryLoading } from "../ui/loading/Loading";
 
 interface GalleryImage {
@@ -89,12 +92,15 @@ export function OriginalsTab({
     }
 
     return (
-      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        <p>Klient nie wybrał jeszcze żadnych zdjęć.</p>
-        {deliveryStatus && deliveryStatus !== "CLIENT_SELECTING" && (
-          <p className="mt-2 text-xs text-gray-400">Status zlecenia: {deliveryStatus}</p>
-        )}
-      </div>
+      <EmptyState
+        icon={<HandHeart size={64} />}
+        title="Brak wybranych zdjęć"
+        description={
+          deliveryStatus === "CLIENT_SELECTING"
+            ? "Klient przegląda galerię i wybiera zdjęcia. Wybrane zdjęcia pojawią się tutaj po zakończeniu wyboru przez klienta."
+            : "Klient nie wybrał jeszcze żadnych zdjęć. Po wyborze zdjęć przez klienta, wybrane zdjęcia pojawią się w tym miejscu."
+        }
+      />
     );
   }
 

@@ -115,7 +115,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ustawienia</h1>
 
       {loading ? (
@@ -131,25 +131,25 @@ export default function Settings() {
         </>
       ) : (
         <>
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="space-y-1" style={{ minHeight: "60px" }}>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
                 Email logowania
               </label>
-              <p className="text-sm text-gray-900 dark:text-white">
+              <p className="text-base text-gray-900 dark:text-white">
                 {loginEmail ?? "Ładowanie danych..."}
               </p>
             </div>
           </div>
 
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
               Zmiana hasła
             </h2>
 
             <form onSubmit={handlePasswordChange}>
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Obecne hasło *
                 </label>
                 <Input
@@ -167,7 +167,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Nowe hasło *
                 </label>
                 <Input
@@ -185,7 +185,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Potwierdź nowe hasło *
                 </label>
                 <Input
@@ -210,14 +210,14 @@ export default function Settings() {
             </form>
           </div>
 
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
               Informacje kontaktowe
             </h2>
 
             <form onSubmit={handleBusinessInfoUpdate}>
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Email kontaktowy
                 </label>
                 <Input
@@ -234,7 +234,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Nazwa firmy
                 </label>
                 <Input
@@ -251,7 +251,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Telefon
                 </label>
                 <Input
@@ -268,7 +268,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Adres
                 </label>
                 <Input
@@ -285,7 +285,7 @@ export default function Settings() {
               </div>
 
               <div className="mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   NIP
                 </label>
                 <Input

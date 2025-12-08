@@ -83,7 +83,7 @@ export function GallerySettingsForm({
           }
         | undefined;
       setSettingsForm({
-        galleryName: gallery.galleryName ?? "",
+        galleryName: (gallery.galleryName as string | undefined) ?? "",
         clientEmail: (gallery.clientEmail as string | undefined) ?? "",
         clientPassword: "",
         packageName: pricingPackage?.packageName ?? "",
@@ -210,30 +210,30 @@ export function GallerySettingsForm({
   // Show locked form if gallery is delivered - show form but disabled
   if (hasDeliveredOrders) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
+      <div className="space-y-4">
+        <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div className="p-4 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20 mb-6">
+        <div className="p-8 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-4 bg-error-50 border border-error-200 rounded-lg dark:bg-error-500/10 dark:border-error-500/20 mb-4">
             <div className="flex items-center gap-3 mb-2">
               <AlertTriangle
-                size={24}
+                size={28}
                 className="text-error-600 dark:text-error-400"
                 strokeWidth={2}
               />
-              <h2 className="text-lg font-semibold text-error-800 dark:text-error-200">
+              <h2 className="text-xl font-semibold text-error-800 dark:text-error-200">
                 Ustawienia galerii są zablokowane
               </h2>
             </div>
-            <p className="text-sm text-error-700 dark:text-error-300">
+            <p className="text-base text-error-700 dark:text-error-300">
               Nie możesz edytować ustawień galerii, która ma dostarczone zlecenia. Ustawienia są
               zablokowane po dostarczeniu zdjęć do klienta.
             </p>
           </div>
 
-          <div className="space-y-4 opacity-60">
+          <div className="space-y-3 opacity-60">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Nazwa galerii
               </label>
               <Input
@@ -245,7 +245,7 @@ export function GallerySettingsForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Email logowania
               </label>
               <Input
@@ -257,7 +257,7 @@ export function GallerySettingsForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Hasło klienta (opcjonalne)
               </label>
               <div className="flex gap-2 items-start">
@@ -274,14 +274,14 @@ export function GallerySettingsForm({
               </div>
             </div>
 
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
                 Pakiet cenowy
               </h3>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Nazwa pakietu
                   </label>
                   <Input
@@ -293,7 +293,7 @@ export function GallerySettingsForm({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Liczba zdjęć w pakiecie
                   </label>
                   <Input
@@ -305,7 +305,7 @@ export function GallerySettingsForm({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Cena za dodatkowe zdjęcie (PLN)
                   </label>
                   <Input
@@ -317,7 +317,7 @@ export function GallerySettingsForm({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Cena pakietu (PLN)
                   </label>
                   <Input
@@ -331,7 +331,7 @@ export function GallerySettingsForm({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
+          <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={handleCancel}>
               {cancelLabel}
             </Button>
@@ -345,13 +345,13 @@ export function GallerySettingsForm({
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
+    <div className="space-y-4">
+      <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
-      <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="space-y-4">
+      <div className="p-8 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Nazwa galerii
             </label>
             <Input
@@ -369,7 +369,7 @@ export function GallerySettingsForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Email logowania
             </label>
             <Input
@@ -382,7 +382,7 @@ export function GallerySettingsForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Hasło klienta (opcjonalne)
             </label>
             <div className="flex gap-2 items-start">
@@ -410,14 +410,14 @@ export function GallerySettingsForm({
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
               Pakiet cenowy
             </h3>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Nazwa pakietu
                 </label>
                 <Input
@@ -431,7 +431,7 @@ export function GallerySettingsForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Liczba zdjęć w pakiecie
                 </label>
                 <Input
@@ -449,7 +449,7 @@ export function GallerySettingsForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Cena za dodatkowe zdjęcie (PLN)
                 </label>
                 <Input
@@ -474,7 +474,7 @@ export function GallerySettingsForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Cena pakietu (PLN)
                 </label>
                 <Input
@@ -501,7 +501,7 @@ export function GallerySettingsForm({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={handleCancel} disabled={saving}>
             {cancelLabel}
           </Button>
@@ -509,7 +509,7 @@ export function GallerySettingsForm({
             variant="primary"
             onClick={handleUpdateSettings}
             disabled={saving}
-            startIcon={<Save size={16} />}
+            startIcon={<Save size={20} />}
           >
             {saving ? "Zapisywanie..." : "Zapisz"}
           </Button>

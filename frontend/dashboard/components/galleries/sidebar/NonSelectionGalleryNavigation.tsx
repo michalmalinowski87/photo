@@ -66,13 +66,13 @@ export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigati
             }
           }}
           onClick={handlePhotosClick}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium transition-colors ${
             isOnOrderPage && !router.asPath.includes("/settings")
               ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
               : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <ImageIcon size={20} />
+          <ImageIcon size={26} />
           <span>Zdjęcia</span>
         </Link>
       </li>

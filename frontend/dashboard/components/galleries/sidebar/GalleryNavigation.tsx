@@ -40,10 +40,10 @@ export const GalleryNavigation: React.FC = () => {
 
   if (shouldShowLoading) {
     return (
-      <nav className="flex-1 overflow-y-auto py-4">
-        <ul className="space-y-1">
+      <nav className="flex-1 overflow-y-auto py-3">
+        <ul className="space-y-0.5">
           <li>
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-600">
+            <div className="flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium text-gray-400 dark:text-gray-600">
               <span>Ładowanie...</span>
             </div>
           </li>
@@ -63,8 +63,8 @@ export const GalleryNavigation: React.FC = () => {
   }
 
   return (
-    <nav className="flex-1 overflow-y-auto py-4">
-      <ul className="space-y-1">
+    <nav className="flex-1 overflow-y-auto py-3">
+      <ul className="space-y-0.5">
         {isNonSelectionGallery ? (
           <NonSelectionGalleryNavigation galleryId={gallery.galleryId} />
         ) : (

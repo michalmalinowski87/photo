@@ -173,10 +173,13 @@ export function FinalsTab({
         {!isSelectionMode && (
           <>
             {canUpload && (
-              <Button onClick={onUploadClick} variant="primary">
-                <Plus className="w-5 h-5 mr-2" />
+              <button
+                onClick={onUploadClick}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Plus size={20} />
                 Prześlij zdjęcia finalne
-              </Button>
+              </button>
             )}
             {images.length > 0 && orderDeliveryStatus !== "DELIVERED" && (
               <button
@@ -209,15 +212,7 @@ export function FinalsTab({
               <X size={20} />
               Anuluj
             </button>
-          </>
-        )}
-      </div>
-
-      {/* Bulk Action Toolbar - Show immediately when selection mode is active */}
-      {isSelectionMode && (
-        <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm -mx-6 px-6 py-2">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 ml-auto">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {selectedKeys.size === 0
                   ? "0 zdjęć wybranych"
@@ -256,20 +251,18 @@ export function FinalsTab({
               })()}
             </div>
             {onDeleteImagesBatch && orderDeliveryStatus !== "DELIVERED" && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleBulkDeleteClick}
-                  disabled={isBulkDeleting || selectedKeys.size === 0}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 size={18} />
-                  Usuń {selectedKeys.size > 0 && `(${selectedKeys.size})`}
-                </button>
-              </div>
+              <button
+                onClick={handleBulkDeleteClick}
+                disabled={isBulkDeleting || selectedKeys.size === 0}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={18} />
+                Usuń {selectedKeys.size > 0 && `(${selectedKeys.size})`}
+              </button>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {images.length === 0 ? (
         <EmptyState

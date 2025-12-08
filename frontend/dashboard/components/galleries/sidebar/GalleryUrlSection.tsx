@@ -1,4 +1,4 @@
-import { Plus, Share2, Copy } from "lucide-react";
+import { Plus, Share2, Copy, ExternalLink } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useMemo, useState } from "react";
 
@@ -153,14 +153,20 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     orderDeliveryStatus !== "DELIVERED";
 
   return (
-    <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Adres www galerii:</div>
-      <div className="p-2 bg-transparent dark:bg-transparent rounded text-xs break-all text-blue-600 dark:text-blue-400 mb-2">
-        {displayGalleryUrl}
-      </div>
+    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Adres www galerii:</div>
+      <a
+        href={displayGalleryUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 p-2.5 bg-transparent dark:bg-transparent rounded text-sm break-all text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-2.5 transition-colors no-underline"
+      >
+        <span className="flex-1">{displayGalleryUrl}</span>
+        <ExternalLink size={16} className="flex-shrink-0" />
+      </a>
       <Button
         variant="outline"
-        size="sm"
+        size="md"
         onClick={handleCopyClick}
         className={`w-full transition-all duration-500 ease-in-out ${
           urlCopied
@@ -169,8 +175,8 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
         }`}
         startIcon={
           !urlCopied ? (
-            <span className="relative inline-flex items-center justify-center w-4 h-4 flex-shrink-0">
-              <Copy size={16} />
+            <span className="relative inline-flex items-center justify-center w-5 h-5 flex-shrink-0">
+              <Copy size={20} />
             </span>
           ) : null
         }
@@ -197,10 +203,10 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       {shouldShowPublishButton && (
         <Button
           variant="primary"
-          size="sm"
+          size="md"
           onClick={handlePublishClick}
-          className="w-full mt-2"
-          startIcon={<Plus size={16} />}
+          className="w-full mt-2.5"
+          startIcon={<Plus size={20} />}
         >
           Opublikuj galerię
         </Button>
@@ -212,21 +218,21 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
           {hasClientSelectingOrder ? (
             <Button
               variant="outline"
-              size="sm"
+              size="md"
               disabled
-              className="w-full mt-2"
-              startIcon={<Share2 size={16} />}
+              className="w-full mt-2.5"
+              startIcon={<Share2 size={20} />}
             >
               Udostępniono klientowi
             </Button>
           ) : (
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               onClick={handleSendLink}
               disabled={sendLinkLoading}
-              className="w-full mt-2"
-              startIcon={<Share2 size={16} />}
+              className="w-full mt-2.5"
+              startIcon={<Share2 size={20} />}
             >
               {sendLinkLoading
                 ? "Wysyłanie..."
