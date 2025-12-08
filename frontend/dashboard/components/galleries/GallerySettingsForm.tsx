@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
 import {
+  useUpdateGallery,
   useUpdateGalleryClientPassword,
   useUpdateGalleryPricingPackage,
 } from "../../hooks/mutations/useGalleryMutations";
@@ -51,9 +52,10 @@ export function GallerySettingsForm({
   const hasDeliveredOrders = deliveredOrders.length > 0;
 
   // Use React Query mutations for data operations
+  const updateGalleryMutation = useUpdateGallery();
   const updateClientPasswordMutation = useUpdateGalleryClientPassword();
   const updatePricingPackageMutation = useUpdateGalleryPricingPackage();
-  const saving = updateClientPasswordMutation.isPending || updatePricingPackageMutation.isPending;
+  const saving = updateGalleryMutation.isPending || updateClientPasswordMutation.isPending || updatePricingPackageMutation.isPending;
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({
     galleryName: "",
     clientEmail: "",
@@ -97,6 +99,18 @@ export function GallerySettingsForm({
     }
 
     try {
+      // Update gallery name if changed
+      const currentGalleryName = typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
+      const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
+      if (galleryNameChanged) {
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: {
+            galleryName: settingsForm.galleryName.trim(),
+          },
+        });
+      }
+
       // Update client password if provided (requires clientEmail)
       if (settingsForm.clientPassword && settingsForm.clientEmail) {
         await updateClientPasswordMutation.mutateAsync({
@@ -141,7 +155,10 @@ export function GallerySettingsForm({
         });
       }
 
-      showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
+      // Only show success if at least one change was made
+      if (galleryNameChanged || (settingsForm.clientPassword && settingsForm.clientEmail) || pkgChanged) {
+        showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
+      }
       // React Query mutations will automatically invalidate and refetch gallery data
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err));

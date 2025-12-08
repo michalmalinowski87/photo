@@ -1,8 +1,8 @@
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
 import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
+import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
