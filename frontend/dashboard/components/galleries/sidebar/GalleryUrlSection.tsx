@@ -1,10 +1,11 @@
 import { Plus, Share2, Copy } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import { useSendGalleryToClient } from "../../../hooks/mutations/useGalleryMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
-import { useOrder, useOrders } from "../../../hooks/queries/useOrders";
+import { useOrder, useOrders, useOrderFinalImages } from "../../../hooks/queries/useOrders";
+import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import Button from "../../ui/button/Button";
@@ -24,17 +25,38 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
   const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
-  // Use React Query hooks
+  // Use React Query hooks (must be called before any early returns)
   const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
   const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
   const sendGalleryLinkToClientMutation = useSendGalleryToClient();
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
+  const { startPublishFlow } = usePublishFlow();
 
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
   // Use mutation loading state instead of local state
   const sendLinkLoading = sendGalleryLinkToClientMutation.isPending;
+
+  // For non-selective galleries, check if first order has final images
+  // For selective galleries, check if original photos are uploaded
+  const isNonSelectionGallery = gallery?.selectionEnabled === false;
+  const effectiveOrderIdForFinalImages = useMemo(() => {
+    if (orderIdForQuery) {
+      return orderIdForQuery;
+    }
+    // For non-selective galleries, use first order if available
+    if (isNonSelectionGallery && galleryOrders.length > 0) {
+      return galleryOrders[0]?.orderId;
+    }
+    return undefined;
+  }, [orderIdForQuery, isNonSelectionGallery, galleryOrders]);
+
+  const { data: finalImages = [] } = useOrderFinalImages(
+    galleryIdForQuery,
+    effectiveOrderIdForFinalImages
+  );
+  const finalImagesCount = finalImages.length;
 
   // Early return: don't render if gallery doesn't exist or should hide
   // Check gallery FIRST to prevent any computation or rendering with stale data
@@ -52,7 +74,13 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
       : "";
 
   const isPaid = gallery?.isPaid ?? false;
-  const hasPhotos = (gallery?.originalsBytesUsed ?? 0) > 0;
+
+  // For selective galleries: check original photos
+  // For non-selective galleries: check final images
+  const hasPhotos = isNonSelectionGallery
+    ? finalImagesCount > 0
+    : (gallery?.originalsBytesUsed ?? 0) > 0;
+  
   const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
 
   // Defensive check: don't render if no gallery URL
@@ -96,8 +124,8 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     if (!galleryIdStr) {
       return;
     }
-    // Navigate to gallery page with publish param - GalleryLayoutWrapper will handle opening wizard
-    void router.push(`/galleries/${galleryIdStr}?publish=true&galleryId=${galleryIdStr}`);
+    // Use centralized publish flow action
+    startPublishFlow(galleryIdStr);
   };
 
   // Check if gallery has a CLIENT_SELECTING order

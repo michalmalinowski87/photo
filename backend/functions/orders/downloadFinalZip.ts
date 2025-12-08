@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -56,6 +57,30 @@ export const handler = lambdaLogger(async (event: any) => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ error: 'Unauthorized. Please log in.' })
 			};
+		}
+
+		// For client access, check if gallery is paid before allowing access to finals
+		// Owners can always access finals (even for unpublished galleries)
+		if (access.isClient) {
+			let isPaid = false;
+			try {
+				const paidTransaction = await getPaidTransactionForGallery(galleryId);
+				isPaid = !!paidTransaction;
+			} catch (err) {
+				// If transaction check fails, fall back to gallery state
+				isPaid = gallery.state === 'PAID_ACTIVE';
+			}
+
+			if (!isPaid) {
+				return {
+					statusCode: 403,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Gallery not published',
+						message: 'Final photos are not available until the gallery is published. Please contact the photographer.'
+					})
+				};
+			}
 		}
 
 		// Verify order exists and is DELIVERED or PREPARING_DELIVERY

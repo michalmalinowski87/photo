@@ -8,18 +8,17 @@ import {
   useUpdateGallery,
 } from "../../hooks/mutations/useGalleryMutations";
 import { useBusinessInfo } from "../../hooks/queries/useAuth";
-import { useOrders } from "../../hooks/queries/useOrders";
+import { useGallery } from "../../hooks/queries/useGalleries";
+import { useOrder, useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useBottomRightOverlay } from "../../hooks/useBottomRightOverlay";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
+import { usePublishFlow } from "../../hooks/usePublishFlow";
 import { useToast } from "../../hooks/useToast";
 import { useOverlayStore } from "../../store";
-import type { Gallery, Order } from "../../types";
 import { useGalleryType } from "../hocs/withGalleryType";
 
 interface NextStepsOverlayProps {
-  gallery: Gallery | null;
-  orders?: Order[];
-  galleryLoading?: boolean;
+  // No props needed - component gets all data from React Query stores
 }
 
 interface Step {
@@ -28,15 +27,12 @@ interface Step {
   completed: boolean | null; // null means step doesn't apply (e.g., send step for non-selection galleries)
 }
 
-export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
-  gallery,
-  orders = [],
-  galleryLoading = false,
-}) => {
+export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
+  const router = useRouter();
+  const { id: galleryId, orderId } = router.query;
   const { data: businessInfo } = useBusinessInfo();
   const updateGalleryMutation = useUpdateGallery();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();
-  const router = useRouter();
   const { showToast } = useToast();
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -49,7 +45,41 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
   const nextStepsOverlayExpanded = useOverlayStore((state) => state.nextStepsOverlayExpanded);
   const setNextStepsOverlayExpanded = useOverlayStore((state) => state.setNextStepsOverlayExpanded);
 
-  // Check if publish wizard should be open based on URL params (since it's now local state in GalleryLayoutWrapper)
+  // Get gallery and order IDs from router
+  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+  const galleryIdForQuery =
+    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
+  const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
+
+  // Get all data directly from React Query stores
+  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
+  const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
+  const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
+  const galleryCreationLoading = useGalleryCreationLoading();
+  const { isNonSelectionGallery } = useGalleryType();
+  const sendGalleryLinkToClientMutation = useSendGalleryToClient();
+
+  // For non-selective galleries, if no orderId in URL, use first order from galleryOrders
+  // This ensures we can check final images even when viewing the gallery page (not order page)
+  const effectiveOrderIdForFinalImages = useMemo(() => {
+    if (orderIdForQuery) {
+      return orderIdForQuery;
+    }
+    // For non-selective galleries, use first order if available
+    if (gallery?.selectionEnabled === false && galleryOrders.length > 0) {
+      return galleryOrders[0]?.orderId;
+    }
+    return undefined;
+  }, [orderIdForQuery, gallery?.selectionEnabled, galleryOrders]);
+
+  const { data: finalImages = [] } = useOrderFinalImages(
+    galleryIdForQuery,
+    effectiveOrderIdForFinalImages
+  );
+  const finalImagesCount = finalImages.length;
+
+  // Check if publish wizard should be open based on URL params
   const publishWizardOpen = useMemo(() => {
     if (!gallery?.galleryId) {
       return false;
@@ -57,15 +87,6 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     return params.get("publish") === "true" && params.get("galleryId") === gallery.galleryId;
   }, [gallery?.galleryId]);
-  const sendGalleryLinkToClientMutation = useSendGalleryToClient();
-  // Get orders from React Query
-  const { id: galleryId } = router.query;
-  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  const galleryIdForQuery =
-    galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
-  const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
-  const galleryCreationLoading = useGalleryCreationLoading();
-  const { isNonSelectionGallery } = useGalleryType();
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
@@ -150,11 +171,31 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     const currentBytes = optimisticBytesUsed ?? gallery.originalsBytesUsed ?? 0;
     const uploadCompleted = currentBytes > 0;
     const publishCompleted = gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE";
+    
+    // For non-selective galleries, show different steps
+    // "Prześlij zdjęcia" checks for final images (not original photos)
+    // No separate "Prześlij zdjęcia finalne" step needed
+    if (gallery.selectionEnabled === false) {
+      const finalUploadCompleted = finalImagesCount > 0;
+      
+      return [
+        {
+          id: "upload",
+          label: "Prześlij zdjęcia",
+          completed: finalUploadCompleted,
+        },
+        {
+          id: "publish",
+          label: "Opublikuj galerię",
+          completed: publishCompleted,
+        },
+      ];
+    }
+    
+    // For selective galleries, use original logic
     // Send step is completed when there's any order (gallery has been sent to client)
-    // Use galleryOrders from store instead of orders prop
-    const ordersToCheck = galleryOrders.length > 0 ? galleryOrders : orders;
-    // If there's any order, the gallery has been sent to the client
-    const sendCompleted = gallery.selectionEnabled !== false ? ordersToCheck.length > 0 : null;
+    // Use galleryOrders from React Query store
+    const sendCompleted = galleryOrders.length > 0;
 
     return [
       {
@@ -173,7 +214,7 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
         completed: sendCompleted,
       },
     ];
-  }, [gallery, galleryLoading, galleryOrders, orders, optimisticBytesUsed]);
+  }, [gallery, galleryLoading, galleryOrders, optimisticBytesUsed, finalImagesCount]);
 
   // Clear optimistic bytes when gallery bytes update (after store confirms)
   useEffect(() => {
@@ -554,47 +595,44 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
     ? gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE"
     : false;
 
+  const { startPublishFlow } = usePublishFlow();
+
   const handlePublishClick = () => {
     if (!gallery?.galleryId) {
       return;
     }
 
-    // For non-selection galleries, navigate to order view instead of opening publish wizard
-    if (isNonSelectionGallery) {
-      try {
-        // Fetch gallery orders to get the order ID
-        // Orders are already loaded from React Query
-        const orders = galleryOrders;
-        if (orders?.length > 0) {
-          const firstOrder = orders[0];
-          if (firstOrder?.orderId) {
-            // Navigate to order view
-            void router.push(`/galleries/${gallery.galleryId}/orders/${firstOrder.orderId}`);
-          }
-        } else {
-          // If no orders found, still open publish wizard as fallback
-          void router.push(
-            `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
-          );
-        }
-      } catch (err) {
-        // On error, fall back to opening publish wizard
-        console.error("Failed to fetch orders for non-selection gallery:", err);
-        void router.push(
-          `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
-        );
-      }
-    } else {
-      // For selection galleries, open publish wizard as before
-      void router.push(
-        `/galleries/${gallery.galleryId}?publish=true&galleryId=${gallery.galleryId}`
-      );
-    }
+    // Use centralized publish flow action
+    startPublishFlow(gallery.galleryId);
   };
 
   const handleUploadClick = () => {
-    if (gallery?.galleryId) {
+    if (!gallery?.galleryId) {
+      return;
+    }
+
+    // For non-selective galleries, navigate to order page (where photos are uploaded)
+    if (isNonSelectionGallery) {
+      // Use order from URL if available, otherwise get first order from galleryOrders
+      const targetOrderId = orderIdForQuery ?? (galleryOrders.length > 0 ? galleryOrders[0]?.orderId : null);
+      if (targetOrderId) {
+        void router.push(`/galleries/${gallery.galleryId}/orders/${targetOrderId}`);
+      } else if (galleryOrders.length > 0) {
+        // Fallback: try to get orderId from first order
+        const firstOrder = galleryOrders[0];
+        if (firstOrder?.orderId) {
+          void router.push(`/galleries/${gallery.galleryId}/orders/${firstOrder.orderId}`);
+        }
+      }
+    } else {
+      // For selective galleries, navigate to photos page
       void router.push(`/galleries/${gallery.galleryId}/photos`);
+    }
+  };
+
+  const handleUploadFinalClick = () => {
+    if (gallery?.galleryId && order?.orderId) {
+      void router.push(`/galleries/${gallery.galleryId}/orders/${order.orderId}`);
     }
   };
 
@@ -687,6 +725,8 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = ({
                         void handlePublishClick();
                       } else if (step.id === "send") {
                         void handleSendClick();
+                      } else if (step.id === "uploadFinal") {
+                        handleUploadFinalClick();
                       }
                     }
                   }}

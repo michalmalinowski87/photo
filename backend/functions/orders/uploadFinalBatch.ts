@@ -76,8 +76,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	requireOwnerOr403(gallery.ownerId, requester);
 
 	// Check if gallery is paid
-	const paidTransaction = await getPaidTransactionForGallery(galleryId, ordersTable);
-	if (!paidTransaction) {
+	// For non-selective galleries, allow uploads even if not paid
+	// For selective galleries, require payment
+	const isNonSelectionGallery = gallery.selectionEnabled === false;
+	let isPaid = false;
+	try {
+		const paidTransaction = await getPaidTransactionForGallery(galleryId, ordersTable);
+		isPaid = !!paidTransaction;
+	} catch (err) {
+		// If transaction check fails, fall back to gallery state
+		isPaid = gallery.state === 'PAID_ACTIVE';
+	}
+
+	// Only require payment for selective galleries
+	if (!isNonSelectionGallery && !isPaid) {
 		return {
 			statusCode: 402,
 			headers: { 'content-type': 'application/json' },

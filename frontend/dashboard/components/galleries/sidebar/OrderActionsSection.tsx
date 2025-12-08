@@ -11,6 +11,7 @@ import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useOrder } from "../../../hooks/queries/useOrders";
 import { useDownloadUtils } from "../../../hooks/useDownloadUtils";
 import { useModal } from "../../../hooks/useModal";
+import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
@@ -18,12 +19,11 @@ import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 
 interface OrderActionsSectionProps {
   orderId: string;
-  setPublishWizardOpen?: (open: boolean) => void;
+  setPublishWizardOpen?: (open: boolean) => void; // Kept for backward compatibility, but not used (we use redirect approach)
 }
 
 export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
   orderId,
-  setPublishWizardOpen,
 }) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -143,11 +143,15 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({
     downloadZip(galleryIdStr, orderId);
   }, [galleryIdStr, orderId, downloadZip]);
 
+  const { startPublishFlow } = usePublishFlow();
+
   const handlePublishClick = useCallback(() => {
-    if (setPublishWizardOpen) {
-      setPublishWizardOpen(true);
+    if (!galleryIdStr) {
+      return;
     }
-  }, [setPublishWizardOpen]);
+    // Use centralized publish flow action
+    startPublishFlow(galleryIdStr);
+  }, [galleryIdStr, startPublishFlow]);
 
   // Defensive check: don't render until required data is loaded
   // placeholderData in useOrder hook keeps previous data during refetches to avoid flicker

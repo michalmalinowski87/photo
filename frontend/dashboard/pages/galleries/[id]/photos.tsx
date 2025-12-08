@@ -1061,16 +1061,7 @@ export default function GalleryPhotos() {
   return (
     <>
       {/* Next Steps Overlay */}
-      <NextStepsOverlay
-        gallery={gallery}
-        orders={
-          orders.map((o) => ({
-            ...o,
-            galleryId: galleryId as string,
-          })) as Order[]
-        }
-        galleryLoading={galleryLoading}
-      />
+      <NextStepsOverlay />
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">

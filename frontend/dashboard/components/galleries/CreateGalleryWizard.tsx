@@ -20,7 +20,7 @@ import { PackageStep } from "./wizard/PackageStep";
 interface CreateGalleryWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (galleryId: string) => void;
+  onSuccess: (galleryId: string, orderId?: string, selectionEnabled?: boolean) => void;
   devLocked?: boolean;
 }
 
@@ -384,7 +384,7 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       }
 
       const requestBody: CreateGalleryRequestBody = {
-        selectionEnabled: data.selectionEnabled ?? false,
+        selectionEnabled: data.selectionEnabled!,
         pricingPackage,
       };
 
@@ -440,7 +440,25 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         onClose();
       }
       // Navigate after closing wizard to ensure smooth transition
-      onSuccess(response.galleryId);
+      // Pass orderId and selectionEnabled for proper routing
+      const orderId = (response as any)?.orderId;
+      // Use the actual response value, defaulting based on whether orderId exists
+      // If orderId exists, it's definitely non-selective (selectionEnabled = false)
+      // If orderId doesn't exist, check response.selectionEnabled, default to true if undefined
+      const responseSelectionEnabled = (response as any)?.selectionEnabled;
+      const selectionEnabled = orderId 
+        ? false 
+        : (responseSelectionEnabled !== undefined ? responseSelectionEnabled : true);
+      
+      console.log('Gallery created:', { 
+        galleryId: response.galleryId, 
+        orderId, 
+        selectionEnabled,
+        responseSelectionEnabled,
+        fullResponse: response 
+      });
+      
+      onSuccess(response.galleryId, orderId, selectionEnabled);
     } catch (err: unknown) {
       // Clear flow on error - overlay should disappear
       setGalleryCreationFlowActive(false);

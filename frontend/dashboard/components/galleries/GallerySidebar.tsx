@@ -14,10 +14,10 @@ import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
 
 interface GallerySidebarProps {
-  setPublishWizardOpen?: (open: boolean) => void;
+  // No props needed - publish flow is managed by usePublishFlow hook
 }
 
-export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarProps) {
+export default function GallerySidebar() {
   const router = useRouter();
   const { navigate } = useNavigation();
   const { orderId: orderIdFromQuery } = router.query;
@@ -133,7 +133,7 @@ export default function GallerySidebar({ setPublishWizardOpen }: GallerySidebarP
       <GalleryNavigation />
 
       {orderId && order && (
-        <OrderActionsSection orderId={orderId} setPublishWizardOpen={setPublishWizardOpen} />
+        <OrderActionsSection orderId={orderId} />
       )}
 
       <DeleteGalleryButton

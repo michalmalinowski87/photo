@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { PRICING_PLANS, calculateBestPlan, getPlanKeysSortedByStorage, getNextTierPlan, calculatePriceWithDiscount, getLargestPlanSize, type PlanKey } from '../../lib/src/pricing';
+import { PRICING_PLANS, calculateBestPlan, getNextTierPlan, calculatePriceWithDiscount, getLargestPlanSize } from '../../lib/src/pricing';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -11,7 +11,6 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 
 	if (!galleriesTable) {
@@ -54,16 +53,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	requireOwnerOr403(gallery.ownerId, requester);
 
-	// Use stored total (maintained via atomic operations during uploads/deletes)
-	const uploadedSizeBytes = gallery.originalsBytesUsed || 0;
-	logger?.info('Using stored uploaded size', { galleryId, uploadedSizeBytes });
+	// Calculate pricing based on gallery type (needed for size calculation)
+	const isSelectionGallery = gallery.selectionEnabled !== false;
+
+	// Calculate uploaded size for plan calculation
+	// For selective galleries: originals and finals have SEPARATE quotas (each gets full plan size)
+	//   - Use MAX(originalsBytesUsed, finalsBytesUsed) since we need a plan that fits the larger of the two
+	// For non-selective galleries: originals and finals share the SAME quota
+	//   - Use SUM(originalsBytesUsed, finalsBytesUsed) since they share the same storage pool
+	const originalsBytes = gallery.originalsBytesUsed || 0;
+	const finalsBytes = gallery.finalsBytesUsed || 0;
+	const uploadedSizeBytes = isSelectionGallery
+		? Math.max(originalsBytes, finalsBytes)
+		: originalsBytes + finalsBytes;
+	
+	logger?.info('Using stored uploaded size for plan calculation', { 
+		galleryId,
+		isSelectionGallery,
+		uploadedSizeBytes,
+		originalsBytesUsed: originalsBytes,
+		finalsBytesUsed: finalsBytes,
+		calculationMethod: isSelectionGallery ? 'MAX(originals, finals)' : 'SUM(originals, finals)'
+	});
 
 	// Find best matching plan
 	const suggestedPlan = calculateBestPlan(uploadedSizeBytes, duration as '1m' | '3m' | '12m');
 	const planMetadata = PRICING_PLANS[suggestedPlan];
-
-	// Calculate pricing based on gallery type
-	const isSelectionGallery = gallery.selectionEnabled !== false;
 	const priceCents = calculatePriceWithDiscount(suggestedPlan, isSelectionGallery);
 
 	// Both types: originalsLimitBytes = plan size, finalsLimitBytes = plan size

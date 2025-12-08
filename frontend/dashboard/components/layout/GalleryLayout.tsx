@@ -7,10 +7,9 @@ import GalleryHeader from "./GalleryHeader";
 
 interface GalleryLayoutProps {
   children: React.ReactNode;
-  setPublishWizardOpen?: (open: boolean) => void;
 }
 
-const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children, setPublishWizardOpen }) => {
+const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children }) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
 
@@ -37,7 +36,7 @@ const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children, setPublishWizar
     <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
       <div className="flex">
         <div>
-          {shouldShowSidebar && <GallerySidebar setPublishWizardOpen={setPublishWizardOpen} />}
+          {shouldShowSidebar && <GallerySidebar />}
         </div>
         <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[380px]">
           <GalleryHeader />

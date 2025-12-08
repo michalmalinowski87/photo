@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
+import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
@@ -85,6 +86,7 @@ export default function OrderDetail() {
     handleDeleteImageClick,
     deletingImages,
     deletingImagesRef,
+    deletedImageKeys,
     deletedImageKeysRef,
     clearDeletedKeysForImages,
   } = useFinalImageDelete({
@@ -94,17 +96,8 @@ export default function OrderDetail() {
     setOptimisticFinalsBytes,
   });
 
-  // Derived/computed final images: Filter deleted images
-  // URLs are already mapped via select in useOrderFinalImages
-  const finalImages = useMemo(() => {
-    // Start with React Query data (already transformed with URLs mapped)
-    const baseImages = (finalImagesData || []) as GalleryImage[];
-
-    // Filter out successfully deleted images
-    return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeysRef.current);
-  }, [finalImagesData, deletingImagesRef, deletedImageKeysRef]);
-
-  // Clear deletedImageKeys for final images that have been re-uploaded
+  // Clear deletedImageKeys for final images that have been re-uploaded FIRST
+  // This must happen before the useMemo that filters images, so re-uploaded images aren't filtered out
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
   useEffect(() => {
     if (!finalImagesData || finalImagesData.length === 0) {
@@ -121,9 +114,22 @@ export default function OrderDetail() {
     );
 
     if (reuploadedKeys.length > 0) {
+      // Clear keys synchronously so the useMemo below can see the updated state
       clearDeletedKeysForImages(reuploadedKeys);
     }
   }, [finalImagesData, deletedImageKeysRef, clearDeletedKeysForImages]);
+
+  // Derived/computed final images: Filter deleted images
+  // URLs are already mapped via select in useOrderFinalImages
+  // Note: This depends on deletedImageKeys (state) not deletedImageKeysRef (ref) to ensure it re-runs when keys are cleared
+  const finalImages = useMemo(() => {
+    // Start with React Query data (already transformed with URLs mapped)
+    const baseImages = (finalImagesData || []) as GalleryImage[];
+
+    // Filter out successfully deleted images
+    // Use deletedImageKeys state (not ref) so memo re-runs when keys are cleared
+    return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeys);
+  }, [finalImagesData, deletingImagesRef, deletedImageKeys]);
 
   // Payment mutation
   const payGalleryMutation = usePayGallery();
@@ -486,14 +492,16 @@ export default function OrderDetail() {
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
 
-  // Allow upload for final photos when gallery is paid and order is not in a blocked state
+  // Allow upload for final photos:
+  // - For non-selective galleries: allow even when unpublished (not paid)
+  // - For selective galleries: require gallery to be paid
   // Block uploads only for: CANCELLED
   // Allow uploads for: CLIENT_APPROVED, AWAITING_FINAL_PHOTOS, PREPARING_DELIVERY, PREPARING_FOR_DELIVERY
   // Also allow uploads for non-selection galleries even if deliveryStatus is undefined (legacy orders)
   // Note: Backend uses PREPARING_DELIVERY (without "FOR")
   const blockedUploadStatuses = ["CANCELLED"];
   const canUploadFinals =
-    isGalleryPaid &&
+    (!selectionEnabled || isGalleryPaid) && // For non-selective: allow even if not paid. For selective: require paid.
     !blockedUploadStatuses.includes(order.deliveryStatus ?? "") &&
     ((!selectionEnabled && !order.deliveryStatus) || // Legacy orders without deliveryStatus in non-selection galleries
       !order.deliveryStatus || // Allow if no status set
@@ -624,6 +632,9 @@ export default function OrderDetail() {
           loading={payGalleryMutation.isPending}
         />
       )}
+
+      {/* Next Steps Overlay for non-selective galleries */}
+      {isNonSelectionGallery && <NextStepsOverlay />}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { usePrefetchGallery } from "../../hooks/usePrefetch";
+import { usePublishFlow } from "../../hooks/usePublishFlow";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import type { Gallery } from "../../types";
@@ -27,7 +28,6 @@ import { EmptyState } from "../ui/empty-state/EmptyState";
 import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 
-import { PublishGalleryWizard } from "./PublishGalleryWizard";
 
 interface GalleryListProps {
   filter?:
@@ -52,8 +52,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
     logMount: false,
     logUnmount: false,
   });
-  const [publishWizardOpen, setPublishWizardOpen] = useState(false);
-  const [publishWizardGalleryId, setPublishWizardGalleryId] = useState<string | null>(null);
   const initialLoadRef = useRef(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [galleryToDelete, setGalleryToDelete] = useState<Gallery | null>(null);
@@ -102,15 +100,17 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
   const deleteGalleryMutation = useDeleteGallery();
 
+  const { startPublishFlow } = usePublishFlow();
+
   const handlePayClick = (galleryId: string) => {
-    setPublishWizardGalleryId(galleryId);
-    setPublishWizardOpen(true);
+    // Use centralized publish flow action
+    startPublishFlow(galleryId);
     onWizardOpenChange?.(true);
   };
 
   const handlePaymentComplete = async () => {
     // Reload galleries after payment
-    // Wallet balance is refreshed by PublishGalleryWizard
+    // Wallet balance is refreshed by PublishGalleryWizard (on gallery detail page)
     await refetch();
   };
 
@@ -240,22 +240,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
   };
 
   return (
-    <>
-      {publishWizardOpen && publishWizardGalleryId && (
-        <PublishGalleryWizard
-          key={publishWizardGalleryId}
-          isOpen={publishWizardOpen}
-          onClose={() => {
-            setPublishWizardOpen(false);
-            onWizardOpenChange?.(false);
-          }}
-          galleryId={publishWizardGalleryId}
-          onSuccess={handlePaymentComplete}
-          renderAsModal={false}
-        />
-      )}
-      {!publishWizardOpen && (
-        <div className="space-y-4">
+    <div className="space-y-4">
           {queryError && (
             <div className="text-red-600 dark:text-red-400">{formatApiError(queryError)}</div>
           )}
@@ -411,26 +396,24 @@ const GalleryList: React.FC<GalleryListProps> = ({
             </div>
           )}
 
-          {/* Delete Confirmation Dialog */}
-          <ConfirmDialog
-            isOpen={showDeleteDialog}
-            onClose={() => {
-              if (!deleteGalleryMutation.isPending) {
-                setShowDeleteDialog(false);
-                setGalleryToDelete(null);
-              }
-            }}
-            onConfirm={handleDeleteConfirm}
-            title="Usuń galerię"
-            message={`Czy na pewno chcesz usunąć galerię "${String(galleryToDelete?.galleryName) || String(galleryToDelete?.galleryId) || ""}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
-            confirmText="Usuń galerię"
-            cancelText="Anuluj"
-            variant="danger"
-            loading={deleteGalleryMutation.isPending}
-          />
-        </div>
-      )}
-    </>
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          if (!deleteGalleryMutation.isPending) {
+            setShowDeleteDialog(false);
+            setGalleryToDelete(null);
+          }
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Usuń galerię"
+        message={`Czy na pewno chcesz usunąć galerię "${String(galleryToDelete?.galleryName) || String(galleryToDelete?.galleryId) || ""}"?\n\nTa operacja jest nieodwracalna i usunie wszystkie zdjęcia, zlecenia i dane związane z tą galerią.`}
+        confirmText="Usuń galerię"
+        cancelText="Anuluj"
+        variant="danger"
+        loading={deleteGalleryMutation.isPending}
+      />
+    </div>
   );
 };
 

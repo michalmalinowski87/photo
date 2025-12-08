@@ -502,7 +502,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// This is critical - user may have uploaded/deleted images just before clicking pay
 	// Trigger on-demand recalculation to get accurate bytes from DB
 	// Direct call bypasses cache for immediate recalculation - critical for payment accuracy
-	let currentUploadedSize = gallery.originalsBytesUsed || 0;
+	// Include both originals and finals bytes for plan calculation
+	let currentUploadedSize = (gallery.originalsBytesUsed || 0) + (gallery.finalsBytesUsed || 0);
 	
 	try {
 		// Force immediate recalculation (bypasses cache) - critical for payment accuracy
@@ -517,11 +518,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		if (recalcResult?.body) {
 			try {
 				const body = JSON.parse(recalcResult.body);
-				if (body.originalsBytesUsed !== undefined) {
-					currentUploadedSize = body.originalsBytesUsed;
-					logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
+				if (body.originalsBytesUsed !== undefined || body.finalsBytesUsed !== undefined) {
+					const originalsBytes = body.originalsBytesUsed || 0;
+					const finalsBytes = body.finalsBytesUsed || 0;
+					currentUploadedSize = originalsBytes + finalsBytes;
+					logger?.info('Using recalculated storage from on-demand recalculation (originals + finals)', {
 						galleryId,
-						originalsBytesUsed: currentUploadedSize
+						originalsBytesUsed: originalsBytes,
+						finalsBytesUsed: finalsBytes,
+						totalUploadedSize: currentUploadedSize
 					});
 				}
 			} catch {
@@ -532,7 +537,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 				if (updatedGalleryGet.Item) {
 					gallery = updatedGalleryGet.Item;
-					currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
+					currentUploadedSize = (updatedGalleryGet.Item.originalsBytesUsed || 0) + (updatedGalleryGet.Item.finalsBytesUsed || 0);
 				}
 			}
 		} else {
@@ -543,7 +548,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}));
 			if (updatedGalleryGet.Item) {
 				gallery = updatedGalleryGet.Item;
-				currentUploadedSize = updatedGalleryGet.Item.originalsBytesUsed || 0;
+				currentUploadedSize = (updatedGalleryGet.Item.originalsBytesUsed || 0) + (updatedGalleryGet.Item.finalsBytesUsed || 0);
 			}
 		}
 		}
@@ -553,7 +558,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId
 		});
 		// Use current gallery value - this is acceptable as storage is tracked in real-time
-		currentUploadedSize = gallery.originalsBytesUsed || 0;
+		currentUploadedSize = (gallery.originalsBytesUsed || 0) + (gallery.finalsBytesUsed || 0);
 	}
 
 	// Check if uploaded size exceeds plan limit

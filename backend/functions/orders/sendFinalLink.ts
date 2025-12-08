@@ -5,6 +5,7 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -31,6 +32,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!gallery) return { statusCode: 404, body: 'gallery not found' };
 	requireOwnerOr403(gallery.ownerId, requester);
 	if (!gallery.clientEmail) return { statusCode: 400, body: 'clientEmail not set' };
+
+	// Check if gallery is paid before allowing sending final links
+	// This prevents sending final links for unpublished galleries
+	let isPaid = false;
+	try {
+		const paidTransaction = await getPaidTransactionForGallery(galleryId);
+		isPaid = !!paidTransaction;
+	} catch (err) {
+		// If transaction check fails, fall back to gallery state
+		isPaid = gallery.state === 'PAID_ACTIVE';
+	}
+
+	if (!isPaid) {
+		return { 
+			statusCode: 403, 
+			body: JSON.stringify({ 
+				error: 'Gallery not published',
+				message: 'Cannot send final link. Gallery must be published before sending final links to clients.'
+			})
+		};
+	}
 
 	// Get order to verify it exists and get selected keys
 	const orderGet = await ddb.send(new GetCommand({

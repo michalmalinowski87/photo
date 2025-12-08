@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
+import type { LambdaEvent, LambdaContext, GalleryItem } from '../../lib/src/lambda-types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -12,9 +13,9 @@ function hashPassword(password: string) {
 	return { salt, hash, iterations: 100000, algo: 'pbkdf2-sha256' };
 }
 
-export const handler = lambdaLogger(async (event: any, context: any) => {
-	const logger = (context as any).logger;
-	const envProc = (globalThis as any).process;
+export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaContext) => {
+	const logger = context?.logger;
+	const envProc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 
@@ -39,6 +40,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ownerEmail = claims.email || '';
 
 	const body = event?.body ? JSON.parse(event.body) : {};
+
+	logger?.info('Gallery creation request', { 
+		selectionEnabledRaw: body?.selectionEnabled,
+		hasOrdersTable: !!ordersTable,
+		bodyKeys: Object.keys(body)
+	});
 	
 	const pricingPackage = body?.pricingPackage;
 	if (!pricingPackage) {
@@ -83,7 +90,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Always create gallery as UNPAID draft - transaction created on-demand when user clicks "Opłać galerię"
 	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
-	const item: any = {
+	const item: Partial<GalleryItem> & {
+		galleryId: string;
+		ownerId: string;
+		ownerEmail: string;
+		state: string;
+		ttl: number;
+		originalsBytesUsed: number;
+		finalsBytesUsed: number;
+		selectionEnabled: boolean;
+		selectionStatus: string;
+		version: number;
+		createdAt: string;
+		updatedAt: string;
+	} = {
 		galleryId,
 		ownerId,
 		ownerEmail,
@@ -144,8 +164,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// This allows photographer to upload finals and manage payment, but not send final link until photos are uploaded
 	const initialPaymentAmountCents = body?.initialPaymentAmountCents || 0;
 	let orderPaymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' = 'UNPAID';
+	let createdOrderId: string | undefined = undefined;
 	
-	if (!body.selectionEnabled) {
+	const isNonSelectionGallery = !body.selectionEnabled;
+	logger?.info('Checking order creation', { 
+		selectionEnabled: !!body.selectionEnabled, 
+		isNonSelectionGallery,
+		hasOrdersTable: !!ordersTable 
+	});
+	
+	if (isNonSelectionGallery) {
 		if (ordersTable) {
 			try {
 				// totalPriceCents not available here since plan is not selected yet - treat any payment as PARTIALLY_PAID
@@ -155,13 +183,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				
 				const orderNumber = 1;
 				const orderId = `${orderNumber}-${Date.now()}`;
+				createdOrderId = orderId;
 				await ddb.send(new PutCommand({
 					TableName: ordersTable,
 					Item: {
 						galleryId,
 						orderId,
 						orderNumber,
-						ownerId: requester,
+						ownerId: ownerId,
 						deliveryStatus: 'AWAITING_FINAL_PHOTOS',
 						paymentStatus: orderPaymentStatus,
 						selectedKeys: [],
@@ -182,16 +211,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						':u': now
 					}
 				}));
-				logger.info('Order created immediately for non-selection gallery', { galleryId, orderId, orderPaymentStatus });
-			} catch (orderErr: any) {
-				logger.error('Failed to create order for non-selection gallery', {
+				logger?.info('Order created immediately for non-selection gallery', { galleryId, orderId, orderPaymentStatus });
+			} catch (orderErr: unknown) {
+				const error = orderErr instanceof Error ? orderErr : new Error(String(orderErr));
+				logger?.error('Failed to create order for non-selection gallery', {
 					error: {
-						name: orderErr.name,
-						message: orderErr.message
+						name: error.name,
+						message: error.message
 					},
 					galleryId
 				});
 			}
+		} else {
+			logger?.warn('Orders table not configured, cannot create order for non-selection gallery', { galleryId });
 		}
 	}
 
@@ -201,6 +233,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		body: JSON.stringify({ 
 			galleryId, 
 			paid: false,
+			selectionEnabled: !!body.selectionEnabled,
+			orderId: createdOrderId,
 			message: 'Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona.'
 		})
 	};

@@ -146,7 +146,8 @@ export function FinalsTab({
       return null;
     }
 
-    if (!isGalleryPaid) {
+    // For selective galleries, require payment
+    if (!isNonSelectionGallery && !isGalleryPaid) {
       return "Aby przesłać zdjęcia finalne, galeria musi być opublikowana.";
     }
 
@@ -155,8 +156,8 @@ export function FinalsTab({
     }
 
     if (isNonSelectionGallery) {
-      // For non-selection galleries, uploads are allowed when order is in specific statuses
-      // If we get here and gallery is paid, it means order status is not in the allowed list
+      // For non-selection galleries, uploads are allowed even when unpublished
+      // If we get here, it means order status is not in the allowed list
       return "Aby przesłać zdjęcia finalne, zlecenie musi być w statusie oczekiwania na zdjęcia finalne (AWAITING_FINAL_PHOTOS) lub przygotowania do dostawy. Sprawdź status zlecenia i poczekaj na odpowiedni moment w procesie.";
     }
 

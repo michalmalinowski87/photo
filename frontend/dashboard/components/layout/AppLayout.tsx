@@ -27,7 +27,8 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
     setWizardOpen(true);
   };
 
-  const handleWizardSuccess = (galleryId: string) => {
+  const handleWizardSuccess = (galleryId: string, orderId?: string, selectionEnabled?: boolean) => {
+    console.log('handleWizardSuccess called:', { galleryId, orderId, selectionEnabled });
     if (!devLocked) {
       setWizardOpen(false);
     }
@@ -35,11 +36,19 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       // Store dashboard as referrer when creating a new gallery
       const referrerKey = `gallery_referrer_${galleryId}`;
       sessionStorage.setItem(referrerKey, window.location.pathname);
-      // Redirect to photos page as the first action is uploading photos
-      // Use router.push instead of window.location.href to avoid full page reload
-      // This keeps the loading state and provides smoother transition
+      
+      // For non-selective galleries with an order, redirect to order page
+      // For selective galleries, redirect to photos page as the first action is uploading photos
       if (!devLocked) {
-        void router.push(`/galleries/${galleryId}/photos`);
+        if (!selectionEnabled && orderId) {
+          const orderPath = `/galleries/${galleryId}/orders/${orderId}`;
+          console.log('Redirecting to order page:', orderPath);
+          void router.push(orderPath);
+        } else {
+          const photosPath = `/galleries/${galleryId}/photos`;
+          console.log('Redirecting to photos page:', photosPath, { selectionEnabled, orderId });
+          void router.push(photosPath);
+        }
       }
     }
   };

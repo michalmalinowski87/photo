@@ -7,6 +7,7 @@ import { useOrder } from "../../hooks/queries/useOrders";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { useGalleryRoute } from "../../hooks/useGalleryRoute";
 import { useModal } from "../../hooks/useModal";
+import { usePublishFlow } from "../../hooks/usePublishFlow";
 import { ClientSendSuccessPopup } from "../galleries/ClientSendSuccessPopup";
 import { PublishGalleryWizard } from "../galleries/PublishGalleryWizard";
 import { DenyChangeRequestModal } from "../orders/DenyChangeRequestModal";
@@ -51,35 +52,23 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
 
   // Modal hooks
   const { isOpen: denyModalOpen, closeModal: closeDenyModal } = useModal("deny-change");
-  // Use local state for publish wizard (UI state, not global state)
-  const [publishWizardOpen, setPublishWizardOpen] = useState(false);
   const [showClientSendPopup, setShowClientSendPopup] = useState(false);
 
-  // Helper function to clean up publish wizard URL params
-  const cleanupPublishParams = useCallback(() => {
-    if (typeof window === "undefined" || !galleryRoute.isReady) {
-      return;
+  // Use centralized publish flow hook
+  const { isOpen: publishWizardOpen, galleryId: publishFlowGalleryId, initialState, closePublishFlow } = usePublishFlow();
+
+  // Check if gallery is already published before opening wizard
+  useEffect(() => {
+    if (publishWizardOpen && publishFlowGalleryId && gallery) {
+      const isAlreadyPublished =
+        gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID";
+
+      if (isAlreadyPublished) {
+        // Gallery is already published - close the wizard
+        closePublishFlow();
+      }
     }
-
-    const params = new URLSearchParams(window.location.search);
-    const hadPublishParam = params.has("publish");
-    const hadGalleryIdParam = params.has("galleryId");
-
-    if (hadPublishParam || hadGalleryIdParam) {
-      // Remove publish wizard params, but keep other params (like payment=success)
-      params.delete("publish");
-      params.delete("galleryId");
-      params.delete("duration");
-      params.delete("planKey");
-
-      const newParamsStr = params.toString();
-      const newPath = galleryRoute.asPath.split("?")[0]; // Get path without query string
-      const newUrl = newParamsStr ? `${newPath}?${newParamsStr}` : newPath;
-
-      // Use router.replace() to update Next.js router state properly
-      void router.replace(newUrl, undefined, { shallow: true });
-    }
-  }, [router, galleryRoute.isReady, galleryRoute.asPath]);
+  }, [publishWizardOpen, publishFlowGalleryId, gallery, closePublishFlow]);
 
   // SIMPLIFIED RULE: Only clear gallery/order when navigating AWAY from gallery routes
   // Examples of when to clear: /dashboard, /wallet, /settings (global), /clients
@@ -114,55 +103,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     [galleryIdStr, orderIdStr, denyChangeRequestMutation, closeDenyModal]
   );
 
-  // Check URL params to auto-open wizard (but skip if gallery is already published)
-  // This effect should trigger when URL params change (e.g., returning from top-up)
-  useEffect(() => {
-    if (typeof window === "undefined" || !galleryIdStr || !galleryRoute.isReady) {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const publishParam = params.get("publish");
-    const galleryParam = params.get("galleryId");
-
-    if (publishParam === "true" && galleryParam === galleryIdStr) {
-      // If gallery is not loaded yet, wait for it (don't open wizard yet)
-      if (!gallery) {
-        return;
-      }
-
-      // Check if gallery is already published
-      const isAlreadyPublished =
-        gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID";
-
-      if (isAlreadyPublished) {
-        // Gallery is already published - clean up URL params but don't open wizard
-        cleanupPublishParams();
-      } else {
-        // Gallery is not published yet - open the wizard
-        setPublishWizardOpen(true);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryIdStr, galleryRoute.isReady, galleryRoute.asPath, gallery, cleanupPublishParams]);
-
-  // Clean up URL params when wizard closes (so NextStepsOverlay can show)
-  useEffect(() => {
-    if (typeof window !== "undefined" && galleryRoute.isReady && galleryIdStr) {
-      // Only clean up if wizard is closed and we have publish params in URL
-      const params = new URLSearchParams(window.location.search);
-      if (!publishWizardOpen && params.get("publish") === "true") {
-        cleanupPublishParams();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    publishWizardOpen,
-    galleryRoute.isReady,
-    galleryRoute.asPath,
-    galleryIdStr,
-    cleanupPublishParams,
-  ]);
+  // URL params are now handled by usePublishFlow hook
 
   // Payment confirmation is handled by page components (e.g., [orderId].tsx)
   // GalleryLayoutWrapper only handles gallery data loading
@@ -238,16 +179,13 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   return (
     <>
       <WelcomePopupWrapper />
-      <GalleryLayout setPublishWizardOpen={setPublishWizardOpen}>
-        {publishWizardOpen ? (
+      <GalleryLayout>
+        {publishWizardOpen && publishFlowGalleryId ? (
           <PublishGalleryWizard
             isOpen={publishWizardOpen}
-            onClose={() => {
-              setPublishWizardOpen(false);
-              // Clean up URL params when wizard closes so NextStepsOverlay can show
-              cleanupPublishParams();
-            }}
-            galleryId={galleryIdStr ?? ""}
+            onClose={closePublishFlow}
+            galleryId={publishFlowGalleryId}
+            initialState={initialState}
             onSuccess={async () => {
               // React Query will automatically refetch gallery and order due to invalidation
               if (galleryIdStr) {
