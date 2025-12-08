@@ -167,151 +167,158 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
             <div className="w-full mb-4">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-900">
+                  <TableRow className="bg-gray-100 dark:bg-gray-900">
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Galeria
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Zlecenie
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status dostawy
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status płatności
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Kwota
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Data utworzenia
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Akcje
                     </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
-                    <TableRow
-                      key={`${order.galleryId}-${order.orderId}`}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        <Link
-                          href={`/galleries/${order.galleryId}`}
-                          className="text-brand-500 hover:text-brand-600"
-                          onClick={() => {
-                            onClose();
-                            if (typeof window !== "undefined") {
-                              const referrerKey = `gallery_referrer_${order.galleryId}`;
-                              sessionStorage.setItem(referrerKey, window.location.pathname);
-                            }
-                          }}
-                        >
-                          {typeof order.galleryName === "string" ? order.galleryName : ""}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        <Link
-                          href={`/galleries/${order.galleryId}/orders/${order.orderId}`}
-                          className="text-brand-500 hover:text-brand-600"
-                          onClick={onClose}
-                        >
-                          #{typeof order.orderNumber === "string" ? order.orderNumber : ""}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm whitespace-nowrap">
-                        {getDeliveryStatusBadge(order.deliveryStatus ?? "")}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
-                        {getPaymentStatusBadge(order.paymentStatus ?? "")}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {formatPrice(order.totalCents)}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {order.createdAt
-                          ? new Date(order.createdAt).toLocaleDateString("pl-PL")
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          {order.deliveryStatus === "CHANGES_REQUESTED" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={async () => {
-                                  if (!order.galleryId || !order.orderId) {
-                                    return;
-                                  }
-                                  try {
-                                    await approveChangeRequestMutation.mutateAsync({
-                                      galleryId: order.galleryId,
-                                      orderId: order.orderId,
-                                    });
-                                    await refetch();
-                                  } catch {
-                                    // Error handled by React Query
-                                  }
-                                }}
-                                disabled={approveChangeRequestMutation.isPending}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                {approveChangeRequestMutation.isPending
-                                  ? "Zatwierdzanie..."
-                                  : "Zatwierdź"}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setDenyGalleryId(order.galleryId ?? null);
-                                  setDenyOrderId(order.orderId ?? null);
-                                  setDenyModalOpen(true);
-                                }}
-                              >
-                                Odrzuć
-                              </Button>
-                            </>
-                          )}
-                          <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={onClose}
-                              className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
-                            >
-                              <Eye className="w-4 h-4 hidden max-[1350px]:block" />
-                              <span className="max-[1350px]:hidden">Szczegóły</span>
-                            </Button>
+                  {orders.map((order, index) => {
+                    const isEvenRow = index % 2 === 0;
+                    return (
+                      <TableRow
+                        key={`${order.galleryId}-${order.orderId}`}
+                        className={`h-[120px] ${
+                          isEvenRow
+                            ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                            : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                        }`}
+                      >
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                          <Link
+                            href={`/galleries/${order.galleryId}`}
+                            className="text-brand-500 hover:text-brand-600"
+                            onClick={() => {
+                              onClose();
+                              if (typeof window !== "undefined") {
+                                const referrerKey = `gallery_referrer_${order.galleryId}`;
+                                sessionStorage.setItem(referrerKey, window.location.pathname);
+                              }
+                            }}
+                          >
+                            {typeof order.galleryName === "string" ? order.galleryName : ""}
                           </Link>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                          <Link
+                            href={`/galleries/${order.galleryId}/orders/${order.orderId}`}
+                            className="text-brand-500 hover:text-brand-600"
+                            onClick={onClose}
+                          >
+                            #{typeof order.orderNumber === "string" ? order.orderNumber : ""}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="px-3 py-5 whitespace-nowrap align-middle">
+                          {getDeliveryStatusBadge(order.deliveryStatus ?? "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 align-middle">
+                          {getPaymentStatusBadge(order.paymentStatus ?? "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                          {formatPrice(order.totalCents)}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                          {order.createdAt
+                            ? new Date(order.createdAt).toLocaleDateString("pl-PL")
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 align-middle">
+                          <div className="flex items-center gap-2">
+                            {order.deliveryStatus === "CHANGES_REQUESTED" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={async () => {
+                                    if (!order.galleryId || !order.orderId) {
+                                      return;
+                                    }
+                                    try {
+                                      await approveChangeRequestMutation.mutateAsync({
+                                        galleryId: order.galleryId,
+                                        orderId: order.orderId,
+                                      });
+                                      await refetch();
+                                    } catch {
+                                      // Error handled by React Query
+                                    }
+                                  }}
+                                  disabled={approveChangeRequestMutation.isPending}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {approveChangeRequestMutation.isPending
+                                    ? "Zatwierdzanie..."
+                                    : "Zatwierdź"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setDenyGalleryId(order.galleryId ?? null);
+                                    setDenyOrderId(order.orderId ?? null);
+                                    setDenyModalOpen(true);
+                                  }}
+                                >
+                                  Odrzuć
+                                </Button>
+                              </>
+                            )}
+                            <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={onClose}
+                                className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
+                              >
+                                <Eye className="w-4 h-4 hidden max-[1350px]:block" />
+                                <span className="max-[1350px]:hidden">Szczegóły</span>
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

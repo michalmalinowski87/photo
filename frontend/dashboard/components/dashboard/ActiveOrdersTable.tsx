@@ -120,53 +120,53 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
         <div className="w-full">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 dark:bg-gray-900">
+              <TableRow className="bg-gray-100 dark:bg-gray-900">
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Galeria
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Zlecenie
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Status dostawy
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Status płatności
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Kwota
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Data utworzenia
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Akcje
                 </TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order) => {
+              {orders.map((order, index) => {
                 const orderObj: OrderWithGalleryInfo = order;
                 const galleryId = typeof orderObj.galleryId === "string" ? orderObj.galleryId : "";
                 const orderId = typeof orderObj.orderId === "string" ? orderObj.orderId : "";
@@ -185,13 +185,18 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                   typeof orderObj.totalCents === "number" ? orderObj.totalCents : null;
                 const createdAt = orderObj.createdAt;
                 const isNonSelectionGallery = orderObj.gallerySelectionEnabled === false;
+                const isEvenRow = index % 2 === 0;
 
                 return (
                   <TableRow
                     key={`${galleryId}-${orderId}`}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className={`h-[120px] ${
+                      isEvenRow
+                        ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                        : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                    }`}
                   >
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                       <Link
                         href={`/galleries/${galleryId}`}
                         className="text-brand-500 hover:text-brand-600"
@@ -203,11 +208,11 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                       >
                         {galleryName}
                         {navigatingGalleryId === galleryId && (
-                          <span className="ml-2 text-xs text-gray-400">...</span>
+                          <span className="ml-2 text-sm text-gray-400">...</span>
                         )}
                       </Link>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                       <Link
                         href={`/galleries/${galleryId}/orders/${orderId}`}
                         className="text-brand-500 hover:text-brand-600"
@@ -215,19 +220,19 @@ export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
                         #{orderNumber}
                       </Link>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm whitespace-nowrap">
+                    <TableCell className="px-3 py-5 whitespace-nowrap align-middle">
                       {getDeliveryStatusBadge(deliveryStatus, isNonSelectionGallery)}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm">
+                    <TableCell className="px-3 py-5 align-middle">
                       {getPaymentStatusBadge(paymentStatus)}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                       {formatPrice(totalCents)}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
                       {createdAt ? new Date(createdAt).toLocaleDateString("pl-PL") : "-"}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-sm">
+                    <TableCell className="px-3 py-5 align-middle">
                       <div className="flex items-center gap-2">
                         {deliveryStatus === "CHANGES_REQUESTED" && (
                           <>

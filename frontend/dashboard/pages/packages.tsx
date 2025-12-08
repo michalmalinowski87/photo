@@ -285,89 +285,99 @@ export default function Packages() {
         <div className="w-full">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 dark:bg-gray-900">
+              <TableRow className="bg-gray-100 dark:bg-gray-900">
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Nazwa
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Zdjęcia w pakiecie
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Cena za dodatkowe zdjęcie
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Cena pakietu
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Data utworzenia
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                 >
                   Akcje
                 </TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {packages.map((pkg) => (
-                <TableRow key={pkg.packageId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <TableCell className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                    {pkg.name || "-"}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {pkg.includedPhotos}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {formatPrice(pkg.pricePerExtraPhoto)}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                    {formatPrice(pkg.price)}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                    {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
-                  </TableCell>
-                  <TableCell className="px-0 py-3">
-                    <div className="flex gap-0 items-center">
-                      <Tooltip content="Edytuj">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(pkg)}
-                          className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 -mr-4"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Usuń">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteClick(pkg.packageId)}
-                          className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {packages.map((pkg, index) => {
+                const isEvenRow = index % 2 === 0;
+                return (
+                  <TableRow
+                    key={pkg.packageId}
+                    className={`h-[120px] ${
+                      isEvenRow
+                        ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                        : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                    }`}
+                  >
+                    <TableCell className="px-3 py-5 text-base font-medium text-gray-900 dark:text-white align-middle">
+                      {pkg.name || "-"}
+                    </TableCell>
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                      {pkg.includedPhotos}
+                    </TableCell>
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                      {formatPrice(pkg.pricePerExtraPhoto)}
+                    </TableCell>
+                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                      {formatPrice(pkg.price)}
+                    </TableCell>
+                    <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                      {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
+                    </TableCell>
+                    <TableCell className="px-3 py-5 align-middle">
+                      <div className="flex gap-2 items-center">
+                        <Tooltip content="Edytuj">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(pkg)}
+                            className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 -mr-4"
+                          >
+                            <Pencil className="w-5 h-5" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Usuń">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteClick(pkg.packageId)}
+                            className="px-0 w-auto h-auto bg-transparent border-0 ring-0 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

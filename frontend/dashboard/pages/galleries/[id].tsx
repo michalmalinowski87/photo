@@ -626,108 +626,115 @@ export default function GalleryDetail() {
             <div className="w-full">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-900">
+                  <TableRow className="bg-gray-100 dark:bg-gray-900">
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Numer
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status dostawy
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status płatności
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Kwota
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Data utworzenia
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Akcje
                     </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
-                    <TableRow
-                      key={order.orderId}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        #
-                        {order.orderNumber ??
-                          (typeof order.orderId === "string" ? order.orderId.slice(-8) : "")}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
-                        {getDeliveryStatusBadge(
-                          typeof order.deliveryStatus === "string"
-                            ? order.deliveryStatus
-                            : undefined
-                        )}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm">
-                        {getPaymentStatusBadge(order.paymentStatus)}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {formatPrice(
-                          typeof order.totalCents === "number" ? order.totalCents : null
-                        )}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {order.createdAt
-                          ? new Date(order.createdAt as string | number | Date).toLocaleDateString(
-                              "pl-PL"
-                            )
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {order.deliveryStatus === "CHANGES_REQUESTED" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => handleApproveChangeRequest(order.orderId)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                Zatwierdź
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDenyChangeRequest(order.orderId)}
-                              >
-                                Odrzuć
-                              </Button>
-                            </>
+                  {orders.map((order, index) => {
+                    const isEvenRow = index % 2 === 0;
+                    return (
+                      <TableRow
+                        key={order.orderId}
+                        className={`h-[120px] ${
+                          isEvenRow
+                            ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                            : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                        }`}
+                      >
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                          #
+                          {order.orderNumber ??
+                            (typeof order.orderId === "string" ? order.orderId.slice(-8) : "")}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 align-middle">
+                          {getDeliveryStatusBadge(
+                            typeof order.deliveryStatus === "string"
+                              ? order.deliveryStatus
+                              : undefined
                           )}
-                          <Link href={`/galleries/${galleryIdStr}/orders/${order.orderId}`}>
-                            <Button size="sm" variant="outline">
-                              Szczegóły
-                            </Button>
-                          </Link>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 align-middle">
+                          {getPaymentStatusBadge(order.paymentStatus)}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                          {formatPrice(
+                            typeof order.totalCents === "number" ? order.totalCents : null
+                          )}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                          {order.createdAt
+                            ? new Date(
+                                order.createdAt as string | number | Date
+                              ).toLocaleDateString("pl-PL")
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="px-3 py-5 align-middle">
+                          <div className="flex items-center gap-2">
+                            {order.deliveryStatus === "CHANGES_REQUESTED" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => handleApproveChangeRequest(order.orderId)}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  Zatwierdź
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDenyChangeRequest(order.orderId)}
+                                >
+                                  Odrzuć
+                                </Button>
+                              </>
+                            )}
+                            <Link href={`/galleries/${galleryIdStr}/orders/${order.orderId}`}>
+                              <Button size="sm" variant="outline">
+                                Szczegóły
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
