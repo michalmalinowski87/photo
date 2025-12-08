@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { pbkdf2Sync } from 'crypto';
 import { signJWT } from '../../lib/src/jwt';
+import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -68,6 +69,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			statusCode: 404,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Gallery not found' })
+		};
+	}
+
+	// Check if gallery is published before allowing client login
+	// This prevents access even if someone has the correct password
+	let isPaid = false;
+	try {
+		const paidTransaction = await getPaidTransactionForGallery(galleryId);
+		isPaid = !!paidTransaction;
+	} catch (err) {
+		// If transaction check fails, fall back to gallery state
+		isPaid = gallery.state === 'PAID_ACTIVE';
+	}
+
+	if (!isPaid) {
+		logger.warn('Client login attempt for unpublished gallery', { galleryId, galleryState: gallery.state });
+		return {
+			statusCode: 403,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Gallery not published',
+				message: 'This gallery is not yet published. Please contact the photographer.'
+			})
 		};
 	}
 
