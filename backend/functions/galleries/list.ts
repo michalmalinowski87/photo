@@ -333,15 +333,17 @@ export const handler = lambdaLogger(async (event: any) => {
 		let filteredGalleries = enrichedGalleries;
 		if (filter) {
 			switch (filter) {
-				case 'unpaid':
-					// Wersje robocze: unpaid galleries with no orders OR paid galleries with no orders
-					// Once a gallery (paid or unpaid) has orders, it should appear in workflow status views
-					filteredGalleries = enrichedGalleries.filter((g: any) => {
-						if (g.orders && g.orders.length > 0) return false;
-						if (!g.isPaid) return true;
-						return true;
-					});
-					break;
+			case 'unpaid':
+				// Wersje robocze: unpaid galleries (regardless of orders)
+				// Non-selective galleries have orders created immediately, but should still appear in robocze if unpaid
+				// Once a gallery is paid and has orders, it should appear in workflow status views instead
+				filteredGalleries = enrichedGalleries.filter((g: any) => {
+					// Show unpaid galleries (they may have orders if non-selective)
+					if (!g.isPaid) return true;
+					// Don't show paid galleries (they should be in workflow status views if they have orders)
+					return false;
+				});
+				break;
 				case 'wyslano':
 					filteredGalleries = enrichedGalleries.filter((g: any) => {
 						if (!g.orders || g.orders.length === 0) return false;
