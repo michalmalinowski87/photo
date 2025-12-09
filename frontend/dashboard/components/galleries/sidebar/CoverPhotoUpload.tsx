@@ -1,224 +1,187 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 
-import { useUpdateGallery } from "../../../hooks/mutations/useGalleryMutations";
-import { useGallery, useGalleryCoverPhoto } from "../../../hooks/queries/useGalleries";
-import { usePresignedUrl } from "../../../hooks/queries/usePresignedUrl";
+import {
+  useUpdateGallery,
+  useUploadCoverPhoto,
+} from "../../../hooks/mutations/useGalleryMutations";
+import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
+import { queryKeys } from "../../../lib/react-query";
 import { RetryableImage } from "../../ui/RetryableImage";
-import { Tooltip } from "../../ui/tooltip/Tooltip";
 
 export const CoverPhotoUpload: React.FC = () => {
   const router = useRouter();
   const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const galleryId = typeof galleryIdParam === "string" ? galleryIdParam : undefined;
+  const queryClient = useQueryClient();
 
   // Use React Query hooks
+  // placeholderData is already configured in useGallery to keep previous data during refetch
   const { data: gallery, isLoading } = useGallery(galleryId);
   const updateGalleryMutation = useUpdateGallery();
-  const { refetch: refetchCoverPhoto } = useGalleryCoverPhoto(galleryId);
+  const uploadCoverPhotoMutation = useUploadCoverPhoto();
 
-  const coverPhotoUrl =
-    gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
-      ? gallery.coverPhotoUrl
-      : null;
+  // Track upload phase: 'uploading' (S3 upload) or 'processing' (waiting for CloudFront)
+  const [uploadPhase, setUploadPhase] = useState<"uploading" | "processing" | null>(null);
+  // Track when image is actually loaded and ready to display
+  const [imageReady, setImageReady] = useState(false);
+  // Track if we've started an upload (to keep showing loading state until CloudFront URL is ready)
+  const [hasStartedUpload, setHasStartedUpload] = useState(false);
+
+  // Only show image when we have a final CloudFront URL (not S3, not blob) and image is ready
+  const isUploadingOrProcessing = uploadCoverPhotoMutation.isPending;
+  const hasCloudFrontUrl =
+    gallery?.coverPhotoUrl &&
+    typeof gallery.coverPhotoUrl === "string" &&
+    !gallery.coverPhotoUrl.startsWith("blob:") &&
+    !gallery.coverPhotoUrl.includes(".s3.") &&
+    !gallery.coverPhotoUrl.includes("s3.amazonaws.com");
+  
+  // Keep showing loading state if we've started upload but don't have CloudFront URL yet
+  const shouldShowLoadingState = isUploadingOrProcessing || (hasStartedUpload && !hasCloudFrontUrl);
+  
+  // Reset imageReady when upload starts or URL changes
+  useEffect(() => {
+    if (isUploadingOrProcessing || !hasCloudFrontUrl) {
+      setImageReady(false);
+    }
+    // Clear hasStartedUpload when we have CloudFront URL
+    if (hasCloudFrontUrl) {
+      setHasStartedUpload(false);
+    }
+  }, [isUploadingOrProcessing, hasCloudFrontUrl]);
+  
   const { showToast } = useToast();
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [processingCover, setProcessingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [presignParams, setPresignParams] = useState<{
-    key: string;
-    contentType: string;
-    fileSize: number;
-    file: File;
-  } | null>(null);
 
-  // Use presigned URL hook when params are set
-  const {
-    data: presignResponse,
-    isLoading: presignLoading,
-    error: presignError,
-  } = usePresignedUrl({
-    galleryId: galleryId ?? "",
-    key: presignParams?.key ?? "",
-    contentType: presignParams?.contentType ?? "",
-    fileSize: presignParams?.fileSize ?? 0,
-    enabled: !!presignParams && !!galleryId,
-  });
+  // Determine upload/processing states based on mutation and phase
+  // If phase is not set yet but mutation is pending, default to uploading
+  const isUploading = uploadCoverPhotoMutation.isPending && (uploadPhase === "uploading" || uploadPhase === null);
+  const isProcessing = uploadCoverPhotoMutation.isPending && uploadPhase === "processing";
+  
 
-  // Handle upload once presigned URL is available
+  // Handle mutation success/error with toasts
   useEffect(() => {
-    if (!presignParams || !presignResponse?.url || presignLoading) {
-      return;
-    }
-
-    const performUpload = async (): Promise<void> => {
-      if (!galleryId || !presignParams) {
-        return;
-      }
-
-      try {
-        // Upload file to S3
-        await fetch(presignResponse.url, {
-          method: "PUT",
-          body: presignParams.file,
-          headers: {
-            "Content-Type": presignParams.contentType,
-          },
-        });
-
-        // Update gallery in backend with S3 URL - backend will convert it to CloudFront
-        const s3Url = presignResponse.url.split("?")[0]; // Remove query params
-
-        await updateGalleryMutation.mutateAsync({
-          galleryId,
-          data: { coverPhotoUrl: s3Url },
-        });
-
-        // Switch to processing state and poll for processed CloudFront URL
-        setUploadingCover(false);
-        setProcessingCover(true);
-
-        // Poll the lightweight cover photo endpoint until we get a CloudFront URL
-        let attempts = 0;
-        const maxAttempts = 30;
-        const pollInterval = 1000;
-
-        while (attempts < maxAttempts) {
-          attempts++;
-
-          try {
-            // Refetch cover photo using React Query
-            const refetchResult = await refetchCoverPhoto();
-            const fetchedUrl = refetchResult.data?.coverPhotoUrl;
-
-            // Check if we have a CloudFront URL (not S3, not null)
-            if (
-              fetchedUrl &&
-              typeof fetchedUrl === "string" &&
-              !fetchedUrl.includes(".s3.") &&
-              !fetchedUrl.includes("s3.amazonaws.com")
-            ) {
-              // Update gallery via mutation (will invalidate cache)
-              if (galleryId) {
-                await updateGalleryMutation.mutateAsync({
-                  galleryId,
-                  data: { coverPhotoUrl: fetchedUrl },
-                });
-              }
-              setProcessingCover(false);
-              showToast("success", "Sukces", "Okładka galerii została przesłana");
-              setPresignParams(null); // Reset params
-              return;
-            }
-
-            // Wait before next poll
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          } catch (pollErr) {
-            console.error("Failed to poll for cover photo URL:", pollErr);
-            // Continue polling on error
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          }
-        }
-
-        // Max attempts reached
-        setProcessingCover(false);
+    if (uploadCoverPhotoMutation.isSuccess && uploadCoverPhotoMutation.data) {
+      if (uploadCoverPhotoMutation.data.warning) {
         showToast(
           "warning",
           "Ostrzeżenie",
           "Okładka została przesłana, ale przetwarzanie trwa dłużej niż zwykle"
         );
-        setPresignParams(null); // Reset params
-      } catch (err: unknown) {
-        setUploadingCover(false);
-        setProcessingCover(false);
-        setPresignParams(null); // Reset params on error
-        showToast(
-          "error",
-          "Błąd",
-          formatApiError(err as Error) ?? "Nie udało się przesłać okładki"
-        );
+      } else {
+        showToast("success", "Sukces", "Okładka galerii została przesłana");
       }
-    };
-
-    void performUpload();
+      // The blob will be cleared automatically by the useEffect when real data arrives
+      uploadCoverPhotoMutation.reset();
+    }
   }, [
-    presignResponse,
-    presignLoading,
-    presignParams,
-    galleryId,
-    updateGalleryMutation,
-    refetchCoverPhoto,
+    uploadCoverPhotoMutation.isSuccess,
+    uploadCoverPhotoMutation.data,
+    uploadCoverPhotoMutation,
     showToast,
   ]);
 
-  // Handle presign errors
   useEffect(() => {
-    if (presignError && presignParams) {
-      setUploadingCover(false);
-      setProcessingCover(false);
-      setPresignParams(null);
+    if (uploadCoverPhotoMutation.isError) {
+      setUploadPhase(null);
       showToast(
         "error",
         "Błąd",
-        formatApiError(presignError) ?? "Nie udało się uzyskać URL do przesłania"
+        formatApiError(uploadCoverPhotoMutation.error) ?? "Nie udało się przesłać okładki"
       );
+      uploadCoverPhotoMutation.reset();
     }
-  }, [presignError, presignParams, showToast]);
+  }, [
+    uploadCoverPhotoMutation.isError,
+    uploadCoverPhotoMutation.error,
+    uploadCoverPhotoMutation,
+    showToast,
+  ]);
 
-  const handleCoverPhotoUpload = (file: File): void => {
-    if (!file || !galleryId || typeof galleryId !== "string") {
-      return;
+
+  // Track upload phase when a new upload starts
+  useEffect(() => {
+    if (uploadCoverPhotoMutation.isPending) {
+      // If phase is null but mutation is pending, set to uploading
+      if (uploadPhase === null) {
+        setUploadPhase("uploading");
+      }
+      // After a short delay, switch to processing phase (S3 upload is quick, then we wait for CloudFront)
+      // This gives a better UX - show "uploading" briefly, then "processing"
+      if (uploadPhase === "uploading") {
+        const timeoutId = setTimeout(() => {
+          setUploadPhase("processing");
+        }, 2000); // Switch to processing after 2 seconds (S3 upload should be done by then)
+        return () => clearTimeout(timeoutId);
+      }
+      return undefined;
+    } else {
+      // Upload complete, reset phase
+      setUploadPhase(null);
+      return undefined;
     }
+  }, [uploadCoverPhotoMutation.isPending, uploadPhase]);
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("error", "Błąd", "Plik jest za duży. Maksymalny rozmiar to 5MB.");
-      return;
-    }
 
-    setUploadingCover(true);
+  const handleCoverPhotoUpload = useCallback(
+    (file: File): void => {
+      if (!file || !galleryId || typeof galleryId !== "string") {
+        return;
+      }
 
-    // Get presigned URL - use unique filename with timestamp to avoid CloudFront cache issues
-    const timestamp = Date.now();
-    const fileExtension = file.name.split(".").pop() ?? "jpg";
-    const key = `cover_${timestamp}.${fileExtension}`;
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showToast("error", "Błąd", "Plik jest za duży. Maksymalny rozmiar to 5MB.");
+        return;
+      }
 
-    // Set params to trigger presigned URL query
-    // The useEffect will handle the actual upload once the URL is available
-    setPresignParams({
-      key,
-      contentType: file.type ?? "image/jpeg",
-      fileSize: file.size,
-      file,
-    });
-  };
+      // Set upload phase immediately and mark that we've started upload
+      setUploadPhase("uploading");
+      setHasStartedUpload(true);
 
-  const handleRemoveCoverPhoto = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation(); // Prevent triggering the file input
+      // Trigger the React Query mutation which handles the entire upload flow
+      uploadCoverPhotoMutation.mutate({ galleryId, file });
+    },
+    [galleryId, showToast, uploadCoverPhotoMutation]
+  );
 
-    if (!galleryId || typeof galleryId !== "string") {
-      return;
-    }
+  const handleRemoveCoverPhoto = useCallback(
+    async (e: React.MouseEvent): Promise<void> => {
+      e.stopPropagation(); // Prevent triggering the file input
 
-    setUploadingCover(true);
+      if (!galleryId || typeof galleryId !== "string") {
+        return;
+      }
 
-    try {
-      // Remove cover photo by setting coverPhotoUrl to null
-      await updateGalleryMutation.mutateAsync({
-        galleryId,
-        data: { coverPhotoUrl: undefined },
-      });
-      showToast("success", "Sukces", "Okładka galerii została usunięta");
-    } catch (err: unknown) {
-      showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");
-    } finally {
-      setUploadingCover(false);
-    }
-  };
+      setUploadPhase(null);
+
+      try {
+        // Remove cover photo by setting coverPhotoUrl to null (backend expects null or empty string)
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: { coverPhotoUrl: null },
+        });
+
+        // Invalidate cover photo query cache to ensure UI updates
+        if (galleryId) {
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.galleries.coverPhoto(galleryId),
+          });
+        }
+
+        showToast("success", "Sukces", "Okładka galerii została usunięta");
+      } catch (err: unknown) {
+        showToast("error", "Błąd", formatApiError(err as Error) ?? "Nie udało się usunąć okładki");
+      }
+    },
+    [galleryId, updateGalleryMutation, queryClient, showToast]
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
@@ -257,7 +220,7 @@ export const CoverPhotoUpload: React.FC = () => {
             : `cursor-pointer ${
                 isDragging
                   ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
-                  : coverPhotoUrl
+                  : hasCloudFrontUrl || shouldShowLoadingState
                     ? "border-gray-200 dark:border-gray-700"
                     : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
               }`
@@ -274,46 +237,86 @@ export const CoverPhotoUpload: React.FC = () => {
             </div>
             <div className="text-sm text-gray-500 dark:text-gray-400">Ładowanie...</div>
           </div>
-        ) : coverPhotoUrl ? (
+        ) : shouldShowLoadingState ? (
+          <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer relative">
+            {/* Dark overlay with upload/processing message */}
+            <div className="absolute inset-0 bg-black bg-opacity-70 rounded-lg flex items-center justify-center z-10">
+              <div className="text-white text-base font-semibold">
+                {isProcessing ? "Przetwarzanie obrazu..." : "Przesyłanie do serwera..."}
+              </div>
+            </div>
+            <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2 opacity-30" />
+            <p className="text-sm text-gray-500 dark:text-gray-500 text-center px-4">
+              {isProcessing ? "Przetwarzanie..." : "Przesyłanie..."}
+            </p>
+          </div>
+        ) : hasCloudFrontUrl ? (
           <>
             <RetryableImage
-              src={coverPhotoUrl}
+              src={gallery.coverPhotoUrl as string}
               alt="Okładka galerii"
               className="w-full h-full object-cover rounded-lg pointer-events-none"
             />
-            {processingCover && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="text-white text-sm font-medium">Przetwarzanie...</div>
+            {/* Hidden image to detect when it's loaded */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={gallery.coverPhotoUrl as string}
+              alt=""
+              className="hidden"
+              onLoad={() => {
+                // Image has loaded, mark as ready
+                setImageReady(true);
+              }}
+            />
+            {/* Show loading overlay until image is ready */}
+            {!imageReady && (
+              <div className="absolute inset-0 bg-black bg-opacity-70 rounded-lg flex items-center justify-center z-10">
+                <div className="text-white text-base font-semibold">
+                  {isProcessing ? "Przetwarzanie obrazu..." : "Ładowanie obrazu..."}
+                </div>
               </div>
             )}
-            <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
-                {uploadingCover
-                  ? "Przesyłanie..."
-                  : processingCover
-                    ? "Przetwarzanie..."
-                    : "Kliknij na obraz aby zmienić"}
+            {/* Hover overlay - only show when image is ready */}
+            {imageReady && (
+              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity rounded-lg flex flex-col items-center justify-center gap-2 group">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
+                  Kliknij na obraz aby zmienić
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleRemoveCoverPhoto(e);
+                  }}
+                  disabled={updateGalleryMutation.isPending}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Usuń okładkę
+                </button>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleRemoveCoverPhoto(e);
-                }}
-                disabled={uploadingCover || processingCover}
-                className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Tooltip content="Usuń okładkę">
-                  <span className="cursor-pointer">Usuń okładkę</span>
-                </Tooltip>
-              </button>
-            </div>
+            )}
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-            {uploadingCover || processingCover ? (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {uploadingCover ? "Przesyłanie..." : "Przetwarzanie..."}
-              </div>
+            {isUploading ? (
+              <>
+                <div className="absolute inset-0 bg-black bg-opacity-70 rounded-lg flex items-center justify-center">
+                  <div className="text-white text-base font-semibold">Przesyłanie do serwera...</div>
+                </div>
+                <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2 opacity-30" />
+                <p className="text-sm text-gray-500 dark:text-gray-500 text-center px-4">
+                  Przesyłanie...
+                </p>
+              </>
+            ) : isProcessing ? (
+              <>
+                <div className="absolute inset-0 bg-black bg-opacity-70 rounded-lg flex items-center justify-center">
+                  <div className="text-white text-base font-semibold">Przetwarzanie obrazu...</div>
+                </div>
+                <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2 opacity-30" />
+                <p className="text-sm text-gray-500 dark:text-gray-500 text-center px-4">
+                  Przetwarzanie...
+                </p>
+              </>
             ) : (
               <>
                 <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2" />

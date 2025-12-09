@@ -131,8 +131,11 @@ export const handler = lambdaLogger(async (event: any) => {
 					};
 					
 					const oldS3Key = extractS3Key(gallery.coverPhotoUrl);
+					const newS3Key = extractS3Key(body.coverPhotoUrl.trim());
 					
-					if (oldS3Key.includes(`galleries/${id}/cover`)) {
+					// Only delete the old file if it's different from the new one
+					// This prevents deleting the file we just uploaded when updating from S3 URL to CloudFront URL
+					if (oldS3Key.includes(`galleries/${id}/cover`) && oldS3Key !== newS3Key) {
 						await s3.send(new DeleteObjectCommand({
 							Bucket: bucket,
 							Key: oldS3Key

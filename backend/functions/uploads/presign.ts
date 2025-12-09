@@ -120,11 +120,16 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 
+	// Create PutObjectCommand without checksum to avoid browser upload issues
+	// The AWS SDK may add checksum parameters automatically, but we don't want to require them
 	const cmd = new PutObjectCommand({
 		Bucket: bucket,
 		Key: objectKey,
 		ContentType: contentType
 	});
+	
+	// Generate presigned URL
+	// Note: The SDK may still add checksum parameters automatically, but they should be optional
 	const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
 
 	return {

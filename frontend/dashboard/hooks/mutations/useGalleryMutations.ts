@@ -82,6 +82,13 @@ export function useUpdateGallery() {
       if (data) {
         queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
       }
+
+      // If coverPhotoUrl was updated, also invalidate the cover photo query
+      if (variables.data.coverPhotoUrl !== undefined) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.coverPhoto(variables.galleryId),
+        });
+      }
     },
     onSettled: (_, __, variables) => {
       // Refetch to ensure consistency
@@ -89,6 +96,13 @@ export function useUpdateGallery() {
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+
+      // If coverPhotoUrl was updated, also invalidate the cover photo query
+      if (variables.data.coverPhotoUrl !== undefined) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.coverPhoto(variables.galleryId),
+        });
+      }
     },
   });
 }
@@ -367,6 +381,91 @@ export function useDeleteGalleryImage() {
 
       // Storage is already updated with API response data above, so no need to invalidate
       // The API response contains the accurate storage values from the synchronous backend
+    },
+  });
+}
+
+/**
+ * Upload cover photo mutation
+ * Handles the complete upload flow: presigned URL → S3 upload → gallery update → polling for CloudFront URL
+ * Uses React Query mutation to manage the entire upload state
+ */
+export function useUploadCoverPhoto() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ galleryId, file }: { galleryId: string; file: File }) => {
+      // Step 1: Get presigned URL
+      const timestamp = Date.now();
+      const fileExtension = file.name.split(".").pop() ?? "jpg";
+      const key = `cover_${timestamp}.${fileExtension}`;
+
+      const presignResponse = await api.uploads.getPresignedUrl({
+        galleryId,
+        key,
+        contentType: file.type ?? "image/jpeg",
+        fileSize: file.size,
+      });
+
+      // Step 2: Upload file to S3
+      // Use fetch like the original working implementation
+      await fetch(presignResponse.url, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type ?? "image/jpeg",
+        },
+      });
+
+      // Step 3: Update gallery with S3 URL (backend will convert to CloudFront)
+      // Use the presigned URL without query params as the S3 URL
+      const s3Url = presignResponse.url.split("?")[0]; // Remove query params
+      await api.galleries.update(galleryId, { coverPhotoUrl: s3Url });
+
+      // Step 4: Poll for CloudFront URL (with timeout)
+      const maxAttempts = 30;
+      const pollInterval = 1000;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+        try {
+          const coverPhotoResponse = await api.galleries.getCoverPhoto(galleryId);
+          const fetchedUrl = coverPhotoResponse.coverPhotoUrl;
+
+          // Check if we have a CloudFront URL (not S3, not null)
+          if (
+            fetchedUrl &&
+            typeof fetchedUrl === "string" &&
+            !fetchedUrl.includes(".s3.") &&
+            !fetchedUrl.includes("s3.amazonaws.com")
+          ) {
+            // Update gallery with CloudFront URL
+            await api.galleries.update(galleryId, { coverPhotoUrl: fetchedUrl });
+            return { success: true, coverPhotoUrl: fetchedUrl };
+          }
+        } catch (pollErr) {
+          console.error("Failed to poll for cover photo URL:", pollErr);
+          // Continue polling on error
+        }
+      }
+
+      // Max attempts reached - return partial success
+      return {
+        success: true,
+        coverPhotoUrl: s3Url,
+        warning: "Processing taking longer than usual",
+      };
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate queries to refresh UI
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.coverPhoto(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
   });
 }

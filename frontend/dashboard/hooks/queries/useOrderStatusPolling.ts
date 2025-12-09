@@ -86,7 +86,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         // Use ETag from response (backend-generated MD5 hash)
         // Backend should always send ETag, but handle cases where it might be missing
         const hadPreviousEtag = etagRef.current !== undefined;
-        
+
         if (response.etag) {
           // We got an ETag from the response - use it
           etagRef.current = response.etag;
@@ -94,11 +94,14 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           // No ETag in response - this is unexpected if we sent If-None-Match
           // Only warn if we had a previous ETag (meaning we sent If-None-Match header)
           if (hadPreviousEtag) {
-            console.warn("[OrderStatusPolling] Response missing ETag header (expected one since If-None-Match was sent)", {
-              orderCount: response.orders?.length ?? 0,
-              duration: `${pollDuration}ms`,
-              previousEtag: etagRef.current,
-            });
+            console.warn(
+              "[OrderStatusPolling] Response missing ETag header (expected one since If-None-Match was sent)",
+              {
+                orderCount: response.orders?.length ?? 0,
+                duration: `${pollDuration}ms`,
+                previousEtag: etagRef.current,
+              }
+            );
           }
           // Keep existing ETag (or undefined if first request)
           // Don't update etagRef since we didn't get a new one
@@ -107,13 +110,14 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         return response;
       } catch (pollError: unknown) {
         const pollDuration = Date.now() - pollStartTime;
-        const errorDetails = pollError instanceof Error
-          ? {
-              name: pollError.name,
-              message: pollError.message,
-              stack: pollError.stack,
-            }
-          : pollError;
+        const errorDetails =
+          pollError instanceof Error
+            ? {
+                name: pollError.name,
+                message: pollError.message,
+                stack: pollError.stack,
+              }
+            : pollError;
         console.error("[OrderStatusPolling] Poll failed", {
           error: errorDetails,
           duration: `${pollDuration}ms`,
@@ -195,16 +199,16 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           state,
           updatedAt,
         };
-        
+
         // Update the cache
         queryClient.setQueryData<Order>(orderDetailKey, updatedOrder);
-        
+
         // Mark query as stale and invalidate to force React Query to check the cache
         // This ensures components re-render even with placeholderData
         void queryClient.invalidateQueries({
           queryKey: orderDetailKey,
         });
-        
+
         // Refetch active queries - they'll use the updated cache if data is fresh
         void queryClient.refetchQueries({
           queryKey: orderDetailKey,
@@ -213,21 +217,28 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       } else {
         // If order doesn't exist in cache, create minimal order object
         // Use function updater to ensure React Query detects the change
-        queryClient.setQueryData<Order>(orderDetailKey, () => ({
-          orderId,
-          galleryId,
-          deliveryStatus,
-          paymentStatus,
-          amount,
-          state,
-          updatedAt,
-        } as Order));
+        queryClient.setQueryData<Order>(
+          orderDetailKey,
+          () =>
+            ({
+              orderId,
+              galleryId,
+              deliveryStatus,
+              paymentStatus,
+              amount,
+              state,
+              updatedAt,
+            }) as Order
+        );
       }
 
       // Invalidate gallery list queries when order status changes to/from CHANGES_REQUESTED
       // This ensures sidebar badges (like "Prośba o zmiany") update immediately
       // Gallery lists are filtered by order status, so they need to refetch
-      if (statusChanged && (deliveryStatus === "CHANGES_REQUESTED" || oldDeliveryStatus === "CHANGES_REQUESTED")) {
+      if (
+        statusChanged &&
+        (deliveryStatus === "CHANGES_REQUESTED" || oldDeliveryStatus === "CHANGES_REQUESTED")
+      ) {
         // Invalidate all gallery list queries (they filter by order status)
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.lists(),
@@ -260,7 +271,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             };
             return updatedOrders;
           });
-          
+
           // Invalidate to trigger re-renders
           void queryClient.invalidateQueries({
             queryKey: ordersByGalleryKey,
@@ -282,7 +293,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
               } as Order,
             ];
           });
-          
+
           // Invalidate to trigger re-renders
           void queryClient.invalidateQueries({
             queryKey: ordersByGalleryKey,
@@ -296,7 +307,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       const activeOrdersQueries = queryClient.getQueryCache().findAll({
         queryKey: ["dashboard", "activeOrders"],
       });
-      
+
       activeOrdersQueries.forEach((query) => {
         const cachedData = query.state.data as Order[] | undefined;
         if (cachedData && Array.isArray(cachedData)) {
@@ -317,7 +328,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
               };
               return updatedOrders;
             });
-            
+
             // Invalidate this specific query to trigger re-renders
             void queryClient.invalidateQueries({
               queryKey: query.queryKey,
@@ -325,13 +336,13 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           }
         }
       });
-      
+
       // Always invalidate all active orders queries to ensure dashboard updates
       // This ensures any queries we missed will refetch
       void queryClient.invalidateQueries({
         queryKey: ["dashboard", "activeOrders"],
       });
-      
+
       // Also update all orders list cache (used by orders page)
       const allOrdersKey = queryKeys.orders.list();
       const allOrdersList = queryClient.getQueryData<Order[]>(allOrdersKey);
@@ -353,7 +364,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             };
             return updatedOrders;
           });
-          
+
           // Invalidate to trigger re-renders
           void queryClient.invalidateQueries({
             queryKey: allOrdersKey,
