@@ -25,6 +25,11 @@ export function useApproveChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
+      // Invalidate gallery list queries to update sidebar badge
+      // Approving a change request removes the order from CHANGES_REQUESTED status
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.lists(),
+      });
     },
   });
 }
@@ -55,6 +60,11 @@ export function useDenyChangeRequest() {
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
+      // Invalidate gallery list queries to update sidebar badge
+      // Denying a change request removes the order from CHANGES_REQUESTED status
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.lists(),
       });
     },
   });

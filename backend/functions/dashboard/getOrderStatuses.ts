@@ -32,21 +32,41 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	try {
-		// Query only CHANGES_REQUESTED orders using GSI with fallback
+		// Query CHANGES_REQUESTED and CLIENT_APPROVED orders using parallel GSI queries
 		const queryStartTime = Date.now();
-		const result = await queryOrdersByOwnerWithFallback(
-			ddb,
-			ownerId,
-			ordersTable,
-			galleriesTable,
-			{
-				deliveryStatus: 'CHANGES_REQUESTED'
-			}
-		);
+		
+		// Query both statuses in parallel for efficiency
+		const [changesRequestedResult, clientApprovedResult] = await Promise.all([
+			queryOrdersByOwnerWithFallback(
+				ddb,
+				ownerId,
+				ordersTable,
+				galleriesTable,
+				{
+					deliveryStatus: 'CHANGES_REQUESTED'
+				}
+			),
+			queryOrdersByOwnerWithFallback(
+				ddb,
+				ownerId,
+				ordersTable,
+				galleriesTable,
+				{
+					deliveryStatus: 'CLIENT_APPROVED'
+				}
+			)
+		]);
+		
+		// Combine results from both queries
+		const allOrders = [
+			...(changesRequestedResult.orders || []),
+			...(clientApprovedResult.orders || [])
+		];
+		
 		const queryDuration = Date.now() - queryStartTime;
 
 		// Extract only status fields for efficient response
-		const orders = (result.orders || []).map((order: any) => ({
+		const orders = allOrders.map((order: any) => ({
 			orderId: order.orderId,
 			galleryId: order.galleryId,
 			deliveryStatus: order.deliveryStatus,

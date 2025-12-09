@@ -30,16 +30,15 @@ interface UseOrderStatusPollingOptions {
  * Global order status polling hook
  *
  * Features:
- * - Polls only CHANGES_REQUESTED orders via single endpoint
+ * - Polls CHANGES_REQUESTED and CLIENT_APPROVED orders via single endpoint
  * - Uses ETag/304 for efficient polling (70-90% of polls return 304)
  * - Quiet polling (no loading states)
- * - Detects new change requests by comparing with previous poll
+ * - Detects new change requests and approvals by comparing with previous poll
  * - Updates React Query cache for all affected orders
  * - Prevents multiple simultaneous polls
  * - Integrates with adaptive polling for activity-based intervals
  * - Single-tab leader election (only one tab polls at a time)
  */
-/* eslint-disable no-console */
 export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}) {
   const { enablePolling = false } = options;
   const queryClient = useQueryClient();
@@ -56,35 +55,14 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
   // Calculate interval for React Query (15s when should poll, false otherwise)
   const interval = shouldPoll ? 15000 : false;
 
-  // Log polling state changes (only when polling capability actually changes, not on shouldPollImmediately flips)
+  // Track polling state changes
   const prevPollingEnabledRef = useRef<boolean>(false);
   const prevIsLeaderRef = useRef<boolean>(false);
   useEffect(() => {
     const isPollingEnabled = enablePolling && shouldPoll;
-    const prevIsPollingEnabled = prevPollingEnabledRef.current;
-    const prevIsLeader = prevIsLeaderRef.current;
-
-    // Only log when polling capability actually changes (enabled/disabled or leader status changes)
-    if (prevIsPollingEnabled !== isPollingEnabled || prevIsLeader !== isLeader) {
-      if (isPollingEnabled) {
-        console.log("[OrderStatusPolling] Polling enabled", {
-          interval: interval ? `${interval / 1000}s` : "false",
-          isLeader,
-        });
-      } else {
-        console.log("[OrderStatusPolling] Polling disabled", {
-          reason: !enablePolling
-            ? "disabled by option"
-            : !isLeader
-              ? "not leader tab"
-              : "idle/hidden",
-          isLeader,
-        });
-      }
-      prevPollingEnabledRef.current = isPollingEnabled;
-      prevIsLeaderRef.current = isLeader;
-    }
-  }, [enablePolling, shouldPoll, isLeader, interval]);
+    prevPollingEnabledRef.current = isPollingEnabled;
+    prevIsLeaderRef.current = isLeader;
+  }, [enablePolling, shouldPoll, isLeader]);
 
   const { data, error } = useQuery<OrderStatusResponse>({
     queryKey: ["orderStatusPolling"],
@@ -94,7 +72,6 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         // Return previous data if poll is already in progress
         const previousData = queryClient.getQueryData<OrderStatusResponse>(["orderStatusPolling"]);
         if (previousData) {
-          console.log("[OrderStatusPolling] Poll already in progress, returning cached data");
           return previousData;
         }
         throw new Error("Poll already in progress");
@@ -103,13 +80,6 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       isPollingRef.current = true;
       const pollStartTime = Date.now();
       try {
-        console.log("[OrderStatusPolling] Starting poll", {
-          etag: etagRef.current ?? "none",
-          enablePolling,
-          interval: interval ? `${interval / 1000}s` : "false",
-          isLeader,
-        });
-
         const response = await api.dashboard.getOrderStatuses(etagRef.current);
         const pollDuration = Date.now() - pollStartTime;
 
@@ -119,24 +89,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         
         if (response.etag) {
           // We got an ETag from the response - use it
-          const etagChanged = etagRef.current !== response.etag;
           etagRef.current = response.etag;
-
-          if (response.orders && response.orders.length > 0) {
-            console.log("[OrderStatusPolling] Poll completed (200 OK)", {
-              orderCount: response.orders.length,
-              orderIds: response.orders.map((o) => o.orderId),
-              etag: response.etag,
-              etagChanged,
-              duration: `${pollDuration}ms`,
-            });
-          } else {
-            // Empty response means 304 - ETag unchanged
-            console.log("[OrderStatusPolling] Poll completed (304 Not Modified)", {
-              etag: response.etag,
-              duration: `${pollDuration}ms`,
-            });
-          }
         } else {
           // No ETag in response - this is unexpected if we sent If-None-Match
           // Only warn if we had a previous ETag (meaning we sent If-None-Match header)
@@ -146,26 +99,27 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
               duration: `${pollDuration}ms`,
               previousEtag: etagRef.current,
             });
-          } else {
-            // First request - no ETag yet, this is normal
-            console.log("[OrderStatusPolling] Poll completed (no ETag in response, first request)", {
-              orderCount: response.orders?.length ?? 0,
-              duration: `${pollDuration}ms`,
-            });
           }
           // Keep existing ETag (or undefined if first request)
           // Don't update etagRef since we didn't get a new one
         }
 
         return response;
-      } catch (pollError) {
+      } catch (pollError: unknown) {
         const pollDuration = Date.now() - pollStartTime;
+        const errorDetails = pollError instanceof Error
+          ? {
+              name: pollError.name,
+              message: pollError.message,
+              stack: pollError.stack,
+            }
+          : pollError;
         console.error("[OrderStatusPolling] Poll failed", {
-          error: pollError,
+          error: errorDetails,
           duration: `${pollDuration}ms`,
           etag: etagRef.current ?? "none",
         });
-        throw pollError;
+        throw pollError instanceof Error ? pollError : new Error(String(pollError));
       } finally {
         isPollingRef.current = false;
       }
@@ -175,7 +129,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
     refetchIntervalInBackground: false,
     refetchOnMount: false, // Don't use refetchOnMount - we'll handle immediate polls manually
     staleTime: 10_000, // Prevent refetch if data is <10s old (prevents rapid tab-switch abuse)
-    notifyOnChangeProps: [], // Quiet polling - no loading states
+    notifyOnChangeProps: ["data"], // Only notify on data changes, not loading states (quiet polling)
     refetchOnWindowFocus: false, // Handled by adaptive polling
     refetchOnReconnect: false, // Handled by adaptive polling
     retry: false, // Don't retry on error - just wait for next poll
@@ -191,15 +145,12 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       enablePolling &&
       shouldPoll
     ) {
-      console.log("[OrderStatusPolling] Triggering immediate poll (recovering from idle)", {
-        isLeader,
-      });
       // Invalidate the query to trigger a refetch
       void queryClient.invalidateQueries({ queryKey: ["orderStatusPolling"] });
       updateLastPollTime();
     }
     prevShouldPollImmediatelyRef.current = shouldPollImmediately;
-  }, [shouldPollImmediately, enablePolling, shouldPoll, isLeader, queryClient, updateLastPollTime]);
+  }, [shouldPollImmediately, enablePolling, shouldPoll, queryClient, updateLastPollTime]);
 
   // Handle successful response and update caches
   useEffect(() => {
@@ -208,35 +159,14 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
     }
 
     // If no orders in response (304 Not Modified), just update poll time and return
-    if (data.orders.length === 0) {
-      console.log("[OrderStatusPolling] No orders in response (304), updating poll time only");
+    if (!data.orders || data.orders.length === 0) {
       updateLastPollTime();
       return;
     }
 
     const currentOrderIds = new Set(data.orders.map((o) => o.orderId));
-    const previousOrderIds = previousPollOrderIdsRef.current;
-
-    // Detect new CHANGES_REQUESTED orders (orders that weren't in previous poll)
-    const newOrderIds = Array.from(currentOrderIds).filter(
-      (orderId) => !previousOrderIds.has(orderId)
-    );
-
-    if (newOrderIds.length > 0) {
-      console.log("[OrderStatusPolling] New CHANGES_REQUESTED orders detected", {
-        newOrderIds,
-        totalOrders: currentOrderIds.size,
-        previousOrders: Array.from(previousOrderIds),
-      });
-    } else {
-      console.log("[OrderStatusPolling] No new orders, updating existing order caches", {
-        orderCount: currentOrderIds.size,
-        orderIds: Array.from(currentOrderIds),
-      });
-    }
 
     // Update caches for all orders in the response
-    let cacheUpdatesCount = 0;
     data.orders.forEach((orderStatus) => {
       const { orderId, galleryId, deliveryStatus, paymentStatus, amount, state, updatedAt } =
         orderStatus;
@@ -245,43 +175,45 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       const orderDetailKey = queryKeys.orders.detail(galleryId, orderId);
       const existingOrder = queryClient.getQueryData<Order>(orderDetailKey);
 
+      // Track if status changed for gallery list invalidation
+      let statusChanged = false;
+      let oldDeliveryStatus: string | undefined;
+
       if (existingOrder) {
         // Merge status fields with existing order data
-        const statusChanged =
+        oldDeliveryStatus = existingOrder.deliveryStatus;
+        statusChanged =
           existingOrder.deliveryStatus !== deliveryStatus ||
           existingOrder.paymentStatus !== paymentStatus;
 
         // Update cache with new data
-        queryClient.setQueryData<Order>(orderDetailKey, {
+        const updatedOrder: Order = {
           ...existingOrder,
           deliveryStatus,
           paymentStatus,
           amount,
           state,
           updatedAt,
-        });
-
-        // Invalidate query to ensure React Query triggers re-renders
-        // This is important because setQueryData might not always trigger subscriptions
+        };
+        
+        // Update the cache
+        queryClient.setQueryData<Order>(orderDetailKey, updatedOrder);
+        
+        // Mark query as stale and invalidate to force React Query to check the cache
+        // This ensures components re-render even with placeholderData
         void queryClient.invalidateQueries({
           queryKey: orderDetailKey,
-          refetchType: "none", // Don't refetch, just notify subscribers of cache change
         });
-
-        if (statusChanged) {
-          console.log("[OrderStatusPolling] Updated order detail cache", {
-            orderId,
-            galleryId,
-            oldStatus: existingOrder.deliveryStatus,
-            newStatus: deliveryStatus,
-            oldPaymentStatus: existingOrder.paymentStatus,
-            newPaymentStatus: paymentStatus,
-          });
-        }
-        cacheUpdatesCount++;
+        
+        // Refetch active queries - they'll use the updated cache if data is fresh
+        void queryClient.refetchQueries({
+          queryKey: orderDetailKey,
+          type: "active",
+        });
       } else {
         // If order doesn't exist in cache, create minimal order object
-        queryClient.setQueryData<Order>(orderDetailKey, {
+        // Use function updater to ensure React Query detects the change
+        queryClient.setQueryData<Order>(orderDetailKey, () => ({
           orderId,
           galleryId,
           deliveryStatus,
@@ -289,21 +221,22 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           amount,
           state,
           updatedAt,
-        } as Order);
+        } as Order));
+      }
 
-        // Invalidate query to ensure React Query triggers re-renders
+      // Invalidate gallery list queries when order status changes to/from CHANGES_REQUESTED
+      // This ensures sidebar badges (like "Prośba o zmiany") update immediately
+      // Gallery lists are filtered by order status, so they need to refetch
+      if (statusChanged && (deliveryStatus === "CHANGES_REQUESTED" || oldDeliveryStatus === "CHANGES_REQUESTED")) {
+        // Invalidate all gallery list queries (they filter by order status)
         void queryClient.invalidateQueries({
-          queryKey: orderDetailKey,
-          refetchType: "none", // Don't refetch, just notify subscribers of cache change
+          queryKey: queryKeys.galleries.lists(),
         });
-
-        console.log("[OrderStatusPolling] Created new order detail cache entry", {
-          orderId,
-          galleryId,
-          deliveryStatus,
-          paymentStatus,
+      } else if (!existingOrder && deliveryStatus === "CHANGES_REQUESTED") {
+        // If order is new and has CHANGES_REQUESTED status, invalidate gallery lists
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.lists(),
         });
-        cacheUpdatesCount++;
       }
 
       // Update orders-by-gallery cache
@@ -313,42 +246,117 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       if (existingOrdersList) {
         const orderIndex = existingOrdersList.findIndex((o) => o.orderId === orderId);
         if (orderIndex >= 0) {
-          // Update existing order in list
-          const updatedOrders = [...existingOrdersList];
-          updatedOrders[orderIndex] = {
-            ...updatedOrders[orderIndex],
-            deliveryStatus,
-            paymentStatus,
-            amount,
-            state,
-            updatedAt,
-          };
-          queryClient.setQueryData<Order[]>(ordersByGalleryKey, updatedOrders);
-
-          // Invalidate query to ensure React Query triggers re-renders
-          void queryClient.invalidateQueries({
-            queryKey: ordersByGalleryKey,
-            refetchType: "none", // Don't refetch, just notify subscribers of cache change
-          });
-        } else {
-          // Add new order to list (shouldn't happen often, but handle it)
-          queryClient.setQueryData<Order[]>(ordersByGalleryKey, [
-            ...existingOrdersList,
-            {
-              orderId,
-              galleryId,
+          // Update existing order in list using function updater
+          queryClient.setQueryData<Order[]>(ordersByGalleryKey, (old) => {
+            if (!old) return old;
+            const updatedOrders = [...old];
+            updatedOrders[orderIndex] = {
+              ...updatedOrders[orderIndex],
               deliveryStatus,
               paymentStatus,
               amount,
               state,
               updatedAt,
-            } as Order,
-          ]);
-
-          // Invalidate query to ensure React Query triggers re-renders
+            };
+            return updatedOrders;
+          });
+          
+          // Invalidate to trigger re-renders
           void queryClient.invalidateQueries({
             queryKey: ordersByGalleryKey,
-            refetchType: "none", // Don't refetch, just notify subscribers of cache change
+          });
+        } else {
+          // Add new order to list (shouldn't happen often, but handle it)
+          queryClient.setQueryData<Order[]>(ordersByGalleryKey, (old) => {
+            if (!old) return old;
+            return [
+              ...old,
+              {
+                orderId,
+                galleryId,
+                deliveryStatus,
+                paymentStatus,
+                amount,
+                state,
+                updatedAt,
+              } as Order,
+            ];
+          });
+          
+          // Invalidate to trigger re-renders
+          void queryClient.invalidateQueries({
+            queryKey: ordersByGalleryKey,
+          });
+        }
+      }
+
+      // Update dashboard active orders cache (used by dashboard page)
+      // Find and update all active orders queries that might contain this order
+      // Use base key to match all active orders queries regardless of params
+      const activeOrdersQueries = queryClient.getQueryCache().findAll({
+        queryKey: ["dashboard", "activeOrders"],
+      });
+      
+      activeOrdersQueries.forEach((query) => {
+        const cachedData = query.state.data as Order[] | undefined;
+        if (cachedData && Array.isArray(cachedData)) {
+          const orderIndex = cachedData.findIndex(
+            (o) => o.orderId === orderId && o.galleryId === galleryId
+          );
+          if (orderIndex >= 0) {
+            queryClient.setQueryData<Order[]>(query.queryKey, (old) => {
+              if (!old) return old;
+              const updatedOrders = [...old];
+              updatedOrders[orderIndex] = {
+                ...updatedOrders[orderIndex],
+                deliveryStatus,
+                paymentStatus,
+                amount,
+                state,
+                updatedAt,
+              };
+              return updatedOrders;
+            });
+            
+            // Invalidate this specific query to trigger re-renders
+            void queryClient.invalidateQueries({
+              queryKey: query.queryKey,
+            });
+          }
+        }
+      });
+      
+      // Always invalidate all active orders queries to ensure dashboard updates
+      // This ensures any queries we missed will refetch
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboard", "activeOrders"],
+      });
+      
+      // Also update all orders list cache (used by orders page)
+      const allOrdersKey = queryKeys.orders.list();
+      const allOrdersList = queryClient.getQueryData<Order[]>(allOrdersKey);
+      if (allOrdersList) {
+        const orderIndex = allOrdersList.findIndex(
+          (o) => o.orderId === orderId && o.galleryId === galleryId
+        );
+        if (orderIndex >= 0) {
+          queryClient.setQueryData<Order[]>(allOrdersKey, (old) => {
+            if (!old) return old;
+            const updatedOrders = [...old];
+            updatedOrders[orderIndex] = {
+              ...updatedOrders[orderIndex],
+              deliveryStatus,
+              paymentStatus,
+              amount,
+              state,
+              updatedAt,
+            };
+            return updatedOrders;
+          });
+          
+          // Invalidate to trigger re-renders
+          void queryClient.invalidateQueries({
+            queryKey: allOrdersKey,
           });
         }
       }
@@ -359,12 +367,6 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
 
     // Update last poll time
     updateLastPollTime();
-
-    console.log("[OrderStatusPolling] Cache updates completed", {
-      cacheUpdatesCount,
-      orderCount: currentOrderIds.size,
-      timestamp: data.timestamp,
-    });
   }, [data, enablePolling, queryClient, updateLastPollTime]);
 
   // Handle errors (log but don't break polling)
