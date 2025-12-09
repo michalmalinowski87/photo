@@ -45,6 +45,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		? new Set(requestedSizesParam.split(',').map(s => s.trim().toLowerCase()))
 		: new Set(['thumb', 'preview', 'bigthumb']); // Default: all sizes
 
+	// Parse pagination parameters
+	const limitParam = event?.queryStringParameters?.limit;
+	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50; // Default 50, max 100
+	const cursorParam = event?.queryStringParameters?.cursor;
+	let cursor: string | null = cursorParam ? decodeURIComponent(cursorParam) : null;
+
 	// Verify gallery exists
 	let gallery;
 	try {
@@ -95,11 +101,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const bigThumbsPrefix = `galleries/${galleryId}/bigthumbs/`;
 		const thumbsPrefix = `galleries/${galleryId}/thumbs/`;
 
-		const [originalsListResponse, previewsListResponse, bigThumbsListResponse, thumbsListResponse] = await Promise.all([
-			s3.send(new ListObjectsV2Command({
+		// Fetch all originals with pagination support (if many images)
+		// For other folders, we need all items to match with originals
+		const allOriginalsContents: any[] = [];
+		let continuationToken: string | undefined = undefined;
+		
+		do {
+			const originalsListParams: any = {
 				Bucket: bucket,
 				Prefix: originalsPrefix
-			})),
+			};
+			if (continuationToken) {
+				originalsListParams.ContinuationToken = continuationToken;
+			}
+			
+			const originalsListResponse = await s3.send(new ListObjectsV2Command(originalsListParams));
+			allOriginalsContents.push(...(originalsListResponse.Contents || []));
+			continuationToken = originalsListResponse.NextContinuationToken;
+		} while (continuationToken);
+
+		// Fetch all other folders (we need complete lists to match)
+		const [previewsListResponse, bigThumbsListResponse, thumbsListResponse] = await Promise.all([
 			s3.send(new ListObjectsV2Command({
 				Bucket: bucket,
 				Prefix: previewsPrefix
@@ -116,7 +138,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Process originals (may be empty if already deleted after finals upload)
 		const originalFiles = new Map<string, any>(
-			(originalsListResponse.Contents || [])
+			allOriginalsContents
 				.map(obj => {
 					const fullKey = obj.Key || '';
 					const filename = fullKey.replace(originalsPrefix, '');
@@ -124,7 +146,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				})
 				.filter((entry): entry is [string, any] => entry !== null)
 		);
-		const originalKeys = new Set(originalFiles.keys());
+		const originalKeys = Array.from(originalFiles.keys()).sort(); // Sort for consistent pagination
 
 		// Process preview images (kept even when originals are deleted, so we can show them as "Wybrane")
 		const previewFiles = new Map<string, any>(
@@ -160,13 +182,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			return `${fname.substring(0, lastDot)}.webp`;
 		};
 
-		// Build images list from originals only (PNG/JPEG files)
+		// Apply cursor-based pagination (skip files before cursor)
+		let paginatedOriginalKeys = originalKeys;
+		if (cursor) {
+			const cursorIndex = originalKeys.findIndex(key => key === cursor);
+			if (cursorIndex >= 0) {
+				paginatedOriginalKeys = originalKeys.slice(cursorIndex + 1);
+			} else if (cursorIndex === -1 && originalKeys.length > 0) {
+				// Cursor not found, find position where it would be inserted
+				const insertIndex = originalKeys.findIndex(key => key > cursor);
+				paginatedOriginalKeys = insertIndex >= 0 ? originalKeys.slice(insertIndex) : [];
+			}
+		}
+
+		// Apply limit + 1 to check if there are more items
+		const keysToProcess = paginatedOriginalKeys.slice(0, limit + 1);
+		const hasMore = keysToProcess.length > limit;
+		const finalKeys = hasMore ? keysToProcess.slice(0, limit) : keysToProcess;
+
+		// Build images list from paginated originals only (PNG/JPEG files)
 		// For each original, generate WebP preview/thumb URLs from previews/thumbs folders
 		// This allows showing previews even when originals are deleted (after finals upload)
 		// But we only list originals as the source of truth
 		// Generate S3 presigned URLs as fallback for robust image loading
 		const images = await Promise.all(
-			Array.from(originalKeys).map(async (filename: string) => {
+			finalKeys.map(async (filename: string) => {
 				if (!filename) return null;
 				
 				// Skip WebP files in originals folder (shouldn't happen, but safety check)
@@ -294,15 +334,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		);
 
 		const filteredImages = images
-			.filter((item): item is NonNullable<typeof item> => item !== null)
-			.sort((a, b) => {
-				// Sort by filename for consistent ordering
-				return a.key.localeCompare(b.key);
-			});
+			.filter((item): item is NonNullable<typeof item> => item !== null);
+
+		// Generate next cursor from last item
+		let nextCursor: string | null = null;
+		if (hasMore && filteredImages.length > 0) {
+			const lastItem = filteredImages[filteredImages.length - 1];
+			nextCursor = encodeURIComponent(lastItem.key);
+		}
 
 		// Check for sync issue: no images but originalsBytesUsed > 0
 		// Note: Storage recalculation is now handled on-demand when needed (pay, validateUploadLimits, etc.)
-		if (images.length === 0 && (gallery.originalsBytesUsed || 0) > 0) {
+		// Only check if we're on the first page (no cursor) and got no results
+		if (!cursor && filteredImages.length === 0 && (gallery.originalsBytesUsed || 0) > 0) {
 			logger.info('Detected sync issue: no images but originalsBytesUsed > 0, S3 events will handle recalculation', {
 				galleryId,
 				originalsBytesUsed: gallery.originalsBytesUsed || 0
@@ -316,7 +360,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({
 				galleryId,
 				images: filteredImages,
-				count: filteredImages.length
+				count: filteredImages.length,
+				hasMore,
+				nextCursor
 			})
 		};
 	} catch (error: any) {

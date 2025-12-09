@@ -28,10 +28,14 @@ export const queryKeys = {
     all: ["galleries"] as const,
     lists: () => [...queryKeys.galleries.all, "list"] as const,
     list: (filter?: string) => [...queryKeys.galleries.lists(), filter] as const,
+    infiniteList: (filter?: string, limit?: number) =>
+      [...queryKeys.galleries.lists(), "infinite", filter, limit] as const,
     details: () => [...queryKeys.galleries.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.galleries.details(), id] as const,
     images: (id: string, type: "originals" | "finals" | "thumb" = "thumb") =>
       [...queryKeys.galleries.detail(id), "images", type] as const,
+    infiniteImages: (id: string, type: "originals" | "finals" | "thumb" = "thumb", limit?: number) =>
+      [...queryKeys.galleries.detail(id), "images", "infinite", type, limit] as const,
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
     deliveredOrders: (id: string) =>
       [...queryKeys.galleries.detail(id), "delivered-orders"] as const,

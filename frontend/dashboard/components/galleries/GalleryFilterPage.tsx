@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { LayoutDashboard, List as ListIcon } from "lucide-react";
 
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
@@ -81,14 +82,61 @@ export default function GalleryFilterPage({
   const showFullPageLoading =
     loading && !hasInitiallyLoaded && !publishWizardOpen && !shouldOpenWizardFromUrl;
 
+  // View mode state - shared with GalleryList
+  const [viewMode, setViewMode] = useState<"list" | "cards">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("galleryListViewMode");
+      return (saved === "list" || saved === "cards") ? saved : "cards";
+    }
+    return "cards";
+  });
+
+  // Save view mode preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("galleryListViewMode", viewMode);
+    }
+  }, [viewMode]);
+
   return (
     <>
       {showFullPageLoading && <FullPageLoading text={loadingText} />}
       <div className="space-y-6">
         {!publishWizardOpen && (
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`p-3 rounded-md transition-colors ${
+                  viewMode === "cards"
+                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                }`}
+                aria-label="Widok kart"
+              >
+                <LayoutDashboard size={24} />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-3 rounded-md transition-colors ${
+                  viewMode === "list"
+                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                }`}
+                aria-label="Widok listy"
+              >
+                <ListIcon size={24} />
+              </button>
+            </div>
+          </div>
         )}
-        <GalleryList filter={filter} onWizardOpenChange={handleWizardOpenChange} />
+        <GalleryList 
+          filter={filter} 
+          onWizardOpenChange={handleWizardOpenChange}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
       </div>
     </>
   );

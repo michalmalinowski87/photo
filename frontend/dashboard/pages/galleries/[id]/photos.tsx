@@ -11,7 +11,8 @@ import {
   Link,
 } from "lucide-react";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Virtuoso } from "react-virtuoso";
 
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
@@ -21,9 +22,9 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
+import { Loading, GalleryLoading, InlineLoading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
-import { useGalleryImages } from "../../../hooks/queries/useGalleries";
+import { useInfiniteGalleryImages } from "../../../hooks/useInfiniteGalleryImages";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
@@ -69,11 +70,18 @@ export default function GalleryPhotos() {
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
   const {
+    data: imagesData,
     isLoading: imagesLoading,
     isFetching: imagesFetching,
-    data: imagesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     refetch: refetchGalleryImages,
-  } = useGalleryImages(galleryIdForQuery, "thumb");
+  } = useInfiniteGalleryImages({
+    galleryId: galleryIdForQuery,
+    type: "thumb",
+    limit: 50,
+  });
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
   // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
@@ -345,10 +353,12 @@ export default function GalleryPhotos() {
 
   // Convert React Query data to GalleryImage format and filter out deleted images
   const images = useMemo(() => {
-    if (!imagesData) {
+    if (!imagesData?.pages) {
       return [];
     }
-    const apiImages = imagesData as ApiImage[];
+    // Flatten all pages into a single array
+    const allApiImages = (imagesData as any).pages.flatMap((page: any) => page.images || []);
+    const apiImages = allApiImages as ApiImage[];
     const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
       key: img.key,
       filename: img.filename,
@@ -388,12 +398,13 @@ export default function GalleryPhotos() {
   // Clear deletedImageKeys for images that have been re-uploaded
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
   useEffect(() => {
-    if (!imagesData || imagesData.length === 0) {
+    if (!imagesData?.pages || (imagesData as any).pages.length === 0) {
       return;
     }
 
+    const allApiImages = (imagesData as any).pages.flatMap((page: any) => page.images || []);
     const currentImageKeys = new Set(
-      imagesData.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
+      allApiImages.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
     );
 
     // Find keys that are in deletedImageKeys but now present in the data (re-uploaded)
@@ -906,32 +917,27 @@ export default function GalleryPhotos() {
     });
   };
 
-  // Render image grid
-  const renderImageGrid = (imagesToRender: GalleryImage[]) => {
+  // Render single image item (extracted for reuse)
+  const renderImageItem = useCallback((img: GalleryImage, index: number, allImages: GalleryImage[]) => {
     // Combine deleting states from both single and bulk delete
     const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
+    
+    const isApproved = isImageInApprovedSelection(img);
+    const isInAnyOrder = isImageInAnyOrder(img);
+    const orderStatus = getImageOrderStatus(img);
+    const isDelivered = orderStatus === "DELIVERED";
+    const isNonDeletable = isApproved || isDelivered;
+    // Use stable key/filename as identifier - always prefer key, fallback to filename
+    // This ensures React can properly reconcile components when images are reordered
+    const imageKey = img.key ?? img.filename ?? "";
+    // Check if image has any available URLs
+    const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
+    const isSelected = selectedKeys.has(imageKey);
+    const isDeleting = allDeletingImages.has(imageKey);
 
     return (
       <div
-        className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 ${isSelectionMode ? "select-none" : ""}`}
-      >
-        {imagesToRender.map((img, index) => {
-          const isApproved = isImageInApprovedSelection(img);
-          const isInAnyOrder = isImageInAnyOrder(img);
-          const orderStatus = getImageOrderStatus(img);
-          const isDelivered = orderStatus === "DELIVERED";
-          const isNonDeletable = isApproved || isDelivered;
-          // Use stable key/filename as identifier - always prefer key, fallback to filename
-          // This ensures React can properly reconcile components when images are reordered
-          const imageKey = img.key ?? img.filename ?? "";
-          // Check if image has any available URLs
-          const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
-          const isSelected = selectedKeys.has(imageKey);
-          const isDeleting = allDeletingImages.has(imageKey);
-
-          return (
-            <div
-              key={imageKey}
+        key={imageKey}
               className={`relative group border rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${
                 isSelectionMode ? "select-none" : ""
               } ${
@@ -955,7 +961,7 @@ export default function GalleryPhotos() {
               }}
               onClick={(e) => {
                 if (isSelectionMode && !isNonDeletable) {
-                  handleSelectionClick(imageKey, index, e.nativeEvent, imagesToRender);
+                  handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
                 } else if (isSelectionMode && isNonDeletable) {
                   e.stopPropagation();
                 }
@@ -976,7 +982,7 @@ export default function GalleryPhotos() {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isNonDeletable) {
-                          handleSelectionClick(imageKey, index, e.nativeEvent, imagesToRender);
+                          handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
                         }
                       }}
                     >
@@ -1096,10 +1102,15 @@ export default function GalleryPhotos() {
               </div>
             </div>
           );
-        })}
+  }, [deletingImages, deletingImagesBulk, isImageInApprovedSelection, isImageInAnyOrder, getImageOrderStatus, selectedKeys, isSelectionMode, handleSelectionClick, handleDeletePhotoClick, removeFileExtension]);
+
+  const renderImageGrid = useCallback((imagesToRender: GalleryImage[], enableSelection: boolean, enableInfiniteScroll: boolean) => {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
       </div>
     );
-  };
+  }, [renderImageItem]);
 
   return (
     <>
@@ -1326,7 +1337,7 @@ export default function GalleryPhotos() {
                   </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg">
-                      {renderImageGrid(orderImages)}
+                      {renderImageGrid(orderImages, true, false)}
                     </div>
                   )}
                 </div>
@@ -1384,15 +1395,15 @@ export default function GalleryPhotos() {
                 </div>
                 {expandedSections.has("unselected") && (
                   <div className="px-4 pb-4 pt-2 rounded-b-lg">
-                    {renderImageGrid(unselectedImages)}
+                    {renderImageGrid(unselectedImages, true, false)}
                   </div>
                 )}
               </div>
             )}
           </div>
         ) : (
-          // Fallback: show all images if no delivered orders
-          renderImageGrid(images)
+          // Fallback: show all images if no delivered orders (global view with infinite scroll)
+          renderImageGrid(images, true, true)
         )}
       </div>
 

@@ -1,8 +1,9 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
-import { listTransactionsByUser, getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { listTransactionsByUser } from '../../lib/src/transactions';
+import { createLambdaErrorResponse } from '../../lib/src/error-utils';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -36,22 +37,87 @@ export const handler = lambdaLogger(async (event: any) => {
 		? (filterParam as FilterType) 
 		: undefined;
 
+	// Parse pagination parameters
+	const limitParam = event?.queryStringParameters?.limit;
+	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50; // Default 50, max 100
+	const cursorParam = event?.queryStringParameters?.cursor;
+	let cursor: { galleryId: string; createdAt: string } | null = null;
+	if (cursorParam) {
 		try {
-		// For workflow status filters, optimize by querying orders first (DB-level filtering) to avoid N+1 queries
-		let targetGalleryIds: Set<string> | null = null;
-		const allOrdersByGallery: Map<string, any[]> = new Map();
+			cursor = JSON.parse(decodeURIComponent(cursorParam));
+		} catch (err) {
+			// Invalid cursor, ignore
+		}
+	}
+
+		try {
+		// OPTIMIZATION: Run independent queries in parallel
+		const [ordersData, transactionsData] = await Promise.all([
+			// Pre-fetch all orders for this user (parallel with transactions)
+			ordersTable ? (async () => {
+				try {
+					const allOrders: any[] = [];
+					let lastKey: Record<string, any> | undefined;
 		
-		// For 'unpaid' filter, pre-fetch all orders by ownerId to avoid N individual order queries per gallery
-		if (filter === 'unpaid' && ordersTable) {
-			try {
-				const allOrdersQuery = await ddb.send(new QueryCommand({
+					// Fetch all orders in parallel batches
+					const orderBatches: Promise<any>[] = [];
+					
+					// First batch - get all orders
+					do {
+						const batchPromise = ddb.send(new QueryCommand({
 					TableName: ordersTable,
 					IndexName: 'ownerId-deliveryStatus-index',
 					KeyConditionExpression: 'ownerId = :o',
-					ExpressionAttributeValues: { ':o': requester }
-				}));
-				
-				(allOrdersQuery.Items || []).forEach((order: any) => {
+							ExpressionAttributeValues: { ':o': requester },
+							ExclusiveStartKey: lastKey
+						}));
+						orderBatches.push(batchPromise);
+						
+						const result = await batchPromise;
+						allOrders.push(...(result.Items || []));
+						lastKey = result.LastEvaluatedKey;
+					} while (lastKey && orderBatches.length < 5); // Limit to 5 batches to prevent timeout
+					
+					return allOrders;
+				} catch (err) {
+					console.warn('Failed to pre-fetch orders:', err);
+					return [];
+				}
+			})() : Promise.resolve([]),
+			
+			// Pre-fetch all paid transactions for this user (parallel with orders)
+			transactionsTable ? (async () => {
+				try {
+					const paidTransactions = new Map<string, boolean>();
+					let lastKey: Record<string, any> | undefined;
+					
+					do {
+						const result = await listTransactionsByUser(requester, {
+							status: 'PAID',
+							limit: 100,
+							exclusiveStartKey: lastKey
+						});
+						
+						result.transactions.forEach((tx: any) => {
+							if (tx.galleryId) {
+								paidTransactions.set(tx.galleryId, true);
+							}
+						});
+						
+						lastKey = result.hasMore ? result.lastKey : undefined;
+					} while (lastKey);
+					
+					return paidTransactions;
+				} catch (err) {
+					console.warn('Failed to batch query transactions:', err);
+					return new Map<string, boolean>();
+				}
+			})() : Promise.resolve(new Map<string, boolean>())
+		]);
+
+		// Organize orders by gallery
+		const allOrdersByGallery: Map<string, any[]> = new Map();
+		ordersData.forEach((order: any) => {
 					if (order.galleryId) {
 						if (!allOrdersByGallery.has(order.galleryId)) {
 							allOrdersByGallery.set(order.galleryId, []);
@@ -59,12 +125,11 @@ export const handler = lambdaLogger(async (event: any) => {
 						allOrdersByGallery.get(order.galleryId)!.push(order);
 					}
 				});
-			} catch (err) {
-				console.warn('Failed to pre-fetch orders for unpaid filter:', err);
-			}
-		}
+
+		// Determine target gallery IDs based on filter
+		let targetGalleryIds: Set<string> | null = null;
 		
-		if (filter && filter !== 'unpaid' && ordersTable) {
+		if (filter && filter !== 'unpaid' && ordersData.length > 0) {
 			const deliveryStatuses: string[] = [];
 			switch (filter) {
 				case 'wyslano':
@@ -85,74 +150,132 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 			
 			if (deliveryStatuses.length > 0) {
-				try {
-					const orderQueries = await Promise.all(
-						deliveryStatuses.map(status =>
-							ddb.send(new QueryCommand({
-								TableName: ordersTable,
-								IndexName: 'ownerId-deliveryStatus-index',
-								KeyConditionExpression: 'ownerId = :o AND deliveryStatus = :ds',
-								ExpressionAttributeValues: {
-									':o': requester,
-									':ds': status
-								}
-							}))
-						)
-					);
-					
-					targetGalleryIds = new Set<string>();
-					orderQueries.forEach(result => {
-						(result.Items || []).forEach((order: any) => {
-							if (order.galleryId) {
+				targetGalleryIds = new Set<string>();
+				
+				// Filter orders by status and collect gallery IDs
+				ordersData.forEach((order: any) => {
+					if (order.galleryId && deliveryStatuses.includes(order.deliveryStatus)) {
 								targetGalleryIds!.add(order.galleryId);
-								if (!allOrdersByGallery.has(order.galleryId)) {
-									allOrdersByGallery.set(order.galleryId, []);
-								}
-								allOrdersByGallery.get(order.galleryId)!.push(order);
-							}
-						});
+					}
+				});
+				
+				// For 'dostarczone', verify ALL orders are DELIVERED
+				if (filter === 'dostarczone' && targetGalleryIds.size > 0) {
+					const galleriesToCheck = Array.from(targetGalleryIds);
+					const verifiedGalleryIds = new Set<string>();
+					
+					galleriesToCheck.forEach(galleryId => {
+						const orders = allOrdersByGallery.get(galleryId) || [];
+						if (orders.length > 0 && orders.every((o: any) => o.deliveryStatus === 'DELIVERED')) {
+							verifiedGalleryIds.add(galleryId);
+						}
 					});
 					
-					// For 'dostarczone', check that ALL orders are DELIVERED - fetch all orders to verify
-					if (filter === 'dostarczone' && targetGalleryIds.size > 0) {
-						const galleriesNeedingFullOrders = Array.from(targetGalleryIds);
+					targetGalleryIds = verifiedGalleryIds.size > 0 ? verifiedGalleryIds : new Set();
+							}
+			}
+		}
+
+		// OPTIMIZATION: Only fetch galleries we need
+		// If we have target gallery IDs, use BatchGet (faster) or query only those
+		// Otherwise, use paginated query
+		let needsAllGalleries = filter === undefined || filter === 'unpaid';
+		const allGalleryItems: any[] = [];
+		
+		if (targetGalleryIds && targetGalleryIds.size > 0) {
+			// OPTIMIZATION: For filtered queries, only fetch target galleries
+			// Use BatchGet for small sets, otherwise query in batches
+			const galleryIdArray = Array.from(targetGalleryIds);
 						
-						if (galleriesNeedingFullOrders.length > 0) {
-							const allOrdersQueries = await Promise.all(
-								galleriesNeedingFullOrders.map(galleryId =>
-									ddb.send(new QueryCommand({
-										TableName: ordersTable,
-										KeyConditionExpression: 'galleryId = :g',
-										ExpressionAttributeValues: { ':g': galleryId }
-									}))
-								)
-							);
-							
-							allOrdersQueries.forEach((result, idx) => {
-								const galleryId = galleriesNeedingFullOrders[idx];
-								allOrdersByGallery.set(galleryId, result.Items || []);
-							});
-						}
+			if (galleryIdArray.length <= 100) {
+				// Use BatchGet for up to 100 items (DynamoDB limit)
+				const batchSize = 100;
+				for (let i = 0; i < galleryIdArray.length; i += batchSize) {
+					const batch = galleryIdArray.slice(i, i + batchSize);
+					const keys = batch.map(galleryId => ({ galleryId }));
+					
+					try {
+						const batchResult = await ddb.send(new BatchGetCommand({
+							RequestItems: {
+								[galleriesTable]: {
+									Keys: keys
+								}
+							}
+						}));
+						
+						if (batchResult.Responses?.[galleriesTable]) {
+							allGalleryItems.push(...batchResult.Responses[galleriesTable]);
 					}
-				} catch (gsiError: any) {
-					console.warn('GSI query failed, falling back to gallery-based queries:', gsiError.message);
-					targetGalleryIds = null;
+					} catch (err) {
+						console.warn('BatchGet failed, falling back to querying all galleries:', err);
+						// Fallback to querying all galleries
+						needsAllGalleries = true;
 				}
+			}
+			} else {
+				// Too many galleries, fall back to querying all
+				needsAllGalleries = true;
 			}
 		}
 		
-		// Query all galleries and filter in memory for workflow filters - more efficient than N+1 queries since we pre-fetch orders via GSI
-		const galleriesQuery = await ddb.send(new QueryCommand({
-			TableName: galleriesTable,
-			IndexName: 'ownerId-index',
-			KeyConditionExpression: 'ownerId = :o',
-			ExpressionAttributeValues: { ':o': requester },
-			ScanIndexForward: false // newest first
-		}));
+		// If we still need all galleries (no filter, unpaid filter, or BatchGet failed)
+		if (needsAllGalleries || allGalleryItems.length === 0) {
+		let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+		
+			// OPTIMIZATION: For unpaid filter or no filter, use pagination at DynamoDB level
+			if ((filter === 'unpaid' || !filter) && !cursor) {
+			const queryParams: any = {
+				TableName: galleriesTable,
+				IndexName: 'ownerId-index',
+				KeyConditionExpression: 'ownerId = :o',
+				ExpressionAttributeValues: { ':o': requester },
+				ScanIndexForward: false, // newest first
+					Limit: limit + 20 // Fetch extra to account for filtering
+			};
+			
+				const galleriesQuery = await ddb.send(new QueryCommand(queryParams));
+			allGalleryItems.push(...(galleriesQuery.Items || []));
+		} else {
+				// Need all galleries for filtering - but limit to reasonable amount
+				const MAX_GALLERIES_TO_FETCH = 1000; // Safety limit
+				let fetchedCount = 0;
+				
+			do {
+				const queryParams: any = {
+					TableName: galleriesTable,
+					IndexName: 'ownerId-index',
+					KeyConditionExpression: 'ownerId = :o',
+					ExpressionAttributeValues: { ':o': requester },
+						ScanIndexForward: false,
+						Limit: 100 // Fetch in chunks
+				};
+				
+				if (lastEvaluatedKey) {
+					queryParams.ExclusiveStartKey = lastEvaluatedKey;
+				}
+				
+					const galleriesQuery = await ddb.send(new QueryCommand(queryParams));
+					const items = galleriesQuery.Items || [];
+					allGalleryItems.push(...items);
+				lastEvaluatedKey = galleriesQuery.LastEvaluatedKey;
+					fetchedCount += items.length;
+					
+					// Early termination if we have enough for filtering
+					if (targetGalleryIds && allGalleryItems.length >= targetGalleryIds.size * 2) {
+						break;
+					}
+					
+					if (fetchedCount >= MAX_GALLERIES_TO_FETCH) {
+						break;
+					}
+			} while (lastEvaluatedKey);
+			}
+		}
 
 		const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
 		
-		const galleries = (galleriesQuery.Items || []).map((g: any) => {
+		// Transform galleries (lightweight operation)
+		const galleries = allGalleryItems.map((g: any) => {
 			let coverPhotoUrl = g.coverPhotoUrl;
 			if (coverPhotoUrl && cloudfrontDomain) {
 				const isS3Url = coverPhotoUrl.includes('.s3.') || coverPhotoUrl.includes('s3.amazonaws.com');
@@ -182,7 +305,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				selectionStats: g.selectionStats,
 				currentOrderId: g.currentOrderId,
 				lastOrderNumber: g.lastOrderNumber,
-				clientEmail: g.clientEmail, // Include clientEmail for "Send to Client" button visibility
+				clientEmail: g.clientEmail,
 				plan: g.plan,
 				priceCents: g.priceCents,
 				originalsLimitBytes: g.originalsLimitBytes,
@@ -197,44 +320,20 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		});
 
+		// Filter by target gallery IDs if needed
 		let galleriesToProcess = galleries;
 		if (targetGalleryIds && targetGalleryIds.size > 0) {
 			galleriesToProcess = galleries.filter((g: any) => targetGalleryIds!.has(g.galleryId));
 		}
 		
-		// Pre-fetch all paid transactions for this user (single query instead of N queries) for better performance
-		const paidTransactionsByGallery = new Map<string, boolean>();
-		if (transactionsTable && galleriesToProcess.length > 0) {
-			try {
-				let lastKey: Record<string, any> | undefined;
-				do {
-					const transactionsResult = await listTransactionsByUser(requester, {
-						status: 'PAID',
-						limit: 100,
-						exclusiveStartKey: lastKey
-					});
-					
-					transactionsResult.transactions.forEach((tx: any) => {
-						if (tx.galleryId) {
-							paidTransactionsByGallery.set(tx.galleryId, true);
-						}
-					});
-					
-					lastKey = transactionsResult.hasMore ? transactionsResult.lastKey : undefined;
-				} while (lastKey);
-			} catch (err) {
-				console.warn('Failed to batch query transactions, falling back to individual queries:', err);
-			}
-		}
-		
-		// Enrich with order summaries and payment status - use batching to prevent timeout
-		// Process galleries in batches of 50 to avoid overwhelming the system
+		// OPTIMIZATION: Enrich galleries in parallel batches (no sequential await)
 		const BATCH_SIZE = 50;
-		const enrichmentResults: Array<PromiseSettledResult<any>> = [];
+		const enrichmentPromises: Promise<any>[] = [];
 		
 		for (let i = 0; i < galleriesToProcess.length; i += BATCH_SIZE) {
 			const batch = galleriesToProcess.slice(i, i + BATCH_SIZE);
-			const batchResults = await Promise.allSettled(batch.map(async (g: any) => {
+			batch.forEach((g: any) => {
+				enrichmentPromises.push((async () => {
 			let orderData = { 
 				changeRequestPending: false, 
 				orderCount: 0, 
@@ -244,26 +343,11 @@ export const handler = lambdaLogger(async (event: any) => {
 				orderStatuses: [] as string[]
 			};
 			
-			let orders: any[] = [];
-			if (allOrdersByGallery.has(g.galleryId)) {
-				orders = allOrdersByGallery.get(g.galleryId)!;
-			} else if (ordersTable && g.galleryId) {
-				try {
-					const ordersQuery = await ddb.send(new QueryCommand({
-						TableName: ordersTable,
-						KeyConditionExpression: 'galleryId = :g',
-						ExpressionAttributeValues: { ':g': g.galleryId }
-					}));
-					orders = ordersQuery.Items || [];
-				} catch (err) {
-					// If orders query fails, continue without order data
-				}
-			}
+					const orders = allOrdersByGallery.get(g.galleryId) || [];
 			
 			if (orders.length > 0) {
 				const changeRequestPending = orders.some((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
 				const orderStatuses = orders.map((o: any) => o.deliveryStatus).filter(Boolean);
-				// Total revenue: sum of all order totals (additional photos) + photography package price
 				const ordersRevenueCents = orders.reduce((sum: number, o: any) => sum + (o.totalCents || 0), 0);
 				const photographyPackagePriceCents = g.pricingPackage?.packagePriceCents || 0;
 				const totalRevenueCents = ordersRevenueCents + photographyPackagePriceCents;
@@ -280,25 +364,8 @@ export const handler = lambdaLogger(async (event: any) => {
 				};
 			}
 
-			let isPaid = false;
-			let paymentStatus = 'UNPAID';
-			
-			if (paidTransactionsByGallery.has(g.galleryId)) {
-				isPaid = true;
-				paymentStatus = 'PAID';
-			} else if (paidTransactionsByGallery.size > 0) {
-				isPaid = false;
-				paymentStatus = 'UNPAID';
-			} else {
-				try {
-					const paidTransaction = await getPaidTransactionForGallery(g.galleryId);
-					isPaid = !!paidTransaction;
-					paymentStatus = isPaid ? 'PAID' : 'UNPAID';
-				} catch (err) {
-					isPaid = g.state === 'PAID_ACTIVE';
-					paymentStatus = isPaid ? 'PAID' : 'UNPAID';
-				}
-			}
+					const isPaid = transactionsData.has(g.galleryId);
+					const paymentStatus = isPaid ? 'PAID' : 'UNPAID';
 
 			let effectiveState = g.state;
 			if (!isPaid && g.state !== 'EXPIRED') {
@@ -314,35 +381,29 @@ export const handler = lambdaLogger(async (event: any) => {
 				isPaid,
 				...orderData
 			};
-			}));
-			
-			enrichmentResults.push(...batchResults);
+				})());
+			});
 		}
 		
+		// Wait for all enrichments in parallel
+		const enrichmentResults = await Promise.allSettled(enrichmentPromises);
 		const enrichedGalleries = enrichmentResults
-			.map((result, idx) => {
+			.map((result) => {
 				if (result.status === 'fulfilled') {
 					return result.value;
 				} else {
-					console.warn(`Failed to enrich gallery ${galleriesToProcess[idx]?.galleryId}:`, result.reason);
+					console.warn('Failed to enrich gallery:', result.reason);
 					return null;
 				}
 			})
 			.filter((g): g is NonNullable<typeof g> => g !== null);
 
+		// Apply filters
 		let filteredGalleries = enrichedGalleries;
 		if (filter) {
 			switch (filter) {
 			case 'unpaid':
-				// Wersje robocze: unpaid galleries (regardless of orders)
-				// Non-selective galleries have orders created immediately, but should still appear in robocze if unpaid
-				// Once a gallery is paid and has orders, it should appear in workflow status views instead
-				filteredGalleries = enrichedGalleries.filter((g: any) => {
-					// Show unpaid galleries (they may have orders if non-selective)
-					if (!g.isPaid) return true;
-					// Don't show paid galleries (they should be in workflow status views if they have orders)
-					return false;
-				});
+				filteredGalleries = enrichedGalleries.filter((g: any) => !g.isPaid);
 				break;
 				case 'wyslano':
 					filteredGalleries = enrichedGalleries.filter((g: any) => {
@@ -384,15 +445,49 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 		}
 
+		// Sort by createdAt descending (newest first)
+		filteredGalleries.sort((a: any, b: any) => {
+			const timeA = new Date(a.createdAt || 0).getTime();
+			const timeB = new Date(b.createdAt || 0).getTime();
+			return timeB - timeA;
+		});
+
+		// Apply cursor-based pagination
+		let paginatedGalleries = filteredGalleries;
+		if (cursor) {
+			const cursorIndex = filteredGalleries.findIndex((g: any) => 
+				g.galleryId === cursor!.galleryId && g.createdAt === cursor!.createdAt
+			);
+			if (cursorIndex >= 0) {
+				paginatedGalleries = filteredGalleries.slice(cursorIndex + 1);
+			}
+		}
+
+		// Apply limit
+		const hasMore = paginatedGalleries.length > limit;
+		const items = paginatedGalleries.slice(0, limit);
+
+		// Generate next cursor from last item
+		let nextCursor: string | null = null;
+		if (hasMore && items.length > 0) {
+			const lastItem = items[items.length - 1];
+			nextCursor = encodeURIComponent(JSON.stringify({
+				galleryId: lastItem.galleryId,
+				createdAt: lastItem.createdAt
+			}));
+		}
+
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ items: filteredGalleries })
+		body: JSON.stringify({
+			items,
+			hasMore,
+			nextCursor
+		})
 		};
 	} catch (error: any) {
 		console.error('List galleries failed:', error);
-		const { createLambdaErrorResponse } = require('../../lib/src/error-utils');
 		return createLambdaErrorResponse(error, 'Failed to list galleries', 500);
 	}
 });
-

@@ -58,16 +58,46 @@ export function useUpdateGallery() {
       });
 
       // Optimistically update gallery in list if it exists
-      if (previousGalleryList) {
-        queryClient.setQueryData<Gallery[]>(queryKeys.galleries.lists(), (old) => {
+      // Use setQueriesData to handle both regular and infinite queries
+      queryClient.setQueriesData(
+        {
+          predicate: (query) => {
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.length >= 2 &&
+              query.queryKey[0] === "galleries" &&
+              query.queryKey[1] === "list"
+            );
+          },
+        },
+        (old) => {
           if (!old) {
             return old;
           }
+          
+          // Handle infinite query structure (has pages array)
+          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+            return {
+              ...old,
+              pages: (old as any).pages.map((page: any) => ({
+                ...page,
+                items: page.items?.map((gallery: Gallery) =>
+                  gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
+                ) || []
+              }))
+            };
+          }
+          
+          // Handle regular array structure
+          if (Array.isArray(old)) {
           return old.map((gallery) =>
             gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
           );
-        });
       }
+          
+          return old;
+        }
+      );
 
       return { previousGallery, previousGalleryList };
     },
@@ -178,7 +208,7 @@ export function useUpdateGalleryName() {
       });
 
       // Optimistically update gallery in ALL list queries (regardless of filter)
-      queryClient.setQueriesData<Gallery[]>(
+      queryClient.setQueriesData(
         {
           predicate: (query) => {
             return (
@@ -193,9 +223,28 @@ export function useUpdateGalleryName() {
           if (!old) {
             return old;
           }
+          
+          // Handle infinite query structure (has pages array)
+          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+            return {
+              ...old,
+              pages: (old as any).pages.map((page: any) => ({
+                ...page,
+                items: page.items?.map((gallery: Gallery) =>
+                  gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
+                ) || []
+              }))
+            };
+          }
+          
+          // Handle regular array structure
+          if (Array.isArray(old)) {
           return old.map((gallery) =>
             gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
           );
+          }
+          
+          return old;
         }
       );
 
@@ -227,7 +276,7 @@ export function useUpdateGalleryName() {
         queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
 
         // Also update in ALL list caches (regardless of filter)
-        queryClient.setQueriesData<Gallery[]>(
+        queryClient.setQueriesData(
           {
             predicate: (query) => {
               return (
@@ -242,11 +291,32 @@ export function useUpdateGalleryName() {
             if (!old) {
               return old;
             }
+            
+            // Handle infinite query structure (has pages array)
+            if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+              return {
+                ...old,
+                pages: (old as any).pages.map((page: any) => ({
+                  ...page,
+                  items: page.items?.map((gallery: Gallery) =>
+                    gallery.galleryId === variables.galleryId
+                      ? { ...gallery, galleryName: variables.galleryName }
+                      : gallery
+                  ) || []
+                }))
+              };
+            }
+            
+            // Handle regular array structure
+            if (Array.isArray(old)) {
             return old.map((gallery) =>
               gallery.galleryId === variables.galleryId
                 ? { ...gallery, galleryName: variables.galleryName }
                 : gallery
             );
+            }
+            
+            return old;
           }
         );
       }
@@ -260,9 +330,99 @@ export function useDeleteGallery() {
 
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.delete(galleryId),
-    onSuccess: (_, galleryId) => {
+    onMutate: async (galleryId) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        predicate: (query) => {
+          return (
+            Array.isArray(query.queryKey) &&
+            query.queryKey.length >= 2 &&
+            query.queryKey[0] === "galleries" &&
+            (query.queryKey[1] === "list" || query.queryKey[1] === "detail")
+          );
+        },
+      });
+
+      // Snapshot previous list queries for rollback
+      const previousListQueries = new Map<string, any>();
+      queryClient
+        .getQueriesData({
+          predicate: (query) => {
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.length >= 2 &&
+              query.queryKey[0] === "galleries" &&
+              query.queryKey[1] === "list"
+            );
+          },
+        })
+        .forEach(([queryKey, data]) => {
+          if (data) {
+            const key = JSON.stringify(queryKey);
+            previousListQueries.set(key, data);
+          }
+        });
+
+      // Optimistically remove gallery from ALL list queries (infinite and regular)
+      queryClient.setQueriesData(
+        {
+          predicate: (query) => {
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.length >= 2 &&
+              query.queryKey[0] === "galleries" &&
+              query.queryKey[1] === "list"
+            );
+          },
+        },
+        (old) => {
+          if (!old) {
+            return old;
+          }
+
+          // Handle infinite query structure (has pages array)
+          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+            return {
+              ...old,
+              pages: (old as any).pages.map((page: any) => ({
+                ...page,
+                items: page.items?.filter((gallery: Gallery) => gallery.galleryId !== galleryId) || []
+              }))
+            };
+          }
+
+          // Handle regular array structure
+          if (Array.isArray(old)) {
+            return old.filter((gallery) => gallery.galleryId !== galleryId);
+          }
+
+          return old;
+        }
+      );
+
+      // Remove gallery detail query
       queryClient.removeQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+
+      return { previousListQueries };
+    },
+    onError: (_err, _galleryId, context) => {
+      // Rollback on error
+      if (context?.previousListQueries) {
+        context.previousListQueries.forEach((data, key) => {
+          try {
+            const queryKey = JSON.parse(key) as unknown[];
+            queryClient.setQueryData(queryKey, data);
+          } catch {
+            // Ignore JSON parse errors
+          }
+        });
+      }
+    },
+    onSuccess: (_, galleryId) => {
+      // Remove gallery detail query
+      queryClient.removeQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
+      // No need to invalidate - optimistic update already removed the gallery
+      // Only invalidate if we want to ensure backend consistency (optional)
     },
   });
 }

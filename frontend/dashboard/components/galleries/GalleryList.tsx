@@ -11,12 +11,15 @@ import {
   Menu,
   Rocket,
   Eye,
+  LayoutDashboard,
+  List as ListIcon,
 } from "lucide-react";
 import Link from "next/link";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
 
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
-import { useGalleries } from "../../hooks/queries/useGalleries";
+import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { usePrefetchGallery } from "../../hooks/usePrefetch";
 import { usePublishFlow } from "../../hooks/usePublishFlow";
@@ -32,6 +35,8 @@ import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
+import { GalleryCard } from "./GalleryCard";
+
 interface GalleryListProps {
   filter?:
     | "unpaid"
@@ -42,6 +47,8 @@ interface GalleryListProps {
     | "dostarczone";
   onLoadingChange?: (loading: boolean, initialLoad: boolean) => void;
   onWizardOpenChange?: (isOpen: boolean) => void;
+  viewMode?: "list" | "cards";
+  onViewModeChange?: (mode: "list" | "cards") => void;
 }
 
 // Helper function to format plan display (e.g., "1GB-12m" -> "1GB 12m")
@@ -143,6 +150,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
   filter = "unpaid",
   onLoadingChange,
   onWizardOpenChange,
+  viewMode: externalViewMode,
+  onViewModeChange,
 }) => {
   const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: `GalleryList-${filter}`,
@@ -156,10 +165,38 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [useHamburgerMenu, setUseHamburgerMenu] = useState(false);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { showToast } = useToast();
+  
+  // View toggle state - use external if provided, otherwise manage internally
+  const [internalViewMode, setInternalViewMode] = useState<"list" | "cards">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("galleryListViewMode");
+      return (saved === "list" || saved === "cards") ? saved : "cards";
+    }
+    return "cards";
+  });
+
+  const viewMode = externalViewMode ?? internalViewMode;
+  const setViewMode = onViewModeChange ?? setInternalViewMode;
 
   const prefetchGallery = usePrefetchGallery();
 
-  const { data: galleries = [], isLoading: loading, error: queryError } = useGalleries(filter);
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteGalleries({
+    filter,
+    limit: 20,
+  });
+
+  // Flatten pages into a single array of galleries
+  const galleries = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.items || []);
+  }, [data]);
 
   const initialLoad = loading && initialLoadRef.current;
 
@@ -271,6 +308,13 @@ const GalleryList: React.FC<GalleryListProps> = ({
     );
   };
 
+  // Save view mode preference (only if managing internally)
+  useEffect(() => {
+    if (typeof window !== "undefined" && !externalViewMode) {
+      localStorage.setItem("galleryListViewMode", internalViewMode);
+    }
+  }, [internalViewMode, externalViewMode]);
+
   const getEmptyStateConfig = () => {
     const handleCreateGallery = () => {
       // Dispatch event to open gallery creation wizard
@@ -357,57 +401,149 @@ const GalleryList: React.FC<GalleryListProps> = ({
         <InlineLoading text="Ładowanie galerii..." />
       ) : galleries.length === 0 ? (
         <EmptyState {...getEmptyStateConfig()} />
+      ) : viewMode === "cards" ? (
+        // Cards View with Infinite Scroll - Ultra Smooth with Early Preloading
+        <div className="w-full" style={{ height: "calc(100vh - 200px)", minHeight: "900px" }}>
+          <VirtuosoGrid
+            totalCount={galleries.length}
+            data={galleries}
+            rangeChanged={(range) => {
+              // Trigger prefetch when we're within 25 items of the end
+              // This ensures data loads well before user reaches the end, accounting for 1sec API latency
+              // Higher threshold accounts for faster scrolling speeds
+              const distanceFromEnd = galleries.length - range.endIndex;
+              const prefetchThreshold = 25; // Start loading when 25 items away from end
+              
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage) {
+                void fetchNextPage();
+              }
+            }}
+            endReached={() => {
+              // Fallback: also trigger when actually reaching the end (should rarely be needed)
+              if (hasNextPage && !isFetchingNextPage) {
+                void fetchNextPage();
+              }
+            }}
+            // Very large overscan to preload items well ahead for ultra-smooth scrolling
+            overscan={1200}
+            itemContent={(index) => {
+              const gallery = galleries[index];
+              if (!gallery) return null;
+              return (
+                <div className="p-2 h-full">
+                  <GalleryCard
+                    gallery={gallery}
+                    onPublish={handlePayClick}
+                    onDelete={handleDeleteClick}
+                    onPrefetch={prefetchGallery}
+                  />
+                </div>
+              );
+            }}
+            style={{ height: "100%" }}
+            components={{
+              List: (() => {
+                const VirtuosoGridList = React.forwardRef<HTMLDivElement, { style?: React.CSSProperties; children?: React.ReactNode }>(
+                  ({ style, children }, ref) => (
+                <div
+                  ref={ref}
+                  style={style}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                >
+                  {children}
+                </div>
+                  )
+                );
+                VirtuosoGridList.displayName = "VirtuosoGridList";
+                return VirtuosoGridList;
+              })(),
+              Footer: () =>
+                isFetchingNextPage ? (
+                  <div className="flex justify-center py-4 col-span-full opacity-0">
+                    <InlineLoading text="Ładowanie więcej galerii..." />
+                  </div>
+                ) : null,
+            }}
+          />
+        </div>
       ) : (
-        <div className="w-full overflow-visible">
-          <Table className="w-full relative">
-            <TableHeader>
-              <TableRow className="bg-gray-100 dark:bg-gray-900">
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[120px]"
-                >
-                  Okładka
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
-                >
-                  Nazwa galerii
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Plan
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Status
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Zlecenia
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Utworzono
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Akcje
-                </TableCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {galleries.map((gallery, index) => {
+        // List View with Infinite Scroll - Ultra Smooth with Early Preloading
+        <div className="w-full relative">
+          <div
+            className="w-full overflow-auto"
+            style={{ height: "calc(100vh - 200px)", minHeight: "800px" }}
+            onScroll={(e) => {
+              const target = e.target as HTMLElement;
+              const scrollTop = target.scrollTop;
+              const clientHeight = target.clientHeight;
+              
+              // Use same item-based prefetching as cards view for consistency
+              // Calculate how many items are remaining based on scroll position
+              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const totalItemsRendered = galleries.length;
+              
+              // Calculate which item index is currently at the bottom of viewport
+              const scrollBottom = scrollTop + clientHeight;
+              const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+              
+              // Calculate distance from end (same logic as cards view)
+              const distanceFromEnd = totalItemsRendered - itemsScrolled;
+              const prefetchThreshold = 25; // Same threshold as cards view
+              
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage) {
+                void fetchNextPage();
+              }
+            }}
+          >
+            <Table className="w-full relative">
+              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
+                <TableRow className="bg-gray-100 dark:bg-gray-900">
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[120px]"
+                  >
+                    Okładka
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
+                  >
+                    Nazwa galerii
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Plan
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Status
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Zlecenia
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Utworzono
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Akcje
+                  </TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {galleries.map((gallery, index) => {
                 const galleryName =
                   typeof gallery.galleryName === "string"
                     ? gallery.galleryName
@@ -423,7 +559,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
                 return (
                   <TableRow
-                    key={gallery.galleryId}
                     className={`h-[120px] ${
                       isEvenRow
                         ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
@@ -672,9 +807,19 @@ const GalleryList: React.FC<GalleryListProps> = ({
                   </TableRow>
                 );
               })}
+              {isFetchingNextPage && (
+                <TableRow>
+                  <TableCell colSpan={7} className="px-3 py-5">
+                    <div className="flex justify-center py-4">
+                      <InlineLoading text="Ładowanie więcej galerii..." />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>
+      </div>
       )}
 
       {/* Delete Confirmation Dialog */}

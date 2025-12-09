@@ -118,6 +118,7 @@ interface ListResponse<T> {
   items: T[];
   hasMore?: boolean;
   lastKey?: string | null;
+  nextCursor?: string | null;
 }
 
 class ApiService {
@@ -401,9 +402,24 @@ class ApiService {
     /**
      * List all galleries
      * @param filter - Optional filter: 'unpaid', 'wyslano', 'wybrano', 'prosba-o-zmiany', 'gotowe-do-wysylki', 'dostarczone'
+     * @param pagination - Optional pagination params: limit (default 50), cursor
      */
-    list: async (filter?: string): Promise<ListResponse<Gallery> | Gallery[]> => {
-      const url = filter ? `/galleries?filter=${encodeURIComponent(filter)}` : "/galleries";
+    list: async (
+      filter?: string,
+      pagination?: { limit?: number; cursor?: string | null }
+    ): Promise<ListResponse<Gallery> | Gallery[]> => {
+      const params = new URLSearchParams();
+      if (filter) {
+        params.append("filter", filter);
+      }
+      if (pagination?.limit) {
+        params.append("limit", pagination.limit.toString());
+      }
+      if (pagination?.cursor) {
+        params.append("cursor", pagination.cursor);
+      }
+      const queryString = params.toString();
+      const url = queryString ? `/galleries?${queryString}` : "/galleries";
       return await this._request(url);
     },
 
@@ -474,14 +490,30 @@ class ApiService {
      * Get gallery images
      * @param sizes - Optional comma-separated list of sizes to request (thumb,preview,bigthumb)
      *                 If not provided, all sizes are returned (backward compatible)
+     * @param pagination - Optional pagination params: limit (default 50), cursor
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getImages: async (galleryId: string, sizes?: string): Promise<{ images: any[] }> => {
+    getImages: async (
+      galleryId: string,
+      sizes?: string,
+      pagination?: { limit?: number; cursor?: string | null }
+    ): Promise<{ images: any[]; hasMore?: boolean; nextCursor?: string | null }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      const queryParams = sizes ? `?sizes=${encodeURIComponent(sizes)}` : "";
-      return await this._request(`/galleries/${galleryId}/images${queryParams}`);
+      const params = new URLSearchParams();
+      if (sizes) {
+        params.append("sizes", sizes);
+      }
+      if (pagination?.limit) {
+        params.append("limit", pagination.limit.toString());
+      }
+      if (pagination?.cursor) {
+        params.append("cursor", pagination.cursor);
+      }
+      const queryString = params.toString();
+      const url = queryString ? `/galleries/${galleryId}/images?${queryString}` : `/galleries/${galleryId}/images`;
+      return await this._request(url);
     },
 
     /**

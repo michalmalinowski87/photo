@@ -12,6 +12,7 @@ import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
 import Backdrop from "./Backdrop";
+import { DevMenuButton } from "../dev/DevMenuButton";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -159,6 +160,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
           </div>
         </div>
       </div>
+      <DevMenuButton />
     </>
   );
 };

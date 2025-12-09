@@ -9,6 +9,7 @@ import {
   ChevronDown,
   LogOut,
   AlertTriangle,
+  FlaskConical,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -262,7 +263,18 @@ const AppSidebar: React.FC = () => {
         {(isExpanded || isMobileOpen) && <SidebarWidget />}
       </div>
       {(isExpanded || isMobileOpen) && (
-        <div className="mt-auto pb-6">
+        <div className="mt-auto pb-6 space-y-2">
+          <Link
+            href="/dev"
+            className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              router.pathname?.startsWith("/dev")
+                ? "bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
+                : "text-gray-700 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-purple-900/10"
+            }`}
+          >
+            <FlaskConical size={26} />
+            <span>Dev Menu</span>
+          </Link>
           <Link
             href="/login"
             className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
