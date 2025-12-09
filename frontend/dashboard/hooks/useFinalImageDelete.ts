@@ -18,7 +18,7 @@ interface UseFinalImageDeleteOptions {
 export const useFinalImageDelete = ({
   galleryId,
   orderId,
-  setFinalImages,
+  setFinalImages: _setFinalImages,
   setOptimisticFinalsBytes,
 }: UseFinalImageDeleteOptions) => {
   const { showToast } = useToast();

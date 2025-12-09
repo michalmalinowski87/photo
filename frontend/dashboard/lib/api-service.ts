@@ -1283,6 +1283,116 @@ class ApiService {
     }> => {
       return await this._request("/dashboard/stats");
     },
+
+    /**
+     * Get order statuses for CHANGES_REQUESTED orders (for polling)
+     * Supports ETag/304 for efficient polling
+     */
+    getOrderStatuses: async (
+      etag?: string
+    ): Promise<{
+      orders: Array<{
+        orderId: string;
+        galleryId: string;
+        deliveryStatus: string;
+        paymentStatus: string;
+        amount: number;
+        state: string;
+        updatedAt: string;
+      }>;
+      timestamp: string;
+      etag?: string;
+    }> => {
+      // Re-initialize baseUrl if it's not set
+      if (!this.baseUrl && typeof window !== "undefined") {
+        this.baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      }
+
+      if (!this.baseUrl) {
+        const error = new Error(
+          "API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable."
+        ) as ApiError;
+        error.status = 500;
+        throw error;
+      }
+
+      const url = `${this.baseUrl}/dashboard/status`;
+      const token = await getValidToken();
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+
+      if (etag) {
+        headers["If-None-Match"] = etag;
+      }
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+      });
+
+      // Read ETag from response headers
+      const responseEtag =
+        response.headers.get("ETag") ?? response.headers.get("etag") ?? undefined;
+
+      // Handle 304 Not Modified - return empty orders (no changes)
+      if (response.status === 304) {
+        return {
+          orders: [],
+          timestamp: new Date().toISOString(),
+          etag: responseEtag ?? etag, // Use response ETag or keep existing
+        };
+      }
+
+      // Handle other non-ok responses
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        const isJson = contentType?.includes("application/json") ?? false;
+        let body: unknown;
+        try {
+          body = isJson ? await response.json() : await response.text();
+        } catch (_e) {
+          body = null;
+        }
+
+        const bodyObj = body as { error?: string; message?: string } | null;
+        const error: ApiError = new Error(
+          bodyObj?.error ?? bodyObj?.message ?? `HTTP ${response.status}: ${response.statusText}`
+        );
+        error.status = response.status;
+        error.body = body;
+        throw error;
+      }
+
+      // Parse successful response
+      const contentType = response.headers.get("content-type");
+      const isJson = contentType?.includes("application/json") ?? false;
+
+      if (!isJson) {
+        const error: ApiError = new Error("Expected JSON response");
+        error.status = response.status;
+        throw error;
+      }
+
+      const data = (await response.json()) as {
+        orders: Array<{
+          orderId: string;
+          galleryId: string;
+          deliveryStatus: string;
+          paymentStatus: string;
+          amount: number;
+          state: string;
+          updatedAt: string;
+        }>;
+        timestamp: string;
+      };
+      return {
+        ...data,
+        etag: responseEtag ?? etag, // Use response ETag or fall back to existing (shouldn't happen, but safe)
+      };
+    },
   };
 
   // ==================== PAYMENTS ====================

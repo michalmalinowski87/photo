@@ -513,7 +513,8 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   });
 
   // Add custom thumbnail upload plugin to upload generated thumbnails to S3
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
+  // @ts-expect-error - ThumbnailUploadPlugin is a custom plugin not in Uppy types
   uppy.use(ThumbnailUploadPlugin as any);
 
   // Add AWS S3 plugin with custom getUploadParameters and multipart support
@@ -737,7 +738,12 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     },
     // Type compatibility issue with Uppy's internal types - acceptable given Uppy's type system limitations
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises
-    listParts: async (_file: any, { uploadId, key }: { uploadId: string; key: string }) => {
+    listParts: async (_file: any, opts: { uploadId?: string; key?: string }) => {
+      const uploadId = opts.uploadId;
+      const key = opts.key;
+      if (!uploadId || !key) {
+        return [];
+      }
       // List existing parts for resume
       // If this fails (e.g., 503 errors), return empty array to allow upload to continue
       // This prevents resume failures from blocking uploads
@@ -801,6 +807,7 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     },
     // Type compatibility issue with Uppy's internal types - acceptable given Uppy's type system limitations
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-misused-promises
+    // @ts-expect-error - Uppy type system limitations with multipart upload types
     completeMultipartUpload: async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       file: any,
@@ -840,8 +847,13 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     abortMultipartUpload: async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       _file: any,
-      { uploadId, key }: { uploadId: string; key: string }
+      opts: { uploadId?: string; key?: string }
     ) => {
+      const uploadId = opts.uploadId;
+      const key = opts.key;
+      if (!uploadId || !key) {
+        return;
+      }
       // Abort the multipart upload
       const galleryId = config.galleryId;
       // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.

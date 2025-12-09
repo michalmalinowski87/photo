@@ -28,7 +28,6 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   };
 
   const handleWizardSuccess = (galleryId: string, orderId?: string, selectionEnabled?: boolean) => {
-    console.log("handleWizardSuccess called:", { galleryId, orderId, selectionEnabled });
     if (!devLocked) {
       setWizardOpen(false);
     }
@@ -42,11 +41,9 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       if (!devLocked) {
         if (!selectionEnabled && orderId) {
           const orderPath = `/galleries/${galleryId}/orders/${orderId}`;
-          console.log("Redirecting to order page:", orderPath);
           void router.push(orderPath);
         } else {
           const photosPath = `/galleries/${galleryId}/photos`;
-          console.log("Redirecting to photos page:", photosPath, { selectionEnabled, orderId });
           void router.push(photosPath);
         }
       }

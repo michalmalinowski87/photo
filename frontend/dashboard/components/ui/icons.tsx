@@ -11,15 +11,35 @@ export const Icons = {
   // flex-shrink-0 prevents icon from shrinking in flex containers
   // Using stroke-current only so icons display as outlines without filled backgrounds
   success: ({ className, ...props }: LucideProps) => (
-    <CheckCircle2 {...props} className={cn("flex-shrink-0 stroke-current", className)} strokeWidth={2.5} fill="none" />
+    <CheckCircle2
+      {...props}
+      className={cn("flex-shrink-0 stroke-current", className)}
+      strokeWidth={2.5}
+      fill="none"
+    />
   ),
   error: ({ className, ...props }: LucideProps) => (
-    <XCircle {...props} className={cn("flex-shrink-0 stroke-current", className)} strokeWidth={2.5} fill="none" />
+    <XCircle
+      {...props}
+      className={cn("flex-shrink-0 stroke-current", className)}
+      strokeWidth={2.5}
+      fill="none"
+    />
   ),
   warning: ({ className, ...props }: LucideProps) => (
-    <AlertTriangle {...props} className={cn("flex-shrink-0 stroke-current", className)} strokeWidth={2.5} fill="none" />
+    <AlertTriangle
+      {...props}
+      className={cn("flex-shrink-0 stroke-current", className)}
+      strokeWidth={2.5}
+      fill="none"
+    />
   ),
   info: ({ className, ...props }: LucideProps) => (
-    <Info {...props} className={cn("flex-shrink-0 stroke-current", className)} strokeWidth={2.5} fill="none" />
+    <Info
+      {...props}
+      className={cn("flex-shrink-0 stroke-current", className)}
+      strokeWidth={2.5}
+      fill="none"
+    />
   ),
 };

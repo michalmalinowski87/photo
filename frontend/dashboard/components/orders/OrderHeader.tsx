@@ -53,7 +53,9 @@ export function OrderHeader() {
         )}
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">
           {isNonSelectionGallery
-            ? (gallery?.galleryName ?? "Galeria")
+            ? typeof gallery?.galleryName === "string"
+              ? gallery.galleryName
+              : "Galeria"
             : `Zlecenie #${String(displayOrderNumber)}`}
         </h1>
       </div>

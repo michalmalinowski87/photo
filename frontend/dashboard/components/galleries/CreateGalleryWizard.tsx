@@ -386,8 +386,13 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
         pricingPackage.packageName = finalPackageName;
       }
 
+      // Validate selectionEnabled is set before proceeding
+      if (data.selectionEnabled === undefined) {
+        throw new Error("Typ galerii musi być wybrany");
+      }
+
       const requestBody: CreateGalleryRequestBody = {
-        selectionEnabled: data.selectionEnabled!,
+        selectionEnabled: data.selectionEnabled,
         pricingPackage,
       };
 
@@ -444,24 +449,24 @@ const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
       }
       // Navigate after closing wizard to ensure smooth transition
       // Pass orderId and selectionEnabled for proper routing
-      const orderId = (response as any)?.orderId;
+      // Gallery type allows additional properties via [key: string]: unknown
+      const orderId =
+        typeof response === "object" && response !== null && "orderId" in response
+          ? typeof response.orderId === "string"
+            ? response.orderId
+            : undefined
+          : undefined;
       // Use the actual response value, defaulting based on whether orderId exists
       // If orderId exists, it's definitely non-selective (selectionEnabled = false)
       // If orderId doesn't exist, check response.selectionEnabled, default to true if undefined
-      const responseSelectionEnabled = (response as any)?.selectionEnabled;
-      const selectionEnabled = orderId
-        ? false
-        : responseSelectionEnabled !== undefined
-          ? responseSelectionEnabled
-          : true;
-
-      console.log("Gallery created:", {
-        galleryId: response.galleryId,
-        orderId,
-        selectionEnabled,
-        responseSelectionEnabled,
-        fullResponse: response,
-      });
+      const responseSelectionEnabled =
+        typeof response === "object" &&
+        response !== null &&
+        "selectionEnabled" in response &&
+        typeof response.selectionEnabled === "boolean"
+          ? response.selectionEnabled
+          : undefined;
+      const selectionEnabled = orderId ? false : (responseSelectionEnabled ?? true);
 
       onSuccess(response.galleryId, orderId, selectionEnabled);
     } catch (err: unknown) {

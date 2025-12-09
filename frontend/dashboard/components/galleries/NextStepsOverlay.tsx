@@ -18,9 +18,7 @@ import { useModalStore, useOverlayStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
-interface NextStepsOverlayProps {
-  // No props needed - component gets all data from React Query stores
-}
+type NextStepsOverlayProps = Record<string, never>;
 
 interface Step {
   id: string;

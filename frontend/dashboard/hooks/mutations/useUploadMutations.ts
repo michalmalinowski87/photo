@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
 export function useValidateUploadLimits() {
   const queryClient = useQueryClient();
@@ -19,11 +20,14 @@ export function useValidateUploadLimits() {
 
 export function useMarkFinalUploadComplete() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.uploads.markFinalUploadComplete(galleryId, orderId),
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Invalidate order detail, final images, and gallery detail
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
@@ -87,7 +91,7 @@ export function useCreateMultipartUpload() {
         files: Array<{
           key: string;
           contentType?: string;
-          fileSize?: number;
+          fileSize: number;
         }>;
       };
     }) => api.uploads.createMultipartUpload(galleryId, data),

@@ -2,15 +2,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Order } from "../../types";
+import type { Gallery, GalleryImage, Order } from "../../types";
+import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
 export function useApproveChangeRequest() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.approveChangeRequest(galleryId, orderId),
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Invalidate order detail, orders by gallery, and gallery detail
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
@@ -27,6 +31,7 @@ export function useApproveChangeRequest() {
 
 export function useDenyChangeRequest() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({
@@ -39,6 +44,8 @@ export function useDenyChangeRequest() {
       reason?: string;
     }) => api.orders.denyChangeRequest(galleryId, orderId, reason),
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Invalidate order detail, orders by gallery, and gallery detail
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
@@ -55,6 +62,7 @@ export function useDenyChangeRequest() {
 
 export function useMarkOrderPaid() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
@@ -127,6 +135,8 @@ export function useMarkOrderPaid() {
       }
     },
     onSuccess: (data, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Update cache with response data if available (more accurate than optimistic update)
       // Merge with existing order data to avoid overwriting with partial response
       if (data) {
@@ -159,11 +169,14 @@ export function useMarkOrderPaid() {
 
 export function useMarkOrderPartiallyPaid() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markPartiallyPaid(galleryId, orderId),
     onSuccess: (data, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Update cache directly with response data if available
       if (data) {
         queryClient.setQueryData(
@@ -184,11 +197,14 @@ export function useMarkOrderPartiallyPaid() {
 
 export function useMarkOrderCanceled() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markCanceled(galleryId, orderId),
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
@@ -201,11 +217,14 @@ export function useMarkOrderCanceled() {
 
 export function useMarkOrderRefunded() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
       api.orders.markRefunded(galleryId, orderId),
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
       });
@@ -218,6 +237,7 @@ export function useMarkOrderRefunded() {
 
 export function useSendFinalLink() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({ galleryId, orderId }: { galleryId: string; orderId: string }) =>
@@ -276,6 +296,8 @@ export function useSendFinalLink() {
       }
     },
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation
+      resetTimer();
       // Invalidate to refetch and get the real data from server
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
@@ -293,6 +315,7 @@ export function useSendFinalLink() {
  */
 export function useDeleteFinalImage() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({
@@ -314,33 +337,35 @@ export function useDeleteFinalImage() {
       });
 
       // Snapshot previous state
-      const previousFinalImages = queryClient.getQueryData<any[]>(
+      const previousFinalImages = queryClient.getQueryData<GalleryImage[]>(
         queryKeys.orders.finalImages(galleryId, orderId)
       );
-      const previousGallery = queryClient.getQueryData<any>(queryKeys.galleries.detail(galleryId));
+      const previousGallery = queryClient.getQueryData<Gallery>(
+        queryKeys.galleries.detail(galleryId)
+      );
 
       // Calculate total file size from images being deleted for optimistic storage update
       let totalBytesToSubtract = 0;
       if (previousFinalImages) {
-        const imagesToDelete = previousFinalImages.filter((img: any) =>
+        const imagesToDelete = previousFinalImages.filter((img) =>
           imageKeys.includes(img.key ?? img.filename ?? "")
         );
-        totalBytesToSubtract = imagesToDelete.reduce((sum, img: any) => sum + (img.size || 0), 0);
+        totalBytesToSubtract = imagesToDelete.reduce((sum, img) => sum + (img.size ?? 0), 0);
       }
 
       // Optimistically remove images from cache
-      queryClient.setQueryData<any[]>(
+      queryClient.setQueryData<GalleryImage[]>(
         queryKeys.orders.finalImages(galleryId, orderId),
-        (old = []) => old.filter((img: any) => !imageKeys.includes(img.key ?? img.filename ?? ""))
+        (old = []) => old.filter((img) => !imageKeys.includes(img.key ?? img.filename ?? ""))
       );
 
       // Optimistically update storage usage for immediate UI feedback
       if (totalBytesToSubtract > 0 && previousGallery) {
-        queryClient.setQueryData<any>(queryKeys.galleries.detail(galleryId), (old) => {
+        queryClient.setQueryData<Gallery>(queryKeys.galleries.detail(galleryId), (old) => {
           if (!old) {
             return old;
           }
-          const currentFinals = old.finalsBytesUsed || 0;
+          const currentFinals = old.finalsBytesUsed ?? 0;
           return {
             ...old,
             finalsBytesUsed: Math.max(0, currentFinals - totalBytesToSubtract),
@@ -366,19 +391,25 @@ export function useDeleteFinalImage() {
       }
     },
     onSuccess: (data, variables) => {
+      // Reset polling timer after successful mutation (deleting final images can affect order status)
+      resetTimer();
       // Update gallery detail with API response if available (more accurate than optimistic update)
       // The backend returns updated storage values synchronously
       if (data && typeof data === "object" && "finalsBytesUsed" in data) {
-        queryClient.setQueryData<any>(queryKeys.galleries.detail(variables.galleryId), (old) => {
-          if (!old) {
-            return old;
+        queryClient.setQueryData<Gallery>(
+          queryKeys.galleries.detail(variables.galleryId),
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            const dataTyped = data as { finalsBytesUsed: number; finalsLimitBytes?: number };
+            return {
+              ...old,
+              finalsBytesUsed: dataTyped.finalsBytesUsed,
+              finalsLimitBytes: dataTyped.finalsLimitBytes ?? old.finalsLimitBytes,
+            };
           }
-          return {
-            ...old,
-            finalsBytesUsed: data.finalsBytesUsed,
-            finalsLimitBytes: data.finalsLimitBytes ?? old.finalsLimitBytes,
-          };
-        });
+        );
       }
 
       // Invalidate final images query to ensure UI reflects backend state
@@ -427,6 +458,7 @@ export function useCleanupOriginals() {
 
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: ({
@@ -439,6 +471,8 @@ export function useUpdateOrder() {
       data: Partial<Record<string, unknown>>;
     }) => api.orders.update(galleryId, orderId, data),
     onSuccess: (data, variables) => {
+      // Reset polling timer after successful mutation (updating order could change status)
+      resetTimer();
       // Update cache directly with response data if available
       if (data) {
         queryClient.setQueryData(
@@ -561,6 +595,7 @@ export function useDownloadFinalZip() {
 
 export function useUploadFinalPhotos() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: async ({
@@ -599,6 +634,8 @@ export function useUploadFinalPhotos() {
       return { success: true, fileCount: files.length };
     },
     onSuccess: (_, variables) => {
+      // Reset polling timer after successful mutation (uploading final photos can trigger status change)
+      resetTimer();
       // Invalidate order detail and related queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),

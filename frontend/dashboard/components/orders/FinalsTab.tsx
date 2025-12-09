@@ -5,7 +5,6 @@ import { useImageSelection } from "../../hooks/useImageSelection";
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { BulkDeleteConfirmDialog } from "../dialogs/BulkDeleteConfirmDialog";
-import Button from "../ui/button/Button";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";

@@ -214,7 +214,11 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
       <ClientSendSuccessPopup
         isOpen={showClientSendPopup}
         onClose={() => setShowClientSendPopup(false)}
-        galleryName={gallery?.galleryName}
+        galleryName={
+          gallery?.galleryName && typeof gallery.galleryName === "string"
+            ? gallery.galleryName
+            : undefined
+        }
       />
     </>
   );

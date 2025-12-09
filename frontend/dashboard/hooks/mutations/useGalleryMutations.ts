@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 import type { Gallery, GalleryImage } from "../../types";
+import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
 export function useCreateGallery() {
   const queryClient = useQueryClient();
@@ -106,10 +107,13 @@ export function useDeleteGallery() {
 
 export function useSendGalleryToClient() {
   const queryClient = useQueryClient();
+  const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
     mutationFn: (galleryId: string) => api.galleries.sendToClient(galleryId),
     onSuccess: (_, galleryId) => {
+      // Reset polling timer after successful mutation (sending gallery can create orders or change status)
+      resetTimer();
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.detail(galleryId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.orders.byGallery(galleryId) });
     },

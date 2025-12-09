@@ -20,7 +20,10 @@ export const CoverPhotoUpload: React.FC = () => {
   const updateGalleryMutation = useUpdateGallery();
   const { refetch: refetchCoverPhoto } = useGalleryCoverPhoto(galleryId);
 
-  const coverPhotoUrl = gallery?.coverPhotoUrl ?? null;
+  const coverPhotoUrl =
+    gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
+      ? gallery.coverPhotoUrl
+      : null;
   const { showToast } = useToast();
   const [uploadingCover, setUploadingCover] = useState(false);
   const [processingCover, setProcessingCover] = useState(false);

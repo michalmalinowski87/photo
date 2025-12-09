@@ -24,7 +24,7 @@ import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOrigin
 const router = Router();
 
 // Gallery-scoped orders (mounted at root, so paths are relative to root)
-router.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
+// /galleries/:id/orders route is registered as public route in index.ts (no requireAuth) to support client JWT tokens
 // orders/delivered route is registered as public route in index.ts (no requireAuth)
 router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
 router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));

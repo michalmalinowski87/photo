@@ -111,7 +111,9 @@ export default function GallerySidebar() {
             onClick={handleGalleryNameClick}
             className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer text-left w-full"
           >
-            {effectiveGallery.galleryName ?? "Galeria"}
+            {typeof effectiveGallery.galleryName === "string"
+              ? effectiveGallery.galleryName
+              : "Galeria"}
           </button>
         </div>
       ) : shouldShowLoading ? (
@@ -132,7 +134,11 @@ export default function GallerySidebar() {
 
       <DeleteGalleryButton
         galleryId={effectiveGallery?.galleryId ?? ""}
-        galleryName={effectiveGallery?.galleryName}
+        galleryName={
+          effectiveGallery?.galleryName && typeof effectiveGallery.galleryName === "string"
+            ? effectiveGallery.galleryName
+            : undefined
+        }
       />
     </aside>
   );

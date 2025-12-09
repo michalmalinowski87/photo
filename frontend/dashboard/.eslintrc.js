@@ -70,7 +70,6 @@ module.exports = {
     "prefer-arrow-callback": "error",
     "prefer-template": "error",
     eqeqeq: ["error", "always"],
-    curly: ["error", "all"],
     "no-throw-literal": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",

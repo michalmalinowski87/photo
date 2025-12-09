@@ -34,7 +34,9 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
 
     const updatePosition = () => {
-      if (!triggerRef.current || !tooltipRef.current) {return;}
+      if (!triggerRef.current || !tooltipRef.current) {
+        return;
+      }
 
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
@@ -137,7 +139,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
-        maxWidth: maxWidth || undefined,
+        maxWidth: maxWidth ?? undefined,
       }}
     >
       {content}

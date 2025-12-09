@@ -100,7 +100,11 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
       }
 
       // Get gallery name from React Query data
-      setGalleryName(gallery?.galleryName ?? galleryIdForQuery);
+      setGalleryName(
+        gallery?.galleryName && typeof gallery.galleryName === "string"
+          ? gallery.galleryName
+          : (galleryIdForQuery ?? "")
+      );
     } catch (error) {
       setMessage(formatApiError(error));
     }

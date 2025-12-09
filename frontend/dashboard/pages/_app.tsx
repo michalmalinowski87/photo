@@ -17,11 +17,11 @@ import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
-import { AuthProvider } from "../context/AuthProvider";
+import { AuthProvider, useAuth } from "../context/AuthProvider";
+import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
 import { queryClient } from "../lib/react-query";
-import { initCacheLogger } from "../lib/react-query-cache-logger";
 import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -46,34 +46,28 @@ const GALLERY_ROUTES = [
   "/galleries/[id]/orders/[orderId]/settings",
 ];
 
-export default function App({ Component, pageProps }: AppProps) {
+export default function App(props: AppProps) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WebPCompatibilityCheck>
+        <AuthProvider>
+          <AppContent {...props} />
+        </AuthProvider>
+      </WebPCompatibilityCheck>
+      {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
+  );
+}
+
+function AppContent({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { recoveryState, showModal, handleResume, handleClear } = useUploadRecovery();
   const [swRegistered, setSwRegistered] = useState(false);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+  const { isAuthenticated } = useAuth();
 
-  // Initialize unified dev tools (development only)
-  useEffect(() => {
-    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-      initDevTools();
-      // Initialize React Query cache logger for monitoring
-      initCacheLogger(queryClient);
-    }
-  }, []);
-
-  // Register Service Worker for Golden Retriever
-  useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator && !swRegistered) {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
-        .then(() => {
-          setSwRegistered(true);
-        })
-        .catch(() => {
-          // Continue without Service Worker (fallback to IndexedDB only)
-        });
-    }
-  }, [swRegistered]);
+  // Enable global order status polling when authenticated
+  useOrderStatusPolling({ enablePolling: isAuthenticated });
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
@@ -178,46 +172,62 @@ export default function App({ Component, pageProps }: AppProps) {
     };
   }, [router.isReady, router.pathname, router.events, setSessionExpired]);
 
+  // Register Service Worker for Golden Retriever
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && !swRegistered) {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
+        .then(() => {
+          setSwRegistered(true);
+        })
+        .catch(() => {
+          // Continue without Service Worker (fallback to IndexedDB only)
+        });
+    }
+  }, [swRegistered]);
+
+  // Initialize unified dev tools (development only)
+  useEffect(() => {
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      initDevTools();
+    }
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <WebPCompatibilityCheck>
-        <AuthProvider>
-          {/* Auth routes don't need protection */}
-          {isAuthRoute ? (
-            <AuthLayout>
-              <Component {...pageProps} />
-            </AuthLayout>
-          ) : (
-            <ProtectedRoute>
-              <SessionExpiredModalWrapper />
-              <ToastContainer />
-              <ZipDownloadContainer />
-              {recoveryState && (
-                <UploadRecoveryModal
-                  isOpen={showModal}
-                  onClose={handleClear}
-                  onResume={handleResume}
-                  onClear={handleClear}
-                  fileCount={recoveryState.fileCount}
-                  galleryId={recoveryState.galleryId}
-                  type={recoveryState.type}
-                  orderId={recoveryState.orderId}
-                />
-              )}
-              {isGalleryRoute ? (
-                <GalleryLayoutWrapper>
-                  <Component {...pageProps} />
-                </GalleryLayoutWrapper>
-              ) : (
-                <AppLayout>
-                  <Component {...pageProps} />
-                </AppLayout>
-              )}
-            </ProtectedRoute>
+    <>
+      {/* Auth routes don't need protection */}
+      {isAuthRoute ? (
+        <AuthLayout>
+          <Component {...pageProps} />
+        </AuthLayout>
+      ) : (
+        <ProtectedRoute>
+          <SessionExpiredModalWrapper />
+          <ToastContainer />
+          <ZipDownloadContainer />
+          {recoveryState && (
+            <UploadRecoveryModal
+              isOpen={showModal}
+              onClose={handleClear}
+              onResume={handleResume}
+              onClear={handleClear}
+              fileCount={recoveryState.fileCount}
+              galleryId={recoveryState.galleryId}
+              type={recoveryState.type}
+              orderId={recoveryState.orderId}
+            />
           )}
-        </AuthProvider>
-      </WebPCompatibilityCheck>
-      {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
-    </QueryClientProvider>
+          {isGalleryRoute ? (
+            <GalleryLayoutWrapper>
+              <Component {...pageProps} />
+            </GalleryLayoutWrapper>
+          ) : (
+            <AppLayout>
+              <Component {...pageProps} />
+            </AppLayout>
+          )}
+        </ProtectedRoute>
+      )}
+    </>
   );
 }

@@ -10,6 +10,7 @@ import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
 import * as galleriesListImages from '../galleries/listImages';
 import { ordersRoutes } from './routes/orders';
+import * as ordersList from '../../functions/orders/list';
 import * as ordersListDelivered from '../../functions/orders/listDelivered';
 import * as ordersDownloadZip from '../../functions/orders/downloadZip';
 import { clientsRoutes } from './routes/clients';
@@ -84,6 +85,7 @@ app.post('/galleries/:id/client-login', wrapHandler(galleriesClientLogin.handler
 // Client gallery endpoints (use client JWT tokens, not Cognito)
 // These endpoints verify client JWT tokens in the Lambda function itself
 app.get('/galleries/:id/images', wrapHandler(galleriesListImages.handler));
+app.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
 app.get('/galleries/:id/orders/delivered', wrapHandler(ordersListDelivered.handler));
 app.get('/galleries/:id/selections', wrapHandler(selectionsGet.handler));
 app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.handler));

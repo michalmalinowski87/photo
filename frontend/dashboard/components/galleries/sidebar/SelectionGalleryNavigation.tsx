@@ -1,9 +1,9 @@
 import { FileText, Image as ImageIcon, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
 import React, { useMemo } from "react";
 
+import { useOrders } from "../../../hooks/queries/useOrders";
 import { useGalleryRoute } from "../../../hooks/useGalleryRoute";
 import { useNavigation } from "../../../hooks/useNavigation";
-import { useOrders } from "../../../hooks/queries/useOrders";
 
 interface SelectionGalleryNavigationProps {
   galleryId: string;
@@ -32,34 +32,21 @@ export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProp
 
     if (hasChangesRequested) {
       return (
-        <AlertTriangle
-          size={20}
-          className="text-orange-500 dark:text-orange-400 flex-shrink-0"
-        />
+        <AlertTriangle size={20} className="text-orange-500 dark:text-orange-400 flex-shrink-0" />
       );
     }
 
     // Check if all orders are delivered
-    const allDelivered = orders.every(
-      (order) => order.deliveryStatus === "DELIVERED"
-    );
+    const allDelivered = orders.every((order) => order.deliveryStatus === "DELIVERED");
 
     if (allDelivered) {
       return (
-        <CheckCircle2
-          size={20}
-          className="text-green-500 dark:text-green-400 flex-shrink-0"
-        />
+        <CheckCircle2 size={20} className="text-green-500 dark:text-green-400 flex-shrink-0" />
       );
     }
 
     // Not all orders are delivered (but none with CHANGES_REQUESTED)
-    return (
-      <Info
-        size={20}
-        className="text-blue-500 dark:text-blue-400 flex-shrink-0"
-      />
-    );
+    return <Info size={20} className="text-blue-500 dark:text-blue-400 flex-shrink-0" />;
   }, [orders]);
 
   const handleOrdersClick = () => {
@@ -84,7 +71,9 @@ export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProp
         >
           <FileText size={26} className="flex-shrink-0" />
           <span className="flex-shrink-0 whitespace-nowrap">Zlecenia</span>
-          {orderStatusIndicator && <span className="ml-auto flex-shrink-0">{orderStatusIndicator}</span>}
+          {orderStatusIndicator && (
+            <span className="ml-auto flex-shrink-0">{orderStatusIndicator}</span>
+          )}
         </button>
       </li>
 

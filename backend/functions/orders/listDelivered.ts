@@ -24,42 +24,22 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
 	}
 
-	// Query for DELIVERED, PREPARING_DELIVERY, or CLIENT_APPROVED orders
+	// Query for DELIVERED orders only (orders that have been actually delivered)
 	// Try using GSI first, fall back to query + filter if GSI not available yet
 	let orders: any[] = [];
 	try {
 		// Try using galleryId-deliveryStatus-index GSI (if available)
-		const ordersQuery1 = await ddb.send(new QueryCommand({
+		const ordersQuery = await ddb.send(new QueryCommand({
 			TableName: ordersTable,
 			IndexName: 'galleryId-deliveryStatus-index',
-			KeyConditionExpression: 'galleryId = :g AND deliveryStatus = :ds1',
+			KeyConditionExpression: 'galleryId = :g AND deliveryStatus = :ds',
 			ExpressionAttributeValues: {
 				':g': galleryId,
-				':ds1': 'DELIVERED'
+				':ds': 'DELIVERED'
 			}
 		}));
 		
-		const ordersQuery2 = await ddb.send(new QueryCommand({
-			TableName: ordersTable,
-			IndexName: 'galleryId-deliveryStatus-index',
-			KeyConditionExpression: 'galleryId = :g AND deliveryStatus = :ds2',
-			ExpressionAttributeValues: {
-				':g': galleryId,
-				':ds2': 'PREPARING_DELIVERY'
-			}
-		}));
-		
-		const ordersQuery3 = await ddb.send(new QueryCommand({
-			TableName: ordersTable,
-			IndexName: 'galleryId-deliveryStatus-index',
-			KeyConditionExpression: 'galleryId = :g AND deliveryStatus = :ds3',
-			ExpressionAttributeValues: {
-				':g': galleryId,
-				':ds3': 'CLIENT_APPROVED'
-			}
-		}));
-		
-		orders = [...(ordersQuery1.Items || []), ...(ordersQuery2.Items || []), ...(ordersQuery3.Items || [])];
+		orders = ordersQuery.Items || [];
 	} catch (gsiError: any) {
 		// Fallback: Query all orders for gallery and filter by status
 		console.warn('GSI not available, using fallback query:', gsiError.message);
@@ -72,9 +52,7 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 		}));
 		
 		orders = (allOrdersQuery.Items || []).filter((order: any) => 
-			order.deliveryStatus === 'DELIVERED' || 
-			order.deliveryStatus === 'PREPARING_DELIVERY' ||
-			order.deliveryStatus === 'CLIENT_APPROVED'
+			order.deliveryStatus === 'DELIVERED'
 		);
 	}
 

@@ -36,7 +36,7 @@ import { ImageFallbackUrls } from "../../../lib/image-fallback";
 import { storeLogger } from "../../../lib/store-logger";
 import { useModalStore } from "../../../store";
 import { useUnifiedStore } from "../../../store/unifiedStore";
-import type { Gallery, GalleryImage, Order } from "../../../types";
+import type { Gallery, GalleryImage } from "../../../types";
 
 interface ApiImage {
   key?: string;
@@ -63,7 +63,7 @@ export default function GalleryPhotos() {
   const { logSkippedLoad } = usePageLogger({
     pageName: "GalleryPhotos",
   });
-  const { gallery: galleryRaw, loading: galleryLoading, reloadGallery } = useGallery();
+  const { gallery: galleryRaw, loading: _galleryLoading, reloadGallery } = useGallery();
   const gallery = galleryRaw && typeof galleryRaw === "object" ? galleryRaw : null;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
@@ -203,7 +203,7 @@ export default function GalleryPhotos() {
         }
       }
     }
-  }, [galleryId]);
+  }, [galleryId, closeModal]);
 
   // Use hook for deletion logic
   const {
@@ -1467,7 +1467,6 @@ export default function GalleryPhotos() {
             ? deletingImages.has(imageToDelete.key ?? imageToDelete.filename ?? "")
             : false
         }
-        suppressKey="original_image_delete_confirm_suppress"
       />
 
       {/* Bulk Delete Confirmation Dialog */}
@@ -1481,7 +1480,6 @@ export default function GalleryPhotos() {
         onConfirm={handleBulkDeleteConfirm}
         count={selectedKeys.size}
         loading={isBulkDeleting}
-        suppressKey="original_image_delete_confirm_suppress"
       />
 
       {/* Delete All Unselected Confirmation Dialog */}
@@ -1496,7 +1494,6 @@ export default function GalleryPhotos() {
         onConfirm={handleDeleteAllUnselectedConfirm}
         count={unselectedImagesToDelete.length}
         loading={isBulkDeleting}
-        suppressKey="original_image_delete_confirm_suppress"
       />
 
       {/* Debug: Show suppression status and allow manual clearing (only in development) */}
