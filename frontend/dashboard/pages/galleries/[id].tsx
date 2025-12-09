@@ -515,7 +515,10 @@ export default function GalleryDetail() {
     setDenyModalOpen(true);
   };
 
-  const handleDenyConfirm = async (reason?: string, preventFutureChangeRequests?: boolean): Promise<void> => {
+  const handleDenyConfirm = async (
+    reason?: string,
+    preventFutureChangeRequests?: boolean
+  ): Promise<void> => {
     if (!galleryId || !denyOrderId) {
       return;
     }

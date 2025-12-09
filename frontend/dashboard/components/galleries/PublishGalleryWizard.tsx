@@ -70,10 +70,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
     return undefined;
   }, [isNonSelectionGallery, galleryOrders]);
 
-  const { data: finalImages = [] } = useOrderFinalImages(
-    galleryId,
-    effectiveOrderIdForFinalImages
-  );
+  const { data: finalImages = [] } = useOrderFinalImages(galleryId, effectiveOrderIdForFinalImages);
   const finalImagesCount = finalImages.length;
   const hasPhotos = isNonSelectionGallery
     ? finalImagesCount > 0

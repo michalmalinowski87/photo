@@ -786,9 +786,9 @@ class ApiService {
       }
       return await this._request(`/galleries/${galleryId}/orders/${orderId}/deny-change`, {
         method: "POST",
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           reason: reason ?? undefined,
-          preventFutureChangeRequests: preventFutureChangeRequests ?? false
+          preventFutureChangeRequests: preventFutureChangeRequests ?? false,
         }),
       });
     },

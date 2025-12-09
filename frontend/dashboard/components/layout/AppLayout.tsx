@@ -1,9 +1,9 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
-import { isGalleryRoute } from "../../lib/navigation";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { useSidebar } from "../../hooks/useSidebar";
+import { isGalleryRoute } from "../../lib/navigation";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";

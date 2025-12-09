@@ -9,6 +9,7 @@ import { useUnifiedStore } from "../../store/unifiedStore";
 
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";
+import { EditableGalleryName } from "./sidebar/EditableGalleryName";
 import { GalleryMetadata } from "./sidebar/GalleryMetadata";
 import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
@@ -115,14 +116,15 @@ export default function GallerySidebar() {
       {/* Gallery Info */}
       {!shouldShowLoading && effectiveGallery ? (
         <div className="py-4 border-b border-gray-200 dark:border-gray-800">
-          <button
-            onClick={handleGalleryNameClick}
-            className="text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer text-left w-full"
-          >
-            {typeof effectiveGallery.galleryName === "string"
-              ? effectiveGallery.galleryName
-              : "Galeria"}
-          </button>
+          <EditableGalleryName
+            galleryId={effectiveGallery.galleryId}
+            galleryName={
+              typeof effectiveGallery.galleryName === "string"
+                ? effectiveGallery.galleryName
+                : "Galeria"
+            }
+            onNameClick={handleGalleryNameClick}
+          />
         </div>
       ) : shouldShowLoading ? (
         <div className="py-4 border-b border-gray-200 dark:border-gray-800">

@@ -15,11 +15,5 @@ export default function OrderSettings() {
     return null;
   }
 
-  return (
-    <GallerySettingsForm
-      galleryId={galleryIdStr}
-      cancelLabel="Powrót do zlecenia"
-      cancelHref={`/galleries/${galleryIdStr}/orders/${orderIdStr}`}
-    />
-  );
+  return <GallerySettingsForm galleryId={galleryIdStr} />;
 }

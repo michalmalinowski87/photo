@@ -3,8 +3,6 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React from "react";
 
-import { Tooltip } from "../../ui/tooltip/Tooltip";
-
 interface GallerySettingsLinkProps {
   galleryId: string;
   orderId?: string;
@@ -14,7 +12,7 @@ interface GallerySettingsLinkProps {
 export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
   galleryId,
   orderId,
-  hasDeliveredOrders,
+  hasDeliveredOrders: _hasDeliveredOrders,
 }) => {
   const router = useRouter();
   const isOnOrderPage = router.pathname?.includes("/orders/");
@@ -23,19 +21,6 @@ export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
     isOnOrderPage && orderId
       ? `/galleries/${galleryId}/orders/${orderId}/settings`
       : `/galleries/${galleryId}/settings`;
-
-  if (hasDeliveredOrders) {
-    return (
-      <li>
-        <Tooltip content="Ustawienia galerii są zablokowane dla dostarczonych galerii">
-          <div className="flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50">
-            <Settings size={26} />
-            <span>Ustawienia</span>
-          </div>
-        </Tooltip>
-      </li>
-    );
-  }
 
   return (
     <li>

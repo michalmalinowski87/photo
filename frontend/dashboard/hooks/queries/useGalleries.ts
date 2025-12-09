@@ -2,7 +2,7 @@ import { useQuery, useQueryClient, UseQueryOptions } from "@tanstack/react-query
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
-import type { Gallery } from "../../types";
+import type { Gallery, GalleryImage } from "../../types";
 
 export function useGalleries(
   filter?: string,
@@ -30,6 +30,7 @@ export function useGallery(
   const queryClient = useQueryClient();
 
   // Try to get gallery from list cache to use as initialData for instant display when navigating from a list
+  // Prefer list cache over detail cache because list responses are more complete
   const getInitialData = (): Gallery | undefined => {
     if (!galleryId) return undefined;
 
@@ -46,15 +47,37 @@ export function useGallery(
       }
     }
 
+    // Fall back to detail cache if list cache doesn't have it
+    // This is useful when navigating directly to a gallery without going through list first
+    const detailCache = queryClient.getQueryData<Gallery>(queryKeys.galleries.detail(galleryId));
+
+    // Only use detail cache if it has essential fields (avoid incomplete creation responses)
+    if (detailCache?.galleryId) {
+      // Check if this looks like a complete gallery object (has createdAt or other expected fields)
+      // If it only has galleryId, paid, selectionEnabled, orderId - it's likely a creation response
+      const hasEssentialFields =
+        detailCache.createdAt !== undefined ||
+        detailCache.galleryName !== undefined ||
+        detailCache.pricingPackage !== undefined ||
+        Object.keys(detailCache).length > 5; // More than just the basic creation response
+
+      if (hasEssentialFields) {
+        return detailCache;
+      }
+    }
+
     return undefined;
   };
 
   const initialData = getInitialData();
 
   return useQuery<Gallery>({
-    queryKey: queryKeys.galleries.detail(galleryId!),
+    queryKey: queryKeys.galleries.detail(galleryId ?? ""),
     queryFn: async () => {
-      const gallery = await api.galleries.get(galleryId!);
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      const gallery = await api.galleries.get(galleryId);
       return gallery as Gallery;
     },
     enabled: !!galleryId,
@@ -68,13 +91,16 @@ export function useGallery(
 export function useGalleryImages(
   galleryId: string | undefined,
   type: "originals" | "finals" | "thumb" = "thumb",
-  options?: Omit<UseQueryOptions<any[]>, "queryKey" | "queryFn">
+  options?: Omit<UseQueryOptions<GalleryImage[]>, "queryKey" | "queryFn">
 ) {
-  return useQuery({
-    queryKey: queryKeys.galleries.images(galleryId!, type),
+  return useQuery<GalleryImage[]>({
+    queryKey: queryKeys.galleries.images(galleryId ?? "", type),
     queryFn: async () => {
-      const response = await api.galleries.getImages(galleryId!, type);
-      return response.images || [];
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      const response = await api.galleries.getImages(galleryId, type);
+      return (response.images || []) as GalleryImage[];
     },
     enabled: !!galleryId,
     staleTime: 30 * 1000,
@@ -84,8 +110,13 @@ export function useGalleryImages(
 
 export function useGalleryCoverPhoto(galleryId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.galleries.coverPhoto(galleryId!),
-    queryFn: () => api.galleries.getCoverPhoto(galleryId!),
+    queryKey: queryKeys.galleries.coverPhoto(galleryId ?? ""),
+    queryFn: () => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return api.galleries.getCoverPhoto(galleryId);
+    },
     enabled: !!galleryId,
     staleTime: 30 * 1000,
   });
@@ -93,8 +124,13 @@ export function useGalleryCoverPhoto(galleryId: string | undefined) {
 
 export function useGalleryDeliveredOrders(galleryId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.galleries.deliveredOrders(galleryId!),
-    queryFn: () => api.galleries.checkDeliveredOrders(galleryId!),
+    queryKey: queryKeys.galleries.deliveredOrders(galleryId ?? ""),
+    queryFn: () => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return api.galleries.checkDeliveredOrders(galleryId);
+    },
     enabled: !!galleryId,
     staleTime: 30 * 1000,
     select: (data) => {
@@ -103,14 +139,44 @@ export function useGalleryDeliveredOrders(galleryId: string | undefined) {
   });
 }
 
+interface CalculatePlanResponse {
+  suggestedPlan: unknown;
+  originalsLimitBytes: number;
+  finalsLimitBytes: number;
+  uploadedSizeBytes: number;
+  selectionEnabled: boolean;
+  usagePercentage?: number;
+  isNearCapacity?: boolean;
+  isAtCapacity?: boolean;
+  exceedsLargestPlan?: boolean;
+  nextTierPlan?: {
+    planKey: string;
+    name: string;
+    priceCents: number;
+    storageLimitBytes: number;
+    storage: string;
+  };
+}
+
 export function useCalculatePlan(
   galleryId: string | undefined,
   duration: string = "1m",
-  options?: Omit<UseQueryOptions<any>, "queryKey" | "queryFn">
+  options?: Omit<UseQueryOptions<CalculatePlanResponse>, "queryKey" | "queryFn">
 ) {
-  return useQuery({
-    queryKey: queryKeys.galleries.calculatePlan(galleryId!, duration),
-    queryFn: () => api.galleries.calculatePlan(galleryId!, duration),
+  // Manually construct queryKey to avoid type issues with undefined galleryId
+  // The query is disabled when galleryId is undefined, so the key won't be used
+  const queryKey = galleryId
+    ? (["galleries", "detail", galleryId, "calculate-plan", duration] as const)
+    : (["galleries", "detail", "", "calculate-plan", duration] as const);
+
+  return useQuery<CalculatePlanResponse>({
+    queryKey,
+    queryFn: () => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return api.galleries.calculatePlan(galleryId, duration);
+    },
     enabled: !!galleryId,
     staleTime: 30 * 1000,
     ...options,

@@ -12,7 +12,13 @@ export function useCreateGallery() {
     mutationFn: (data: Partial<Gallery>) => api.galleries.create(data),
     onSuccess: (data) => {
       if (data?.galleryId) {
+        // Set cache with response data for immediate display
         queryClient.setQueryData(queryKeys.galleries.detail(data.galleryId), data);
+        // Refetch gallery detail to ensure we have complete data from server
+        // This is important because the creation response might not include all fields
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(data.galleryId),
+        });
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
     },
@@ -104,6 +110,148 @@ export function useUpdateGallery() {
         });
       }
     },
+  });
+}
+
+/**
+ * Optimistic-only mutation for updating gallery name.
+ * Does not invalidate queries to avoid unnecessary refetches.
+ * Only updates the gallery name in cache - no other data depends on it.
+ */
+export function useUpdateGalleryName() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ galleryId, galleryName }: { galleryId: string; galleryName: string }) =>
+      api.galleries.update(galleryId, { galleryName }),
+    onMutate: async ({ galleryId, galleryName }) => {
+      // Cancel outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
+      });
+      await queryClient.cancelQueries({
+        predicate: (query) => {
+          // Cancel all list queries (with or without filters)
+          return (
+            Array.isArray(query.queryKey) &&
+            query.queryKey.length >= 2 &&
+            query.queryKey[0] === "galleries" &&
+            query.queryKey[1] === "list"
+          );
+        },
+      });
+
+      // Snapshot previous values for rollback
+      const previousGallery = queryClient.getQueryData<Gallery>(
+        queryKeys.galleries.detail(galleryId)
+      );
+
+      // Get all list query caches for rollback
+      const previousListQueries = new Map<string, Gallery[]>();
+      queryClient
+        .getQueriesData<Gallery[]>({
+          predicate: (query) => {
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.length >= 2 &&
+              query.queryKey[0] === "galleries" &&
+              query.queryKey[1] === "list"
+            );
+          },
+        })
+        .forEach(([queryKey, data]) => {
+          if (data) {
+            const key = JSON.stringify(queryKey);
+            previousListQueries.set(key, data);
+          }
+        });
+
+      // Optimistically update gallery detail
+      queryClient.setQueryData<Gallery>(queryKeys.galleries.detail(galleryId), (old) => {
+        if (!old) {
+          return old;
+        }
+        return {
+          ...old,
+          galleryName,
+        };
+      });
+
+      // Optimistically update gallery in ALL list queries (regardless of filter)
+      queryClient.setQueriesData<Gallery[]>(
+        {
+          predicate: (query) => {
+            return (
+              Array.isArray(query.queryKey) &&
+              query.queryKey.length >= 2 &&
+              query.queryKey[0] === "galleries" &&
+              query.queryKey[1] === "list"
+            );
+          },
+        },
+        (old) => {
+          if (!old) {
+            return old;
+          }
+          return old.map((gallery) =>
+            gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
+          );
+        }
+      );
+
+      return { previousGallery, previousListQueries };
+    },
+    onError: (_err, variables, context) => {
+      // Rollback on error
+      if (context?.previousGallery) {
+        queryClient.setQueryData(
+          queryKeys.galleries.detail(variables.galleryId),
+          context.previousGallery
+        );
+      }
+      if (context?.previousListQueries) {
+        context.previousListQueries.forEach((data, key) => {
+          try {
+            const queryKey = JSON.parse(key) as unknown[];
+            queryClient.setQueryData(queryKey, data);
+          } catch {
+            // Ignore JSON parse errors
+          }
+        });
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Update cache with response data (more accurate than optimistic update)
+      // No query invalidation - we trust the optimistic update and server response
+      if (data) {
+        queryClient.setQueryData(queryKeys.galleries.detail(variables.galleryId), data);
+
+        // Also update in ALL list caches (regardless of filter)
+        queryClient.setQueriesData<Gallery[]>(
+          {
+            predicate: (query) => {
+              return (
+                Array.isArray(query.queryKey) &&
+                query.queryKey.length >= 2 &&
+                query.queryKey[0] === "galleries" &&
+                query.queryKey[1] === "list"
+              );
+            },
+          },
+          (old) => {
+            if (!old) {
+              return old;
+            }
+            return old.map((gallery) =>
+              gallery.galleryId === variables.galleryId
+                ? { ...gallery, galleryName: variables.galleryName }
+                : gallery
+            );
+          }
+        );
+      }
+    },
+    // No onSettled - we don't invalidate queries to avoid refetches
   });
 }
 

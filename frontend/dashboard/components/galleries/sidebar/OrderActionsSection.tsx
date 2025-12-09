@@ -38,10 +38,7 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   // Check if gallery has photos
   // For non-selection galleries: check final images count
   // For selection galleries: check originalsBytesUsed
-  const { data: finalImages = [] } = useOrderFinalImages(
-    galleryIdForQuery,
-    orderId
-  );
+  const { data: finalImages = [] } = useOrderFinalImages(galleryIdForQuery, orderId);
   const finalImagesCount = finalImages.length;
   const hasPhotos = isNonSelectionGallery
     ? finalImagesCount > 0

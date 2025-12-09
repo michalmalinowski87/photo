@@ -40,10 +40,10 @@ export const CoverPhotoUpload: React.FC = () => {
     !gallery.coverPhotoUrl.startsWith("blob:") &&
     !gallery.coverPhotoUrl.includes(".s3.") &&
     !gallery.coverPhotoUrl.includes("s3.amazonaws.com");
-  
+
   // Keep showing loading state if we've started upload but don't have CloudFront URL yet
   const shouldShowLoadingState = isUploadingOrProcessing || (hasStartedUpload && !hasCloudFrontUrl);
-  
+
   // Reset imageReady when upload starts or URL changes
   useEffect(() => {
     if (isUploadingOrProcessing || !hasCloudFrontUrl) {
@@ -54,16 +54,16 @@ export const CoverPhotoUpload: React.FC = () => {
       setHasStartedUpload(false);
     }
   }, [isUploadingOrProcessing, hasCloudFrontUrl]);
-  
+
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // Determine upload/processing states based on mutation and phase
   // If phase is not set yet but mutation is pending, default to uploading
-  const isUploading = uploadCoverPhotoMutation.isPending && (uploadPhase === "uploading" || uploadPhase === null);
+  const isUploading =
+    uploadCoverPhotoMutation.isPending && (uploadPhase === "uploading" || uploadPhase === null);
   const isProcessing = uploadCoverPhotoMutation.isPending && uploadPhase === "processing";
-  
 
   // Handle mutation success/error with toasts
   useEffect(() => {
@@ -104,7 +104,6 @@ export const CoverPhotoUpload: React.FC = () => {
     showToast,
   ]);
 
-
   // Track upload phase when a new upload starts
   useEffect(() => {
     if (uploadCoverPhotoMutation.isPending) {
@@ -127,7 +126,6 @@ export const CoverPhotoUpload: React.FC = () => {
       return undefined;
     }
   }, [uploadCoverPhotoMutation.isPending, uploadPhase]);
-
 
   const handleCoverPhotoUpload = useCallback(
     (file: File): void => {
@@ -300,7 +298,9 @@ export const CoverPhotoUpload: React.FC = () => {
             {isUploading ? (
               <>
                 <div className="absolute inset-0 bg-black bg-opacity-70 rounded-lg flex items-center justify-center">
-                  <div className="text-white text-base font-semibold">Przesyłanie do serwera...</div>
+                  <div className="text-white text-base font-semibold">
+                    Przesyłanie do serwera...
+                  </div>
                 </div>
                 <Plus size={48} className="text-gray-400 dark:text-gray-500 mb-2 opacity-30" />
                 <p className="text-sm text-gray-500 dark:text-gray-500 text-center px-4">

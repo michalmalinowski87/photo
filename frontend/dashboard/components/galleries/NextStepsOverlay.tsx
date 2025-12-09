@@ -814,7 +814,10 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
               );
 
               // Wrap with tooltip when collapsed or when disabled publish step
-              if (!nextStepsOverlayExpanded || (step.id === "publish" && isDisabled && !hasPhotos)) {
+              if (
+                !nextStepsOverlayExpanded ||
+                (step.id === "publish" && isDisabled && !hasPhotos)
+              ) {
                 return (
                   <Tooltip
                     key={step.id}
