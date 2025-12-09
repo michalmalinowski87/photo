@@ -5,7 +5,8 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
-import { useOrders } from "../../hooks/queries/useOrders";
+import { useGallery } from "../../hooks/queries/useGalleries";
+import { useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../hooks/queries/useWallet";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
@@ -52,11 +53,31 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   const router = useRouter();
   const { data: walletData } = useWalletBalance();
   const walletBalanceCents = walletData?.balanceCents ?? 0;
-  const { refetch: refetchOrders } = useOrders(galleryId);
+  const { refetch: refetchOrders, data: galleryOrders = [] } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
+  const { data: gallery } = useGallery(galleryId);
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
+
+  // Check if gallery has photos
+  // For non-selective galleries: check final images from first order
+  // For selective galleries: check originalsBytesUsed
+  const effectiveOrderIdForFinalImages = useMemo(() => {
+    if (isNonSelectionGallery && galleryOrders.length > 0) {
+      return galleryOrders[0]?.orderId;
+    }
+    return undefined;
+  }, [isNonSelectionGallery, galleryOrders]);
+
+  const { data: finalImages = [] } = useOrderFinalImages(
+    galleryId,
+    effectiveOrderIdForFinalImages
+  );
+  const finalImagesCount = finalImages.length;
+  const hasPhotos = isNonSelectionGallery
+    ? finalImagesCount > 0
+    : (gallery?.originalsBytesUsed ?? 0) > 0;
 
   const handlePaymentSuccess = useCallback(async () => {
     onSuccess?.();
@@ -202,6 +223,10 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
   const handlePublish = () => {
     if (!selectedPlan) {
       showToast("error", "Błąd", "Proszę wybrać plan");
+      return;
+    }
+    if (!hasPhotos) {
+      showToast("error", "Błąd", "Najpierw prześlij zdjęcia");
       return;
     }
 
@@ -421,7 +446,7 @@ export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
         <Button
           variant="primary"
           onClick={handlePublish}
-          disabled={isProcessing || pricingLoading || !selectedPlan}
+          disabled={isProcessing || pricingLoading || !selectedPlan || !hasPhotos}
           className="flex-1"
         >
           {isProcessing

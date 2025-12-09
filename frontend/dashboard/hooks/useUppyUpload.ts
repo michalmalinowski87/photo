@@ -236,9 +236,12 @@ async function handlePostUploadActions(
         // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
         // Uppy's onComplete callback requires synchronous finalization during upload completion lifecycle.
         await api.uploads.markFinalUploadComplete(galleryId, orderId);
-        // Manually invalidate order detail if using fallback
+        // Manually invalidate order detail and gallery list if using fallback
         await queryClient.invalidateQueries({
           queryKey: queryKeys.orders.detail(galleryId, orderId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.lists(),
         });
       }
 
@@ -341,6 +344,12 @@ async function handlePostUploadActions(
         queryKey: queryKeys.galleries.images(galleryId, "originals"),
       });
     }
+
+    // Always invalidate gallery list to refresh originalsBytesUsed/finalsBytesUsed
+    // This ensures the publish button state is updated in the gallery list view
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.galleries.lists(),
+    });
 
     // Reload gallery UI - this will fetch images and update state
     // We don't fetch here to avoid duplicate requests - let reloadGallery handle it

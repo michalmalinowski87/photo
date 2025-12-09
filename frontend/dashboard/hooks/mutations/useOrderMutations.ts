@@ -659,6 +659,10 @@ export function useUploadFinalPhotos() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
       });
+      // Invalidate gallery list to refresh finalsBytesUsed for publish button state
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.lists(),
+      });
     },
   });
 }

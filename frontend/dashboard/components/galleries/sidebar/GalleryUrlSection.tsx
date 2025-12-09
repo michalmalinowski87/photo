@@ -9,6 +9,7 @@ import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import Button from "../../ui/button/Button";
+import { Tooltip } from "../../ui/tooltip/Tooltip";
 
 interface GalleryUrlSectionProps {
   shouldHideSecondaryElements: boolean;
@@ -81,7 +82,9 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
     ? finalImagesCount > 0
     : (gallery?.originalsBytesUsed ?? 0) > 0;
 
-  const shouldShowPublishButton = !isPaid && hasPhotos && gallery && !isLoading;
+  // Always show publish button when gallery is not paid (regardless of photos)
+  // But disable it when there are no photos
+  const shouldShowPublishButton = !isPaid && gallery && !isLoading;
 
   // Defensive check: don't render if no gallery URL
   if (!displayGalleryUrl) {
@@ -198,17 +201,25 @@ export const GalleryUrlSection: React.FC<GalleryUrlSectionProps> = ({
         </span>
       </Button>
 
-      {/* Publish Gallery Button - Show when photos uploaded but not published */}
+      {/* Publish Gallery Button - Show when not paid, disabled if no photos */}
       {shouldShowPublishButton && (
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handlePublishClick}
-          className="w-full mt-2.5"
-          startIcon={<Plus size={20} />}
+        <Tooltip
+          content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
+          side="top"
+          align="center"
+          fullWidth
         >
-          Opublikuj galerię
-        </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handlePublishClick}
+            disabled={!hasPhotos}
+            className="w-full mt-2.5"
+            startIcon={<Plus size={20} />}
+          >
+            Opublikuj galerię
+          </Button>
+        </Tooltip>
       )}
 
       {/* Share Button - Show when published and ready to send */}

@@ -8,7 +8,7 @@ import {
   useSendFinalLink,
 } from "../../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
-import { useOrder } from "../../../hooks/queries/useOrders";
+import { useOrder, useOrderFinalImages } from "../../../hooks/queries/useOrders";
 import { useDownloadUtils } from "../../../hooks/useDownloadUtils";
 import { useModal } from "../../../hooks/useModal";
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
@@ -16,6 +16,7 @@ import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
+import { Tooltip } from "../../ui/tooltip/Tooltip";
 
 interface OrderActionsSectionProps {
   orderId: string;
@@ -33,6 +34,18 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
   const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
   const { data: orderData } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
+
+  // Check if gallery has photos
+  // For non-selection galleries: check final images count
+  // For selection galleries: check originalsBytesUsed
+  const { data: finalImages = [] } = useOrderFinalImages(
+    galleryIdForQuery,
+    orderId
+  );
+  const finalImagesCount = finalImages.length;
+  const hasPhotos = isNonSelectionGallery
+    ? finalImagesCount > 0
+    : (gallery?.originalsBytesUsed ?? 0) > 0;
 
   // Type guard: ensure order is properly typed
   const order: Order | undefined = orderData;
@@ -179,15 +192,23 @@ export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderI
       <div className="space-y-2.5 px-3">
         {/* Publish Gallery Button for Non-Selection Galleries */}
         {shouldShowPublishButton && (
-          <Button
-            size="md"
-            variant="primary"
-            onClick={handlePublishClick}
-            className="w-full justify-start"
-            startIcon={<Home size={20} strokeWidth={2} />}
+          <Tooltip
+            content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
+            side="top"
+            align="start"
+            fullWidth
           >
-            Opublikuj galerię
-          </Button>
+            <Button
+              size="md"
+              variant="primary"
+              onClick={handlePublishClick}
+              disabled={!hasPhotos}
+              className="w-full justify-start"
+              startIcon={<Home size={20} strokeWidth={2} />}
+            >
+              Opublikuj galerię
+            </Button>
+          </Tooltip>
         )}
 
         {/* Download Selected Originals ZIP */}

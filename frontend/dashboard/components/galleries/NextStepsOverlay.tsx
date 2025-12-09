@@ -721,7 +721,22 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
                 return null;
               }
 
-              const isDisabled = step.id === "send" && !isPaid;
+              // Check if gallery has photos
+              // For selective galleries: check original photos
+              // For non-selective galleries: check final images
+              const hasPhotos = isNonSelectionGallery
+                ? finalImagesCount > 0
+                : (gallery?.originalsBytesUsed ?? 0) > 0;
+
+              // Disable publish step if no photos, or send step if not paid
+              const isDisabled =
+                (step.id === "publish" && !hasPhotos) || (step.id === "send" && !isPaid);
+
+              // Get tooltip content for disabled publish step
+              const tooltipContent =
+                step.id === "publish" && isDisabled && !hasPhotos
+                  ? "Najpierw prześlij zdjęcia"
+                  : step.label;
 
               const stepButton = (
                 <button
@@ -798,10 +813,16 @@ export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
                 </button>
               );
 
-              // Wrap with tooltip when collapsed
-              if (!nextStepsOverlayExpanded) {
+              // Wrap with tooltip when collapsed or when disabled publish step
+              if (!nextStepsOverlayExpanded || (step.id === "publish" && isDisabled && !hasPhotos)) {
                 return (
-                  <Tooltip key={step.id} content={step.label} side="top" align="end" fullWidth>
+                  <Tooltip
+                    key={step.id}
+                    content={tooltipContent}
+                    side="top"
+                    align={!nextStepsOverlayExpanded ? "end" : "center"}
+                    fullWidth={!nextStepsOverlayExpanded}
+                  >
                     {stepButton}
                   </Tooltip>
                 );

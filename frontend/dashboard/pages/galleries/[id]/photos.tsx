@@ -1495,36 +1495,6 @@ export default function GalleryPhotos() {
         count={unselectedImagesToDelete.length}
         loading={isBulkDeleting}
       />
-
-      {/* Debug: Show suppression status and allow manual clearing (only in development) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 left-4 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs border border-gray-300 dark:border-gray-600">
-          <div className="text-gray-600 dark:text-gray-400 mb-1">
-            Suppression:{" "}
-            {(() => {
-              const suppressKey = "photo_delete_confirm_suppress";
-              const suppressUntil = localStorage.getItem(suppressKey);
-              if (suppressUntil) {
-                const suppressUntilTime = parseInt(suppressUntil, 10);
-                const isActive = Date.now() < suppressUntilTime;
-                const remaining = Math.max(0, suppressUntilTime - Date.now());
-                const minutes = Math.floor(remaining / 60000);
-                const seconds = Math.floor((remaining % 60000) / 1000);
-                return isActive ? `Active (${minutes}m ${seconds}s remaining)` : "Expired";
-              }
-              return "Not set";
-            })()}
-          </div>
-          <button
-            onClick={() => {
-              localStorage.removeItem("photo_delete_confirm_suppress");
-            }}
-            className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
-          >
-            Clear Suppression
-          </button>
-        </div>
-      )}
     </>
   );
 }

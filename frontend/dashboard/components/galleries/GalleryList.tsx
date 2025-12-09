@@ -532,18 +532,41 @@ const GalleryList: React.FC<GalleryListProps> = ({
                             }
                             className="w-48 bg-white dark:bg-gray-900 shadow-xl"
                           >
-                            {!gallery.isPaid && (
-                              <DropdownItem
-                                onClick={() => {
-                                  handlePayClick(gallery.galleryId);
-                                  setOpenActionMenu(null);
-                                }}
-                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl"
-                              >
-                                <Rocket size={16} />
-                                Opublikuj
-                              </DropdownItem>
-                            )}
+                            {!gallery.isPaid && (() => {
+                              // Check if gallery has photos
+                              // For selective galleries: check originalsBytesUsed
+                              // For non-selective galleries: check both finalsBytesUsed and originalsBytesUsed
+                              // (photos should be in finals, but check both for robustness)
+                              const isSelectionGallery = gallery.selectionEnabled !== false;
+                              const hasPhotos = isSelectionGallery
+                                ? (gallery.originalsBytesUsed ?? 0) > 0
+                                : (gallery.finalsBytesUsed ?? 0) > 0 ||
+                                  (gallery.originalsBytesUsed ?? 0) > 0;
+
+                              return (
+                                <Tooltip
+                                  content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
+                                  side="left"
+                                  align="center"
+                                >
+                                  <div>
+                                    <DropdownItem
+                                      onClick={() => {
+                                        if (hasPhotos) {
+                                          handlePayClick(gallery.galleryId);
+                                          setOpenActionMenu(null);
+                                        }
+                                      }}
+                                      disabled={!hasPhotos}
+                                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                    >
+                                      <Rocket size={16} />
+                                      Opublikuj
+                                    </DropdownItem>
+                                  </div>
+                                </Tooltip>
+                              );
+                            })()}
                             <div onMouseEnter={() => prefetchGallery(gallery.galleryId)}>
                               <DropdownItem
                                 tag="a"
@@ -583,17 +606,39 @@ const GalleryList: React.FC<GalleryListProps> = ({
                         </div>
                       ) : (
                         <div className="flex items-center">
-                          {!gallery.isPaid && (
-                            <Tooltip content="Opublikuj" side="top">
-                              <button
-                                onClick={() => handlePayClick(gallery.galleryId)}
-                                className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5"
-                                aria-label="Opublikuj"
+                          {!gallery.isPaid && (() => {
+                            // Check if gallery has photos
+                            // For selective galleries: check originalsBytesUsed
+                            // For non-selective galleries: check both finalsBytesUsed and originalsBytesUsed
+                            // (photos should be in finals, but check both for robustness)
+                            const isSelectionGallery = gallery.selectionEnabled !== false;
+                            const hasPhotos = isSelectionGallery
+                              ? (gallery.originalsBytesUsed ?? 0) > 0
+                              : (gallery.finalsBytesUsed ?? 0) > 0 ||
+                                (gallery.originalsBytesUsed ?? 0) > 0;
+
+                            return (
+                              <Tooltip
+                                content={
+                                  !hasPhotos ? "Najpierw prześlij zdjęcia" : "Opublikuj"
+                                }
+                                side="top"
                               >
-                                <Rocket className="w-5 h-5" />
-                              </button>
-                            </Tooltip>
-                          )}
+                                <button
+                                  onClick={() => {
+                                    if (hasPhotos) {
+                                      handlePayClick(gallery.galleryId);
+                                    }
+                                  }}
+                                  disabled={!hasPhotos}
+                                  className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-brand-500"
+                                  aria-label="Opublikuj"
+                                >
+                                  <Rocket className="w-5 h-5" />
+                                </button>
+                              </Tooltip>
+                            );
+                          })()}
                           <Tooltip content="Szczegóły" side="top">
                             <Link
                               href={`/galleries/${gallery.galleryId}`}
