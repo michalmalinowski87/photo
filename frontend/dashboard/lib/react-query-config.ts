@@ -19,8 +19,9 @@ const MINUTE = 60 * SECOND;
 export const galleryDetailOptions: Partial<
   UseQueryOptions<unknown, Error, unknown, readonly unknown[]>
 > = {
-  staleTime: 2 * MINUTE, // 2 minutes - data changes infrequently
-  gcTime: 10 * MINUTE, // 10 minutes - keep in cache longer
+  staleTime: 5 * MINUTE, // 5 minutes - gallery rarely changes
+  gcTime: 30 * MINUTE, // 30 minutes - keep in cache longer
+  refetchOnMount: false, // Don't refetch on mount if data is fresh (staleTime handles staleness)
   refetchOnWindowFocus: true, // Refetch when user returns to tab
   refetchOnReconnect: true, // Refetch on network reconnect
 };
@@ -47,8 +48,9 @@ export const galleryListOptions: Partial<
 export const orderListOptions: Partial<
   UseQueryOptions<unknown, Error, unknown, readonly unknown[]>
 > = {
-  staleTime: 1 * MINUTE, // 1 minute - order status changes frequently
-  gcTime: 5 * MINUTE, // 5 minutes
+  staleTime: 2 * MINUTE, // 2 minutes - reasonable for order lists
+  gcTime: 15 * MINUTE, // 15 minutes - keep in cache longer
+  refetchOnMount: false, // Don't refetch on mount if data is fresh (staleTime handles staleness)
   refetchOnWindowFocus: true,
   refetchOnReconnect: true,
 };

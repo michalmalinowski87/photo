@@ -170,6 +170,9 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
 
     const currentOrderIds = new Set(data.orders.map((o) => o.orderId));
 
+    // Track if any order's status changed significantly (for batch invalidation)
+    let anyStatusChanged = false;
+
     // Update caches for all orders in the response
     data.orders.forEach((orderStatus) => {
       const { orderId, galleryId, deliveryStatus, paymentStatus, amount, state, updatedAt } =
@@ -200,20 +203,19 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           updatedAt,
         };
 
-        // Update the cache
+        // Update the cache - setQueryData automatically notifies subscribers
         queryClient.setQueryData<Order>(orderDetailKey, updatedOrder);
 
-        // Mark query as stale and invalidate to force React Query to check the cache
-        // This ensures components re-render even with placeholderData
-        void queryClient.invalidateQueries({
-          queryKey: orderDetailKey,
-        });
-
-        // Refetch active queries - they'll use the updated cache if data is fresh
-        void queryClient.refetchQueries({
-          queryKey: orderDetailKey,
-          type: "active",
-        });
+        // Track if any status changed for batch invalidation
+        if (statusChanged) {
+          anyStatusChanged = true;
+          // Only refetch active queries if status actually changed
+          // This ensures components see updates without unnecessary network calls
+          void queryClient.refetchQueries({
+            queryKey: orderDetailKey,
+            type: "active",
+          });
+        }
       } else {
         // If order doesn't exist in cache, create minimal order object
         // Use function updater to ensure React Query detects the change
@@ -251,12 +253,18 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       }
 
       // Update orders-by-gallery cache
+      // This is the same key as orders.list(galleryId) used by useOrders hook
       const ordersByGalleryKey = queryKeys.orders.byGallery(galleryId);
       const existingOrdersList = queryClient.getQueryData<Order[]>(ordersByGalleryKey);
 
       if (existingOrdersList) {
         const orderIndex = existingOrdersList.findIndex((o) => o.orderId === orderId);
         if (orderIndex >= 0) {
+          const existingOrderInList = existingOrdersList[orderIndex];
+          const orderStatusChangedInList =
+            existingOrderInList.deliveryStatus !== deliveryStatus ||
+            existingOrderInList.paymentStatus !== paymentStatus;
+
           // Update existing order in list using function updater
           queryClient.setQueryData<Order[]>(ordersByGalleryKey, (old) => {
             if (!old) return old;
@@ -272,10 +280,14 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             return updatedOrders;
           });
 
-          // Invalidate to trigger re-renders
-          void queryClient.invalidateQueries({
-            queryKey: ordersByGalleryKey,
-          });
+          // Invalidate to ensure components re-render with updated data
+          // This is especially important for useGalleryImageOrders which computes derived state
+          // Only invalidate if status actually changed to avoid unnecessary refetches
+          if (orderStatusChangedInList) {
+            void queryClient.invalidateQueries({
+              queryKey: ordersByGalleryKey,
+            });
+          }
         } else {
           // Add new order to list (shouldn't happen often, but handle it)
           queryClient.setQueryData<Order[]>(ordersByGalleryKey, (old) => {
@@ -294,7 +306,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             ];
           });
 
-          // Invalidate to trigger re-renders
+          // Invalidate to ensure components re-render with new order data
           void queryClient.invalidateQueries({
             queryKey: ordersByGalleryKey,
           });
@@ -315,6 +327,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             (o) => o.orderId === orderId && o.galleryId === galleryId
           );
           if (orderIndex >= 0) {
+            // setQueryData automatically notifies subscribers, no need to invalidate
             queryClient.setQueryData<Order[]>(query.queryKey, (old) => {
               if (!old) return old;
               const updatedOrders = [...old];
@@ -328,20 +341,10 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
               };
               return updatedOrders;
             });
-
-            // Invalidate this specific query to trigger re-renders
-            void queryClient.invalidateQueries({
-              queryKey: query.queryKey,
-            });
           }
         }
       });
 
-      // Always invalidate all active orders queries to ensure dashboard updates
-      // This ensures any queries we missed will refetch
-      void queryClient.invalidateQueries({
-        queryKey: ["dashboard", "activeOrders"],
-      });
 
       // Also update all orders list cache (used by orders page)
       const allOrdersKey = queryKeys.orders.list();
@@ -351,6 +354,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           (o) => o.orderId === orderId && o.galleryId === galleryId
         );
         if (orderIndex >= 0) {
+          // setQueryData automatically notifies subscribers, no need to invalidate
           queryClient.setQueryData<Order[]>(allOrdersKey, (old) => {
             if (!old) return old;
             const updatedOrders = [...old];
@@ -364,14 +368,18 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             };
             return updatedOrders;
           });
-
-          // Invalidate to trigger re-renders
-          void queryClient.invalidateQueries({
-            queryKey: allOrdersKey,
-          });
         }
       }
     });
+
+    // Invalidate active orders queries once if any order's status changed
+    // This prevents unnecessary refetches when only minor fields update
+    // setQueryData above already updates the cache for known queries
+    if (anyStatusChanged) {
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboard", "activeOrders"],
+      });
+    }
 
     // Store current poll results for next comparison
     previousPollOrderIdsRef.current = currentOrderIds;

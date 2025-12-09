@@ -24,7 +24,6 @@ import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
-import { queryKeys } from "../../lib/react-query";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
 
@@ -337,11 +336,9 @@ export default function GalleryDetail() {
 
     // Auth is handled by AuthProvider/ProtectedRoute - just load data
     if (galleryIdForQuery) {
-      // Invalidate orders query to ensure fresh data when navigating to gallery page
-      // This is especially important when navigating from order detail page
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.byGallery(galleryIdForQuery),
-      });
+      // Let React Query's cache and staleTime handle freshness automatically
+      // With refetchOnMount: "stale", queries will only refetch if data is actually stale
+      // This prevents unnecessary refetches when data is still fresh (< 2 min old)
       void loadOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

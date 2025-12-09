@@ -18,7 +18,6 @@ export function useOrders(
     // Only fetch if galleryId is provided (for gallery-specific orders)
     // or if no galleryId (for all orders)
     enabled: true,
-    staleTime: 30 * 1000,
     ...options,
   });
 }
@@ -64,7 +63,6 @@ export function useOrder(
     queryKey: queryKeys.orders.detail(galleryId!, orderId!),
     queryFn: () => api.orders.get(galleryId!, orderId!),
     enabled: !!galleryId && !!orderId,
-    staleTime: 30 * 1000,
     // Use data from list cache as initialData for instant display
     initialData,
     // Keep previous data while loading new order for smoother transitions
@@ -85,7 +83,6 @@ export function useOrderFinalImages(
       return response.images || [];
     },
     enabled: !!galleryId && !!orderId,
-    staleTime: 30 * 1000,
     // Transform data at query level for better memoization
     select: (data) =>
       data.map((img: any) => ({

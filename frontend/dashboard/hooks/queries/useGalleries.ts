@@ -15,7 +15,6 @@ export function useGalleries(
       const galleries = Array.isArray(response) ? response : response.items || [];
       return galleries as Gallery[];
     },
-    staleTime: 30 * 1000,
     ...options,
   });
 }
@@ -81,7 +80,6 @@ export function useGallery(
       return gallery as Gallery;
     },
     enabled: !!galleryId,
-    staleTime: 30 * 1000,
     initialData,
     placeholderData: (previousData) => previousData,
     ...options,
@@ -103,7 +101,6 @@ export function useGalleryImages(
       return (response.images || []) as GalleryImage[];
     },
     enabled: !!galleryId,
-    staleTime: 30 * 1000,
     ...options,
   });
 }
@@ -118,7 +115,6 @@ export function useGalleryCoverPhoto(galleryId: string | undefined) {
       return api.galleries.getCoverPhoto(galleryId);
     },
     enabled: !!galleryId,
-    staleTime: 30 * 1000,
   });
 }
 
@@ -132,7 +128,6 @@ export function useGalleryDeliveredOrders(galleryId: string | undefined) {
       return api.galleries.checkDeliveredOrders(galleryId);
     },
     enabled: !!galleryId,
-    staleTime: 30 * 1000,
     select: (data) => {
       return Array.isArray(data) ? data : data.items || [];
     },
@@ -178,7 +173,6 @@ export function useCalculatePlan(
       return api.galleries.calculatePlan(galleryId, duration);
     },
     enabled: !!galleryId,
-    staleTime: 30 * 1000,
     ...options,
   });
 }
