@@ -139,22 +139,34 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 	
+	// Get reason and preventFutureChangeRequests from request body (optional)
+	const requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body || {});
+	const reason = requestBody.reason?.trim() || undefined;
+	const preventFutureChangeRequests = requestBody.preventFutureChangeRequests === true;
+	
 	const now = new Date().toISOString();
 	
-	// Revert order status to previous status (CLIENT_APPROVED)
+	// Build update expression - include changeRequestsBlocked if preventFutureChangeRequests is true
+	const updateExpression = preventFutureChangeRequests
+		? 'SET deliveryStatus = :ds, changeRequestsBlocked = :crb, updatedAt = :u'
+		: 'SET deliveryStatus = :ds, updatedAt = :u';
+	
+	const expressionAttributeValues: any = {
+		':ds': previousStatus,
+		':u': now
+	};
+	
+	if (preventFutureChangeRequests) {
+		expressionAttributeValues[':crb'] = true;
+	}
+	
+	// Revert order status to previous status and optionally block future change requests
 	await ddb.send(new UpdateCommand({
 		TableName: ordersTable,
 		Key: { galleryId, orderId: targetOrderId },
-		UpdateExpression: 'SET deliveryStatus = :ds, updatedAt = :u',
-		ExpressionAttributeValues: { 
-			':ds': previousStatus,
-			':u': now
-		}
+		UpdateExpression: updateExpression,
+		ExpressionAttributeValues: expressionAttributeValues
 	}));
-
-	// Get reason from request body (optional)
-	const requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body || {});
-	const reason = requestBody.reason?.trim() || undefined;
 
 	// Send email to client notifying them the change request was denied
 	if (sender && gallery.clientEmail) {
@@ -228,7 +240,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			orderId: targetOrderId,
 			previousStatus,
 			reason: reason || null,
-			message: 'Change request denied. Order reverted to previous status.'
+			changeRequestsBlocked: preventFutureChangeRequests,
+			message: preventFutureChangeRequests
+				? 'Change request denied. Order reverted to previous status. Future change requests are now blocked.'
+				: 'Change request denied. Order reverted to previous status.'
 		})
 	};
 });

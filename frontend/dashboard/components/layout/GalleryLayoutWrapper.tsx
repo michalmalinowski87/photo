@@ -88,7 +88,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // Order action handlers - these are handled by child components (OrderActionsSection, etc.)
   // Keeping only the deny handler that's used by DenyChangeRequestModal
   const handleDenyConfirm = useCallback(
-    async (reason?: string) => {
+    async (reason?: string, preventFutureChangeRequests?: boolean) => {
       if (!galleryIdStr || !orderIdStr) {
         return;
       }
@@ -97,6 +97,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
           galleryId: galleryIdStr,
           orderId: orderIdStr,
           reason,
+          preventFutureChangeRequests,
         });
         closeDenyModal();
         // React Query will automatically refetch order due to invalidation

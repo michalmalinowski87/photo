@@ -67,7 +67,7 @@ export default function Dashboard() {
     setDenyModalOpen(true);
   };
 
-  const handleDenyConfirm = async (reason?: string) => {
+  const handleDenyConfirm = async (reason?: string, preventFutureChangeRequests?: boolean) => {
     if (!denyGalleryId || !denyOrderId) {
       return;
     }
@@ -77,6 +77,7 @@ export default function Dashboard() {
         galleryId: denyGalleryId,
         orderId: denyOrderId,
         reason,
+        preventFutureChangeRequests,
       });
       // Invalidate active orders to refetch
       void queryClient.invalidateQueries({

@@ -144,6 +144,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					canSelect: selectionData.canSelect !== false, // Default to true if not provided
 					changeRequestPending: selectionData.changeRequestPending || false,
 					hasClientApprovedOrder: selectionData.hasClientApprovedOrder || false,
+					changeRequestsBlocked: selectionData.changeRequestsBlocked || false,
 					hasDeliveredOrder: hasDeliveredOrder,
 					selectionEnabled: selectionData.selectionEnabled !== false, // Gallery-level setting
 					pricingPackage: selectionData.pricingPackage || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
@@ -165,6 +166,7 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 					canSelect: true,
 					changeRequestPending: false,
 					hasClientApprovedOrder: false,
+					changeRequestsBlocked: false,
 					hasDeliveredOrder: hasDeliveredOrderFromOrders, // Use delivered orders check
 					pricingPackage: { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
 				});
@@ -306,7 +308,8 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 	const isApproved = galleryInfo?.approved || false;
 	const changeRequestPending = galleryInfo?.changeRequestPending || false;
 	const hasClientApprovedOrder = galleryInfo?.hasClientApprovedOrder || false;
-	const canRequestChange = hasClientApprovedOrder && !changeRequestPending; // Can request changes if approved and not already pending 
+	const changeRequestsBlocked = galleryInfo?.changeRequestsBlocked || false;
+	const canRequestChange = hasClientApprovedOrder && !changeRequestPending && !changeRequestsBlocked; // Can request changes if approved, not already pending, and not blocked 
 	
 	// If selection is disabled, always show processed view (no purchase/selection UI)
 	// If there are no photos to select from, no active orders, but there are delivered orders, only show processed view

@@ -43,11 +43,13 @@ export function useDenyChangeRequest() {
       galleryId,
       orderId,
       reason,
+      preventFutureChangeRequests,
     }: {
       galleryId: string;
       orderId: string;
       reason?: string;
-    }) => api.orders.denyChangeRequest(galleryId, orderId, reason),
+      preventFutureChangeRequests?: boolean;
+    }) => api.orders.denyChangeRequest(galleryId, orderId, reason, preventFutureChangeRequests),
     onSuccess: (_, variables) => {
       // Reset polling timer after successful mutation
       resetTimer();

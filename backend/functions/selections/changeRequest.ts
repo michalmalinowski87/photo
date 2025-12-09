@@ -54,6 +54,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!activeOrder) {
 		return { statusCode: 400, body: 'no active order to request changes for' };
 	}
+	
+	// Check if change requests are blocked for this order
+	if (activeOrder.changeRequestsBlocked === true) {
+		return { 
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Change requests are not allowed for this order' })
+		};
+	}
 
 	const now = new Date().toISOString();
 	

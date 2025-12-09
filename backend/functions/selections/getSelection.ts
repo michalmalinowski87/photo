@@ -66,6 +66,9 @@ export const handler = lambdaLogger(async (event: any) => {
 	// Can request changes if order is CLIENT_APPROVED or PREPARING_DELIVERY (photographer has done work)
 	const canRequestChanges = !!(clientApprovedOrder || preparingDeliveryOrder);
 	
+	// Check if change requests are blocked for the active order
+	const changeRequestsBlocked = canRequestChanges && (clientApprovedOrder?.changeRequestsBlocked === true || preparingDeliveryOrder?.changeRequestsBlocked === true);
+	
 	// Include gallery-level status and pricing info
 	return { 
 		statusCode: 200, 
@@ -74,6 +77,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			canSelect, // Simplified: true if no order or order is CLIENT_SELECTING
 			changeRequestPending: !!changesRequestedOrder, // True if waiting for photographer approval
 			hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
+			changeRequestsBlocked: changeRequestsBlocked || false, // True if change requests are blocked for this order
 			hasDeliveredOrder, // For showing processed photos view
 			selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
 			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }

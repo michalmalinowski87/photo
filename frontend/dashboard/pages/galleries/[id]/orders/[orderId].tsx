@@ -450,7 +450,7 @@ export default function OrderDetail() {
   }, []);
 
   const handleDenyConfirm = useCallback(
-    async (reason?: string) => {
+    async (reason?: string, preventFutureChangeRequests?: boolean) => {
       if (!galleryIdForQuery || !orderIdForQuery) {
         return;
       }
@@ -458,6 +458,7 @@ export default function OrderDetail() {
         galleryId: galleryIdForQuery,
         orderId: orderIdForQuery,
         reason,
+        preventFutureChangeRequests,
       });
       setDenyModalOpen(false);
       await loadOrderData();

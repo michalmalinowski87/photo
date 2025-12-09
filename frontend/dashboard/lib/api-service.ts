@@ -775,7 +775,8 @@ class ApiService {
     denyChangeRequest: async (
       galleryId: string,
       orderId: string,
-      reason?: string
+      reason?: string,
+      preventFutureChangeRequests?: boolean
     ): Promise<void> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -785,7 +786,10 @@ class ApiService {
       }
       return await this._request(`/galleries/${galleryId}/orders/${orderId}/deny-change`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason ?? undefined }),
+        body: JSON.stringify({ 
+          reason: reason ?? undefined,
+          preventFutureChangeRequests: preventFutureChangeRequests ?? false
+        }),
       });
     },
 

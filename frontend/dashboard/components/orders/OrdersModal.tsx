@@ -359,7 +359,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
           setDenyGalleryId(null);
           setDenyOrderId(null);
         }}
-        onConfirm={async (reason?: string) => {
+        onConfirm={async (reason?: string, preventFutureChangeRequests?: boolean) => {
           if (!denyGalleryId || !denyOrderId) {
             return;
           }
@@ -369,6 +369,7 @@ export const OrdersModal: React.FC<OrdersModalProps> = ({
               galleryId: denyGalleryId,
               orderId: denyOrderId,
               reason,
+              preventFutureChangeRequests,
             });
             setDenyModalOpen(false);
             setDenyGalleryId(null);

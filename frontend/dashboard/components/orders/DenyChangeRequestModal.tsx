@@ -7,7 +7,7 @@ import { Modal } from "../ui/modal";
 interface DenyChangeRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (reason?: string) => void;
+  onConfirm: (reason?: string, preventFutureChangeRequests?: boolean) => void;
   loading?: boolean;
 }
 
@@ -19,8 +19,8 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
 }) => {
   const [reason, setReason] = useState("");
 
-  const handleConfirm = () => {
-    onConfirm(reason.trim() || undefined);
+  const handleConfirm = (preventFutureChangeRequests: boolean = false) => {
+    onConfirm(reason.trim() || undefined, preventFutureChangeRequests);
     setReason(""); // Reset on confirm
   };
 
@@ -71,17 +71,26 @@ export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
             variant="outline"
             onClick={handleClose}
             disabled={loading}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 border-red-300 dark:border-red-700"
+            className="text-gray-700 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-white/5 border-gray-300 dark:border-gray-700"
           >
             Anuluj
           </Button>
           <Button
             variant="primary"
-            onClick={handleConfirm}
+            onClick={() => handleConfirm(false)}
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Odrzucanie..." : "Odrzuć"}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => handleConfirm(true)}
+            disabled={loading}
+            startIcon={<AlertTriangle className="w-4 h-4" />}
+            className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? "Odrzucanie..." : "Odrzuć i zablokuj przyszłe prośby"}
           </Button>
         </div>
       </div>

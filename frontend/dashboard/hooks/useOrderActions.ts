@@ -87,7 +87,7 @@ export const useOrderActions = ({
   }, [openDenyModal]);
 
   const handleDenyConfirm = useCallback(
-    async (reason?: string) => {
+    async (reason?: string, preventFutureChangeRequests?: boolean) => {
       if (!galleryIdStr || !orderIdStr) {
         return;
       }
@@ -99,6 +99,7 @@ export const useOrderActions = ({
           galleryId: galleryIdStr,
           orderId: orderIdStr,
           reason,
+          preventFutureChangeRequests,
         });
 
         showToast(
