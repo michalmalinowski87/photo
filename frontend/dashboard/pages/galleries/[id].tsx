@@ -25,6 +25,7 @@ import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import { queryKeys } from "../../lib/react-query";
+import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
 
 // List of filter route names that should not be treated as gallery IDs
@@ -254,6 +255,13 @@ export default function GalleryDetail() {
   // Move hooks before conditional return to avoid React Hooks rules violation
   const galleryCreationLoading = useGalleryCreationLoading();
 
+  // Clear gallery creation flow state when gallery detail page is ready
+  const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
+  const galleryCreationTargetId = useUnifiedStore((state) => state.galleryCreationTargetId);
+  const setGalleryCreationFlowActive = useUnifiedStore(
+    (state) => state.setGalleryCreationFlowActive
+  );
+
   const {
     data: orders = [],
     isLoading: orderLoading,
@@ -373,6 +381,64 @@ export default function GalleryDetail() {
     void loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [galleryId, router.isReady, router.asPath, gallery]);
+
+  // Clear gallery creation flow when gallery detail page is fully ready
+  useEffect(() => {
+    // Only clear if flow is active and we're on the target gallery
+    if (!galleryCreationFlowActive || !galleryIdStr || galleryCreationTargetId !== galleryIdStr) {
+      return;
+    }
+
+    // Check if page is fully ready:
+    // - Gallery is loaded (not loading)
+    // - Router is ready
+    const isPageReady = !!gallery && !galleryLoading && router.isReady;
+
+    if (isPageReady) {
+      // Clear the flow - overlay will disappear
+      setGalleryCreationFlowActive(false);
+    }
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    gallery,
+    galleryLoading,
+    router.isReady,
+    setGalleryCreationFlowActive,
+  ]);
+
+  // Clear flow if user navigates away from target gallery
+  useEffect(() => {
+    if (
+      galleryCreationFlowActive &&
+      galleryCreationTargetId &&
+      galleryIdStr &&
+      galleryCreationTargetId !== galleryIdStr
+    ) {
+      // User navigated to a different gallery - clear the flow
+      setGalleryCreationFlowActive(false);
+    }
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    setGalleryCreationFlowActive,
+  ]);
+
+  // Clear flow on unmount if it's still active (safety cleanup)
+  useEffect(() => {
+    return () => {
+      if (galleryCreationFlowActive && galleryCreationTargetId === galleryIdStr) {
+        setGalleryCreationFlowActive(false);
+      }
+    };
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    setGalleryCreationFlowActive,
+  ]);
 
   // Redirect non-selection galleries to order view
   useEffect(() => {

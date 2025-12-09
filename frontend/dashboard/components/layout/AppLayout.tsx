@@ -1,8 +1,10 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
+import { isGalleryRoute } from "../../lib/navigation";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { useSidebar } from "../../hooks/useSidebar";
+import { useUnifiedStore } from "../../store/unifiedStore";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -50,21 +52,25 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
     }
   };
 
-  // Dev mode: Listen for wizard open event and check for lock flag
+  // Listen for wizard open event (works in all environments)
+  // Dev mode: Also check for lock flag
   useEffect(() => {
-    if (typeof window === "undefined" || process.env.NODE_ENV !== "development") {
+    if (typeof window === "undefined") {
       return;
     }
 
     const handleOpenWizard = () => {
-      interface WindowWithDevFlag extends Window {
-        __galleryWizardDevLocked?: boolean;
-      }
-      const windowWithDevFlag = window as WindowWithDevFlag;
-      const shouldLock = windowWithDevFlag.__galleryWizardDevLocked === true;
-      if (shouldLock) {
-        setDevLocked(true);
-        windowWithDevFlag.__galleryWizardDevLocked = false; // Reset flag
+      // Dev mode: Check for lock flag
+      if (process.env.NODE_ENV === "development") {
+        interface WindowWithDevFlag extends Window {
+          __galleryWizardDevLocked?: boolean;
+        }
+        const windowWithDevFlag = window as WindowWithDevFlag;
+        const shouldLock = windowWithDevFlag.__galleryWizardDevLocked === true;
+        if (shouldLock) {
+          setDevLocked(true);
+          windowWithDevFlag.__galleryWizardDevLocked = false; // Reset flag
+        }
       }
       if (!wizardOpen) {
         setWizardOpen(true);
@@ -90,6 +96,31 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
       router.events.off("routeChangeStart", handleRouteChange);
     };
   }, [wizardOpen, devLocked, router.events]);
+
+  // Clear gallery creation flow state when navigating away from gallery routes
+  useEffect(() => {
+    if (!router.events) {
+      return;
+    }
+
+    const setGalleryCreationFlowActive = useUnifiedStore.getState().setGalleryCreationFlowActive;
+
+    const handleRouteChange = (url: string) => {
+      // If navigating away from a gallery route, clear the flow state
+      const currentIsGallery = isGalleryRoute(router.asPath);
+      const targetIsGallery = isGalleryRoute(url);
+
+      if (currentIsGallery && !targetIsGallery) {
+        // Navigating away from gallery routes - clear flow state
+        setGalleryCreationFlowActive(false);
+      }
+    };
+
+    router.events.on("routeChangeStart", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChange);
+    };
+  }, [router.events, router.asPath]);
 
   return (
     <>

@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
 import { useNavigation } from "../../hooks/useNavigation";
+import { useUnifiedStore } from "../../store/unifiedStore";
 
 import { CoverPhotoUpload } from "./sidebar/CoverPhotoUpload";
 import { DeleteGalleryButton } from "./sidebar/DeleteGalleryButton";
@@ -76,7 +77,14 @@ export default function GallerySidebar() {
   // This ensures navigation menu remains accessible
   const shouldHideSecondaryElements = viewportHeight < 1100;
 
+  const setGalleryCreationFlowActive = useUnifiedStore(
+    (state) => state.setGalleryCreationFlowActive
+  );
+
   const handleBack = () => {
+    // Clear gallery creation flow state when navigating back
+    setGalleryCreationFlowActive(false);
+
     if (typeof window !== "undefined" && gallery?.galleryId) {
       const referrerKey = `gallery_referrer_${gallery.galleryId}`;
       const referrerPath = sessionStorage.getItem(referrerKey);

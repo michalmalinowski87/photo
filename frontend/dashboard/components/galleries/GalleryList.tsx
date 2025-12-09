@@ -13,7 +13,6 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
 
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
@@ -145,7 +144,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   onLoadingChange,
   onWizardOpenChange,
 }) => {
-  const router = useRouter();
   const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: `GalleryList-${filter}`,
     logMount: false,
@@ -275,7 +273,10 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
   const getEmptyStateConfig = () => {
     const handleCreateGallery = () => {
-      void router.push("/galleries/robocze");
+      // Dispatch event to open gallery creation wizard
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("openGalleryWizard"));
+      }
     };
 
     switch (filter) {
