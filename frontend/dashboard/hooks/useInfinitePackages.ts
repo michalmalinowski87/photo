@@ -2,33 +2,39 @@ import { useInfiniteQuery, UseInfiniteQueryOptions } from "@tanstack/react-query
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
-import type { Gallery } from "../types";
 
-interface UseInfiniteGalleriesParams {
-  filter?: string;
+interface Package {
+  packageId: string;
+  name?: string;
+  includedPhotos?: number;
+  pricePerExtraPhoto?: number;
+  price?: number;
+  createdAt?: string;
+  [key: string]: unknown;
+}
+
+interface UseInfinitePackagesParams {
   limit?: number;
   search?: string;
-  sortBy?: "name" | "date" | "expiration";
+  sortBy?: "name" | "price" | "pricePerExtraPhoto" | "date";
   sortOrder?: "asc" | "desc";
   options?: Omit<
-    UseInfiniteQueryOptions<{ items: Gallery[]; hasMore?: boolean; nextCursor?: string | null }>,
+    UseInfiniteQueryOptions<{ items: Package[]; hasMore?: boolean; nextCursor?: string | null }>,
     "queryKey" | "queryFn"
   >;
 }
 
-export function useInfiniteGalleries({
-  filter,
-  limit = 50,
+export function useInfinitePackages({
+  limit = 20,
   search,
   sortBy,
   sortOrder,
   options,
-}: UseInfiniteGalleriesParams = {}) {
-  return useInfiniteQuery<{ items: Gallery[]; hasMore?: boolean; nextCursor?: string | null }>({
-    queryKey: queryKeys.galleries.infiniteList(filter, limit, search, sortBy, sortOrder),
+}: UseInfinitePackagesParams = {}) {
+  return useInfiniteQuery<{ items: Package[]; hasMore?: boolean; nextCursor?: string | null }>({
+    queryKey: queryKeys.packages.infiniteList(limit, search, sortBy, sortOrder),
     queryFn: async ({ pageParam }) => {
-      const response = await api.galleries.list(
-        filter,
+      const response = await api.packages.list(
         {
           limit,
           cursor: pageParam as string | null | undefined,
@@ -47,7 +53,11 @@ export function useInfiniteGalleries({
         };
       }
       
-      return response;
+      return {
+        items: response.items || [],
+        hasMore: response.hasMore ?? false,
+        nextCursor: response.nextCursor ?? null,
+      };
     },
     getNextPageParam: (lastPage) => {
       if (lastPage.hasMore && lastPage.nextCursor) {

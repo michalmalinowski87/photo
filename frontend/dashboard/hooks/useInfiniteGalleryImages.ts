@@ -62,6 +62,8 @@ export function useInfiniteGalleryImages({
     },
     initialPageParam: null as string | null,
     enabled: !!galleryId,
+    // Disable retries for infinite queries to prevent infinite loops on errors
+    retry: false,
     ...options,
   });
 }

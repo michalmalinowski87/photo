@@ -11,12 +11,10 @@ import {
   Menu,
   Rocket,
   Eye,
-  LayoutDashboard,
-  List as ListIcon,
 } from "lucide-react";
 import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
+import { VirtuosoGrid } from "react-virtuoso";
 
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
 import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
@@ -49,6 +47,9 @@ interface GalleryListProps {
   onWizardOpenChange?: (isOpen: boolean) => void;
   viewMode?: "list" | "cards";
   onViewModeChange?: (mode: "list" | "cards") => void;
+  search?: string;
+  sortBy?: "name" | "date" | "expiration";
+  sortOrder?: "asc" | "desc";
 }
 
 // Helper function to format plan display (e.g., "1GB-12m" -> "1GB 12m")
@@ -152,6 +153,9 @@ const GalleryList: React.FC<GalleryListProps> = ({
   onWizardOpenChange,
   viewMode: externalViewMode,
   onViewModeChange,
+  search,
+  sortBy,
+  sortOrder,
 }) => {
   const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: `GalleryList-${filter}`,
@@ -176,7 +180,6 @@ const GalleryList: React.FC<GalleryListProps> = ({
   });
 
   const viewMode = externalViewMode ?? internalViewMode;
-  const setViewMode = onViewModeChange ?? setInternalViewMode;
 
   const prefetchGallery = usePrefetchGallery();
 
@@ -190,6 +193,9 @@ const GalleryList: React.FC<GalleryListProps> = ({
   } = useInfiniteGalleries({
     filter,
     limit: 20,
+    search,
+    sortBy,
+    sortOrder,
   });
 
   // Flatten pages into a single array of galleries
@@ -414,13 +420,15 @@ const GalleryList: React.FC<GalleryListProps> = ({
               const distanceFromEnd = galleries.length - range.endIndex;
               const prefetchThreshold = 25; // Start loading when 25 items away from end
               
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage) {
+              // Don't fetch if there's an error or already fetching
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
                 void fetchNextPage();
               }
             }}
             endReached={() => {
               // Fallback: also trigger when actually reaching the end (should rarely be needed)
-              if (hasNextPage && !isFetchingNextPage) {
+              // Don't fetch if there's an error or already fetching
+              if (hasNextPage && !isFetchingNextPage && !queryError) {
                 void fetchNextPage();
               }
             }}
@@ -471,7 +479,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
         <div className="w-full relative">
           <div
             className="w-full overflow-auto"
-            style={{ height: "calc(100vh - 200px)", minHeight: "800px" }}
+            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
             onScroll={(e) => {
               const target = e.target as HTMLElement;
               const scrollTop = target.scrollTop;
@@ -490,7 +498,8 @@ const GalleryList: React.FC<GalleryListProps> = ({
               const distanceFromEnd = totalItemsRendered - itemsScrolled;
               const prefetchThreshold = 25; // Same threshold as cards view
               
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage) {
+              // Don't fetch if there's an error or already fetching
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
                 void fetchNextPage();
               }
             }}
@@ -500,43 +509,43 @@ const GalleryList: React.FC<GalleryListProps> = ({
                 <TableRow className="bg-gray-100 dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[120px]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[120px]"
                   >
                     Okładka
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
                   >
                     Nazwa galerii
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Plan
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Status
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Zlecenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Utworzono
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -590,6 +599,14 @@ const GalleryList: React.FC<GalleryListProps> = ({
                       {!gallery.galleryName && (
                         <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           {gallery.galleryId}
+                        </div>
+                      )}
+                      {(gallery.clientFirstName || gallery.clientLastName || gallery.clientEmail) && (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          Klient:{" "}
+                          {gallery.clientFirstName && gallery.clientLastName
+                            ? `${gallery.clientFirstName} ${gallery.clientLastName}`
+                            : gallery.clientEmail || "-"}
                         </div>
                       )}
                     </TableCell>

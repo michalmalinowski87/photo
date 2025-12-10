@@ -24,6 +24,11 @@ interface OriginalsTabProps {
   selectedKeys: string[];
   selectionEnabled: boolean;
   deliveryStatus?: string;
+  isLoading?: boolean;
+  error?: unknown;
+  fetchNextPage?: () => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
 }
 
 export function OriginalsTab({
@@ -31,41 +36,111 @@ export function OriginalsTab({
   selectedKeys,
   selectionEnabled,
   deliveryStatus,
+  isLoading = false,
+  error,
+  fetchNextPage,
+  hasNextPage = false,
+  isFetchingNextPage = false,
 }: OriginalsTabProps) {
   const shouldShowAllImages = !selectionEnabled;
 
-  // Helper to render image grid
-  const renderImageGrid = (imagesToRender: GalleryImage[], highlightSelected = false) => (
-    <div className="grid grid-cols-4 gap-4">
-      {imagesToRender.map((img, idx) => {
-        const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
-        return (
-          <div
-            key={imgKey ?? idx}
-            className={`relative ${
-              highlightSelected
-                ? "border-2 border-brand-500 ring-2 ring-brand-200"
-                : "border border-gray-200 dark:border-gray-700"
-            } rounded-lg overflow-hidden`}
-          >
-            <LazyRetryableImage
-              imageData={img as ImageFallbackUrls}
-              alt={imgKey}
-              className="w-full h-48 object-cover"
-              preferredSize="thumb"
-            />
+  // Helper to render image grid with infinite scroll support
+  const renderImageGrid = (imagesToRender: GalleryImage[], highlightSelected = false, enableInfiniteScroll = false) => {
+    if (enableInfiniteScroll) {
+      // For infinite scroll, wrap in scrollable container with prefetching
+      return (
+        <div
+          className="w-full overflow-auto table-scrollbar"
+          style={{ height: "calc(100vh - 400px)", minHeight: "600px", overscrollBehavior: "none" }}
+          onScroll={(e) => {
+            const target = e.target as HTMLElement;
+            const scrollTop = target.scrollTop;
+            const clientHeight = target.clientHeight;
+            
+            // Use item-based prefetching for smooth scrolling
+            // Estimate item height based on grid layout (4 columns)
+            // Average item height is approximately 200px (image + gap)
+            const estimatedItemHeight = 200;
+            const totalItemsRendered = imagesToRender.length;
+            
+            // Calculate which item index is currently at the bottom of viewport
+            const scrollBottom = scrollTop + clientHeight;
+            const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+            
+            // Calculate distance from end (same logic as gallery photos)
+            const distanceFromEnd = totalItemsRendered - itemsScrolled;
+            const prefetchThreshold = 25; // Same threshold as other infinite scrolls
+            
+            // Don't fetch if there's an error or already fetching
+            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+              void fetchNextPage();
+            }
+          }}
+        >
+          <div className="grid grid-cols-4 gap-4 pb-4">
+            {imagesToRender.map((img, idx) => {
+              const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
+              return (
+                <div
+                  key={imgKey ?? idx}
+                  className={`relative ${
+                    highlightSelected
+                      ? "border-2 border-brand-500 ring-2 ring-brand-200"
+                      : "border border-gray-200 dark:border-gray-700"
+                  } rounded-lg overflow-hidden`}
+                >
+                  <LazyRetryableImage
+                    imageData={img as ImageFallbackUrls}
+                    alt={imgKey}
+                    className="w-full h-48 object-cover"
+                    preferredSize="thumb"
+                  />
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
-  );
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // For non-infinite scroll, use simple grid
+    return (
+      <div className="grid grid-cols-4 gap-4">
+        {imagesToRender.map((img, idx) => {
+          const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
+          return (
+            <div
+              key={imgKey ?? idx}
+              className={`relative ${
+                highlightSelected
+                  ? "border-2 border-brand-500 ring-2 ring-brand-200"
+                  : "border border-gray-200 dark:border-gray-700"
+              } rounded-lg overflow-hidden`}
+            >
+              <LazyRetryableImage
+                imageData={img as ImageFallbackUrls}
+                alt={imgKey}
+                className="w-full h-48 object-cover"
+                preferredSize="thumb"
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   // Non-selection gallery: show all images
   if (shouldShowAllImages) {
-    if (images.length === 0) {
+    if (isLoading && images.length === 0) {
       return <GalleryLoading />;
     }
-    return <div className="space-y-4">{renderImageGrid(images)}</div>;
+    return <div className="space-y-4">{renderImageGrid(images, false, true)}</div>;
   }
 
   // Selection gallery but no selectedKeys yet
@@ -111,7 +186,7 @@ export function OriginalsTab({
     return normalizedSelectedKeys.includes(imgKey);
   });
 
-  if (images.length === 0) {
+  if (isLoading && images.length === 0) {
     return <GalleryLoading />;
   }
 
@@ -130,5 +205,5 @@ export function OriginalsTab({
     );
   }
 
-  return <div className="space-y-4">{renderImageGrid(filteredImages, true)}</div>;
+  return <div className="space-y-4">{renderImageGrid(filteredImages, true, true)}</div>;
 }

@@ -33,6 +33,11 @@ interface FinalsTabProps {
   isNonSelectionGallery?: boolean;
   galleryId?: string;
   orderId?: string;
+  isLoading?: boolean;
+  error?: unknown;
+  fetchNextPage?: () => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
 }
 
 export function FinalsTab({
@@ -47,6 +52,11 @@ export function FinalsTab({
   isNonSelectionGallery = false,
   galleryId,
   orderId,
+  isLoading = false,
+  error,
+  fetchNextPage,
+  hasNextPage = false,
+  isFetchingNextPage = false,
 }: FinalsTabProps) {
   // Selection mode for bulk delete
   const {
@@ -283,8 +293,36 @@ export function FinalsTab({
           }
         />
       ) : (
-        <div className={`grid grid-cols-4 gap-4 ${isSelectionMode ? "select-none" : ""}`}>
-          {images.map((img, idx) => {
+        <div
+          className={`w-full overflow-auto table-scrollbar ${isSelectionMode ? "select-none" : ""}`}
+          style={{ height: "calc(100vh - 400px)", minHeight: "600px", overscrollBehavior: "none" }}
+          onScroll={(e) => {
+            const target = e.target as HTMLElement;
+            const scrollTop = target.scrollTop;
+            const clientHeight = target.clientHeight;
+            
+            // Use item-based prefetching for smooth scrolling
+            // Estimate item height based on grid layout (4 columns)
+            // Average item height is approximately 250px (image + gap + text)
+            const estimatedItemHeight = 250;
+            const totalItemsRendered = images.length;
+            
+            // Calculate which item index is currently at the bottom of viewport
+            const scrollBottom = scrollTop + clientHeight;
+            const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+            
+            // Calculate distance from end (same logic as gallery photos)
+            const distanceFromEnd = totalItemsRendered - itemsScrolled;
+            const prefetchThreshold = 25; // Same threshold as other infinite scrolls
+            
+            // Don't fetch if there's an error or already fetching
+            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+              void fetchNextPage();
+            }
+          }}
+        >
+          <div className={`grid grid-cols-4 gap-4 pb-4 ${isSelectionMode ? "select-none" : ""}`}>
+            {images.map((img, idx) => {
             const imageKey = img.key ?? img.filename ?? "";
             const isSelected = selectedKeys.has(imageKey);
             const isDeleting = deletingImages.has(imageKey);
@@ -380,6 +418,12 @@ export function FinalsTab({
               </div>
             );
           })}
+          </div>
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+            </div>
+          )}
         </div>
       )}
 

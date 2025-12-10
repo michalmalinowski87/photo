@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Virtuoso } from "react-virtuoso";
 
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
@@ -22,13 +21,13 @@ import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { Loading, GalleryLoading, InlineLoading } from "../../../components/ui/loading/Loading";
+import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
 import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
-import { useInfiniteGalleryImages } from "../../../hooks/useInfiniteGalleryImages";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
 import { useImageSelection } from "../../../hooks/useImageSelection";
+import { useInfiniteGalleryImages } from "../../../hooks/useInfiniteGalleryImages";
 import { useOriginalImageDelete } from "../../../hooks/useOriginalImageDelete";
 import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
@@ -73,6 +72,7 @@ export default function GalleryPhotos() {
     data: imagesData,
     isLoading: imagesLoading,
     isFetching: imagesFetching,
+    error: imagesError,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -1104,13 +1104,58 @@ export default function GalleryPhotos() {
           );
   }, [deletingImages, deletingImagesBulk, isImageInApprovedSelection, isImageInAnyOrder, getImageOrderStatus, selectedKeys, isSelectionMode, handleSelectionClick, handleDeletePhotoClick, removeFileExtension]);
 
-  const renderImageGrid = useCallback((imagesToRender: GalleryImage[], enableSelection: boolean, enableInfiniteScroll: boolean) => {
+  const renderImageGrid = useCallback((imagesToRender: GalleryImage[], _enableSelection: boolean, enableInfiniteScroll: boolean) => {
+    if (enableInfiniteScroll) {
+      // For infinite scroll, wrap in scrollable container with prefetching
+      return (
+        <div
+          className="w-full overflow-auto table-scrollbar"
+          style={{ height: "calc(100vh - 300px)", minHeight: "600px", overscrollBehavior: "none" }}
+          onScroll={(e) => {
+            const target = e.target as HTMLElement;
+            const scrollTop = target.scrollTop;
+            const clientHeight = target.clientHeight;
+            
+            // Use item-based prefetching for smooth scrolling
+            // Estimate item height based on grid layout (responsive)
+            // For a 6-column grid on xl screens, each row has ~6 items
+            // Average item height is approximately 200px (image + gap)
+            const estimatedItemHeight = 200;
+            const totalItemsRendered = imagesToRender.length;
+            
+            // Calculate which item index is currently at the bottom of viewport
+            const scrollBottom = scrollTop + clientHeight;
+            const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+            
+            // Calculate distance from end (same logic as galleries/clients/packages)
+            const distanceFromEnd = totalItemsRendered - itemsScrolled;
+            const prefetchThreshold = 25; // Same threshold as other infinite scrolls
+            
+            // Don't fetch if there's an error or already fetching
+            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
+              void fetchNextPage();
+            }
+          }}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
+            {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
+          </div>
+          {isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // For non-infinite scroll (e.g., order sections), use simple grid
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
       </div>
     );
-  }, [renderImageItem]);
+  }, [renderImageItem, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
 
   return (
     <>

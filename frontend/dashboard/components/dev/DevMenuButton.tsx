@@ -17,7 +17,9 @@ export const DevMenuButton: React.FC = () => {
   const showButton =
     !router.pathname?.includes("/galleries/[id]") &&
     router.pathname !== "/dev/create-test-galleries" &&
-    router.pathname !== "/dev/delete-galleries-by-status";
+    router.pathname !== "/dev/delete-galleries-by-status" &&
+    router.pathname !== "/dev/create-test-data" &&
+    router.pathname !== "/dev/delete-all-data";
 
   if (!showButton) {
     return null;

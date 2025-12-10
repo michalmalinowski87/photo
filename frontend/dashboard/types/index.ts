@@ -35,6 +35,8 @@ export interface Gallery {
   selectionEnabled?: boolean;
   nextStepsCompleted?: boolean;
   createdAt?: string;
+  clientFirstName?: string;
+  clientLastName?: string;
   [key: string]: unknown;
 }
 

@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
+import { createLambdaErrorResponse } from '../../lib/src/error-utils';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -26,8 +27,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	const limit = parseInt(event?.queryStringParameters?.limit || '20', 10);
-	const limitClamped = Math.min(Math.max(limit, 1), 100);
+	const limitParam = event?.queryStringParameters?.limit;
+	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 20, 1), 100) : 20; // Default 20, max 100
 	const lastKeyParam = event?.queryStringParameters?.lastKey;
 	let exclusiveStartKey: Record<string, any> | undefined;
 	if (lastKeyParam) {
@@ -40,6 +41,12 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	const searchQuery = event?.queryStringParameters?.search?.trim().toLowerCase() || '';
 	const pageOffset = parseInt(event?.queryStringParameters?.offset || '0', 10);
+	
+	// Parse sort parameters
+	const sortByParam = event?.queryStringParameters?.sortBy || 'date';
+	const sortBy = ['name', 'date'].includes(sortByParam) ? sortByParam : 'date';
+	const sortOrderParam = event?.queryStringParameters?.sortOrder || 'desc';
+	const sortOrder = ['asc', 'desc'].includes(sortOrderParam) ? sortOrderParam : 'desc';
 
 	try {
 		let allItems: any[] = [];
@@ -48,29 +55,39 @@ export const handler = lambdaLogger(async (event: any) => {
 		let items: any[] = [];
 
 		if (searchQuery) {
-			// For search, fetch all items (up to reasonable limit) and filter
+			// OPTIMIZATION: For search, fetch all items (up to reasonable limit) and filter
 			// Then paginate through filtered results
-			const queryParams: any = {
-				TableName: clientsTable,
-				IndexName: 'ownerId-index',
-				KeyConditionExpression: 'ownerId = :o',
-				ExpressionAttributeValues: {
-					':o': ownerId
-				},
-				ScanIndexForward: false,
-				Limit: 500 // Fetch up to 500 items for search
-			};
-
-			// Continue fetching until we have enough or no more items
-			let lastEvaluatedKey = exclusiveStartKey;
+			const MAX_ITEMS_TO_FETCH = 1000; // Safety limit
+			let fetchedCount = 0;
+			let lastEvaluatedKey: Record<string, any> | undefined = exclusiveStartKey;
+			
 			do {
+				const queryParams: any = {
+					TableName: clientsTable,
+					IndexName: 'ownerId-index',
+					KeyConditionExpression: 'ownerId = :o',
+					ExpressionAttributeValues: {
+						':o': ownerId
+					},
+					ScanIndexForward: false,
+					Limit: 100 // Fetch in chunks
+				};
+
 				if (lastEvaluatedKey) {
 					queryParams.ExclusiveStartKey = lastEvaluatedKey;
 				}
+
 				const result = await ddb.send(new QueryCommand(queryParams));
-				allItems = allItems.concat(result.Items || []);
+				const batchItems = result.Items || [];
+				allItems = allItems.concat(batchItems);
 				lastEvaluatedKey = result.LastEvaluatedKey;
-			} while (lastEvaluatedKey && allItems.length < 500);
+				fetchedCount += batchItems.length;
+				
+				// Safety limit to prevent timeouts
+				if (fetchedCount >= MAX_ITEMS_TO_FETCH) {
+					break;
+				}
+			} while (lastEvaluatedKey);
 
 			// Filter items
 			allItems = allItems.filter((item: any) => {
@@ -91,11 +108,34 @@ export const handler = lambdaLogger(async (event: any) => {
 				);
 			});
 
+			// Sort filtered items
+			allItems.sort((a: any, b: any) => {
+				let comparison = 0;
+				
+				if (sortBy === 'name') {
+					// For companies, use companyName; for individuals, use firstName + lastName
+					const nameA = a.isCompany 
+						? (a.companyName || '').toLowerCase()
+						: `${(a.firstName || '')} ${(a.lastName || '')}`.trim().toLowerCase();
+					const nameB = b.isCompany
+						? (b.companyName || '').toLowerCase()
+						: `${(b.firstName || '')} ${(b.lastName || '')}`.trim().toLowerCase();
+					comparison = nameA.localeCompare(nameB);
+				} else {
+					// Default: sort by date (createdAt)
+					const timeA = new Date(a.createdAt || 0).getTime();
+					const timeB = new Date(b.createdAt || 0).getTime();
+					comparison = timeA - timeB;
+				}
+				
+				return sortOrder === 'asc' ? comparison : -comparison;
+			});
+			
 			// Apply pagination to filtered results
 			const startIndex = pageOffset;
-			const endIndex = startIndex + limitClamped;
+			const endIndex = startIndex + limit;
 			hasMore = endIndex < allItems.length;
-			const items = allItems.slice(startIndex, endIndex);
+			items = allItems.slice(startIndex, endIndex);
 			
 			return {
 				statusCode: 200,
@@ -108,29 +148,94 @@ export const handler = lambdaLogger(async (event: any) => {
 				})
 			};
 		} else {
-			// Normal pagination without search
-			const queryParams: any = {
-				TableName: clientsTable,
-				IndexName: 'ownerId-index',
-				KeyConditionExpression: 'ownerId = :o',
-				ExpressionAttributeValues: {
-					':o': ownerId
-				},
-				ScanIndexForward: false,
-				Limit: limitClamped + 1
-			};
+			// OPTIMIZATION: For non-search queries, use pagination at DynamoDB level when possible
+			// If sorting by date (default), we can use DynamoDB's native sorting
+			if (sortBy === 'date') {
+				const queryParams: any = {
+					TableName: clientsTable,
+					IndexName: 'ownerId-index',
+					KeyConditionExpression: 'ownerId = :o',
+					ExpressionAttributeValues: {
+						':o': ownerId
+					},
+					ScanIndexForward: sortOrder === 'asc', // DynamoDB sorts by createdAt
+					Limit: limit + 1
+				};
 
-			if (exclusiveStartKey) {
-				queryParams.ExclusiveStartKey = exclusiveStartKey;
+				if (exclusiveStartKey) {
+					queryParams.ExclusiveStartKey = exclusiveStartKey;
+				}
+
+				const result = await ddb.send(new QueryCommand(queryParams));
+				items = result.Items || [];
+				lastKey = result.LastEvaluatedKey;
+
+				// Check if there are more items
+				hasMore = items.length > limit;
+				items = hasMore ? items.slice(0, -1) : items;
+			} else {
+				// For name sorting, we need to fetch all items and sort
+				// But limit to reasonable amount to prevent timeouts
+				const MAX_ITEMS_TO_FETCH = 1000; // Safety limit
+				let fetchedCount = 0;
+				let lastEvaluatedKey: Record<string, any> | undefined = exclusiveStartKey;
+				
+				do {
+					const queryParams: any = {
+						TableName: clientsTable,
+						IndexName: 'ownerId-index',
+						KeyConditionExpression: 'ownerId = :o',
+						ExpressionAttributeValues: {
+							':o': ownerId
+						},
+						ScanIndexForward: false,
+						Limit: 100 // Fetch in chunks
+					};
+
+					if (lastEvaluatedKey) {
+						queryParams.ExclusiveStartKey = lastEvaluatedKey;
+					}
+
+					const result = await ddb.send(new QueryCommand(queryParams));
+					const batchItems = result.Items || [];
+					allItems = allItems.concat(batchItems);
+					lastEvaluatedKey = result.LastEvaluatedKey;
+					fetchedCount += batchItems.length;
+					
+					// Safety limit to prevent timeouts
+					if (fetchedCount >= MAX_ITEMS_TO_FETCH) {
+						lastKey = lastEvaluatedKey; // Save for pagination
+						break;
+					}
+				} while (lastEvaluatedKey);
+				
+				// Sort items
+				allItems.sort((a: any, b: any) => {
+					let comparison = 0;
+					
+					if (sortBy === 'name') {
+						// For companies, use companyName; for individuals, use firstName + lastName
+						const nameA = a.isCompany 
+							? (a.companyName || '').toLowerCase()
+							: `${(a.firstName || '')} ${(a.lastName || '')}`.trim().toLowerCase();
+						const nameB = b.isCompany
+							? (b.companyName || '').toLowerCase()
+							: `${(b.firstName || '')} ${(b.lastName || '')}`.trim().toLowerCase();
+						comparison = nameA.localeCompare(nameB);
+					} else {
+						// Default: sort by date (createdAt)
+						const timeA = new Date(a.createdAt || 0).getTime();
+						const timeB = new Date(b.createdAt || 0).getTime();
+						comparison = timeA - timeB;
+					}
+					
+					return sortOrder === 'asc' ? comparison : -comparison;
+				});
+				
+				// Apply pagination
+				items = allItems.slice(0, limit);
+				hasMore = allItems.length > limit;
 			}
-
-			const result = await ddb.send(new QueryCommand(queryParams));
-			items = result.Items || [];
-			lastKey = result.LastEvaluatedKey;
-
-			// Check if there are more items
-			hasMore = items.length > limitClamped;
-			items = hasMore ? items.slice(0, -1) : items;
 		}
 
 		return {
@@ -144,11 +249,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to list clients', message: error.message })
-		};
+		console.error('List clients failed:', error);
+		return createLambdaErrorResponse(error, 'Failed to list clients', 500);
 	}
 });
 

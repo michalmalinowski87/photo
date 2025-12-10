@@ -49,7 +49,7 @@ export default function NotificationDropdown() {
             <X size={24} className="fill-current" />
           </button>
         </div>
-        <ul className="flex flex-col h-auto overflow-y-auto custom-scrollbar">
+        <ul className="flex flex-col h-auto overflow-y-auto">
           {/* Placeholder - will be populated with real notifications */}
           <li>
             <div className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5">

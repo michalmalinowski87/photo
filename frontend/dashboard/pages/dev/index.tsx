@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Database,
-  Code,
   Settings,
   FileText,
 } from "lucide-react";
@@ -36,6 +35,22 @@ const devTools: DevTool[] = [
     path: "/dev/delete-galleries-by-status",
     icon: <Trash2 size={24} />,
     category: "Galerie",
+    color: "red",
+  },
+  {
+    title: "Utwórz dane testowe",
+    description: "Utwórz 100 pakietów i/lub 100 klientów do testowania",
+    path: "/dev/create-test-data",
+    icon: <Plus size={24} />,
+    category: "Baza",
+    color: "green",
+  },
+  {
+    title: "Usuń wszystkie dane",
+    description: "Usuń wszystkie pakiety i/lub klientów z bazy danych",
+    path: "/dev/delete-all-data",
+    icon: <Trash2 size={24} />,
+    category: "Baza",
     color: "red",
   },
 ];
@@ -123,36 +138,6 @@ export default function DevMenu() {
           })}
         </div>
 
-        {/* Quick Links */}
-        <div className="mt-12 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Skrypty konsolowe
-          </h2>
-          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-start gap-2">
-              <Code size={16} className="mt-0.5 flex-shrink-0" />
-              <div>
-                <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                  frontend/dashboard/scripts/create-test-galleries.js
-                </code>
-                <p className="mt-1">
-                  Skrypt do tworzenia galerii testowych w konsoli przeglądarki
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Code size={16} className="mt-0.5 flex-shrink-0" />
-              <div>
-                <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                  frontend/dashboard/scripts/delete-galleries-by-status.js
-                </code>
-                <p className="mt-1">
-                  Skrypt do usuwania galerii według statusu w konsoli przeglądarki
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

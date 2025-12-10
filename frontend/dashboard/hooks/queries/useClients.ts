@@ -28,6 +28,8 @@ export function useClients(
     page?: string | number;
     itemsPerPage?: string | number;
     search?: string;
+    sortBy?: "name" | "date";
+    sortOrder?: "asc" | "desc";
   },
   options?: Omit<UseQueryOptions<ListResponse<Client>>, "queryKey" | "queryFn">
 ) {

@@ -15,6 +15,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	const clientsTable = envProc?.env?.CLIENTS_TABLE as string;
 	if (!galleriesTable) {
 		return {
 			statusCode: 500,
@@ -37,6 +38,15 @@ export const handler = lambdaLogger(async (event: any) => {
 		? (filterParam as FilterType) 
 		: undefined;
 
+	// Parse search parameter
+	const searchQuery = event?.queryStringParameters?.search?.trim() || '';
+
+	// Parse sort parameters
+	const sortByParam = event?.queryStringParameters?.sortBy || 'date';
+	const sortBy = ['name', 'date', 'expiration'].includes(sortByParam) ? sortByParam : 'date';
+	const sortOrderParam = event?.queryStringParameters?.sortOrder || 'desc';
+	const sortOrder = ['asc', 'desc'].includes(sortOrderParam) ? sortOrderParam : 'desc';
+
 	// Parse pagination parameters
 	const limitParam = event?.queryStringParameters?.limit;
 	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50; // Default 50, max 100
@@ -52,7 +62,7 @@ export const handler = lambdaLogger(async (event: any) => {
 
 		try {
 		// OPTIMIZATION: Run independent queries in parallel
-		const [ordersData, transactionsData] = await Promise.all([
+		const [ordersData, transactionsData, clientsData] = await Promise.all([
 			// Pre-fetch all orders for this user (parallel with transactions)
 			ordersTable ? (async () => {
 				try {
@@ -112,7 +122,42 @@ export const handler = lambdaLogger(async (event: any) => {
 					console.warn('Failed to batch query transactions:', err);
 					return new Map<string, boolean>();
 				}
-			})() : Promise.resolve(new Map<string, boolean>())
+			})() : Promise.resolve(new Map<string, boolean>()),
+			
+			// Pre-fetch all clients for this user (parallel with orders and transactions)
+			clientsTable ? (async () => {
+				try {
+					const clientsByEmail = new Map<string, { firstName?: string; lastName?: string }>();
+					let lastKey: Record<string, any> | undefined;
+					
+					do {
+						const result = await ddb.send(new QueryCommand({
+							TableName: clientsTable,
+							IndexName: 'ownerId-index',
+							KeyConditionExpression: 'ownerId = :o',
+							ExpressionAttributeValues: { ':o': requester },
+							ExclusiveStartKey: lastKey,
+							Limit: 100
+						}));
+						
+						(result.Items || []).forEach((client: any) => {
+							if (client.email) {
+								clientsByEmail.set(client.email.toLowerCase(), {
+									firstName: client.firstName,
+									lastName: client.lastName
+								});
+							}
+						});
+						
+						lastKey = result.LastEvaluatedKey;
+					} while (lastKey);
+					
+					return clientsByEmail;
+				} catch (err) {
+					console.warn('Failed to pre-fetch clients:', err);
+					return new Map<string, { firstName?: string; lastName?: string }>();
+				}
+			})() : Promise.resolve(new Map<string, { firstName?: string; lastName?: string }>())
 		]);
 
 		// Organize orders by gallery
@@ -374,12 +419,25 @@ export const handler = lambdaLogger(async (event: any) => {
 				effectiveState = 'PAID_ACTIVE';
 			}
 
+			// Enrich with client data
+			let clientFirstName: string | undefined;
+			let clientLastName: string | undefined;
+			if (g.clientEmail) {
+				const clientData = clientsData.get(g.clientEmail.toLowerCase());
+				if (clientData) {
+					clientFirstName = clientData.firstName;
+					clientLastName = clientData.lastName;
+				}
+			}
+
 			return {
 				...g,
 				state: effectiveState,
 				paymentStatus,
 				isPaid,
-				...orderData
+				...orderData,
+				clientFirstName,
+				clientLastName
 			};
 				})());
 			});
@@ -398,8 +456,40 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 			.filter((g): g is NonNullable<typeof g> => g !== null);
 
-		// Apply filters
+		// Apply search filter
 		let filteredGalleries = enrichedGalleries;
+		if (searchQuery) {
+			const searchLower = searchQuery.toLowerCase();
+			filteredGalleries = filteredGalleries.filter((g: any) => {
+				// Search in gallery name
+				const galleryName = (g.galleryName || '').toLowerCase();
+				if (galleryName.includes(searchLower)) return true;
+				
+				// Search in client email
+				const clientEmail = (g.clientEmail || '').toLowerCase();
+				if (clientEmail.includes(searchLower)) return true;
+				
+				// Search in client first name
+				const clientFirstName = (g.clientFirstName || '').toLowerCase();
+				if (clientFirstName.includes(searchLower)) return true;
+				
+				// Search in client last name
+				const clientLastName = (g.clientLastName || '').toLowerCase();
+				if (clientLastName.includes(searchLower)) return true;
+				
+				// Search in date (formatted date string)
+				if (g.createdAt) {
+					const dateStr = new Date(g.createdAt).toLocaleDateString('pl-PL');
+					if (dateStr.includes(searchQuery)) return true;
+					// Also check ISO format
+					if (g.createdAt.includes(searchQuery)) return true;
+				}
+				
+				return false;
+			});
+		}
+
+		// Apply status filters
 		if (filter) {
 			switch (filter) {
 			case 'unpaid':
@@ -445,11 +535,26 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 		}
 
-		// Sort by createdAt descending (newest first)
+		// Sort galleries
 		filteredGalleries.sort((a: any, b: any) => {
-			const timeA = new Date(a.createdAt || 0).getTime();
-			const timeB = new Date(b.createdAt || 0).getTime();
-			return timeB - timeA;
+			let comparison = 0;
+			
+			if (sortBy === 'name') {
+				const nameA = (a.galleryName || '').toLowerCase();
+				const nameB = (b.galleryName || '').toLowerCase();
+				comparison = nameA.localeCompare(nameB);
+			} else if (sortBy === 'expiration') {
+				const timeA = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
+				const timeB = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
+				comparison = timeA - timeB;
+			} else {
+				// Default: sort by date (createdAt)
+				const timeA = new Date(a.createdAt || 0).getTime();
+				const timeB = new Date(b.createdAt || 0).getTime();
+				comparison = timeA - timeB;
+			}
+			
+			return sortOrder === 'asc' ? comparison : -comparison;
 		});
 
 		// Apply cursor-based pagination

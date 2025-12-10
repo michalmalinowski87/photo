@@ -67,6 +67,8 @@ interface PaginationParams {
   page?: string | number;
   itemsPerPage?: string | number;
   search?: string;
+  sortBy?: string;
+  sortOrder?: string;
   excludeDeliveryStatus?: string;
 }
 
@@ -403,10 +405,16 @@ class ApiService {
      * List all galleries
      * @param filter - Optional filter: 'unpaid', 'wyslano', 'wybrano', 'prosba-o-zmiany', 'gotowe-do-wysylki', 'dostarczone'
      * @param pagination - Optional pagination params: limit (default 50), cursor
+     * @param search - Optional search query (searches name, date, client email, first/last names)
+     * @param sortBy - Optional sort field: 'name', 'date', 'expiration' (default: 'date')
+     * @param sortOrder - Optional sort order: 'asc', 'desc' (default: 'desc')
      */
     list: async (
       filter?: string,
-      pagination?: { limit?: number; cursor?: string | null }
+      pagination?: { limit?: number; cursor?: string | null },
+      search?: string,
+      sortBy?: "name" | "date" | "expiration",
+      sortOrder?: "asc" | "desc"
     ): Promise<ListResponse<Gallery> | Gallery[]> => {
       const params = new URLSearchParams();
       if (filter) {
@@ -417,6 +425,15 @@ class ApiService {
       }
       if (pagination?.cursor) {
         params.append("cursor", pagination.cursor);
+      }
+      if (search) {
+        params.append("search", search);
+      }
+      if (sortBy) {
+        params.append("sortBy", sortBy);
+      }
+      if (sortOrder) {
+        params.append("sortOrder", sortOrder);
       }
       const queryString = params.toString();
       const url = queryString ? `/galleries?${queryString}` : "/galleries";
@@ -1162,6 +1179,7 @@ class ApiService {
   clients = {
     /**
      * List clients
+     * @param params - Pagination and search params, including optional sortBy ('name' | 'date') and sortOrder ('asc' | 'desc')
      */
     list: async (params: PaginationParams = {}): Promise<ListResponse<Client>> => {
       const queryString = new URLSearchParams(params as Record<string, string>).toString();
@@ -1226,9 +1244,36 @@ class ApiService {
   packages = {
     /**
      * List packages
+     * @param pagination - Optional pagination params: limit (default 20), cursor
+     * @param search - Optional search query to filter by name
+     * @param sortBy - Optional sort field: name, price, pricePerExtraPhoto, date
+     * @param sortOrder - Optional sort order: asc, desc
      */
-    list: async (): Promise<ListResponse<Package>> => {
-      return await this._request<ListResponse<Package>>("/packages");
+    list: async (
+      pagination?: { limit?: number; cursor?: string | null },
+      search?: string,
+      sortBy?: "name" | "price" | "pricePerExtraPhoto" | "date",
+      sortOrder?: "asc" | "desc"
+    ): Promise<ListResponse<Package>> => {
+      const params = new URLSearchParams();
+      if (pagination?.limit) {
+        params.append("limit", pagination.limit.toString());
+      }
+      if (pagination?.cursor) {
+        params.append("cursor", pagination.cursor);
+      }
+      if (search) {
+        params.append("search", search);
+      }
+      if (sortBy) {
+        params.append("sortBy", sortBy);
+      }
+      if (sortOrder) {
+        params.append("sortOrder", sortOrder);
+      }
+      const queryString = params.toString();
+      const url = queryString ? `/packages?${queryString}` : "/packages";
+      return await this._request<ListResponse<Package>>(url);
     },
 
     /**

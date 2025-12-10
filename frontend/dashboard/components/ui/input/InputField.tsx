@@ -22,6 +22,7 @@ interface InputProps {
   required?: boolean;
   autoComplete?: string;
   autoFocus?: boolean;
+  hideErrorSpace?: boolean;
 }
 
 const Input: FC<InputProps> = ({
@@ -45,6 +46,7 @@ const Input: FC<InputProps> = ({
   required,
   autoComplete,
   autoFocus,
+  hideErrorSpace = false,
 }) => {
   let inputClasses = ` h-11 w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-theme-xs placeholder:text-gray-400 focus:outline-hidden focus:ring-3  dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 ${className}`;
 
@@ -78,26 +80,30 @@ const Input: FC<InputProps> = ({
         autoFocus={autoFocus}
         className={inputClasses}
         style={{ minHeight: "44px" }}
+        data-1p-ignore="true"
+        data-lpignore="true"
       />
 
       {/* Reserved space for error messages or hints to prevent layout shifts */}
-      <div className="min-h-[20px] mt-1.5">
-        {errorMessage ? (
-          <p className="text-xs text-error-500 opacity-70">{errorMessage}</p>
-        ) : hint ? (
-          <p
-            className={`text-xs ${
-              error
-                ? "text-error-500"
-                : success
-                  ? "text-success-500"
-                  : "text-gray-500 dark:text-gray-400"
-            }`}
-          >
-            {hint}
-          </p>
-        ) : null}
-      </div>
+      {!hideErrorSpace && (
+        <div className="min-h-[20px] mt-1.5">
+          {errorMessage ? (
+            <p className="text-xs text-error-500 opacity-70">{errorMessage}</p>
+          ) : hint ? (
+            <p
+              className={`text-xs ${
+                error
+                  ? "text-error-500"
+                  : success
+                    ? "text-success-500"
+                    : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
+              {hint}
+            </p>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 };

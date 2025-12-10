@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { createLambdaErrorResponse } from '../../lib/src/error-utils';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -377,11 +378,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			bucket,
 			hasCloudfrontDomain: !!cloudfrontDomain
 		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to list images', message: error.message })
-		};
+		return createLambdaErrorResponse(error, 'Failed to list images', 500);
 	}
 });
 

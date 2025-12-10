@@ -6,12 +6,15 @@ import type { Gallery, GalleryImage } from "../../types";
 
 export function useGalleries(
   filter?: string,
+  search?: string,
+  sortBy?: "name" | "date" | "expiration",
+  sortOrder?: "asc" | "desc",
   options?: Omit<UseQueryOptions<Gallery[]>, "queryKey" | "queryFn">
 ) {
   return useQuery<Gallery[]>({
-    queryKey: queryKeys.galleries.list(filter),
+    queryKey: [...queryKeys.galleries.list(filter), search, sortBy, sortOrder],
     queryFn: async () => {
-      const response = await api.galleries.list(filter);
+      const response = await api.galleries.list(filter, undefined, search, sortBy, sortOrder);
       const galleries = Array.isArray(response) ? response : response.items || [];
       return galleries as Gallery[];
     },

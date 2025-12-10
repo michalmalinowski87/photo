@@ -1,5 +1,8 @@
+
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo } from "react";
+
 
 import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
@@ -19,17 +22,18 @@ import {
   useDenyChangeRequest,
   useDeleteFinalImage,
 } from "../../../../hooks/mutations/useOrderMutations";
-import { useGalleryImages } from "../../../../hooks/queries/useGalleries";
-import { useOrder, useOrderFinalImages } from "../../../../hooks/queries/useOrders";
+import { useOrder } from "../../../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../../../hooks/queries/useWallet";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
+import { useInfiniteGalleryImages } from "../../../../hooks/useInfiniteGalleryImages";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
 import { usePageLogger } from "../../../../hooks/usePageLogger";
 import { useToast } from "../../../../hooks/useToast";
-import { formatApiError } from "../../../../lib/api-service";
+import api, { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
+import { queryKeys } from "../../../../lib/react-query";
 import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from types/index.ts
@@ -62,15 +66,70 @@ export default function OrderDetail() {
   const { gallery } = useGallery();
   const { data: order, refetch: refetchOrder } = useOrder(galleryIdForQuery, orderIdForQuery);
 
-  // Use React Query hooks to automatically load images
-  const { data: galleryImagesData = [] } = useGalleryImages(galleryIdForQuery, "thumb");
-  const originalImages = (galleryImagesData || []) as GalleryImage[];
+  // Use infinite scroll for originals (client selected images)
+  const {
+    data: originalImagesData,
+    isLoading: originalImagesLoading,
+    error: originalImagesError,
+    fetchNextPage: fetchNextOriginalPage,
+    hasNextPage: hasNextOriginalPage,
+    isFetchingNextPage: isFetchingNextOriginalPage,
+  } = useInfiniteGalleryImages({
+    galleryId: galleryIdForQuery,
+    type: "thumb",
+    limit: 50,
+  });
 
-  // Use React Query hook to automatically load final images (URLs are mapped via select)
-  const { data: finalImagesData = [], refetch: refetchFinalImages } = useOrderFinalImages(
-    galleryIdForQuery,
-    orderIdForQuery
-  );
+  // Flatten pages into a single array of original images
+  const originalImages = useMemo(() => {
+    if (!originalImagesData?.pages) return [];
+    return originalImagesData.pages.flatMap((page) => page.images || []);
+  }, [originalImagesData]);
+
+  // Use infinite scroll for final images
+  // Note: Backend doesn't support pagination yet, so we fetch all at once but use same UI strategy
+  const {
+    data: finalImagesData,
+    isLoading: finalImagesLoading,
+    error: finalImagesError,
+    fetchNextPage: fetchNextFinalPage,
+    hasNextPage: hasNextFinalPage,
+    isFetchingNextPage: isFetchingNextFinalPage,
+    refetch: refetchFinalImages,
+  } = useInfiniteQuery({
+    queryKey: queryKeys.orders.finalImages(
+      galleryIdForQuery ?? "",
+      orderIdForQuery ?? ""
+    ),
+    queryFn: async ({ pageParam: _pageParam }) => {
+      if (!galleryIdForQuery || !orderIdForQuery) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      const response = await api.orders.getFinalImages(galleryIdForQuery, orderIdForQuery);
+      const images = (response.images || []).map((img: any) => ({
+        ...img,
+        url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
+        finalUrl: img.finalUrl ?? img.url ?? "",
+      }));
+      // Return as a single page since backend doesn't support pagination
+      return {
+        images: images || [],
+        hasMore: false,
+        nextCursor: null,
+      };
+    },
+    getNextPageParam: () => undefined, // No pagination support
+    initialPageParam: null as string | null,
+    enabled: !!galleryIdForQuery && !!orderIdForQuery,
+    retry: false, // Disable retries for infinite queries to prevent infinite loops on errors
+    structuralSharing: false, // Prevent React Query from trying to merge cached data with different structure
+  });
+
+  // Flatten pages into a single array of final images
+  const finalImagesDataFlattened = useMemo(() => {
+    if (!finalImagesData?.pages) return [];
+    return finalImagesData.pages.flatMap((page) => page.images || []);
+  }, [finalImagesData]);
 
   const [error, setError] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
@@ -100,12 +159,12 @@ export default function OrderDetail() {
   // This must happen before the useMemo that filters images, so re-uploaded images aren't filtered out
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
   useEffect(() => {
-    if (!finalImagesData || finalImagesData.length === 0) {
+    if (!finalImagesDataFlattened || finalImagesDataFlattened.length === 0) {
       return;
     }
 
     const currentImageKeys = new Set(
-      finalImagesData.map((img: GalleryImage) => img.key ?? img.filename).filter(Boolean)
+      finalImagesDataFlattened.map((img: GalleryImage) => img.key ?? img.filename).filter(Boolean)
     );
 
     // Find keys that are in deletedImageKeys but now present in the data (re-uploaded)
@@ -117,19 +176,25 @@ export default function OrderDetail() {
       // Clear keys synchronously so the useMemo below can see the updated state
       clearDeletedKeysForImages(reuploadedKeys);
     }
-  }, [finalImagesData, deletedImageKeysRef, clearDeletedKeysForImages]);
+  }, [finalImagesDataFlattened, deletedImageKeysRef, clearDeletedKeysForImages]);
 
-  // Derived/computed final images: Filter deleted images
-  // URLs are already mapped via select in useOrderFinalImages
+  // Derived/computed final images: Filter deleted images and map URLs
   // Note: This depends on deletedImageKeys (state) not deletedImageKeysRef (ref) to ensure it re-runs when keys are cleared
   const finalImages = useMemo(() => {
-    // Start with React Query data (already transformed with URLs mapped)
-    const baseImages = (finalImagesData || []) as GalleryImage[];
+    // Start with React Query data
+    const baseImages = (finalImagesDataFlattened || []) as GalleryImage[];
+
+    // Map URLs (similar to what useOrderFinalImages did)
+    const mappedImages = baseImages.map((img: GalleryImage) => ({
+      ...img,
+      url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
+      finalUrl: img.finalUrl ?? img.url ?? "",
+    }));
 
     // Filter out successfully deleted images
     // Use deletedImageKeys state (not ref) so memo re-runs when keys are cleared
-    return filterDeletedImages(baseImages, deletingImagesRef.current, deletedImageKeys);
-  }, [finalImagesData, deletingImagesRef, deletedImageKeys]);
+    return filterDeletedImages(mappedImages, deletingImagesRef.current, deletedImageKeys);
+  }, [finalImagesDataFlattened, deletingImagesRef, deletedImageKeys]);
 
   // Payment mutation
   const payGalleryMutation = usePayGallery();
@@ -546,6 +611,11 @@ export default function OrderDetail() {
           selectedKeys={selectedKeys}
           selectionEnabled={selectionEnabled}
           deliveryStatus={order.deliveryStatus}
+          isLoading={originalImagesLoading}
+          error={originalImagesError}
+          fetchNextPage={fetchNextOriginalPage}
+          hasNextPage={hasNextOriginalPage}
+          isFetchingNextPage={isFetchingNextOriginalPage}
         />
       )}
 
@@ -562,6 +632,11 @@ export default function OrderDetail() {
           isNonSelectionGallery={isNonSelectionGallery}
           galleryId={galleryIdForQuery}
           orderId={orderIdForQuery}
+          isLoading={finalImagesLoading}
+          error={finalImagesError}
+          fetchNextPage={fetchNextFinalPage}
+          hasNextPage={hasNextFinalPage}
+          isFetchingNextPage={isFetchingNextFinalPage}
         />
       )}
 

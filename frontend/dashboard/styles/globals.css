@@ -89,21 +89,6 @@
     display: none;
   }
 
-  .custom-scrollbar::-webkit-scrollbar {
-    @apply w-1.5 h-1.5;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    @apply rounded-full;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full dark:bg-gray-700;
-  }
-
-  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #344054;
-  }
 
   .shadow-theme-xs {
     box-shadow: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);

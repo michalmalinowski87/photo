@@ -1,19 +1,21 @@
-import { X, Users, Plus, Pencil, Trash2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { X, Users, Plus, Pencil, Trash2, ArrowUpDown } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
-import { ContentViewLoading } from "../components/ui/loading/Loading";
+import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
+import { Dropdown } from "../components/ui/dropdown/Dropdown";
+import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import {
   useCreateClient,
   useDeleteClient,
   useUpdateClient,
 } from "../hooks/mutations/useClientMutations";
-import { useClients } from "../hooks/queries/useClients";
+import { useInfiniteClients } from "../hooks/useInfiniteClients";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
 
@@ -40,10 +42,6 @@ interface ClientFormData {
   nip: string;
 }
 
-interface PageHistoryItem {
-  page: number;
-  cursor: string | null;
-}
 
 export default function Clients() {
   const { showToast } = useToast();
@@ -64,47 +62,83 @@ export default function Clients() {
     companyName: "",
     nip: "",
   });
+  // Search state with debouncing
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [paginationCursor, setPaginationCursor] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<PageHistoryItem[]>([{ page: 1, cursor: null }]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 600);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
-
-  // Build query params based on search vs pagination
-  const queryParams = searchQuery
-    ? {
-        limit: "20",
-        search: searchQuery,
-        offset: ((currentPage - 1) * 20).toString(),
-      }
-    : paginationCursor
-      ? { limit: "20", lastKey: paginationCursor }
-      : { limit: "20" };
-
-  // React Query hook
-  const { data: clientsData, isLoading: loading, isFetching, error } = useClients(queryParams);
-
-  const clients = clientsData?.items ?? [];
-  const hasMore = clientsData?.hasMore ?? false;
-
-  // Update pagination cursor when data changes (only for non-search pagination)
-  useEffect(() => {
-    if (!searchQuery && clientsData?.lastKey !== undefined) {
-      setPaginationCursor(clientsData.lastKey);
+  
+  // Sort state - persisted in localStorage
+  const [sortBy, setSortBy] = useState<"name" | "date">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("clientsListSortBy");
+      return (saved === "name" || saved === "date") ? saved : "date";
     }
-  }, [clientsData?.lastKey, searchQuery]);
+    return "date";
+  });
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("clientsListSortOrder");
+      return (saved === "asc" || saved === "desc") ? saved : "desc";
+    }
+    return "desc";
+  });
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // Handle search query changes with debounce
+  // Save sort preferences
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCurrentPage(1);
-      setPageHistory([{ page: 1, cursor: null }]);
-      setPaginationCursor(null);
-    }, 300);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("clientsListSortBy", sortBy);
+      localStorage.setItem("clientsListSortOrder", sortOrder);
+    }
+  }, [sortBy, sortOrder]);
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+  const getSortLabel = () => {
+    const sortLabels: Record<"name" | "date", string> = {
+      name: "Nazwa",
+      date: "Data",
+    };
+    const orderLabel = sortOrder === "asc" ? "rosnąco" : "malejąco";
+    return `${sortLabels[sortBy]} (${orderLabel})`;
+  };
+
+  // React Query hook with infinite scroll
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteClients({
+    limit: 20,
+    search: debouncedSearchQuery || undefined,
+    sortBy,
+    sortOrder,
+  });
+
+  // Flatten pages into a single array of clients
+  const clients = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.items || []);
+  }, [data]);
 
   const handleCreate = (): void => {
     setEditingClient(null);
@@ -177,45 +211,6 @@ export default function Clients() {
     }
   };
 
-  const handleNextPage = (): void => {
-    if (hasMore) {
-      const nextPage = currentPage + 1;
-      if (searchQuery) {
-        setCurrentPage(nextPage);
-      } else {
-        if (paginationCursor) {
-          const newCursor = paginationCursor;
-          setCurrentPage(nextPage);
-          const historyIndex = pageHistory.findIndex((h) => h.page === nextPage);
-          if (historyIndex >= 0) {
-            const newHistory = [...pageHistory];
-            newHistory[historyIndex] = { page: nextPage, cursor: newCursor };
-            setPageHistory(newHistory);
-          } else {
-            setPageHistory([...pageHistory, { page: nextPage, cursor: newCursor }]);
-          }
-        }
-      }
-    }
-  };
-
-  const handlePreviousPage = (): void => {
-    if (currentPage > 1) {
-      const previousPage = currentPage - 1;
-      if (searchQuery) {
-        setCurrentPage(previousPage);
-      } else {
-        const previousPageData = pageHistory.find((h) => h.page === previousPage);
-        if (previousPageData) {
-          setPaginationCursor(previousPageData.cursor);
-          setCurrentPage(previousPage);
-        } else {
-          setPaginationCursor(null);
-          setCurrentPage(1);
-        }
-      }
-    }
-  };
 
   if (showForm) {
     return (
@@ -233,7 +228,7 @@ export default function Clients() {
           </button>
         </div>
 
-        {error && <div>{formatApiError(error)}</div>}
+        {queryError && <div>{formatApiError(queryError)}</div>}
 
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
@@ -345,40 +340,130 @@ export default function Clients() {
     );
   }
 
-  if (loading && !clientsData) {
+  if (loading && !data) {
     return <ContentViewLoading text="Ładowanie klientów..." />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4 flex-wrap">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Klienci</h1>
+        {/* Search Input - spans from title to sort dropdown */}
+        {((!loading && clients.length > 0) || searchQuery) && (
+          <div className="relative flex-1 min-w-[200px]">
+            <Input
+              type="text"
+              placeholder="Szukaj (email, imię, nazwisko, firma, NIP, telefon)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full h-11 ${searchQuery ? "pr-10" : ""}`}
+              hideErrorSpace={true}
+              autoComplete="off"
+              autoFocus={false}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                aria-label="Wyczyść wyszukiwanie"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        )}
+        
+        {/* Sort Dropdown */}
+        <div className="relative">
+            <button
+              ref={sortButtonRef}
+              onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+              className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+            >
+              <ArrowUpDown size={16} />
+              <span>{getSortLabel()}</span>
+            </button>
+            <Dropdown
+              isOpen={sortDropdownOpen}
+              onClose={() => setSortDropdownOpen(false)}
+              triggerRef={sortButtonRef}
+              className="w-56 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+            >
+              <div className="p-2">
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Sortuj według
+                </div>
+                <DropdownItem
+                  onClick={() => {
+                    setSortBy("name");
+                    setSortDropdownOpen(false);
+                  }}
+                  className={`px-3 py-2 text-sm ${
+                    sortBy === "name"
+                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
+                </DropdownItem>
+                <DropdownItem
+                  onClick={() => {
+                    setSortBy("date");
+                    setSortDropdownOpen(false);
+                  }}
+                  className={`px-3 py-2 text-sm ${
+                    sortBy === "date"
+                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
+                </DropdownItem>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Kolejność
+                </div>
+                <DropdownItem
+                  onClick={() => {
+                    setSortOrder("asc");
+                    setSortDropdownOpen(false);
+                  }}
+                  className={`px-3 py-2 text-sm ${
+                    sortOrder === "asc"
+                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Rosnąco ↑
+                </DropdownItem>
+                <DropdownItem
+                  onClick={() => {
+                    setSortOrder("desc");
+                    setSortDropdownOpen(false);
+                  }}
+                  className={`px-3 py-2 text-sm ${
+                    sortOrder === "desc"
+                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Malejąco ↓
+                </DropdownItem>
+              </div>
+            </Dropdown>
+          </div>
+
+        {/* Add Client Button */}
         <button
           onClick={handleCreate}
-          className="text-xl text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
+          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
         >
-          <span className="text-2xl">+</span>
+          <Plus size={16} />
           <span>Dodaj klienta</span>
         </button>
       </div>
 
-      {error && <div>{formatApiError(error)}</div>}
-
-      {(!loading && clients.length > 0) || searchQuery ? (
-        <div className="pt-6 px-6 pb-1 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Szukaj (email, imię, nazwisko, firma, NIP, telefon)
-            </label>
-            <Input
-              type="text"
-              placeholder="Wpisz tekst do wyszukania..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-      ) : null}
+      {queryError && <div>{formatApiError(queryError)}</div>}
 
       {clients.length === 0 ? (
         searchQuery ? (
@@ -398,38 +483,64 @@ export default function Clients() {
           />
         )
       ) : (
-        <>
-          <div className="w-full">
-            <Table>
-              <TableHeader>
+        <div className="w-full relative">
+          <div
+            className="w-full overflow-auto table-scrollbar"
+            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
+            onScroll={(e) => {
+              const target = e.target as HTMLElement;
+              const scrollTop = target.scrollTop;
+              const clientHeight = target.clientHeight;
+              
+              // Use same item-based prefetching as galleries for consistency
+              // Calculate how many items are remaining based on scroll position
+              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const totalItemsRendered = clients.length;
+              
+              // Calculate which item index is currently at the bottom of viewport
+              const scrollBottom = scrollTop + clientHeight;
+              const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+              
+              // Calculate distance from end (same logic as galleries)
+              const distanceFromEnd = totalItemsRendered - itemsScrolled;
+              const prefetchThreshold = 25; // Same threshold as galleries
+              
+              // Don't fetch if there's an error or already fetching
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+                void fetchNextPage();
+              }
+            }}
+          >
+            <Table className="w-full relative">
+              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
                 <TableRow className="bg-gray-100 dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                   >
                     Email
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                   >
                     Imię i nazwisko / Firma
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Telefon
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -497,35 +608,13 @@ export default function Clients() {
                 })}
               </TableBody>
             </Table>
+            {isFetchingNextPage && (
+              <div className="flex justify-center py-4">
+                <InlineLoading text="Ładowanie więcej klientów..." />
+              </div>
+            )}
           </div>
-
-          {clients.length > 0 && (currentPage > 1 || hasMore) && (
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                Strona {currentPage}
-                {clients.length === 20 && hasMore && " (więcej dostępne)"}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePreviousPage}
-                  disabled={isFetching || currentPage === 1}
-                >
-                  Poprzednia
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNextPage}
-                  disabled={isFetching || !hasMore}
-                >
-                  Następna
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       <ConfirmDialog

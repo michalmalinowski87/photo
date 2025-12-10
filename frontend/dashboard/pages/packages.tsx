@@ -1,19 +1,21 @@
-import { X, Package, Plus, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { X, Package, Plus, Pencil, Trash2, Search, ArrowUpDown } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
-import { ContentViewLoading } from "../components/ui/loading/Loading";
+import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
+import { Dropdown } from "../components/ui/dropdown/Dropdown";
+import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import {
   useCreatePackage,
   useDeletePackage,
   useUpdatePackage,
 } from "../hooks/mutations/usePackageMutations";
-import { usePackages } from "../hooks/queries/usePackages";
+import { useInfinitePackages } from "../hooks/useInfinitePackages";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../lib/currency";
@@ -43,10 +45,82 @@ export default function Packages() {
   const updatePackageMutation = useUpdatePackage();
   const deletePackageMutation = useDeletePackage();
 
-  // React Query hook
-  const { data: packagesData, isLoading: loading, error } = usePackages();
+  // Search state with debouncing
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const packages = (packagesData?.items ?? []) as PricingPackage[];
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 600);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Sort state - persisted in localStorage
+  const [sortBy, setSortBy] = useState<"name" | "price" | "pricePerExtraPhoto" | "date">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("packagesListSortBy");
+      return (saved === "name" || saved === "price" || saved === "pricePerExtraPhoto" || saved === "date") ? saved : "date";
+    }
+    return "date";
+  });
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("packagesListSortOrder");
+      return (saved === "asc" || saved === "desc") ? saved : "desc";
+    }
+    return "desc";
+  });
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Save sort preferences
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("packagesListSortBy", sortBy);
+      localStorage.setItem("packagesListSortOrder", sortOrder);
+    }
+  }, [sortBy, sortOrder]);
+
+  const getSortLabel = () => {
+    const sortLabels: Record<"name" | "price" | "pricePerExtraPhoto" | "date", string> = {
+      name: "Nazwa",
+      price: "Cena pakietu",
+      pricePerExtraPhoto: "Cena za zdjęcie",
+      date: "Data",
+    };
+    const orderLabel = sortOrder === "asc" ? "rosnąco" : "malejąco";
+    return `${sortLabels[sortBy]} (${orderLabel})`;
+  };
+
+  // React Query hook with infinite scroll
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfinitePackages({
+    limit: 20,
+    search: debouncedSearchQuery || undefined,
+    sortBy,
+    sortOrder,
+  });
+
+  // Flatten pages into a single array of packages
+  const packages = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.items || []);
+  }, [data]);
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [editingPackage, setEditingPackage] = useState<PricingPackage | null>(null);
@@ -146,7 +220,7 @@ export default function Packages() {
           </button>
         </div>
 
-        {error && <div>{formatApiError(error)}</div>}
+        {queryError && <div>{formatApiError(queryError)}</div>}
 
         <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
@@ -251,24 +325,160 @@ export default function Packages() {
     );
   }
 
-  if (loading && !packagesData) {
+  const initialLoad = loading && packages.length === 0;
+  
+  if (initialLoad) {
     return <ContentViewLoading text="Ładowanie pakietów..." />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4 flex-wrap">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pakiety</h1>
+        
+        {/* Search Input - spans from title to sort dropdown */}
+        <div className="relative flex-1 min-w-[200px]">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+            <Search size={18} className="text-gray-400 dark:text-gray-500" />
+          </div>
+          <Input
+            type="text"
+            placeholder="Szukaj (nazwa pakietu)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`pl-9 ${searchQuery ? "pr-10" : "pr-4"} h-11`}
+            hideErrorSpace={true}
+            autoComplete="off"
+            autoFocus={false}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-5 h-5 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+              aria-label="Wyczyść wyszukiwanie"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        
+        {/* Sort Dropdown */}
+        <div className="relative">
+          <button
+            ref={sortButtonRef}
+            onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+          >
+            <ArrowUpDown size={16} />
+            <span>{getSortLabel()}</span>
+          </button>
+          <Dropdown
+            isOpen={sortDropdownOpen}
+            onClose={() => setSortDropdownOpen(false)}
+            triggerRef={sortButtonRef}
+            className="w-64 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+          >
+            <div className="p-2">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Sortuj według
+              </div>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("name");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "name"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("price");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "price"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Cena pakietu {sortBy === "price" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("pricePerExtraPhoto");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "pricePerExtraPhoto"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Cena za zdjęcie {sortBy === "pricePerExtraPhoto" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("date");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "date"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Kolejność
+              </div>
+              <DropdownItem
+                onClick={() => {
+                  setSortOrder("asc");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortOrder === "asc"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Rosnąco ↑
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortOrder("desc");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortOrder === "desc"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Malejąco ↓
+              </DropdownItem>
+            </div>
+          </Dropdown>
+        </div>
+
+        {/* Add Package Button */}
         <button
           onClick={handleCreate}
-          className="text-xl text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 transition-colors flex items-center gap-2"
+          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
         >
-          <span className="text-2xl">+</span>
+          <Plus size={16} />
           <span>Dodaj pakiet</span>
         </button>
       </div>
 
-      {error && <div>{formatApiError(error)}</div>}
+      {queryError && <div>{formatApiError(queryError)}</div>}
 
       {packages.length === 0 ? (
         <EmptyState
@@ -282,105 +492,142 @@ export default function Packages() {
           }}
         />
       ) : (
-        <div className="w-full">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-100 dark:bg-gray-900">
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
-                >
-                  Nazwa
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Zdjęcia w pakiecie
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[1%]"
-                >
-                  <div className="flex flex-col leading-tight">
-                    <span className="whitespace-nowrap">Cena za</span>
-                    <span className="whitespace-nowrap">dodatkowe zdjęcie</span>
-                  </div>
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Cena pakietu
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Data utworzenia
-                </TableCell>
-                <TableCell
-                  isHeader
-                  className="px-3 py-5 text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
-                >
-                  Akcje
-                </TableCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {packages.map((pkg, index) => {
-                const isEvenRow = index % 2 === 0;
-                return (
-                  <TableRow
-                    key={pkg.packageId}
-                    className={`h-[120px] ${
-                      isEvenRow
-                        ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                        : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
-                    }`}
+        <div className="w-full relative">
+          <div
+            className="w-full overflow-auto"
+            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
+            onScroll={(e) => {
+              const target = e.target as HTMLElement;
+              const scrollTop = target.scrollTop;
+              const clientHeight = target.clientHeight;
+              
+              // Use same item-based prefetching as galleries for consistency
+              // Calculate how many items are remaining based on scroll position
+              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const totalItemsRendered = packages.length;
+              
+              // Calculate which item index is currently at the bottom of viewport
+              const scrollBottom = scrollTop + clientHeight;
+              const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+              
+              // Calculate distance from end (same logic as galleries)
+              const distanceFromEnd = totalItemsRendered - itemsScrolled;
+              const prefetchThreshold = 25; // Same threshold as galleries
+              
+              // Don't fetch if there's an error or already fetching
+              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+                void fetchNextPage();
+              }
+            }}
+          >
+            <Table className="w-full relative">
+              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
+                <TableRow className="bg-gray-100 dark:bg-gray-900">
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                   >
-                    <TableCell className="px-3 py-5 text-base font-medium text-gray-900 dark:text-white align-middle">
-                      {pkg.name || "-"}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
-                      {pkg.includedPhotos}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
-                      {formatPrice(pkg.pricePerExtraPhoto)}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
-                      {formatPrice(pkg.price)}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
-                      {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 align-middle text-center">
-                      <div className="flex items-center justify-center">
-                        <Tooltip content="Edytuj">
-                          <button
-                            onClick={() => handleEdit(pkg)}
-                            className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors mr-0.5"
-                            aria-label="Edytuj"
-                          >
-                            <Pencil className="w-5 h-5" />
-                          </button>
-                        </Tooltip>
-                        <Tooltip content="Usuń">
-                          <button
-                            onClick={() => handleDeleteClick(pkg.packageId)}
-                            className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                            aria-label="Usuń"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </Tooltip>
+                    Nazwa
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Zdjęcia w pakiecie
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[1%]"
+                  >
+                    <div className="flex flex-col leading-tight">
+                      <span className="whitespace-nowrap">Cena za</span>
+                      <span className="whitespace-nowrap">dodatkowe zdjęcie</span>
+                    </div>
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Cena pakietu
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Data utworzenia
+                  </TableCell>
+                  <TableCell
+                    isHeader
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                  >
+                    Akcje
+                  </TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {packages.map((pkg, index) => {
+                  const isEvenRow = index % 2 === 0;
+                  return (
+                    <TableRow
+                      key={pkg.packageId}
+                      className={`h-[120px] ${
+                        isEvenRow
+                          ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                          : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                      }`}
+                    >
+                      <TableCell className="px-3 py-5 text-base font-medium text-gray-900 dark:text-white align-middle">
+                        {pkg.name || "-"}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
+                        {pkg.includedPhotos}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
+                        {formatPrice(pkg.pricePerExtraPhoto)}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
+                        {formatPrice(pkg.price)}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                        {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 align-middle text-center">
+                        <div className="flex items-center justify-center">
+                          <Tooltip content="Edytuj">
+                            <button
+                              onClick={() => handleEdit(pkg)}
+                              className="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 rounded hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors mr-0.5"
+                              aria-label="Edytuj"
+                            >
+                              <Pencil className="w-5 h-5" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Usuń">
+                            <button
+                              onClick={() => handleDeleteClick(pkg.packageId)}
+                              className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                              aria-label="Usuń"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {isFetchingNextPage && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="px-3 py-5">
+                      <div className="flex justify-center py-4">
+                        <InlineLoading text="Ładowanie więcej pakietów..." />
                       </div>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 

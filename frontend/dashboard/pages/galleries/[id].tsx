@@ -695,37 +695,37 @@ export default function GalleryDetail() {
                   <TableRow className="bg-gray-100 dark:bg-gray-900">
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Numer
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status dostawy
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Status płatności
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Kwota
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Data utworzenia
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-5 text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
                     >
                       Akcje
                     </TableCell>

@@ -28,8 +28,14 @@ export const queryKeys = {
     all: ["galleries"] as const,
     lists: () => [...queryKeys.galleries.all, "list"] as const,
     list: (filter?: string) => [...queryKeys.galleries.lists(), filter] as const,
-    infiniteList: (filter?: string, limit?: number) =>
-      [...queryKeys.galleries.lists(), "infinite", filter, limit] as const,
+    infiniteList: (
+      filter?: string,
+      limit?: number,
+      search?: string,
+      sortBy?: "name" | "date" | "expiration",
+      sortOrder?: "asc" | "desc"
+    ) =>
+      [...queryKeys.galleries.lists(), "infinite", filter, limit, search, sortBy, sortOrder] as const,
     details: () => [...queryKeys.galleries.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.galleries.details(), id] as const,
     images: (id: string, type: "originals" | "finals" | "thumb" = "thumb") =>
@@ -63,6 +69,13 @@ export const queryKeys = {
     all: ["packages"] as const,
     lists: () => [...queryKeys.packages.all, "list"] as const,
     list: () => [...queryKeys.packages.lists()] as const,
+    infiniteList: (
+      limit?: number,
+      search?: string,
+      sortBy?: "name" | "price" | "pricePerExtraPhoto" | "date",
+      sortOrder?: "asc" | "desc"
+    ) =>
+      [...queryKeys.packages.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
     details: () => [...queryKeys.packages.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.packages.details(), id] as const,
   },
@@ -70,6 +83,13 @@ export const queryKeys = {
     all: ["clients"] as const,
     lists: () => [...queryKeys.clients.all, "list"] as const,
     list: (params?: PaginationParams) => [...queryKeys.clients.lists(), params] as const,
+    infiniteList: (
+      limit?: number,
+      search?: string,
+      sortBy?: "name" | "date",
+      sortOrder?: "asc" | "desc"
+    ) =>
+      [...queryKeys.clients.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
     details: () => [...queryKeys.clients.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.clients.details(), id] as const,
   },
