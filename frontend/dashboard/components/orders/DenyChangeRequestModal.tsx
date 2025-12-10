@@ -11,12 +11,12 @@ interface DenyChangeRequestModalProps {
   loading?: boolean;
 }
 
-export const DenyChangeRequestModal: React.FC<DenyChangeRequestModalProps> = ({
+export const DenyChangeRequestModal = ({
   isOpen,
   onClose,
   onConfirm,
   loading = false,
-}) => {
+}: DenyChangeRequestModalProps) => {
   const [reason, setReason] = useState("");
 
   const handleConfirm = (preventFutureChangeRequests: boolean = false) => {

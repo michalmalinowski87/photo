@@ -10,7 +10,7 @@ interface WelcomePopupWrapperProps {
   onCreateGallery?: () => void;
 }
 
-export const WelcomePopupWrapper: React.FC<WelcomePopupWrapperProps> = ({ onCreateGallery }) => {
+export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProps) => {
   const { data: businessInfo } = useBusinessInfo();
   const { data: walletTransactionsData, refetch: refetchTransactions } = useWalletTransactions({
     limit: "10",

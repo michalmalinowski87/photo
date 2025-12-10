@@ -10,13 +10,13 @@ interface DropdownProps {
   triggerRef?: React.RefObject<HTMLElement> | { current: HTMLElement | null };
 }
 
-export const Dropdown: React.FC<DropdownProps> = ({
+export const Dropdown = ({
   isOpen,
   onClose,
   children,
   className = "",
   triggerRef,
-}) => {
+}: DropdownProps) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{
     top?: number;

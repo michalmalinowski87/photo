@@ -12,7 +12,7 @@ interface ModalProps {
   closeOnClickOutside?: boolean;
 }
 
-export const Modal: React.FC<ModalProps> = ({
+export const Modal = ({
   isOpen,
   onClose,
   children,
@@ -20,7 +20,7 @@ export const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
   isFullscreen = false,
   closeOnClickOutside = true,
-}) => {
+}: ModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

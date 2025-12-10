@@ -89,12 +89,12 @@ interface WizardData {
   initialPaymentAmountCents: number;
 }
 
-const CreateGalleryWizard: React.FC<CreateGalleryWizardProps> = ({
+const CreateGalleryWizard = ({
   isOpen,
   onClose,
   onSuccess,
   devLocked = false,
-}) => {
+}: CreateGalleryWizardProps) => {
   const { showToast } = useToast();
   const createGalleryMutation = useCreateGallery();
   const createPackageMutation = useCreatePackage();

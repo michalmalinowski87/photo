@@ -12,13 +12,13 @@ interface BulkDeleteConfirmDialogProps {
   loading?: boolean;
 }
 
-export const BulkDeleteConfirmDialog: React.FC<BulkDeleteConfirmDialogProps> = ({
+export const BulkDeleteConfirmDialog = ({
   isOpen,
   onClose,
   onConfirm,
   count,
   loading = false,
-}) => {
+}: BulkDeleteConfirmDialogProps) => {
   const handleConfirm = async () => {
     if (loading) {
       return;

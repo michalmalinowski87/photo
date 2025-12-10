@@ -11,7 +11,7 @@ interface AppHeaderProps {
   onCreateGallery?: () => void;
 }
 
-const AppHeader: React.FC<AppHeaderProps> = ({ onCreateGallery }) => {
+const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
   const { isMobileOpen, toggleMobileSidebar } = useSidebar();
 

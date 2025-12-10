@@ -25,7 +25,7 @@ interface SearchableSelectProps {
  * The trigger becomes the search input when opened
  * Matches TypeformInput underline style
  */
-export const SearchableSelect: React.FC<SearchableSelectProps> = ({
+export const SearchableSelect = ({
   options,
   value,
   onChange,
@@ -36,7 +36,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   disabled = false,
   error = false,
   label,
-}) => {
+}: SearchableSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);

@@ -9,7 +9,7 @@ import { ZipDownloadProgress } from "./ZipDownloadProgress";
  * ZipDownloadContainer component that renders download progress from Zustand store
  * This replaces the ZipDownloadProvider context component
  */
-export const ZipDownloadContainer: React.FC = () => {
+export const ZipDownloadContainer = () => {
   const downloads = useDownloadStore((state) => state.downloads);
   const removeDownload = useDownloadStore((state) => state.removeDownload);
   const [mounted, setMounted] = useState(false);

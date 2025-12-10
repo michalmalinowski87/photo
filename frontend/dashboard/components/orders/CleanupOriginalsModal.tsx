@@ -10,12 +10,12 @@ interface CleanupOriginalsModalProps {
   onCancel: () => void;
 }
 
-export const CleanupOriginalsModal: React.FC<CleanupOriginalsModalProps> = ({
+export const CleanupOriginalsModal = ({
   isOpen,
   onClose,
   onConfirm,
   onCancel,
-}) => {
+}: CleanupOriginalsModalProps) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg">
       <div className="p-6">

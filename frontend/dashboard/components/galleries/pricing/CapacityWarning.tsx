@@ -6,10 +6,10 @@ interface CapacityWarningProps {
   originalsLimitBytes: number;
 }
 
-export const CapacityWarning: React.FC<CapacityWarningProps> = ({
+export const CapacityWarning = ({
   uploadedSizeBytes,
   originalsLimitBytes,
-}) => {
+}: CapacityWarningProps) => {
   const usagePercentage = (uploadedSizeBytes / originalsLimitBytes) * 100;
   const usedGB = (uploadedSizeBytes / (1024 * 1024 * 1024)).toFixed(2);
   const limitGB = (originalsLimitBytes / (1024 * 1024 * 1024)).toFixed(0);

@@ -16,10 +16,10 @@ interface PaymentMethodGuidanceProps {
   onTopUpComplete?: () => void;
 }
 
-export const PaymentMethodGuidance: React.FC<PaymentMethodGuidanceProps> = ({
+export const PaymentMethodGuidance = ({
   paymentMethodInfo,
   onTopUpComplete,
-}) => {
+}: PaymentMethodGuidanceProps) => {
   if (!paymentMethodInfo) {
     return null;
   }

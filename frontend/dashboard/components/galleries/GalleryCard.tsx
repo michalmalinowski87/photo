@@ -24,12 +24,12 @@ interface GalleryCardProps {
   onPrefetch?: (galleryId: string) => void;
 }
 
-export const GalleryCard: React.FC<GalleryCardProps> = ({
+export const GalleryCard = ({
   gallery,
   onPublish,
   onDelete,
   onPrefetch,
-}) => {
+}: GalleryCardProps) => {
   const [openActionMenu, setOpenActionMenu] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 

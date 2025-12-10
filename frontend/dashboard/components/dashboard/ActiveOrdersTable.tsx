@@ -62,12 +62,12 @@ const getPaymentStatusBadge = (status: string) => {
   );
 };
 
-export const ActiveOrdersTable: React.FC<ActiveOrdersTableProps> = ({
+export const ActiveOrdersTable = ({
   orders,
   onApproveChangeRequest,
   onDenyChangeRequest,
   onViewAllClick,
-}) => {
+}: ActiveOrdersTableProps) => {
   const router = useRouter();
   const [navigatingGalleryId, setNavigatingGalleryId] = useState<string | null>(null);
 

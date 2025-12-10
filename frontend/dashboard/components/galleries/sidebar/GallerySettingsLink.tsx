@@ -9,11 +9,11 @@ interface GallerySettingsLinkProps {
   hasDeliveredOrders: boolean;
 }
 
-export const GallerySettingsLink: React.FC<GallerySettingsLinkProps> = ({
+export const GallerySettingsLink = ({
   galleryId,
   orderId,
   hasDeliveredOrders: _hasDeliveredOrders,
-}) => {
+}: GallerySettingsLinkProps) => {
   const router = useRouter();
   const isOnOrderPage = router.pathname?.includes("/orders/");
 

@@ -22,14 +22,14 @@ interface PlanSelectionGridProps {
   onPlanKeyChange: (planKey: PlanKey) => void;
 }
 
-export const PlanSelectionGrid: React.FC<PlanSelectionGridProps> = ({
+export const PlanSelectionGrid = ({
   suggestedStorage,
   selectedDuration,
   selectedPlanKey,
   selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
-}) => {
+}: PlanSelectionGridProps) => {
   // Get all plans grouped by storage
   const allPlans = React.useMemo(() => getAllPlansGroupedByStorage(), []);
 

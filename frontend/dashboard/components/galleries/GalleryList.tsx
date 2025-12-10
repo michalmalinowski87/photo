@@ -120,9 +120,9 @@ const calculateUsagePercentage = (gallery: Gallery): number => {
 };
 
 // Cover photo cell component with error handling
-const CoverPhotoCell: React.FC<{ coverPhotoUrl: string | null | undefined }> = ({
+const CoverPhotoCell = ({
   coverPhotoUrl,
-}) => {
+}: { coverPhotoUrl: string | null | undefined }) => {
   const [imageError, setImageError] = useState(false);
 
   if (!coverPhotoUrl || imageError) {
@@ -147,7 +147,7 @@ const CoverPhotoCell: React.FC<{ coverPhotoUrl: string | null | undefined }> = (
   );
 };
 
-const GalleryList: React.FC<GalleryListProps> = ({
+const GalleryList = ({
   filter = "unpaid",
   onLoadingChange,
   onWizardOpenChange,
@@ -156,7 +156,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
   search,
   sortBy,
   sortOrder,
-}) => {
+}: GalleryListProps) => {
   const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: `GalleryList-${filter}`,
     logMount: false,

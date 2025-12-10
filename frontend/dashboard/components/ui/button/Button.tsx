@@ -12,7 +12,7 @@ interface ButtonProps {
   type?: "button" | "submit" | "reset";
 }
 
-const Button: React.FC<ButtonProps> = ({
+const Button = ({
   children,
   size = "md",
   variant = "primary",
@@ -22,7 +22,7 @@ const Button: React.FC<ButtonProps> = ({
   className = "",
   disabled = false,
   type = "button",
-}) => {
+}: ButtonProps) => {
   // Size Classes
   const sizeClasses = {
     sm: "px-4 py-3 text-sm",

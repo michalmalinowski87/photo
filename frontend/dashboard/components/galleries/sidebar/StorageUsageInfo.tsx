@@ -7,7 +7,7 @@ interface StorageUsageInfoProps {
   orderId?: string;
 }
 
-export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) => {
+export const StorageUsageInfo = ({ orderId }: StorageUsageInfoProps) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;

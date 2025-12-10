@@ -6,10 +6,10 @@ interface GalleryTypeStepProps {
   onSelectionEnabledChange: (enabled: boolean) => void;
 }
 
-export const GalleryTypeStep: React.FC<GalleryTypeStepProps> = ({
+export const GalleryTypeStep = ({
   selectionEnabled,
   onSelectionEnabledChange,
-}) => {
+}: GalleryTypeStepProps) => {
   const isFirstSelected = selectionEnabled === true;
   const isSecondSelected = selectionEnabled === false;
 

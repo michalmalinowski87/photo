@@ -24,7 +24,7 @@ export interface AnimatedBeamProps {
     endYOffset?: number;
 }
 
-export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
+export const AnimatedBeam = ({
     className,
     containerRef,
     fromRef,
@@ -33,6 +33,7 @@ export const AnimatedBeam: React.FC<AnimatedBeamProps> = ({
     reverse = false, // Include the reverse prop
     duration = Math.random() * 3 + 4,
     delay = 0,
+}: AnimatedBeamProps) => {
     pathColor = "gray",
     pathWidth = 2,
     pathOpacity = 0.2,

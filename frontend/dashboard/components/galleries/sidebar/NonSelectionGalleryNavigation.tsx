@@ -10,9 +10,9 @@ interface NonSelectionGalleryNavigationProps {
   galleryId: string;
 }
 
-export const NonSelectionGalleryNavigation: React.FC<NonSelectionGalleryNavigationProps> = ({
+export const NonSelectionGalleryNavigation = ({
   galleryId,
-}) => {
+}: NonSelectionGalleryNavigationProps) => {
   const router = useRouter();
   const isOnOrderPage = router.pathname?.includes("/orders/");
   const { orderId } = router.query;

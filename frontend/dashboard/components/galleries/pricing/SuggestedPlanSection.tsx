@@ -25,14 +25,14 @@ const formatBytes = (bytes: number): string => {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 };
 
-export const SuggestedPlanSection: React.FC<SuggestedPlanSectionProps> = ({
+export const SuggestedPlanSection = ({
   suggestedStorage,
   selectedDuration,
   selectedPlanKey,
   selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
-}) => {
+}: SuggestedPlanSectionProps) => {
   // Get selected plan details
   const selectedPlan = React.useMemo(() => {
     if (selectedPlanKey) {

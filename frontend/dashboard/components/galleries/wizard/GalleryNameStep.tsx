@@ -8,11 +8,11 @@ interface GalleryNameStepProps {
   error?: string;
 }
 
-export const GalleryNameStep: React.FC<GalleryNameStepProps> = ({
+export const GalleryNameStep = ({
   galleryName,
   onGalleryNameChange,
   error,
-}) => {
+}: GalleryNameStepProps) => {
   return (
     <div className="w-full mt-[200px]">
       <div className="mb-8 md:mb-12">

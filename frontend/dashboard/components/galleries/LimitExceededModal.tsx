@@ -27,7 +27,7 @@ interface LimitExceededModalProps {
   onCancel?: () => void;
 }
 
-export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
+export const LimitExceededModal = ({
   isOpen,
   onClose,
   galleryId,
@@ -40,7 +40,7 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
   isSelectionGallery,
   onUpgrade,
   onCancel,
-}) => {
+}: LimitExceededModalProps) => {
   const { showToast } = useToast();
   const { data: gallery } = useGallery(galleryId);
   const payGalleryMutation = usePayGallery();

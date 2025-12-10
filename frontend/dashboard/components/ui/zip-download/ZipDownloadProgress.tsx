@@ -11,13 +11,13 @@ interface ZipDownloadProgressProps {
   onDismiss: () => void;
 }
 
-export const ZipDownloadProgress: React.FC<ZipDownloadProgressProps> = ({
+export const ZipDownloadProgress = ({
   orderId,
   galleryId: _galleryId,
   status,
   error,
   onDismiss,
-}) => {
+}: ZipDownloadProgressProps) => {
   const getStatusText = () => {
     switch (status) {
       case "generating":

@@ -75,7 +75,7 @@ const navItems: NavItem[] = [
   },
 ];
 
-const AppSidebar: React.FC = () => {
+const AppSidebar = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
   const router = useRouter();
 

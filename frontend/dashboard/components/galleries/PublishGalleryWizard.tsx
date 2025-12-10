@@ -41,14 +41,14 @@ interface PublishGalleryWizardProps {
   } | null;
 }
 
-export const PublishGalleryWizard: React.FC<PublishGalleryWizardProps> = ({
+export const PublishGalleryWizard = ({
   isOpen,
   onClose,
   galleryId,
   onSuccess,
   renderAsModal = false,
   initialState,
-}) => {
+}: PublishGalleryWizardProps) => {
   const { showToast } = useToast();
   const router = useRouter();
   const { data: walletData } = useWalletBalance();

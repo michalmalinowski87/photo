@@ -16,13 +16,13 @@ interface WalletTopUpSectionProps {
   className?: string; // Optional className for container
 }
 
-export const WalletTopUpSection: React.FC<WalletTopUpSectionProps> = ({
+export const WalletTopUpSection = ({
   onTopUp,
   isLoading: externalLoading = false,
   quickAmounts = [2000, 5000, 10000], // Default: 20, 50, 100 PLN
   showCustomInput = false,
   className = "",
-}) => {
+}: WalletTopUpSectionProps) => {
   const { showToast } = useToast();
   const createCheckoutMutation = useCreateCheckout();
   const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);

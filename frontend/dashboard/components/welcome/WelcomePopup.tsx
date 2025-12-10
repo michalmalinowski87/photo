@@ -12,12 +12,12 @@ interface WelcomePopupProps {
   onCreateGallery?: () => void;
 }
 
-export const WelcomePopup: React.FC<WelcomePopupProps> = ({
+export const WelcomePopup = ({
   isOpen,
   onClose,
   welcomeBonusCents,
   onCreateGallery,
-}) => {
+}: WelcomePopupProps) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-w-2xl max-h-[90vh] flex flex-col">
       <div className="overflow-y-auto flex-1 p-6">

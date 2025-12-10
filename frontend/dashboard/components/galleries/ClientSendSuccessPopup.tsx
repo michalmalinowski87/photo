@@ -13,11 +13,11 @@ interface ClientSendSuccessPopupProps {
   galleryName?: string;
 }
 
-export const ClientSendSuccessPopup: React.FC<ClientSendSuccessPopupProps> = ({
+export const ClientSendSuccessPopup = ({
   isOpen,
   onClose,
   galleryName,
-}) => {
+}: ClientSendSuccessPopupProps) => {
   const { showToast } = useToast();
   const { data: businessInfo } = useBusinessInfo();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();

@@ -14,14 +14,14 @@ interface SelectProps {
   value?: string; // Controlled value
 }
 
-const Select: React.FC<SelectProps> = ({
+const Select = ({
   options,
   placeholder = "Wybierz opcję",
   onChange,
   className = "",
   defaultValue = "",
   value,
-}) => {
+}: SelectProps) => {
   // Use controlled value if provided, otherwise manage internal state
   const [internalValue, setInternalValue] = useState<string>(defaultValue);
   const selectedValue = value ?? internalValue;

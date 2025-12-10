@@ -17,12 +17,12 @@ interface StorageDisplayProps {
  * Reusable component for displaying storage usage with progress bar
  * Used in upload zones and other places where storage needs to be shown
  */
-export const StorageDisplay: React.FC<StorageDisplayProps> = ({
+export const StorageDisplay = ({
   bytes,
   limitBytes,
   label,
   isLoading = false,
-}) => {
+}: StorageDisplayProps) => {
   const usagePercentage = limitBytes ? (bytes / limitBytes) * 100 : 0;
   const isWarning = usagePercentage > 75 && usagePercentage <= 90;
   const isError = usagePercentage > 90;

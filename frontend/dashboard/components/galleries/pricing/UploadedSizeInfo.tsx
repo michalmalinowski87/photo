@@ -4,7 +4,7 @@ interface UploadedSizeInfoProps {
   uploadedSizeBytes: number;
 }
 
-export const UploadedSizeInfo: React.FC<UploadedSizeInfoProps> = ({ uploadedSizeBytes }) => {
+export const UploadedSizeInfo = ({ uploadedSizeBytes }: UploadedSizeInfoProps) => {
   const uploadedMB = (uploadedSizeBytes / (1024 * 1024)).toFixed(2);
 
   return (

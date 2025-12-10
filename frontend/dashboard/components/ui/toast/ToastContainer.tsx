@@ -9,7 +9,7 @@ import Toast from "./Toast";
  * ToastContainer component that renders toasts from Zustand store
  * This replaces the ToastProvider context component
  */
-export const ToastContainer: React.FC = () => {
+export const ToastContainer = () => {
   const toasts = useToastStore((state) => state.toasts);
   const removeToast = useToastStore((state) => state.removeToast);
   const [mounted, setMounted] = useState(false);

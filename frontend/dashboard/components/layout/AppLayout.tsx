@@ -19,7 +19,7 @@ interface AppLayoutProps {
   onCreateGallery?: () => void;
 }
 
-const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
+const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
   const router = useRouter();
   const { isMobileOpen } = useSidebar();
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -165,7 +165,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) 
   );
 };
 
-const AppLayout: React.FC<AppLayoutProps> = ({ children, onCreateGallery }) => {
+const AppLayout = ({ children, onCreateGallery }: AppLayoutProps) => {
   return <LayoutContent onCreateGallery={onCreateGallery}>{children}</LayoutContent>;
 };
 

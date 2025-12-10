@@ -9,7 +9,7 @@ import { GallerySettingsLink } from "./GallerySettingsLink";
 import { NonSelectionGalleryNavigation } from "./NonSelectionGalleryNavigation";
 import { SelectionGalleryNavigation } from "./SelectionGalleryNavigation";
 
-export const GalleryNavigation: React.FC = () => {
+export const GalleryNavigation = () => {
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;

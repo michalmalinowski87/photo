@@ -10,7 +10,7 @@ interface ToastProps {
   duration?: number;
 }
 
-const Toast: React.FC<ToastProps> = ({ variant, title, message, onClose, duration = 2000 }) => {
+const Toast = ({ variant, title, message, onClose, duration = 2000 }: ToastProps) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {

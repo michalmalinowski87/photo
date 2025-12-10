@@ -40,12 +40,12 @@ function formatSpeed(bytesPerSecond: number): string {
   return `${formatBytes(bytesPerSecond)}/s`;
 }
 
-export const UploadCompletionOverlay: React.FC<UploadCompletionOverlayProps> = ({
+export const UploadCompletionOverlay = ({
   isOpen,
   onClose,
   stats,
   isFinalizing = false,
-}) => {
+}: UploadCompletionOverlayProps) => {
   if (!isOpen) {
     return null;
   }

@@ -13,7 +13,7 @@ interface DropdownItemProps {
   children: React.ReactNode;
 }
 
-export const DropdownItem: React.FC<DropdownItemProps> = ({
+export const DropdownItem = ({
   tag = "button",
   to,
   href,
@@ -23,7 +23,7 @@ export const DropdownItem: React.FC<DropdownItemProps> = ({
   className = "",
   disabled = false,
   children,
-}) => {
+}: DropdownItemProps) => {
   const disabledClasses = disabled
     ? "opacity-50 cursor-not-allowed hover:bg-transparent hover:text-gray-700"
     : "";

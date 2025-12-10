@@ -18,15 +18,13 @@ import { useModalStore, useOverlayStore } from "../../store";
 import { useGalleryType } from "../hocs/withGalleryType";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
-type NextStepsOverlayProps = Record<string, never>;
-
 interface Step {
   id: string;
   label: string;
   completed: boolean | null; // null means step doesn't apply (e.g., send step for non-selection galleries)
 }
 
-export const NextStepsOverlay: React.FC<NextStepsOverlayProps> = () => {
+export const NextStepsOverlay = () => {
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
   const { data: businessInfo } = useBusinessInfo();

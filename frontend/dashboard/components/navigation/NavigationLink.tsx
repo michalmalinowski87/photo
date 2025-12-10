@@ -17,13 +17,13 @@ interface NavigationLinkProps extends LinkProps {
   onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
 }
 
-export const NavigationLink: React.FC<NavigationLinkProps> = ({
+export const NavigationLink = ({
   href,
   children,
   className,
   onClick,
   ...props
-}) => {
+}: NavigationLinkProps) => {
   const router = useRouter();
 
   const handleClick = useCallback(

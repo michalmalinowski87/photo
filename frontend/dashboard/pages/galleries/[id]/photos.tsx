@@ -339,7 +339,7 @@ export default function GalleryPhotos() {
       return queryKeys.galleries.infiniteImages(
         galleryIdForQuery,
         "thumb",
-        10,
+        50,
         filterOrderId,
         filterUnselected
       );
@@ -370,7 +370,7 @@ export default function GalleryPhotos() {
   const currentSectionQuery = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
-    limit: 10,
+    limit: 50,
     filterOrderId: expandedSection?.startsWith("order-")
       ? expandedSection.replace("order-", "")
       : undefined,

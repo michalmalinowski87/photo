@@ -8,7 +8,7 @@ import SessionExpiredModal from "./SessionExpiredModal";
 /**
  * SessionExpiredModalWrapper component that uses AuthProvider context
  */
-export const SessionExpiredModalWrapper: React.FC = () => {
+export const SessionExpiredModalWrapper = () => {
   const router = useRouter();
   const { isSessionExpired, returnUrl, setSessionExpired } = useAuth();
 

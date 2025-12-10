@@ -11,14 +11,14 @@ interface BadgeProps {
   children: React.ReactNode; // Badge content
 }
 
-const Badge: React.FC<BadgeProps> = ({
+const Badge = ({
   variant = "light",
   color = "primary",
   size = "md",
   startIcon,
   endIcon,
   children,
-}) => {
+}: BadgeProps) => {
   const baseStyles =
     "inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium whitespace-nowrap";
 

@@ -13,7 +13,7 @@ import { formatApiError } from "../../../lib/api-service";
 import { queryKeys } from "../../../lib/react-query";
 import { RetryableImage } from "../../ui/RetryableImage";
 
-export const CoverPhotoUpload: React.FC = () => {
+export const CoverPhotoUpload = () => {
   const router = useRouter();
   const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
   const galleryId = typeof galleryIdParam === "string" ? galleryIdParam : undefined;

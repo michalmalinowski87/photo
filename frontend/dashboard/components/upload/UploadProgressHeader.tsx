@@ -12,7 +12,7 @@ interface UploadProgressHeaderProps {
   onDismiss?: () => void;
 }
 
-export const UploadProgressHeader: React.FC<UploadProgressHeaderProps> = ({
+export const UploadProgressHeader = ({
   allComplete,
   isUploadComplete,
   uploadingCount,
@@ -21,7 +21,7 @@ export const UploadProgressHeader: React.FC<UploadProgressHeaderProps> = ({
   errorCount,
   total,
   onDismiss,
-}) => {
+}: UploadProgressHeaderProps) => {
   return (
     <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">

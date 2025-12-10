@@ -7,7 +7,7 @@ interface LoadingProps {
   className?: string;
 }
 
-export const Loading: React.FC<LoadingProps> = ({ size = "md", text, className = "" }) => {
+export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => {
   const sizeClasses = {
     sm: "w-4 h-4",
     md: "w-8 h-8",
@@ -34,10 +34,10 @@ export const Loading: React.FC<LoadingProps> = ({ size = "md", text, className =
 
 // Full page loading component
 // Fixed overlay that covers the entire screen including header
-export const FullPageLoading: React.FC<{ text?: string; logo?: React.ReactNode }> = ({
+export const FullPageLoading = ({
   text,
   logo,
-}) => {
+}: { text?: string; logo?: React.ReactNode }) => {
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",
@@ -98,13 +98,13 @@ export const FullPageLoading: React.FC<{ text?: string; logo?: React.ReactNode }
 };
 
 // Inline loading component
-export const InlineLoading: React.FC<{ text?: string }> = ({ text }) => {
+export const InlineLoading = ({ text }: { text?: string }) => {
   return <Loading size="md" text={text} />;
 };
 
 // Gallery loading component - subtle PhotoHub text fading in/out with customizable loading text
 // Use this for gallery image loading states (originals, user selected, finals)
-export const GalleryLoading: React.FC<{ text?: string }> = ({ text = "Ładowanie..." }) => {
+export const GalleryLoading = ({ text = "Ładowanie..." }: { text?: string }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
       <div className="flex flex-col items-center justify-center gap-4">
@@ -122,10 +122,10 @@ export const GalleryLoading: React.FC<{ text?: string }> = ({ text = "Ładowanie
 // Content view loading component - only covers the content area (not sidebar/header)
 // Use this for page-level loading states instead of FullPageLoading
 // This shows a loading state centered in the content area without covering sidebar/header
-export const ContentViewLoading: React.FC<{ text?: string; logo?: React.ReactNode }> = ({
+export const ContentViewLoading = ({
   text,
   logo,
-}) => {
+}: { text?: string; logo?: React.ReactNode }) => {
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",

@@ -23,7 +23,7 @@ interface OrderActionsSectionProps {
   setPublishWizardOpen?: (open: boolean) => void; // Kept for backward compatibility, but not used (we use redirect approach)
 }
 
-export const OrderActionsSection: React.FC<OrderActionsSectionProps> = ({ orderId }) => {
+export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;

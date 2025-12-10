@@ -9,9 +9,9 @@ interface SelectionGalleryNavigationProps {
   galleryId: string;
 }
 
-export const SelectionGalleryNavigation: React.FC<SelectionGalleryNavigationProps> = ({
+export const SelectionGalleryNavigation = ({
   galleryId,
-}) => {
+}: SelectionGalleryNavigationProps) => {
   const galleryRoute = useGalleryRoute();
   const { navigate } = useNavigation();
   const { data: orders = [] } = useOrders(galleryId);

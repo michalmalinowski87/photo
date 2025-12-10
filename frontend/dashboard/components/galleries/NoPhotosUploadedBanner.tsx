@@ -5,7 +5,7 @@ interface NoPhotosUploadedBannerProps {
   galleryId: string;
 }
 
-export const NoPhotosUploadedBanner: React.FC<NoPhotosUploadedBannerProps> = ({ galleryId }) => {
+export const NoPhotosUploadedBanner = ({ galleryId }: NoPhotosUploadedBannerProps) => {
   const router = useRouter();
 
   return (

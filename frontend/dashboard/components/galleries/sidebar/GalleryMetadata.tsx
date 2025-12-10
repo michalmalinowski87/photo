@@ -7,9 +7,9 @@ interface GalleryMetadataProps {
   shouldHideSecondaryElements: boolean;
 }
 
-export const GalleryMetadata: React.FC<GalleryMetadataProps> = ({
+export const GalleryMetadata = ({
   shouldHideSecondaryElements,
-}) => {
+}: GalleryMetadataProps) => {
   // Use React Query hook for gallery data
   const router = useRouter();
   const { id: galleryId } = router.query;

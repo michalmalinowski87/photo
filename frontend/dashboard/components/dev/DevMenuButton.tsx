@@ -9,7 +9,7 @@ import React, { useState } from "react";
  * Floating dev menu button that appears in the bottom-right corner
  * Provides quick access to dev tools
  */
-export const DevMenuButton: React.FC = () => {
+export const DevMenuButton = () => {
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
 

@@ -18,7 +18,7 @@ interface ConfirmDialogProps {
   onSuppressChange?: (suppressed: boolean) => void; // Callback when suppress option changes
 }
 
-export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+export const ConfirmDialog = ({
   isOpen,
   onClose,
   onConfirm,
@@ -30,7 +30,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   loading = false,
   suppressKey,
   onSuppressChange: _onSuppressChange,
-}) => {
+}: ConfirmDialogProps) => {
   const [suppressChecked, setSuppressChecked] = useState(false);
 
   // Reset checkbox state when modal opens

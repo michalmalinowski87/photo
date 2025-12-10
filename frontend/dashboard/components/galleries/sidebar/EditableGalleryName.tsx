@@ -11,11 +11,11 @@ interface EditableGalleryNameProps {
   onNameClick?: () => void;
 }
 
-export const EditableGalleryName: React.FC<EditableGalleryNameProps> = ({
+export const EditableGalleryName = ({
   galleryId,
   galleryName,
   onNameClick,
-}) => {
+}: EditableGalleryNameProps) => {
   const {
     isEditing,
     editingValue,

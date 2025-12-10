@@ -134,7 +134,7 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
 // Debug Component
 // ============================================================================
 
-const FilesGridDebugger: React.FC<{ uppy: Uppy }> = () => {
+const FilesGridDebugger = (_props: { uppy: Uppy }) => {
   // Debug component removed - no longer needed
   return null;
 };
@@ -143,7 +143,7 @@ const FilesGridDebugger: React.FC<{ uppy: Uppy }> = () => {
 // Component
 // ============================================================================
 
-export const UppyUploadModal: React.FC<UppyUploadModalProps> = ({ isOpen, onClose, config }) => {
+export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProps) => {
   const {
     uppy,
     uploading,

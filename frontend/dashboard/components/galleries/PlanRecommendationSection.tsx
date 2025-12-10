@@ -17,14 +17,14 @@ interface PlanRecommendationSectionProps {
   selectionEnabled: boolean;
 }
 
-export const PlanRecommendationSection: React.FC<PlanRecommendationSectionProps> = ({
+export const PlanRecommendationSection = ({
   planRecommendation,
   isLoading,
   uploadedSizeBytes,
   selectedDuration,
   setSelectedDuration,
   selectionEnabled,
-}) => {
+}: PlanRecommendationSectionProps) => {
   const formatBytes = (bytes: number | undefined | null): string => {
     if (!bytes || bytes === 0) {
       return "0 GB";

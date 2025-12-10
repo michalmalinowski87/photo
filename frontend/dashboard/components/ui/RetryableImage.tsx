@@ -27,13 +27,13 @@ interface RetryableImageProps {
  * This ensures robust, fail-free image loading even when CloudFront returns 403 errors.
  */
 
-export const RetryableImage: React.FC<RetryableImageProps> = ({
+export const RetryableImage = ({
   src,
   alt,
   className = "",
   imageData,
   preferredSize = "thumb",
-}) => {
+}: RetryableImageProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
   // Use imageData to compute initial URL if available, otherwise use src

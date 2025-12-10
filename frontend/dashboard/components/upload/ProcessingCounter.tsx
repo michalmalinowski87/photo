@@ -4,7 +4,7 @@ interface ProcessingCounterProps {
   count: number;
 }
 
-export const ProcessingCounter: React.FC<ProcessingCounterProps> = ({ count }) => {
+export const ProcessingCounter = ({ count }: ProcessingCounterProps) => {
   if (count === 0) {
     return null;
   }

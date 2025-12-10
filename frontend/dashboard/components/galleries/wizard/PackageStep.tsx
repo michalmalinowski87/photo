@@ -53,7 +53,7 @@ interface PackageStepProps {
   }) => Promise<void>;
 }
 
-export const PackageStep: React.FC<PackageStepProps> = ({
+export const PackageStep = ({
   existingPackages,
   selectedPackageId,
   packageName,
@@ -71,7 +71,7 @@ export const PackageStep: React.FC<PackageStepProps> = ({
   onPaymentAmountInputChange,
   fieldErrors = {},
   onPackageSave,
-}) => {
+}: PackageStepProps) => {
   const [saving, setSaving] = useState(false);
   const [isFormMode, setIsFormMode] = useState(false);
 

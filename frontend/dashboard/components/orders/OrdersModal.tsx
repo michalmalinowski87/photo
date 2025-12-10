@@ -39,12 +39,12 @@ interface Order {
 
 type BadgeColor = "info" | "success" | "error" | "warning" | "light";
 
-export const OrdersModal: React.FC<OrdersModalProps> = ({
+export const OrdersModal = ({
   isOpen,
   onClose,
   title,
   excludeDeliveryStatus,
-}) => {
+}: OrdersModalProps) => {
   const [page, setPage] = useState(1);
   const itemsPerPage = 20;
   const [denyModalOpen, setDenyModalOpen] = useState(false);

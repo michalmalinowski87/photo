@@ -67,7 +67,7 @@ interface ClientStepProps {
   ) => Promise<void>;
 }
 
-export const ClientStep: React.FC<ClientStepProps> = ({
+export const ClientStep = ({
   existingClients,
   selectedClientId,
   clientEmail,
@@ -84,7 +84,7 @@ export const ClientStep: React.FC<ClientStepProps> = ({
   onDataChange,
   fieldErrors = {},
   onClientSave,
-}) => {
+}: ClientStepProps) => {
   const [saving, setSaving] = useState(false);
   const [isFormMode, setIsFormMode] = useState(false);
 

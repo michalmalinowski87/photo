@@ -36,7 +36,7 @@ interface LazyRetryableImageProps {
  * 3. Next size version (thumb → preview → bigthumb)
  * 4. Original photo from S3 (ultimate fallback)
  */
-export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
+export const LazyRetryableImage = ({
   imageData,
   alt,
   className = "",
@@ -45,7 +45,7 @@ export const LazyRetryableImage: React.FC<LazyRetryableImageProps> = ({
   placeholder,
   loadingPlaceholder,
   errorPlaceholder,
-}) => {
+}: LazyRetryableImageProps) => {
   const [isInView, setIsInView] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);

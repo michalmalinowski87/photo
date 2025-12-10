@@ -5,7 +5,7 @@ import { useRouter } from "next/router";
 import { ThemeToggleButton } from "../common/ThemeToggleButton";
 import { StorageUsageInfo } from "../galleries/sidebar/StorageUsageInfo";
 
-const GalleryHeader: React.FC = () => {
+const GalleryHeader = () => {
   const router = useRouter();
   const { orderId: orderIdFromQuery } = router.query;
   const orderId: string | undefined = Array.isArray(orderIdFromQuery)

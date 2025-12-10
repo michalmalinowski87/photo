@@ -11,14 +11,14 @@ interface AlertProps {
   linkText?: string; // Link text
 }
 
-const Alert: React.FC<AlertProps> = ({
+const Alert = ({
   variant,
   title,
   message,
   showLink = false,
   linkHref = "#",
   linkText = "Dowiedz się więcej",
-}) => {
+}: AlertProps) => {
   // Tailwind classes for each variant
   const variantClasses = {
     success: {

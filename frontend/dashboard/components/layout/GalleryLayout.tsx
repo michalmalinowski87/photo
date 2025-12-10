@@ -9,7 +9,7 @@ interface GalleryLayoutProps {
   children: React.ReactNode;
 }
 
-const GalleryLayout: React.FC<GalleryLayoutProps> = ({ children }) => {
+const GalleryLayout = ({ children }: GalleryLayoutProps) => {
   const router = useRouter();
   const { id: galleryId } = router.query;
 

@@ -14,7 +14,7 @@ interface UploadRecoveryModalProps {
   orderId?: string;
 }
 
-export const UploadRecoveryModal: React.FC<UploadRecoveryModalProps> = ({
+export const UploadRecoveryModal = ({
   isOpen,
   onClose,
   onResume,
@@ -23,7 +23,7 @@ export const UploadRecoveryModal: React.FC<UploadRecoveryModalProps> = ({
   galleryId: _galleryId,
   type,
   orderId: _orderId,
-}) => {
+}: UploadRecoveryModalProps) => {
   const typeLabel = type === "finals" ? "zdjęć finalnych" : "zdjęć";
 
   return (

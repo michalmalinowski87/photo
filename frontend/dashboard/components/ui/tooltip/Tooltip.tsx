@@ -10,14 +10,14 @@ interface TooltipProps {
   fullWidth?: boolean;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({
+export const Tooltip = ({
   content,
   children,
   side = "top",
   align = "center",
   maxWidth,
   fullWidth = false,
-}) => {
+}: TooltipProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement>(null);
