@@ -102,9 +102,9 @@ export const InlineLoading: React.FC<{ text?: string }> = ({ text }) => {
   return <Loading size="md" text={text} />;
 };
 
-// Gallery loading component - subtle PhotoHub text fading in/out with "Loading Photos" text
+// Gallery loading component - subtle PhotoHub text fading in/out with customizable loading text
 // Use this for gallery image loading states (originals, user selected, finals)
-export const GalleryLoading: React.FC = () => {
+export const GalleryLoading: React.FC<{ text?: string }> = ({ text = "Ładowanie..." }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
       <div className="flex flex-col items-center justify-center gap-4">
@@ -112,8 +112,8 @@ export const GalleryLoading: React.FC = () => {
         <h1 className="text-4xl font-bold text-gray-400 dark:text-gray-600 animate-fade-in-out">
           PhotoHub
         </h1>
-        {/* Loading Photos text */}
-        <p className="text-base text-gray-500 dark:text-gray-400 font-medium">Loading Photos</p>
+        {/* Loading text */}
+        <p className="text-base text-gray-500 dark:text-gray-400 font-medium">{text}</p>
       </div>
     </div>
   );

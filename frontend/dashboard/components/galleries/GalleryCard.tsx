@@ -42,9 +42,10 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
 
   // Truncate gallery name to 72 characters
   const MAX_NAME_LENGTH = 72;
-  const displayName = galleryName.length > MAX_NAME_LENGTH 
-    ? `${galleryName.substring(0, MAX_NAME_LENGTH)}...`
-    : galleryName;
+  const displayName =
+    galleryName.length > MAX_NAME_LENGTH
+      ? `${galleryName.substring(0, MAX_NAME_LENGTH)}...`
+      : galleryName;
   const fullName = galleryName || gallery.galleryId || "";
 
   const coverPhotoUrl = gallery.coverPhotoUrl as string | null | undefined;
@@ -125,11 +126,13 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     // Format date as standard format (e.g., 5.12.2025)
-    const formatted = expiryDate.toLocaleDateString("pl-PL", {
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    }).replace(/\//g, ".");
+    const formatted = expiryDate
+      .toLocaleDateString("pl-PL", {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric",
+      })
+      .replace(/\//g, ".");
 
     // Determine color based on time remaining
     let color: string;
@@ -256,11 +259,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
         {/* Gallery Name - Fixed height for 2 lines (48px = 3rem) */}
         <div className="h-12 mb-3">
           {galleryName.length > MAX_NAME_LENGTH ? (
-            <Tooltip 
-              content={fullName} 
-              side="top" 
-              align="start"
-            >
+            <Tooltip content={fullName} side="top" align="start">
               <Link
                 href={`/galleries/${gallery.galleryId}`}
                 className="block font-semibold text-base text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors line-clamp-2"
@@ -353,4 +352,3 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
     </div>
   );
 };
-

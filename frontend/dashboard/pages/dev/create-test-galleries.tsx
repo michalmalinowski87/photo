@@ -17,7 +17,7 @@ export default function CreateTestGalleries() {
   async function getRandomImage(width = 800, height = 600): Promise<Blob> {
     const imageId = Math.floor(Math.random() * 1000);
     const url = `https://picsum.photos/${width}/${height}?random=${imageId}`;
-    
+
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch image");
@@ -37,7 +37,7 @@ export default function CreateTestGalleries() {
     try {
       const timestamp = Date.now();
       const key = `cover_${timestamp}.jpg`;
-      
+
       // Step 1: Get presigned URL
       const presignResponse = await api.uploads.getPresignedUrl({
         galleryId,
@@ -148,11 +148,7 @@ export default function CreateTestGalleries() {
         }
       }
 
-      showToast(
-        "success",
-        "Sukces",
-        `Utworzono ${galleries.length} galerii testowych!`
-      );
+      showToast("success", "Sukces", `Utworzono ${galleries.length} galerii testowych!`);
       setProgress({
         current: count,
         total: count,
@@ -223,9 +219,9 @@ export default function CreateTestGalleries() {
 
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Uwaga:</strong> Ta strona tworzy galerie testowe z losowymi zdjęciami okładkowymi.
-              Galerie będą miały status "Nieopublikowana" (unpaid) i pojawią się w filtrze "Wersje
-              robocze".
+              <strong>Uwaga:</strong> Ta strona tworzy galerie testowe z losowymi zdjęciami
+              okładkowymi. Galerie będą miały status "Nieopublikowana" (unpaid) i pojawią się w
+              filtrze "Wersje robocze".
             </p>
           </div>
         </div>
@@ -233,4 +229,3 @@ export default function CreateTestGalleries() {
     </div>
   );
 }
-

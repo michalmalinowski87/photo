@@ -43,7 +43,7 @@ export function useInfinitePackages({
         sortBy,
         sortOrder
       );
-      
+
       // Handle both paginated and non-paginated responses for backward compatibility
       if (Array.isArray(response)) {
         return {
@@ -52,7 +52,7 @@ export function useInfinitePackages({
           nextCursor: null,
         };
       }
-      
+
       return {
         items: response.items || [],
         hasMore: response.hasMore ?? false,
@@ -71,4 +71,3 @@ export function useInfinitePackages({
     ...options,
   });
 }
-

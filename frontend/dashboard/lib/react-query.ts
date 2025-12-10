@@ -35,7 +35,15 @@ export const queryKeys = {
       sortBy?: "name" | "date" | "expiration",
       sortOrder?: "asc" | "desc"
     ) =>
-      [...queryKeys.galleries.lists(), "infinite", filter, limit, search, sortBy, sortOrder] as const,
+      [
+        ...queryKeys.galleries.lists(),
+        "infinite",
+        filter,
+        limit,
+        search,
+        sortBy,
+        sortOrder,
+      ] as const,
     details: () => [...queryKeys.galleries.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.galleries.details(), id] as const,
     images: (id: string, type: "originals" | "finals" | "thumb" = "thumb") =>
@@ -47,7 +55,15 @@ export const queryKeys = {
       filterOrderId?: string,
       filterUnselected?: boolean
     ) =>
-      [...queryKeys.galleries.detail(id), "images", "infinite", type, limit, filterOrderId, filterUnselected] as const,
+      [
+        ...queryKeys.galleries.detail(id),
+        "images",
+        "infinite",
+        type,
+        limit,
+        filterOrderId,
+        filterUnselected,
+      ] as const,
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
     deliveredOrders: (id: string) =>
       [...queryKeys.galleries.detail(id), "delivered-orders"] as const,
@@ -64,6 +80,8 @@ export const queryKeys = {
     byGallery: (galleryId: string) => [...queryKeys.orders.list(galleryId)] as const,
     finalImages: (galleryId: string, orderId: string) =>
       [...queryKeys.orders.detail(galleryId, orderId), "final-images"] as const,
+    finalImagesInfinite: (galleryId: string, orderId: string) =>
+      [...queryKeys.orders.detail(galleryId, orderId), "final-images", "infinite"] as const,
   },
   wallet: {
     all: ["wallet"] as const,
@@ -80,8 +98,7 @@ export const queryKeys = {
       search?: string,
       sortBy?: "name" | "price" | "pricePerExtraPhoto" | "date",
       sortOrder?: "asc" | "desc"
-    ) =>
-      [...queryKeys.packages.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
+    ) => [...queryKeys.packages.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
     details: () => [...queryKeys.packages.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.packages.details(), id] as const,
   },
@@ -94,8 +111,7 @@ export const queryKeys = {
       search?: string,
       sortBy?: "name" | "date",
       sortOrder?: "asc" | "desc"
-    ) =>
-      [...queryKeys.clients.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
+    ) => [...queryKeys.clients.lists(), "infinite", limit, search, sortBy, sortOrder] as const,
     details: () => [...queryKeys.clients.all, "detail"] as const,
     detail: (id: string) => [...queryKeys.clients.details(), id] as const,
   },

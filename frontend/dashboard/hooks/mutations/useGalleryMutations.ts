@@ -74,27 +74,33 @@ export function useUpdateGallery() {
           if (!old) {
             return old;
           }
-          
+
           // Handle infinite query structure (has pages array)
-          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+          if (
+            old &&
+            typeof old === "object" &&
+            "pages" in old &&
+            Array.isArray((old as any).pages)
+          ) {
             return {
               ...old,
               pages: (old as any).pages.map((page: any) => ({
                 ...page,
-                items: page.items?.map((gallery: Gallery) =>
-                  gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
-                ) || []
-              }))
+                items:
+                  page.items?.map((gallery: Gallery) =>
+                    gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
+                  ) || [],
+              })),
             };
           }
-          
+
           // Handle regular array structure
           if (Array.isArray(old)) {
-          return old.map((gallery) =>
-            gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
-          );
-      }
-          
+            return old.map((gallery) =>
+              gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
+            );
+          }
+
           return old;
         }
       );
@@ -223,27 +229,33 @@ export function useUpdateGalleryName() {
           if (!old) {
             return old;
           }
-          
+
           // Handle infinite query structure (has pages array)
-          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+          if (
+            old &&
+            typeof old === "object" &&
+            "pages" in old &&
+            Array.isArray((old as any).pages)
+          ) {
             return {
               ...old,
               pages: (old as any).pages.map((page: any) => ({
                 ...page,
-                items: page.items?.map((gallery: Gallery) =>
-                  gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
-                ) || []
-              }))
+                items:
+                  page.items?.map((gallery: Gallery) =>
+                    gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
+                  ) || [],
+              })),
             };
           }
-          
+
           // Handle regular array structure
           if (Array.isArray(old)) {
-          return old.map((gallery) =>
-            gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
-          );
+            return old.map((gallery) =>
+              gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
+            );
           }
-          
+
           return old;
         }
       );
@@ -291,31 +303,37 @@ export function useUpdateGalleryName() {
             if (!old) {
               return old;
             }
-            
+
             // Handle infinite query structure (has pages array)
-            if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+            if (
+              old &&
+              typeof old === "object" &&
+              "pages" in old &&
+              Array.isArray((old as any).pages)
+            ) {
               return {
                 ...old,
                 pages: (old as any).pages.map((page: any) => ({
                   ...page,
-                  items: page.items?.map((gallery: Gallery) =>
-                    gallery.galleryId === variables.galleryId
-                      ? { ...gallery, galleryName: variables.galleryName }
-                      : gallery
-                  ) || []
-                }))
+                  items:
+                    page.items?.map((gallery: Gallery) =>
+                      gallery.galleryId === variables.galleryId
+                        ? { ...gallery, galleryName: variables.galleryName }
+                        : gallery
+                    ) || [],
+                })),
               };
             }
-            
+
             // Handle regular array structure
             if (Array.isArray(old)) {
-            return old.map((gallery) =>
-              gallery.galleryId === variables.galleryId
-                ? { ...gallery, galleryName: variables.galleryName }
-                : gallery
-            );
+              return old.map((gallery) =>
+                gallery.galleryId === variables.galleryId
+                  ? { ...gallery, galleryName: variables.galleryName }
+                  : gallery
+              );
             }
-            
+
             return old;
           }
         );
@@ -381,13 +399,19 @@ export function useDeleteGallery() {
           }
 
           // Handle infinite query structure (has pages array)
-          if (old && typeof old === 'object' && 'pages' in old && Array.isArray((old as any).pages)) {
+          if (
+            old &&
+            typeof old === "object" &&
+            "pages" in old &&
+            Array.isArray((old as any).pages)
+          ) {
             return {
               ...old,
               pages: (old as any).pages.map((page: any) => ({
                 ...page,
-                items: page.items?.filter((gallery: Gallery) => gallery.galleryId !== galleryId) || []
-              }))
+                items:
+                  page.items?.filter((gallery: Gallery) => gallery.galleryId !== galleryId) || [],
+              })),
             };
           }
 
@@ -666,7 +690,12 @@ export function useDeleteGalleryImage() {
           }
 
           // Handle infinite query structure: { pages: [{ images: GalleryImage[], hasMore, nextCursor }, ...] }
-          if (old && typeof old === "object" && "pages" in old && Array.isArray((old as any).pages)) {
+          if (
+            old &&
+            typeof old === "object" &&
+            "pages" in old &&
+            Array.isArray((old as any).pages)
+          ) {
             // Calculate total deleted count across all pages for stats update
             let totalDeletedFromQuery = 0;
             const updatedPages = (old as any).pages.map((page: any) => {

@@ -5,6 +5,7 @@ import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading
 import { useSidebar } from "../../hooks/useSidebar";
 import { isGalleryRoute } from "../../lib/navigation";
 import { useUnifiedStore } from "../../store/unifiedStore";
+import { DevMenuButton } from "../dev/DevMenuButton";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -12,7 +13,6 @@ import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
 import Backdrop from "./Backdrop";
-import { DevMenuButton } from "../dev/DevMenuButton";
 
 interface AppLayoutProps {
   children: React.ReactNode;

@@ -539,7 +539,9 @@ class ApiService {
         params.append("filterUnselected", "true");
       }
       const queryString = params.toString();
-      const url = queryString ? `/galleries/${galleryId}/images?${queryString}` : `/galleries/${galleryId}/images`;
+      const url = queryString
+        ? `/galleries/${galleryId}/images?${queryString}`
+        : `/galleries/${galleryId}/images`;
       return await this._request(url);
     },
 

@@ -3,13 +3,13 @@ import { useState, useMemo, useRef, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
+import { Dropdown } from "../components/ui/dropdown/Dropdown";
+import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
-import { Dropdown } from "../components/ui/dropdown/Dropdown";
-import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import {
   useCreatePackage,
   useDeletePackage,
@@ -68,14 +68,19 @@ export default function Packages() {
   const [sortBy, setSortBy] = useState<"name" | "price" | "pricePerExtraPhoto" | "date">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("packagesListSortBy");
-      return (saved === "name" || saved === "price" || saved === "pricePerExtraPhoto" || saved === "date") ? saved : "date";
+      return saved === "name" ||
+        saved === "price" ||
+        saved === "pricePerExtraPhoto" ||
+        saved === "date"
+        ? saved
+        : "date";
     }
     return "date";
   });
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("packagesListSortOrder");
-      return (saved === "asc" || saved === "desc") ? saved : "desc";
+      return saved === "asc" || saved === "desc" ? saved : "desc";
     }
     return "desc";
   });
@@ -326,7 +331,7 @@ export default function Packages() {
   }
 
   const initialLoad = loading && packages.length === 0;
-  
+
   if (initialLoad) {
     return <ContentViewLoading text="Ładowanie pakietów..." />;
   }
@@ -335,7 +340,7 @@ export default function Packages() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pakiety</h1>
-        
+
         {/* Search Input - spans from title to sort dropdown */}
         <div className="relative flex-1 min-w-[200px]">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
@@ -361,7 +366,7 @@ export default function Packages() {
             </button>
           )}
         </div>
-        
+
         {/* Sort Dropdown */}
         <div className="relative">
           <button
@@ -419,7 +424,8 @@ export default function Packages() {
                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                 }`}
               >
-                Cena za zdjęcie {sortBy === "pricePerExtraPhoto" && (sortOrder === "asc" ? "↑" : "↓")}
+                Cena za zdjęcie{" "}
+                {sortBy === "pricePerExtraPhoto" && (sortOrder === "asc" ? "↑" : "↓")}
               </DropdownItem>
               <DropdownItem
                 onClick={() => {
@@ -495,27 +501,36 @@ export default function Packages() {
         <div className="w-full relative">
           <div
             className="w-full overflow-auto"
-            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
+            style={{
+              height: "calc(100vh - 200px)",
+              minHeight: "800px",
+              overscrollBehavior: "none",
+            }}
             onScroll={(e) => {
               const target = e.target as HTMLElement;
               const scrollTop = target.scrollTop;
               const clientHeight = target.clientHeight;
-              
+
               // Use same item-based prefetching as galleries for consistency
               // Calculate how many items are remaining based on scroll position
               const estimatedItemHeight = 120; // Height of each table row (h-[120px])
               const totalItemsRendered = packages.length;
-              
+
               // Calculate which item index is currently at the bottom of viewport
               const scrollBottom = scrollTop + clientHeight;
               const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-              
+
               // Calculate distance from end (same logic as galleries)
               const distanceFromEnd = totalItemsRendered - itemsScrolled;
               const prefetchThreshold = 25; // Same threshold as galleries
-              
+
               // Don't fetch if there's an error or already fetching
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+              if (
+                distanceFromEnd <= prefetchThreshold &&
+                hasNextPage &&
+                !isFetchingNextPage &&
+                !queryError
+              ) {
                 void fetchNextPage();
               }
             }}

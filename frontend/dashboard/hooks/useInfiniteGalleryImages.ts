@@ -39,15 +39,27 @@ export function useInfiniteGalleryImages({
       unselectedCount?: number;
     };
   }>({
-    queryKey: queryKeys.galleries.infiniteImages(galleryId ?? "", type, limit, filterOrderId, filterUnselected),
+    queryKey: queryKeys.galleries.infiniteImages(
+      galleryId ?? "",
+      type,
+      limit,
+      filterOrderId,
+      filterUnselected
+    ),
     queryFn: async ({ pageParam }) => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      const response = await api.galleries.getImages(galleryId, type, {
-        limit,
-        cursor: pageParam as string | null | undefined,
-      }, filterOrderId, filterUnselected);
+      const response = await api.galleries.getImages(
+        galleryId,
+        type,
+        {
+          limit,
+          cursor: pageParam as string | null | undefined,
+        },
+        filterOrderId,
+        filterUnselected
+      );
 
       // Handle backward compatibility - if response doesn't have pagination fields
       if (response.images && !("hasMore" in response)) {
@@ -85,4 +97,3 @@ export function useInfiniteGalleryImages({
     ...options,
   });
 }
-

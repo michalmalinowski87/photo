@@ -34,7 +34,12 @@ export function useInfiniteClients({
   sortOrder,
   options,
 }: UseInfiniteClientsParams = {}) {
-  return useInfiniteQuery<{ items: Client[]; hasMore?: boolean; lastKey?: string | null; nextOffset?: number }>({
+  return useInfiniteQuery<{
+    items: Client[];
+    hasMore?: boolean;
+    lastKey?: string | null;
+    nextOffset?: number;
+  }>({
     queryKey: queryKeys.clients.infiniteList(limit, search, sortBy, sortOrder),
     queryFn: async ({ pageParam }) => {
       const params: any = {
@@ -92,4 +97,3 @@ export function useInfiniteClients({
     ...options,
   });
 }
-

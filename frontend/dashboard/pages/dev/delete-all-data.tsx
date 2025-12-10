@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/router";
 import { Package, Users, Trash2 } from "lucide-react";
+import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
-import { useToast } from "../../hooks/useToast";
-import { useInfinitePackages } from "../../hooks/useInfinitePackages";
 import { useClients } from "../../hooks/queries/useClients";
+import { useInfinitePackages } from "../../hooks/useInfinitePackages";
+import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 
 export default function DeleteAllData() {
@@ -18,11 +18,11 @@ export default function DeleteAllData() {
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isDeletingPackages, setIsDeletingPackages] = useState(false);
   const [isDeletingClients, setIsDeletingClients] = useState(false);
-  const [deleteProgress, setDeleteProgress] = useState({ 
-    current: 0, 
-    total: 0, 
+  const [deleteProgress, setDeleteProgress] = useState({
+    current: 0,
+    total: 0,
     message: "",
-    type: "" as "packages" | "clients" | ""
+    type: "" as "packages" | "clients" | "",
   });
 
   // Fetch all packages
@@ -93,7 +93,12 @@ export default function DeleteAllData() {
     }
 
     setIsDeletingPackages(true);
-    setDeleteProgress({ current: 0, total: packages.length, message: "Rozpoczynanie...", type: "packages" });
+    setDeleteProgress({
+      current: 0,
+      total: packages.length,
+      message: "Rozpoczynanie...",
+      type: "packages",
+    });
 
     const batchSize = 5;
     let deleted = 0;
@@ -180,7 +185,12 @@ export default function DeleteAllData() {
     }
 
     setIsDeletingClients(true);
-    setDeleteProgress({ current: 0, total: clients.length, message: "Rozpoczynanie...", type: "clients" });
+    setDeleteProgress({
+      current: 0,
+      total: clients.length,
+      message: "Rozpoczynanie...",
+      type: "clients",
+    });
 
     const batchSize = 5;
     let deleted = 0;
@@ -277,7 +287,8 @@ export default function DeleteAllData() {
         {/* Warning */}
         <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <p className="text-sm text-red-800 dark:text-red-200">
-            <strong>⚠️ Uwaga:</strong> Ta operacja jest nieodwracalna! Wszystkie wybrane dane zostaną trwale usunięte.
+            <strong>⚠️ Uwaga:</strong> Ta operacja jest nieodwracalna! Wszystkie wybrane dane
+            zostaną trwale usunięte.
           </p>
         </div>
 
@@ -288,14 +299,14 @@ export default function DeleteAllData() {
               <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Pakiety
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Pakiety</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Znaleziono <strong>{packages.length}</strong> pakietów.
               </p>
               {isLoadingPackages && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Ładowanie wszystkich pakietów...</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Ładowanie wszystkich pakietów...
+                </p>
               )}
               {hasNextPackagesPage && !isLoadingPackages && (
                 <button
@@ -309,7 +320,9 @@ export default function DeleteAllData() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                     <span>{deleteProgress.message}</span>
-                    <span>{deleteProgress.current}/{deleteProgress.total}</span>
+                    <span>
+                      {deleteProgress.current}/{deleteProgress.total}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
@@ -338,9 +351,7 @@ export default function DeleteAllData() {
               <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Klienci
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Klienci</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Znaleziono <strong>{clients.length}</strong> klientów.
                 {clientsLoading && " Ładowanie..."}
@@ -349,7 +360,9 @@ export default function DeleteAllData() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                     <span>{deleteProgress.message}</span>
-                    <span>{deleteProgress.current}/{deleteProgress.total}</span>
+                    <span>
+                      {deleteProgress.current}/{deleteProgress.total}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
@@ -374,4 +387,3 @@ export default function DeleteAllData() {
     </div>
   );
 }
-

@@ -300,124 +300,133 @@ export function FinalsTab({
             const target = e.target as HTMLElement;
             const scrollTop = target.scrollTop;
             const clientHeight = target.clientHeight;
-            
+
             // Use item-based prefetching for smooth scrolling
             // Estimate item height based on grid layout (4 columns)
             // Average item height is approximately 250px (image + gap + text)
             const estimatedItemHeight = 250;
             const totalItemsRendered = images.length;
-            
+
             // Calculate which item index is currently at the bottom of viewport
             const scrollBottom = scrollTop + clientHeight;
             const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-            
+
             // Calculate distance from end (same logic as gallery photos)
             const distanceFromEnd = totalItemsRendered - itemsScrolled;
             const prefetchThreshold = 25; // Same threshold as other infinite scrolls
-            
+
             // Don't fetch if there's an error or already fetching
-            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+            if (
+              distanceFromEnd <= prefetchThreshold &&
+              hasNextPage &&
+              !isFetchingNextPage &&
+              !error &&
+              fetchNextPage
+            ) {
               void fetchNextPage();
             }
           }}
         >
           <div className={`grid grid-cols-4 gap-4 pb-4 ${isSelectionMode ? "select-none" : ""}`}>
             {images.map((img, idx) => {
-            const imageKey = img.key ?? img.filename ?? "";
-            const isSelected = selectedKeys.has(imageKey);
-            const isDeleting = deletingImages.has(imageKey);
+              const imageKey = img.key ?? img.filename ?? "";
+              const isSelected = selectedKeys.has(imageKey);
+              const isDeleting = deletingImages.has(imageKey);
 
-            return (
-              <div
-                key={imageKey ?? idx}
-                className={`relative group border rounded-lg overflow-hidden transition-all ${
-                  isSelectionMode ? "select-none" : ""
-                } ${
-                  isDeleting
-                    ? "opacity-60"
-                    : isSelected && isSelectionMode
-                      ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
-                      : "border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
-                }`}
-                onMouseDown={(e) => {
-                  // Prevent browser text/element selection when in selection mode
-                  if (isSelectionMode) {
-                    e.preventDefault();
-                  }
-                }}
-                onClick={(e) => {
-                  if (isSelectionMode) {
-                    handleSelectionClick(imageKey, idx, e.nativeEvent, images);
-                  }
-                }}
-              >
-                <div className="aspect-square relative">
-                  {/* Selection checkbox overlay */}
-                  {isSelectionMode && (
-                    <div className="absolute top-2 left-2 z-30">
-                      <div
-                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                          isSelected
-                            ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                            : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectionClick(imageKey, idx, e.nativeEvent, images);
-                        }}
-                      >
-                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                      </div>
-                    </div>
-                  )}
-
-                  <LazyRetryableImage
-                    imageData={img as ImageFallbackUrls}
-                    alt={imageKey}
-                    className="w-full h-full object-cover rounded-lg"
-                    preferredSize="thumb"
-                  />
-                  {/* Deleting overlay - always visible when deleting */}
-                  {isDeleting && (
-                    <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
-                      <div className="flex flex-col items-center space-y-2">
-                        <Loading size="sm" />
-                        <span className="text-white text-sm font-medium">Usuwanie...</span>
-                      </div>
-                    </div>
-                  )}
-                  {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
-                  {onDeleteImage &&
-                    !isDeleting &&
-                    !isSelectionMode &&
-                    orderDeliveryStatus !== "DELIVERED" && (
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                        <button
+              return (
+                <div
+                  key={imageKey ?? idx}
+                  className={`relative group border rounded-lg overflow-hidden transition-all ${
+                    isSelectionMode ? "select-none" : ""
+                  } ${
+                    isDeleting
+                      ? "opacity-60"
+                      : isSelected && isSelectionMode
+                        ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
+                        : "border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
+                  }`}
+                  onMouseDown={(e) => {
+                    // Prevent browser text/element selection when in selection mode
+                    if (isSelectionMode) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onClick={(e) => {
+                    if (isSelectionMode) {
+                      handleSelectionClick(imageKey, idx, e.nativeEvent, images);
+                    }
+                  }}
+                >
+                  <div className="aspect-square relative">
+                    {/* Selection checkbox overlay */}
+                    {isSelectionMode && (
+                      <div className="absolute top-2 left-2 z-30">
+                        <div
+                          className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                            isSelected
+                              ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                              : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                          }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDeleteImage(img);
+                            handleSelectionClick(imageKey, idx, e.nativeEvent, images);
                           }}
-                          disabled={deletingImages.size > 0}
-                          className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
-                            deletingImages.size > 0
-                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                              : "bg-error-500 text-white hover:bg-error-600"
-                          }`}
                         >
-                          <Trash2 size={14} />
-                          Usuń
-                        </button>
+                          {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                        </div>
                       </div>
                     )}
+
+                    <LazyRetryableImage
+                      imageData={img as ImageFallbackUrls}
+                      alt={imageKey}
+                      className="w-full h-full object-cover rounded-lg"
+                      preferredSize="thumb"
+                    />
+                    {/* Deleting overlay - always visible when deleting */}
+                    {isDeleting && (
+                      <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
+                        <div className="flex flex-col items-center space-y-2">
+                          <Loading size="sm" />
+                          <span className="text-white text-sm font-medium">Usuwanie...</span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
+                    {onDeleteImage &&
+                      !isDeleting &&
+                      !isSelectionMode &&
+                      orderDeliveryStatus !== "DELIVERED" && (
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteImage(img);
+                            }}
+                            disabled={deletingImages.size > 0}
+                            className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
+                              deletingImages.size > 0
+                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                                : "bg-error-500 text-white hover:bg-error-600"
+                            }`}
+                          >
+                            <Trash2 size={14} />
+                            Usuń
+                          </button>
+                        </div>
+                      )}
+                  </div>
+                  <div className="p-2">
+                    <p
+                      className="text-xs text-gray-600 dark:text-gray-400 truncate"
+                      title={imageKey}
+                    >
+                      {removeFileExtension(imageKey)}
+                    </p>
+                  </div>
                 </div>
-                <div className="p-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
-                    {removeFileExtension(imageKey)}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
           </div>
           {isFetchingNextPage && (
             <div className="flex justify-center py-4">

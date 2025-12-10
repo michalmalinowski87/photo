@@ -1,15 +1,8 @@
 "use client";
 
-import React from "react";
+import { FlaskConical, Plus, Trash2, Database, Settings, FileText } from "lucide-react";
 import Link from "next/link";
-import {
-  FlaskConical,
-  Plus,
-  Trash2,
-  Database,
-  Settings,
-  FileText,
-} from "lucide-react";
+import React from "react";
 
 interface DevTool {
   title: string;
@@ -137,9 +130,7 @@ export default function DevMenu() {
             );
           })}
         </div>
-
       </div>
     </div>
   );
 }
-

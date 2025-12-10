@@ -1,8 +1,5 @@
-
-import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo } from "react";
-
 
 import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
@@ -27,13 +24,13 @@ import { useWalletBalance } from "../../../../hooks/queries/useWallet";
 import { useFinalImageDelete } from "../../../../hooks/useFinalImageDelete";
 import { useGallery } from "../../../../hooks/useGallery";
 import { useInfiniteGalleryImages } from "../../../../hooks/useInfiniteGalleryImages";
+import { useInfiniteOrderFinalImages } from "../../../../hooks/useInfiniteOrderFinalImages";
 import { useOrderAmountEdit } from "../../../../hooks/useOrderAmountEdit";
 import { usePageLogger } from "../../../../hooks/usePageLogger";
 import { useToast } from "../../../../hooks/useToast";
-import api, { formatApiError } from "../../../../lib/api-service";
+import { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
-import { queryKeys } from "../../../../lib/react-query";
 import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from types/index.ts
@@ -83,7 +80,9 @@ export default function OrderDetail() {
   // Flatten pages into a single array of original images
   const originalImages = useMemo(() => {
     if (!originalImagesData?.pages) return [];
-    return originalImagesData.pages.flatMap((page) => page.images || []);
+    return originalImagesData.pages.flatMap(
+      (page) => (page as { images?: GalleryImage[] }).images || []
+    );
   }, [originalImagesData]);
 
   // Use infinite scroll for final images
@@ -96,39 +95,20 @@ export default function OrderDetail() {
     hasNextPage: hasNextFinalPage,
     isFetchingNextPage: isFetchingNextFinalPage,
     refetch: refetchFinalImages,
-  } = useInfiniteQuery({
-    queryKey: queryKeys.orders.finalImages(
-      galleryIdForQuery ?? "",
-      orderIdForQuery ?? ""
-    ),
-    queryFn: async ({ pageParam: _pageParam }) => {
-      if (!galleryIdForQuery || !orderIdForQuery) {
-        throw new Error("Gallery ID and Order ID are required");
-      }
-      const response = await api.orders.getFinalImages(galleryIdForQuery, orderIdForQuery);
-      const images = (response.images || []).map((img: any) => ({
-        ...img,
-        url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
-        finalUrl: img.finalUrl ?? img.url ?? "",
-      }));
-      // Return as a single page since backend doesn't support pagination
-      return {
-        images: images || [],
-        hasMore: false,
-        nextCursor: null,
-      };
+  } = useInfiniteOrderFinalImages({
+    galleryId: galleryIdForQuery,
+    orderId: orderIdForQuery,
+    options: {
+      structuralSharing: false, // Prevent React Query from trying to merge cached data with different structure
     },
-    getNextPageParam: () => undefined, // No pagination support
-    initialPageParam: null as string | null,
-    enabled: !!galleryIdForQuery && !!orderIdForQuery,
-    retry: false, // Disable retries for infinite queries to prevent infinite loops on errors
-    structuralSharing: false, // Prevent React Query from trying to merge cached data with different structure
   });
 
   // Flatten pages into a single array of final images
   const finalImagesDataFlattened = useMemo(() => {
     if (!finalImagesData?.pages) return [];
-    return finalImagesData.pages.flatMap((page) => page.images || []);
+    return finalImagesData.pages.flatMap(
+      (page) => (page as { images?: GalleryImage[] }).images || []
+    );
   }, [finalImagesData]);
 
   const [error, setError] = useState<string>("");
@@ -182,7 +162,7 @@ export default function OrderDetail() {
   // Note: This depends on deletedImageKeys (state) not deletedImageKeysRef (ref) to ensure it re-runs when keys are cleared
   const finalImages = useMemo(() => {
     // Start with React Query data
-    const baseImages = (finalImagesDataFlattened || []) as GalleryImage[];
+    const baseImages = (finalImagesDataFlattened || []);
 
     // Map URLs (similar to what useOrderFinalImages did)
     const mappedImages = baseImages.map((img: GalleryImage) => ({

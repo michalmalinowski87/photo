@@ -14,7 +14,6 @@ import {
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
-
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
@@ -67,6 +66,8 @@ interface OrderImagesGridProps {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   imagesError: Error | null;
+  isLoading?: boolean;
+  isFetching?: boolean;
 }
 
 function OrderImagesGrid({
@@ -76,8 +77,13 @@ function OrderImagesGrid({
   hasNextPage,
   isFetchingNextPage,
   imagesError,
+  isLoading = false,
+  isFetching = false,
 }: OrderImagesGridProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Show loading state when fetching and no images yet
+  const isInitialLoading = (isLoading || isFetching) && images.length === 0;
 
   // Auto-fetch next pages when content fits without scrolling
   useEffect(() => {
@@ -101,23 +107,38 @@ function OrderImagesGrid({
     }
   }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
 
+  // Show loading state when initially loading/fetching and no images yet
+  if (isInitialLoading) {
+    return <GalleryLoading text="Ładowanie zdjęć..." />;
+  }
+
   return (
     <div
       ref={scrollContainerRef}
       className="w-full overflow-auto table-scrollbar"
-      style={{ height: "calc(100vh - 400px)", minHeight: "400px", maxHeight: "800px", overscrollBehavior: "none" }}
+      style={{
+        height: "calc(100vh - 400px)",
+        minHeight: "400px",
+        maxHeight: "800px",
+        overscrollBehavior: "none",
+      }}
       onScroll={(e) => {
         const target = e.target as HTMLElement;
         const scrollTop = target.scrollTop;
         const scrollHeight = target.scrollHeight;
         const clientHeight = target.clientHeight;
-        
+
         // Calculate distance from bottom
         const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
         const prefetchThreshold = 200; // Trigger fetch when 200px from bottom
-        
+
         // Don't fetch if there's an error or already fetching
-        if (distanceFromBottom <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
+        if (
+          distanceFromBottom <= prefetchThreshold &&
+          hasNextPage &&
+          !isFetchingNextPage &&
+          !imagesError
+        ) {
           void fetchNextPage();
         }
       }}
@@ -189,24 +210,29 @@ function InfiniteScrollContainer({
         const target = e.target as HTMLElement;
         const scrollTop = target.scrollTop;
         const clientHeight = target.clientHeight;
-        
+
         // Use item-based prefetching for smooth scrolling
         // Estimate item height based on grid layout (responsive)
         // For a 6-column grid on xl screens, each row has ~6 items
         // Average item height is approximately 200px (image + gap)
         const estimatedItemHeight = 200;
         const totalItemsRendered = images.length;
-        
+
         // Calculate which item index is currently at the bottom of viewport
         const scrollBottom = scrollTop + clientHeight;
         const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-        
+
         // Calculate distance from end (same logic as galleries/clients/packages)
         const distanceFromEnd = totalItemsRendered - itemsScrolled;
         const prefetchThreshold = 25; // Same threshold as other infinite scrolls
-        
+
         // Don't fetch if there's an error or already fetching
-        if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
+        if (
+          distanceFromEnd <= prefetchThreshold &&
+          hasNextPage &&
+          !isFetchingNextPage &&
+          !imagesError
+        ) {
           void fetchNextPage();
         }
       }}
@@ -243,10 +269,7 @@ export default function GalleryPhotos() {
 
   // Fetch statistics only (first page with stats, but we don't need all images)
   // This gives us total counts without loading all images
-  const {
-    data: statsData,
-    isLoading: statsLoading,
-  } = useInfiniteGalleryImages({
+  const { data: statsData, isLoading: statsLoading } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 1, // Only need stats, so minimal limit
@@ -280,12 +303,23 @@ export default function GalleryPhotos() {
   }, [orders]);
 
   // Helper to get query key for a section
-  const getSectionQueryKey = useCallback((sectionId: string | null) => {
-    if (!sectionId || !galleryIdForQuery) return null;
-    const filterOrderId = sectionId.startsWith("order-") ? sectionId.replace("order-", "") : undefined;
-    const filterUnselected = sectionId === "unselected";
-    return queryKeys.galleries.infiniteImages(galleryIdForQuery, "thumb", 10, filterOrderId, filterUnselected);
-  }, [galleryIdForQuery]);
+  const getSectionQueryKey = useCallback(
+    (sectionId: string | null) => {
+      if (!sectionId || !galleryIdForQuery) return null;
+      const filterOrderId = sectionId.startsWith("order-")
+        ? sectionId.replace("order-", "")
+        : undefined;
+      const filterUnselected = sectionId === "unselected";
+      return queryKeys.galleries.infiniteImages(
+        galleryIdForQuery,
+        "thumb",
+        10,
+        filterOrderId,
+        filterUnselected
+      );
+    },
+    [galleryIdForQuery]
+  );
 
   // Get cached data for the expanded section (if available) to avoid refetching
   // This ensures we use cached data immediately when expanding, avoiding network calls
@@ -311,7 +345,9 @@ export default function GalleryPhotos() {
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 10,
-    filterOrderId: expandedSection?.startsWith("order-") ? expandedSection.replace("order-", "") : undefined,
+    filterOrderId: expandedSection?.startsWith("order-")
+      ? expandedSection.replace("order-", "")
+      : undefined,
     filterUnselected: expandedSection === "unselected",
     options: {
       enabled: !!galleryIdForQuery && !!expandedSection, // Only fetch when section is expanded
@@ -357,7 +393,8 @@ export default function GalleryPhotos() {
   // Prefer query data first, then fall back to cached data for current section
   // Only use cached data if it exists and matches the current expanded section
   // This prevents showing wrong section's data when switching sections
-  const effectiveImagesData = imagesData || (cachedDataForExpandedSection ? cachedDataForExpandedSection : undefined);
+  const effectiveImagesData =
+    imagesData || (cachedDataForExpandedSection ? cachedDataForExpandedSection : undefined);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
   // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
@@ -628,7 +665,9 @@ export default function GalleryPhotos() {
       return [];
     }
     // Flatten all pages into a single array
-    const allApiImages = (effectiveImagesData as any).pages.flatMap((page: any) => page.images || []);
+    const allApiImages = (effectiveImagesData as any).pages.flatMap(
+      (page: any) => page.images || []
+    );
     const apiImages = allApiImages as ApiImage[];
     const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
       key: img.key,
@@ -673,7 +712,9 @@ export default function GalleryPhotos() {
       return;
     }
 
-    const allApiImages = (effectiveImagesData as any).pages.flatMap((page: any) => page.images || []);
+    const allApiImages = (effectiveImagesData as any).pages.flatMap(
+      (page: any) => page.images || []
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const currentImageKeys = new Set(
       allApiImages.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
@@ -1021,7 +1062,6 @@ export default function GalleryPhotos() {
     [approvedSelectionKeys, imageOrderStatus]
   );
 
-
   // Format date for display
   const formatDate = (dateString?: string): string => {
     if (!dateString) {
@@ -1042,23 +1082,26 @@ export default function GalleryPhotos() {
   };
 
   // Helper to normalize selectedKeys from order (used for grouping images by order)
-  const normalizeOrderSelectedKeys = useCallback((selectedKeys: string[] | string | undefined): string[] => {
-    if (!selectedKeys) {
-      return [];
-    }
-    if (Array.isArray(selectedKeys)) {
-      return selectedKeys.map((k) => k.toString().trim());
-    }
-    if (typeof selectedKeys === "string") {
-      try {
-        const parsed: unknown = JSON.parse(selectedKeys);
-        return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
-      } catch {
+  const normalizeOrderSelectedKeys = useCallback(
+    (selectedKeys: string[] | string | undefined): string[] => {
+      if (!selectedKeys) {
         return [];
       }
-    }
-    return [];
-  }, []);
+      if (Array.isArray(selectedKeys)) {
+        return selectedKeys.map((k) => k.toString().trim());
+      }
+      if (typeof selectedKeys === "string") {
+        try {
+          const parsed: unknown = JSON.parse(selectedKeys);
+          return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    },
+    []
+  );
 
   // deliveredOrders is already defined above - remove duplicate
 
@@ -1081,7 +1124,9 @@ export default function GalleryPhotos() {
       if (!orderId) {
         return;
       }
-      const orderTotalCount = orderTotalCountsFromStats.get(orderId) ?? normalizeOrderSelectedKeys(order.selectedKeys).length;
+      const orderTotalCount =
+        orderTotalCountsFromStats.get(orderId) ??
+        normalizeOrderSelectedKeys(order.selectedKeys).length;
       map.set(orderId, orderTotalCount);
     });
     return map;
@@ -1208,216 +1253,233 @@ export default function GalleryPhotos() {
   // No need for auto-loading effect - infinite scroll in OrderImagesGrid handles it
 
   // Render single image item (extracted for reuse)
-  const renderImageItem = useCallback((img: GalleryImage, index: number, allImages: GalleryImage[]) => {
-    // Combine deleting states from both single and bulk delete
-    const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
-    
-    const isApproved = isImageInApprovedSelection(img);
-    const isInAnyOrder = isImageInAnyOrder(img);
-    const orderStatus = getImageOrderStatus(img);
-    const isDelivered = orderStatus === "DELIVERED";
-    const isNonDeletable = isApproved || isDelivered;
-    // Use stable key/filename as identifier - always prefer key, fallback to filename
-    // This ensures React can properly reconcile components when images are reordered
-    const imageKey = img.key ?? img.filename ?? "";
-    // Check if image has any available URLs
-    const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
-    const isSelected = selectedKeys.has(imageKey);
-    const isDeleting = allDeletingImages.has(imageKey);
+  const renderImageItem = useCallback(
+    (img: GalleryImage, index: number, allImages: GalleryImage[]) => {
+      // Combine deleting states from both single and bulk delete
+      const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
 
-    return (
-      <div
-        key={imageKey}
-              className={`relative group border rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${
-                isSelectionMode ? "select-none" : ""
-              } ${
-                isDeleting
-                  ? "opacity-60"
-                  : isSelected && isSelectionMode
-                    ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
-                    : isNonDeletable && isSelectionMode
-                      ? "opacity-60 border-gray-300 dark:border-gray-600"
-                      : "border-gray-200"
-              } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""}`}
-              onMouseDown={(e) => {
-                // Prevent browser text/element selection when in selection mode
-                if (isSelectionMode) {
-                  e.preventDefault();
-                }
-                // Prevent interaction with non-deletable images in selection mode
-                if (isSelectionMode && isNonDeletable) {
-                  e.stopPropagation();
-                }
-              }}
-              onClick={(e) => {
-                if (isSelectionMode && !isNonDeletable) {
-                  handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
-                } else if (isSelectionMode && isNonDeletable) {
-                  e.stopPropagation();
-                }
-              }}
-            >
-              <div className="aspect-square relative">
-                {/* Selection checkbox overlay */}
-                {isSelectionMode && (
-                  <div className="absolute top-2 left-2 z-30 group/checkbox">
-                    <div
-                      className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                        isNonDeletable
-                          ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
-                          : isSelected
-                            ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                            : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
-                      }`}
+      const isApproved = isImageInApprovedSelection(img);
+      const isInAnyOrder = isImageInAnyOrder(img);
+      const orderStatus = getImageOrderStatus(img);
+      const isDelivered = orderStatus === "DELIVERED";
+      const isNonDeletable = isApproved || isDelivered;
+      // Use stable key/filename as identifier - always prefer key, fallback to filename
+      // This ensures React can properly reconcile components when images are reordered
+      const imageKey = img.key ?? img.filename ?? "";
+      // Check if image has any available URLs
+      const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
+      const isSelected = selectedKeys.has(imageKey);
+      const isDeleting = allDeletingImages.has(imageKey);
+
+      return (
+        <div
+          key={imageKey}
+          className={`relative group border rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${
+            isSelectionMode ? "select-none" : ""
+          } ${
+            isDeleting
+              ? "opacity-60"
+              : isSelected && isSelectionMode
+                ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
+                : isNonDeletable && isSelectionMode
+                  ? "opacity-60 border-gray-300 dark:border-gray-600"
+                  : "border-gray-200"
+          } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""}`}
+          onMouseDown={(e) => {
+            // Prevent browser text/element selection when in selection mode
+            if (isSelectionMode) {
+              e.preventDefault();
+            }
+            // Prevent interaction with non-deletable images in selection mode
+            if (isSelectionMode && isNonDeletable) {
+              e.stopPropagation();
+            }
+          }}
+          onClick={(e) => {
+            if (isSelectionMode && !isNonDeletable) {
+              handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
+            } else if (isSelectionMode && isNonDeletable) {
+              e.stopPropagation();
+            }
+          }}
+        >
+          <div className="aspect-square relative">
+            {/* Selection checkbox overlay */}
+            {isSelectionMode && (
+              <div className="absolute top-2 left-2 z-30 group/checkbox">
+                <div
+                  className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                    isNonDeletable
+                      ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
+                      : isSelected
+                        ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                        : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isNonDeletable) {
+                      handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
+                    }
+                  }}
+                >
+                  {isSelected && !isNonDeletable && (
+                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                  )}
+                  {isNonDeletable && (
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      <X className="w-3 h-3 text-gray-500 dark:text-gray-400" strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+                {isNonDeletable && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover/checkbox:opacity-100 group-hover/checkbox:visible transition-all duration-200 z-50 pointer-events-none">
+                    {isApproved
+                      ? "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
+                      : "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isProcessing ? (
+              <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+                <div className="text-center space-y-2">
+                  <Loading size="sm" />
+                  <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
+                    Przetwarzanie...
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <LazyRetryableImage
+                  imageData={
+                    {
+                      ...img,
+                      key: img.key,
+                      filename: img.filename,
+                    } as ImageFallbackUrls & { key?: string; filename?: string }
+                  }
+                  alt={imageKey}
+                  className={`w-full h-full object-cover rounded-lg ${
+                    isNonDeletable && isSelectionMode ? "opacity-60" : ""
+                  }`}
+                  preferredSize="thumb"
+                />
+                {orderStatus &&
+                  (() => {
+                    // Map order status to badge color and label (matching StatusBadges component)
+                    const statusMap: Record<
+                      string,
+                      {
+                        color:
+                          | "success"
+                          | "info"
+                          | "warning"
+                          | "error"
+                          | "light"
+                          | "dark"
+                          | "primary";
+                        label: string;
+                      }
+                    > = {
+                      CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+                      PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+                      DELIVERED: { color: "success", label: "Dostarczone" },
+                    };
+
+                    const statusInfo = statusMap[orderStatus] ?? {
+                      color: "light" as const,
+                      label: orderStatus,
+                    };
+
+                    return (
+                      <div className="absolute top-2 right-2 z-20">
+                        <Badge color={statusInfo.color} variant="light" size="sm">
+                          {statusInfo.label}
+                        </Badge>
+                      </div>
+                    );
+                  })()}
+                {isDeleting && (
+                  <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
+                    <div className="flex flex-col items-center space-y-2">
+                      <Loading size="sm" />
+                      <span className="text-white text-sm font-medium">Usuwanie...</span>
+                    </div>
+                  </div>
+                )}
+                {!isDeleting && !isSelectionMode && !isDelivered && !isInAnyOrder && (
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!isNonDeletable) {
-                          handleSelectionClick(imageKey, index, e.nativeEvent, allImages);
-                        }
+                        handleDeletePhotoClick(img);
                       }}
-                    >
-                      {isSelected && !isNonDeletable && (
-                        <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                      )}
-                      {isNonDeletable && (
-                        <div className="w-4 h-4 flex items-center justify-center">
-                          <X className="w-3 h-3 text-gray-500 dark:text-gray-400" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                    {isNonDeletable && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover/checkbox:opacity-100 group-hover/checkbox:visible transition-all duration-200 z-50 pointer-events-none">
-                        {isApproved
-                          ? "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
-                          : "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {isProcessing ? (
-                  <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
-                    <div className="text-center space-y-2">
-                      <Loading size="sm" />
-                      <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
-                        Przetwarzanie...
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <LazyRetryableImage
-                      imageData={
-                        {
-                          ...img,
-                          key: img.key,
-                          filename: img.filename,
-                        } as ImageFallbackUrls & { key?: string; filename?: string }
-                      }
-                      alt={imageKey}
-                      className={`w-full h-full object-cover rounded-lg ${
-                        isNonDeletable && isSelectionMode ? "opacity-60" : ""
+                      disabled={isNonDeletable || allDeletingImages.size > 0}
+                      className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
+                        isNonDeletable || allDeletingImages.size > 0
+                          ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                          : "bg-error-500 text-white hover:bg-error-600"
                       }`}
-                      preferredSize="thumb"
-                    />
-                    {orderStatus &&
-                      (() => {
-                        // Map order status to badge color and label (matching StatusBadges component)
-                        const statusMap: Record<
-                          string,
-                          {
-                            color:
-                              | "success"
-                              | "info"
-                              | "warning"
-                              | "error"
-                              | "light"
-                              | "dark"
-                              | "primary";
-                            label: string;
-                          }
-                        > = {
-                          CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
-                          PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
-                          DELIVERED: { color: "success", label: "Dostarczone" },
-                        };
-
-                        const statusInfo = statusMap[orderStatus] ?? {
-                          color: "light" as const,
-                          label: orderStatus,
-                        };
-
-                        return (
-                          <div className="absolute top-2 right-2 z-20">
-                            <Badge color={statusInfo.color} variant="light" size="sm">
-                              {statusInfo.label}
-                            </Badge>
-                          </div>
-                        );
-                      })()}
-                    {isDeleting && (
-                      <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
-                        <div className="flex flex-col items-center space-y-2">
-                          <Loading size="sm" />
-                          <span className="text-white text-sm font-medium">Usuwanie...</span>
-                        </div>
-                      </div>
-                    )}
-                    {!isDeleting && !isSelectionMode && !isDelivered && !isInAnyOrder && (
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePhotoClick(img);
-                          }}
-                          disabled={isNonDeletable || allDeletingImages.size > 0}
-                          className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md ${
-                            isNonDeletable || allDeletingImages.size > 0
-                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                              : "bg-error-500 text-white hover:bg-error-600"
-                          }`}
-                        >
-                          Usuń
-                        </button>
-                      </div>
-                    )}
-                  </>
+                    >
+                      Usuń
+                    </button>
+                  </div>
                 )}
-              </div>
-              <div className="p-2">
-                <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
-                  {removeFileExtension(imageKey)}
-                </p>
-              </div>
-            </div>
-          );
-  }, [deletingImages, deletingImagesBulk, isImageInApprovedSelection, isImageInAnyOrder, getImageOrderStatus, selectedKeys, isSelectionMode, handleSelectionClick, handleDeletePhotoClick, removeFileExtension]);
-
-  const renderImageGrid = useCallback((imagesToRender: GalleryImage[], _enableSelection: boolean, enableInfiniteScroll: boolean) => {
-    if (enableInfiniteScroll) {
-      // For infinite scroll, use InfiniteScrollContainer component with auto-prefetching
-      return (
-        <InfiniteScrollContainer
-          images={imagesToRender}
-          renderImageItem={renderImageItem}
-          fetchNextPage={fetchNextPage}
-          hasNextPage={hasNextPage}
-          isFetchingNextPage={isFetchingNextPage}
-          imagesError={imagesError}
-          containerHeight="calc(100vh - 300px)"
-          minHeight="600px"
-        />
+              </>
+            )}
+          </div>
+          <div className="p-2">
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
+              {removeFileExtension(imageKey)}
+            </p>
+          </div>
+        </div>
       );
-    }
-    
-    // For non-infinite scroll (e.g., order sections), use simple grid
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
-      </div>
-    );
-  }, [renderImageItem, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
+    },
+    [
+      deletingImages,
+      deletingImagesBulk,
+      isImageInApprovedSelection,
+      isImageInAnyOrder,
+      getImageOrderStatus,
+      selectedKeys,
+      isSelectionMode,
+      handleSelectionClick,
+      handleDeletePhotoClick,
+      removeFileExtension,
+    ]
+  );
+
+  const renderImageGrid = useCallback(
+    (imagesToRender: GalleryImage[], _enableSelection: boolean, enableInfiniteScroll: boolean) => {
+      if (enableInfiniteScroll) {
+        // For infinite scroll, use InfiniteScrollContainer component with auto-prefetching
+        return (
+          <InfiniteScrollContainer
+            images={imagesToRender}
+            renderImageItem={renderImageItem}
+            fetchNextPage={fetchNextPage}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            imagesError={imagesError}
+            containerHeight="calc(100vh - 300px)"
+            minHeight="600px"
+          />
+        );
+      }
+
+      // For non-infinite scroll (e.g., order sections), use simple grid
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
+        </div>
+      );
+    },
+    [renderImageItem, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]
+  );
 
   return (
     <>
@@ -1435,7 +1497,11 @@ export default function GalleryPhotos() {
             ) : (
               <>
                 {totalGalleryImageCount}{" "}
-                {totalGalleryImageCount === 1 ? "zdjęcie" : totalGalleryImageCount < 5 ? "zdjęcia" : "zdjęć"}
+                {totalGalleryImageCount === 1
+                  ? "zdjęcie"
+                  : totalGalleryImageCount < 5
+                    ? "zdjęcia"
+                    : "zdjęć"}
                 {imagesFetching && (
                   <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
                 )}
@@ -1495,7 +1561,7 @@ export default function GalleryPhotos() {
                         ? `${selectedKeys.size} zdjęcia wybrane`
                         : `${selectedKeys.size} zdjęć wybranych`}
                 </span>
-                  {(() => {
+                {(() => {
                   // Get count of selectable images (excluding approved and delivered)
                   // Use section images for selection mode
                   const selectableImages = getSelectableImages(sectionImages);
@@ -1541,7 +1607,7 @@ export default function GalleryPhotos() {
 
         {/* Images Grid - Grouped by Orders */}
         {statsLoading ? (
-          <GalleryLoading />
+          <GalleryLoading text="Ładowanie sekcji zdjęć..." />
         ) : totalGalleryImageCount === 0 ? (
           <EmptyState
             // eslint-disable-next-line jsx-a11y/alt-text
@@ -1651,6 +1717,8 @@ export default function GalleryPhotos() {
                         hasNextPage={hasNextPage}
                         isFetchingNextPage={isFetchingNextPage}
                         imagesError={imagesError}
+                        isLoading={imagesLoading}
+                        isFetching={imagesFetching}
                       />
                     </div>
                   )}
@@ -1695,9 +1763,7 @@ export default function GalleryPhotos() {
                   <button
                     onClick={() => toggleSection("unselected")}
                     className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                    aria-label={
-                      expandedSection === "unselected" ? "Zwiń sekcję" : "Rozwiń sekcję"
-                    }
+                    aria-label={expandedSection === "unselected" ? "Zwiń sekcję" : "Rozwiń sekcję"}
                   >
                     <ChevronDown
                       size={18}
@@ -1710,7 +1776,9 @@ export default function GalleryPhotos() {
               </div>
               {expandedSection === "unselected" && (
                 <div className="px-4 pb-4 pt-2 rounded-b-lg">
-                  {unselectedImages.length > 0 ? (
+                  {(imagesLoading || imagesFetching) && unselectedImages.length === 0 ? (
+                    <GalleryLoading text="Ładowanie niewybranych zdjęć..." />
+                  ) : unselectedImages.length > 0 ? (
                     <OrderImagesGrid
                       images={unselectedImages}
                       renderImageItem={renderImageItem}
@@ -1718,6 +1786,8 @@ export default function GalleryPhotos() {
                       hasNextPage={hasNextPage}
                       isFetchingNextPage={isFetchingNextPage}
                       imagesError={imagesError}
+                      isLoading={imagesLoading}
+                      isFetching={imagesFetching}
                     />
                   ) : (
                     <EmptyState

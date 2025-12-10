@@ -169,12 +169,12 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const [useHamburgerMenu, setUseHamburgerMenu] = useState(false);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { showToast } = useToast();
-  
+
   // View toggle state - use external if provided, otherwise manage internally
   const [internalViewMode, setInternalViewMode] = useState<"list" | "cards">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("galleryListViewMode");
-      return (saved === "list" || saved === "cards") ? saved : "cards";
+      return saved === "list" || saved === "cards" ? saved : "cards";
     }
     return "cards";
   });
@@ -419,9 +419,14 @@ const GalleryList: React.FC<GalleryListProps> = ({
               // Higher threshold accounts for faster scrolling speeds
               const distanceFromEnd = galleries.length - range.endIndex;
               const prefetchThreshold = 25; // Start loading when 25 items away from end
-              
+
               // Don't fetch if there's an error or already fetching
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+              if (
+                distanceFromEnd <= prefetchThreshold &&
+                hasNextPage &&
+                !isFetchingNextPage &&
+                !queryError
+              ) {
                 void fetchNextPage();
               }
             }}
@@ -451,17 +456,18 @@ const GalleryList: React.FC<GalleryListProps> = ({
             style={{ height: "100%" }}
             components={{
               List: (() => {
-                const VirtuosoGridList = React.forwardRef<HTMLDivElement, { style?: React.CSSProperties; children?: React.ReactNode }>(
-                  ({ style, children }, ref) => (
-                <div
-                  ref={ref}
-                  style={style}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                >
-                  {children}
-                </div>
-                  )
-                );
+                const VirtuosoGridList = React.forwardRef<
+                  HTMLDivElement,
+                  { style?: React.CSSProperties; children?: React.ReactNode }
+                >(({ style, children }, ref) => (
+                  <div
+                    ref={ref}
+                    style={style}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  >
+                    {children}
+                  </div>
+                ));
                 VirtuosoGridList.displayName = "VirtuosoGridList";
                 return VirtuosoGridList;
               })(),
@@ -479,27 +485,36 @@ const GalleryList: React.FC<GalleryListProps> = ({
         <div className="w-full relative">
           <div
             className="w-full overflow-auto"
-            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
+            style={{
+              height: "calc(100vh - 200px)",
+              minHeight: "800px",
+              overscrollBehavior: "none",
+            }}
             onScroll={(e) => {
               const target = e.target as HTMLElement;
               const scrollTop = target.scrollTop;
               const clientHeight = target.clientHeight;
-              
+
               // Use same item-based prefetching as cards view for consistency
               // Calculate how many items are remaining based on scroll position
               const estimatedItemHeight = 120; // Height of each table row (h-[120px])
               const totalItemsRendered = galleries.length;
-              
+
               // Calculate which item index is currently at the bottom of viewport
               const scrollBottom = scrollTop + clientHeight;
               const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-              
+
               // Calculate distance from end (same logic as cards view)
               const distanceFromEnd = totalItemsRendered - itemsScrolled;
               const prefetchThreshold = 25; // Same threshold as cards view
-              
+
               // Don't fetch if there's an error or already fetching
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+              if (
+                distanceFromEnd <= prefetchThreshold &&
+                hasNextPage &&
+                !isFetchingNextPage &&
+                !queryError
+              ) {
                 void fetchNextPage();
               }
             }}
@@ -553,137 +568,214 @@ const GalleryList: React.FC<GalleryListProps> = ({
               </TableHeader>
               <TableBody>
                 {galleries.map((gallery, index) => {
-                const galleryName =
-                  typeof gallery.galleryName === "string"
-                    ? gallery.galleryName
-                    : typeof gallery.galleryId === "string"
-                      ? gallery.galleryId
-                      : "";
-                const nameLines = breakTextAtWords(galleryName, 50);
-                // First row (index 0) should be light to contrast with dark header
-                // So even indices get light background, odd indices get striped background
-                const isEvenRow = index % 2 === 0;
+                  const galleryName =
+                    typeof gallery.galleryName === "string"
+                      ? gallery.galleryName
+                      : typeof gallery.galleryId === "string"
+                        ? gallery.galleryId
+                        : "";
+                  const nameLines = breakTextAtWords(galleryName, 50);
+                  // First row (index 0) should be light to contrast with dark header
+                  // So even indices get light background, odd indices get striped background
+                  const isEvenRow = index % 2 === 0;
 
-                const coverPhotoUrl = gallery.coverPhotoUrl as string | null | undefined;
+                  const coverPhotoUrl = gallery.coverPhotoUrl as string | null | undefined;
 
-                return (
-                  <TableRow
-                    className={`h-[120px] ${
-                      isEvenRow
-                        ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                        : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
-                    }`}
-                  >
-                    <TableCell className="px-3 py-5 align-middle text-center w-[120px]">
-                      <CoverPhotoCell coverPhotoUrl={coverPhotoUrl} />
-                    </TableCell>
-                    <TableCell className="px-3 py-5 align-middle min-w-[400px]">
-                      <Link
-                        href={`/galleries/${gallery.galleryId}`}
-                        className="font-medium text-base text-brand-500 hover:text-brand-600 block max-w-full"
-                        onClick={() => {
-                          // Store current page as referrer when navigating to gallery
-                          if (typeof window !== "undefined") {
-                            const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                            sessionStorage.setItem(referrerKey, window.location.pathname);
-                          }
-                        }}
-                        title={galleryName}
-                      >
-                        {nameLines.map((line, lineIndex) => (
-                          <span key={lineIndex} className="block">
-                            {line}
-                          </span>
-                        ))}
-                      </Link>
-                      {!gallery.galleryName && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {gallery.galleryId}
-                        </div>
-                      )}
-                      {(gallery.clientFirstName || gallery.clientLastName || gallery.clientEmail) && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          Klient:{" "}
-                          {gallery.clientFirstName && gallery.clientLastName
-                            ? `${gallery.clientFirstName} ${gallery.clientLastName}`
-                            : gallery.clientEmail || "-"}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white whitespace-nowrap align-middle text-center">
-                      {(() => {
-                        // Check if plan exists and is a non-empty string
-                        // For non-selective galleries, plan should always be present
-                        const planValue = gallery.plan;
-                        const hasPlan =
-                          planValue &&
-                          (typeof planValue === "string" ? planValue.trim() !== "" : true);
-
-                        // Check if limit bytes exist (for non-selective galleries, they might only have finalsLimitBytes)
-                        const hasLimitBytes = !!(
-                          gallery.originalsLimitBytes ?? gallery.finalsLimitBytes
-                        );
-
-                        // Show plan if either plan field exists OR limit bytes exist
-                        // For non-selective galleries, plan should always be shown if it exists
-                        if (hasPlan || hasLimitBytes) {
-                          const planDisplay =
-                            planValue && typeof planValue === "string"
-                              ? formatPlanDisplay(planValue)
-                              : "-";
-                          return (
-                            <div className="text-center">
-                              <div className="text-base font-medium">{planDisplay}</div>
-                              {hasLimitBytes ? (
-                                <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  {calculateUsagePercentage(gallery).toFixed(1)}%
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        }
-                        return <span className="text-gray-400">-</span>;
-                      })()}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 align-middle text-center">
-                      {getStateBadge(gallery)}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
-                      {(gallery.orderCount ?? 0) as number}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
-                      {gallery.createdAt
-                        ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="px-3 py-5 align-middle text-center">
-                      {useHamburgerMenu ? (
-                        <div className="relative">
-                          <button
-                            ref={(el) => {
-                              buttonRefs.current[gallery.galleryId] = el;
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const isCurrentlyOpen = openActionMenu === gallery.galleryId;
-                              // Close all menus first, then open this one if it wasn't open
-                              setOpenActionMenu(isCurrentlyOpen ? null : gallery.galleryId);
-                            }}
-                            className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
-                            aria-label="Akcje"
-                          >
-                            <Menu size={16} />
-                          </button>
-                          <Dropdown
-                            isOpen={openActionMenu === gallery.galleryId}
-                            onClose={() => setOpenActionMenu(null)}
-                            triggerRef={
-                              buttonRefs.current[gallery.galleryId]
-                                ? { current: buttonRefs.current[gallery.galleryId] }
-                                : undefined
+                  return (
+                    <TableRow
+                      className={`h-[120px] ${
+                        isEvenRow
+                          ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
+                          : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                      }`}
+                    >
+                      <TableCell className="px-3 py-5 align-middle text-center w-[120px]">
+                        <CoverPhotoCell coverPhotoUrl={coverPhotoUrl} />
+                      </TableCell>
+                      <TableCell className="px-3 py-5 align-middle min-w-[400px]">
+                        <Link
+                          href={`/galleries/${gallery.galleryId}`}
+                          className="font-medium text-base text-brand-500 hover:text-brand-600 block max-w-full"
+                          onClick={() => {
+                            // Store current page as referrer when navigating to gallery
+                            if (typeof window !== "undefined") {
+                              const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                              sessionStorage.setItem(referrerKey, window.location.pathname);
                             }
-                            className="w-48 bg-white dark:bg-gray-900 shadow-xl"
-                          >
+                          }}
+                          title={galleryName}
+                        >
+                          {nameLines.map((line, lineIndex) => (
+                            <span key={lineIndex} className="block">
+                              {line}
+                            </span>
+                          ))}
+                        </Link>
+                        {!gallery.galleryName && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {gallery.galleryId}
+                          </div>
+                        )}
+                        {(gallery.clientFirstName ||
+                          gallery.clientLastName ||
+                          gallery.clientEmail) && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Klient:{" "}
+                            {gallery.clientFirstName && gallery.clientLastName
+                              ? `${gallery.clientFirstName} ${gallery.clientLastName}`
+                              : gallery.clientEmail || "-"}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white whitespace-nowrap align-middle text-center">
+                        {(() => {
+                          // Check if plan exists and is a non-empty string
+                          // For non-selective galleries, plan should always be present
+                          const planValue = gallery.plan;
+                          const hasPlan =
+                            planValue &&
+                            (typeof planValue === "string" ? planValue.trim() !== "" : true);
+
+                          // Check if limit bytes exist (for non-selective galleries, they might only have finalsLimitBytes)
+                          const hasLimitBytes = !!(
+                            gallery.originalsLimitBytes ?? gallery.finalsLimitBytes
+                          );
+
+                          // Show plan if either plan field exists OR limit bytes exist
+                          // For non-selective galleries, plan should always be shown if it exists
+                          if (hasPlan || hasLimitBytes) {
+                            const planDisplay =
+                              planValue && typeof planValue === "string"
+                                ? formatPlanDisplay(planValue)
+                                : "-";
+                            return (
+                              <div className="text-center">
+                                <div className="text-base font-medium">{planDisplay}</div>
+                                {hasLimitBytes ? (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {calculateUsagePercentage(gallery).toFixed(1)}%
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          }
+                          return <span className="text-gray-400">-</span>;
+                        })()}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 align-middle text-center">
+                        {getStateBadge(gallery)}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
+                        {(gallery.orderCount ?? 0) as number}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                        {gallery.createdAt
+                          ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="px-3 py-5 align-middle text-center">
+                        {useHamburgerMenu ? (
+                          <div className="relative">
+                            <button
+                              ref={(el) => {
+                                buttonRefs.current[gallery.galleryId] = el;
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const isCurrentlyOpen = openActionMenu === gallery.galleryId;
+                                // Close all menus first, then open this one if it wasn't open
+                                setOpenActionMenu(isCurrentlyOpen ? null : gallery.galleryId);
+                              }}
+                              className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
+                              aria-label="Akcje"
+                            >
+                              <Menu size={16} />
+                            </button>
+                            <Dropdown
+                              isOpen={openActionMenu === gallery.galleryId}
+                              onClose={() => setOpenActionMenu(null)}
+                              triggerRef={
+                                buttonRefs.current[gallery.galleryId]
+                                  ? { current: buttonRefs.current[gallery.galleryId] }
+                                  : undefined
+                              }
+                              className="w-48 bg-white dark:bg-gray-900 shadow-xl"
+                            >
+                              {!gallery.isPaid &&
+                                (() => {
+                                  // Check if gallery has photos
+                                  // For selective galleries: check originalsBytesUsed
+                                  // For non-selective galleries: check both finalsBytesUsed and originalsBytesUsed
+                                  // (photos should be in finals, but check both for robustness)
+                                  const isSelectionGallery = gallery.selectionEnabled !== false;
+                                  const hasPhotos = isSelectionGallery
+                                    ? (gallery.originalsBytesUsed ?? 0) > 0
+                                    : (gallery.finalsBytesUsed ?? 0) > 0 ||
+                                      (gallery.originalsBytesUsed ?? 0) > 0;
+
+                                  return (
+                                    <Tooltip
+                                      content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
+                                      side="left"
+                                      align="center"
+                                    >
+                                      <div>
+                                        <DropdownItem
+                                          onClick={() => {
+                                            if (hasPhotos) {
+                                              handlePayClick(gallery.galleryId);
+                                              setOpenActionMenu(null);
+                                            }
+                                          }}
+                                          disabled={!hasPhotos}
+                                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                        >
+                                          <Rocket size={16} />
+                                          Opublikuj
+                                        </DropdownItem>
+                                      </div>
+                                    </Tooltip>
+                                  );
+                                })()}
+                              <div onMouseEnter={() => prefetchGallery(gallery.galleryId)}>
+                                <DropdownItem
+                                  tag="a"
+                                  href={`/galleries/${gallery.galleryId}`}
+                                  onItemClick={() => {
+                                    setOpenActionMenu(null);
+                                    if (typeof window !== "undefined") {
+                                      const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                                      sessionStorage.setItem(referrerKey, window.location.pathname);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
+                                    gallery.isPaid ? "first:rounded-t-xl" : ""
+                                  }`}
+                                >
+                                  <Eye size={16} />
+                                  Szczegóły
+                                </DropdownItem>
+                              </div>
+                              <DropdownItem
+                                onClick={() => {
+                                  if (!deleteGalleryMutation.isPending) {
+                                    handleDeleteClick(gallery);
+                                    setOpenActionMenu(null);
+                                  }
+                                }}
+                                className={`flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl ${
+                                  deleteGalleryMutation.isPending
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : ""
+                                }`}
+                              >
+                                <Trash2 size={16} />
+                                Usuń
+                              </DropdownItem>
+                            </Dropdown>
+                          </div>
+                        ) : (
+                          <div className="flex items-center">
                             {!gallery.isPaid &&
                               (() => {
                                 // Check if gallery has photos
@@ -698,145 +790,70 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
                                 return (
                                   <Tooltip
-                                    content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
-                                    side="left"
-                                    align="center"
+                                    content={!hasPhotos ? "Najpierw prześlij zdjęcia" : "Opublikuj"}
+                                    side="top"
                                   >
-                                    <div>
-                                      <DropdownItem
-                                        onClick={() => {
-                                          if (hasPhotos) {
-                                            handlePayClick(gallery.galleryId);
-                                            setOpenActionMenu(null);
-                                          }
-                                        }}
-                                        disabled={!hasPhotos}
-                                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                                      >
-                                        <Rocket size={16} />
-                                        Opublikuj
-                                      </DropdownItem>
-                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        if (hasPhotos) {
+                                          handlePayClick(gallery.galleryId);
+                                        }
+                                      }}
+                                      disabled={!hasPhotos}
+                                      className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-brand-500"
+                                      aria-label="Opublikuj"
+                                    >
+                                      <Rocket className="w-5 h-5" />
+                                    </button>
                                   </Tooltip>
                                 );
                               })()}
-                            <div onMouseEnter={() => prefetchGallery(gallery.galleryId)}>
-                              <DropdownItem
-                                tag="a"
+                            <Tooltip content="Szczegóły" side="top">
+                              <Link
                                 href={`/galleries/${gallery.galleryId}`}
-                                onItemClick={() => {
-                                  setOpenActionMenu(null);
+                                onMouseEnter={() => prefetchGallery(gallery.galleryId)}
+                                onClick={() => {
+                                  // Store current page as referrer when navigating to gallery
                                   if (typeof window !== "undefined") {
                                     const referrerKey = `gallery_referrer_${gallery.galleryId}`;
                                     sessionStorage.setItem(referrerKey, window.location.pathname);
                                   }
                                 }}
-                                className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
-                                  gallery.isPaid ? "first:rounded-t-xl" : ""
-                                }`}
+                                className="flex items-center justify-center w-8 h-8 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mr-0.5"
+                                aria-label="Szczegóły"
                               >
-                                <Eye size={16} />
-                                Szczegóły
-                              </DropdownItem>
-                            </div>
-                            <DropdownItem
-                              onClick={() => {
-                                if (!deleteGalleryMutation.isPending) {
-                                  handleDeleteClick(gallery);
-                                  setOpenActionMenu(null);
-                                }
-                              }}
-                              className={`flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl ${
-                                deleteGalleryMutation.isPending
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <Trash2 size={16} />
-                              Usuń
-                            </DropdownItem>
-                          </Dropdown>
-                        </div>
-                      ) : (
-                        <div className="flex items-center">
-                          {!gallery.isPaid &&
-                            (() => {
-                              // Check if gallery has photos
-                              // For selective galleries: check originalsBytesUsed
-                              // For non-selective galleries: check both finalsBytesUsed and originalsBytesUsed
-                              // (photos should be in finals, but check both for robustness)
-                              const isSelectionGallery = gallery.selectionEnabled !== false;
-                              const hasPhotos = isSelectionGallery
-                                ? (gallery.originalsBytesUsed ?? 0) > 0
-                                : (gallery.finalsBytesUsed ?? 0) > 0 ||
-                                  (gallery.originalsBytesUsed ?? 0) > 0;
-
-                              return (
-                                <Tooltip
-                                  content={!hasPhotos ? "Najpierw prześlij zdjęcia" : "Opublikuj"}
-                                  side="top"
-                                >
-                                  <button
-                                    onClick={() => {
-                                      if (hasPhotos) {
-                                        handlePayClick(gallery.galleryId);
-                                      }
-                                    }}
-                                    disabled={!hasPhotos}
-                                    className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-brand-500"
-                                    aria-label="Opublikuj"
-                                  >
-                                    <Rocket className="w-5 h-5" />
-                                  </button>
-                                </Tooltip>
-                              );
-                            })()}
-                          <Tooltip content="Szczegóły" side="top">
-                            <Link
-                              href={`/galleries/${gallery.galleryId}`}
-                              onMouseEnter={() => prefetchGallery(gallery.galleryId)}
-                              onClick={() => {
-                                // Store current page as referrer when navigating to gallery
-                                if (typeof window !== "undefined") {
-                                  const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                                  sessionStorage.setItem(referrerKey, window.location.pathname);
-                                }
-                              }}
-                              className="flex items-center justify-center w-8 h-8 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mr-0.5"
-                              aria-label="Szczegóły"
-                            >
-                              <Eye className="w-5 h-5" />
-                            </Link>
-                          </Tooltip>
-                          <Tooltip content="Usuń" side="top">
-                            <button
-                              onClick={() => handleDeleteClick(gallery)}
-                              disabled={deleteGalleryMutation.isPending}
-                              className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              aria-label="Usuń"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </Tooltip>
-                        </div>
-                      )}
+                                <Eye className="w-5 h-5" />
+                              </Link>
+                            </Tooltip>
+                            <Tooltip content="Usuń" side="top">
+                              <button
+                                onClick={() => handleDeleteClick(gallery)}
+                                disabled={deleteGalleryMutation.isPending}
+                                className="flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label="Usuń"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {isFetchingNextPage && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="px-3 py-5">
+                      <div className="flex justify-center py-4">
+                        <InlineLoading text="Ładowanie więcej galerii..." />
+                      </div>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-              {isFetchingNextPage && (
-                <TableRow>
-                  <TableCell colSpan={7} className="px-3 py-5">
-                    <div className="flex justify-center py-4">
-                      <InlineLoading text="Ładowanie więcej galerii..." />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Delete Confirmation Dialog */}

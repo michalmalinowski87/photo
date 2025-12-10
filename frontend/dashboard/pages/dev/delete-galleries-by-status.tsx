@@ -16,7 +16,7 @@ const GALLERY_STATUSES = [
   { value: "dostarczone", label: "Dostarczone" },
 ] as const;
 
-type GalleryStatus = typeof GALLERY_STATUSES[number]["value"];
+type GalleryStatus = (typeof GALLERY_STATUSES)[number]["value"];
 
 export default function DeleteGalleriesByStatus() {
   const router = useRouter();
@@ -27,9 +27,7 @@ export default function DeleteGalleriesByStatus() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, message: "" });
   const [deletedGalleries, setDeletedGalleries] = useState<string[]>([]);
-  const [failedDeletions, setFailedDeletions] = useState<Array<{ id: string; error: string }>>(
-    []
-  );
+  const [failedDeletions, setFailedDeletions] = useState<Array<{ id: string; error: string }>>([]);
 
   // Fetch galleries for selected status
   const {
@@ -140,11 +138,7 @@ export default function DeleteGalleriesByStatus() {
       const failCount = failed.length;
 
       if (failCount === 0) {
-        showToast(
-          "success",
-          "Sukces",
-          `Usunięto wszystkie ${successCount} galerie!`
-        );
+        showToast("success", "Sukces", `Usunięto wszystkie ${successCount} galerie!`);
       } else {
         showToast(
           "warning",
@@ -218,9 +212,7 @@ export default function DeleteGalleriesByStatus() {
                 </span>
               </div>
               {galleriesLoading && (
-                <div className="text-sm text-blue-700 dark:text-blue-300">
-                  Ładowanie galerii...
-                </div>
+                <div className="text-sm text-blue-700 dark:text-blue-300">Ładowanie galerii...</div>
               )}
               {hasNextPage && !galleriesLoading && (
                 <button
@@ -241,9 +233,7 @@ export default function DeleteGalleriesByStatus() {
               disabled={isDeleting || isLoading || galleriesLoading}
               className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {isDeleting
-                ? "Usuwanie..."
-                : `Usuń wszystkie ${galleries.length} galerie`}
+              {isDeleting ? "Usuwanie..." : `Usuń wszystkie ${galleries.length} galerie`}
             </button>
           )}
 
@@ -311,4 +301,3 @@ export default function DeleteGalleriesByStatus() {
     </div>
   );
 }
-

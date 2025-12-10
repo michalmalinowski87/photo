@@ -11,16 +11,25 @@ export default function CreateTestData() {
   const router = useRouter();
   const { showToast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
-  const [progress, setProgress] = useState({ 
-    current: 0, 
-    total: 0, 
+  const [progress, setProgress] = useState({
+    current: 0,
+    total: 0,
     message: "",
-    type: "" as "packages" | "clients" | ""
+    type: "" as "packages" | "clients" | "",
   });
 
   // Generate random package data
   const generatePackageData = (index: number) => {
-    const names = ["Basic", "Standard", "Premium", "Pro", "Enterprise", "Starter", "Advanced", "Ultimate"];
+    const names = [
+      "Basic",
+      "Standard",
+      "Premium",
+      "Pro",
+      "Enterprise",
+      "Starter",
+      "Advanced",
+      "Ultimate",
+    ];
     const name = `${names[index % names.length]} ${Math.floor(index / names.length) + 1}`;
     return {
       name,
@@ -32,14 +41,32 @@ export default function CreateTestData() {
 
   // Generate random client data
   const generateClientData = (index: number) => {
-    const firstNames = ["Jan", "Anna", "Piotr", "Maria", "Krzysztof", "Katarzyna", "Tomasz", "Magdalena"];
-    const lastNames = ["Kowalski", "Nowak", "Wiśniewski", "Wójcik", "Kowalczyk", "Kamiński", "Lewandowski", "Zieliński"];
+    const firstNames = [
+      "Jan",
+      "Anna",
+      "Piotr",
+      "Maria",
+      "Krzysztof",
+      "Katarzyna",
+      "Tomasz",
+      "Magdalena",
+    ];
+    const lastNames = [
+      "Kowalski",
+      "Nowak",
+      "Wiśniewski",
+      "Wójcik",
+      "Kowalczyk",
+      "Kamiński",
+      "Lewandowski",
+      "Zieliński",
+    ];
     const domains = ["gmail.com", "wp.pl", "o2.pl", "interia.pl", "example.com"];
-    
+
     const isCompany = index % 3 === 0; // Every 3rd client is a company
     const firstName = firstNames[index % firstNames.length];
     const lastName = lastNames[Math.floor(index / firstNames.length) % lastNames.length];
-    
+
     if (isCompany) {
       return {
         email: `firma${index}@${domains[index % domains.length]}`,
@@ -84,7 +111,7 @@ export default function CreateTestData() {
         }
 
         const results = await Promise.allSettled(batch);
-        
+
         results.forEach((result) => {
           if (result.status === "fulfilled") {
             created++;
@@ -94,11 +121,11 @@ export default function CreateTestData() {
           }
         });
 
-        setProgress({ 
-          current: batchEnd, 
-          total: 100, 
+        setProgress({
+          current: batchEnd,
+          total: 100,
           message: `Utworzono ${created}/${batchEnd} pakietów${failed > 0 ? `, ${failed} błędów` : ""}`,
-          type: "packages"
+          type: "packages",
         });
 
         // Small delay between batches
@@ -107,7 +134,11 @@ export default function CreateTestData() {
         }
       }
 
-      showToast("success", "Sukces", `Utworzono ${created} pakietów${failed > 0 ? `, ${failed} błędów` : ""}`);
+      showToast(
+        "success",
+        "Sukces",
+        `Utworzono ${created} pakietów${failed > 0 ? `, ${failed} błędów` : ""}`
+      );
     } catch (error) {
       console.error("Error creating packages:", error);
       showToast("error", "Błąd", "Wystąpił błąd podczas tworzenia pakietów");
@@ -138,7 +169,7 @@ export default function CreateTestData() {
         }
 
         const results = await Promise.allSettled(batch);
-        
+
         results.forEach((result) => {
           if (result.status === "fulfilled") {
             created++;
@@ -148,11 +179,11 @@ export default function CreateTestData() {
           }
         });
 
-        setProgress({ 
-          current: batchEnd, 
-          total: 100, 
+        setProgress({
+          current: batchEnd,
+          total: 100,
           message: `Utworzono ${created}/${batchEnd} klientów${failed > 0 ? `, ${failed} błędów` : ""}`,
-          type: "clients"
+          type: "clients",
         });
 
         // Small delay between batches
@@ -161,7 +192,11 @@ export default function CreateTestData() {
         }
       }
 
-      showToast("success", "Sukces", `Utworzono ${created} klientów${failed > 0 ? `, ${failed} błędów` : ""}`);
+      showToast(
+        "success",
+        "Sukces",
+        `Utworzono ${created} klientów${failed > 0 ? `, ${failed} błędów` : ""}`
+      );
     } catch (error) {
       console.error("Error creating clients:", error);
       showToast("error", "Błąd", "Wystąpił błąd podczas tworzenia klientów");
@@ -204,9 +239,7 @@ export default function CreateTestData() {
               <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Pakiety
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Pakiety</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Utworzy 100 pakietów z losowymi nazwami, cenami i liczbą zdjęć.
               </p>
@@ -214,7 +247,9 @@ export default function CreateTestData() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                     <span>{progress.message}</span>
-                    <span>{progress.current}/{progress.total}</span>
+                    <span>
+                      {progress.current}/{progress.total}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
@@ -229,7 +264,9 @@ export default function CreateTestData() {
                 disabled={isCreating}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                {isCreating && progress.type === "packages" ? "Tworzenie..." : "Utwórz 100 pakietów"}
+                {isCreating && progress.type === "packages"
+                  ? "Tworzenie..."
+                  : "Utwórz 100 pakietów"}
               </button>
             </div>
           </div>
@@ -242,9 +279,7 @@ export default function CreateTestData() {
               <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Klienci
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Klienci</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Utworzy 100 klientów (osoby fizyczne i firmy) z losowymi danymi.
               </p>
@@ -252,7 +287,9 @@ export default function CreateTestData() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                     <span>{progress.message}</span>
-                    <span>{progress.current}/{progress.total}</span>
+                    <span>
+                      {progress.current}/{progress.total}
+                    </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
@@ -276,4 +313,3 @@ export default function CreateTestData() {
     </div>
   );
 }
-

@@ -37,7 +37,7 @@ export function useInfiniteGalleries({
         sortBy,
         sortOrder
       );
-      
+
       // Handle both paginated and non-paginated responses for backward compatibility
       if (Array.isArray(response)) {
         return {
@@ -46,7 +46,7 @@ export function useInfiniteGalleries({
           nextCursor: null,
         };
       }
-      
+
       return response;
     },
     getNextPageParam: (lastPage) => {
@@ -61,4 +61,3 @@ export function useInfiniteGalleries({
     ...options,
   });
 }
-

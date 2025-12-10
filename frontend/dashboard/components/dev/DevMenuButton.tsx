@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/router";
-import Link from "next/link";
 import { FlaskConical, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import React, { useState } from "react";
 
 /**
  * Floating dev menu button that appears in the bottom-right corner
@@ -42,4 +42,3 @@ export const DevMenuButton: React.FC = () => {
     </Link>
   );
 };
-

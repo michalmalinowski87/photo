@@ -89,7 +89,7 @@ export default function GalleryFilterPage({
   const [viewMode, setViewMode] = useState<"list" | "cards">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("galleryListViewMode");
-      return (saved === "list" || saved === "cards") ? saved : "cards";
+      return saved === "list" || saved === "cards" ? saved : "cards";
     }
     return "cards";
   });
@@ -124,14 +124,14 @@ export default function GalleryFilterPage({
   const [sortBy, setSortBy] = useState<"name" | "date" | "expiration">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("galleryListSortBy");
-      return (saved === "name" || saved === "date" || saved === "expiration") ? saved : "date";
+      return saved === "name" || saved === "date" || saved === "expiration" ? saved : "date";
     }
     return "date";
   });
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("galleryListSortOrder");
-      return (saved === "asc" || saved === "desc") ? saved : "desc";
+      return saved === "asc" || saved === "desc" ? saved : "desc";
     }
     return "desc";
   });
@@ -188,129 +188,129 @@ export default function GalleryFilterPage({
                 </button>
               )}
             </div>
-            
+
             {/* Sort Dropdown */}
             <div className="relative">
-                <button
-                  ref={sortButtonRef}
-                  onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
-                >
-                  <ArrowUpDown size={16} />
-                  <span>{getSortLabel()}</span>
-                </button>
-                <Dropdown
-                  isOpen={sortDropdownOpen}
-                  onClose={() => setSortDropdownOpen(false)}
-                  triggerRef={sortButtonRef}
-                  className="w-64 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
-                >
-                  <div className="p-2">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Sortuj według
-                    </div>
-                    <DropdownItem
-                      onClick={() => {
-                        setSortBy("name");
-                        setSortDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-sm ${
-                        sortBy === "name"
-                          ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
-                    </DropdownItem>
-                    <DropdownItem
-                      onClick={() => {
-                        setSortBy("date");
-                        setSortDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-sm ${
-                        sortBy === "date"
-                          ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
-                    </DropdownItem>
-                    <DropdownItem
-                      onClick={() => {
-                        setSortBy("expiration");
-                        setSortDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-sm ${
-                        sortBy === "expiration"
-                          ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      Data wygaśnięcia {sortBy === "expiration" && (sortOrder === "asc" ? "↑" : "↓")}
-                    </DropdownItem>
-                    <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Kolejność
-                    </div>
-                    <DropdownItem
-                      onClick={() => {
-                        setSortOrder("asc");
-                        setSortDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-sm ${
-                        sortOrder === "asc"
-                          ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      Rosnąco ↑
-                    </DropdownItem>
-                    <DropdownItem
-                      onClick={() => {
-                        setSortOrder("desc");
-                        setSortDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-sm ${
-                        sortOrder === "desc"
-                          ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      Malejąco ↓
-                    </DropdownItem>
+              <button
+                ref={sortButtonRef}
+                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+              >
+                <ArrowUpDown size={16} />
+                <span>{getSortLabel()}</span>
+              </button>
+              <Dropdown
+                isOpen={sortDropdownOpen}
+                onClose={() => setSortDropdownOpen(false)}
+                triggerRef={sortButtonRef}
+                className="w-64 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+              >
+                <div className="p-2">
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Sortuj według
                   </div>
-                </Dropdown>
-              </div>
+                  <DropdownItem
+                    onClick={() => {
+                      setSortBy("name");
+                      setSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-sm ${
+                      sortBy === "name"
+                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </DropdownItem>
+                  <DropdownItem
+                    onClick={() => {
+                      setSortBy("date");
+                      setSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-sm ${
+                      sortBy === "date"
+                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </DropdownItem>
+                  <DropdownItem
+                    onClick={() => {
+                      setSortBy("expiration");
+                      setSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-sm ${
+                      sortBy === "expiration"
+                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    Data wygaśnięcia {sortBy === "expiration" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </DropdownItem>
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Kolejność
+                  </div>
+                  <DropdownItem
+                    onClick={() => {
+                      setSortOrder("asc");
+                      setSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-sm ${
+                      sortOrder === "asc"
+                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    Rosnąco ↑
+                  </DropdownItem>
+                  <DropdownItem
+                    onClick={() => {
+                      setSortOrder("desc");
+                      setSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-sm ${
+                      sortOrder === "desc"
+                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    Malejąco ↓
+                  </DropdownItem>
+                </div>
+              </Dropdown>
+            </div>
 
             {/* View Toggle */}
             <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 h-11">
-                <button
-                  onClick={() => setViewMode("cards")}
-                  className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
-                    viewMode === "cards"
-                      ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
-                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                  }`}
-                  aria-label="Widok kart"
-                >
-                  <LayoutDashboard size={24} />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
-                    viewMode === "list"
-                      ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
-                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-                  }`}
-                  aria-label="Widok listy"
-                >
-                  <ListIcon size={24} />
-                </button>
-              </div>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
+                  viewMode === "cards"
+                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                }`}
+                aria-label="Widok kart"
+              >
+                <LayoutDashboard size={24} />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
+                  viewMode === "list"
+                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                }`}
+                aria-label="Widok listy"
+              >
+                <ListIcon size={24} />
+              </button>
+            </div>
           </div>
         )}
-        <GalleryList 
-          filter={filter} 
+        <GalleryList
+          filter={filter}
           onWizardOpenChange={handleWizardOpenChange}
           viewMode={viewMode}
           onViewModeChange={setViewMode}

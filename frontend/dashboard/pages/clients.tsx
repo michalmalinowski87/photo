@@ -3,13 +3,13 @@ import { useState, useEffect, useRef, useMemo } from "react";
 
 import Button from "../components/ui/button/Button";
 import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
+import { Dropdown } from "../components/ui/dropdown/Dropdown";
+import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
 import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
-import { Dropdown } from "../components/ui/dropdown/Dropdown";
-import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import {
   useCreateClient,
   useDeleteClient,
@@ -41,7 +41,6 @@ interface ClientFormData {
   companyName: string;
   nip: string;
 }
-
 
 export default function Clients() {
   const { showToast } = useToast();
@@ -83,19 +82,19 @@ export default function Clients() {
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
-  
+
   // Sort state - persisted in localStorage
   const [sortBy, setSortBy] = useState<"name" | "date">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("clientsListSortBy");
-      return (saved === "name" || saved === "date") ? saved : "date";
+      return saved === "name" || saved === "date" ? saved : "date";
     }
     return "date";
   });
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("clientsListSortOrder");
-      return (saved === "asc" || saved === "desc") ? saved : "desc";
+      return saved === "asc" || saved === "desc" ? saved : "desc";
     }
     return "desc";
   });
@@ -210,7 +209,6 @@ export default function Clients() {
       showToast("error", "Błąd", formatApiError(err as Error));
     }
   };
-
 
   if (showForm) {
     return (
@@ -372,86 +370,86 @@ export default function Clients() {
             )}
           </div>
         )}
-        
+
         {/* Sort Dropdown */}
         <div className="relative">
-            <button
-              ref={sortButtonRef}
-              onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-              className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
-            >
-              <ArrowUpDown size={16} />
-              <span>{getSortLabel()}</span>
-            </button>
-            <Dropdown
-              isOpen={sortDropdownOpen}
-              onClose={() => setSortDropdownOpen(false)}
-              triggerRef={sortButtonRef}
-              className="w-56 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
-            >
-              <div className="p-2">
-                <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Sortuj według
-                </div>
-                <DropdownItem
-                  onClick={() => {
-                    setSortBy("name");
-                    setSortDropdownOpen(false);
-                  }}
-                  className={`px-3 py-2 text-sm ${
-                    sortBy === "name"
-                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
-                </DropdownItem>
-                <DropdownItem
-                  onClick={() => {
-                    setSortBy("date");
-                    setSortDropdownOpen(false);
-                  }}
-                  className={`px-3 py-2 text-sm ${
-                    sortBy === "date"
-                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
-                </DropdownItem>
-                <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-                <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Kolejność
-                </div>
-                <DropdownItem
-                  onClick={() => {
-                    setSortOrder("asc");
-                    setSortDropdownOpen(false);
-                  }}
-                  className={`px-3 py-2 text-sm ${
-                    sortOrder === "asc"
-                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Rosnąco ↑
-                </DropdownItem>
-                <DropdownItem
-                  onClick={() => {
-                    setSortOrder("desc");
-                    setSortDropdownOpen(false);
-                  }}
-                  className={`px-3 py-2 text-sm ${
-                    sortOrder === "desc"
-                      ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  }`}
-                >
-                  Malejąco ↓
-                </DropdownItem>
+          <button
+            ref={sortButtonRef}
+            onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+          >
+            <ArrowUpDown size={16} />
+            <span>{getSortLabel()}</span>
+          </button>
+          <Dropdown
+            isOpen={sortDropdownOpen}
+            onClose={() => setSortDropdownOpen(false)}
+            triggerRef={sortButtonRef}
+            className="w-56 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+          >
+            <div className="p-2">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Sortuj według
               </div>
-            </Dropdown>
-          </div>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("name");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "name"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortBy("date");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortBy === "date"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
+              </DropdownItem>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Kolejność
+              </div>
+              <DropdownItem
+                onClick={() => {
+                  setSortOrder("asc");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortOrder === "asc"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Rosnąco ↑
+              </DropdownItem>
+              <DropdownItem
+                onClick={() => {
+                  setSortOrder("desc");
+                  setSortDropdownOpen(false);
+                }}
+                className={`px-3 py-2 text-sm ${
+                  sortOrder === "desc"
+                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                Malejąco ↓
+              </DropdownItem>
+            </div>
+          </Dropdown>
+        </div>
 
         {/* Add Client Button */}
         <button
@@ -486,27 +484,36 @@ export default function Clients() {
         <div className="w-full relative">
           <div
             className="w-full overflow-auto table-scrollbar"
-            style={{ height: "calc(100vh - 200px)", minHeight: "800px", overscrollBehavior: "none" }}
+            style={{
+              height: "calc(100vh - 200px)",
+              minHeight: "800px",
+              overscrollBehavior: "none",
+            }}
             onScroll={(e) => {
               const target = e.target as HTMLElement;
               const scrollTop = target.scrollTop;
               const clientHeight = target.clientHeight;
-              
+
               // Use same item-based prefetching as galleries for consistency
               // Calculate how many items are remaining based on scroll position
               const estimatedItemHeight = 120; // Height of each table row (h-[120px])
               const totalItemsRendered = clients.length;
-              
+
               // Calculate which item index is currently at the bottom of viewport
               const scrollBottom = scrollTop + clientHeight;
               const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-              
+
               // Calculate distance from end (same logic as galleries)
               const distanceFromEnd = totalItemsRendered - itemsScrolled;
               const prefetchThreshold = 25; // Same threshold as galleries
-              
+
               // Don't fetch if there's an error or already fetching
-              if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !queryError) {
+              if (
+                distanceFromEnd <= prefetchThreshold &&
+                hasNextPage &&
+                !isFetchingNextPage &&
+                !queryError
+              ) {
                 void fetchNextPage();
               }
             }}

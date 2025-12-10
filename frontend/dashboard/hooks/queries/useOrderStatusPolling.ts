@@ -345,7 +345,6 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         }
       });
 
-
       // Also update all orders list cache (used by orders page)
       const allOrdersKey = queryKeys.orders.list();
       const allOrdersList = queryClient.getQueryData<Order[]>(allOrdersKey);

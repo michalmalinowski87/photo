@@ -45,7 +45,11 @@ export function OriginalsTab({
   const shouldShowAllImages = !selectionEnabled;
 
   // Helper to render image grid with infinite scroll support
-  const renderImageGrid = (imagesToRender: GalleryImage[], highlightSelected = false, enableInfiniteScroll = false) => {
+  const renderImageGrid = (
+    imagesToRender: GalleryImage[],
+    highlightSelected = false,
+    enableInfiniteScroll = false
+  ) => {
     if (enableInfiniteScroll) {
       // For infinite scroll, wrap in scrollable container with prefetching
       return (
@@ -56,23 +60,29 @@ export function OriginalsTab({
             const target = e.target as HTMLElement;
             const scrollTop = target.scrollTop;
             const clientHeight = target.clientHeight;
-            
+
             // Use item-based prefetching for smooth scrolling
             // Estimate item height based on grid layout (4 columns)
             // Average item height is approximately 200px (image + gap)
             const estimatedItemHeight = 200;
             const totalItemsRendered = imagesToRender.length;
-            
+
             // Calculate which item index is currently at the bottom of viewport
             const scrollBottom = scrollTop + clientHeight;
             const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-            
+
             // Calculate distance from end (same logic as gallery photos)
             const distanceFromEnd = totalItemsRendered - itemsScrolled;
             const prefetchThreshold = 25; // Same threshold as other infinite scrolls
-            
+
             // Don't fetch if there's an error or already fetching
-            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+            if (
+              distanceFromEnd <= prefetchThreshold &&
+              hasNextPage &&
+              !isFetchingNextPage &&
+              !error &&
+              fetchNextPage
+            ) {
               void fetchNextPage();
             }
           }}
@@ -107,7 +117,7 @@ export function OriginalsTab({
         </div>
       );
     }
-    
+
     // For non-infinite scroll, use simple grid
     return (
       <div className="grid grid-cols-4 gap-4">
