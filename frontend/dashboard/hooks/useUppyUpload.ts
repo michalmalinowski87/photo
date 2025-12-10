@@ -343,6 +343,23 @@ async function handlePostUploadActions(
       await queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(galleryId, "originals"),
       });
+
+      // Also invalidate infinite image queries (including stats query)
+      // This ensures counters in the UI update after upload
+      await queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key.length >= 5 &&
+            key[0] === "galleries" &&
+            key[1] === "detail" &&
+            key[2] === galleryId &&
+            key[3] === "images" &&
+            key[4] === "infinite"
+          );
+        },
+      });
     }
 
     // Always invalidate gallery list to refresh originalsBytesUsed/finalsBytesUsed

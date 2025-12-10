@@ -36,15 +36,32 @@ export function useGallery(
   const getInitialData = (): Gallery | undefined => {
     if (!galleryId) return undefined;
 
-    const listQueries = queryClient.getQueriesData<Gallery[]>({
+    const listQueries = queryClient.getQueriesData({
       queryKey: queryKeys.galleries.lists(),
     });
 
-    for (const [, galleries] of listQueries) {
-      if (galleries) {
-        const galleryFromList = galleries.find((g) => g.galleryId === galleryId);
+    for (const [, data] of listQueries) {
+      if (!data) continue;
+
+      // Handle regular list queries (Gallery[])
+      if (Array.isArray(data)) {
+        const galleryFromList = data.find((g: Gallery) => g.galleryId === galleryId);
         if (galleryFromList) {
           return galleryFromList;
+        }
+        continue;
+      }
+
+      // Handle infinite query structure ({ pages: [{ items: Gallery[], ... }] })
+      if (data && typeof data === "object" && "pages" in data) {
+        const pages = (data as { pages: Array<{ items?: Gallery[] }> }).pages;
+        for (const page of pages) {
+          if (page.items && Array.isArray(page.items)) {
+            const galleryFromList = page.items.find((g: Gallery) => g.galleryId === galleryId);
+            if (galleryFromList) {
+              return galleryFromList;
+            }
+          }
         }
       }
     }

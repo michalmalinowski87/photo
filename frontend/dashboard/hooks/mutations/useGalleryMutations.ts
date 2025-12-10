@@ -825,7 +825,8 @@ export function useDeleteGalleryImage() {
           ),
         });
 
-        // Also invalidate infinite image queries
+        // Also invalidate infinite image queries (including stats query used for counters)
+        // This ensures UI counters update after deletion
         void queryClient.invalidateQueries({
           predicate: (query) => {
             const key = query.queryKey;
