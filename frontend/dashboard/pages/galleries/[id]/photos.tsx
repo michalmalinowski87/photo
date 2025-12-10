@@ -125,16 +125,26 @@ function OrderImagesGrid({
       onScroll={(e) => {
         const target = e.target as HTMLElement;
         const scrollTop = target.scrollTop;
-        const scrollHeight = target.scrollHeight;
         const clientHeight = target.clientHeight;
 
-        // Calculate distance from bottom
-        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-        const prefetchThreshold = 200; // Trigger fetch when 200px from bottom
+        // Use item-based prefetching for smooth scrolling (same strategy as galleries list)
+        // Estimate item height based on grid layout (responsive)
+        // For a 6-column grid on xl screens, each row has ~6 items
+        // Average item height is approximately 200px (image + gap)
+        const estimatedItemHeight = 200;
+        const totalItemsRendered = images.length;
+
+        // Calculate which item index is currently at the bottom of viewport
+        const scrollBottom = scrollTop + clientHeight;
+        const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+
+        // Calculate distance from end (same logic as galleries/clients/packages)
+        const distanceFromEnd = totalItemsRendered - itemsScrolled;
+        const prefetchThreshold = 25; // Same threshold as other infinite scrolls
 
         // Don't fetch if there's an error or already fetching
         if (
-          distanceFromBottom <= prefetchThreshold &&
+          distanceFromEnd <= prefetchThreshold &&
           hasNextPage &&
           !isFetchingNextPage &&
           !imagesError

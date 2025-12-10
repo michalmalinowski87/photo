@@ -302,9 +302,9 @@ export function FinalsTab({
             const clientHeight = target.clientHeight;
 
             // Use item-based prefetching for smooth scrolling
-            // Estimate item height based on grid layout (4 columns)
-            // Average item height is approximately 250px (image + gap + text)
-            const estimatedItemHeight = 250;
+            // Estimate item height based on grid layout (responsive: 2-6 columns)
+            // Average item height is approximately 200px (square image + gap)
+            const estimatedItemHeight = 200;
             const totalItemsRendered = images.length;
 
             // Calculate which item index is currently at the bottom of viewport
@@ -327,7 +327,7 @@ export function FinalsTab({
             }
           }}
         >
-          <div className={`grid grid-cols-4 gap-4 pb-4 ${isSelectionMode ? "select-none" : ""}`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4 ${isSelectionMode ? "select-none" : ""}`}>
             {images.map((img, idx) => {
               const imageKey = img.key ?? img.filename ?? "";
               const isSelected = selectedKeys.has(imageKey);
@@ -415,14 +415,6 @@ export function FinalsTab({
                           </button>
                         </div>
                       )}
-                  </div>
-                  <div className="p-2">
-                    <p
-                      className="text-xs text-gray-600 dark:text-gray-400 truncate"
-                      title={imageKey}
-                    >
-                      {removeFileExtension(imageKey)}
-                    </p>
                   </div>
                 </div>
               );

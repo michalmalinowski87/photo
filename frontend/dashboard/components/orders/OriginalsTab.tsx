@@ -87,24 +87,22 @@ export function OriginalsTab({
             }
           }}
         >
-          <div className="grid grid-cols-4 gap-4 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
             {imagesToRender.map((img, idx) => {
               const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
               return (
                 <div
                   key={imgKey ?? idx}
-                  className={`relative ${
-                    highlightSelected
-                      ? "border-2 border-brand-500 ring-2 ring-brand-200"
-                      : "border border-gray-200 dark:border-gray-700"
-                  } rounded-lg overflow-hidden`}
+                  className="relative group border border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 rounded-lg overflow-hidden transition-all"
                 >
-                  <LazyRetryableImage
-                    imageData={img as ImageFallbackUrls}
-                    alt={imgKey}
-                    className="w-full h-48 object-cover"
-                    preferredSize="thumb"
-                  />
+                  <div className="aspect-square relative">
+                    <LazyRetryableImage
+                      imageData={img as ImageFallbackUrls}
+                      alt={imgKey}
+                      className="w-full h-full object-cover rounded-lg"
+                      preferredSize="thumb"
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -120,24 +118,22 @@ export function OriginalsTab({
 
     // For non-infinite scroll, use simple grid
     return (
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {imagesToRender.map((img, idx) => {
           const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
           return (
             <div
               key={imgKey ?? idx}
-              className={`relative ${
-                highlightSelected
-                  ? "border-2 border-brand-500 ring-2 ring-brand-200"
-                  : "border border-gray-200 dark:border-gray-700"
-              } rounded-lg overflow-hidden`}
+              className="relative group border border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 rounded-lg overflow-hidden transition-all"
             >
-              <LazyRetryableImage
-                imageData={img as ImageFallbackUrls}
-                alt={imgKey}
-                className="w-full h-48 object-cover"
-                preferredSize="thumb"
-              />
+              <div className="aspect-square relative">
+                <LazyRetryableImage
+                  imageData={img as ImageFallbackUrls}
+                  alt={imgKey}
+                  className="w-full h-full object-cover rounded-lg"
+                  preferredSize="thumb"
+                />
+              </div>
             </div>
           );
         })}
