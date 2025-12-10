@@ -6,6 +6,7 @@ import React, { useState, useEffect } from "react";
 import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
+import type { Gallery } from "../../types";
 
 const GALLERY_STATUSES = [
   { value: "unpaid", label: "Nieopłacone (Wersje robocze)" },
@@ -22,7 +23,7 @@ export default function DeleteGalleriesByStatus() {
   const router = useRouter();
   const { showToast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<GalleryStatus | "">("");
-  const [galleries, setGalleries] = useState<any[]>([]);
+  const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, message: "" });
@@ -41,13 +42,19 @@ export default function DeleteGalleriesByStatus() {
     limit: 50,
     options: {
       enabled: !!selectedStatus,
-    },
+      // getNextPageParam and initialPageParam are handled by the hook itself
+    } as NonNullable<Parameters<typeof useInfiniteGalleries>[0]>["options"],
   });
 
   // Flatten all galleries from pages
   useEffect(() => {
     if (data?.pages) {
-      const allGalleries = data.pages.flatMap((page) => page.items || []);
+      const allGalleries = data.pages.flatMap((page) => {
+        if (page && typeof page === "object" && "items" in page && Array.isArray(page.items)) {
+          return page.items;
+        }
+        return [];
+      });
       setGalleries(allGalleries);
     } else {
       setGalleries([]);
@@ -57,7 +64,7 @@ export default function DeleteGalleriesByStatus() {
   // Load all pages
   useEffect(() => {
     if (selectedStatus && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
+      void fetchNextPage();
     }
   }, [selectedStatus, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
@@ -84,6 +91,7 @@ export default function DeleteGalleriesByStatus() {
     if (!selectedStatus || galleries.length === 0 || isDeleting) return;
 
     if (
+      // eslint-disable-next-line no-alert
       !confirm(
         `Czy na pewno chcesz usunąć wszystkie ${galleries.length} galerie ze statusem "${GALLERY_STATUSES.find((s) => s.value === selectedStatus)?.label}"?\n\nTa operacja jest nieodwracalna!`
       )
@@ -114,8 +122,11 @@ export default function DeleteGalleriesByStatus() {
               total: galleries.length,
               message: `Usunięto ${deleted.length}/${galleries.length}`,
             });
-          } catch (error: any) {
-            const errorMsg = error?.message || "Nieznany błąd";
+          } catch (error: unknown) {
+            const errorMsg =
+              error && typeof error === "object" && "message" in error
+                ? String(error.message)
+                : "Nieznany błąd";
             failed.push({ id: gallery.galleryId, error: errorMsg });
             setFailedDeletions([...failed]);
             setDeleteProgress({
@@ -161,7 +172,7 @@ export default function DeleteGalleriesByStatus() {
       }
     } catch (error) {
       console.error("Failed to delete galleries:", error);
-      showToast("error", "Błąd", `Nie udało się usunąć galerii: ${error}`);
+      showToast("error", "Błąd", `Nie udało się usunąć galerii: ${String(error)}`);
     } finally {
       setIsDeleting(false);
     }

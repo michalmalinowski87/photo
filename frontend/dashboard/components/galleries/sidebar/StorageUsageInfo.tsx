@@ -20,22 +20,6 @@ export const StorageUsageInfo: React.FC<StorageUsageInfoProps> = ({ orderId }) =
     isFetching: galleryFetching,
   } = useGallery(galleryIdForQuery);
 
-  // Log when gallery data changes to track if it's being overwritten
-  React.useEffect(() => {
-    if (currentGallery) {
-      // eslint-disable-next-line no-console
-      console.log("[StorageUsageInfo] Gallery data changed:", {
-        galleryId: currentGallery.galleryId,
-        originalsBytesUsed: currentGallery.originalsBytesUsed,
-        finalsBytesUsed: currentGallery.finalsBytesUsed,
-      });
-    }
-  }, [
-    currentGallery?.originalsBytesUsed,
-    currentGallery?.finalsBytesUsed,
-    currentGallery?.galleryId,
-    currentGallery,
-  ]);
 
   const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {

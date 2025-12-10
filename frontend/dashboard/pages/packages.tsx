@@ -23,11 +23,12 @@ import { formatPrice } from "../lib/format-price";
 
 interface PricingPackage {
   packageId: string;
-  name: string;
-  includedPhotos: number;
-  pricePerExtraPhoto: number;
-  price: number;
+  name?: string;
+  includedPhotos?: number;
+  pricePerExtraPhoto?: number;
+  price?: number;
   createdAt?: string;
+  [key: string]: unknown;
 }
 
 interface PackageFormData {
@@ -122,9 +123,14 @@ export default function Packages() {
   });
 
   // Flatten pages into a single array of packages
-  const packages = useMemo(() => {
+  const packages = useMemo((): PricingPackage[] => {
     if (!data?.pages) return [];
-    return data.pages.flatMap((page) => page.items || []);
+    return data.pages.flatMap((page) => {
+      if (page && typeof page === "object" && "items" in page && Array.isArray(page.items)) {
+        return page.items as PricingPackage[];
+      }
+      return [] as PricingPackage[];
+    });
   }, [data]);
 
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -592,7 +598,7 @@ export default function Packages() {
                       }`}
                     >
                       <TableCell className="px-3 py-5 text-base font-medium text-gray-900 dark:text-white align-middle">
-                        {pkg.name || "-"}
+                        {pkg.name ?? "-"}
                       </TableCell>
                       <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
                         {pkg.includedPhotos}

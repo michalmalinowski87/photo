@@ -18,19 +18,7 @@ import {
 import { useInfiniteClients } from "../hooks/useInfiniteClients";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
-
-interface Client {
-  clientId: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  isCompany?: boolean;
-  companyName?: string;
-  nip?: string;
-  createdAt?: string;
-  [key: string]: unknown;
-}
+import type { Client } from "../types";
 
 interface ClientFormData {
   email: string;
@@ -134,9 +122,14 @@ export default function Clients() {
   });
 
   // Flatten pages into a single array of clients
-  const clients = useMemo(() => {
+  const clients = useMemo((): Client[] => {
     if (!data?.pages) return [];
-    return data.pages.flatMap((page) => page.items || []);
+    return data.pages.flatMap((page) => {
+      if (page && typeof page === "object" && "items" in page && Array.isArray(page.items)) {
+        return page.items as Client[];
+      }
+      return [] as Client[];
+    });
   }, [data]);
 
   const handleCreate = (): void => {
@@ -156,13 +149,13 @@ export default function Clients() {
   const handleEdit = (client: Client): void => {
     setEditingClient(client);
     setFormData({
-      email: client.email ?? "",
-      firstName: client.firstName ?? "",
-      lastName: client.lastName ?? "",
-      phone: client.phone ?? "",
-      isCompany: client.isCompany ?? false,
-      companyName: client.companyName ?? "",
-      nip: client.nip ?? "",
+      email: typeof client.email === "string" ? client.email : "",
+      firstName: typeof client.firstName === "string" ? client.firstName : "",
+      lastName: typeof client.lastName === "string" ? client.lastName : "",
+      phone: typeof client.phone === "string" ? client.phone : "",
+      isCompany: typeof client.isCompany === "boolean" ? client.isCompany : false,
+      companyName: typeof client.companyName === "string" ? client.companyName : "",
+      nip: typeof client.nip === "string" ? client.nip : "",
     });
     setShowForm(true);
   };
@@ -571,13 +564,15 @@ export default function Clients() {
                       <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                         {client.isCompany ? (
                           <div>
-                            <div className="font-medium">{client.companyName}</div>
+                            <div className="font-medium">
+                              {typeof client.companyName === "string" ? client.companyName : ""}
+                            </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              NIP: {client.nip}
+                              NIP: {typeof client.nip === "string" ? client.nip : ""}
                             </div>
                           </div>
                         ) : (
-                          `${client.firstName} ${client.lastName}`
+                          `${typeof client.firstName === "string" ? client.firstName : ""} ${typeof client.lastName === "string" ? client.lastName : ""}`
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">

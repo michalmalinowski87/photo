@@ -157,10 +157,10 @@ export default function CreateTestGalleries() {
 
       // Optionally redirect to galleries list
       setTimeout(() => {
-        router.push("/galleries?filter=unpaid");
+        void router.push("/galleries?filter=unpaid");
       }, 2000);
     } catch (error) {
-      showToast("error", "Błąd", `Nie udało się utworzyć galerii: ${error}`);
+      showToast("error", "Błąd", `Nie udało się utworzyć galerii: ${String(error)}`);
       console.error("Failed to create galleries:", error);
     } finally {
       setIsCreating(false);
@@ -220,8 +220,8 @@ export default function CreateTestGalleries() {
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <strong>Uwaga:</strong> Ta strona tworzy galerie testowe z losowymi zdjęciami
-              okładkowymi. Galerie będą miały status "Nieopublikowana" (unpaid) i pojawią się w
-              filtrze "Wersje robocze".
+              okładkowymi. Galerie będą miały status &quot;Nieopublikowana&quot; (unpaid) i pojawią się w
+              filtrze &quot;Wersje robocze&quot;.
             </p>
           </div>
         </div>

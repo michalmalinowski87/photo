@@ -618,13 +618,9 @@ export function invalidateSession(keepRefreshToken: boolean = false): void {
  */
 export function triggerSessionExpired(): void {
   if (typeof window === "undefined") {
-    // eslint-disable-next-line no-console
     console.error("This function can only be called in the browser");
     return;
   }
-
-  // eslint-disable-next-line no-console
-  console.log("🔴 Triggering session expired event...");
 
   // Directly dispatch the session-expired event that the modal listens for
   window.dispatchEvent(
@@ -632,9 +628,6 @@ export function triggerSessionExpired(): void {
       detail: { returnUrl: window.location.pathname + window.location.search },
     })
   );
-
-  // eslint-disable-next-line no-console
-  console.log("✅ Session expired popup should now be visible!");
 }
 
 export function getHostedUILoginUrl(

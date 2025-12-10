@@ -207,6 +207,8 @@ function OrderImagesGrid({
       }, 100);
       return () => clearTimeout(timeoutId);
     }
+    
+    return undefined;
   }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
 
   // Show loading state when initially loading/fetching and no images yet
@@ -262,239 +264,6 @@ function OrderImagesGrid({
   );
 }
 
-// Component for infinite scroll container with auto-prefetching when content fits without scrolling
-interface InfiniteScrollContainerProps {
-  images: GalleryImage[];
-  renderImageItem: (img: GalleryImage, index: number, allImages: GalleryImage[]) => React.ReactNode;
-  fetchNextPage: () => void;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  imagesError: Error | null;
-  containerHeight?: string;
-  minHeight?: string;
-}
-
-function InfiniteScrollContainer({
-  images,
-  renderImageItem,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  imagesError,
-  containerHeight = "calc(100vh - 300px)",
-  minHeight = "600px",
-}: InfiniteScrollContainerProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const gridContainerRef = useRef<HTMLDivElement>(null);
-  const scrollbarDetectedRef = useRef(false);
-  const imagesCountWhenScrollbarAppearedRef = useRef<number | null>(null);
-  const measuredRowHeightRef = useRef<number | null>(null);
-
-  // Measure actual row height from DOM - adapts to any item height
-  const measureRowHeight = useCallback(() => {
-    if (!gridContainerRef.current || images.length === 0) {
-      return null;
-    }
-
-    const grid = gridContainerRef.current;
-    const children = Array.from(grid.children) as HTMLElement[];
-    
-    if (children.length === 0) {
-      return null;
-    }
-
-    // Calculate columns based on viewport width
-    const viewportWidth = grid.clientWidth;
-    let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280) columns = 6; // xl
-    else if (viewportWidth >= 1024) columns = 5; // lg
-    else if (viewportWidth >= 768) columns = 4; // md
-    else if (viewportWidth >= 640) columns = 3; // sm
-
-    // Measure height of first few rows to get average
-    // Need at least 2 rows to calculate row height accurately
-    const minItemsForMeasurement = columns * 2;
-    if (children.length < minItemsForMeasurement) {
-      return null;
-    }
-
-    // Get positions of items in first two rows
-    const firstRowItems = children.slice(0, columns);
-    const secondRowItems = children.slice(columns, columns * 2);
-    
-    if (firstRowItems.length === 0 || secondRowItems.length === 0) {
-      return null;
-    }
-
-    // Get top position of first item in first row
-    const firstItemTop = firstRowItems[0].offsetTop;
-    // Get top position of first item in second row
-    const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-    
-    // Calculate row height (difference between rows)
-    const rowHeight = secondRowFirstItemTop - firstItemTop;
-    
-    // Validate measurement (should be positive and reasonable)
-    if (rowHeight > 0 && rowHeight < 1000) {
-      return rowHeight;
-    }
-
-    return null;
-  }, [images.length]);
-
-  // Update measured row height when images change or on resize
-  useEffect(() => {
-    const updateRowHeight = () => {
-      const measured = measureRowHeight();
-      if (measured !== null) {
-        measuredRowHeightRef.current = measured;
-      }
-    };
-
-    // Measure after a short delay to ensure DOM is updated
-    const timeoutId = setTimeout(updateRowHeight, 100);
-    
-    // Also measure on window resize
-    window.addEventListener('resize', updateRowHeight);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('resize', updateRowHeight);
-    };
-  }, [images.length, measureRowHeight]);
-
-  // Auto-fetch strategy for initial load:
-  // 1. Detect when scrollbar first appears
-  // 2. Note how many images we had when scrollbar appeared
-  // 3. Fetch until we have double that amount (if 30 images needed scroll, fetch until 60)
-  // 4. After initial prefetch, use normal smooth scrolling strategy
-  useEffect(() => {
-    console.log("[InfiniteScrollContainer useEffect]", {
-      hasContainer: !!scrollContainerRef.current,
-      isFetchingNextPage,
-      hasError: !!imagesError,
-      imagesCount: images.length,
-      hasNextPage,
-      scrollbarDetected: scrollbarDetectedRef.current,
-      imagesWhenScrollbarAppeared: imagesCountWhenScrollbarAppearedRef.current,
-    });
-
-    if (!scrollContainerRef.current || isFetchingNextPage || imagesError || images.length === 0) {
-      console.log("[InfiniteScrollContainer useEffect] Early return:", {
-        hasContainer: !!scrollContainerRef.current,
-        isFetchingNextPage,
-        hasError: !!imagesError,
-        imagesCount: images.length,
-      });
-      return;
-    }
-
-    const container = scrollContainerRef.current;
-    const needsScrolling = container.scrollHeight > container.clientHeight;
-
-    console.log("[InfiniteScrollContainer useEffect] Scroll check:", {
-      scrollHeight: container.scrollHeight,
-      clientHeight: container.clientHeight,
-      needsScrolling,
-    });
-
-    // Detect when scrollbar first appears
-    if (needsScrolling && !scrollbarDetectedRef.current) {
-      scrollbarDetectedRef.current = true;
-      imagesCountWhenScrollbarAppearedRef.current = images.length;
-      console.log("[InfiniteScrollContainer useEffect] Scrollbar detected! Images count:", images.length);
-    }
-
-    // Initial prefetch phase: fetch double the images count when scrollbar appeared
-    if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
-      const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-      console.log("[InfiniteScrollContainer useEffect] Initial prefetch phase:", {
-        currentImages: images.length,
-        targetImages: targetImagesCount,
-        hasNextPage,
-      });
-      
-      if (images.length < targetImagesCount && hasNextPage) {
-        // Still in initial prefetch phase - fetch until we have double
-        console.log("[InfiniteScrollContainer useEffect] Fetching next page (initial prefetch)");
-        const timeoutId = setTimeout(() => {
-          if (hasNextPage && !isFetchingNextPage && !imagesError) {
-            console.log("[InfiniteScrollContainer useEffect] Executing fetchNextPage (initial prefetch)");
-            void fetchNextPage();
-          } else {
-            console.log("[InfiniteScrollContainer useEffect] Skipped fetch (initial prefetch):", {
-              hasNextPage,
-              isFetchingNextPage,
-              hasError: !!imagesError,
-            });
-          }
-        }, 100);
-        return () => clearTimeout(timeoutId);
-      }
-      // After initial prefetch is complete, scroll handler will take over
-      console.log("[InfiniteScrollContainer useEffect] Initial prefetch complete, scroll handler will take over");
-      return;
-    }
-
-    // Before scrollbar appears, keep fetching until we get scroll
-    if (!scrollbarDetectedRef.current && !needsScrolling && hasNextPage) {
-      console.log("[InfiniteScrollContainer useEffect] Fetching next page (before scrollbar)");
-      const timeoutId = setTimeout(() => {
-        if (hasNextPage && !isFetchingNextPage && !imagesError) {
-          console.log("[InfiniteScrollContainer useEffect] Executing fetchNextPage (before scrollbar)");
-          void fetchNextPage();
-        } else {
-          console.log("[InfiniteScrollContainer useEffect] Skipped fetch (before scrollbar):", {
-            hasNextPage,
-            isFetchingNextPage,
-            hasError: !!imagesError,
-          });
-        }
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
-
-  return (
-    <div
-      ref={scrollContainerRef}
-      className="w-full overflow-auto table-scrollbar"
-      style={{ height: containerHeight, minHeight, overscrollBehavior: "none" }}
-      onScroll={(e) => {
-        const target = e.target as HTMLElement;
-        const scrollTop = target.scrollTop;
-        const scrollHeight = target.scrollHeight;
-        const clientHeight = target.clientHeight;
-
-        // Simple approach: fetch when near the bottom of the scroll container
-        // After initial prefetch, just fetch when user scrolls close to the end
-        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-        const threshold = 200; // Fetch when within 200px of bottom
-
-        // Only fetch if we're past the initial prefetch phase
-        if (
-          scrollbarDetectedRef.current &&
-          distanceFromBottom <= threshold &&
-          hasNextPage &&
-          !isFetchingNextPage &&
-          !imagesError
-        ) {
-          void fetchNextPage();
-        }
-      }}
-    >
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
-        {images.map((img, index) => renderImageItem(img, index, images))}
-      </div>
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <Loading size="sm" text="Ładowanie więcej zdjęć..." />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function GalleryPhotos() {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -521,13 +290,24 @@ export default function GalleryPhotos() {
     limit: 1, // Only need stats, so minimal limit
     options: {
       enabled: !!galleryIdForQuery,
-      // These are handled by the hook itself
-    } as any,
+      // getNextPageParam and initialPageParam are handled by the hook itself
+    } as Parameters<typeof useInfiniteGalleryImages>[0]["options"],
   });
 
   // Get statistics from the first page response
-  const imageStats = (statsData?.pages?.[0] as any)?.stats;
-  const totalGalleryImageCount = (statsData?.pages?.[0] as any)?.totalCount ?? 0;
+  interface PageWithStats {
+    stats?: {
+      orderCounts?: Array<{ orderId: string; count: number }>;
+      unselectedCount?: number;
+    };
+    totalCount?: number;
+    images?: GalleryImage[];
+    hasMore?: boolean;
+    nextCursor?: string | null;
+  }
+  const firstPage = statsData?.pages?.[0] as PageWithStats | undefined;
+  const imageStats = firstPage?.stats;
+  const totalGalleryImageCount = firstPage?.totalCount ?? 0;
 
   // Use hook for order/image relationship management - needed to get list of orders
   const {
@@ -614,13 +394,13 @@ export default function GalleryPhotos() {
       // Only use cachedDataForExpandedSection which is validated to match the current expandedSection
       // This ensures we don't show wrong section's data when switching sections
       // Return undefined if no cached data to prevent showing stale data from previous section
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       placeholderData: () => {
         // Only use cached data that matches the current expanded section
         // This prevents showing unselected images when expanding an order section (and vice versa)
-        return cachedDataForExpandedSection || undefined;
+        return (cachedDataForExpandedSection as typeof imagesData) ?? undefined;
       },
-    } as any,
+      // getNextPageParam and initialPageParam are handled by the hook itself
+    } as unknown as Parameters<typeof useInfiniteGalleryImages>[0]["options"],
   });
 
   // Extract data from current section query
@@ -639,8 +419,7 @@ export default function GalleryPhotos() {
   // Prefer query data first, then fall back to cached data for current section
   // Only use cached data if it exists and matches the current expanded section
   // This prevents showing wrong section's data when switching sections
-  const effectiveImagesData =
-    imagesData || (cachedDataForExpandedSection ? cachedDataForExpandedSection : undefined);
+  const effectiveImagesData: typeof imagesData = imagesData ?? (cachedDataForExpandedSection ? (cachedDataForExpandedSection as unknown as typeof imagesData) : undefined);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
   // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
@@ -911,10 +690,12 @@ export default function GalleryPhotos() {
       return [];
     }
     // Flatten all pages into a single array
-    const allApiImages = (effectiveImagesData as any).pages.flatMap(
-      (page: any) => page.images || []
-    );
-    const apiImages = allApiImages as ApiImage[];
+    interface PageData {
+      images?: ApiImage[];
+    }
+    const pages = effectiveImagesData.pages as PageData[];
+    const allApiImages = pages.flatMap((page) => page.images ?? []);
+    const apiImages: ApiImage[] = allApiImages;
     const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
       key: img.key,
       filename: img.filename,
@@ -954,13 +735,15 @@ export default function GalleryPhotos() {
   // Clear deletedImageKeys for images that have been re-uploaded
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
   useEffect(() => {
-    if (!effectiveImagesData?.pages || (effectiveImagesData as any).pages.length === 0) {
+    if (!effectiveImagesData?.pages || effectiveImagesData.pages.length === 0) {
       return;
     }
 
-    const allApiImages = (effectiveImagesData as any).pages.flatMap(
-      (page: any) => page.images || []
-    );
+    interface PageData {
+      images?: ApiImage[];
+    }
+    const pages = effectiveImagesData.pages as PageData[];
+    const allApiImages = pages.flatMap((page) => page.images ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const currentImageKeys = new Set(
       allApiImages.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
@@ -1034,41 +817,44 @@ export default function GalleryPhotos() {
     getImageOrderStatus,
   ]);
 
-  const handleDeletePhotoClick = (image: GalleryImage): void => {
-    const imageKey = image.key ?? image.filename;
+  const handleDeletePhotoClick = useCallback(
+    (image: GalleryImage): void => {
+      const imageKey = image.key ?? image.filename;
 
-    if (!imageKey) {
-      return;
-    }
+      if (!imageKey) {
+        return;
+      }
 
-    // Check if image is in approved selection
-    if (approvedSelectionKeys.has(imageKey)) {
-      showToast(
-        "error",
-        "Błąd",
-        "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
-      );
-      return;
-    }
+      // Check if image is in approved selection
+      if (approvedSelectionKeys.has(imageKey)) {
+        showToast(
+          "error",
+          "Błąd",
+          "Nie można usunąć zdjęcia, które jest częścią zatwierdzonej selekcji klienta"
+        );
+        return;
+      }
 
-    // Check if image is in a DELIVERED order
-    const orderStatus = getImageOrderStatus(image);
-    if (orderStatus === "DELIVERED") {
-      showToast(
-        "error",
-        "Błąd",
-        "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"
-      );
-      return;
-    }
+      // Check if image is in a DELIVERED order
+      const orderStatus = getImageOrderStatus(image);
+      if (orderStatus === "DELIVERED") {
+        showToast(
+          "error",
+          "Błąd",
+          "Nie można usunąć zdjęcia, które jest częścią dostarczonego zlecenia"
+        );
+        return;
+      }
 
-    // Use hook's handler which handles suppression check and confirmation dialog
-    const imageToDeleteResult = handleDeleteImageClick(image);
-    if (imageToDeleteResult) {
-      setImageToDelete(imageToDeleteResult);
-      setDeleteConfirmOpen(true);
-    }
-  };
+      // Use hook's handler which handles suppression check and confirmation dialog
+      const imageToDeleteResult = handleDeleteImageClick(image);
+      if (imageToDeleteResult) {
+        setImageToDelete(imageToDeleteResult);
+        setDeleteConfirmOpen(true);
+      }
+    },
+    [approvedSelectionKeys, getImageOrderStatus, showToast, handleDeleteImageClick]
+  );
 
   const handleDeleteConfirm = async (suppressChecked?: boolean): Promise<void> => {
     if (!imageToDelete) {
@@ -1275,15 +1061,21 @@ export default function GalleryPhotos() {
   ]);
 
   // Helper functions (must be defined before early returns)
-  const isImageInApprovedSelection = (image: GalleryImage): boolean => {
-    const imageKey = image.key ?? image.filename;
-    return imageKey ? approvedSelectionKeys.has(imageKey) : false;
-  };
+  const isImageInApprovedSelection = useCallback(
+    (image: GalleryImage): boolean => {
+      const imageKey = image.key ?? image.filename;
+      return imageKey ? approvedSelectionKeys.has(imageKey) : false;
+    },
+    [approvedSelectionKeys]
+  );
 
-  const isImageInAnyOrder = (image: GalleryImage): boolean => {
-    const imageKey = image.key ?? image.filename;
-    return imageKey ? allOrderSelectionKeys.has(imageKey) : false;
-  };
+  const isImageInAnyOrder = useCallback(
+    (image: GalleryImage): boolean => {
+      const imageKey = image.key ?? image.filename;
+      return imageKey ? allOrderSelectionKeys.has(imageKey) : false;
+    },
+    [allOrderSelectionKeys]
+  );
 
   // Helper to get selectable images (excluding approved and delivered)
   const getSelectableImages = useCallback(
@@ -1308,179 +1100,6 @@ export default function GalleryPhotos() {
     [approvedSelectionKeys, imageOrderStatus]
   );
 
-  // Format date for display
-  const formatDate = (dateString?: string): string => {
-    if (!dateString) {
-      return "";
-    }
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("pl-PL", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Helper to normalize selectedKeys from order (used for grouping images by order)
-  const normalizeOrderSelectedKeys = useCallback(
-    (selectedKeys: string[] | string | undefined): string[] => {
-      if (!selectedKeys) {
-        return [];
-      }
-      if (Array.isArray(selectedKeys)) {
-        return selectedKeys.map((k) => k.toString().trim());
-      }
-      if (typeof selectedKeys === "string") {
-        try {
-          const parsed: unknown = JSON.parse(selectedKeys);
-          return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
-        } catch {
-          return [];
-        }
-      }
-      return [];
-    },
-    []
-  );
-
-  // deliveredOrders is already defined above - remove duplicate
-
-  // Use backend statistics if available
-  const orderTotalCountsFromStats = useMemo(() => {
-    const map = new Map<string, number>();
-    if (imageStats?.orderCounts) {
-      imageStats.orderCounts.forEach(({ orderId, count }: { orderId: string; count: number }) => {
-        map.set(orderId, count);
-      });
-    }
-    return map;
-  }, [imageStats]);
-
-  // Build order totals map - use stats when available, otherwise fallback to selectedKeys length
-  const orderTotalCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    deliveredOrders.forEach((order) => {
-      const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
-      if (!orderId) {
-        return;
-      }
-      const orderTotalCount =
-        orderTotalCountsFromStats.get(orderId) ??
-        normalizeOrderSelectedKeys(order.selectedKeys).length;
-      map.set(orderId, orderTotalCount);
-    });
-    return map;
-  }, [deliveredOrders, orderTotalCountsFromStats, normalizeOrderSelectedKeys]);
-
-  // Get images for currently expanded section
-  // For order sections, images are already filtered by the backend
-  // For unselected section, images are already filtered by the backend
-  const sectionImages = images;
-
-  // Get images for the expanded order section (if expanded section is an order)
-  const imagesByOrder = useMemo(() => {
-    if (!expandedSection?.startsWith("order-")) {
-      return new Map<string, GalleryImage[]>();
-    }
-    const orderId = expandedSection.replace("order-", "");
-    return new Map([[orderId, sectionImages]]);
-  }, [expandedSection, sectionImages]);
-
-  // Get unselected images (only when unselected section is expanded)
-  const unselectedImages = useMemo(() => {
-    if (expandedSection !== "unselected") {
-      return [];
-    }
-    return sectionImages;
-  }, [expandedSection, sectionImages]);
-
-  // Use backend statistics for total unselected count
-  const totalUnselectedCount = imageStats?.unselectedCount ?? 0;
-
-  // Handler for deleting all unselected images
-  const handleDeleteAllUnselectedClick = useCallback(() => {
-    if (unselectedImages.length === 0) {
-      return;
-    }
-
-    // Get all unselected image keys and filter out non-deletable ones
-    const imageKeysToDelete = unselectedImages
-      .map((img) => img.key ?? img.filename)
-      .filter((key): key is string => {
-        if (!key) {
-          return false;
-        }
-        // Check if approved
-        if (approvedSelectionKeys.has(key)) {
-          return false;
-        }
-        // Check if in DELIVERED order
-        const img = unselectedImages.find((i) => (i.key ?? i.filename) === key);
-        if (img) {
-          const orderStatus = getImageOrderStatus(img);
-          if (orderStatus === "DELIVERED") {
-            return false;
-          }
-        }
-        return true;
-      });
-
-    if (imageKeysToDelete.length === 0) {
-      showToast(
-        "error",
-        "Błąd",
-        "Nie można usunąć żadnych zdjęć - wszystkie są częścią zatwierdzonej selekcji lub dostarczonego zlecenia"
-      );
-      return;
-    }
-
-    setUnselectedImagesToDelete(imageKeysToDelete);
-    setDeleteAllUnselectedOpen(true);
-  }, [unselectedImages, approvedSelectionKeys, getImageOrderStatus, showToast]);
-
-  // Show loading if galleryId is not yet available from router (prevents flash of empty state)
-  if (!galleryId) {
-    // Return null to let GalleryLayoutWrapper handle the loading overlay
-    // This ensures the sidebar is visible during loading
-    return null;
-  }
-
-  // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
-  // This ensures the sidebar is visible during loading
-  // Return empty content (not null) so the layout still renders
-  if (!isGalleryLoaded) {
-    // Return empty div so layout still renders (sidebar will show loading state)
-    return <div />;
-  }
-
-  // Use effectiveGallery (from store or cache) for rendering
-  // Fallback to gallery from hook if effectiveGallery is not available
-  const galleryToRender = (effectiveGallery || gallery) as Gallery | null;
-  if (!galleryToRender) {
-    return null; // Error is handled by GalleryLayoutWrapper
-  }
-
-  const handleDeleteAllUnselectedConfirm = async (): Promise<void> => {
-    if (unselectedImagesToDelete.length === 0) {
-      setDeleteAllUnselectedOpen(false);
-      return;
-    }
-
-    try {
-      await deleteImagesBulk(unselectedImagesToDelete);
-      setDeleteAllUnselectedOpen(false);
-      setUnselectedImagesToDelete([]);
-    } catch {
-      // Error already handled in deleteImagesBulk
-    }
-  };
-
   // Toggle section expansion - only one section can be expanded at a time
   // React Query automatically caches each section's data based on unique query keys
   // When switching sections, previously loaded images remain in cache
@@ -1495,8 +1114,6 @@ export default function GalleryPhotos() {
       return sectionId;
     });
   }, []);
-
-  // No need for auto-loading effect - infinite scroll in OrderImagesGrid handles it
 
   // Render single image item (extracted for reuse)
   const renderImageItem = useCallback(
@@ -1695,37 +1312,186 @@ export default function GalleryPhotos() {
       isSelectionMode,
       handleSelectionClick,
       handleDeletePhotoClick,
-      removeFileExtension,
     ]
   );
 
-  const renderImageGrid = useCallback(
-    (imagesToRender: GalleryImage[], _enableSelection: boolean, enableInfiniteScroll: boolean) => {
-      if (enableInfiniteScroll) {
-        // For infinite scroll, use InfiniteScrollContainer component with auto-prefetching
-        return (
-          <InfiniteScrollContainer
-            images={imagesToRender}
-            renderImageItem={renderImageItem}
-            fetchNextPage={fetchNextPage}
-            hasNextPage={hasNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            imagesError={imagesError}
-            containerHeight="calc(100vh - 300px)"
-            minHeight="600px"
-          />
-        );
-      }
+  // Format date for display
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) {
+      return "";
+    }
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("pl-PL", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateString;
+    }
+  };
 
-      // For non-infinite scroll (e.g., order sections), use simple grid
-      return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
-        </div>
-      );
+  // Helper to normalize selectedKeys from order (used for grouping images by order)
+  const normalizeOrderSelectedKeys = useCallback(
+    (selectedKeys: string[] | string | undefined): string[] => {
+      if (!selectedKeys) {
+        return [];
+      }
+      if (Array.isArray(selectedKeys)) {
+        return selectedKeys.map((k) => k.toString().trim());
+      }
+      if (typeof selectedKeys === "string") {
+        try {
+          const parsed: unknown = JSON.parse(selectedKeys);
+          return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
     },
-    [renderImageItem, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]
+    []
   );
+
+  // deliveredOrders is already defined above - remove duplicate
+
+  // Use backend statistics if available
+  const orderTotalCountsFromStats = useMemo(() => {
+    const map = new Map<string, number>();
+    if (imageStats?.orderCounts) {
+      imageStats.orderCounts.forEach((item) => {
+        if (item && typeof item === "object" && "orderId" in item && "count" in item) {
+          map.set(String(item.orderId), Number(item.count));
+        }
+      });
+    }
+    return map;
+  }, [imageStats]);
+
+  // Build order totals map - use stats when available, otherwise fallback to selectedKeys length
+  const orderTotalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    deliveredOrders.forEach((order) => {
+      const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
+      if (!orderId) {
+        return;
+      }
+      const orderTotalCount =
+        orderTotalCountsFromStats.get(orderId) ??
+        normalizeOrderSelectedKeys(order.selectedKeys).length;
+      map.set(orderId, orderTotalCount);
+    });
+    return map;
+  }, [deliveredOrders, orderTotalCountsFromStats, normalizeOrderSelectedKeys]);
+
+  // Get images for currently expanded section
+  // For order sections, images are already filtered by the backend
+  // For unselected section, images are already filtered by the backend
+  const sectionImages = images;
+
+  // Get images for the expanded order section (if expanded section is an order)
+  const imagesByOrder = useMemo(() => {
+    if (!expandedSection?.startsWith("order-")) {
+      return new Map<string, GalleryImage[]>();
+    }
+    const orderId = expandedSection.replace("order-", "");
+    return new Map([[orderId, sectionImages]]);
+  }, [expandedSection, sectionImages]);
+
+  // Get unselected images (only when unselected section is expanded)
+  const unselectedImages = useMemo(() => {
+    if (expandedSection !== "unselected") {
+      return [];
+    }
+    return sectionImages;
+  }, [expandedSection, sectionImages]);
+
+  // Use backend statistics for total unselected count
+  const totalUnselectedCount =
+    imageStats && typeof imageStats === "object" && "unselectedCount" in imageStats
+      ? Number(imageStats.unselectedCount) ?? 0
+      : 0;
+
+  // Handler for deleting all unselected images
+  const handleDeleteAllUnselectedClick = useCallback(() => {
+    if (unselectedImages.length === 0) {
+      return;
+    }
+
+    // Get all unselected image keys and filter out non-deletable ones
+    const imageKeysToDelete = unselectedImages
+      .map((img) => img.key ?? img.filename)
+      .filter((key): key is string => {
+        if (!key) {
+          return false;
+        }
+        // Check if approved
+        if (approvedSelectionKeys.has(key)) {
+          return false;
+        }
+        // Check if in DELIVERED order
+        const img = unselectedImages.find((i) => (i.key ?? i.filename) === key);
+        if (img) {
+          const orderStatus = getImageOrderStatus(img);
+          if (orderStatus === "DELIVERED") {
+            return false;
+          }
+        }
+        return true;
+      });
+
+    if (imageKeysToDelete.length === 0) {
+      showToast(
+        "error",
+        "Błąd",
+        "Nie można usunąć żadnych zdjęć - wszystkie są częścią zatwierdzonej selekcji lub dostarczonego zlecenia"
+      );
+      return;
+    }
+
+    setUnselectedImagesToDelete(imageKeysToDelete);
+    setDeleteAllUnselectedOpen(true);
+  }, [unselectedImages, approvedSelectionKeys, getImageOrderStatus, showToast]);
+
+  // Show loading if galleryId is not yet available from router (prevents flash of empty state)
+  if (!galleryId) {
+    // Return null to let GalleryLayoutWrapper handle the loading overlay
+    // This ensures the sidebar is visible during loading
+    return null;
+  }
+
+  // Don't show FullPageLoading here - let GalleryLayoutWrapper handle it
+  // This ensures the sidebar is visible during loading
+  // Return empty content (not null) so the layout still renders
+  if (!isGalleryLoaded) {
+    // Return empty div so layout still renders (sidebar will show loading state)
+    return <div />;
+  }
+
+  // Use effectiveGallery (from store or cache) for rendering
+  // Fallback to gallery from hook if effectiveGallery is not available
+  const galleryToRender = (effectiveGallery || gallery) as Gallery | null;
+  if (!galleryToRender) {
+    return null; // Error is handled by GalleryLayoutWrapper
+  }
+
+  const handleDeleteAllUnselectedConfirm = async (): Promise<void> => {
+    if (unselectedImagesToDelete.length === 0) {
+      setDeleteAllUnselectedOpen(false);
+      return;
+    }
+
+    try {
+      await deleteImagesBulk(unselectedImagesToDelete);
+      setDeleteAllUnselectedOpen(false);
+      setUnselectedImagesToDelete([]);
+    } catch {
+      // Error already handled in deleteImagesBulk
+    }
+  };
 
   return (
     <>
@@ -2037,6 +1803,7 @@ export default function GalleryPhotos() {
                     />
                   ) : (
                     <EmptyState
+                      // eslint-disable-next-line jsx-a11y/alt-text
                       icon={<Image size={64} aria-hidden="true" />}
                       title="Brak niewybranych zdjęć"
                       description="Wszystkie zdjęcia w galerii są częścią zleceń."
@@ -2049,6 +1816,7 @@ export default function GalleryPhotos() {
         ) : (
           // Fallback: show empty state if no delivered orders and no images
           <EmptyState
+            // eslint-disable-next-line jsx-a11y/alt-text
             icon={<Image size={64} aria-hidden="true" />}
             title="Brak zdjęć w galerii"
             description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."

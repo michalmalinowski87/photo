@@ -2,7 +2,6 @@ import { Plus, Trash2, Sparkles, CheckSquare, Square, Check, X } from "lucide-re
 import { useState, useCallback, useEffect, useRef } from "react";
 
 import { useImageSelection } from "../../hooks/useImageSelection";
-import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { BulkDeleteConfirmDialog } from "../dialogs/BulkDeleteConfirmDialog";
 import { EmptyState } from "../ui/empty-state/EmptyState";
@@ -52,7 +51,7 @@ export function FinalsTab({
   isNonSelectionGallery = false,
   galleryId,
   orderId,
-  isLoading = false,
+  isLoading: _isLoading = false,
   error,
   fetchNextPage,
   hasNextPage = false,
@@ -298,6 +297,8 @@ export function FinalsTab({
       }, 100);
       return () => clearTimeout(timeoutId);
     }
+    
+    return undefined;
   }, [images.length, hasNextPage, isFetchingNextPage, error, fetchNextPage]);
 
   return (

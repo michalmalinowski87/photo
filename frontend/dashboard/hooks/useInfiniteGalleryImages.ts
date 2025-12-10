@@ -16,7 +16,7 @@ interface UseInfiniteGalleryImagesParams {
       hasMore?: boolean;
       nextCursor?: string | null;
     }>,
-    "queryKey" | "queryFn"
+    "queryKey" | "queryFn" | "select"
   >;
 }
 

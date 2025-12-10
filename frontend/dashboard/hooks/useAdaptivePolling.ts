@@ -32,7 +32,6 @@ const ACTIVE_POLL_INTERVAL_MS = 15000; // Poll every 15 seconds when active
  * - Only true 60s+ user inactivity triggers immediate poll on return
  * - Visibility only affects regular polling interval (pause when hidden)
  */
-/* eslint-disable no-console */
 export function useAdaptivePolling(): UseAdaptivePollingResult {
   const [isActive, setIsActive] = useState(true);
   const [isPageVisible, setIsPageVisible] = useState(true);
@@ -80,10 +79,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
           timeSinceLastImmediatePoll >= MIN_POLL_INTERVAL_MS
         ) {
           hasTriggeredImmediate.current = true;
-          console.log("[AdaptivePolling] User back after true idle → triggering immediate poll", {
-            timeSinceLastPoll: `${Math.round(timeSinceLastPoll / 1000)}s`,
-            timeSinceLastImmediatePoll: `${Math.round(timeSinceLastImmediatePoll / 1000)}s`,
-          });
           lastImmediatePollTimeRef.current = now;
           setShouldPollImmediately(true);
           // Reset flag after a short delay to prevent multiple immediate polls
@@ -92,15 +87,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
           setTimeout(() => {
             hasTriggeredImmediate.current = false;
           }, 1000);
-        } else {
-          console.log(
-            "[AdaptivePolling] True idle → activity resumed, but minimum interval not met",
-            {
-              timeSinceLastPoll: `${Math.round(timeSinceLastPoll / 1000)}s`,
-              timeSinceLastImmediatePoll: `${Math.round(timeSinceLastImmediatePoll / 1000)}s`,
-              required: `${MIN_POLL_INTERVAL_MS / 1000}s`,
-            }
-          );
         }
 
         // Reset trigger flag after short delay to allow future immediate polls
@@ -110,7 +96,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
       }
 
       if (wasInactive) {
-        console.log("[AdaptivePolling] Activity detected → becoming active");
         setIsActive(true);
       }
     }, 100); // 100ms debounce to batch rapid events
@@ -124,10 +109,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
       const idleTime = now - lastActivityTimeRef.current;
 
       if (idleTime >= ACTIVITY_THRESHOLD_MS && isActive) {
-        console.log("[AdaptivePolling] Truly idle for 60s → going idle", {
-          idleTime: `${Math.round(idleTime / 1000)}s`,
-          threshold: `${ACTIVITY_THRESHOLD_MS / 1000}s`,
-        });
         setIsActive(false);
         wasIdleRef.current = true; // This is the key flag!
       }
@@ -184,7 +165,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
         setIsPageVisible(visible);
         // DO NOT trigger immediate poll here!
         // Only regular polling resumes when visible + active
-        console.log("[AdaptivePolling] Visibility changed →", visible ? "visible" : "hidden");
       }, 250);
     };
 
@@ -201,7 +181,6 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
   const resetTimer = useCallback(() => {
     lastPollTimeRef.current = Date.now();
     lastImmediatePollTimeRef.current = 0;
-    console.log("[AdaptivePolling] Timer reset (e.g. after mutation)");
   }, []);
 
   // Update lastPollTime (called by polling hook after successful poll)
@@ -215,18 +194,13 @@ export function useAdaptivePolling(): UseAdaptivePollingResult {
     return isActive && isPageVisible ? ACTIVE_POLL_INTERVAL_MS : null;
   }, [isActive, isPageVisible]);
 
-  // Log interval changes (only when interval actually changes, not on every render)
+  // Track interval changes (only when interval actually changes, not on every render)
   const prevIntervalRef = useRef<number | null>(null);
   useEffect(() => {
     if (prevIntervalRef.current !== interval) {
-      console.log("[AdaptivePolling] Interval updated", {
-        interval: interval ? `${interval / 1000}s` : "null (idle/hidden)",
-        isActive,
-        isPageVisible,
-      });
       prevIntervalRef.current = interval;
     }
-  }, [interval, isActive, isPageVisible]);
+  }, [interval]);
 
   return {
     interval,

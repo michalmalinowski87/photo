@@ -14,7 +14,7 @@ interface UseInfiniteOrderFinalImagesParams {
       nextCursor?: string | null;
       totalCount?: number;
     }>,
-    "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
+    "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam" | "select"
   >;
 }
 

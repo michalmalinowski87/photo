@@ -3,6 +3,7 @@ import { useInfiniteQuery, UseInfiniteQueryOptions } from "@tanstack/react-query
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 
+// API response Package type (may differ from domain model)
 interface Package {
   packageId: string;
   name?: string;
@@ -20,7 +21,7 @@ interface UseInfinitePackagesParams {
   sortOrder?: "asc" | "desc";
   options?: Omit<
     UseInfiniteQueryOptions<{ items: Package[]; hasMore?: boolean; nextCursor?: string | null }>,
-    "queryKey" | "queryFn"
+    "queryKey" | "queryFn" | "select"
   >;
 }
 

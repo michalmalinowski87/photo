@@ -137,26 +137,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     (shouldShowGalleryLoading || shouldShowOrderLoading) &&
     !galleryCreationLoading;
 
-  // Debug logging
-  if (isOrderPage && typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    // eslint-disable-next-line no-console
-    console.log("[GalleryLayoutWrapper] Loading state:", {
-      isOrderPage,
-      orderIdStr,
-      currentOrderOrderId: currentOrder?.orderId,
-      hasOrder,
-      orderLoading,
-      shouldShowOrderLoading,
-      shouldShowGalleryLoading,
-      shouldShowLoading,
-      routerIsReady: galleryRoute.isReady,
-      pageType: galleryRoute.pageType,
-      galleryCreationLoading,
-      loading,
-      hasGallery,
-      galleryIdStr,
-    });
-  }
 
   // CRITICAL: If we have the order, NEVER show loading overlay
   if (hasOrder) {

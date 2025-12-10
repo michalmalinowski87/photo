@@ -12,7 +12,7 @@ interface UseInfiniteGalleriesParams {
   sortOrder?: "asc" | "desc";
   options?: Omit<
     UseInfiniteQueryOptions<{ items: Gallery[]; hasMore?: boolean; nextCursor?: string | null }>,
-    "queryKey" | "queryFn"
+    "queryKey" | "queryFn" | "select"
   >;
 }
 

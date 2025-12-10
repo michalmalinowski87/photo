@@ -52,6 +52,8 @@ export async function getValidToken(): Promise<string> {
  *   await api.galleries.create(data);
  */
 
+import type { GalleryImage } from "../types";
+
 interface ApiError extends Error {
   status?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -518,7 +520,7 @@ class ApiService {
       pagination?: { limit?: number; cursor?: string | null },
       filterOrderId?: string,
       filterUnselected?: boolean
-    ): Promise<{ images: any[]; hasMore?: boolean; nextCursor?: string | null }> => {
+    ): Promise<{ images: GalleryImage[]; hasMore?: boolean; nextCursor?: string | null }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -882,13 +884,12 @@ class ApiService {
     /**
      * Get final images for an order
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getFinalImages: async (
       galleryId: string,
       orderId: string,
       options?: { limit?: number; cursor?: string | null }
     ): Promise<{
-      images: any[];
+      images: GalleryImage[];
       count?: number;
       totalCount?: number;
       hasMore?: boolean;

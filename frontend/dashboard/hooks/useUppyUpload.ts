@@ -153,8 +153,8 @@ async function handlePostUploadActions(
   galleryId: string,
   orderId: string | undefined,
   type: UploadType,
-  successfulFiles: TypedUppyFile[],
-  reloadGallery?: () => Promise<void>,
+  _successfulFiles: TypedUppyFile[],
+  _reloadGallery?: () => Promise<void>,
   onFinalizingChange?: (isFinalizing: boolean) => void,
   markFinalUploadCompleteMutation?: ReturnType<typeof useMarkFinalUploadComplete>,
   onScrollReset?: () => void

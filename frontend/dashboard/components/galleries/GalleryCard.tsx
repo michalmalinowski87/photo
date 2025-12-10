@@ -157,6 +157,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
       {/* Cover Photo Section */}
       <div className="relative h-56 bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
         {coverPhotoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={coverPhotoUrl}
             alt={galleryName || "Gallery cover"}
@@ -169,6 +170,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <Image className="w-12 h-12 text-gray-400 dark:text-gray-500" aria-hidden="true" />
             </div>
           </div>

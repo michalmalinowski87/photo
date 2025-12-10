@@ -1,6 +1,37 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import type { GalleryImage } from "../types";
+
 import api from "./api-service";
+
+interface GetImagesResponse {
+  images: GalleryImage[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  totalCount?: number;
+  stats?: {
+    totalCount?: number;
+    orderCounts?: Array<{ orderId: string; count: number }>;
+    unselectedCount?: number;
+  };
+}
+
+interface InfiniteQueryPage {
+  images: GalleryImage[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  totalCount?: number;
+  stats?: {
+    totalCount?: number;
+    orderCounts?: Array<{ orderId: string; count: number }>;
+    unselectedCount?: number;
+  };
+}
+
+interface InfiniteQueryData {
+  pages: InfiniteQueryPage[];
+  pageParams?: (string | null)[];
+}
 
 /**
  * Refetches only the first page of infinite queries matching the predicate.
@@ -65,23 +96,13 @@ export async function refetchFirstPageOnly(
       );
 
       // Get current cache data first (needed for filtering logic)
-      const currentData = query.state.data as
-        | {
-            pages: Array<{
-              images: unknown[];
-              hasMore?: boolean;
-              nextCursor?: string | null;
-              totalCount?: number;
-              stats?: unknown;
-            }>;
-            pageParams?: unknown[];
-          }
-        | undefined;
+      const currentData = query.state.data as InfiniteQueryData | undefined;
 
       // Handle backward compatibility - if response doesn't have pagination fields
       // Create new objects for stats to ensure React Query detects the change
-      const responseStats = (response as any).stats;
-      const responseTotalCount = (response as any).totalCount;
+      const typedResponse = response as GetImagesResponse;
+      const responseStats = typedResponse.stats;
+      const responseTotalCount = typedResponse.totalCount;
       
       let firstPage = response.images && !("hasMore" in response)
         ? {
@@ -108,10 +129,20 @@ export async function refetchFirstPageOnly(
           // Get image keys that exist in cache but not in the refetched data
           // These are likely images that were optimistically deleted
           const cachedImageKeys = new Set(
-            firstPageFromCache.images.map((img: any) => img.key ?? img.filename).filter(Boolean)
+            firstPageFromCache.images
+              .map((img) => {
+                const key = img.key ?? img.filename;
+                return typeof key === "string" ? key : "";
+              })
+              .filter(Boolean)
           );
           const refetchedImageKeys = new Set(
-            firstPage.images.map((img: any) => img.key ?? img.filename).filter(Boolean)
+            firstPage.images
+              .map((img) => {
+                const key = img.key ?? img.filename;
+                return typeof key === "string" ? key : "";
+              })
+              .filter(Boolean)
           );
           
           // If cache has fewer images than refetched data, filter refetched data to match cache
@@ -120,9 +151,9 @@ export async function refetchFirstPageOnly(
           if (cachedImageKeys.size < refetchedImageKeys.size) {
             firstPage = {
               ...firstPage,
-              images: firstPage.images.filter((img: any) => {
+              images: firstPage.images.filter((img) => {
                 const imgKey = img.key ?? img.filename;
-                return imgKey && cachedImageKeys.has(imgKey);
+                return typeof imgKey === "string" && imgKey && cachedImageKeys.has(imgKey);
               }),
               // Preserve stats and totalCount from backend response - don't overwrite with filtered count
               totalCount: firstPage.totalCount,
@@ -135,7 +166,7 @@ export async function refetchFirstPageOnly(
       // Use setQueryData with a function updater to ensure React Query detects the change
       // This is critical for triggering re-renders in components using this query
       // The function form ensures React Query knows the data has changed
-      queryClient.setQueryData(queryKey, (oldData: any) => {
+      queryClient.setQueryData(queryKey, (oldData: InfiniteQueryData | undefined) => {
         if (!oldData || !Array.isArray(oldData.pages)) {
           return {
             pages: [firstPage],
@@ -146,7 +177,7 @@ export async function refetchFirstPageOnly(
         // Create completely new object structure with new references at every level
         // This ensures React Query's change detection works correctly
         // Important: Create new objects for stats and all nested properties to bypass structural sharing
-        const newPages = oldData.pages.map((page: any, index: number) => {
+        const newPages = oldData.pages.map((page, index: number) => {
           if (index === 0) {
             // First page: use the refetched firstPage with new stats
             // Always create new object references to ensure React Query detects the change
@@ -174,7 +205,7 @@ export async function refetchFirstPageOnly(
       
       // Force React Query to notify subscribers by invalidating with refetchType: 'none'
       // This ensures components re-render even if structural sharing would prevent it
-      queryClient.invalidateQueries({ 
+      void queryClient.invalidateQueries({ 
         queryKey,
         refetchType: 'none', // Don't refetch, just notify subscribers of the cache update
       });

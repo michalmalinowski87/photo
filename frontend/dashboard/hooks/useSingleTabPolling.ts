@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { useEffect, useRef, useState } from "react";
 
 import { useAdaptivePolling } from "./useAdaptivePolling";
@@ -67,7 +66,6 @@ export function useSingleTabPolling() {
 
     isLeader = true;
     setIsLeaderState(true);
-    console.log("[PollingLeader] This tab is now the leader");
     // Stop checking for leader health since we're now the leader
     stopLeaderCheck();
     // Don't send immediate heartbeat - let the interval handle it
@@ -100,10 +98,6 @@ export function useSingleTabPolling() {
 
       // If we haven't seen a heartbeat in a while, the leader is probably dead
       if (lastHeartbeatRef.current === 0 || timeSinceLastHeartbeat > LEADER_TIMEOUT) {
-        console.log("[PollingLeader] Leader appears to be dead, attempting to become leader", {
-          timeSinceLastHeartbeat: `${Math.round(timeSinceLastHeartbeat / 1000)}s`,
-          timeout: `${LEADER_TIMEOUT / 1000}s`,
-        });
         becomeLeader();
       }
     }, LEADER_CHECK_INTERVAL);
@@ -117,7 +111,6 @@ export function useSingleTabPolling() {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
     }
-    console.log("[PollingLeader] This tab resigned leadership");
     // Start checking for leader health since we're now a follower
     startLeaderCheck();
   };

@@ -371,27 +371,8 @@ export function OriginalsTab({
     return <GalleryLoading />;
   }
 
-  // Always render the grid container so auto-fetch can work, even if filteredImages is empty
-  // Show warning message above the grid if no matches found yet
-  const mightHaveMore = images.length > 0 && selectedKeys.length > images.length;
-  const showWarning = filteredImages.length === 0 && images.length > 0;
-
   return (
     <div className="space-y-4">
-      {showWarning && (
-        <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-          <p className="text-sm text-warning-800 dark:text-warning-200">
-            Nie znaleziono zdjęć pasujących do wybranych kluczy. Wybrane klucze:{" "}
-            {selectedKeys.slice(0, 5).join(", ")}
-            {selectedKeys.length > 5 ? "..." : ""}
-          </p>
-          <p className="text-xs text-warning-600 dark:text-warning-400 mt-1">
-            {mightHaveMore
-              ? `Załadowane zdjęcia: ${images.length} | Wybrane klucze: ${selectedKeys.length} (możliwe, że więcej zdjęć jest w trakcie ładowania)`
-              : `Załadowane zdjęcia: ${images.length} | Wybrane klucze: ${selectedKeys.length}`}
-          </p>
-        </div>
-      )}
       {renderImageGrid(filteredImages, true, true)}
     </div>
   );

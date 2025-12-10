@@ -1,6 +1,6 @@
 "use client";
 
-import { Package, Users, Trash2 } from "lucide-react";
+import { Package as PackageIcon, Users, Trash2 } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
@@ -8,14 +8,14 @@ import { useClients } from "../../hooks/queries/useClients";
 import { useInfinitePackages } from "../../hooks/useInfinitePackages";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
+import type { Client, Package } from "../../types";
 
 export default function DeleteAllData() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [packages, setPackages] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
-  const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isDeletingPackages, setIsDeletingPackages] = useState(false);
   const [isDeletingClients, setIsDeletingClients] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState({
@@ -43,8 +43,13 @@ export default function DeleteAllData() {
   // Flatten packages from pages
   useEffect(() => {
     if (packagesData?.pages) {
-      const allPackages = packagesData.pages.flatMap((page) => page.items || []);
-      setPackages(allPackages);
+      const allPackages = packagesData.pages.flatMap((page) => {
+        if (page && typeof page === "object" && "items" in page && Array.isArray(page.items)) {
+          return page.items;
+        }
+        return [];
+      });
+      setPackages(allPackages as Package[]);
     } else {
       setPackages([]);
     }
@@ -53,14 +58,15 @@ export default function DeleteAllData() {
   // Load all package pages
   useEffect(() => {
     if (hasNextPackagesPage && !isFetchingNextPackagesPage) {
-      fetchNextPackagesPage();
+      void fetchNextPackagesPage();
     }
   }, [hasNextPackagesPage, isFetchingNextPackagesPage, fetchNextPackagesPage]);
 
   // Set clients
   useEffect(() => {
-    if (clientsData?.items) {
-      setClients(clientsData.items);
+    if (clientsData && typeof clientsData === "object" && "items" in clientsData && Array.isArray(clientsData.items)) {
+      // Convert API Client type to domain Client type
+      setClients(clientsData.items as Client[]);
     } else {
       setClients([]);
     }
@@ -85,6 +91,7 @@ export default function DeleteAllData() {
     if (packages.length === 0 || isDeletingPackages) return;
 
     if (
+      // eslint-disable-next-line no-alert
       !confirm(
         `Czy na pewno chcesz usunąć wszystkie ${packages.length} pakiety?\n\nTa operacja jest nieodwracalna!`
       )
@@ -113,8 +120,8 @@ export default function DeleteAllData() {
         for (let j = i; j < batchEnd; j++) {
           const pkg = packages[j];
           batch.push(
-            api.packages.delete(pkg.packageId).catch((error) => {
-              return { error, packageId: pkg.packageId };
+            api.packages.delete(pkg.packageId).catch((error: unknown) => {
+              return { error: error instanceof Error ? error.message : String(error), packageId: pkg.packageId };
             })
           );
         }
@@ -177,6 +184,7 @@ export default function DeleteAllData() {
     if (clients.length === 0 || isDeletingClients) return;
 
     if (
+      // eslint-disable-next-line no-alert
       !confirm(
         `Czy na pewno chcesz usunąć wszystkich ${clients.length} klientów?\n\nTa operacja jest nieodwracalna!`
       )
@@ -205,8 +213,8 @@ export default function DeleteAllData() {
         for (let j = i; j < batchEnd; j++) {
           const client = clients[j];
           batch.push(
-            api.clients.delete(client.clientId).catch((error) => {
-              return { error, clientId: client.clientId };
+            api.clients.delete(client.clientId).catch((error: unknown) => {
+              return { error: error instanceof Error ? error.message : String(error), clientId: client.clientId };
             })
           );
         }
@@ -296,7 +304,7 @@ export default function DeleteAllData() {
         <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-start gap-4 mb-4">
             <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <PackageIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Pakiety</h2>

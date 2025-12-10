@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Plus, Trash2, Database, Settings, FileText } from "lucide-react";
+import { FlaskConical, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 

@@ -152,7 +152,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
   onLoadingChange,
   onWizardOpenChange,
   viewMode: externalViewMode,
-  onViewModeChange,
+  onViewModeChange: _onViewModeChange,
   search,
   sortBy,
   sortOrder,
@@ -171,7 +171,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
   const { showToast } = useToast();
 
   // View toggle state - use external if provided, otherwise manage internally
-  const [internalViewMode, setInternalViewMode] = useState<"list" | "cards">(() => {
+  const [internalViewMode] = useState<"list" | "cards">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("galleryListViewMode");
       return saved === "list" || saved === "cards" ? saved : "cards";
@@ -201,7 +201,12 @@ const GalleryList: React.FC<GalleryListProps> = ({
   // Flatten pages into a single array of galleries
   const galleries = useMemo(() => {
     if (!data?.pages) return [];
-    return data.pages.flatMap((page) => page.items || []);
+    return data.pages.flatMap((page) => {
+      if (page && typeof page === "object" && "items" in page && Array.isArray(page.items)) {
+        return page.items;
+      }
+      return [];
+    });
   }, [data]);
 
   const initialLoad = loading && initialLoadRef.current;
@@ -574,7 +579,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
                       : typeof gallery.galleryId === "string"
                         ? gallery.galleryId
                         : "";
-                  const nameLines = breakTextAtWords(galleryName, 50);
+                  const nameLines = breakTextAtWords(String(galleryName), 50);
                   // First row (index 0) should be light to contrast with dark header
                   // So even indices get light background, odd indices get striped background
                   const isEvenRow = index % 2 === 0;
@@ -583,6 +588,7 @@ const GalleryList: React.FC<GalleryListProps> = ({
 
                   return (
                     <TableRow
+                      key={gallery.galleryId}
                       className={`h-[120px] ${
                         isEvenRow
                           ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
@@ -594,19 +600,19 @@ const GalleryList: React.FC<GalleryListProps> = ({
                       </TableCell>
                       <TableCell className="px-3 py-5 align-middle min-w-[400px]">
                         <Link
-                          href={`/galleries/${gallery.galleryId}`}
+                          href={`/galleries/${String(gallery.galleryId)}`}
                           className="font-medium text-base text-brand-500 hover:text-brand-600 block max-w-full"
                           onClick={() => {
                             // Store current page as referrer when navigating to gallery
                             if (typeof window !== "undefined") {
-                              const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                              const referrerKey = `gallery_referrer_${String(gallery.galleryId)}`;
                               sessionStorage.setItem(referrerKey, window.location.pathname);
                             }
                           }}
                           title={galleryName}
                         >
                           {nameLines.map((line, lineIndex) => (
-                            <span key={lineIndex} className="block">
+                            <span key={`line-${lineIndex}`} className="block">
                               {line}
                             </span>
                           ))}
@@ -616,14 +622,19 @@ const GalleryList: React.FC<GalleryListProps> = ({
                             {gallery.galleryId}
                           </div>
                         )}
-                        {(gallery.clientFirstName ||
-                          gallery.clientLastName ||
-                          gallery.clientEmail) && (
+                        {((typeof gallery.clientFirstName === "string" && gallery.clientFirstName) ||
+                          (typeof gallery.clientLastName === "string" && gallery.clientLastName) ||
+                          (typeof gallery.clientEmail === "string" && gallery.clientEmail)) && (
                           <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             Klient:{" "}
-                            {gallery.clientFirstName && gallery.clientLastName
+                            {typeof gallery.clientFirstName === "string" &&
+                            typeof gallery.clientLastName === "string" &&
+                            gallery.clientFirstName &&
+                            gallery.clientLastName
                               ? `${gallery.clientFirstName} ${gallery.clientLastName}`
-                              : gallery.clientEmail || "-"}
+                              : typeof gallery.clientEmail === "string"
+                                ? gallery.clientEmail
+                                : "-"}
                           </div>
                         )}
                       </TableCell>

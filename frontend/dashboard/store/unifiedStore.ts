@@ -64,14 +64,6 @@ export const useUnifiedStore = create<UnifiedStore>()(
                 const nextStepsExpanded = parsed.state?.nextStepsExpanded;
                 const nextStepsOverlayExpanded = parsed.state?.nextStepsOverlayExpanded;
 
-                console.log("[UnifiedStore] Rehydrating state", {
-                  theme,
-                  nextStepsVisible,
-                  nextStepsExpanded,
-                  nextStepsOverlayExpanded,
-                  fullState: parsed.state,
-                });
-
                 state.setTheme(theme);
 
                 // Restore overlay state if it exists

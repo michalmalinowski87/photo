@@ -81,7 +81,7 @@ export default function OrderDetail() {
   const originalImages = useMemo(() => {
     if (!originalImagesData?.pages) return [];
     return originalImagesData.pages.flatMap(
-      (page) => (page as { images?: GalleryImage[] }).images || []
+      (page) => (page as { images?: GalleryImage[] }).images ?? []
     );
   }, [originalImagesData]);
 
@@ -107,7 +107,7 @@ export default function OrderDetail() {
   const finalImagesDataFlattened = useMemo(() => {
     if (!finalImagesData?.pages) return [];
     return finalImagesData.pages.flatMap(
-      (page) => (page as { images?: GalleryImage[] }).images || []
+      (page) => (page as { images?: GalleryImage[] }).images ?? []
     );
   }, [finalImagesData]);
 

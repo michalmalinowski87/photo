@@ -3,6 +3,7 @@ import { useInfiniteQuery, UseInfiniteQueryOptions } from "@tanstack/react-query
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 
+// API response Client type (may differ from domain model)
 interface Client {
   clientId: string;
   email?: string;
@@ -23,7 +24,7 @@ interface UseInfiniteClientsParams {
   sortOrder?: "asc" | "desc";
   options?: Omit<
     UseInfiniteQueryOptions<{ items: Client[]; hasMore?: boolean; lastKey?: string | null }>,
-    "queryKey" | "queryFn"
+    "queryKey" | "queryFn" | "select"
   >;
 }
 
