@@ -40,8 +40,14 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.galleries.details(), id] as const,
     images: (id: string, type: "originals" | "finals" | "thumb" = "thumb") =>
       [...queryKeys.galleries.detail(id), "images", type] as const,
-    infiniteImages: (id: string, type: "originals" | "finals" | "thumb" = "thumb", limit?: number) =>
-      [...queryKeys.galleries.detail(id), "images", "infinite", type, limit] as const,
+    infiniteImages: (
+      id: string,
+      type: "originals" | "finals" | "thumb" = "thumb",
+      limit?: number,
+      filterOrderId?: string,
+      filterUnselected?: boolean
+    ) =>
+      [...queryKeys.galleries.detail(id), "images", "infinite", type, limit, filterOrderId, filterUnselected] as const,
     coverPhoto: (id: string) => [...queryKeys.galleries.detail(id), "cover-photo"] as const,
     deliveredOrders: (id: string) =>
       [...queryKeys.galleries.detail(id), "delivered-orders"] as const,

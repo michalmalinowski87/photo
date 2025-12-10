@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+
 
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
@@ -33,6 +35,7 @@ import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
+import { queryKeys } from "../../../lib/react-query";
 import { storeLogger } from "../../../lib/store-logger";
 import { useModalStore } from "../../../store";
 import { useUnifiedStore } from "../../../store/unifiedStore";
@@ -56,6 +59,170 @@ interface ApiImage {
 
 // UploadProgress interface is imported from PhotoUploadHandler
 
+// Component for rendering images with infinite scroll within an order section
+interface OrderImagesGridProps {
+  images: GalleryImage[];
+  renderImageItem: (img: GalleryImage, index: number, allImages: GalleryImage[]) => React.ReactNode;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  imagesError: Error | null;
+}
+
+function OrderImagesGrid({
+  images,
+  renderImageItem,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+  imagesError,
+}: OrderImagesGridProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-fetch next pages when content fits without scrolling
+  useEffect(() => {
+    if (!scrollContainerRef.current || isFetchingNextPage || imagesError || images.length === 0) {
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    const needsScrolling = container.scrollHeight > container.clientHeight;
+
+    // If content fits without scrolling and more pages are available, fetch next page
+    if (!needsScrolling && hasNextPage) {
+      // Small delay to ensure DOM has rendered and measurements are accurate
+      const timeoutId = setTimeout(() => {
+        // Re-check conditions in case they changed during timeout
+        if (hasNextPage && !isFetchingNextPage && !imagesError) {
+          void fetchNextPage();
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
+
+  return (
+    <div
+      ref={scrollContainerRef}
+      className="w-full overflow-auto table-scrollbar"
+      style={{ height: "calc(100vh - 400px)", minHeight: "400px", maxHeight: "800px", overscrollBehavior: "none" }}
+      onScroll={(e) => {
+        const target = e.target as HTMLElement;
+        const scrollTop = target.scrollTop;
+        const scrollHeight = target.scrollHeight;
+        const clientHeight = target.clientHeight;
+        
+        // Calculate distance from bottom
+        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+        const prefetchThreshold = 200; // Trigger fetch when 200px from bottom
+        
+        // Don't fetch if there's an error or already fetching
+        if (distanceFromBottom <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
+          void fetchNextPage();
+        }
+      }}
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
+        {images.map((img, index) => renderImageItem(img, index, images))}
+      </div>
+      {isFetchingNextPage && (
+        <div className="flex justify-center py-4">
+          <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Component for infinite scroll container with auto-prefetching when content fits without scrolling
+interface InfiniteScrollContainerProps {
+  images: GalleryImage[];
+  renderImageItem: (img: GalleryImage, index: number, allImages: GalleryImage[]) => React.ReactNode;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  imagesError: Error | null;
+  containerHeight?: string;
+  minHeight?: string;
+}
+
+function InfiniteScrollContainer({
+  images,
+  renderImageItem,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+  imagesError,
+  containerHeight = "calc(100vh - 300px)",
+  minHeight = "600px",
+}: InfiniteScrollContainerProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-fetch next pages when content fits without scrolling
+  useEffect(() => {
+    if (!scrollContainerRef.current || isFetchingNextPage || imagesError || images.length === 0) {
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    const needsScrolling = container.scrollHeight > container.clientHeight;
+
+    // If content fits without scrolling and more pages are available, fetch next page
+    if (!needsScrolling && hasNextPage) {
+      // Small delay to ensure DOM has rendered and measurements are accurate
+      const timeoutId = setTimeout(() => {
+        // Re-check conditions in case they changed during timeout
+        if (hasNextPage && !isFetchingNextPage && !imagesError) {
+          void fetchNextPage();
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
+
+  return (
+    <div
+      ref={scrollContainerRef}
+      className="w-full overflow-auto table-scrollbar"
+      style={{ height: containerHeight, minHeight, overscrollBehavior: "none" }}
+      onScroll={(e) => {
+        const target = e.target as HTMLElement;
+        const scrollTop = target.scrollTop;
+        const clientHeight = target.clientHeight;
+        
+        // Use item-based prefetching for smooth scrolling
+        // Estimate item height based on grid layout (responsive)
+        // For a 6-column grid on xl screens, each row has ~6 items
+        // Average item height is approximately 200px (image + gap)
+        const estimatedItemHeight = 200;
+        const totalItemsRendered = images.length;
+        
+        // Calculate which item index is currently at the bottom of viewport
+        const scrollBottom = scrollTop + clientHeight;
+        const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+        
+        // Calculate distance from end (same logic as galleries/clients/packages)
+        const distanceFromEnd = totalItemsRendered - itemsScrolled;
+        const prefetchThreshold = 25; // Same threshold as other infinite scrolls
+        
+        // Don't fetch if there's an error or already fetching
+        if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
+          void fetchNextPage();
+        }
+      }}
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
+        {images.map((img, index) => renderImageItem(img, index, images))}
+      </div>
+      {isFetchingNextPage && (
+        <div className="flex justify-center py-4">
+          <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GalleryPhotos() {
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -68,28 +235,32 @@ export default function GalleryPhotos() {
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
   const galleryIdForQuery =
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
+
+  // State for expanded section must be defined before queries that use it
+  const [expandedSection, setExpandedSection] = useState<string | null>(null); // Track expanded section - only one can be expanded at a time (all collapsed by default)
+
+  const queryClient = useQueryClient();
+
+  // Fetch statistics only (first page with stats, but we don't need all images)
+  // This gives us total counts without loading all images
   const {
-    data: imagesData,
-    isLoading: imagesLoading,
-    isFetching: imagesFetching,
-    error: imagesError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch: refetchGalleryImages,
+    data: statsData,
+    isLoading: statsLoading,
   } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
-    limit: 50,
+    limit: 1, // Only need stats, so minimal limit
+    options: {
+      enabled: !!galleryIdForQuery,
+      // These are handled by the hook itself
+    } as any,
   });
-  // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
-  const loadedGalleryIdRef = useRef<string>("");
-  // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
-  const hasLoggedGalleryReadyRef = useRef<string>("");
-  // Track if we've already processed the upload query parameter
-  const hasProcessedUploadParamRef = useRef<boolean>(false);
 
-  // Use hook for order/image relationship management
+  // Get statistics from the first page response
+  const imageStats = (statsData?.pages?.[0] as any)?.stats;
+  const totalGalleryImageCount = (statsData?.pages?.[0] as any)?.totalCount ?? 0;
+
+  // Use hook for order/image relationship management - needed to get list of orders
   const {
     orders,
     approvedSelectionKeys,
@@ -97,6 +268,102 @@ export default function GalleryPhotos() {
     imageOrderStatus,
     loadApprovedSelections,
   } = useGalleryImageOrders(galleryId);
+
+  // Get delivered orders (DELIVERED, PREPARING_DELIVERY, or CLIENT_APPROVED)
+  const deliveredOrders = useMemo(() => {
+    return orders.filter(
+      (o) =>
+        o.deliveryStatus === "DELIVERED" ||
+        o.deliveryStatus === "PREPARING_DELIVERY" ||
+        o.deliveryStatus === "CLIENT_APPROVED"
+    );
+  }, [orders]);
+
+  // Helper to get query key for a section
+  const getSectionQueryKey = useCallback((sectionId: string | null) => {
+    if (!sectionId || !galleryIdForQuery) return null;
+    const filterOrderId = sectionId.startsWith("order-") ? sectionId.replace("order-", "") : undefined;
+    const filterUnselected = sectionId === "unselected";
+    return queryKeys.galleries.infiniteImages(galleryIdForQuery, "thumb", 10, filterOrderId, filterUnselected);
+  }, [galleryIdForQuery]);
+
+  // Get cached data for the expanded section (if available) to avoid refetching
+  // This ensures we use cached data immediately when expanding, avoiding network calls
+  const cachedDataForExpandedSection = useMemo(() => {
+    if (!expandedSection || !galleryIdForQuery) return null;
+    const queryKey = getSectionQueryKey(expandedSection);
+    if (!queryKey) return null;
+    // Get the cached query state to check if data exists and is fresh
+    const queryState = queryClient.getQueryState(queryKey);
+    if (queryState?.data) {
+      return queryState.data;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedSection, galleryIdForQuery, getSectionQueryKey]);
+
+  // Create query for the currently expanded section
+  // React Query automatically caches each section separately based on unique query keys
+  // (query key includes filterOrderId/filterUnselected parameters)
+  // When user switches sections, previous query data is automatically cached by React Query
+  // Each section gets its own cache entry that persists even when the query is disabled
+  const currentSectionQuery = useInfiniteGalleryImages({
+    galleryId: galleryIdForQuery,
+    type: "thumb",
+    limit: 10,
+    filterOrderId: expandedSection?.startsWith("order-") ? expandedSection.replace("order-", "") : undefined,
+    filterUnselected: expandedSection === "unselected",
+    options: {
+      enabled: !!galleryIdForQuery && !!expandedSection, // Only fetch when section is expanded
+      // React Query automatically caches queries by unique query keys
+      // staleTime: data is considered fresh for this duration, no refetch will occur
+      // With high staleTime, React Query won't refetch when re-enabling if data exists and is fresh
+      staleTime: Infinity, // Never consider data stale - use cached data indefinitely unless manually invalidated
+      // gcTime: how long inactive queries stay in cache (garbage collection time)
+      gcTime: 60 * 60 * 1000, // 60 minutes - keep cached sections available very long
+      // Don't refetch on mount if we have cached data - use cached data immediately
+      refetchOnMount: false,
+      // Don't refetch on window focus
+      refetchOnWindowFocus: false,
+      // Don't refetch on reconnect
+      refetchOnReconnect: false,
+      // Use placeholderData function to keep cached data when query re-enables
+      // DO NOT use previousData - it may be from a different section (different query key)
+      // Only use cachedDataForExpandedSection which is validated to match the current expandedSection
+      // This ensures we don't show wrong section's data when switching sections
+      // Return undefined if no cached data to prevent showing stale data from previous section
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      placeholderData: () => {
+        // Only use cached data that matches the current expanded section
+        // This prevents showing unselected images when expanding an order section (and vice versa)
+        return cachedDataForExpandedSection || undefined;
+      },
+    } as any,
+  });
+
+  // Extract data from current section query
+  // Use cached data immediately if available, otherwise use query data
+  const {
+    data: imagesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: imagesLoading,
+    isFetching: imagesFetching,
+    error: imagesError,
+    refetch: refetchGalleryImages,
+  } = currentSectionQuery;
+
+  // Prefer query data first, then fall back to cached data for current section
+  // Only use cached data if it exists and matches the current expanded section
+  // This prevents showing wrong section's data when switching sections
+  const effectiveImagesData = imagesData || (cachedDataForExpandedSection ? cachedDataForExpandedSection : undefined);
+  // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
+  const loadedGalleryIdRef = useRef<string>("");
+  // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
+  const hasLoggedGalleryReadyRef = useRef<string>("");
+  // Track if we've already processed the upload query parameter
+  const hasProcessedUploadParamRef = useRef<boolean>(false);
 
   // Get order delivery status for an image (defined early to avoid use-before-define)
   const getImageOrderStatus = useCallback(
@@ -109,7 +376,6 @@ export default function GalleryPhotos() {
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["unselected"])); // Track expanded order sections (Niewybrane always expanded by default)
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   // Get modal state from Zustand
@@ -352,12 +618,17 @@ export default function GalleryPhotos() {
   }, [galleryId]); // Only depend on galleryId, not on the callback functions to avoid infinite loops
 
   // Convert React Query data to GalleryImage format and filter out deleted images
+  // Use effectiveImagesData which includes cached data to avoid clearing images when collapsing
+  // CRITICAL: We still check expandedSection to only show images for the expanded section,
+  // but React Query cache ensures data is available instantly when re-expanding
   const images = useMemo(() => {
-    if (!imagesData?.pages) {
+    // Only return images if section is expanded (don't show images when collapsed)
+    // But cached data is preserved by React Query, so when we expand again, data loads instantly
+    if (!effectiveImagesData?.pages || !expandedSection) {
       return [];
     }
     // Flatten all pages into a single array
-    const allApiImages = (imagesData as any).pages.flatMap((page: any) => page.images || []);
+    const allApiImages = (effectiveImagesData as any).pages.flatMap((page: any) => page.images || []);
     const apiImages = allApiImages as ApiImage[];
     const mappedImages: GalleryImage[] = apiImages.map((img: ApiImage) => ({
       key: img.key,
@@ -393,16 +664,17 @@ export default function GalleryPhotos() {
       }
       return true;
     });
-  }, [imagesData, deletedImageKeys, deletedImageKeysBulk]);
+  }, [effectiveImagesData, deletedImageKeys, deletedImageKeysBulk, expandedSection]);
 
   // Clear deletedImageKeys for images that have been re-uploaded
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
   useEffect(() => {
-    if (!imagesData?.pages || (imagesData as any).pages.length === 0) {
+    if (!effectiveImagesData?.pages || (effectiveImagesData as any).pages.length === 0) {
       return;
     }
 
-    const allApiImages = (imagesData as any).pages.flatMap((page: any) => page.images || []);
+    const allApiImages = (effectiveImagesData as any).pages.flatMap((page: any) => page.images || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const currentImageKeys = new Set(
       allApiImages.map((img: ApiImage) => img.key ?? img.filename).filter(Boolean)
     );
@@ -419,8 +691,9 @@ export default function GalleryPhotos() {
     if (reuploadedKeysBulk.length > 0) {
       clearDeletedKeysForImagesBulk(reuploadedKeysBulk);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    imagesData,
+    effectiveImagesData,
     deletedImageKeys,
     deletedImageKeysBulk,
     clearDeletedKeysForImages,
@@ -748,24 +1021,6 @@ export default function GalleryPhotos() {
     [approvedSelectionKeys, imageOrderStatus]
   );
 
-  // Helper to normalize selectedKeys from order (used for grouping images by order)
-  const normalizeOrderSelectedKeys = (selectedKeys: string[] | string | undefined): string[] => {
-    if (!selectedKeys) {
-      return [];
-    }
-    if (Array.isArray(selectedKeys)) {
-      return selectedKeys.map((k) => k.toString().trim());
-    }
-    if (typeof selectedKeys === "string") {
-      try {
-        const parsed: unknown = JSON.parse(selectedKeys);
-        return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  };
 
   // Format date for display
   const formatDate = (dateString?: string): string => {
@@ -786,45 +1041,76 @@ export default function GalleryPhotos() {
     }
   };
 
-  // Get delivered orders (DELIVERED, PREPARING_DELIVERY, or CLIENT_APPROVED)
-  const deliveredOrders = orders.filter(
-    (o) =>
-      o.deliveryStatus === "DELIVERED" ||
-      o.deliveryStatus === "PREPARING_DELIVERY" ||
-      o.deliveryStatus === "CLIENT_APPROVED"
-  );
-
-  // Group images by order
-  const imagesByOrder = new Map<string, GalleryImage[]>();
-  const imagesInOrders = new Set<string>();
-
-  deliveredOrders.forEach((order) => {
-    const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
-    if (!orderId) {
-      return;
+  // Helper to normalize selectedKeys from order (used for grouping images by order)
+  const normalizeOrderSelectedKeys = useCallback((selectedKeys: string[] | string | undefined): string[] => {
+    if (!selectedKeys) {
+      return [];
     }
-
-    const selectedKeys = normalizeOrderSelectedKeys(order.selectedKeys);
-    const orderImages: GalleryImage[] = [];
-
-    images.forEach((img) => {
-      const imgKey = (img.key ?? img.filename ?? "").toString().trim();
-      if (imgKey && selectedKeys.includes(imgKey)) {
-        orderImages.push(img);
-        imagesInOrders.add(imgKey);
+    if (Array.isArray(selectedKeys)) {
+      return selectedKeys.map((k) => k.toString().trim());
+    }
+    if (typeof selectedKeys === "string") {
+      try {
+        const parsed: unknown = JSON.parse(selectedKeys);
+        return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+      } catch {
+        return [];
       }
-    });
-
-    if (orderImages.length > 0) {
-      imagesByOrder.set(orderId, orderImages);
     }
-  });
+    return [];
+  }, []);
 
-  // Get unselected images (not in any delivered order)
-  const unselectedImages = images.filter((img) => {
-    const imgKey = (img.key ?? img.filename ?? "").toString().trim();
-    return imgKey && !imagesInOrders.has(imgKey);
-  });
+  // deliveredOrders is already defined above - remove duplicate
+
+  // Use backend statistics if available
+  const orderTotalCountsFromStats = useMemo(() => {
+    const map = new Map<string, number>();
+    if (imageStats?.orderCounts) {
+      imageStats.orderCounts.forEach(({ orderId, count }: { orderId: string; count: number }) => {
+        map.set(orderId, count);
+      });
+    }
+    return map;
+  }, [imageStats]);
+
+  // Build order totals map - use stats when available, otherwise fallback to selectedKeys length
+  const orderTotalCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    deliveredOrders.forEach((order) => {
+      const orderId = typeof order.orderId === "string" ? order.orderId : undefined;
+      if (!orderId) {
+        return;
+      }
+      const orderTotalCount = orderTotalCountsFromStats.get(orderId) ?? normalizeOrderSelectedKeys(order.selectedKeys).length;
+      map.set(orderId, orderTotalCount);
+    });
+    return map;
+  }, [deliveredOrders, orderTotalCountsFromStats, normalizeOrderSelectedKeys]);
+
+  // Get images for currently expanded section
+  // For order sections, images are already filtered by the backend
+  // For unselected section, images are already filtered by the backend
+  const sectionImages = images;
+
+  // Get images for the expanded order section (if expanded section is an order)
+  const imagesByOrder = useMemo(() => {
+    if (!expandedSection?.startsWith("order-")) {
+      return new Map<string, GalleryImage[]>();
+    }
+    const orderId = expandedSection.replace("order-", "");
+    return new Map([[orderId, sectionImages]]);
+  }, [expandedSection, sectionImages]);
+
+  // Get unselected images (only when unselected section is expanded)
+  const unselectedImages = useMemo(() => {
+    if (expandedSection !== "unselected") {
+      return [];
+    }
+    return sectionImages;
+  }, [expandedSection, sectionImages]);
+
+  // Use backend statistics for total unselected count
+  const totalUnselectedCount = imageStats?.unselectedCount ?? 0;
 
   // Handler for deleting all unselected images
   const handleDeleteAllUnselectedClick = useCallback(() => {
@@ -904,18 +1190,22 @@ export default function GalleryPhotos() {
     }
   };
 
-  // Toggle section expansion
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
+  // Toggle section expansion - only one section can be expanded at a time
+  // React Query automatically caches each section's data based on unique query keys
+  // When switching sections, previously loaded images remain in cache
+  const toggleSection = useCallback((sectionId: string) => {
+    setExpandedSection((prev) => {
+      // If clicking the same section, collapse it
+      if (prev === sectionId) {
+        return null;
       }
-      return next;
+      // Otherwise, expand the new section (collapses any previously expanded section)
+      // React Query will use cached data if available, or fetch if not
+      return sectionId;
     });
-  };
+  }, []);
+
+  // No need for auto-loading effect - infinite scroll in OrderImagesGrid handles it
 
   // Render single image item (extracted for reuse)
   const renderImageItem = useCallback((img: GalleryImage, index: number, allImages: GalleryImage[]) => {
@@ -1106,46 +1396,18 @@ export default function GalleryPhotos() {
 
   const renderImageGrid = useCallback((imagesToRender: GalleryImage[], _enableSelection: boolean, enableInfiniteScroll: boolean) => {
     if (enableInfiniteScroll) {
-      // For infinite scroll, wrap in scrollable container with prefetching
+      // For infinite scroll, use InfiniteScrollContainer component with auto-prefetching
       return (
-        <div
-          className="w-full overflow-auto table-scrollbar"
-          style={{ height: "calc(100vh - 300px)", minHeight: "600px", overscrollBehavior: "none" }}
-          onScroll={(e) => {
-            const target = e.target as HTMLElement;
-            const scrollTop = target.scrollTop;
-            const clientHeight = target.clientHeight;
-            
-            // Use item-based prefetching for smooth scrolling
-            // Estimate item height based on grid layout (responsive)
-            // For a 6-column grid on xl screens, each row has ~6 items
-            // Average item height is approximately 200px (image + gap)
-            const estimatedItemHeight = 200;
-            const totalItemsRendered = imagesToRender.length;
-            
-            // Calculate which item index is currently at the bottom of viewport
-            const scrollBottom = scrollTop + clientHeight;
-            const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
-            
-            // Calculate distance from end (same logic as galleries/clients/packages)
-            const distanceFromEnd = totalItemsRendered - itemsScrolled;
-            const prefetchThreshold = 25; // Same threshold as other infinite scrolls
-            
-            // Don't fetch if there's an error or already fetching
-            if (distanceFromEnd <= prefetchThreshold && hasNextPage && !isFetchingNextPage && !imagesError) {
-              void fetchNextPage();
-            }
-          }}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
-            {imagesToRender.map((img, index) => renderImageItem(img, index, imagesToRender))}
-          </div>
-          {isFetchingNextPage && (
-            <div className="flex justify-center py-4">
-              <Loading size="sm" text="Ładowanie więcej zdjęć..." />
-            </div>
-          )}
-        </div>
+        <InfiniteScrollContainer
+          images={imagesToRender}
+          renderImageItem={renderImageItem}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          imagesError={imagesError}
+          containerHeight="calc(100vh - 300px)"
+          minHeight="600px"
+        />
       );
     }
     
@@ -1172,8 +1434,8 @@ export default function GalleryPhotos() {
               <Loading size="sm" />
             ) : (
               <>
-                {images.length}{" "}
-                {images.length === 1 ? "zdjęcie" : images.length < 5 ? "zdjęcia" : "zdjęć"}
+                {totalGalleryImageCount}{" "}
+                {totalGalleryImageCount === 1 ? "zdjęcie" : totalGalleryImageCount < 5 ? "zdjęcia" : "zdjęć"}
                 {imagesFetching && (
                   <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
                 )}
@@ -1192,7 +1454,7 @@ export default function GalleryPhotos() {
                 <Plus size={20} />
                 Prześlij zdjęcia
               </button>
-              {images.length > 0 && (
+              {totalGalleryImageCount > 0 && (
                 <button
                   onClick={toggleSelectionMode}
                   className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -1233,9 +1495,10 @@ export default function GalleryPhotos() {
                         ? `${selectedKeys.size} zdjęcia wybrane`
                         : `${selectedKeys.size} zdjęć wybranych`}
                 </span>
-                {(() => {
+                  {(() => {
                   // Get count of selectable images (excluding approved and delivered)
-                  const selectableImages = getSelectableImages(images);
+                  // Use section images for selection mode
+                  const selectableImages = getSelectableImages(sectionImages);
                   const selectableCount = selectableImages.length;
                   const allSelected = selectableCount > 0 && selectedKeys.size === selectableCount;
                   return (
@@ -1245,7 +1508,7 @@ export default function GalleryPhotos() {
                           if (allSelected) {
                             deselectAll();
                           } else {
-                            selectAll(images);
+                            selectAll(sectionImages);
                           }
                         }}
                         className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1277,9 +1540,9 @@ export default function GalleryPhotos() {
         </div>
 
         {/* Images Grid - Grouped by Orders */}
-        {imagesLoading ? (
+        {statsLoading ? (
           <GalleryLoading />
-        ) : images.length === 0 ? (
+        ) : totalGalleryImageCount === 0 ? (
           <EmptyState
             // eslint-disable-next-line jsx-a11y/alt-text
             icon={<Image size={64} aria-hidden="true" />}
@@ -1301,12 +1564,11 @@ export default function GalleryPhotos() {
               }
 
               const orderImages = imagesByOrder.get(orderId) ?? [];
-              if (orderImages.length === 0) {
-                return null;
-              }
+              const orderTotalCount = orderTotalCounts.get(orderId) ?? 0;
 
+              // Always show order section even if no images loaded yet (for display purposes)
               const sectionId = `order-${orderId}`;
-              const isExpanded = expandedSections.has(sectionId);
+              const isExpanded = expandedSection === sectionId;
               const orderDisplayNumber =
                 order.orderNumber !== undefined && order.orderNumber !== null
                   ? String(order.orderNumber)
@@ -1350,10 +1612,10 @@ export default function GalleryPhotos() {
                         )}
                       </div>
                       <div className="text-sm text-gray-400 dark:text-gray-500">
-                        {orderImages.length}{" "}
-                        {orderImages.length === 1
+                        {orderTotalCount}{" "}
+                        {orderTotalCount === 1
                           ? "zdjęcie"
-                          : orderImages.length < 5
+                          : orderTotalCount < 5
                             ? "zdjęcia"
                             : "zdjęć"}
                       </div>
@@ -1382,38 +1644,45 @@ export default function GalleryPhotos() {
                   </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg">
-                      {renderImageGrid(orderImages, true, false)}
+                      <OrderImagesGrid
+                        images={orderImages}
+                        renderImageItem={renderImageItem}
+                        fetchNextPage={fetchNextPage}
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        imagesError={imagesError}
+                      />
                     </div>
                   )}
                 </div>
               );
             })}
 
-            {/* Unselected Section */}
-            {unselectedImages.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-                <div
-                  className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                    expandedSections.has("unselected") ? "rounded-t-lg" : "rounded-lg"
-                  }`}
+            {/* Unselected Section - Always show header */}
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+              <div
+                className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                  expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"
+                }`}
+              >
+                <button
+                  onClick={() => toggleSection("unselected")}
+                  className="flex-1 text-left flex items-center gap-4"
                 >
-                  <button
-                    onClick={() => toggleSection("unselected")}
-                    className="flex-1 text-left flex items-center gap-4"
-                  >
-                    <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Niewybrane
-                    </div>
-                    <div className="text-sm text-gray-400 dark:text-gray-500">
-                      {unselectedImages.length}{" "}
-                      {unselectedImages.length === 1
-                        ? "zdjęcie"
-                        : unselectedImages.length < 5
-                          ? "zdjęcia"
-                          : "zdjęć"}
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Niewybrane
+                  </div>
+                  <div className="text-sm text-gray-400 dark:text-gray-500">
+                    {totalUnselectedCount}{" "}
+                    {totalUnselectedCount === 1
+                      ? "zdjęcie"
+                      : totalUnselectedCount < 5
+                        ? "zdjęcia"
+                        : "zdjęć"}
+                  </div>
+                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {unselectedImages.length > 0 && (
                     <button
                       onClick={handleDeleteAllUnselectedClick}
                       disabled={isBulkDeleting}
@@ -1422,33 +1691,57 @@ export default function GalleryPhotos() {
                       <Trash2 size={16} />
                       <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
                     </button>
-                    <button
-                      onClick={() => toggleSection("unselected")}
-                      className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                      aria-label={
-                        expandedSections.has("unselected") ? "Zwiń sekcję" : "Rozwiń sekcję"
-                      }
-                    >
-                      <ChevronDown
-                        size={18}
-                        className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
-                          expandedSections.has("unselected") ? "transform rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => toggleSection("unselected")}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                    aria-label={
+                      expandedSection === "unselected" ? "Zwiń sekcję" : "Rozwiń sekcję"
+                    }
+                  >
+                    <ChevronDown
+                      size={18}
+                      className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                        expandedSection === "unselected" ? "transform rotate-180" : ""
+                      }`}
+                    />
+                  </button>
                 </div>
-                {expandedSections.has("unselected") && (
-                  <div className="px-4 pb-4 pt-2 rounded-b-lg">
-                    {renderImageGrid(unselectedImages, true, false)}
-                  </div>
-                )}
               </div>
-            )}
+              {expandedSection === "unselected" && (
+                <div className="px-4 pb-4 pt-2 rounded-b-lg">
+                  {unselectedImages.length > 0 ? (
+                    <OrderImagesGrid
+                      images={unselectedImages}
+                      renderImageItem={renderImageItem}
+                      fetchNextPage={fetchNextPage}
+                      hasNextPage={hasNextPage}
+                      isFetchingNextPage={isFetchingNextPage}
+                      imagesError={imagesError}
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={<Image size={64} aria-hidden="true" />}
+                      title="Brak niewybranych zdjęć"
+                      description="Wszystkie zdjęcia w galerii są częścią zleceń."
+                    />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         ) : (
-          // Fallback: show all images if no delivered orders (global view with infinite scroll)
-          renderImageGrid(images, true, true)
+          // Fallback: show empty state if no delivered orders and no images
+          <EmptyState
+            icon={<Image size={64} aria-hidden="true" />}
+            title="Brak zdjęć w galerii"
+            description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
+            actionButton={{
+              label: "Prześlij zdjęcia",
+              onClick: () => openModal("photos-upload-modal"),
+              icon: <Upload size={18} />,
+            }}
+          />
         )}
       </div>
 

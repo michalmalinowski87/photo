@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { createLambdaErrorResponse } from '../../lib/src/error-utils';
 
@@ -13,6 +13,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
 	
@@ -51,6 +52,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50; // Default 50, max 100
 	const cursorParam = event?.queryStringParameters?.cursor;
 	let cursor: string | null = cursorParam ? decodeURIComponent(cursorParam) : null;
+
+	// Parse filter parameters for per-section fetching
+	const filterOrderId = event?.queryStringParameters?.filterOrderId; // Filter by specific order
+	const filterUnselected = event?.queryStringParameters?.filterUnselected === 'true'; // Filter unselected images
 
 	// Verify gallery exists
 	let gallery;
@@ -147,7 +152,79 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				})
 				.filter((entry): entry is [string, any] => entry !== null)
 		);
-		const originalKeys = Array.from(originalFiles.keys()).sort(); // Sort for consistent pagination
+		let originalKeys = Array.from(originalFiles.keys()).sort(); // Sort for consistent pagination
+
+		// Apply filtering based on orderId or unselected filter BEFORE pagination
+		// This ensures we only paginate through the relevant images for the section
+		if (filterOrderId || filterUnselected) {
+			// Fetch orders to determine which images belong to which order
+			let allOrderImageKeys: Set<string> | null = null;
+			let targetOrderImageKeys: Set<string> | null = null;
+
+			if (ordersTable) {
+				try {
+					const ordersQuery = await ddb.send(new QueryCommand({
+						TableName: ordersTable,
+						KeyConditionExpression: 'galleryId = :g',
+						ExpressionAttributeValues: { ':g': galleryId }
+					}));
+
+					const orders = ordersQuery.Items || [];
+					// Filter to delivered orders only
+					const deliveredOrders = orders.filter((o: any) => 
+						o.deliveryStatus === 'DELIVERED' || 
+						o.deliveryStatus === 'PREPARING_DELIVERY' || 
+						o.deliveryStatus === 'CLIENT_APPROVED'
+					);
+
+					// Build set of all images in orders
+					allOrderImageKeys = new Set<string>();
+					targetOrderImageKeys = new Set<string>();
+
+					deliveredOrders.forEach((order: any) => {
+						if (!order.orderId) return;
+						
+						// Normalize selectedKeys
+						let selectedKeys: string[] = [];
+						if (Array.isArray(order.selectedKeys)) {
+							selectedKeys = order.selectedKeys.map((k: unknown) => String(k).trim());
+						} else if (typeof order.selectedKeys === 'string') {
+							try {
+								const parsed = JSON.parse(order.selectedKeys);
+								if (Array.isArray(parsed)) {
+									selectedKeys = parsed.map((k: unknown) => String(k).trim());
+								}
+							} catch {
+								// Invalid JSON, skip
+							}
+						}
+
+						selectedKeys.forEach(key => {
+							allOrderImageKeys!.add(key);
+							// If filtering by specific order, track its images
+							if (filterOrderId && order.orderId === filterOrderId) {
+								targetOrderImageKeys!.add(key);
+							}
+						});
+					});
+
+					// Apply filter to originalKeys
+					if (filterOrderId) {
+						// Only include images in the specified order
+						originalKeys = originalKeys.filter(key => targetOrderImageKeys!.has(key));
+					} else if (filterUnselected) {
+						// Only include images NOT in any order
+						originalKeys = originalKeys.filter(key => !allOrderImageKeys!.has(key));
+					}
+				} catch (err: any) {
+					// Log but continue - filtering is optional, we can fall back to showing all
+					logger.warn('Failed to fetch orders for filtering', {
+						error: err.message,
+						galleryId
+					});
+				}
+			}
+		}
 
 		// Process preview images (kept even when originals are deleted, so we can show them as "Wybrane")
 		const previewFiles = new Map<string, any>(
@@ -355,6 +432,76 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			// No action needed - S3 events will trigger recalculation automatically
 		}
 
+		// Calculate statistics: total count and order-based counts
+		const totalCount = originalKeys.length;
+		const stats: {
+			totalCount: number;
+			orderCounts?: Array<{ orderId: string; count: number }>;
+			unselectedCount?: number;
+		} = {
+			totalCount
+		};
+
+		// If orders table is available and we're on the first page, fetch order statistics
+		if (ordersTable && !cursor) {
+			try {
+				const ordersQuery = await ddb.send(new QueryCommand({
+					TableName: ordersTable,
+					KeyConditionExpression: 'galleryId = :g',
+					ExpressionAttributeValues: { ':g': galleryId }
+				}));
+
+				const orders = ordersQuery.Items || [];
+				// Filter to delivered orders only (DELIVERED, PREPARING_DELIVERY, CLIENT_APPROVED)
+				const deliveredOrders = orders.filter((o: any) => 
+					o.deliveryStatus === 'DELIVERED' || 
+					o.deliveryStatus === 'PREPARING_DELIVERY' || 
+					o.deliveryStatus === 'CLIENT_APPROVED'
+				);
+
+				// Calculate counts per order and total images in orders
+				const orderCounts: Array<{ orderId: string; count: number }> = [];
+				const allOrderImageKeys = new Set<string>();
+
+				deliveredOrders.forEach((order: any) => {
+					if (!order.orderId) return;
+					
+					// Normalize selectedKeys - handle both array and JSON string
+					let selectedKeys: string[] = [];
+					if (Array.isArray(order.selectedKeys)) {
+						selectedKeys = order.selectedKeys.map((k: unknown) => String(k).trim());
+					} else if (typeof order.selectedKeys === 'string') {
+						try {
+							const parsed = JSON.parse(order.selectedKeys);
+							if (Array.isArray(parsed)) {
+								selectedKeys = parsed.map((k: unknown) => String(k).trim());
+							}
+						} catch {
+							// Invalid JSON, skip
+						}
+					}
+
+					const count = selectedKeys.length;
+					if (count > 0) {
+						orderCounts.push({
+							orderId: order.orderId,
+							count
+						});
+						selectedKeys.forEach(key => allOrderImageKeys.add(key));
+					}
+				});
+
+				stats.orderCounts = orderCounts;
+				stats.unselectedCount = Math.max(0, totalCount - allOrderImageKeys.size);
+			} catch (err: any) {
+				// Log but don't fail - stats are optional
+				logger.warn('Failed to fetch order statistics', {
+					error: err.message,
+					galleryId
+				});
+			}
+		}
+
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
@@ -362,6 +509,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleryId,
 				images: filteredImages,
 				count: filteredImages.length,
+				totalCount: stats.totalCount,
+				stats: stats.orderCounts || stats.unselectedCount !== undefined ? stats : undefined,
 				hasMore,
 				nextCursor
 			})

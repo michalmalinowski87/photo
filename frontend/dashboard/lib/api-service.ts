@@ -508,12 +508,16 @@ class ApiService {
      * @param sizes - Optional comma-separated list of sizes to request (thumb,preview,bigthumb)
      *                 If not provided, all sizes are returned (backward compatible)
      * @param pagination - Optional pagination params: limit (default 50), cursor
+     * @param filterOrderId - Optional orderId to filter images by specific order
+     * @param filterUnselected - Optional flag to filter only unselected images (not in any delivered order)
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getImages: async (
       galleryId: string,
       sizes?: string,
-      pagination?: { limit?: number; cursor?: string | null }
+      pagination?: { limit?: number; cursor?: string | null },
+      filterOrderId?: string,
+      filterUnselected?: boolean
     ): Promise<{ images: any[]; hasMore?: boolean; nextCursor?: string | null }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -527,6 +531,12 @@ class ApiService {
       }
       if (pagination?.cursor) {
         params.append("cursor", pagination.cursor);
+      }
+      if (filterOrderId) {
+        params.append("filterOrderId", filterOrderId);
+      }
+      if (filterUnselected) {
+        params.append("filterUnselected", "true");
       }
       const queryString = params.toString();
       const url = queryString ? `/galleries/${galleryId}/images?${queryString}` : `/galleries/${galleryId}/images`;

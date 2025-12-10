@@ -555,6 +555,22 @@ export function useDeleteGalleryImage() {
         queryKey: queryKeys.galleries.images(galleryId, imageType),
       });
 
+      // Cancel infinite image queries
+      await queryClient.cancelQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key.length >= 5 &&
+            key[0] === "galleries" &&
+            key[1] === "detail" &&
+            key[2] === galleryId &&
+            key[3] === "images" &&
+            key[4] === "infinite"
+          );
+        },
+      });
+
       // Also cancel thumb queries and gallery detail if deleting originals
       if (imageType === "originals") {
         await queryClient.cancelQueries({
@@ -578,6 +594,29 @@ export function useDeleteGalleryImage() {
         queryKeys.galleries.detail(galleryId)
       );
 
+      // Snapshot infinite query states for rollback on error
+      const previousInfiniteQueries = queryClient
+        .getQueryCache()
+        .findAll({
+          predicate: (query) => {
+            const key = query.queryKey;
+            return (
+              Array.isArray(key) &&
+              key.length >= 6 &&
+              key[0] === "galleries" &&
+              key[1] === "detail" &&
+              key[2] === galleryId &&
+              key[3] === "images" &&
+              key[4] === "infinite" &&
+              key[5] === imageType
+            );
+          },
+        })
+        .map((query) => ({
+          queryKey: query.queryKey,
+          data: query.state.data,
+        }));
+
       // Calculate total file size from images being deleted for optimistic storage update
       // Only for originals and finals (not thumbs)
       let totalBytesToSubtract = 0;
@@ -588,7 +627,7 @@ export function useDeleteGalleryImage() {
         totalBytesToSubtract = imagesToDelete.reduce((sum, img) => sum + (img.size ?? 0), 0);
       }
 
-      // Optimistically remove images from cache
+      // Optimistically remove images from regular cache
       queryClient.setQueryData<GalleryImage[]>(
         queryKeys.galleries.images(galleryId, imageType),
         (old = []) => old.filter((img) => !imageKeys.includes(img.key ?? img.filename ?? ""))
@@ -601,6 +640,78 @@ export function useDeleteGalleryImage() {
           (old = []) => old.filter((img) => !imageKeys.includes(img.key ?? img.filename ?? ""))
         );
       }
+
+      // Optimistically remove images from ALL infinite query caches for this gallery and image type
+      // This handles infinite queries with different limits, filters, etc.
+      queryClient.setQueriesData(
+        {
+          predicate: (query) => {
+            const key = query.queryKey;
+            // Match infinite image queries: ["galleries", "detail", galleryId, "images", "infinite", type, ...]
+            return (
+              Array.isArray(key) &&
+              key.length >= 6 &&
+              key[0] === "galleries" &&
+              key[1] === "detail" &&
+              key[2] === galleryId &&
+              key[3] === "images" &&
+              key[4] === "infinite" &&
+              key[5] === imageType
+            );
+          },
+        },
+        (old) => {
+          if (!old) {
+            return old;
+          }
+
+          // Handle infinite query structure: { pages: [{ images: GalleryImage[], hasMore, nextCursor }, ...] }
+          if (old && typeof old === "object" && "pages" in old && Array.isArray((old as any).pages)) {
+            // Calculate total deleted count across all pages for stats update
+            let totalDeletedFromQuery = 0;
+            const updatedPages = (old as any).pages.map((page: any) => {
+              if (!Array.isArray(page.images)) {
+                return page;
+              }
+              const imagesBefore = page.images.length;
+              const filteredImages = page.images.filter(
+                (img: GalleryImage) => !imageKeys.includes(img.key ?? img.filename ?? "")
+              );
+              const deletedFromPage = imagesBefore - filteredImages.length;
+              totalDeletedFromQuery += deletedFromPage;
+
+              return {
+                ...page,
+                images: filteredImages,
+              };
+            });
+
+            // Update stats in the first page if it exists
+            const firstPage = updatedPages[0];
+            if (firstPage && typeof firstPage.totalCount === "number") {
+              firstPage.totalCount = Math.max(0, firstPage.totalCount - totalDeletedFromQuery);
+            }
+            // Update stats in the overall query if it exists at the root level
+            if ((old as any).stats && typeof (old as any).stats.totalCount === "number") {
+              return {
+                ...old,
+                pages: updatedPages,
+                stats: {
+                  ...(old as any).stats,
+                  totalCount: Math.max(0, (old as any).stats.totalCount - totalDeletedFromQuery),
+                },
+              };
+            }
+
+            return {
+              ...old,
+              pages: updatedPages,
+            };
+          }
+
+          return old;
+        }
+      );
 
       // Optimistically update storage usage for immediate UI feedback
       if (totalBytesToSubtract > 0 && previousGallery) {
@@ -626,7 +737,7 @@ export function useDeleteGalleryImage() {
         });
       }
 
-      return { previousImages, previousThumbImages, previousGallery };
+      return { previousImages, previousThumbImages, previousGallery, previousInfiniteQueries };
     },
     onError: (_err, variables, context) => {
       // Rollback on error
@@ -647,6 +758,12 @@ export function useDeleteGalleryImage() {
           queryKeys.galleries.detail(variables.galleryId),
           context.previousGallery
         );
+      }
+      // Rollback infinite queries
+      if (context?.previousInfiniteQueries) {
+        context.previousInfiniteQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data);
+        });
       }
     },
     onSuccess: (data, variables) => {
@@ -677,6 +794,22 @@ export function useDeleteGalleryImage() {
             variables.galleryId,
             variables.imageType ?? "originals"
           ),
+        });
+
+        // Also invalidate infinite image queries
+        void queryClient.invalidateQueries({
+          predicate: (query) => {
+            const key = query.queryKey;
+            return (
+              Array.isArray(key) &&
+              key.length >= 5 &&
+              key[0] === "galleries" &&
+              key[1] === "detail" &&
+              key[2] === variables.galleryId &&
+              key[3] === "images" &&
+              key[4] === "infinite"
+            );
+          },
         });
 
         // Also invalidate thumb queries if deleting originals

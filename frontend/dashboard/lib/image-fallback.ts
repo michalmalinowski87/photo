@@ -17,10 +17,13 @@
  * 4. Original photo from S3 (ultimate fallback)
  *
  * Cache busting strategy:
- * - Uses S3 lastModified timestamp to avoid unnecessary cache busting
- * - Same file = same timestamp = can be cached
- * - Different file = different timestamp = fresh fetch
- * - When a new photo is uploaded, S3 lastModified changes automatically
+ * - For CloudFront URLs: Uses `v={lastModified}` as version parameter
+ *   - Same file (same lastModified) = same URL = browser caches it
+ *   - Different file (different lastModified) = different URL = fresh fetch
+ *   - Solves file replacement: when photo is replaced with same name, lastModified changes = new URL
+ *   - CloudFront cache policy includes query strings in cache key, so versions are cached separately
+ * - For S3 presigned URLs: Uses `t={lastModified}` (legacy format)
+ * - When a new photo is uploaded, S3 lastModified changes automatically, creating new versioned URL
  */
 
 export interface ImageFallbackUrls {
@@ -38,11 +41,43 @@ export interface ImageFallbackUrls {
 export type ImageSize = "thumb" | "preview" | "bigthumb";
 
 /**
- * Add cache-busting query parameter to URL using S3 lastModified timestamp
+ * Check if a URL is a CloudFront URL (vs S3 presigned URL)
+ * CloudFront URLs typically have a specific domain pattern
+ */
+function isCloudFrontUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    // CloudFront URLs typically use cloudfront.net domain or a custom CloudFront domain
+    // S3 presigned URLs use s3.amazonaws.com or the bucket's regional endpoint
+    const hostname = urlObj.hostname.toLowerCase();
+    return (
+      hostname.includes("cloudfront.net") ||
+      hostname.includes("cloudfront") ||
+      // Check if it's NOT an S3 URL (presigned URLs have specific patterns)
+      (!hostname.includes("s3") && !hostname.includes("amazonaws.com"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Add version query parameter to URL using S3 lastModified timestamp
  * This is part of the unified image loading strategy
  *
+ * STRATEGY:
+ * - For CloudFront URLs: Use `v={lastModified}` as a version parameter
+ *   - Same file (same lastModified) = same URL = browser caches it
+ *   - Different file (different lastModified) = different URL = fresh fetch
+ *   - CloudFront cache policy includes query strings in cache key, so different versions are cached separately
+ *   - This solves the file replacement problem: when a photo is replaced with the same name,
+ *     the lastModified changes, creating a new URL that bypasses the old cache
+ *
+ * - For S3 presigned URLs: Use `t={lastModified}` (legacy format for compatibility)
+ *   - S3 presigned URLs already have query parameters and expire, so this is for consistency
+ *
  * Uses only S3 lastModified timestamp - when a new photo is uploaded,
- * S3's lastModified changes automatically, so no extra cache busting is needed
+ * S3's lastModified changes automatically, creating a new versioned URL
  */
 function addCacheBustingToUrl(
   url: string | null | undefined,
@@ -52,6 +87,35 @@ function addCacheBustingToUrl(
     return null;
   }
 
+  // Calculate lastModified timestamp
+  const lastModifiedTs = lastModified
+    ? typeof lastModified === "string"
+      ? new Date(lastModified).getTime()
+      : lastModified
+    : Date.now();
+
+  // For CloudFront URLs, use version parameter (v={lastModified})
+  // This allows browser caching while handling file replacements
+  // CloudFront cache policy includes query strings in cache key, so different versions are cached separately
+  if (isCloudFrontUrl(url)) {
+    try {
+      const urlObj = new URL(url);
+      // Remove any old cache-busting parameters
+      urlObj.searchParams.delete("t");
+      urlObj.searchParams.delete("f");
+      // Set version parameter based on lastModified
+      // Same file = same version = same URL = cached
+      // Different file = different version = different URL = fresh fetch
+      urlObj.searchParams.set("v", String(lastModifiedTs));
+      return urlObj.toString();
+    } catch {
+      // If URL parsing fails, append version parameter manually
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}v=${lastModifiedTs}`;
+    }
+  }
+
+  // For S3 presigned URLs, use legacy format (t={lastModified}) for compatibility
   // Remove any existing cache-busting parameters to avoid duplicates
   try {
     const urlObj = new URL(url);
@@ -66,16 +130,7 @@ function addCacheBustingToUrl(
   // If URL already has query parameters, append; otherwise add
   const separator = url.includes("?") ? "&" : "?";
 
-  // Use lastModified timestamp if available (from S3 LastModified)
-  // This ensures we don't cache-bust unnecessarily - same file = same timestamp
-  // When a new photo is uploaded, S3 lastModified changes automatically
-  const lastModifiedTs = lastModified
-    ? typeof lastModified === "string"
-      ? new Date(lastModified).getTime()
-      : lastModified
-    : Date.now();
-
-  // Format: t={lastModified}
+  // Format: t={lastModified} for S3 URLs (legacy)
   return `${url}${separator}t=${lastModifiedTs}`;
 }
 
