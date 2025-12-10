@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+import { refetchFirstPageOnly } from "../../lib/react-query-helpers";
 import type { Gallery, GalleryImage } from "../../types";
 import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
@@ -667,23 +668,27 @@ export function useDeleteGalleryImage() {
 
       // Optimistically remove images from ALL infinite query caches for this gallery and image type
       // This handles infinite queries with different limits, filters, etc.
-      queryClient.setQueriesData(
-        {
-          predicate: (query) => {
-            const key = query.queryKey;
-            // Match infinite image queries: ["galleries", "detail", galleryId, "images", "infinite", type, ...]
-            return (
-              Array.isArray(key) &&
-              key.length >= 6 &&
-              key[0] === "galleries" &&
-              key[1] === "detail" &&
-              key[2] === galleryId &&
-              key[3] === "images" &&
-              key[4] === "infinite" &&
-              key[5] === imageType
-            );
+      // When deleting originals, also update thumb queries since thumb images are derived from originals
+      const typesToUpdate = imageType === "originals" ? [imageType, "thumb"] : [imageType];
+      
+      typesToUpdate.forEach((typeToUpdate) => {
+        queryClient.setQueriesData(
+          {
+            predicate: (query) => {
+              const key = query.queryKey;
+              // Match infinite image queries: ["galleries", "detail", galleryId, "images", "infinite", type, ...]
+              return (
+                Array.isArray(key) &&
+                key.length >= 6 &&
+                key[0] === "galleries" &&
+                key[1] === "detail" &&
+                key[2] === galleryId &&
+                key[3] === "images" &&
+                key[4] === "infinite" &&
+                key[5] === typeToUpdate
+              );
+            },
           },
-        },
         (old) => {
           if (!old) {
             return old;
@@ -740,7 +745,8 @@ export function useDeleteGalleryImage() {
 
           return old;
         }
-      );
+        );
+      });
 
       // Optimistically update storage usage for immediate UI feedback
       if (totalBytesToSubtract > 0 && previousGallery) {
@@ -817,7 +823,7 @@ export function useDeleteGalleryImage() {
       // Invalidate image queries to ensure UI reflects backend state
       // Backend processes deletion synchronously, so we can invalidate immediately
       // Use Promise.resolve().then() to let React Query finish processing optimistic updates first
-      void Promise.resolve().then(() => {
+      void Promise.resolve().then(async () => {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.images(
             variables.galleryId,
@@ -825,28 +831,47 @@ export function useDeleteGalleryImage() {
           ),
         });
 
-        // Also invalidate infinite image queries (including stats query used for counters)
-        // This ensures UI counters update after deletion
-        void queryClient.invalidateQueries({
-          predicate: (query) => {
+        // Refetch first page to update stats, but the helper function will filter out
+        // any images that were optimistically deleted (preventing them from reappearing)
+        // Use a delay to ensure backend has processed the deletion and stats are updated
+        setTimeout(async () => {
+          await refetchFirstPageOnly(queryClient, (query) => {
             const key = query.queryKey;
             return (
               Array.isArray(key) &&
-              key.length >= 5 &&
+              key.length >= 6 &&
               key[0] === "galleries" &&
               key[1] === "detail" &&
               key[2] === variables.galleryId &&
               key[3] === "images" &&
-              key[4] === "infinite"
+              key[4] === "infinite" &&
+              key[5] === (variables.imageType ?? "originals")
             );
-          },
-        });
+          });
+        }, 1000);
 
-        // Also invalidate thumb queries if deleting originals
+        // Also invalidate and refetch thumb queries if deleting originals
+        // This includes the stats query (type: "thumb", limit: 1) which provides counters
         if (variables.imageType === "originals" || !variables.imageType) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.galleries.images(variables.galleryId, "thumb"),
           });
+          setTimeout(async () => {
+            // Refetch all thumb infinite queries, including the stats query
+            await refetchFirstPageOnly(queryClient, (query) => {
+              const key = query.queryKey;
+              return (
+                Array.isArray(key) &&
+                key.length >= 6 &&
+                key[0] === "galleries" &&
+                key[1] === "detail" &&
+                key[2] === variables.galleryId &&
+                key[3] === "images" &&
+                key[4] === "infinite" &&
+                key[5] === "thumb"
+              );
+            });
+          }, 1000);
         }
       });
 

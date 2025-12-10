@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
+import { refetchFirstPageOnly } from "../lib/react-query-helpers";
 import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
 import { createUppyInstance, type UploadType, type TypedUppyFile } from "../lib/uppy-config";
 
@@ -291,6 +292,23 @@ async function handlePostUploadActions(
       await queryClient.invalidateQueries({
         queryKey: queryKeys.orders.finalImages(galleryId, orderId),
       });
+
+      // Refetch only first page of infinite queries for finals to get new images and updated stats
+      // This is more efficient than invalidating all pages, which would refetch everything
+      // New images appear at the beginning (first page), other pages remain valid
+      await refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 6 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === galleryId &&
+          key[3] === "images" &&
+          key[4] === "infinite" &&
+          key[5] === "finals"
+        );
+      });
     } else {
       // For originals, poll for thumbnail availability (same process as finals)
       try {
@@ -344,21 +362,21 @@ async function handlePostUploadActions(
         queryKey: queryKeys.galleries.images(galleryId, "originals"),
       });
 
-      // Also invalidate infinite image queries (including stats query)
-      // This ensures counters in the UI update after upload
-      await queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          return (
-            Array.isArray(key) &&
-            key.length >= 5 &&
-            key[0] === "galleries" &&
-            key[1] === "detail" &&
-            key[2] === galleryId &&
-            key[3] === "images" &&
-            key[4] === "infinite"
-          );
-        },
+      // Refetch only first page of infinite queries to get new images and updated stats
+      // This is more efficient than invalidating all pages, which would refetch everything
+      // New images appear at the beginning (first page), other pages remain valid
+      await refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 6 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === galleryId &&
+          key[3] === "images" &&
+          key[4] === "infinite" &&
+          (key[5] === "originals" || key[5] === "thumb")
+        );
       });
     }
 
@@ -368,12 +386,9 @@ async function handlePostUploadActions(
       queryKey: queryKeys.galleries.lists(),
     });
 
-    // Reload gallery UI - this will fetch images and update state
-    // We don't fetch here to avoid duplicate requests - let reloadGallery handle it
-    // The delay above ensures backend has processed files before reloadGallery fetches
-    if (reloadGallery) {
-      await reloadGallery();
-    }
+    // Don't call reloadGallery - we've already refetched the first page of infinite queries
+    // Calling reloadGallery would trigger a full refetch of all pages, which defeats the optimization
+    // The first page refetch above already updates the UI with new images and stats
 
     // Set finalizing state to false after API fetch completes
     onFinalizingChange?.(false);
