@@ -51,7 +51,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const limitParam = event?.queryStringParameters?.limit;
 	const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 100) : 50; // Default 50, max 100
 	const cursorParam = event?.queryStringParameters?.cursor;
-	let cursor: string | null = cursorParam ? decodeURIComponent(cursorParam) : null;
+	const cursor: string | null = cursorParam ? decodeURIComponent(cursorParam) : null;
 
 	// Parse filter parameters for per-section fetching
 	const filterOrderId = event?.queryStringParameters?.filterOrderId; // Filter by specific order
@@ -152,7 +152,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				})
 				.filter((entry): entry is [string, any] => entry !== null)
 		);
-		let originalKeys = Array.from(originalFiles.keys()).sort(); // Sort for consistent pagination
+		
+		// Sort by LastModified timestamp (newest first), with filename as secondary sort key
+		// This ensures accurate ordering for fast consecutive uploads
+		let sortedOriginals = Array.from(originalFiles.entries())
+			.map(([filename, obj]) => ({
+				filename,
+				lastModified: obj.LastModified ? new Date(obj.LastModified).getTime() : 0
+			}))
+			.sort((a, b) => {
+				// Primary sort: by timestamp descending (newest first)
+				if (b.lastModified !== a.lastModified) {
+					return b.lastModified - a.lastModified;
+				}
+				// Secondary sort: by filename ascending (for consistent ordering when timestamps are identical)
+				return a.filename.localeCompare(b.filename);
+			});
+		
+		let originalKeys = sortedOriginals.map(item => item.filename);
 
 		// Apply filtering based on orderId or unselected filter BEFORE pagination
 		// This ensures we only paginate through the relevant images for the section
@@ -208,13 +225,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						});
 					});
 
-					// Apply filter to originalKeys
+					// Apply filter to both sortedOriginals and originalKeys
 					if (filterOrderId) {
 						// Only include images in the specified order
-						originalKeys = originalKeys.filter(key => targetOrderImageKeys!.has(key));
+						sortedOriginals = sortedOriginals.filter(item => targetOrderImageKeys!.has(item.filename));
+						originalKeys = sortedOriginals.map(item => item.filename);
 					} else if (filterUnselected) {
 						// Only include images NOT in any order
-						originalKeys = originalKeys.filter(key => !allOrderImageKeys!.has(key));
+						sortedOriginals = sortedOriginals.filter(item => !allOrderImageKeys!.has(item.filename));
+						originalKeys = sortedOriginals.map(item => item.filename);
 					}
 				} catch (err: any) {
 					// Log but continue - filtering is optional, we can fall back to showing all
@@ -261,15 +280,44 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 
 		// Apply cursor-based pagination (skip files before cursor)
+		// Cursor format: "timestamp|filename" (e.g., "1704110400000|image.jpg")
 		let paginatedOriginalKeys = originalKeys;
 		if (cursor) {
-			const cursorIndex = originalKeys.findIndex(key => key === cursor);
-			if (cursorIndex >= 0) {
-				paginatedOriginalKeys = originalKeys.slice(cursorIndex + 1);
-			} else if (cursorIndex === -1 && originalKeys.length > 0) {
-				// Cursor not found, find position where it would be inserted
-				const insertIndex = originalKeys.findIndex(key => key > cursor);
-				paginatedOriginalKeys = insertIndex >= 0 ? originalKeys.slice(insertIndex) : [];
+			// Parse cursor: extract timestamp and filename
+			const parts = cursor.split('|');
+			if (parts.length !== 2) {
+				// Invalid cursor format - treat as no cursor (start from beginning)
+				logger.warn('Invalid cursor format, expected timestamp|filename', { cursor, galleryId });
+			} else {
+				const cursorTimestamp = parseInt(parts[0], 10);
+				const cursorFilename = parts[1];
+				
+				if (isNaN(cursorTimestamp) || !cursorFilename) {
+					// Invalid cursor - treat as no cursor
+					logger.warn('Invalid cursor values', { cursorTimestamp, cursorFilename, galleryId });
+				} else {
+					// Find cursor position by timestamp and filename
+					const cursorIndex = sortedOriginals.findIndex(item => 
+						item.filename === cursorFilename && item.lastModified === cursorTimestamp
+					);
+					if (cursorIndex >= 0) {
+						paginatedOriginalKeys = originalKeys.slice(cursorIndex + 1);
+					} else if (cursorIndex === -1 && sortedOriginals.length > 0) {
+						// Cursor not found, find position where it would be inserted
+						// Since we're sorted descending (newest first), find first item that comes AFTER cursor
+						const insertIndex = sortedOriginals.findIndex(item => {
+							// Item comes after cursor if: older timestamp OR same timestamp with filename after cursor
+							if (item.lastModified < cursorTimestamp) {
+								return true; // Item is older (smaller timestamp) = comes after cursor in descending sort
+							}
+							if (item.lastModified === cursorTimestamp && item.filename > cursorFilename) {
+								return true; // Same timestamp, but filename comes after cursor alphabetically
+							}
+							return false;
+						});
+						paginatedOriginalKeys = insertIndex >= 0 ? originalKeys.slice(insertIndex) : [];
+					}
+				}
 			}
 		}
 
@@ -415,10 +463,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			.filter((item): item is NonNullable<typeof item> => item !== null);
 
 		// Generate next cursor from last item
+		// Format: "timestamp|filename" for accurate pagination with timestamp-based sorting
 		let nextCursor: string | null = null;
 		if (hasMore && filteredImages.length > 0) {
 			const lastItem = filteredImages[filteredImages.length - 1];
-			nextCursor = encodeURIComponent(lastItem.key);
+			if (lastItem.key && lastItem.lastModified) {
+				// Get timestamp as number (milliseconds since epoch)
+				const timestamp = typeof lastItem.lastModified === 'string' 
+					? new Date(lastItem.lastModified).getTime()
+					: lastItem.lastModified;
+				// Format: timestamp|filename
+				nextCursor = encodeURIComponent(`${timestamp}|${lastItem.key}`);
+			} else {
+				// Fallback to old format if lastModified is missing (shouldn't happen, but for safety)
+				nextCursor = encodeURIComponent(lastItem.key || '');
+			}
 		}
 
 		// Check for sync issue: no images but originalsBytesUsed > 0
