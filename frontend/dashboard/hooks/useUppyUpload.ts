@@ -4,8 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 import api from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
-import { refetchFirstPageOnly } from "../lib/react-query-helpers";
-import { pollThumbnailAvailability } from "../lib/thumbnail-polling";
+import { resetInfiniteQueryAndRefetchFirstPage } from "../lib/react-query-helpers";
 import { createUppyInstance, type UploadType, type TypedUppyFile } from "../lib/uppy-config";
 
 import { useMarkFinalUploadComplete } from "./mutations/useUploadMutations";
@@ -26,6 +25,7 @@ export interface UseUppyUploadConfig {
     isSelectionGallery?: boolean;
   }) => void;
   reloadGallery?: () => Promise<void>;
+  onScrollReset?: () => void;
 }
 
 interface SpeedCalculationState {
@@ -156,71 +156,9 @@ async function handlePostUploadActions(
   successfulFiles: TypedUppyFile[],
   reloadGallery?: () => Promise<void>,
   onFinalizingChange?: (isFinalizing: boolean) => void,
-  markFinalUploadCompleteMutation?: ReturnType<typeof useMarkFinalUploadComplete>
+  markFinalUploadCompleteMutation?: ReturnType<typeof useMarkFinalUploadComplete>,
+  onScrollReset?: () => void
 ): Promise<void> {
-  // Calculate total file sizes from successful uploads for optimistic update
-  // Validate file sizes - only count files with valid, positive sizes
-  // This prevents inaccurate optimistic updates from corrupted or missing file size data
-  const validFiles = successfulFiles.filter((file) => {
-    const size = file.size ?? 0;
-    return size > 0 && size < 10 * 1024 * 1024 * 1024; // Sanity check: max 10GB per file
-  });
-  const totalSize = validFiles.reduce((sum, file) => sum + (file.size ?? 0), 0);
-
-  // Log warning if some files had invalid sizes (for debugging)
-  if (validFiles.length < successfulFiles.length) {
-    console.warn(
-      `[handlePostUploadActions] Some files had invalid sizes: ${successfulFiles.length - validFiles.length} files excluded from optimistic update`
-    );
-  }
-
-  // Optimistically update storage usage for immediate UI feedback
-  // The backend updates storage synchronously via completeUpload/completeMultipartUpload endpoints
-  // We invalidate after a short delay to reconcile any differences (backend processing time)
-  if (totalSize > 0) {
-    const originalsSize = type === "originals" ? totalSize : 0;
-    const finalsSize = type === "finals" ? totalSize : 0;
-
-    try {
-      // Cancel any outgoing queries to prevent race conditions
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.galleries.detail(galleryId),
-      });
-
-      // Optimistically update storage usage in gallery detail
-      queryClient.setQueryData<{
-        originalsBytesUsed?: number;
-        finalsBytesUsed?: number;
-        [key: string]: unknown;
-      }>(queryKeys.galleries.detail(galleryId), (old) => {
-        if (!old) {
-          return old;
-        }
-        const currentOriginals = old.originalsBytesUsed ?? 0;
-        const currentFinals = old.finalsBytesUsed ?? 0;
-        return {
-          ...old,
-          originalsBytesUsed: Math.max(0, currentOriginals + originalsSize),
-          finalsBytesUsed: Math.max(0, currentFinals + finalsSize),
-          // Total storage is computed dynamically: originalsBytesUsed + finalsBytesUsed
-        };
-      });
-
-      // Note: We don't invalidate here because:
-      // 1. Backend updates storage synchronously via completeUpload/completeMultipartUpload
-      // 2. Optimistic update provides immediate UI feedback
-      // 3. The actual storage is updated by backend immediately when files complete upload
-      // 4. Invalidating would cause unnecessary refetch since optimistic update is already accurate
-      // If reconciliation is needed, it happens naturally when gallery data is refetched for other reasons
-    } catch (error) {
-      // If optimistic update fails, log but don't throw - backend will still update
-      console.error(
-        "[handlePostUploadActions] Failed to optimistically update storage usage:",
-        error
-      );
-    }
-  }
-
   // Set finalizing state at the start
   onFinalizingChange?.(true);
 
@@ -229,6 +167,7 @@ async function handlePostUploadActions(
       // Wait a bit for backend to finalize uploads before marking complete
       // This is especially important after pause/resume cycles with multipart uploads
       await new Promise((resolve) => setTimeout(resolve, 500));
+      
       // Use mutation hook to ensure order detail is invalidated (status may change from CLIENT_APPROVED/AWAITING_FINAL_PHOTOS to PREPARING_DELIVERY)
       if (markFinalUploadCompleteMutation) {
         await markFinalUploadCompleteMutation.mutateAsync({ galleryId, orderId });
@@ -246,57 +185,23 @@ async function handlePostUploadActions(
         });
       }
 
-      // Poll for thumbnail availability to ensure backend processing is complete
-      // This ensures UI is ready when user closes the confirmation modal
-      try {
-        // Fetch final images list to get thumbUrls for uploaded files
-        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
-        // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
-        const finalImagesResponse = await api.orders.getFinalImages(galleryId, orderId);
-        const finalImages = finalImagesResponse?.images ?? [];
-
-        if (finalImages.length > 0) {
-          // Get the last uploaded file's thumbnail URL (most recently uploaded)
-          // Or use a random one if we can't determine which is last
-          const lastImage = finalImages[finalImages.length - 1] as
-            | { thumbUrl?: string }
-            | undefined;
-          const thumbUrl = lastImage?.thumbUrl;
-
-          if (thumbUrl) {
-            // Poll for thumbnail availability (max 10 attempts, 500ms interval = 5 seconds total)
-            const isAvailable = await pollThumbnailAvailability(thumbUrl, 10, 500);
-
-            if (!isAvailable) {
-              // If polling timed out, wait additional 3 seconds as fallback
-              await new Promise((resolve) => setTimeout(resolve, 3000));
-            }
-          } else {
-            // No thumbUrl available, wait 3 seconds as fallback
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-          }
-        } else {
-          // No images returned yet, wait 3 seconds as fallback
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-      } catch (pollError) {
-        // If polling fails, wait 3 seconds as fallback
-        console.warn(
-          "[handlePostUploadActions] Thumbnail polling failed, using fallback delay:",
-          pollError
+      // Reset and refetch final images infinite queries
+      await resetInfiniteQueryAndRefetchFirstPage(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 6 &&
+          key[0] === "orders" &&
+          key[1] === "detail" &&
+          key[2] === galleryId &&
+          key[3] === orderId &&
+          key[4] === "final-images" &&
+          key[5] === "infinite"
         );
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
-
-      // Invalidate final images cache
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.finalImages(galleryId, orderId),
       });
 
-      // Refetch only first page of infinite queries for finals to get new images and updated stats
-      // This is more efficient than invalidating all pages, which would refetch everything
-      // New images appear at the beginning (first page), other pages remain valid
-      await refetchFirstPageOnly(queryClient, (query) => {
+      // Also reset gallery images queries for finals type
+      await resetInfiniteQueryAndRefetchFirstPage(queryClient, (query) => {
         const key = query.queryKey;
         return (
           Array.isArray(key) &&
@@ -310,62 +215,8 @@ async function handlePostUploadActions(
         );
       });
     } else {
-      // For originals, poll for thumbnail availability (same process as finals)
-      try {
-        // Wait a bit for backend to process uploads
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Fetch originals images list to get thumbUrls for uploaded files
-        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
-        // Uppy's onComplete callback requires synchronous thumbnail polling during upload completion lifecycle.
-        const originalsImagesResponse = await api.galleries.getImages(galleryId, "thumb");
-        const originalsImages = originalsImagesResponse?.images ?? [];
-
-        if (originalsImages.length > 0) {
-          // Get the last uploaded file's thumbnail URL (most recently uploaded)
-          // Or use a random one if we can't determine which is last
-          const lastImage = originalsImages[originalsImages.length - 1] as
-            | { thumbUrl?: string }
-            | undefined;
-          const thumbUrl = lastImage?.thumbUrl;
-
-          if (thumbUrl) {
-            // Poll for thumbnail availability (max 10 attempts, 500ms interval = 5 seconds total)
-            const isAvailable = await pollThumbnailAvailability(thumbUrl, 10, 500);
-
-            if (!isAvailable) {
-              // If polling timed out, wait additional 3 seconds as fallback
-              await new Promise((resolve) => setTimeout(resolve, 3000));
-            }
-          } else {
-            // No thumbUrl available, wait 3 seconds as fallback
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-          }
-        } else {
-          // No images returned yet, wait 3 seconds as fallback
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-      } catch (pollError) {
-        // If polling fails, wait 3 seconds as fallback
-        console.warn(
-          "[handlePostUploadActions] Thumbnail polling failed, using fallback delay:",
-          pollError
-        );
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
-
-      // Invalidate cache so reloadGallery will fetch fresh images
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(galleryId, "thumb"),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.galleries.images(galleryId, "originals"),
-      });
-
-      // Refetch only first page of infinite queries to get new images and updated stats
-      // This is more efficient than invalidating all pages, which would refetch everything
-      // New images appear at the beginning (first page), other pages remain valid
-      await refetchFirstPageOnly(queryClient, (query) => {
+      // For originals, reset and refetch infinite queries
+      await resetInfiniteQueryAndRefetchFirstPage(queryClient, (query) => {
         const key = query.queryKey;
         return (
           Array.isArray(key) &&
@@ -386,11 +237,10 @@ async function handlePostUploadActions(
       queryKey: queryKeys.galleries.lists(),
     });
 
-    // Don't call reloadGallery - we've already refetched the first page of infinite queries
-    // Calling reloadGallery would trigger a full refetch of all pages, which defeats the optimization
-    // The first page refetch above already updates the UI with new images and stats
+    // Reset scroll to top after resetting queries
+    onScrollReset?.();
 
-    // Set finalizing state to false after API fetch completes
+    // Set finalizing state to false after reset and refetch completes
     onFinalizingChange?.(false);
   } catch (error) {
     // Set finalizing state to false even on error
@@ -552,7 +402,8 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
               successfulFiles,
               configRef.current.reloadGallery,
               setIsFinalizing,
-              markFinalUploadCompleteMutation
+              markFinalUploadCompleteMutation,
+              configRef.current.onScrollReset
             );
           } catch (error) {
             // Only show warning if reloadGallery failed, not for other errors

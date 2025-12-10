@@ -2076,6 +2076,18 @@ export default function GalleryPhotos() {
               setUploadModalOpen(false);
             },
             reloadGallery: reloadGalleryAfterUpload,
+            onScrollReset: () => {
+              // Reset scroll to top for all scroll containers
+              // Find all scroll containers with table-scrollbar class
+              const scrollContainers = document.querySelectorAll(
+                '.table-scrollbar[style*="overflow-auto"], .table-scrollbar[style*="overflow: auto"]'
+              );
+              scrollContainers.forEach((container) => {
+                if (container instanceof HTMLElement) {
+                  container.scrollTop = 0;
+                }
+              });
+            },
           }}
         />
       )}

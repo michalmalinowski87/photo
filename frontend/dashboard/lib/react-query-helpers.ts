@@ -187,3 +187,55 @@ export async function refetchFirstPageOnly(
   // Wait for all refetches to complete
   await Promise.allSettled(refetchPromises);
 }
+
+/**
+ * Resets infinite query data to initial state and refetches the first page.
+ * This is simpler than optimistic updates - just reset everything and start fresh.
+ *
+ * @param queryClient - React Query client instance
+ * @param predicate - Function to match queries that should be reset and refetched
+ */
+export async function resetInfiniteQueryAndRefetchFirstPage(
+  queryClient: QueryClient,
+  predicate: (query: { queryKey: readonly unknown[] }) => boolean
+): Promise<void> {
+  // Find all matching infinite queries
+  const matchingQueries = queryClient
+    .getQueryCache()
+    .findAll({ predicate })
+    .filter((query) => {
+      // Only process infinite queries (they have pages structure)
+      const data = query.state.data;
+      return data && typeof data === "object" && "pages" in data;
+    });
+
+  // Reset and refetch each matching query
+  const resetPromises = matchingQueries.map(async (query) => {
+    try {
+      const queryKey = query.queryKey;
+
+      // Reset query data to initial empty state
+      queryClient.setQueryData(queryKey, {
+        pages: [],
+        pageParams: [],
+      });
+
+      // Invalidate and refetch the query to ensure it fetches fresh data
+      // Using invalidateQueries with refetchType: 'active' ensures active queries are refetched
+      await queryClient.invalidateQueries({
+        queryKey,
+        refetchType: "active",
+      });
+    } catch (error) {
+      // Log error but don't fail the entire operation
+      console.warn(
+        "[resetInfiniteQueryAndRefetchFirstPage] Failed to reset and refetch query:",
+        query.queryKey,
+        error
+      );
+    }
+  });
+
+  // Wait for all resets and refetches to complete
+  await Promise.allSettled(resetPromises);
+}
