@@ -1,9 +1,10 @@
 import { HandHeart } from "lucide-react";
+import { useEffect, useRef, useCallback } from "react";
 
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
-import { GalleryLoading } from "../ui/loading/Loading";
+import { GalleryLoading, Loading } from "../ui/loading/Loading";
 
 interface GalleryImage {
   id?: string;
@@ -43,17 +44,163 @@ export function OriginalsTab({
   isFetchingNextPage = false,
 }: OriginalsTabProps) {
   const shouldShowAllImages = !selectionEnabled;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const scrollbarDetectedRef = useRef(false);
+  const imagesCountWhenScrollbarAppearedRef = useRef<number | null>(null);
+  const measuredRowHeightRef = useRef<number | null>(null);
+
+  // Measure actual row height from DOM - adapts to any item height
+  const measureRowHeight = useCallback(() => {
+    if (!gridContainerRef.current || images.length === 0) {
+      return null;
+    }
+
+    const grid = gridContainerRef.current;
+    const children = Array.from(grid.children) as HTMLElement[];
+    
+    if (children.length === 0) {
+      return null;
+    }
+
+    // Calculate columns based on viewport width
+    const viewportWidth = grid.clientWidth;
+    let columns = 2; // Default for mobile
+    if (viewportWidth >= 1280) columns = 6; // xl
+    else if (viewportWidth >= 1024) columns = 5; // lg
+    else if (viewportWidth >= 768) columns = 4; // md
+    else if (viewportWidth >= 640) columns = 3; // sm
+
+    // Measure height of first few rows to get average
+    // Need at least 2 rows to calculate row height accurately
+    const minItemsForMeasurement = columns * 2;
+    if (children.length < minItemsForMeasurement) {
+      return null;
+    }
+
+    // Get positions of items in first two rows
+    const firstRowItems = children.slice(0, columns);
+    const secondRowItems = children.slice(columns, columns * 2);
+    
+    if (firstRowItems.length === 0 || secondRowItems.length === 0) {
+      return null;
+    }
+
+    // Get top position of first item in first row
+    const firstItemTop = firstRowItems[0].offsetTop;
+    // Get top position of first item in second row
+    const secondRowFirstItemTop = secondRowItems[0].offsetTop;
+    
+    // Calculate row height (difference between rows)
+    const rowHeight = secondRowFirstItemTop - firstItemTop;
+    
+    // Validate measurement (should be positive and reasonable)
+    if (rowHeight > 0 && rowHeight < 1000) {
+      return rowHeight;
+    }
+
+    return null;
+  }, [images.length]);
+
+  // Update measured row height when images change or on resize
+  useEffect(() => {
+    const updateRowHeight = () => {
+      const measured = measureRowHeight();
+      if (measured !== null) {
+        measuredRowHeightRef.current = measured;
+      }
+    };
+
+    // Measure after a short delay to ensure DOM is updated
+    const timeoutId = setTimeout(updateRowHeight, 100);
+    
+    // Also measure on window resize
+    window.addEventListener('resize', updateRowHeight);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', updateRowHeight);
+    };
+  }, [images.length, measureRowHeight]);
+
+  // Auto-fetch strategy for initial load:
+  // 1. Detect when scrollbar first appears
+  // 2. Note how many images we had when scrollbar appeared
+  // 3. Fetch until we have double that amount (if 30 images needed scroll, fetch until 60)
+  // 4. After initial prefetch, use normal smooth scrolling strategy
+  // 5. If we have selectedKeys, ensure we fetch at least that many images
+  useEffect(() => {
+    if (!scrollContainerRef.current || isFetchingNextPage || error || !fetchNextPage) {
+      return undefined;
+    }
+
+    // If we have selectedKeys, ensure we fetch at least that many images
+    // This handles the case where we have 51 selectedKeys but only 50 images loaded
+    if (selectedKeys.length > 0 && images.length < selectedKeys.length && hasNextPage) {
+      const timeoutId = setTimeout(() => {
+        if (hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+          void fetchNextPage();
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Skip auto-fetch if no images loaded yet
+    if (images.length === 0) {
+      return undefined;
+    }
+
+    const container = scrollContainerRef.current;
+    const needsScrolling = container.scrollHeight > container.clientHeight;
+
+    // Detect when scrollbar first appears
+    if (needsScrolling && !scrollbarDetectedRef.current) {
+      scrollbarDetectedRef.current = true;
+      imagesCountWhenScrollbarAppearedRef.current = images.length;
+    }
+
+    // Initial prefetch phase: fetch double the images count when scrollbar appeared
+    if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
+      const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
+      
+      if (images.length < targetImagesCount && hasNextPage) {
+        // Still in initial prefetch phase - fetch until we have double
+        const timeoutId = setTimeout(() => {
+          if (hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+            void fetchNextPage();
+          }
+        }, 100);
+        return () => clearTimeout(timeoutId);
+      }
+      // After initial prefetch is complete, scroll handler will take over
+      return undefined;
+    }
+
+    // Before scrollbar appears, keep fetching until we get scroll
+    if (!scrollbarDetectedRef.current && !needsScrolling && hasNextPage) {
+      const timeoutId = setTimeout(() => {
+        if (hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
+          void fetchNextPage();
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // No cleanup needed for other cases
+    return undefined;
+  }, [images.length, hasNextPage, isFetchingNextPage, error, fetchNextPage, selectedKeys.length]);
 
   // Helper to render image grid with infinite scroll support
   const renderImageGrid = (
     imagesToRender: GalleryImage[],
-    highlightSelected = false,
+    _highlightSelected = false,
     enableInfiniteScroll = false
   ) => {
     if (enableInfiniteScroll) {
       // For infinite scroll, wrap in scrollable container with prefetching
       return (
         <div
+          ref={scrollContainerRef}
           className="w-full overflow-auto table-scrollbar"
           style={{ height: "calc(100vh - 400px)", minHeight: "600px", overscrollBehavior: "none" }}
           onScroll={(e) => {
@@ -62,22 +209,47 @@ export function OriginalsTab({
             const clientHeight = target.clientHeight;
 
             // Use item-based prefetching for smooth scrolling
-            // Estimate item height based on grid layout (4 columns)
-            // Average item height is approximately 200px (image + gap)
-            const estimatedItemHeight = 200;
+            // Calculate based on actual grid layout (responsive: 2-6 columns)
+            // Measure row height dynamically to adapt to any item height
+            // Calculate columns based on viewport width
+            const viewportWidth = target.clientWidth;
+            let columns = 2; // Default for mobile
+            if (viewportWidth >= 1280) columns = 6; // xl
+            else if (viewportWidth >= 1024) columns = 5; // lg
+            else if (viewportWidth >= 768) columns = 4; // md
+            else if (viewportWidth >= 640) columns = 3; // sm
+
+            // Use measured row height if available, otherwise fall back to estimate
+            // Try to measure on-the-fly if not measured yet
+            let rowHeight = measuredRowHeightRef.current;
+            if (rowHeight === null && gridContainerRef.current) {
+              const measured = measureRowHeight();
+              if (measured !== null) {
+                rowHeight = measured;
+                measuredRowHeightRef.current = measured;
+              }
+            }
+            // Fallback to estimate if measurement failed
+            const estimatedRowHeight = rowHeight ?? 200; // Default fallback: 200px per row
             const totalItemsRendered = imagesToRender.length;
 
             // Calculate which item index is currently at the bottom of viewport
             const scrollBottom = scrollTop + clientHeight;
-            const itemsScrolled = Math.floor(scrollBottom / estimatedItemHeight);
+            const rowsScrolled = Math.floor(scrollBottom / estimatedRowHeight);
+            const itemsScrolled = rowsScrolled * columns; // Items = rows * columns per row
 
             // Calculate distance from end (same logic as gallery photos)
             const distanceFromEnd = totalItemsRendered - itemsScrolled;
-            const prefetchThreshold = 25; // Same threshold as other infinite scrolls
+            // Prefetch threshold: account for page size (typically limit=50)
+            // Use 1 page worth to ensure smooth scrolling
+            const prefetchThreshold = 50; // Threshold for originals with typical limit=50
+
+            // Also check if we have selectedKeys and need to fetch more to match them
+            const needsMoreForSelectedKeys = selectedKeys.length > 0 && totalItemsRendered < selectedKeys.length;
 
             // Don't fetch if there's an error or already fetching
             if (
-              distanceFromEnd <= prefetchThreshold &&
+              (distanceFromEnd <= prefetchThreshold || needsMoreForSelectedKeys) &&
               hasNextPage &&
               !isFetchingNextPage &&
               !error &&
@@ -87,7 +259,10 @@ export function OriginalsTab({
             }
           }}
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4">
+          <div 
+            ref={gridContainerRef}
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8"
+          >
             {imagesToRender.map((img, idx) => {
               const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
               return (
@@ -196,20 +371,28 @@ export function OriginalsTab({
     return <GalleryLoading />;
   }
 
-  if (filteredImages.length === 0) {
-    return (
-      <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
-        <p className="text-sm text-warning-800 dark:text-warning-200">
-          Nie znaleziono zdjęć pasujących do wybranych kluczy. Wybrane klucze:{" "}
-          {selectedKeys.slice(0, 5).join(", ")}
-          {selectedKeys.length > 5 ? "..." : ""}
-        </p>
-        <p className="text-xs text-warning-600 dark:text-warning-400 mt-1">
-          Dostępne zdjęcia: {images.length} | Wybrane klucze: {selectedKeys.length}
-        </p>
-      </div>
-    );
-  }
+  // Always render the grid container so auto-fetch can work, even if filteredImages is empty
+  // Show warning message above the grid if no matches found yet
+  const mightHaveMore = images.length > 0 && selectedKeys.length > images.length;
+  const showWarning = filteredImages.length === 0 && images.length > 0;
 
-  return <div className="space-y-4">{renderImageGrid(filteredImages, true, true)}</div>;
+  return (
+    <div className="space-y-4">
+      {showWarning && (
+        <div className="p-4 bg-warning-50 border border-warning-200 rounded-lg dark:bg-warning-500/10 dark:border-warning-500/20">
+          <p className="text-sm text-warning-800 dark:text-warning-200">
+            Nie znaleziono zdjęć pasujących do wybranych kluczy. Wybrane klucze:{" "}
+            {selectedKeys.slice(0, 5).join(", ")}
+            {selectedKeys.length > 5 ? "..." : ""}
+          </p>
+          <p className="text-xs text-warning-600 dark:text-warning-400 mt-1">
+            {mightHaveMore
+              ? `Załadowane zdjęcia: ${images.length} | Wybrane klucze: ${selectedKeys.length} (możliwe, że więcej zdjęć jest w trakcie ładowania)`
+              : `Załadowane zdjęcia: ${images.length} | Wybrane klucze: ${selectedKeys.length}`}
+          </p>
+        </div>
+      )}
+      {renderImageGrid(filteredImages, true, true)}
+    </div>
+  );
 }

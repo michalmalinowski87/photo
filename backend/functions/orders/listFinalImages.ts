@@ -225,6 +225,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return (a?.key || '').localeCompare(b?.key || '');
 			});
 
+		// Calculate total count (before pagination)
+		const totalCount = allImages.length;
+
 		// Apply cursor-based pagination (skip files before cursor)
 		let paginatedImages = allImages;
 		if (cursor) {
@@ -260,6 +263,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				orderId,
 				images: finalImages,
 				count: finalImages.length,
+				totalCount,
 				hasMore,
 				nextCursor
 			})

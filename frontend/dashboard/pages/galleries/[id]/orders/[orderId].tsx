@@ -111,6 +111,16 @@ export default function OrderDetail() {
     );
   }, [finalImagesData]);
 
+  // Get total count of final images from the first page (if available)
+  const totalFinalImagesCount = useMemo(() => {
+    if (!finalImagesData?.pages || finalImagesData.pages.length === 0) {
+      return 0;
+    }
+    // totalCount is returned on the first page
+    const firstPage = finalImagesData.pages[0] as { totalCount?: number };
+    return firstPage?.totalCount ?? finalImagesDataFlattened.length;
+  }, [finalImagesData, finalImagesDataFlattened.length]);
+
   const [error, setError] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
@@ -581,7 +591,7 @@ export default function OrderDetail() {
         <OrderTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          finalsCount={finalImages.length}
+          finalsCount={totalFinalImagesCount}
         />
       )}
 

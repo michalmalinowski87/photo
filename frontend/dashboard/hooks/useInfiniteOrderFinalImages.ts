@@ -12,6 +12,7 @@ interface UseInfiniteOrderFinalImagesParams {
       images: GalleryImage[];
       hasMore?: boolean;
       nextCursor?: string | null;
+      totalCount?: number;
     }>,
     "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
   >;
@@ -26,13 +27,17 @@ export function useInfiniteOrderFinalImages({
     images: GalleryImage[];
     hasMore?: boolean;
     nextCursor?: string | null;
+    totalCount?: number;
   }>({
     queryKey: queryKeys.orders.finalImagesInfinite(galleryId ?? "", orderId ?? ""),
-    queryFn: async ({ pageParam: _pageParam }) => {
+    queryFn: async ({ pageParam }) => {
       if (!galleryId || !orderId) {
         throw new Error("Gallery ID and Order ID are required");
       }
-      const response = await api.orders.getFinalImages(galleryId, orderId);
+      const response = await api.orders.getFinalImages(galleryId, orderId, {
+        limit: 50,
+        cursor: pageParam as string | null | undefined,
+      });
 
       // Handle backward compatibility - if response doesn't have expected structure
       if (!response || typeof response !== "object") {
@@ -40,6 +45,7 @@ export function useInfiniteOrderFinalImages({
           images: [],
           hasMore: false,
           nextCursor: null,
+          totalCount: 0,
         };
       }
 
@@ -51,14 +57,19 @@ export function useInfiniteOrderFinalImages({
         finalUrl: img.finalUrl ?? img.url ?? "",
       }));
 
-      // Return as a single page since backend doesn't support pagination
       return {
         images: images || [],
-        hasMore: false,
-        nextCursor: null,
+        hasMore: response.hasMore ?? false,
+        nextCursor: response.nextCursor ?? null,
+        totalCount: response.totalCount,
       };
     },
-    getNextPageParam: () => undefined, // No pagination support
+    getNextPageParam: (lastPage) => {
+      if (lastPage.hasMore && lastPage.nextCursor) {
+        return lastPage.nextCursor;
+      }
+      return undefined;
+    },
     initialPageParam: null as string | null,
     enabled: !!galleryId && !!orderId,
     // Disable retries for infinite queries to prevent infinite loops on errors

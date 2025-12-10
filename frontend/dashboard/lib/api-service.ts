@@ -883,14 +883,35 @@ class ApiService {
      * Get final images for an order
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    getFinalImages: async (galleryId: string, orderId: string): Promise<{ images: any[] }> => {
+    getFinalImages: async (
+      galleryId: string,
+      orderId: string,
+      options?: { limit?: number; cursor?: string | null }
+    ): Promise<{
+      images: any[];
+      count?: number;
+      totalCount?: number;
+      hasMore?: boolean;
+      nextCursor?: string | null;
+    }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
       if (!orderId) {
         throw new Error("Order ID is required");
       }
-      return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/images`);
+      const params = new URLSearchParams();
+      if (options?.limit) {
+        params.append("limit", options.limit.toString());
+      }
+      if (options?.cursor) {
+        params.append("cursor", options.cursor);
+      }
+      const queryString = params.toString();
+      const url = queryString
+        ? `/galleries/${galleryId}/orders/${orderId}/final/images?${queryString}`
+        : `/galleries/${galleryId}/orders/${orderId}/final/images`;
+      return await this._request(url);
     },
 
     /**
