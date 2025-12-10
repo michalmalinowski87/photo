@@ -166,7 +166,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 
 		// Process final images
-		const allImages = (finalsListResponse.Contents || [])
+		const finalFiles = (finalsListResponse.Contents || [])
 			.map(obj => {
 				const fullKey = obj.Key || '';
 				// Ensure the key matches our expected prefix exactly
@@ -178,66 +178,113 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				if (!filename || filename.includes('/') || filename.startsWith('previews/') || filename.startsWith('thumbs/')) {
 					return null;
 				}
-				
-				const finalKey = `galleries/${galleryId}/final/${orderId}/${filename}`;
-				
-				// Generate WebP preview/thumb keys (for display)
-				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
-				const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
-				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
-				const previewWebpKey = getWebpFilename(previewKey);
-				const bigThumbWebpKey = getWebpFilename(bigThumbKey);
-				const thumbWebpKey = getWebpFilename(thumbKey);
-				
-				// Check if WebP versions exist
-				const hasPreviewWebp = previewFiles.has(filename);
-				const hasBigThumbWebp = bigThumbKeys.has(filename);
-				const hasThumbWebp = thumbKeys.has(filename);
-				
-				// Build CloudFront URLs - encode path segments
-				const buildCloudFrontUrl = (hasFile: boolean, key: string): string | null => {
-					return (hasFile && cloudfrontDomain)
-						? `https://${cloudfrontDomain}/${key.split('/').map(encodeURIComponent).join('/')}`
-						: null;
-				};
-				
-				const finalUrl = cloudfrontDomain 
-					? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
-					: null;
-				
-				// Processed WebP URLs for display (three-tier optimization)
-				const previewUrl = buildCloudFrontUrl(hasPreviewWebp, previewWebpKey);
-				const bigThumbUrl = buildCloudFrontUrl(hasBigThumbWebp, bigThumbWebpKey);
-				const thumbUrl = buildCloudFrontUrl(hasThumbWebp, thumbWebpKey);
-
-				return {
-					key: filename,
-					finalUrl, // Original unprocessed URL (for download)
-					previewUrl, // Processed WebP preview (1400px) for full-screen viewing
-					bigThumbUrl, // Processed WebP big thumb (600px) for masonry grid
-					thumbUrl, // Processed WebP thumbnail (300x300) for CMS grid
-					size: obj.Size || 0,
-					lastModified: obj.LastModified?.toISOString()
-				};
+				return { filename, obj };
 			})
-			.filter(Boolean)
+			.filter((entry): entry is { filename: string; obj: any } => entry !== null);
+
+		// Sort by LastModified timestamp (newest first), with filename as secondary sort key
+		// This ensures accurate ordering for fast consecutive uploads
+		const sortedFinalFiles = finalFiles
+			.map(({ filename, obj }) => ({
+				filename,
+				obj,
+				lastModified: obj.LastModified ? new Date(obj.LastModified).getTime() : 0
+			}))
 			.sort((a, b) => {
-				return (a?.key || '').localeCompare(b?.key || '');
+				// Primary sort: by timestamp descending (newest first)
+				if (b.lastModified !== a.lastModified) {
+					return b.lastModified - a.lastModified;
+				}
+				// Secondary sort: by filename ascending (for consistent ordering when timestamps are identical)
+				return a.filename.localeCompare(b.filename);
 			});
+
+		// Build images array from sorted files
+		const allImages = sortedFinalFiles.map(({ filename, obj }) => {
+			const finalKey = `galleries/${galleryId}/final/${orderId}/${filename}`;
+			
+			// Generate WebP preview/thumb keys (for display)
+			const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+			const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
+			const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
+			const previewWebpKey = getWebpFilename(previewKey);
+			const bigThumbWebpKey = getWebpFilename(bigThumbKey);
+			const thumbWebpKey = getWebpFilename(thumbKey);
+			
+			// Check if WebP versions exist
+			const hasPreviewWebp = previewFiles.has(filename);
+			const hasBigThumbWebp = bigThumbKeys.has(filename);
+			const hasThumbWebp = thumbKeys.has(filename);
+			
+			// Build CloudFront URLs - encode path segments
+			const buildCloudFrontUrl = (hasFile: boolean, key: string): string | null => {
+				return (hasFile && cloudfrontDomain)
+					? `https://${cloudfrontDomain}/${key.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+			};
+			
+			const finalUrl = cloudfrontDomain 
+				? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
+				: null;
+			
+			// Processed WebP URLs for display (three-tier optimization)
+			const previewUrl = buildCloudFrontUrl(hasPreviewWebp, previewWebpKey);
+			const bigThumbUrl = buildCloudFrontUrl(hasBigThumbWebp, bigThumbWebpKey);
+			const thumbUrl = buildCloudFrontUrl(hasThumbWebp, thumbWebpKey);
+
+			return {
+				key: filename,
+				finalUrl, // Original unprocessed URL (for download)
+				previewUrl, // Processed WebP preview (1400px) for full-screen viewing
+				bigThumbUrl, // Processed WebP big thumb (600px) for masonry grid
+				thumbUrl, // Processed WebP thumbnail (300x300) for CMS grid
+				size: obj.Size || 0,
+				lastModified: obj.LastModified?.toISOString()
+			};
+		});
 
 		// Calculate total count (before pagination)
 		const totalCount = allImages.length;
 
 		// Apply cursor-based pagination (skip files before cursor)
+		// Cursor format: "timestamp|filename" (e.g., "1704110400000|image.jpg")
 		let paginatedImages = allImages;
 		if (cursor) {
-			const cursorIndex = allImages.findIndex(img => img?.key === cursor);
-			if (cursorIndex >= 0) {
-				paginatedImages = allImages.slice(cursorIndex + 1);
-			} else if (cursorIndex === -1 && allImages.length > 0) {
-				// Cursor not found, find position where it would be inserted
-				const insertIndex = allImages.findIndex(img => (img?.key || '') > cursor);
-				paginatedImages = insertIndex >= 0 ? allImages.slice(insertIndex) : [];
+			// Parse cursor: extract timestamp and filename
+			const parts = cursor.split('|');
+			if (parts.length !== 2) {
+				// Invalid cursor format - treat as no cursor (start from beginning)
+				logger.warn('Invalid cursor format, expected timestamp|filename', { cursor, galleryId, orderId });
+			} else {
+				const cursorTimestamp = parseInt(parts[0], 10);
+				const cursorFilename = parts[1];
+				
+				if (isNaN(cursorTimestamp) || !cursorFilename) {
+					// Invalid cursor - treat as no cursor
+					logger.warn('Invalid cursor values', { cursorTimestamp, cursorFilename, galleryId, orderId });
+				} else {
+					// Find cursor position by timestamp and filename
+					const cursorIndex = sortedFinalFiles.findIndex(item => 
+						item.filename === cursorFilename && item.lastModified === cursorTimestamp
+					);
+					if (cursorIndex >= 0) {
+						paginatedImages = allImages.slice(cursorIndex + 1);
+					} else if (cursorIndex === -1 && sortedFinalFiles.length > 0) {
+						// Cursor not found, find position where it would be inserted
+						// Since we're sorted descending (newest first), find first item that comes AFTER cursor
+						const insertIndex = sortedFinalFiles.findIndex(item => {
+							// Item comes after cursor if: older timestamp OR same timestamp with filename after cursor
+							if (item.lastModified < cursorTimestamp) {
+								return true; // Item is older (smaller timestamp) = comes after cursor in descending sort
+							}
+							if (item.lastModified === cursorTimestamp && item.filename > cursorFilename) {
+								return true; // Same timestamp, but filename comes after cursor alphabetically
+							}
+							return false;
+						});
+						paginatedImages = insertIndex >= 0 ? allImages.slice(insertIndex) : [];
+					}
+				}
 			}
 		}
 
@@ -247,11 +294,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const finalImages = hasMore ? keysToProcess.slice(0, limit) : keysToProcess;
 
 		// Generate next cursor from last item
+		// Format: "timestamp|filename" for accurate pagination with timestamp-based sorting
 		let nextCursor: string | null = null;
 		if (hasMore && finalImages.length > 0) {
 			const lastItem = finalImages[finalImages.length - 1];
-			if (lastItem && lastItem.key) {
-				nextCursor = encodeURIComponent(lastItem.key);
+			if (lastItem.key && lastItem.lastModified) {
+				// Get timestamp as number (milliseconds since epoch)
+				const timestamp = typeof lastItem.lastModified === 'string' 
+					? new Date(lastItem.lastModified).getTime()
+					: lastItem.lastModified;
+				// Format: timestamp|filename
+				nextCursor = encodeURIComponent(`${timestamp}|${lastItem.key}`);
+			} else {
+				// Fallback to old format if lastModified is missing (shouldn't happen, but for safety)
+				nextCursor = encodeURIComponent(lastItem.key || '');
 			}
 		}
 
