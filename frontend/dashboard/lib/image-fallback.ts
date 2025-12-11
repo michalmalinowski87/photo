@@ -252,6 +252,12 @@ export function getNextFallbackUrl(
     return attemptedSizes?.has(size) ?? false;
   };
 
+  // Helper to check if URL is CloudFront or S3
+  const isCloudFront = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    return isCloudFrontUrl(url);
+  };
+
   // Helper to try a CloudFront URL
   const tryCloudFront = (
     size: "thumb" | "preview" | "bigthumb",
@@ -263,8 +269,10 @@ export function getNextFallbackUrl(
     if (!url || urlsMatch(failedUrl, url)) {
       return null;
     }
-    // Skip if URL doesn't actually exist (check if it's null/undefined or points to non-existent resource)
-    // This prevents trying to fallback to sizes that were never generated
+    // Only try if it's actually a CloudFront URL
+    if (!isCloudFront(url)) {
+      return null;
+    }
     return addCacheBustingToUrl(url, img.lastModified);
   };
 
@@ -282,63 +290,91 @@ export function getNextFallbackUrl(
     return addCacheBustingToUrl(url, img.lastModified);
   };
 
-  // Implement tiered fallback strategy based on preferred size
+  // Check if the failed URL was CloudFront or S3
+  const failedUrlWasCloudFront = isCloudFront(failedUrl);
+
+  // Implement tiered fallback strategy: try all CloudFront versions first, then all S3 versions
+  // Strategy: Try all CloudFront (thumb → bigthumb → preview), then all S3 (thumb → bigthumb → preview), then original
   if (detectedPreferredSize === "thumb") {
-    // Thumb strategy: CloudFront thumb → bigthumb → preview → S3 thumb → bigthumb → preview → original
-    // If CloudFront thumb failed, try CloudFront bigthumb
+    // If CloudFront thumb failed, try S3 thumb for same size first
+    if (failedUrlWasCloudFront) {
+      const thumbS3 = tryS3("thumb", img.thumbUrlFallback);
+      if (thumbS3) {
+        return thumbS3;
+      }
+    }
+
+    // Try all remaining CloudFront versions (from smallest to largest)
     const bigThumbCf = tryCloudFront("bigthumb", img.bigThumbUrl);
     if (bigThumbCf) {
       return bigThumbCf;
     }
 
-    // If CloudFront bigthumb failed or not available, try CloudFront preview
     const previewCf = tryCloudFront("preview", img.previewUrl);
     if (previewCf) {
       return previewCf;
     }
 
-    // All CloudFront options exhausted, try S3 thumb
-    const thumbS3 = tryS3("thumb", img.thumbUrlFallback);
-    if (thumbS3) {
-      return thumbS3;
+    // All CloudFront options exhausted, try remaining S3 versions
+    // (thumb already tried if failed URL was CloudFront)
+    if (!failedUrlWasCloudFront) {
+      const thumbS3 = tryS3("thumb", img.thumbUrlFallback);
+      if (thumbS3) {
+        return thumbS3;
+      }
     }
 
-    // If S3 thumb failed or not available, try S3 bigthumb
     const bigThumbS3 = tryS3("bigthumb", img.bigThumbUrlFallback);
     if (bigThumbS3) {
       return bigThumbS3;
     }
 
-    // If S3 bigthumb failed or not available, try S3 preview
     const previewS3 = tryS3("preview", img.previewUrlFallback);
     if (previewS3) {
       return previewS3;
     }
   } else if (detectedPreferredSize === "bigthumb") {
-    // Bigthumb strategy: CloudFront bigthumb → preview → S3 bigthumb → preview → original
-    // If CloudFront bigthumb failed, try CloudFront preview
+    // If CloudFront bigthumb failed, try S3 bigthumb for same size first
+    if (failedUrlWasCloudFront) {
+      const bigThumbS3 = tryS3("bigthumb", img.bigThumbUrlFallback);
+      if (bigThumbS3) {
+        return bigThumbS3;
+      }
+    }
+
+    // Try remaining CloudFront versions
     const previewCf = tryCloudFront("preview", img.previewUrl);
     if (previewCf) {
       return previewCf;
     }
 
-    // All CloudFront options exhausted, try S3 bigthumb
-    const bigThumbS3 = tryS3("bigthumb", img.bigThumbUrlFallback);
-    if (bigThumbS3) {
-      return bigThumbS3;
+    // All CloudFront options exhausted, try remaining S3 versions
+    if (!failedUrlWasCloudFront) {
+      const bigThumbS3 = tryS3("bigthumb", img.bigThumbUrlFallback);
+      if (bigThumbS3) {
+        return bigThumbS3;
+      }
     }
 
-    // If S3 bigthumb failed or not available, try S3 preview
     const previewS3 = tryS3("preview", img.previewUrlFallback);
     if (previewS3) {
       return previewS3;
     }
   } else if (detectedPreferredSize === "preview") {
-    // Preview strategy: CloudFront preview → S3 preview → original
-    // If CloudFront preview failed, try S3 preview
-    const previewS3 = tryS3("preview", img.previewUrlFallback);
-    if (previewS3) {
-      return previewS3;
+    // If CloudFront preview failed, try S3 preview for same size first
+    if (failedUrlWasCloudFront) {
+      const previewS3 = tryS3("preview", img.previewUrlFallback);
+      if (previewS3) {
+        return previewS3;
+      }
+    }
+
+    // All CloudFront options exhausted, try S3 preview if not already tried
+    if (!failedUrlWasCloudFront) {
+      const previewS3 = tryS3("preview", img.previewUrlFallback);
+      if (previewS3) {
+        return previewS3;
+      }
     }
   }
 

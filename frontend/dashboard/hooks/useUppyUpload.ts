@@ -164,9 +164,13 @@ async function handlePostUploadActions(
 
   try {
     if (type === "finals" && orderId) {
-      // Wait a bit for backend to finalize uploads before marking complete
+      // Wait for backend to finalize uploads and CloudFront to populate new images
       // This is especially important after pause/resume cycles with multipart uploads
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // 1.5 seconds allows time for:
+      // - Backend image processing/thumbnail generation
+      // - CloudFront edge locations to have content available
+      // - Reduces 403 errors when immediately fetching after upload
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       
       // Use mutation hook to ensure order detail is invalidated (status may change from CLIENT_APPROVED/AWAITING_FINAL_PHOTOS to PREPARING_DELIVERY)
       if (markFinalUploadCompleteMutation) {
@@ -215,7 +219,15 @@ async function handlePostUploadActions(
         );
       });
     } else {
-      // For originals, reset and refetch infinite queries
+      // For originals, wait for CloudFront to populate new images before refetching
+      // This delay allows time for:
+      // - Backend image processing/thumbnail generation
+      // - CloudFront edge locations to have content available
+      // - Reduces 403 errors when immediately fetching after upload
+      // Best practice: 1-2 seconds is sufficient for most image processing pipelines
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      // Reset and refetch infinite queries
       await resetInfiniteQueryAndRefetchFirstPage(queryClient, (query) => {
         const key = query.queryKey;
         return (

@@ -362,7 +362,12 @@ export default function GalleryPhotos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSection, galleryIdForQuery, getSectionQueryKey]);
 
-  // Create query for the currently expanded section
+  // When there are no delivered orders, show all images directly (no section expansion needed)
+  // Otherwise, show images for the currently expanded section
+  const hasNoOrders = deliveredOrders.length === 0;
+  const shouldShowAllImages = hasNoOrders && totalGalleryImageCount > 0;
+
+  // Create query for the currently expanded section (or all images if no orders)
   // React Query automatically caches each section separately based on unique query keys
   // (query key includes filterOrderId/filterUnselected parameters)
   // When user switches sections, previous query data is automatically cached by React Query
@@ -371,12 +376,14 @@ export default function GalleryPhotos() {
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 50,
-    filterOrderId: expandedSection?.startsWith("order-")
-      ? expandedSection.replace("order-", "")
-      : undefined,
-    filterUnselected: expandedSection === "unselected",
+    filterOrderId: shouldShowAllImages
+      ? undefined
+      : expandedSection?.startsWith("order-")
+        ? expandedSection.replace("order-", "")
+        : undefined,
+    filterUnselected: shouldShowAllImages ? false : expandedSection === "unselected",
     options: {
-      enabled: !!galleryIdForQuery && !!expandedSection, // Only fetch when section is expanded
+      enabled: !!galleryIdForQuery && (shouldShowAllImages || !!expandedSection), // Fetch when no orders (show all) or when section is expanded
       // React Query automatically caches queries by unique query keys
       // staleTime: data is considered fresh for this duration, no refetch will occur
       // With high staleTime, React Query won't refetch when re-enabling if data exists and is fresh
@@ -642,7 +649,14 @@ export default function GalleryPhotos() {
 
     // Refetch fresh images from React Query - it handles cache updates automatically
     await refetchGalleryImages();
-  }, [galleryIdForQuery, refetchGalleryImages, logSkippedLoad]);
+
+    // When there are no orders, images are shown directly (no section expansion needed)
+    // When there are orders, auto-expand "unselected" section if no section is currently expanded
+    // This ensures newly uploaded images are visible immediately
+    if (deliveredOrders.length > 0 && !expandedSection) {
+      setExpandedSection("unselected");
+    }
+  }, [galleryIdForQuery, refetchGalleryImages, logSkippedLoad, expandedSection, deliveredOrders]);
 
   // Loading state is now automatically managed by React Query mutations
   // No need to manually set/unset loading state
@@ -683,10 +697,15 @@ export default function GalleryPhotos() {
   // Use effectiveImagesData which includes cached data to avoid clearing images when collapsing
   // CRITICAL: We still check expandedSection to only show images for the expanded section,
   // but React Query cache ensures data is available instantly when re-expanding
+  // When there are no orders, show all images directly (no section expansion needed)
   const images = useMemo(() => {
-    // Only return images if section is expanded (don't show images when collapsed)
-    // But cached data is preserved by React Query, so when we expand again, data loads instantly
-    if (!effectiveImagesData?.pages || !expandedSection) {
+    // Return images if: (1) no orders and images exist, OR (2) section is expanded
+    // When there are no orders, we show all images directly without needing section expansion
+    if (!effectiveImagesData?.pages) {
+      return [];
+    }
+    const shouldShowImages = shouldShowAllImages || !!expandedSection;
+    if (!shouldShowImages) {
       return [];
     }
     // Flatten all pages into a single array
@@ -730,7 +749,7 @@ export default function GalleryPhotos() {
       }
       return true;
     });
-  }, [effectiveImagesData, deletedImageKeys, deletedImageKeysBulk, expandedSection]);
+  }, [effectiveImagesData, deletedImageKeys, deletedImageKeysBulk, expandedSection, shouldShowAllImages]);
 
   // Clear deletedImageKeys for images that have been re-uploaded
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
@@ -1814,18 +1833,49 @@ export default function GalleryPhotos() {
             </div>
           </div>
         ) : (
-          // Fallback: show empty state if no delivered orders and no images
-          <EmptyState
-            // eslint-disable-next-line jsx-a11y/alt-text
-            icon={<Image size={64} aria-hidden="true" />}
-            title="Brak zdjęć w galerii"
-            description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
-            actionButton={{
-              label: "Prześlij zdjęcia",
-              onClick: () => openModal("photos-upload-modal"),
-              icon: <Upload size={18} />,
-            }}
-          />
+          // No delivered orders: show images directly with infinite scroll (no section wrapper)
+          totalGalleryImageCount > 0 ? (
+            // Render images directly without section wrapper when there are no orders
+            (imagesLoading || imagesFetching) && images.length === 0 ? (
+              <GalleryLoading text="Ładowanie zdjęć..." />
+            ) : images.length > 0 ? (
+              <OrderImagesGrid
+                images={images}
+                renderImageItem={renderImageItem}
+                fetchNextPage={fetchNextPage}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                imagesError={imagesError}
+                isLoading={imagesLoading}
+                isFetching={imagesFetching}
+              />
+            ) : (
+              <EmptyState
+                // eslint-disable-next-line jsx-a11y/alt-text
+                icon={<Image size={64} aria-hidden="true" />}
+                title="Brak zdjęć w galerii"
+                description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
+                actionButton={{
+                  label: "Prześlij zdjęcia",
+                  onClick: () => openModal("photos-upload-modal"),
+                  icon: <Upload size={18} />,
+                }}
+              />
+            )
+          ) : (
+            // Fallback: show empty state if no delivered orders and no images
+            <EmptyState
+              // eslint-disable-next-line jsx-a11y/alt-text
+              icon={<Image size={64} aria-hidden="true" />}
+              title="Brak zdjęć w galerii"
+              description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
+              actionButton={{
+                label: "Prześlij zdjęcia",
+                onClick: () => openModal("photos-upload-modal"),
+                icon: <Upload size={18} />,
+              }}
+            />
+          )
         )}
       </div>
 
@@ -1912,6 +1962,7 @@ export default function GalleryPhotos() {
             ? deletingImages.has(imageToDelete.key ?? imageToDelete.filename ?? "")
             : false
         }
+        suppressKey="original_image_delete_confirm_suppress"
       />
 
       {/* Bulk Delete Confirmation Dialog */}
