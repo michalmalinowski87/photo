@@ -5,7 +5,6 @@ import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading
 import { useSidebar } from "../../hooks/useSidebar";
 import { isGalleryRoute } from "../../lib/navigation";
 import { useUnifiedStore } from "../../store/unifiedStore";
-import { DevMenuButton } from "../dev/DevMenuButton";
 import CreateGalleryWizard from "../galleries/CreateGalleryWizard";
 import { FullPageLoading } from "../ui/loading/Loading";
 import { WelcomePopupWrapper } from "../welcome/WelcomePopupWrapper";
@@ -169,7 +168,6 @@ const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
           </div>
         </div>
       </div>
-      <DevMenuButton />
     </>
   );
 };
