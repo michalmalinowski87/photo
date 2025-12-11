@@ -64,8 +64,11 @@ export default function App(props: AppProps) {
   // For 404 page during SSG, render without providers to avoid React 19 hook issues
   // The router isn't available during SSG, so we check the pathname from pageProps
   const is404Page = props.router?.pathname === "/404" || props.router?.pathname === undefined;
+  const isSSG404 = is404Page && typeof window === "undefined";
 
-  if (is404Page && typeof window === "undefined") {
+  // Always render the same structure, but conditionally wrap with providers
+  // This ensures hooks are always called in the same order
+  if (isSSG404) {
     // During SSG for 404, render minimal component without providers
     return <props.Component {...props.pageProps} />;
   }
