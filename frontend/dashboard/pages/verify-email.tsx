@@ -22,6 +22,7 @@ export default function VerifyEmail() {
   const [success, setSuccess] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [resending, setResending] = useState<boolean>(false);
+  const [resendCooldown, setResendCooldown] = useState<number>(0); // Seconds remaining
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -40,6 +41,16 @@ export default function VerifyEmail() {
       void router.push("/sign-up");
     }
   }, [router]);
+
+  // Countdown timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const handleVerify = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -79,22 +90,39 @@ export default function VerifyEmail() {
   };
 
   const handleResendCode = async (): Promise<void> => {
+    // Prevent multiple clicks during cooldown
+    if (resendCooldown > 0) {
+      return;
+    }
+
     setError("");
     setResending(true);
 
     try {
       await resendConfirmationCode(email);
       setError("");
+      // Start 1-minute cooldown
+      setResendCooldown(60);
       // Show success message
       // Note: In production, use toast notification instead of alert
       // showToast("success", "Sukces", "Nowy kod weryfikacyjny został wysłany na Twój adres email");
     } catch (err) {
-      const error = err as CognitoError;
+      const error = err as CognitoError & { minutesUntilReset?: number };
+      // Handle rate limit errors
+      if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
+        // Use the friendly message from backend, or provide a fallback
+        setError(error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości.");
+        // Still start cooldown even on rate limit error to prevent spam
+        setResendCooldown(60);
+        return;
+      }
       if (error.message) {
         setError(error.message);
       } else {
         setError("Nie udało się wysłać nowego kodu. Spróbuj ponownie.");
       }
+      // Start cooldown even on error to prevent spam
+      setResendCooldown(60);
     } finally {
       setResending(false);
     }
@@ -166,10 +194,10 @@ export default function VerifyEmail() {
           <button
             type="button"
             onClick={handleResendCode}
-            disabled={resending}
+            disabled={resending || resendCooldown > 0}
             className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            {resending ? "Wysyłanie..." : "Wyślij nowy kod"}
+            {resending ? "Wysyłanie..." : resendCooldown > 0 ? `Wyślij nowy kod (${resendCooldown}s)` : "Wyślij nowy kod"}
           </button>
         </div>
       </div>
@@ -180,7 +208,7 @@ export default function VerifyEmail() {
           <button
             type="button"
             onClick={handleResendCode}
-            disabled={resending}
+            disabled={resending || resendCooldown > 0}
             className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {resending ? "Wysyłanie..." : "wyślij ponownie"}

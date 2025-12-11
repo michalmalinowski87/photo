@@ -178,6 +178,18 @@ export class AppStack extends Stack {
 		removalPolicy: RemovalPolicy.RETAIN
 	});
 
+	const emailCodeRateLimit = new Table(this, 'EmailCodeRateLimitTable', {
+		partitionKey: { name: 'email', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	// Enable TTL on the rate limit table to automatically clean up old entries
+	const emailCodeRateLimitCfnTable = emailCodeRateLimit.node.defaultChild as CfnTable;
+	emailCodeRateLimitCfnTable.timeToLiveSpecification = {
+		enabled: true,
+		attributeName: 'ttl'
+	};
+
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true }
@@ -259,6 +271,7 @@ export class AppStack extends Stack {
 			PACKAGES_TABLE: packages.tableName,
 			NOTIFICATIONS_TABLE: notifications.tableName,
 			USERS_TABLE: users.tableName,
+			EMAIL_CODE_RATE_LIMIT_TABLE: emailCodeRateLimit.tableName,
 			SENDER_EMAIL: process.env.SENDER_EMAIL || '',
 			STRIPE_SECRET_KEY: stripeKeyFromEnv || '',
 			STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
@@ -304,7 +317,7 @@ export class AppStack extends Stack {
 			timeout: Duration.seconds(30), // Increased timeout for complex operations
 			bundling: {
 				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
-				minify: true,
+				minify: false, // Disable minification to prevent AWS SDK v3 constructor issues
 				treeShaking: true,
 				sourceMap: false,
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
@@ -324,13 +337,14 @@ export class AppStack extends Stack {
 		packages.grantReadWriteData(apiFn);
 		notifications.grantReadWriteData(apiFn);
 		users.grantReadWriteData(apiFn);
+		emailCodeRateLimit.grantReadWriteData(apiFn);
 
 		// S3 bucket
 		galleriesBucket.grantReadWrite(apiFn);
 
 		// Cognito permissions
 		apiFn.addToRolePolicy(new PolicyStatement({
-			actions: ['cognito-idp:AdminInitiateAuth', 'cognito-idp:AdminSetUserPassword', 'cognito-idp:AdminGetUser'],
+			actions: ['cognito-idp:AdminInitiateAuth', 'cognito-idp:AdminSetUserPassword', 'cognito-idp:AdminGetUser', 'cognito-idp:AdminCreateUser', 'cognito-idp:AdminResendConfirmationCode'],
 			resources: [userPool.userPoolArn]
 		}));
 
@@ -354,6 +368,19 @@ export class AppStack extends Stack {
 		});
 
 		// Public routes (no authorizer required)
+		// Public auth endpoints (signup and resend verification code) with rate limiting
+		httpApi.addRoutes({
+			path: '/auth/public/signup',
+			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiPublicSignupIntegration', apiFn)
+			// No authorizer - public endpoint
+		});
+		httpApi.addRoutes({
+			path: '/auth/public/resend-verification-code',
+			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiPublicResendCodeIntegration', apiFn)
+			// No authorizer - public endpoint
+		});
 		// Client login endpoint - clients authenticate with gallery password, not Cognito
 		httpApi.addRoutes({
 			path: '/galleries/{id}/client-login',

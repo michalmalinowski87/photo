@@ -463,36 +463,67 @@ export function signIn(email: string, password: string): Promise<string> {
 }
 
 export function signUp(email: string, password: string): Promise<ISignUpResult["user"]> {
-  return new Promise((resolve, reject) => {
-    if (!userPool) {
-      reject(new Error("Auth not initialized"));
+  return new Promise(async (resolve, reject) => {
+    // Use backend API for signup with rate limiting
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      reject(new Error("API URL not configured"));
       return;
     }
 
-    const attributeList = [
-      new CognitoUserAttribute({
-        Name: "email",
-        Value: email,
-      }),
-    ];
+    try {
+      const response = await fetch(`${apiUrl}/auth/public/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    userPool.signUp(
-      email,
-      password,
-      attributeList,
-      [],
-      (err: Error | undefined, result: ISignUpResult | undefined) => {
-        if (err) {
-          reject(err);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Sign up failed" }));
+        
+        // Handle rate limit error
+        if (response.status === 429) {
+          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.name = "RateLimitExceeded";
+          (rateLimitError as any).resetAt = errorData.resetAt;
+          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          reject(rateLimitError);
           return;
         }
-        if (!result?.user) {
-          reject(new Error("Sign up failed"));
+
+        // Handle other errors
+        if (response.status === 409) {
+          const error = new Error(errorData.error || "User already exists") as CognitoError;
+          error.code = "UsernameExistsException";
+          reject(error);
           return;
         }
-        resolve(result.user);
+
+        if (response.status === 400) {
+          const error = new Error(errorData.error || "Invalid parameters") as CognitoError;
+          error.code = "InvalidPasswordException";
+          reject(error);
+          return;
+        }
+
+        const error = new Error(errorData.error || "Sign up failed") as CognitoError;
+        reject(error);
+        return;
       }
-    );
+
+      // Signup successful - create a mock user object for compatibility
+      // The actual user is created in Cognito, but we need to return a user-like object
+      const mockUser = {
+        getUsername: () => email,
+      } as ISignUpResult["user"];
+
+      resolve(mockUser);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Sign up failed"));
+    }
   });
 }
 
@@ -519,24 +550,54 @@ export function confirmSignUp(email: string, code: string): Promise<void> {
 }
 
 export function resendConfirmationCode(email: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!userPool) {
-      reject(new Error("Auth not initialized"));
+  return new Promise(async (resolve, reject) => {
+    // Use backend API for resending code with rate limiting
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      reject(new Error("API URL not configured"));
       return;
     }
 
-    const cognitoUser = new CognitoUser({
-      Username: email,
-      Pool: userPool,
-    });
+    try {
+      const response = await fetch(`${apiUrl}/auth/public/resend-verification-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
 
-    cognitoUser.resendConfirmationCode((err: Error | undefined) => {
-      if (err) {
-        reject(err);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
+        
+        // Handle rate limit error
+        if (response.status === 429) {
+          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.name = "RateLimitExceeded";
+          (rateLimitError as any).resetAt = errorData.resetAt;
+          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          reject(rateLimitError);
+          return;
+        }
+
+        // Handle other errors
+        if (response.status === 404) {
+          const error = new Error(errorData.error || "User not found") as CognitoError;
+          error.code = "UserNotFoundException";
+          reject(error);
+          return;
+        }
+
+        const error = new Error(errorData.error || "Failed to resend code") as CognitoError;
+        reject(error);
         return;
       }
+
       resolve();
-    });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Failed to resend code"));
+    }
   });
 }
 

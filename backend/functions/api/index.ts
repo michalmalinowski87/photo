@@ -6,6 +6,7 @@ import { wrapHandler } from './routes/handlerWrapper';
 import { sanitizeErrorMessage } from '../../lib/src/error-utils';
 
 import { authRoutes } from './routes/auth';
+import { publicAuthRoutes } from './routes/public-auth';
 import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
 import * as galleriesListImages from '../galleries/listImages';
@@ -77,6 +78,10 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req: Request, res: Response) => {
 	res.json({ ok: true });
 });
+
+// Public auth routes (no auth required)
+// Signup and resend verification code endpoints with rate limiting
+app.use('/auth/public', publicAuthRoutes);
 
 // Public gallery routes (no auth required)
 // Client login endpoint - clients authenticate with gallery password, not Cognito

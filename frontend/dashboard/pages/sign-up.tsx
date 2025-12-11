@@ -100,7 +100,13 @@ export default function SignUp() {
         `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
       );
     } catch (err) {
-      const error = err as CognitoError;
+      const error = err as CognitoError & { minutesUntilReset?: number };
+      // Handle rate limit errors
+      if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
+        // Use the friendly message from backend, or provide a fallback
+        setError(error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam.");
+        return;
+      }
       // Handle Cognito errors
       if (error.code === "UsernameExistsException") {
         // User already exists - check if email is verified
