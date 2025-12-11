@@ -124,6 +124,13 @@ export const PackageStep = ({
     }
   }, [selectedPackageId, isFormMode]);
 
+  // Automatically show form mode when there are no packages
+  useEffect(() => {
+    if (existingPackages.length === 0 && !isFormMode) {
+      setIsFormMode(true);
+    }
+  }, [existingPackages.length, isFormMode]);
+
   // Selector mode - step2-style layout
   if (!isFormMode) {
     return (
@@ -237,16 +244,18 @@ export const PackageStep = ({
           Wybierz istniejący pakiet lub stwórz nowy
         </p>
       </div>
-      {/* Back to selector button */}
-      <div className="mb-4">
-        <button
-          onClick={() => setIsFormMode(false)}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-        >
-          <ArrowLeft size={16} />
-          Wróć do wyboru
-        </button>
-      </div>
+      {/* Back to selector button - only show when packages exist */}
+      {existingPackages.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setIsFormMode(false)}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Wróć do wyboru
+          </button>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Reordered fields: Row 1 - Package price + Payment amount */}

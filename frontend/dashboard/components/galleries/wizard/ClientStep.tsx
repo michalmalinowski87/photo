@@ -245,6 +245,13 @@ export const ClientStep = ({
     }
   }, [selectedClientId, isFormMode]);
 
+  // Automatically show form mode when there are no clients
+  useEffect(() => {
+    if (existingClients.length === 0 && !isFormMode) {
+      setIsFormMode(true);
+    }
+  }, [existingClients.length, isFormMode]);
+
   // Selector mode - step2-style layout
   if (!isFormMode) {
     return (
@@ -375,16 +382,18 @@ export const ClientStep = ({
           Wybierz istniejącego klienta lub dodaj nowego
         </p>
       </div>
-      {/* Back to selector button */}
-      <div className="mb-4">
-        <button
-          onClick={() => setIsFormMode(false)}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-        >
-          <ArrowLeft size={16} />
-          Wróć do wyboru
-        </button>
-      </div>
+      {/* Back to selector button - only show when clients exist */}
+      {existingClients.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setIsFormMode(false)}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Wróć do wyboru
+          </button>
+        </div>
+      )}
 
       <form onSubmit={(e) => e.preventDefault()}>
         <div>
