@@ -14,10 +14,7 @@ interface DeleteGalleryButtonProps {
   galleryName?: string;
 }
 
-export const DeleteGalleryButton = ({
-  galleryId,
-  galleryName,
-}: DeleteGalleryButtonProps) => {
+export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryButtonProps) => {
   const { replace } = useNavigation();
   const { showToast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);

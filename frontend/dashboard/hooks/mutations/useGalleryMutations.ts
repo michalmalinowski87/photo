@@ -670,7 +670,7 @@ export function useDeleteGalleryImage() {
       // This handles infinite queries with different limits, filters, etc.
       // When deleting originals, also update thumb queries since thumb images are derived from originals
       const typesToUpdate = imageType === "originals" ? [imageType, "thumb"] : [imageType];
-      
+
       typesToUpdate.forEach((typeToUpdate) => {
         queryClient.setQueriesData(
           {
@@ -689,62 +689,62 @@ export function useDeleteGalleryImage() {
               );
             },
           },
-        (old) => {
-          if (!old) {
-            return old;
-          }
-
-          // Handle infinite query structure: { pages: [{ images: GalleryImage[], hasMore, nextCursor }, ...] }
-          if (
-            old &&
-            typeof old === "object" &&
-            "pages" in old &&
-            Array.isArray((old as any).pages)
-          ) {
-            // Calculate total deleted count across all pages for stats update
-            let totalDeletedFromQuery = 0;
-            const updatedPages = (old as any).pages.map((page: any) => {
-              if (!Array.isArray(page.images)) {
-                return page;
-              }
-              const imagesBefore = page.images.length;
-              const filteredImages = page.images.filter(
-                (img: GalleryImage) => !imageKeys.includes(img.key ?? img.filename ?? "")
-              );
-              const deletedFromPage = imagesBefore - filteredImages.length;
-              totalDeletedFromQuery += deletedFromPage;
-
-              return {
-                ...page,
-                images: filteredImages,
-              };
-            });
-
-            // Update stats in the first page if it exists
-            const firstPage = updatedPages[0];
-            if (firstPage && typeof firstPage.totalCount === "number") {
-              firstPage.totalCount = Math.max(0, firstPage.totalCount - totalDeletedFromQuery);
+          (old) => {
+            if (!old) {
+              return old;
             }
-            // Update stats in the overall query if it exists at the root level
-            if ((old as any).stats && typeof (old as any).stats.totalCount === "number") {
+
+            // Handle infinite query structure: { pages: [{ images: GalleryImage[], hasMore, nextCursor }, ...] }
+            if (
+              old &&
+              typeof old === "object" &&
+              "pages" in old &&
+              Array.isArray((old as any).pages)
+            ) {
+              // Calculate total deleted count across all pages for stats update
+              let totalDeletedFromQuery = 0;
+              const updatedPages = (old as any).pages.map((page: any) => {
+                if (!Array.isArray(page.images)) {
+                  return page;
+                }
+                const imagesBefore = page.images.length;
+                const filteredImages = page.images.filter(
+                  (img: GalleryImage) => !imageKeys.includes(img.key ?? img.filename ?? "")
+                );
+                const deletedFromPage = imagesBefore - filteredImages.length;
+                totalDeletedFromQuery += deletedFromPage;
+
+                return {
+                  ...page,
+                  images: filteredImages,
+                };
+              });
+
+              // Update stats in the first page if it exists
+              const firstPage = updatedPages[0];
+              if (firstPage && typeof firstPage.totalCount === "number") {
+                firstPage.totalCount = Math.max(0, firstPage.totalCount - totalDeletedFromQuery);
+              }
+              // Update stats in the overall query if it exists at the root level
+              if ((old as any).stats && typeof (old as any).stats.totalCount === "number") {
+                return {
+                  ...old,
+                  pages: updatedPages,
+                  stats: {
+                    ...(old as any).stats,
+                    totalCount: Math.max(0, (old as any).stats.totalCount - totalDeletedFromQuery),
+                  },
+                };
+              }
+
               return {
                 ...old,
                 pages: updatedPages,
-                stats: {
-                  ...(old as any).stats,
-                  totalCount: Math.max(0, (old as any).stats.totalCount - totalDeletedFromQuery),
-                },
               };
             }
 
-            return {
-              ...old,
-              pages: updatedPages,
-            };
+            return old;
           }
-
-          return old;
-        }
         );
       });
 

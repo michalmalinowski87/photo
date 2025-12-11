@@ -7,7 +7,7 @@ interface DropdownProps {
   onClose: () => void;
   children: React.ReactNode;
   className?: string;
-  triggerRef?: React.RefObject<HTMLElement> | { current: HTMLElement | null };
+  triggerRef?: React.RefObject<HTMLElement | null> | { current: HTMLElement | null };
 }
 
 export const Dropdown = ({

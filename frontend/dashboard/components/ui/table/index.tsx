@@ -58,12 +58,7 @@ const TableRow = ({ children, className, onClick }: TableRowProps) => {
 };
 
 // TableCell Component
-const TableCell = ({
-  children,
-  isHeader = false,
-  className,
-  colSpan,
-}: TableCellProps) => {
+const TableCell = ({ children, isHeader = false, className, colSpan }: TableCellProps) => {
   const CellTag = isHeader ? "th" : "td";
   return (
     <CellTag className={` ${className}`} colSpan={colSpan}>

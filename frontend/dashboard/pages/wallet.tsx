@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import type { GetServerSideProps } from "next";
 import { useState } from "react";
 
 import Badge from "../components/ui/badge/Badge";
@@ -24,6 +25,11 @@ interface PageHistoryItem {
   page: number;
   cursor: string | null;
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function Wallet() {
   const queryClient = useQueryClient();

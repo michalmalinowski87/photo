@@ -1,3 +1,4 @@
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
@@ -41,6 +42,11 @@ interface PaymentDetails {
   stripeAmountCents: number;
   balanceAfterPayment?: number;
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function OrderDetail() {
   const { showToast } = useToast();
@@ -172,7 +178,7 @@ export default function OrderDetail() {
   // Note: This depends on deletedImageKeys (state) not deletedImageKeysRef (ref) to ensure it re-runs when keys are cleared
   const finalImages = useMemo(() => {
     // Start with React Query data
-    const baseImages = (finalImagesDataFlattened || []);
+    const baseImages = finalImagesDataFlattened || [];
 
     // Map URLs (similar to what useOrderFinalImages did)
     const mappedImages = baseImages.map((img: GalleryImage) => ({

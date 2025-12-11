@@ -24,6 +24,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }, [isAuthenticated, isLoading, router.asPath]);
 
   // Show loading state while checking authentication
+  // With synchronous initialization, this should rarely show for authenticated users
   if (isLoading) {
     return <FullPageLoading />;
   }

@@ -22,15 +22,23 @@ export function detectWebPSupport(): Promise<boolean> {
 export function WebPCompatibilityCheck({ children }: { children: React.ReactNode }) {
 	const [isSupported, setIsSupported] = useState<boolean | null>(null);
 	const [isChecking, setIsChecking] = useState(true);
+	const [isMounted, setIsMounted] = useState(false);
 
 	useEffect(() => {
+		setIsMounted(true);
 		detectWebPSupport().then((supported) => {
 			setIsSupported(supported);
 			setIsChecking(false);
 		});
 	}, []);
 
-	// Show loading state while checking
+	// During SSR, render children immediately to avoid hydration mismatch
+	// Only show loading state on the client after mount
+	if (!isMounted) {
+		return <>{children}</>;
+	}
+
+	// Show loading state while checking (only on client)
 	if (isChecking) {
 		return (
 			<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>

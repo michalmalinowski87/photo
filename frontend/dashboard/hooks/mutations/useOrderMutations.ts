@@ -317,6 +317,14 @@ export function useSendFinalLink() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.byGallery(variables.galleryId),
       });
+      // Invalidate gallery delivered orders query so settings page reflects the new DELIVERED status
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.deliveredOrders(variables.galleryId),
+      });
+      // Also invalidate gallery detail to ensure all related queries are refreshed
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
     },
   });
 }

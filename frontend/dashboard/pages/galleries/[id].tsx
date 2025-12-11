@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback } from "react";
@@ -26,6 +27,11 @@ import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
+
+// Prevent static generation - this page uses client hooks and dynamic routes
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 // List of filter route names that should not be treated as gallery IDs
 const FILTER_ROUTES = [

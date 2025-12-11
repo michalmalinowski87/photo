@@ -187,7 +187,7 @@ export function FinalsTab({
 
     const grid = gridContainerRef.current;
     const children = Array.from(grid.children) as HTMLElement[];
-    
+
     if (children.length === 0) {
       return null;
     }
@@ -195,9 +195,12 @@ export function FinalsTab({
     // Calculate columns based on viewport width
     const viewportWidth = grid.clientWidth;
     let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280) columns = 6; // xl
-    else if (viewportWidth >= 1024) columns = 5; // lg
-    else if (viewportWidth >= 768) columns = 4; // md
+    if (viewportWidth >= 1280)
+      columns = 6; // xl
+    else if (viewportWidth >= 1024)
+      columns = 5; // lg
+    else if (viewportWidth >= 768)
+      columns = 4; // md
     else if (viewportWidth >= 640) columns = 3; // sm
 
     // Measure height of first few rows to get average
@@ -210,7 +213,7 @@ export function FinalsTab({
     // Get positions of items in first two rows
     const firstRowItems = children.slice(0, columns);
     const secondRowItems = children.slice(columns, columns * 2);
-    
+
     if (firstRowItems.length === 0 || secondRowItems.length === 0) {
       return null;
     }
@@ -219,10 +222,10 @@ export function FinalsTab({
     const firstItemTop = firstRowItems[0].offsetTop;
     // Get top position of first item in second row
     const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-    
+
     // Calculate row height (difference between rows)
     const rowHeight = secondRowFirstItemTop - firstItemTop;
-    
+
     // Validate measurement (should be positive and reasonable)
     if (rowHeight > 0 && rowHeight < 1000) {
       return rowHeight;
@@ -242,13 +245,13 @@ export function FinalsTab({
 
     // Measure after a short delay to ensure DOM is updated
     const timeoutId = setTimeout(updateRowHeight, 100);
-    
+
     // Also measure on window resize
-    window.addEventListener('resize', updateRowHeight);
-    
+    window.addEventListener("resize", updateRowHeight);
+
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('resize', updateRowHeight);
+      window.removeEventListener("resize", updateRowHeight);
     };
   }, [images.length, measureRowHeight]);
 
@@ -258,7 +261,13 @@ export function FinalsTab({
   // 3. Fetch until we have double that amount (if 30 images needed scroll, fetch until 60)
   // 4. After initial prefetch, use normal smooth scrolling strategy
   useEffect(() => {
-    if (!scrollContainerRef.current || isFetchingNextPage || error || images.length === 0 || !fetchNextPage) {
+    if (
+      !scrollContainerRef.current ||
+      isFetchingNextPage ||
+      error ||
+      images.length === 0 ||
+      !fetchNextPage
+    ) {
       return;
     }
 
@@ -274,7 +283,7 @@ export function FinalsTab({
     // Initial prefetch phase: fetch double the images count when scrollbar appeared
     if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
       const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-      
+
       if (images.length < targetImagesCount && hasNextPage) {
         // Still in initial prefetch phase - fetch until we have double
         const timeoutId = setTimeout(() => {
@@ -297,7 +306,7 @@ export function FinalsTab({
       }, 100);
       return () => clearTimeout(timeoutId);
     }
-    
+
     return undefined;
   }, [images.length, hasNextPage, isFetchingNextPage, error, fetchNextPage]);
 
@@ -446,7 +455,7 @@ export function FinalsTab({
             }
           }}
         >
-          <div 
+          <div
             ref={gridContainerRef}
             className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8 ${isSelectionMode ? "select-none" : ""}`}
           >

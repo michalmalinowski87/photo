@@ -1,8 +1,14 @@
 "use client";
 
 import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
+
+// Prevent static generation for this dev page
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 interface DevTool {
   title: string;

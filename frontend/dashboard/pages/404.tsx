@@ -1,9 +1,10 @@
-import { useRouter } from "next/router";
+import Link from "next/link";
 import React from "react";
 
+// Note: This page cannot use getServerSideProps in Next.js
+// The build may fail with React 19/Next.js 15 - this is a known compatibility issue
+// The page will work at runtime, but static generation may fail
 export default function Custom404() {
-  const router = useRouter();
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="text-center">
@@ -12,14 +13,12 @@ export default function Custom404() {
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           The page you are looking for does not exist.
         </p>
-        <button
-          onClick={() => {
-            void router.push("/");
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:opacity-90"
+        <Link
+          href="/"
+          className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:opacity-90"
         >
           Go Home
-        </button>
+        </Link>
       </div>
     </div>
   );

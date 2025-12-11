@@ -7,14 +7,19 @@
     "build": "next build",
     "start": "next start"
   },
+  "resolutions": {
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
   "dependencies": {
-    "next": "^14.2.5",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "@photocloud/gallery-components": "*"
+    "@photocloud/gallery-components": "*",
+    "next": "15.5.7",
+    "react": "19.2.1",
+    "react-dom": "19.2.1"
   },
   "devDependencies": {
-    "@types/react": "^18",
-    "typescript": "5.9.3"
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5.7.2"
   }
 }

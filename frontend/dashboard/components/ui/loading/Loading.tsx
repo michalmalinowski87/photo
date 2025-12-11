@@ -34,10 +34,14 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 
 // Full page loading component
 // Fixed overlay that covers the entire screen including header
-export const FullPageLoading = ({
-  text,
-  logo,
-}: { text?: string; logo?: React.ReactNode }) => {
+export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  // Ensure component only renders on client to prevent hydration mismatch
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",
@@ -89,12 +93,13 @@ export const FullPageLoading = ({
     </div>
   );
 
-  // Render full-page loading via portal to document.body to ensure it's above all other content
-  if (typeof window !== "undefined") {
-    return createPortal(loadingOverlay, document.body);
+  // Don't render on server to prevent hydration mismatch
+  if (!isMounted) {
+    return null;
   }
 
-  return loadingOverlay;
+  // Render full-page loading via portal to document.body to ensure it's above all other content
+  return createPortal(loadingOverlay, document.body);
 };
 
 // Inline loading component
@@ -122,10 +127,7 @@ export const GalleryLoading = ({ text = "Ładowanie..." }: { text?: string }) =>
 // Content view loading component - only covers the content area (not sidebar/header)
 // Use this for page-level loading states instead of FullPageLoading
 // This shows a loading state centered in the content area without covering sidebar/header
-export const ContentViewLoading = ({
-  text,
-  logo,
-}: { text?: string; logo?: React.ReactNode }) => {
+export const ContentViewLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",

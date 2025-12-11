@@ -15,9 +15,7 @@ interface GalleryUrlSectionProps {
   shouldHideSecondaryElements: boolean;
 }
 
-export const GalleryUrlSection = ({
-  shouldHideSecondaryElements,
-}: GalleryUrlSectionProps) => {
+export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSectionProps) => {
   const router = useRouter();
   const { id: galleryId, orderId } = router.query;
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;

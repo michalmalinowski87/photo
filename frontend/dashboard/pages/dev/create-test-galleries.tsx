@@ -1,7 +1,13 @@
 "use client";
 
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
+
+// Prevent static generation for this dev page
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
@@ -220,8 +226,8 @@ export default function CreateTestGalleries() {
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <strong>Uwaga:</strong> Ta strona tworzy galerie testowe z losowymi zdjęciami
-              okładkowymi. Galerie będą miały status &quot;Nieopublikowana&quot; (unpaid) i pojawią się w
-              filtrze &quot;Wersje robocze&quot;.
+              okładkowymi. Galerie będą miały status &quot;Nieopublikowana&quot; (unpaid) i pojawią
+              się w filtrze &quot;Wersje robocze&quot;.
             </p>
           </div>
         </div>

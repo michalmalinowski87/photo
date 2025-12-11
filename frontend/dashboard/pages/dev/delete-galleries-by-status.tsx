@@ -1,7 +1,13 @@
 "use client";
 
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
+
+// Prevent static generation for this dev page
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
 import { useToast } from "../../hooks/useToast";

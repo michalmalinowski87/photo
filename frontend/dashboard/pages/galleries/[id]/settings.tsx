@@ -1,6 +1,12 @@
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 
 import { GallerySettingsForm } from "../../../components/galleries/GallerySettingsForm";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function GallerySettings() {
   const router = useRouter();

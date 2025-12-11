@@ -1,3 +1,4 @@
+import type { GetServerSideProps } from "next";
 import { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
@@ -7,6 +8,11 @@ import { useChangePassword, useUpdateBusinessInfo } from "../hooks/mutations/use
 import { useBusinessInfo } from "../hooks/queries/useAuth";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 interface PasswordForm {
   currentPassword: string;

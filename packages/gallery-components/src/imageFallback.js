@@ -50,15 +50,6 @@ export function getInitialImageUrl(img, preferredSize = 'thumb') {
 		url = img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl || img.url || "";
 	}
 	
-	console.log('[ImageFallback] getInitialImageUrl', {
-		preferredSize,
-		thumbUrl: img.thumbUrl,
-		previewUrl: img.previewUrl,
-		bigThumbUrl: img.bigThumbUrl,
-		url: img.url,
-		selectedUrl: url
-	});
-	
 	return url;
 }
 
@@ -75,19 +66,6 @@ export function getInitialImageUrl(img, preferredSize = 'thumb') {
  * @param preferredSize - The initial preferred size (thumb/bigthumb/preview) to determine fallback chain
  */
 export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSize) {
-	console.log('[ImageFallback] getNextFallbackUrl called', {
-		failedUrl: currentUrl,
-		availableUrls: {
-			thumbUrl: img.thumbUrl,
-			thumbUrlFallback: img.thumbUrlFallback,
-			previewUrl: img.previewUrl,
-			previewUrlFallback: img.previewUrlFallback,
-			bigThumbUrl: img.bigThumbUrl,
-			bigThumbUrlFallback: img.bigThumbUrlFallback,
-			url: img.url,
-			finalUrl: img.finalUrl
-		}
-	});
 
 	// Check if current URL is a CloudFront URL
 	const isCloudFrontUrl = (url) => {
@@ -113,14 +91,6 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 	};
 	
 	const detectedPreferredSize = detectPreferredSize();
-	
-	console.log('[ImageFallback] URL analysis', {
-		failedUrl,
-		isCloudFront,
-		normalizedFailed: normalizeUrl(failedUrl),
-		preferredSize: detectedPreferredSize,
-		attemptedSizes: attemptedSizes ? Array.from(attemptedSizes) : []
-	});
 
 	// Helper to check if a size has been attempted
 	const hasAttemptedSize = (size) => {
@@ -132,7 +102,6 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 		if (hasAttemptedSize(size) || !url || urlsMatch(failedUrl, url)) {
 			return null;
 		}
-		console.log(`[ImageFallback] Trying ${size} (CloudFront)`, url);
 		return url;
 	};
 
@@ -141,7 +110,6 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 		if (hasAttemptedSize(size) || !url || urlsMatch(failedUrl, url)) {
 			return null;
 		}
-		console.log(`[ImageFallback] Trying ${size} (S3)`, url);
 		return url;
 	};
 
@@ -191,11 +159,9 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 
 	// Final fallback: try original photo (S3)
 	if (img.finalUrl && !urlsMatch(failedUrl, img.finalUrl)) {
-		console.log('[ImageFallback] All optimized failed, trying finalUrl (S3)', img.finalUrl);
 		return img.finalUrl;
 	}
 	if (img.url && !urlsMatch(failedUrl, img.url)) {
-		console.log('[ImageFallback] All optimized failed, trying original url (S3)', img.url);
 		return img.url;
 	}
 

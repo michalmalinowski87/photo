@@ -120,9 +120,7 @@ const calculateUsagePercentage = (gallery: Gallery): number => {
 };
 
 // Cover photo cell component with error handling
-const CoverPhotoCell = ({
-  coverPhotoUrl,
-}: { coverPhotoUrl: string | null | undefined }) => {
+const CoverPhotoCell = ({ coverPhotoUrl }: { coverPhotoUrl: string | null | undefined }) => {
   const [imageError, setImageError] = useState(false);
 
   if (!coverPhotoUrl || imageError) {
@@ -622,7 +620,8 @@ const GalleryList = ({
                             {gallery.galleryId}
                           </div>
                         )}
-                        {((typeof gallery.clientFirstName === "string" && gallery.clientFirstName) ||
+                        {((typeof gallery.clientFirstName === "string" &&
+                          gallery.clientFirstName) ||
                           (typeof gallery.clientLastName === "string" && gallery.clientLastName) ||
                           (typeof gallery.clientEmail === "string" && gallery.clientEmail)) && (
                           <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">

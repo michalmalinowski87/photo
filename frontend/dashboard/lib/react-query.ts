@@ -134,42 +134,52 @@ export const queryKeys = {
   },
 };
 
-// QueryClient configuration with best practices
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Data is considered fresh for 30 seconds (no refetch)
-      staleTime: 30 * 1000,
-      // Cache data for 5 minutes after last use
-      gcTime: 5 * 60 * 1000, // Previously cacheTime
-      // Refetch on window focus only if data is stale
-      refetchOnWindowFocus: true,
-      // Don't refetch on reconnect by default (can be overridden per query)
-      refetchOnReconnect: false,
-      // Retry failed requests 1 time
-      retry: 1,
-      // Retry delay increases exponentially
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Enable structural sharing (default in v5, but explicit is better)
-      // Prevents unnecessary re-renders when data structure changes but values are the same
-      structuralSharing: true,
+// QueryClient factory function - creates a new client instance
+// This is important for SSR compatibility with React 19 and Next.js 15
+// Each request should get its own QueryClient instance
+export function makeQueryClient(): QueryClient {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Data is considered fresh for 30 seconds (no refetch)
+        staleTime: 30 * 1000,
+        // Cache data for 5 minutes after last use
+        gcTime: 5 * 60 * 1000, // Previously cacheTime
+        // Refetch on window focus only if data is stale
+        refetchOnWindowFocus: true,
+        // Don't refetch on reconnect by default (can be overridden per query)
+        refetchOnReconnect: false,
+        // Retry failed requests 1 time
+        retry: 1,
+        // Retry delay increases exponentially
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+        // Enable structural sharing (default in v5, but explicit is better)
+        // Prevents unnecessary re-renders when data structure changes but values are the same
+        structuralSharing: true,
+      },
+      mutations: {
+        // Retry mutations once on failure
+        retry: 1,
+      },
     },
-    mutations: {
-      // Retry mutations once on failure
-      retry: 1,
-    },
-  },
-});
+  });
 
-// Apply optimized query-specific defaults
-// These override the global defaults for specific query types
-// Note: setQueryDefaults uses query key prefixes, so we set defaults for the base keys
-queryClient.setQueryDefaults(queryKeys.galleries.details(), galleryDetailOptions);
-queryClient.setQueryDefaults(queryKeys.galleries.lists(), galleryListOptions);
-queryClient.setQueryDefaults(queryKeys.orders.lists(), orderListOptions);
-queryClient.setQueryDefaults(queryKeys.orders.details(), orderDetailOptions);
-queryClient.setQueryDefaults(queryKeys.wallet.balance(), walletBalanceOptions);
-queryClient.setQueryDefaults(queryKeys.uploads.all, presignedUrlOptions);
-queryClient.setQueryDefaults(queryKeys.dashboard.stats(), dashboardStatsOptions);
-queryClient.setQueryDefaults(queryKeys.packages.lists(), packageOptions);
-queryClient.setQueryDefaults(queryKeys.clients.lists(), clientOptions);
+  // Apply optimized query-specific defaults
+  // These override the global defaults for specific query types
+  // Note: setQueryDefaults uses query key prefixes, so we set defaults for the base keys
+  client.setQueryDefaults(queryKeys.galleries.details(), galleryDetailOptions);
+  client.setQueryDefaults(queryKeys.galleries.lists(), galleryListOptions);
+  client.setQueryDefaults(queryKeys.orders.lists(), orderListOptions);
+  client.setQueryDefaults(queryKeys.orders.details(), orderDetailOptions);
+  client.setQueryDefaults(queryKeys.wallet.balance(), walletBalanceOptions);
+  client.setQueryDefaults(queryKeys.uploads.all, presignedUrlOptions);
+  client.setQueryDefaults(queryKeys.dashboard.stats(), dashboardStatsOptions);
+  client.setQueryDefaults(queryKeys.packages.lists(), packageOptions);
+  client.setQueryDefaults(queryKeys.clients.lists(), clientOptions);
+
+  return client;
+}
+
+// Legacy export for backward compatibility (deprecated - use makeQueryClient instead)
+// This is kept for any code that might still reference it directly
+export const queryClient = makeQueryClient();
