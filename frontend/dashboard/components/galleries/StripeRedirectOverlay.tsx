@@ -7,10 +7,7 @@ interface StripeRedirectOverlayProps {
   checkoutUrl?: string;
 }
 
-export const StripeRedirectOverlay = ({
-  isVisible,
-  checkoutUrl,
-}: StripeRedirectOverlayProps) => {
+export const StripeRedirectOverlay = ({ isVisible, checkoutUrl }: StripeRedirectOverlayProps) => {
   useEffect(() => {
     if (isVisible && checkoutUrl) {
       // Redirect automatically after a short delay once we have the checkout URL

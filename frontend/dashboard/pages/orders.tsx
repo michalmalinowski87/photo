@@ -1,3 +1,4 @@
+import type { GetServerSideProps } from "next";
 import React, { useState } from "react";
 
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
@@ -17,6 +18,11 @@ import { useOrders } from "../hooks/queries/useOrders";
 import { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { formatPrice } from "../lib/format-price";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function Orders() {
   const [apiUrl, setApiUrl] = useState<string>("");

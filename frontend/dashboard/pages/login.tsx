@@ -1,3 +1,4 @@
+import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
@@ -8,6 +9,11 @@ import { useAuth } from "../context/AuthProvider";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 interface CognitoError extends Error {
   code?: string;
@@ -21,7 +27,7 @@ export default function Login() {
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const hasRedirected = useRef<boolean>(false);
-  const { setSessionExpired } = useAuth();
+  const { setSessionExpired, updateAuthState } = useAuth();
 
   useEffect(() => {
     // Setup auth status listener for landing page
@@ -131,8 +137,11 @@ export default function Login() {
       // Clear session expired state after successful login
       setSessionExpired(false);
 
+      // Immediately update auth state to prevent loading overlay flicker
+      await updateAuthState();
+
       // Small delay to ensure postMessage is sent
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Redirect logic:
       // - If returnUrl is in query params (user was redirected from protected page), use it
@@ -213,11 +222,13 @@ export default function Login() {
             </label>
             <Input
               id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="twoj@email.com"
               disabled={loading}
+              autoComplete="email"
               className="w-full"
             />
           </div>
@@ -231,11 +242,13 @@ export default function Login() {
             </label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Wprowadź hasło"
               disabled={loading}
+              autoComplete="current-password"
               className="w-full"
             />
           </div>

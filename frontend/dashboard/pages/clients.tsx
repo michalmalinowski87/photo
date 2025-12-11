@@ -1,4 +1,5 @@
 import { X, Users, Plus, Pencil, Trash2, ArrowUpDown } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import Button from "../components/ui/button/Button";
@@ -29,6 +30,11 @@ interface ClientFormData {
   companyName: string;
   nip: string;
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function Clients() {
   const { showToast } = useToast();

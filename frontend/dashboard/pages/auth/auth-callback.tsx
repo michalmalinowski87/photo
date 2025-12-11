@@ -1,8 +1,14 @@
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useEffect, useRef } from "react";
 
 import { useAuth } from "../../context/AuthProvider";
 import { exchangeCodeForTokens } from "../../lib/auth";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function AuthCallback() {
   const router = useRouter();

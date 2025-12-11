@@ -1,8 +1,14 @@
 "use client";
 
 import { Package, Users } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
+
+// Prevent static generation for this dev page
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";

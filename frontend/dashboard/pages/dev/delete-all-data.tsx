@@ -1,8 +1,14 @@
 "use client";
 
 import { Package as PackageIcon, Users, Trash2 } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
+
+// Prevent static generation for this dev page
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 import { useClients } from "../../hooks/queries/useClients";
 import { useInfinitePackages } from "../../hooks/useInfinitePackages";
@@ -64,7 +70,12 @@ export default function DeleteAllData() {
 
   // Set clients
   useEffect(() => {
-    if (clientsData && typeof clientsData === "object" && "items" in clientsData && Array.isArray(clientsData.items)) {
+    if (
+      clientsData &&
+      typeof clientsData === "object" &&
+      "items" in clientsData &&
+      Array.isArray(clientsData.items)
+    ) {
       // Convert API Client type to domain Client type
       setClients(clientsData.items as Client[]);
     } else {
@@ -121,7 +132,10 @@ export default function DeleteAllData() {
           const pkg = packages[j];
           batch.push(
             api.packages.delete(pkg.packageId).catch((error: unknown) => {
-              return { error: error instanceof Error ? error.message : String(error), packageId: pkg.packageId };
+              return {
+                error: error instanceof Error ? error.message : String(error),
+                packageId: pkg.packageId,
+              };
             })
           );
         }
@@ -214,7 +228,10 @@ export default function DeleteAllData() {
           const client = clients[j];
           batch.push(
             api.clients.delete(client.clientId).catch((error: unknown) => {
-              return { error: error instanceof Error ? error.message : String(error), clientId: client.clientId };
+              return {
+                error: error instanceof Error ? error.message : String(error),
+                clientId: client.clientId,
+              };
             })
           );
         }

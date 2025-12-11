@@ -14,6 +14,8 @@ interface AuthContextType {
   isSessionExpired: boolean;
   returnUrl: string;
   setSessionExpired: (expired: boolean, returnUrl?: string) => void;
+  // Method to immediately update auth state after login
+  updateAuthState: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,15 +24,102 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Initialize auth state synchronously from localStorage (runs before first render)
+const getInitialAuthState = (): {
+  isAuthenticated: boolean;
+  user: UserIdentity | null;
+  isLoading: boolean;
+} => {
+  try {
+    const userIdentity = getUserIdentitySync();
+    if (userIdentity) {
+      return { isAuthenticated: true, user: userIdentity, isLoading: false };
+    }
+  } catch {
+    // Ignore errors, will check async
+  }
+  return { isAuthenticated: false, user: null, isLoading: true };
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<UserIdentity | null>(null);
+  // Initialize state synchronously from localStorage to prevent loading flicker
+  const initialState = getInitialAuthState();
+  const [isAuthenticated, setIsAuthenticated] = useState(initialState.isAuthenticated);
+  const [isLoading, setIsLoading] = useState(initialState.isLoading);
+  const [user, setUser] = useState<UserIdentity | null>(initialState.user);
 
   // Session expiration state from Zustand store
   const isSessionExpired = useAuthStore((state) => state.isSessionExpired);
   const returnUrl = useAuthStore((state) => state.returnUrl);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+
+  // Check auth state synchronously from localStorage first (fast path)
+  const checkAuthStateSync = (): boolean => {
+    try {
+      const userIdentity = getUserIdentitySync();
+      if (userIdentity) {
+        setUser(userIdentity);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return true;
+      }
+    } catch {
+      // Ignore errors, will check async
+    }
+    return false;
+  };
+
+  // Method to immediately update auth state after login
+  const updateAuthState = async (): Promise<void> => {
+    try {
+      const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
+      const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+
+      if (userPoolId && clientId) {
+        initAuth(userPoolId, clientId);
+
+        // Small delay to ensure tokens are stored
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        try {
+          await getIdToken();
+
+          // Extract user identity from token
+          const userIdentity = getUserIdentitySync();
+          if (userIdentity) {
+            setUser(userIdentity);
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          // Fallback to localStorage check
+          const userIdentity = getUserIdentitySync();
+          if (userIdentity) {
+            setUser(userIdentity);
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+      } else {
+        // Fallback to localStorage for manual token
+        const userIdentity = getUserIdentitySync();
+        if (userIdentity) {
+          setUser(userIdentity);
+          setIsAuthenticated(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      setIsAuthenticated(false);
+      setIsLoading(false);
+    } catch {
+      setIsAuthenticated(false);
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Setup auth status listener for landing page to check auth
@@ -42,7 +131,34 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Request tokens from landing domain if available
     requestTokensFromOtherDomains();
 
-    // Initialize auth and check for token
+    // First, try synchronous check from localStorage (fast path, no loading flicker)
+    if (checkAuthStateSync()) {
+      // Auth state set synchronously, still do async verification in background
+      void (async () => {
+        try {
+          const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
+          const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+
+          if (userPoolId && clientId) {
+            initAuth(userPoolId, clientId);
+            await getIdToken();
+            // Verify user identity is still valid
+            const userIdentity = getUserIdentitySync();
+            if (userIdentity) {
+              setUser(userIdentity);
+              setIsAuthenticated(true);
+            }
+          }
+        } catch {
+          // Token invalid, reset state
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      })();
+      return;
+    }
+
+    // No token found synchronously, do async check
     const initializeAuth = async () => {
       try {
         const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -103,6 +219,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       isSessionExpired,
       returnUrl,
       setSessionExpired,
+      updateAuthState,
     }),
     [isAuthenticated, isLoading, user, isSessionExpired, returnUrl, setSessionExpired]
   );

@@ -58,7 +58,7 @@ export async function refetchFirstPageOnly(
   const refetchPromises = matchingQueries.map(async (query) => {
     try {
       const queryKey = query.queryKey as unknown[];
-      
+
       // Extract parameters from query key
       // Query key structure: ["galleries", "detail", galleryId, "images", "infinite", type, limit, filterOrderId, filterUnselected]
       if (
@@ -103,22 +103,23 @@ export async function refetchFirstPageOnly(
       const typedResponse = response as GetImagesResponse;
       const responseStats = typedResponse.stats;
       const responseTotalCount = typedResponse.totalCount;
-      
-      let firstPage = response.images && !("hasMore" in response)
-        ? {
-            images: response.images,
-            hasMore: false,
-            nextCursor: null,
-            totalCount: responseTotalCount,
-            stats: responseStats ? { ...responseStats } : responseStats, // Create new object for stats
-          }
-        : {
-            images: response.images || [],
-            hasMore: response.hasMore,
-            nextCursor: response.nextCursor,
-            totalCount: responseTotalCount,
-            stats: responseStats ? { ...responseStats } : responseStats, // Create new object for stats
-          };
+
+      let firstPage =
+        response.images && !("hasMore" in response)
+          ? {
+              images: response.images,
+              hasMore: false,
+              nextCursor: null,
+              totalCount: responseTotalCount,
+              stats: responseStats ? { ...responseStats } : responseStats, // Create new object for stats
+            }
+          : {
+              images: response.images || [],
+              hasMore: response.hasMore,
+              nextCursor: response.nextCursor,
+              totalCount: responseTotalCount,
+              stats: responseStats ? { ...responseStats } : responseStats, // Create new object for stats
+            };
 
       // Filter out any images that were optimistically deleted from the current cache
       // This prevents deleted images from reappearing if backend hasn't fully processed deletion yet
@@ -144,7 +145,7 @@ export async function refetchFirstPageOnly(
               })
               .filter(Boolean)
           );
-          
+
           // If cache has fewer images than refetched data, filter refetched data to match cache
           // This ensures deleted images don't reappear
           // But preserve stats and totalCount from backend (they're the source of truth)
@@ -173,7 +174,7 @@ export async function refetchFirstPageOnly(
             pageParams: [null],
           };
         }
-        
+
         // Create completely new object structure with new references at every level
         // This ensures React Query's change detection works correctly
         // Important: Create new objects for stats and all nested properties to bypass structural sharing
@@ -185,33 +186,36 @@ export async function refetchFirstPageOnly(
             return {
               ...firstPage,
               // Ensure stats is always a new object reference (even if values are the same)
-              stats: firstPage.stats && typeof firstPage.stats === 'object' 
-                ? { ...firstPage.stats }
-                : firstPage.stats,
+              stats:
+                firstPage.stats && typeof firstPage.stats === "object"
+                  ? { ...firstPage.stats }
+                  : firstPage.stats,
             };
           }
           // Other pages: create new object reference
           return { ...page };
         });
-        
+
         // Always return a new object structure to ensure React Query detects the change
         return {
           pages: newPages,
-          pageParams: oldData.pageParams 
-            ? [null, ...oldData.pageParams.slice(1)]
-            : [null],
+          pageParams: oldData.pageParams ? [null, ...oldData.pageParams.slice(1)] : [null],
         };
       });
-      
+
       // Force React Query to notify subscribers by invalidating with refetchType: 'none'
       // This ensures components re-render even if structural sharing would prevent it
-      void queryClient.invalidateQueries({ 
+      void queryClient.invalidateQueries({
         queryKey,
-        refetchType: 'none', // Don't refetch, just notify subscribers of the cache update
+        refetchType: "none", // Don't refetch, just notify subscribers of the cache update
       });
     } catch (error) {
       // Log error but don't fail the entire operation
-      console.warn("[refetchFirstPageOnly] Failed to refetch first page for query:", query.queryKey, error);
+      console.warn(
+        "[refetchFirstPageOnly] Failed to refetch first page for query:",
+        query.queryKey,
+        error
+      );
     }
   });
 

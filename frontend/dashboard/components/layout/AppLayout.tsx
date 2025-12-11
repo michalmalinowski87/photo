@@ -83,18 +83,27 @@ const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
   }, [wizardOpen]);
 
   // Close wizard when navigating away (unless dev locked)
+  // Use routeChangeComplete instead of routeChangeStart to prevent flicker
+  // This keeps the wizard visible during navigation transition
   useEffect(() => {
     if (!wizardOpen || devLocked || !router.events) {
       return;
     }
 
-    const handleRouteChange = () => {
+    const handleRouteChangeComplete = () => {
       setWizardOpen(false);
     };
 
-    router.events.on("routeChangeStart", handleRouteChange);
+    const handleRouteChangeError = () => {
+      // If navigation fails, keep wizard open (don't close it)
+      // This prevents the wizard from closing when navigation errors occur
+    };
+
+    router.events.on("routeChangeComplete", handleRouteChangeComplete);
+    router.events.on("routeChangeError", handleRouteChangeError);
     return () => {
-      router.events.off("routeChangeStart", handleRouteChange);
+      router.events.off("routeChangeComplete", handleRouteChangeComplete);
+      router.events.off("routeChangeError", handleRouteChangeError);
     };
   }, [wizardOpen, devLocked, router.events]);
 

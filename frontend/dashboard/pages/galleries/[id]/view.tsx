@@ -1,5 +1,6 @@
 import { GalleryThumbnails, ProcessedPhotosView, ImageModal } from "@photocloud/gallery-components";
 import { useQueryClient } from "@tanstack/react-query";
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
 
@@ -15,6 +16,11 @@ import { useOrders } from "../../../hooks/queries/useOrders";
 import { formatApiError } from "../../../lib/api-service";
 import { queryKeys } from "../../../lib/react-query";
 import type { Order, GalleryImage } from "../../../types";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 interface OwnerGalleryViewProps {
   token: string;

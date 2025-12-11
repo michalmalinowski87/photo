@@ -80,8 +80,9 @@ const Input: FC<InputProps> = ({
         autoFocus={autoFocus}
         className={inputClasses}
         style={{ minHeight: "44px" }}
-        data-1p-ignore="true"
-        data-lpignore="true"
+        {...(autoComplete === "off" || !autoComplete
+          ? { "data-1p-ignore": "true", "data-lpignore": "true" }
+          : {})}
       />
 
       {/* Reserved space for error messages or hints to prevent layout shifts */}

@@ -16,8 +16,11 @@ export const useSidebar = () => {
   // isExpanded should be true when viewport >= 1024px (lg breakpoint) to match CSS
   // This is independent of isMobile which uses 1350px breakpoint
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
+
     if (typeof window === "undefined") {
       return;
     }
@@ -32,8 +35,13 @@ export const useSidebar = () => {
     return () => window.removeEventListener("resize", checkExpanded);
   }, []);
 
+  // Only use isExpanded after mount to prevent hydration mismatch
+  // On server and initial render, use false to ensure consistent rendering
+  // After mount, the actual viewport width determines the value
+  const effectiveIsExpanded = isMounted ? isExpanded : false;
+
   return {
-    isExpanded,
+    isExpanded: effectiveIsExpanded,
     isMobileOpen,
     toggleSidebar,
     toggleMobileSidebar,

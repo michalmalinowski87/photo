@@ -58,7 +58,7 @@ export function OriginalsTab({
 
     const grid = gridContainerRef.current;
     const children = Array.from(grid.children) as HTMLElement[];
-    
+
     if (children.length === 0) {
       return null;
     }
@@ -66,9 +66,12 @@ export function OriginalsTab({
     // Calculate columns based on viewport width
     const viewportWidth = grid.clientWidth;
     let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280) columns = 6; // xl
-    else if (viewportWidth >= 1024) columns = 5; // lg
-    else if (viewportWidth >= 768) columns = 4; // md
+    if (viewportWidth >= 1280)
+      columns = 6; // xl
+    else if (viewportWidth >= 1024)
+      columns = 5; // lg
+    else if (viewportWidth >= 768)
+      columns = 4; // md
     else if (viewportWidth >= 640) columns = 3; // sm
 
     // Measure height of first few rows to get average
@@ -81,7 +84,7 @@ export function OriginalsTab({
     // Get positions of items in first two rows
     const firstRowItems = children.slice(0, columns);
     const secondRowItems = children.slice(columns, columns * 2);
-    
+
     if (firstRowItems.length === 0 || secondRowItems.length === 0) {
       return null;
     }
@@ -90,10 +93,10 @@ export function OriginalsTab({
     const firstItemTop = firstRowItems[0].offsetTop;
     // Get top position of first item in second row
     const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-    
+
     // Calculate row height (difference between rows)
     const rowHeight = secondRowFirstItemTop - firstItemTop;
-    
+
     // Validate measurement (should be positive and reasonable)
     if (rowHeight > 0 && rowHeight < 1000) {
       return rowHeight;
@@ -113,13 +116,13 @@ export function OriginalsTab({
 
     // Measure after a short delay to ensure DOM is updated
     const timeoutId = setTimeout(updateRowHeight, 100);
-    
+
     // Also measure on window resize
-    window.addEventListener('resize', updateRowHeight);
-    
+    window.addEventListener("resize", updateRowHeight);
+
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('resize', updateRowHeight);
+      window.removeEventListener("resize", updateRowHeight);
     };
   }, [images.length, measureRowHeight]);
 
@@ -162,7 +165,7 @@ export function OriginalsTab({
     // Initial prefetch phase: fetch double the images count when scrollbar appeared
     if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
       const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-      
+
       if (images.length < targetImagesCount && hasNextPage) {
         // Still in initial prefetch phase - fetch until we have double
         const timeoutId = setTimeout(() => {
@@ -214,9 +217,12 @@ export function OriginalsTab({
             // Calculate columns based on viewport width
             const viewportWidth = target.clientWidth;
             let columns = 2; // Default for mobile
-            if (viewportWidth >= 1280) columns = 6; // xl
-            else if (viewportWidth >= 1024) columns = 5; // lg
-            else if (viewportWidth >= 768) columns = 4; // md
+            if (viewportWidth >= 1280)
+              columns = 6; // xl
+            else if (viewportWidth >= 1024)
+              columns = 5; // lg
+            else if (viewportWidth >= 768)
+              columns = 4; // md
             else if (viewportWidth >= 640) columns = 3; // sm
 
             // Use measured row height if available, otherwise fall back to estimate
@@ -245,7 +251,8 @@ export function OriginalsTab({
             const prefetchThreshold = 50; // Threshold for originals with typical limit=50
 
             // Also check if we have selectedKeys and need to fetch more to match them
-            const needsMoreForSelectedKeys = selectedKeys.length > 0 && totalItemsRendered < selectedKeys.length;
+            const needsMoreForSelectedKeys =
+              selectedKeys.length > 0 && totalItemsRendered < selectedKeys.length;
 
             // Don't fetch if there's an error or already fetching
             if (
@@ -259,7 +266,7 @@ export function OriginalsTab({
             }
           }}
         >
-          <div 
+          <div
             ref={gridContainerRef}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8"
           >
@@ -371,9 +378,5 @@ export function OriginalsTab({
     return <GalleryLoading />;
   }
 
-  return (
-    <div className="space-y-4">
-      {renderImageGrid(filteredImages, true, true)}
-    </div>
-  );
+  return <div className="space-y-4">{renderImageGrid(filteredImages, true, true)}</div>;
 }

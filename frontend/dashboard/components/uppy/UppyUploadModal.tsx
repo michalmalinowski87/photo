@@ -570,10 +570,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                     type="file"
                     multiple
                     accept="image/*"
-                    {...({
-                      webkitdirectory: "",
-                      directory: "",
-                    } as React.InputHTMLAttributes<HTMLInputElement>)}
                     onChange={handleFileInputChange}
                     className="hidden"
                     disabled={uploading || uploadComplete}
@@ -598,10 +594,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                   type="file"
                   multiple
                   accept="image/*"
-                  {...({
-                    webkitdirectory: "",
-                    directory: "",
-                  } as React.InputHTMLAttributes<HTMLInputElement>)}
                   onChange={handleFileInputChange}
                   className="hidden"
                   disabled={uploading || uploadComplete}

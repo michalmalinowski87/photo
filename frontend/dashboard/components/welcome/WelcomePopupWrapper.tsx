@@ -20,10 +20,16 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
   const [showPopup, setShowPopup] = useState(false);
   const [welcomeBonusCents, setWelcomeBonusCents] = useState(900); // Default to 9 PLN (900 cents)
   const [checking, setChecking] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure component only renders on client to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     // Only check on client side
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !isMounted) {
       return;
     }
 
@@ -92,7 +98,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
     };
 
     void checkWelcomeBonus();
-  }, [businessInfo, walletTransactionsData, refetchBalance, refetchTransactions]);
+  }, [businessInfo, walletTransactionsData, refetchBalance, refetchTransactions, isMounted]);
 
   const handleClose = async () => {
     setShowPopup(false);
@@ -106,8 +112,8 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
     }
   };
 
-  // Don't render anything while checking or if popup shouldn't be shown
-  if (checking || !showPopup) {
+  // Don't render anything on server or while checking or if popup shouldn't be shown
+  if (!isMounted || checking || !showPopup) {
     return null;
   }
 

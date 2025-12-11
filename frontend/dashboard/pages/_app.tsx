@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import "../styles/globals.css";
 import "../styles/auth.css";
 import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
+import { ClientOnly } from "../components/ClientOnly";
 import AuthLayout from "../components/auth/AuthLayout";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
@@ -21,7 +22,7 @@ import { AuthProvider, useAuth } from "../context/AuthProvider";
 import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
-import { queryClient } from "../lib/react-query";
+import { makeQueryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
@@ -47,6 +48,26 @@ const GALLERY_ROUTES = [
 ];
 
 export default function App(props: AppProps) {
+  // For 404 page during SSG, render without providers to avoid React 19 hook issues
+  // The router isn't available during SSG, so we check the pathname from pageProps
+  const is404Page = props.router?.pathname === "/404" || props.router?.pathname === undefined;
+
+  if (is404Page && typeof window === "undefined") {
+    // During SSG for 404, render minimal component without providers
+    return <props.Component {...props.pageProps} />;
+  }
+
+  // Create a new QueryClient instance per request to avoid SSR issues
+  // Use useState with lazy initializer to ensure it's only created once per component instance
+  // This is important for SSR compatibility with React 19 and Next.js 15
+  const [queryClient] = useState(() => makeQueryClient());
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Track client-side mount to prevent hydration mismatch with ReactQueryDevtools
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <WebPCompatibilityCheck>
@@ -54,7 +75,9 @@ export default function App(props: AppProps) {
           <AppContent {...props} />
         </AuthProvider>
       </WebPCompatibilityCheck>
-      {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
+      {process.env.NODE_ENV === "development" && isMounted && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
     </QueryClientProvider>
   );
 }
@@ -66,8 +89,11 @@ function AppContent({ Component, pageProps }: AppProps) {
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
   const { isAuthenticated } = useAuth();
 
-  // Enable global order status polling when authenticated
-  useOrderStatusPolling({ enablePolling: isAuthenticated });
+  // Skip hooks for 404 page during SSG (React 19/Next.js 15 compatibility)
+  const is404Page = router.pathname === "/404";
+
+  // Enable global order status polling when authenticated (skip for 404)
+  useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
@@ -99,8 +125,10 @@ function AppContent({ Component, pageProps }: AppProps) {
       })()
     : false;
 
-  // Global error handler for unhandled promise rejections
+  // Global error handler for unhandled promise rejections (skip for 404 during SSG)
   useEffect(() => {
+    if (is404Page && typeof window === "undefined") return;
+
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       // Check if it's an auth error
       const reason = event.reason as Error | undefined;
@@ -124,12 +152,14 @@ function AppContent({ Component, pageProps }: AppProps) {
     return () => {
       window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     };
-  }, [isAuthRoute, router.asPath]);
+  }, [isAuthRoute, router.asPath, is404Page]);
 
   // Removed reactive cleanup - navigation utility handles cleanup explicitly on user clicks
 
-  // Restore theme and clear session expired state when on non-auth routes
+  // Restore theme and clear session expired state when on non-auth routes (skip for 404 during SSG)
   useEffect(() => {
+    if (is404Page && typeof window === "undefined") return;
+
     const restoreThemeAndClearSessionExpired = () => {
       if (typeof window === "undefined") {
         return;
@@ -170,10 +200,11 @@ function AppContent({ Component, pageProps }: AppProps) {
     return () => {
       router.events.off("routeChangeComplete", handleRouteChangeComplete);
     };
-  }, [router.isReady, router.pathname, router.events, setSessionExpired]);
+  }, [router.isReady, router.pathname, router.events, setSessionExpired, is404Page]);
 
-  // Register Service Worker for Golden Retriever
+  // Register Service Worker for Golden Retriever (skip for 404 during SSG)
   useEffect(() => {
+    if (is404Page && typeof window === "undefined") return;
     if (typeof window !== "undefined" && "serviceWorker" in navigator && !swRegistered) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
@@ -184,14 +215,22 @@ function AppContent({ Component, pageProps }: AppProps) {
           // Continue without Service Worker (fallback to IndexedDB only)
         });
     }
-  }, [swRegistered]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swRegistered, is404Page]);
 
-  // Initialize unified dev tools (development only)
+  // Initialize unified dev tools (development only, skip for 404 during SSG)
   useEffect(() => {
+    if (is404Page && typeof window === "undefined") return;
     if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
       initDevTools();
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [is404Page]);
+
+  // For 404 page, render it directly without layouts/providers to avoid SSG issues
+  if (is404Page) {
+    return <Component {...pageProps} />;
+  }
 
   return (
     <>
@@ -202,30 +241,32 @@ function AppContent({ Component, pageProps }: AppProps) {
         </AuthLayout>
       ) : (
         <ProtectedRoute>
-          <SessionExpiredModalWrapper />
-          <ToastContainer />
-          <ZipDownloadContainer />
-          {recoveryState && (
-            <UploadRecoveryModal
-              isOpen={showModal}
-              onClose={handleClear}
-              onResume={handleResume}
-              onClear={handleClear}
-              fileCount={recoveryState.fileCount}
-              galleryId={recoveryState.galleryId}
-              type={recoveryState.type}
-              orderId={recoveryState.orderId}
-            />
-          )}
-          {isGalleryRoute ? (
-            <GalleryLayoutWrapper>
-              <Component {...pageProps} />
-            </GalleryLayoutWrapper>
-          ) : (
-            <AppLayout>
-              <Component {...pageProps} />
-            </AppLayout>
-          )}
+          <ClientOnly>
+            <SessionExpiredModalWrapper />
+            <ToastContainer />
+            <ZipDownloadContainer />
+            {recoveryState && (
+              <UploadRecoveryModal
+                isOpen={showModal}
+                onClose={handleClear}
+                onResume={handleResume}
+                onClear={handleClear}
+                fileCount={recoveryState.fileCount}
+                galleryId={recoveryState.galleryId}
+                type={recoveryState.type}
+                orderId={recoveryState.orderId}
+              />
+            )}
+            {isGalleryRoute ? (
+              <GalleryLayoutWrapper>
+                <Component {...pageProps} />
+              </GalleryLayoutWrapper>
+            ) : (
+              <AppLayout>
+                <Component {...pageProps} />
+              </AppLayout>
+            )}
+          </ClientOnly>
         </ProtectedRoute>
       )}
     </>

@@ -1,3 +1,5 @@
+"use client";
+
 import Link from 'next/link';
 import { AnimationContainer } from "@/components"
 import { TextHoverEffect } from "@/components/ui/text-hover-effect"

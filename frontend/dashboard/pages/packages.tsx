@@ -1,4 +1,5 @@
 import { X, Package, Plus, Pencil, Trash2, Search, ArrowUpDown } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import { useState, useMemo, useRef, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
@@ -37,6 +38,11 @@ interface PackageFormData {
   pricePerExtraPhoto: number;
   price: number;
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function Packages() {
   const { showToast } = useToast();

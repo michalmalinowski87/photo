@@ -1,3 +1,4 @@
+import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
@@ -10,6 +11,11 @@ import { initAuth, confirmSignUp, resendConfirmationCode } from "../lib/auth";
 interface CognitoError extends Error {
   code?: string;
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function VerifyEmail() {
   const router = useRouter();

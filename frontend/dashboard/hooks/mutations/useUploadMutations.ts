@@ -38,6 +38,11 @@ export function useMarkFinalUploadComplete() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
+      // Explicitly invalidate delivered orders query (status may change to PREPARING_DELIVERY)
+      // This ensures settings page reflects status changes immediately
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.deliveredOrders(variables.galleryId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.images(variables.galleryId, "finals"),
       });

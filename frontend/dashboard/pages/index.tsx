@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import type { GetServerSideProps } from "next";
 import { useState } from "react";
 
 import { ActiveOrdersTable } from "../components/dashboard/ActiveOrdersTable";
@@ -14,6 +15,11 @@ import { useActiveOrders, useDashboardStats } from "../hooks/queries/useDashboar
 import { useWalletBalance } from "../hooks/queries/useWallet";
 import { formatPriceNumber } from "../lib/format-price";
 import { queryKeys } from "../lib/react-query";
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function Dashboard() {
   const queryClient = useQueryClient();

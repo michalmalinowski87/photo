@@ -171,7 +171,7 @@ async function handlePostUploadActions(
       // - CloudFront edge locations to have content available
       // - Reduces 403 errors when immediately fetching after upload
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      
+
       // Use mutation hook to ensure order detail is invalidated (status may change from CLIENT_APPROVED/AWAITING_FINAL_PHOTOS to PREPARING_DELIVERY)
       if (markFinalUploadCompleteMutation) {
         await markFinalUploadCompleteMutation.mutateAsync({ galleryId, orderId });
@@ -180,9 +180,12 @@ async function handlePostUploadActions(
         // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
         // Uppy's onComplete callback requires synchronous finalization during upload completion lifecycle.
         await api.uploads.markFinalUploadComplete(galleryId, orderId);
-        // Manually invalidate order detail and gallery list if using fallback
+        // Manually invalidate order detail, gallery detail, and gallery list if using fallback
         await queryClient.invalidateQueries({
           queryKey: queryKeys.orders.detail(galleryId, orderId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.galleries.detail(galleryId),
         });
         await queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.lists(),
@@ -226,7 +229,7 @@ async function handlePostUploadActions(
       // - Reduces 403 errors when immediately fetching after upload
       // Best practice: 1-2 seconds is sufficient for most image processing pipelines
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      
+
       // Reset and refetch infinite queries
       await resetInfiniteQueryAndRefetchFirstPage(queryClient, (query) => {
         const key = query.queryKey;
@@ -240,6 +243,12 @@ async function handlePostUploadActions(
           key[4] === "infinite" &&
           (key[5] === "originals" || key[5] === "thumb")
         );
+      });
+
+      // Invalidate gallery detail to refresh originalsBytesUsed
+      // This ensures NextStepsOverlay and other components using useGallery() get updated data
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(galleryId),
       });
     }
 

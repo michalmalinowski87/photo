@@ -1,18 +1,31 @@
 {
   "name": "photocloud-monorepo",
   "private": true,
-  "workspaces": [
-    "infra",
-    "backend/*",
-    "frontend/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "infra",
+      "backend/*",
+      "frontend/*",
+      "packages/*"
+    ],
+    "nohoist": [
+      "**/next",
+      "**/next/**",
+      "**/@swc/**",
+      "@photocloud/dashboard/react",
+      "@photocloud/dashboard/react-dom"
+    ]
+  },
   "license": "MIT",
   "scripts": {
     "build": "echo \"Use workspace builds\"",
     "lint": "echo \"Lint in workspaces\"",
     "test": "echo \"Tests run in workspaces\"",
     "smoke": "node scripts/smoke.mjs"
+  },
+  "resolutions": {
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.932.0",

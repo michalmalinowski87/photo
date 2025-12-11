@@ -137,7 +137,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     (shouldShowGalleryLoading || shouldShowOrderLoading) &&
     !galleryCreationLoading;
 
-
   // CRITICAL: If we have the order, NEVER show loading overlay
   if (hasOrder) {
     // Order is loaded, render children normally

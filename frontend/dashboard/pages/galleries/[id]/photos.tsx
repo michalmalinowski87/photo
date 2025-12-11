@@ -11,6 +11,7 @@ import {
   Check,
   Link,
 } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
@@ -97,7 +98,7 @@ function OrderImagesGrid({
 
     const grid = gridContainerRef.current;
     const children = Array.from(grid.children) as HTMLElement[];
-    
+
     if (children.length === 0) {
       return null;
     }
@@ -105,9 +106,12 @@ function OrderImagesGrid({
     // Calculate columns based on viewport width
     const viewportWidth = grid.clientWidth;
     let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280) columns = 6; // xl
-    else if (viewportWidth >= 1024) columns = 5; // lg
-    else if (viewportWidth >= 768) columns = 4; // md
+    if (viewportWidth >= 1280)
+      columns = 6; // xl
+    else if (viewportWidth >= 1024)
+      columns = 5; // lg
+    else if (viewportWidth >= 768)
+      columns = 4; // md
     else if (viewportWidth >= 640) columns = 3; // sm
 
     // Measure height of first few rows to get average
@@ -120,7 +124,7 @@ function OrderImagesGrid({
     // Get positions of items in first two rows
     const firstRowItems = children.slice(0, columns);
     const secondRowItems = children.slice(columns, columns * 2);
-    
+
     if (firstRowItems.length === 0 || secondRowItems.length === 0) {
       return null;
     }
@@ -129,10 +133,10 @@ function OrderImagesGrid({
     const firstItemTop = firstRowItems[0].offsetTop;
     // Get top position of first item in second row
     const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-    
+
     // Calculate row height (difference between rows)
     const rowHeight = secondRowFirstItemTop - firstItemTop;
-    
+
     // Validate measurement (should be positive and reasonable)
     if (rowHeight > 0 && rowHeight < 1000) {
       return rowHeight;
@@ -152,13 +156,13 @@ function OrderImagesGrid({
 
     // Measure after a short delay to ensure DOM is updated
     const timeoutId = setTimeout(updateRowHeight, 100);
-    
+
     // Also measure on window resize
-    window.addEventListener('resize', updateRowHeight);
-    
+    window.addEventListener("resize", updateRowHeight);
+
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('resize', updateRowHeight);
+      window.removeEventListener("resize", updateRowHeight);
     };
   }, [images.length, measureRowHeight]);
 
@@ -184,7 +188,7 @@ function OrderImagesGrid({
     // Initial prefetch phase: fetch double the images count when scrollbar appeared
     if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
       const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-      
+
       if (images.length < targetImagesCount && hasNextPage) {
         // Still in initial prefetch phase - fetch until we have double
         const timeoutId = setTimeout(() => {
@@ -207,7 +211,7 @@ function OrderImagesGrid({
       }, 100);
       return () => clearTimeout(timeoutId);
     }
-    
+
     return undefined;
   }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
 
@@ -249,7 +253,7 @@ function OrderImagesGrid({
         }
       }}
     >
-      <div 
+      <div
         ref={gridContainerRef}
         className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4"
       >
@@ -263,6 +267,11 @@ function OrderImagesGrid({
     </div>
   );
 }
+
+// Prevent static generation - this page uses client hooks
+export const getServerSideProps: GetServerSideProps = () => {
+  return Promise.resolve({ props: {} });
+};
 
 export default function GalleryPhotos() {
   const router = useRouter();
@@ -426,7 +435,11 @@ export default function GalleryPhotos() {
   // Prefer query data first, then fall back to cached data for current section
   // Only use cached data if it exists and matches the current expanded section
   // This prevents showing wrong section's data when switching sections
-  const effectiveImagesData: typeof imagesData = imagesData ?? (cachedDataForExpandedSection ? (cachedDataForExpandedSection as unknown as typeof imagesData) : undefined);
+  const effectiveImagesData: typeof imagesData =
+    imagesData ??
+    (cachedDataForExpandedSection
+      ? (cachedDataForExpandedSection as unknown as typeof imagesData)
+      : undefined);
   // Track loaded galleryId for stable comparison (prevents re-renders from object reference changes)
   const loadedGalleryIdRef = useRef<string>("");
   // Track if we've logged that gallery is ready (prevents repeated logs on re-renders)
@@ -749,7 +762,13 @@ export default function GalleryPhotos() {
       }
       return true;
     });
-  }, [effectiveImagesData, deletedImageKeys, deletedImageKeysBulk, expandedSection, shouldShowAllImages]);
+  }, [
+    effectiveImagesData,
+    deletedImageKeys,
+    deletedImageKeysBulk,
+    expandedSection,
+    shouldShowAllImages,
+  ]);
 
   // Clear deletedImageKeys for images that have been re-uploaded
   // When images appear in the query data, they're no longer deleted, so remove them from deletedImageKeys
@@ -1431,7 +1450,7 @@ export default function GalleryPhotos() {
   // Use backend statistics for total unselected count
   const totalUnselectedCount =
     imageStats && typeof imageStats === "object" && "unselectedCount" in imageStats
-      ? Number(imageStats.unselectedCount) ?? 0
+      ? (Number(imageStats.unselectedCount) ?? 0)
       : 0;
 
   // Handler for deleting all unselected images
@@ -1832,38 +1851,23 @@ export default function GalleryPhotos() {
               )}
             </div>
           </div>
-        ) : (
-          // No delivered orders: show images directly with infinite scroll (no section wrapper)
-          totalGalleryImageCount > 0 ? (
-            // Render images directly without section wrapper when there are no orders
-            (imagesLoading || imagesFetching) && images.length === 0 ? (
-              <GalleryLoading text="Ładowanie zdjęć..." />
-            ) : images.length > 0 ? (
-              <OrderImagesGrid
-                images={images}
-                renderImageItem={renderImageItem}
-                fetchNextPage={fetchNextPage}
-                hasNextPage={hasNextPage}
-                isFetchingNextPage={isFetchingNextPage}
-                imagesError={imagesError}
-                isLoading={imagesLoading}
-                isFetching={imagesFetching}
-              />
-            ) : (
-              <EmptyState
-                // eslint-disable-next-line jsx-a11y/alt-text
-                icon={<Image size={64} aria-hidden="true" />}
-                title="Brak zdjęć w galerii"
-                description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
-                actionButton={{
-                  label: "Prześlij zdjęcia",
-                  onClick: () => openModal("photos-upload-modal"),
-                  icon: <Upload size={18} />,
-                }}
-              />
-            )
+        ) : // No delivered orders: show images directly with infinite scroll (no section wrapper)
+        totalGalleryImageCount > 0 ? (
+          // Render images directly without section wrapper when there are no orders
+          (imagesLoading || imagesFetching) && images.length === 0 ? (
+            <GalleryLoading text="Ładowanie zdjęć..." />
+          ) : images.length > 0 ? (
+            <OrderImagesGrid
+              images={images}
+              renderImageItem={renderImageItem}
+              fetchNextPage={fetchNextPage}
+              hasNextPage={hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              imagesError={imagesError}
+              isLoading={imagesLoading}
+              isFetching={imagesFetching}
+            />
           ) : (
-            // Fallback: show empty state if no delivered orders and no images
             <EmptyState
               // eslint-disable-next-line jsx-a11y/alt-text
               icon={<Image size={64} aria-hidden="true" />}
@@ -1876,6 +1880,19 @@ export default function GalleryPhotos() {
               }}
             />
           )
+        ) : (
+          // Fallback: show empty state if no delivered orders and no images
+          <EmptyState
+            // eslint-disable-next-line jsx-a11y/alt-text
+            icon={<Image size={64} aria-hidden="true" />}
+            title="Brak zdjęć w galerii"
+            description="Prześlij swoje pierwsze zdjęcia, aby rozpocząć. Możesz przesłać wiele zdjęć jednocześnie."
+            actionButton={{
+              label: "Prześlij zdjęcia",
+              onClick: () => openModal("photos-upload-modal"),
+              icon: <Upload size={18} />,
+            }}
+          />
         )}
       </div>
 

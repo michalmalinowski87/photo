@@ -20,7 +20,6 @@ export const StorageUsageInfo = ({ orderId }: StorageUsageInfoProps) => {
     isFetching: galleryFetching,
   } = useGallery(galleryIdForQuery);
 
-
   const isPaid = currentGallery?.isPaid ?? false;
   const formatBytes = (bytes: number | undefined | null): string => {
     if (!bytes || bytes === 0) {
