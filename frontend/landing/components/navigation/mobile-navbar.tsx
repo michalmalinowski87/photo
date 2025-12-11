@@ -11,6 +11,8 @@ import {
   Sheet,
   SheetClose,
   SheetContent,
+  SheetDescription,
+  SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
 import { cn, NAV_LINKS } from "@/utils";
@@ -37,6 +39,10 @@ const MobileNavbar = () => {
           </Button>
         </SheetTrigger>
         <SheetContent className="w-screen">
+          <SheetTitle className="sr-only">Menu nawigacyjne</SheetTitle>
+          <SheetDescription className="sr-only">
+            Menu nawigacyjne z linkami do sekcji strony i opcjami logowania
+          </SheetDescription>
           <SheetClose asChild className="absolute top-3 right-5 bg-background z-20 flex items-center justify-center">
             <Button size="icon" variant="ghost" className="text-neutral-600">
               <X className="w-5 h-5" />

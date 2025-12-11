@@ -9,6 +9,7 @@ import {
   X,
   ArrowUp,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -442,6 +443,21 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     }
   };
 
+  const handleClearFiles = () => {
+    if (!uppy || uploading || uploadComplete) {
+      return;
+    }
+    // Clear local state FIRST so it's immediately updated
+    setFiles([]);
+    // Reset file tracking
+    lastSyncedFileIdsRef.current = [];
+    // Clean up blob URLs
+    blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
+    blobUrlCacheRef.current.clear();
+    // Then clear Uppy files
+    uppy.clear();
+  };
+
   /**
    * Get thumbnail URL for Uppy file
    *
@@ -809,6 +825,16 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                     >
                       {uploading ? "Anuluj" : "Zamknij"}
                     </Button>
+                    {files.length > 0 && !uploading && !uploadComplete && (
+                      <Button
+                        variant="secondary"
+                        onClick={handleClearFiles}
+                        className="flex items-center gap-2"
+                      >
+                        <Trash2 size={16} />
+                        Wyczyść
+                      </Button>
+                    )}
                     {files.length > 0 && !uploading && (
                       <Button onClick={startUpload} variant="primary">
                         Prześlij {files.length} {files.length === 1 ? "plik" : "plików"}

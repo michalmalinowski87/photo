@@ -9,17 +9,19 @@ import { useEffect, useState } from "react";
 import "../styles/globals.css";
 import "../styles/auth.css";
 import { WebPCompatibilityCheck } from "../../shared-auth/webp-check";
-import { ClientOnly } from "../components/ClientOnly";
 import AuthLayout from "../components/auth/AuthLayout";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
+import { ClientOnly } from "../components/ClientOnly";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
+import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { AuthProvider, useAuth } from "../context/AuthProvider";
 import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
 import { makeQueryClient } from "../lib/react-query";
@@ -48,15 +50,6 @@ const GALLERY_ROUTES = [
 ];
 
 export default function App(props: AppProps) {
-  // For 404 page during SSG, render without providers to avoid React 19 hook issues
-  // The router isn't available during SSG, so we check the pathname from pageProps
-  const is404Page = props.router?.pathname === "/404" || props.router?.pathname === undefined;
-
-  if (is404Page && typeof window === "undefined") {
-    // During SSG for 404, render minimal component without providers
-    return <props.Component {...props.pageProps} />;
-  }
-
   // Create a new QueryClient instance per request to avoid SSR issues
   // Use useState with lazy initializer to ensure it's only created once per component instance
   // This is important for SSR compatibility with React 19 and Next.js 15
@@ -67,6 +60,15 @@ export default function App(props: AppProps) {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // For 404 page during SSG, render without providers to avoid React 19 hook issues
+  // The router isn't available during SSG, so we check the pathname from pageProps
+  const is404Page = props.router?.pathname === "/404" || props.router?.pathname === undefined;
+
+  if (is404Page && typeof window === "undefined") {
+    // During SSG for 404, render minimal component without providers
+    return <props.Component {...props.pageProps} />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -86,8 +88,10 @@ function AppContent({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const { recoveryState, showModal, handleResume, handleClear } = useUploadRecovery();
   const [swRegistered, setSwRegistered] = useState(false);
+  const [showMobileWarning, setShowMobileWarning] = useState<boolean>(false);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
 
   // Skip hooks for 404 page during SSG (React 19/Next.js 15 compatibility)
   const is404Page = router.pathname === "/404";
@@ -227,6 +231,18 @@ function AppContent({ Component, pageProps }: AppProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [is404Page]);
 
+  // Show mobile warning when on mobile device and authenticated (not on auth routes)
+  useEffect(() => {
+    if (is404Page) return;
+    if (isMobile && isAuthenticated && !isAuthRoute && router.isReady) {
+      // Check if user has already dismissed the warning in this session
+      const dismissed = sessionStorage.getItem("mobile-warning-dismissed");
+      if (dismissed !== "true") {
+        setShowMobileWarning(true);
+      }
+    }
+  }, [isMobile, isAuthenticated, isAuthRoute, router.isReady, is404Page]);
+
   // For 404 page, render it directly without layouts/providers to avoid SSG issues
   if (is404Page) {
     return <Component {...pageProps} />;
@@ -234,6 +250,13 @@ function AppContent({ Component, pageProps }: AppProps) {
 
   return (
     <>
+      {/* Mobile warning modal for authenticated dashboard pages */}
+      {!isAuthRoute && (
+        <MobileWarningModal
+          isOpen={showMobileWarning}
+          onClose={() => setShowMobileWarning(false)}
+        />
+      )}
       {/* Auth routes don't need protection */}
       {isAuthRoute ? (
         <AuthLayout>

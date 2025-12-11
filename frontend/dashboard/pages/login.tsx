@@ -5,7 +5,9 @@ import React, { useState, useEffect, useRef } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
+import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { useAuth } from "../context/AuthProvider";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
@@ -26,8 +28,10 @@ export default function Login() {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
+  const [showMobileWarning, setShowMobileWarning] = useState<boolean>(false);
   const hasRedirected = useRef<boolean>(false);
   const { setSessionExpired, updateAuthState } = useAuth();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     // Setup auth status listener for landing page
@@ -116,6 +120,17 @@ export default function Login() {
     void checkExistingSession();
   }, [router, setSessionExpired]);
 
+  // Show mobile warning when on mobile device
+  useEffect(() => {
+    if (isMobile && !checkingSession) {
+      // Check if user has already dismissed the warning in this session
+      const dismissed = sessionStorage.getItem("mobile-warning-dismissed");
+      if (dismissed !== "true") {
+        setShowMobileWarning(true);
+      }
+    }
+  }, [isMobile, checkingSession]);
+
   const handleSignIn = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setError("");
@@ -193,12 +208,17 @@ export default function Login() {
   }
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-lg font-bold text-foreground">PhotoCloud</span>
-        </Link>
-      </div>
+    <>
+      <MobileWarningModal
+        isOpen={showMobileWarning}
+        onClose={() => setShowMobileWarning(false)}
+      />
+      <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
+        <div className="flex items-center w-full py-8 border-b border-border/80">
+          <Link href="/galleries" className="flex items-center gap-x-2">
+            <span className="text-lg font-bold text-foreground">PhotoCloud</span>
+          </Link>
+        </div>
 
       <div className="flex flex-col w-full mt-8">
         <h2 className="text-2xl font-semibold mb-2 text-foreground">Zaloguj się</h2>
@@ -281,5 +301,6 @@ export default function Login() {
         </p>
       </div>
     </div>
+    </>
   );
 }
