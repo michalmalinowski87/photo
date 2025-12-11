@@ -1,4 +1,3 @@
-import type { GetServerSideProps } from "next";
 import { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
@@ -10,9 +9,7 @@ import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
 
 // Prevent static generation - this page uses client hooks
-export const getServerSideProps: GetServerSideProps = () => {
-  return Promise.resolve({ props: {} });
-};
+export const dynamic = 'force-dynamic';
 
 interface PasswordForm {
   currentPassword: string;
@@ -308,11 +305,7 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={updateBusinessInfoMutation.isPending}
-                >
+                <Button type="submit" variant="primary" disabled={updateBusinessInfoMutation.isPending}>
                   {updateBusinessInfoMutation.isPending ? "Zapisywanie..." : "Zapisz informacje"}
                 </Button>
               </div>

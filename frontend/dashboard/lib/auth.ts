@@ -24,6 +24,10 @@ interface TokenResponse {
   refresh_token?: string;
 }
 
+interface CognitoError extends Error {
+  code?: string;
+}
+
 export function initAuth(userPoolId: string, clientId: string): CognitoUserPool | null {
   if (!userPoolId || !clientId) {
     return null;
@@ -532,6 +536,57 @@ export function resendConfirmationCode(email: string): Promise<void> {
         return;
       }
       resolve();
+    });
+  });
+}
+
+/**
+ * Check if a user exists and if their email is verified
+ * @param email The email to check
+ * @returns Promise resolving to 'verified' if user exists and is verified, 'unverified' if user exists but is not verified, or 'not_found' if user doesn't exist
+ */
+export function checkUserVerificationStatus(email: string): Promise<"verified" | "unverified" | "not_found"> {
+  return new Promise((resolve) => {
+    if (!userPool) {
+      resolve("not_found");
+      return;
+    }
+
+    // Try to sign in with a dummy password to check user status
+    // This is the most reliable way to check verification status
+    const authenticationDetails = new AuthenticationDetails({
+      Username: email,
+      Password: "dummy-password-to-check-status",
+    });
+    const cognitoUser = new CognitoUser({
+      Username: email,
+      Pool: userPool,
+    });
+
+    cognitoUser.authenticateUser(authenticationDetails, {
+      onSuccess: () => {
+        // This shouldn't happen with a dummy password, but if it does, user is verified
+        resolve("verified");
+      },
+      onFailure: (err: Error) => {
+        const cognitoError = err as CognitoError;
+        if (cognitoError.code === "UserNotConfirmedException") {
+          // User exists but email is not verified
+          resolve("unverified");
+        } else if (cognitoError.code === "NotAuthorizedException" || cognitoError.code === "UserNotFoundException") {
+          // User doesn't exist or wrong password - but since we're checking with dummy password,
+          // NotAuthorizedException means user exists and is verified (wrong password)
+          // UserNotFoundException means user doesn't exist
+          if (cognitoError.code === "UserNotFoundException") {
+            resolve("not_found");
+          } else {
+            resolve("verified");
+          }
+        } else {
+          // Unknown error, assume user doesn't exist
+          resolve("not_found");
+        }
+      },
     });
   });
 }

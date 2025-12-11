@@ -3,6 +3,10 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Next.js 15: Bundle external packages for Pages Router for faster startup times
+  experimental: {
+    bundlePagesRouterDependencies: true,
+  },
   webpack: (config, { isServer, webpack }) => {
     // Resolve modules from local node_modules first (important for nohoisted packages like @swc)
     // Then fall back to root node_modules for other packages

@@ -1,9 +1,8 @@
-import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
-import { Button } from "../components/ui/button";
+import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { initAuth, confirmSignUp, resendConfirmationCode } from "../lib/auth";
@@ -13,9 +12,7 @@ interface CognitoError extends Error {
 }
 
 // Prevent static generation - this page uses client hooks
-export const getServerSideProps: GetServerSideProps = () => {
-  return Promise.resolve({ props: {} });
-};
+export const dynamic = 'force-dynamic';
 
 export default function VerifyEmail() {
   const router = useRouter();
@@ -54,7 +51,6 @@ export default function VerifyEmail() {
     }
 
     setLoading(true);
-
     try {
       await confirmSignUp(email, code);
       setSuccess(true);
@@ -66,7 +62,6 @@ export default function VerifyEmail() {
         );
       }, 2000);
     } catch (err) {
-      setLoading(false);
       const error = err as CognitoError;
       // Handle Cognito errors
       if (error.code === "CodeMismatchException") {
@@ -78,6 +73,8 @@ export default function VerifyEmail() {
       } else {
         setError("Nie udało się zweryfikować konta. Spróbuj ponownie.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -123,7 +120,7 @@ export default function VerifyEmail() {
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-lg font-bold text-foreground">PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
         </Link>
       </div>
 
@@ -134,7 +131,7 @@ export default function VerifyEmail() {
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
             {error}
           </div>
         )}
@@ -148,7 +145,6 @@ export default function VerifyEmail() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               placeholder="000000"
-              disabled={loading}
               required
               maxLength={6}
               className="text-center text-2xl tracking-widest"
@@ -156,28 +152,25 @@ export default function VerifyEmail() {
             />
           </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full"
-            size="lg"
-            disabled={loading || code.length !== 6}
+          <Button 
+            type="submit" 
+            variant="primary" 
+            className="w-full" 
+            disabled={loading}
           >
             {loading ? "Weryfikowanie..." : "Zweryfikuj konto"}
           </Button>
         </form>
 
         <div className="mt-4 text-center">
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
             onClick={handleResendCode}
             disabled={resending}
-            className="text-sm"
+            className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {resending ? "Wysyłanie..." : "Wyślij nowy kod"}
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -188,9 +181,9 @@ export default function VerifyEmail() {
             type="button"
             onClick={handleResendCode}
             disabled={resending}
-            className="text-primary font-bold hover:underline"
+            className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            wyślij ponownie
+            {resending ? "Wysyłanie..." : "wyślij ponownie"}
           </button>
         </p>
       </div>

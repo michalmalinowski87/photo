@@ -89,6 +89,18 @@ interface WizardData {
   initialPaymentAmountCents: number;
 }
 
+function SubmitButton({ onSubmit: _onSubmit, disabled }: { onSubmit: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+    >
+      {disabled ? "Przetwarzanie..." : "Utwórz galerię"}
+    </button>
+  );
+}
+
 const CreateGalleryWizard = ({
   isOpen,
   onClose,
@@ -489,6 +501,15 @@ const CreateGalleryWizard = ({
     }
   };
 
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentStep === 4) {
+      await handleSubmit();
+    } else {
+      handleNext();
+    }
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -790,21 +811,25 @@ const CreateGalleryWizard = ({
                 );
               })()}
             {currentStep > 1 && (
-              <button
-                onClick={handleNext}
-                disabled={loading}
-                className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loading ? (
-                  "Przetwarzanie..."
-                ) : currentStep === 4 ? (
-                  "Utwórz galerię"
-                ) : (
-                  <>
-                    OK <span className="text-lg">✓</span>
-                  </>
-                )}
-              </button>
+              currentStep === 4 ? (
+                <form onSubmit={handleFormSubmit}>
+                  <SubmitButton onSubmit={handleSubmit} disabled={loading} />
+                </form>
+              ) : (
+                <button
+                  onClick={handleNext}
+                  disabled={loading}
+                  className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loading ? (
+                    "Przetwarzanie..."
+                  ) : (
+                    <>
+                      OK <span className="text-lg">✓</span>
+                    </>
+                  )}
+                </button>
+              )
             )}
           </div>
           {currentStep === 1 && <div />}

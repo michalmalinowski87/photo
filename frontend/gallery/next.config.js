@@ -4,6 +4,10 @@ const path = require('path');
 const nextConfig = {
 	reactStrictMode: true,
 	transpilePackages: ['@photocloud/gallery-components'],
+	// Next.js 15: Bundle external packages for Pages Router for faster startup times
+	experimental: {
+		bundlePagesRouterDependencies: true,
+	},
 	webpack: (config, { isServer }) => {
 		// Resolve React and React-DOM from root node_modules in yarn workspace
 		// This ensures Next.js can find React even when it's hoisted to the root

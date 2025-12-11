@@ -1,4 +1,3 @@
-import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
@@ -13,9 +12,7 @@ import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
 
 // Prevent static generation - this page uses client hooks
-export const getServerSideProps: GetServerSideProps = () => {
-  return Promise.resolve({ props: {} });
-};
+export const dynamic = 'force-dynamic';
 
 interface CognitoError extends Error {
   code?: string;
@@ -141,7 +138,6 @@ export default function Login() {
     }
 
     setLoading(true);
-
     try {
       // Login via SDK (stores tokens in localStorage)
       await signIn(email, password);
@@ -177,7 +173,6 @@ export default function Login() {
 
       void router.push(returnUrl);
     } catch (err) {
-      setLoading(false);
       const error = err as CognitoError;
       // Handle Cognito errors
       if (error.code === "NotAuthorizedException" || error.code === "UserNotFoundException") {
@@ -190,6 +185,8 @@ export default function Login() {
       } else {
         setError("Nie udało się zalogować. Spróbuj ponownie.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -216,7 +213,7 @@ export default function Login() {
       <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
         <div className="flex items-center w-full py-8 border-b border-border/80">
           <Link href="/galleries" className="flex items-center gap-x-2">
-            <span className="text-lg font-bold text-foreground">PhotoCloud</span>
+            <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
           </Link>
         </div>
 
@@ -227,7 +224,7 @@ export default function Login() {
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
             {error}
           </div>
         )}
@@ -247,7 +244,6 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="twoj@email.com"
-              disabled={loading}
               autoComplete="email"
               className="w-full"
             />
@@ -267,7 +263,6 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Wprowadź hasło"
-              disabled={loading}
               autoComplete="current-password"
               className="w-full"
             />

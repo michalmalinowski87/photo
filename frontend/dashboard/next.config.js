@@ -4,6 +4,10 @@ const path = require("path");
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@photocloud/gallery-components"],
+  // Next.js 15: Bundle external packages for Pages Router for faster startup times
+  experimental: {
+    bundlePagesRouterDependencies: true,
+  },
   // Fail build on ESLint errors
   eslint: {
     ignoreDuringBuilds: false,

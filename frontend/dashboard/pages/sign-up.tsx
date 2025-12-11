@@ -1,21 +1,19 @@
-import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-import { Button } from "../components/ui/button";
+import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { initAuth, signUp } from "../lib/auth";
+import { PasswordInputWithStrength, PasswordInputWithToggle, PasswordStrengthResult, PasswordStrengthValidator } from "../components/ui/password-strength-validator";
+import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 
 interface CognitoError extends Error {
   code?: string;
 }
 
 // Prevent static generation - this page uses client hooks
-export const getServerSideProps: GetServerSideProps = () => {
-  return Promise.resolve({ props: {} });
-};
+export const dynamic = 'force-dynamic';
 
 export default function SignUp() {
   const router = useRouter();
@@ -24,6 +22,9 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -40,6 +41,35 @@ export default function SignUp() {
     }
   }, [router]);
 
+  // Calculate validator position when password changes or on scroll/resize
+  useEffect(() => {
+    const updatePosition = () => {
+      if (password && passwordInputRef.current) {
+        const inputRect = passwordInputRef.current.getBoundingClientRect();
+        setValidatorPosition({
+          top: 401.667, // Fixed position to align with input field
+          left: inputRect.right + 16, // 16px = ml-4
+        });
+      } else {
+        setValidatorPosition(null);
+      }
+    };
+
+    updatePosition();
+    
+    if (password) {
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+    
+    return undefined;
+  }, [password]);
+
   const handleSignUp = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setError("");
@@ -55,13 +85,13 @@ export default function SignUp() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Hasło musi mieć co najmniej 8 znaków");
+    // Validate password strength
+    if (!passwordStrength?.meetsMinimum) {
+      setError("Hasło nie spełnia wymagań bezpieczeństwa. Sprawdź wymagania poniżej.");
       return;
     }
 
     setLoading(true);
-
     try {
       await signUp(email, password);
       // Redirect to verification page with email
@@ -70,10 +100,32 @@ export default function SignUp() {
         `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
       );
     } catch (err) {
-      setLoading(false);
       const error = err as CognitoError;
       // Handle Cognito errors
       if (error.code === "UsernameExistsException") {
+        // User already exists - check if email is verified
+        try {
+          const verificationStatus = await checkUserVerificationStatus(email);
+          const returnUrl = router.query.returnUrl ?? "/";
+          
+          if (verificationStatus === "verified") {
+            // User exists and is verified - redirect to login
+            void router.push(
+              `/login?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
+            );
+            return;
+          } else if (verificationStatus === "unverified") {
+            // User exists but email is not verified - restart verification flow
+            void router.push(
+              `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
+            );
+            return;
+          }
+        } catch (checkError) {
+          // If check fails, fall through to show error message
+          console.error("Failed to check user verification status:", checkError);
+        }
+        // Fallback error message if check fails
         setError("Użytkownik o tym adresie email już istnieje");
       } else if (error.code === "InvalidPasswordException") {
         setError("Hasło nie spełnia wymagań bezpieczeństwa");
@@ -82,30 +134,32 @@ export default function SignUp() {
       } else {
         setError("Nie udało się utworzyć konta. Spróbuj ponownie.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
+    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-lg font-bold text-foreground">PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
         </Link>
       </div>
 
-      <div className="flex flex-col w-full mt-8">
+      <div className="flex flex-col w-full mt-8 relative">
         <h2 className="text-2xl font-semibold mb-2 text-foreground">Zarejestruj się</h2>
         <p className="text-sm text-muted-foreground mb-6">
           Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSignUp} className="w-full space-y-4">
+        <form onSubmit={handleSignUp} className="w-full space-y-4 relative">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -114,42 +168,77 @@ export default function SignUp() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="twoj@email.com"
-              disabled={loading}
               required
               autoComplete="email"
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 relative">
             <Label htmlFor="password">Hasło</Label>
-            <Input
+            <PasswordInputWithStrength
+              ref={passwordInputRef}
               id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimum 8 znaków"
-              disabled={loading}
+              password={password}
+              onPasswordChange={(value) => {
+                setPassword(value);
+                setError(""); // Clear error when user types
+              }}
+              onStrengthChange={setPasswordStrength}
+              placeholder="Wprowadź hasło"
               required
               autoComplete="new-password"
               minLength={8}
             />
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
+              <PasswordInputWithToggle
+                id="confirmPassword"
+                value={confirmPassword}
+                onValueChange={(value) => {
+                  setConfirmPassword(value);
+                  setError(""); // Clear error when user types
+                }}
+                placeholder="Powtórz hasło"
+                required
+                autoComplete="new-password"
+              />
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">Hasła nie są identyczne</p>
+              )}
+              {confirmPassword && password === confirmPassword && password.length > 0 && (
+                <p className="text-xs text-green-500 mt-1">Hasła są identyczne</p>
+              )}
+            </div>
+
+            {/* Password Strength Validator - Fixed Positioned Side Card */}
+            {password && passwordStrength && validatorPosition && (
+              <div 
+                className="fixed w-72 z-50 hidden md:block pointer-events-auto"
+                style={{
+                  top: `${validatorPosition.top}px`,
+                  left: `${validatorPosition.left}px`,
+                  maxHeight: 'calc(100vh - 2rem)',
+                }}
+              >
+                <div className="rounded-lg border border-border bg-card p-4 shadow-lg max-h-full overflow-y-auto">
+                  <PasswordStrengthValidator
+                    password={password}
+                    minLength={8}
+                    onStrengthChange={setPasswordStrength}
+                    showToggle={false}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Powtórz hasło"
-              disabled={loading}
-              required
-              autoComplete="new-password"
-            />
-          </div>
-
-          <Button type="submit" variant="primary" className="w-full" size="lg" disabled={loading}>
+          <Button 
+            type="submit" 
+            variant="primary" 
+            className="w-full" 
+            disabled={loading || !passwordStrength?.meetsMinimum}
+          >
             {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}
           </Button>
         </form>
