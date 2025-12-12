@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Plus, Trash2 } from "lucide-react";
+import { FlaskConical, Plus, Trash2, Clock } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
@@ -27,6 +27,14 @@ const devTools: DevTool[] = [
     icon: <Plus size={24} />,
     category: "Galerie",
     color: "blue",
+  },
+  {
+    title: "Test wygaśnięcia galerii",
+    description: "Utwórz galerię z 2 oryginalnymi i 2 finalnymi zdjęciami, ustaw datę wygaśnięcia i śledź proces usuwania",
+    path: "/dev/test-gallery-expiry",
+    icon: <Clock size={24} />,
+    category: "Galerie",
+    color: "purple",
   },
   {
     title: "Usuń galerie według statusu",

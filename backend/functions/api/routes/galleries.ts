@@ -20,6 +20,7 @@ import * as galleriesValidateUploadLimits from '../../../functions/galleries/val
 import * as galleriesUpgradePlan from '../../../functions/galleries/upgradePlan';
 import * as galleriesSendToClient from '../../../functions/galleries/sendGalleryToClient';
 import * as galleriesExport from '../../../functions/galleries/export';
+import * as devSetGalleryExpiry from '../../../functions/dev/setGalleryExpiry';
 
 const router = Router();
 
@@ -47,6 +48,9 @@ router.post('/:id/upgrade-plan', wrapHandler(galleriesUpgradePlan.handler));
 // client-login is registered as a public route in index.ts (before requireAuth middleware)
 router.post('/:id/send-to-client', wrapHandler(galleriesSendToClient.handler));
 router.post('/:id/export', wrapHandler(galleriesExport.handler));
+
+// Dev endpoint for testing gallery expiration (only available in dev/staging)
+router.post('/:id/dev/set-expiry', wrapHandler(devSetGalleryExpiry.handler));
 
 export { router as galleriesRoutes };
 

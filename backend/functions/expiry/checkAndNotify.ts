@@ -4,14 +4,12 @@ import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { createExpiryWarningEmail, createExpiryFinalWarningEmail } from '../../lib/src/email';
+import { createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
 const cognito = new CognitoIdentityProviderClient({});
-const lambda = new LambdaClient({});
 
 import { lambdaLogger } from '../../../packages/logger/src';
 
@@ -84,7 +82,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const sender = envProc?.env?.SENDER_EMAIL as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
-	const deleteFnName = envProc?.env?.GALLERIES_DELETE_FN_NAME as string;
 	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
 	
 	if (!galleriesTable || !sender) return;
@@ -93,13 +90,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const sevenDaysFromNow = now + 7 * 24 * 3600 * 1000;
 	const twentyFourHoursFromNow = now + 24 * 3600 * 1000;
 	
-	// Scan galleries with filter for expiry warnings
-	// Note: Deletion is handled automatically by DynamoDB TTL + Streams
-	// This function only sends warning emails for galleries expiring soon
-	// Using scan with filter is acceptable here since:
+	// Scan galleries for expiry warnings and migration
+	// Note: Deletion is handled by EventBridge Scheduler, not this function
+	// This function:
+	// 1. Sends warning emails (7 days for paid, 24h for unpaid)
+	// 2. Migrates existing galleries to EventBridge Scheduler
+	// Using scan is acceptable here since:
 	// 1. We run every 6 hours (4x per day) - reasonable cost vs frequency balance
-	// 2. We filter to only galleries with expiresAt set
-	// 3. Most galleries won't match the filter (expiring in next 7 days)
+	// 2. Most galleries won't match the filter (expiring in next 7 days)
 	const nowISO = new Date(now).toISOString();
 	const sevenDaysFromNowISO = new Date(sevenDaysFromNow).toISOString();
 	
@@ -134,6 +132,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const expiryWarning24hSent = item.expiryWarning24hSent as boolean | undefined;
 		const ttl = item.ttl as number | undefined;
 		const state = item.state as string | undefined;
+		const expiryScheduleName = item.expiryScheduleName as string | undefined;
 		
 		// Check payment status to determine if this is an UNPAID gallery
 		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
@@ -161,53 +160,66 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			continue; // Skip if no expiry date
 		}
 		
-		// Only process if expiry is within 7 days (for paid) or 24h (for unpaid)
-		if (isPaid && expiryDate > sevenDaysFromNow) continue;
-		if (!isPaid && expiryDate > twentyFourHoursFromNow) continue;
-		
-		// Migration: Set ttl attribute for existing paid galleries that don't have it
-		// This ensures DynamoDB TTL will work for existing galleries
-		// Note: 'ttl' is a reserved keyword in DynamoDB, so we must use ExpressionAttributeNames
-		if (isPaid && !ttl && expiresAt) {
-			const ttlExpiresAt = Math.floor(expiresAt / 1000); // Convert to Unix epoch seconds
-			try {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'SET #ttl = :ttl',
-					ExpressionAttributeNames: { '#ttl': 'ttl' },
-					ExpressionAttributeValues: { ':ttl': ttlExpiresAt }
-				}));
-				logger.info('Set ttl attribute for existing paid gallery', { galleryId, ttl: ttlExpiresAt });
-			} catch (updateErr: any) {
-				logger.warn('Failed to set ttl attribute for gallery', { 
-					error: updateErr.message, 
-					galleryId 
+		// Migration: Create EventBridge schedule for galleries without expiryScheduleName
+		// This migrates existing galleries from DynamoDB TTL to EventBridge Scheduler
+		if (!expiryScheduleName) {
+			const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
+			const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
+			const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
+			
+			// Calculate expiresAt ISO string from expiryDate
+			const expiresAtISO = expiryDate ? new Date(expiryDate).toISOString() : undefined;
+			
+			if (deletionLambdaArn && scheduleRoleArn && expiresAtISO) {
+				try {
+					const scheduleName = await createExpirySchedule(galleryId, expiresAtISO, deletionLambdaArn, scheduleRoleArn, dlqArn);
+					
+					// Store schedule name in gallery
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: 'SET expiryScheduleName = :sn',
+						ExpressionAttributeValues: {
+							':sn': scheduleName
+						}
+					}));
+					
+					logger.info('Created EventBridge schedule for existing gallery (migration)', {
+						galleryId,
+						scheduleName,
+						expiresAt: expiresAtISO,
+						isPaid
+					});
+				} catch (scheduleErr: any) {
+					logger.error('Failed to create EventBridge schedule for gallery (migration)', {
+						error: {
+							name: scheduleErr.name,
+							message: scheduleErr.message
+						},
+						galleryId,
+						expiresAt: expiresAtISO
+					});
+					// Continue with warning emails even if schedule creation fails
+				}
+			} else {
+				logger.warn('EventBridge Scheduler not configured - cannot migrate gallery', {
+					galleryId,
+					hasDeletionLambdaArn: !!deletionLambdaArn,
+					hasScheduleRoleArn: !!scheduleRoleArn,
+					hasExpiresAt: !!expiresAtISO
 				});
 			}
 		}
 		
-		// Fallback: Handle already-expired galleries that don't have ttl set yet
-		// This ensures galleries that expired before migration are still cleaned up
-		if (expiryDate <= now && !ttl && deleteFnName) {
-			logger.info('Gallery already expired without ttl, triggering immediate cleanup', { galleryId });
-			try {
-				await lambda.send(new InvokeCommand({
-					FunctionName: deleteFnName,
-					InvocationType: 'Event', // Async invocation
-					Payload: Buffer.from(JSON.stringify({
-						pathParameters: { id: galleryId }
-					}))
-				}));
-				logger.info('Delete gallery lambda invoked for expired gallery (fallback)', { galleryId });
-				continue; // Skip warning emails for already-expired galleries
-			} catch (invokeErr: any) {
-				logger.error('Failed to invoke delete gallery lambda (fallback)', {
-					error: invokeErr.message,
-					galleryId,
-					deleteFnName
-				});
-			}
+		// Only process if expiry is within 7 days (for paid) or 24h (for unpaid)
+		// Note: Actual deletion is handled by EventBridge Scheduler, not this function
+		if (isPaid && expiryDate > sevenDaysFromNow) continue;
+		if (!isPaid && expiryDate > twentyFourHoursFromNow) continue;
+		
+		// Skip already-expired galleries - EventBridge Scheduler will handle deletion
+		if (expiryDate <= now) {
+			logger.info('Gallery already expired - EventBridge Scheduler will handle deletion', { galleryId });
+			continue;
 		}
 		
 		const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
@@ -292,9 +304,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		// Note: Gallery deletion is now handled automatically by DynamoDB TTL + Streams
-		// This function only sends warning emails - no manual deletion needed
-		// When TTL expires, DynamoDB automatically deletes the item and triggers the stream Lambda
+		// Note: Gallery deletion is handled by EventBridge Scheduler
+		// This function only sends warning emails and migrates existing galleries
 	}
 });
 

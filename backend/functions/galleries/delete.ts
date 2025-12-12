@@ -9,6 +9,7 @@ const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createGalleryDeletedEmail } from '../../lib/src/email';
 import { getUnpaidTransactionForGallery, updateTransactionStatus } from '../../lib/src/transactions';
+import { cancelExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -126,6 +127,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	logger.info('Starting gallery deletion', { galleryId, ownerId: gallery.ownerId, triggeredBy: requester ? 'manual' : 'expiry' });
 
 	try {
+		// Cancel EventBridge schedule if it exists (idempotent - won't fail if doesn't exist)
+		const scheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
+		try {
+			await cancelExpirySchedule(scheduleName);
+			logger.info('Canceled EventBridge schedule for gallery', { galleryId, scheduleName });
+		} catch (scheduleErr: any) {
+			logger.warn('Failed to cancel EventBridge schedule (may not exist)', {
+				error: scheduleErr.message,
+				galleryId,
+				scheduleName
+			});
+			// Continue with deletion even if schedule cancellation fails
+		}
+
 		// Cancel any unpaid transactions for this gallery before deletion
 		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 		if (transactionsTable) {

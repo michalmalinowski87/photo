@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { randomBytes, pbkdf2Sync } from 'crypto';
 import type { LambdaEvent, LambdaContext, GalleryItem } from '../../lib/src/lambda-types';
+import { createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -82,11 +83,12 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 	const now = new Date().toISOString();
 	const galleryId = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 	
-	// UNPAID galleries get 3-day TTL for automatic deletion (DynamoDB deletes within 48 hours of expiry)
-	// After payment, TTL is removed and normal expiry (expiresAt) is used
+	// UNPAID galleries expire in 3 days
+	// Set expiresAt (ISO timestamp) and create EventBridge schedule for precise deletion
 	const createdAtDate = new Date(now);
-	const ttlExpiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000);
-	const ttlExpiresAt = Math.floor(ttlExpiresAtDate.getTime() / 1000);
+	const expiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+	const expiresAt = expiresAtDate.toISOString();
+	const ttlExpiresAt = Math.floor(expiresAtDate.getTime() / 1000); // Keep for backward compatibility during migration
 
 	// Always create gallery as UNPAID draft - transaction created on-demand when user clicks "Opłać galerię"
 	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
@@ -95,6 +97,7 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		ownerId: string;
 		ownerEmail: string;
 		state: string;
+		expiresAt: string;
 		ttl: number;
 		originalsBytesUsed: number;
 		finalsBytesUsed: number;
@@ -108,6 +111,7 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		ownerId,
 		ownerEmail,
 		state: 'DRAFT',
+		expiresAt,
 		ttl: ttlExpiresAt,
 		originalsBytesUsed: 0,
 		finalsBytesUsed: 0,
@@ -159,6 +163,45 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		TableName: galleriesTable,
 		Item: item
 	}));
+
+	// Create EventBridge schedule for gallery expiration
+	const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
+	const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
+	const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
+	
+	if (deletionLambdaArn && scheduleRoleArn) {
+		try {
+			const scheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+			
+			// Store schedule name in gallery
+			await ddb.send(new UpdateCommand({
+				TableName: galleriesTable,
+				Key: { galleryId },
+				UpdateExpression: 'SET expiryScheduleName = :sn',
+				ExpressionAttributeValues: {
+					':sn': scheduleName
+				}
+			}));
+			
+			logger?.info('Created EventBridge schedule for gallery expiration', { galleryId, scheduleName, expiresAt });
+		} catch (scheduleErr: any) {
+			logger?.error('Failed to create EventBridge schedule for gallery', {
+				error: {
+					name: scheduleErr.name,
+					message: scheduleErr.message
+				},
+				galleryId,
+				expiresAt
+			});
+			// Continue even if schedule creation fails - gallery will still be created
+		}
+	} else {
+		logger?.warn('EventBridge Scheduler not configured - gallery expiration schedule not created', {
+			galleryId,
+			hasDeletionLambdaArn: !!deletionLambdaArn,
+			hasScheduleRoleArn: !!scheduleRoleArn
+		});
+	}
 
 	// If selection is disabled, create an order immediately with AWAITING_FINAL_PHOTOS status
 	// This allows photographer to upload finals and manage payment, but not send final link until photos are uploaded

@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCom
 const Stripe = require('stripe');
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { PRICING_PLANS } from '../../lib/src/pricing';
+import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -173,9 +174,43 @@ async function processCheckoutSession(
 				const expiresAt = expiresAtDate.toISOString();
 				const originalsLimitBytes = gallery.originalsLimitBytes || planMetadata.storageLimitBytes;
 				const finalsLimitBytes = gallery.finalsLimitBytes || planMetadata.storageLimitBytes;
+				
+				// Cancel old EventBridge schedule (if exists) and create new one for paid expiry
+				const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
+				const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
+				const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
+				const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
+				
+				let newScheduleName: string | undefined;
+				if (deletionLambdaArn && scheduleRoleArn) {
+					try {
+						// Cancel old schedule (idempotent - won't fail if doesn't exist)
+						await cancelExpirySchedule(oldScheduleName);
+						logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
+						
+						// Create new schedule for paid expiry
+						newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+						logger.info('Created new EventBridge schedule for paid gallery', { galleryId, scheduleName: newScheduleName, expiresAt });
+					} catch (scheduleErr: any) {
+						logger.error('Failed to update EventBridge schedule for paid gallery', {
+							error: {
+								name: scheduleErr.name,
+								message: scheduleErr.message
+							},
+							galleryId,
+							expiresAt
+						});
+						// Continue even if schedule update fails - gallery state will still be updated
+					}
+				}
+				
 				const updateExpr = gallery.selectionEnabled
-					? 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl'
-					: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl';
+					? newScheduleName
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
+					: newScheduleName
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl, paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl, paymentLocked';
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
 					':e': expiresAt,
@@ -191,16 +226,18 @@ async function processCheckoutSession(
 				if (gallery.selectionEnabled) {
 					exprValues[':ss'] = 'NOT_STARTED';
 				}
-				const updateExprWithUnlock = updateExpr.replace('REMOVE #ttl', 'REMOVE #ttl, paymentLocked');
+				if (newScheduleName) {
+					exprValues[':sn'] = newScheduleName;
+				}
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: updateExprWithUnlock,
+					UpdateExpression: updateExpr,
 					ConditionExpression: 'ownerId = :o',
 					ExpressionAttributeValues: exprValues,
 					ExpressionAttributeNames: exprNames
 				}));
-				logger.info('Gallery marked as paid', { galleryId, userId, paymentId, amountCents, expiresAt });
+				logger.info('Gallery marked as paid', { galleryId, userId, paymentId, amountCents, expiresAt, scheduleName: newScheduleName });
 				if (!gallery.selectionEnabled && ordersTable) {
 					try {
 						const orderNumber = (gallery.lastOrderNumber ?? 0) + 1;

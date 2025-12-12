@@ -23,6 +23,7 @@ import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import * as path from 'path';
 
 interface AppStackProps extends StackProps {
@@ -698,7 +699,6 @@ export class AppStack extends Stack {
 			environment: envVars
 		});
 		galleries.grantReadWriteData(expiryFn);
-		galleriesDeleteHelperFn.grantInvoke(expiryFn); // Needed for fallback deletion of already-expired galleries
 		expiryFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
 			resources: ['*']
@@ -713,6 +713,117 @@ export class AppStack extends Stack {
 			schedule: Schedule.rate(Duration.hours(6)),
 			targets: [new LambdaFunction(expiryFn)]
 		});
+
+		// EventBridge Scheduler-based gallery expiration system
+		// Deletion Lambda function - invoked by EventBridge Scheduler at exact expiry time
+		const galleryExpiryDeletionFn = new NodejsFunction(this, 'GalleryExpiryDeletionFn', {
+			entry: path.join(__dirname, '../../../backend/functions/expiry/deleteExpiredGallery.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 1024, // Increased memory for faster processing
+			timeout: Duration.minutes(15), // Maximum Lambda timeout for very large galleries
+			bundling: {
+				externalModules: ['aws-sdk'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false
+			},
+			environment: envVars
+		});
+		
+		// Grant permissions to deletion Lambda
+		galleries.grantReadWriteData(galleryExpiryDeletionFn);
+		transactions.grantReadWriteData(galleryExpiryDeletionFn);
+		orders.grantReadWriteData(galleryExpiryDeletionFn);
+		galleriesBucket.grantReadWrite(galleryExpiryDeletionFn);
+		galleryExpiryDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
+		galleryExpiryDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['cognito-idp:AdminGetUser'],
+			resources: [userPool.userPoolArn]
+		}));
+		
+		// Dead Letter Queue for failed schedule executions
+		const galleryExpiryDLQ = new Queue(this, 'GalleryExpiryDLQ', {
+			queueName: `PhotoHub-${props.stage}-GalleryExpiryDLQ`,
+			encryption: QueueEncryption.SQS_MANAGED,
+			retentionPeriod: Duration.days(14)
+		});
+		
+		// IAM role for EventBridge Scheduler to invoke deletion Lambda
+		const schedulerRole = new Role(this, 'GalleryExpirySchedulerRole', {
+			assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
+			description: 'Role for EventBridge Scheduler to invoke gallery expiry deletion Lambda'
+		});
+		galleryExpiryDeletionFn.grantInvoke(schedulerRole);
+		
+		// Grant Lambda functions permission to create/cancel schedules
+		const schedulerPolicy = new PolicyStatement({
+			actions: [
+				'scheduler:CreateSchedule',
+				'scheduler:DeleteSchedule',
+				'scheduler:GetSchedule',
+				'scheduler:UpdateSchedule'
+			],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/gallery-expiry-*`]
+		});
+		
+		// Grant IAM PassRole permission so Lambda can pass the scheduler role to EventBridge Scheduler
+		const passRolePolicy = new PolicyStatement({
+			actions: ['iam:PassRole'],
+			resources: [schedulerRole.roleArn]
+		});
+		
+		// Grant schedule management permissions to Lambda functions that create schedules
+		apiFn.addToRolePolicy(schedulerPolicy);
+		apiFn.addToRolePolicy(passRolePolicy);
+		expiryFn.addToRolePolicy(schedulerPolicy);
+		expiryFn.addToRolePolicy(passRolePolicy);
+		
+		// Add environment variables for schedule management
+		envVars['GALLERY_EXPIRY_DELETION_LAMBDA_ARN'] = galleryExpiryDeletionFn.functionArn;
+		envVars['GALLERY_EXPIRY_SCHEDULE_ROLE_ARN'] = schedulerRole.roleArn;
+		envVars['GALLERY_EXPIRY_DLQ_ARN'] = galleryExpiryDLQ.queueArn;
+		apiFn.addEnvironment('GALLERY_EXPIRY_DELETION_LAMBDA_ARN', galleryExpiryDeletionFn.functionArn);
+		apiFn.addEnvironment('GALLERY_EXPIRY_SCHEDULE_ROLE_ARN', schedulerRole.roleArn);
+		apiFn.addEnvironment('GALLERY_EXPIRY_DLQ_ARN', galleryExpiryDLQ.queueArn);
+		expiryFn.addEnvironment('GALLERY_EXPIRY_DELETION_LAMBDA_ARN', galleryExpiryDeletionFn.functionArn);
+		expiryFn.addEnvironment('GALLERY_EXPIRY_SCHEDULE_ROLE_ARN', schedulerRole.roleArn);
+		expiryFn.addEnvironment('GALLERY_EXPIRY_DLQ_ARN', galleryExpiryDLQ.queueArn);
+		
+		// CloudWatch alarms for gallery expiry deletion
+		const expiryDeletionErrorAlarm = new Alarm(this, 'GalleryExpiryDeletionErrorAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-GalleryExpiryDeletion-Errors`,
+			alarmDescription: 'Alert when gallery expiry deletion Lambda has errors',
+			metric: galleryExpiryDeletionFn.metricErrors({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+		
+		const expiryDLQAlarm = new Alarm(this, 'GalleryExpiryDLQAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-GalleryExpiryDLQ-Messages`,
+			alarmDescription: 'Alert when gallery expiry DLQ has messages (failed deletions)',
+			metric: galleryExpiryDLQ.metricApproximateNumberOfMessagesVisible({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+		
+		// Subscribe alarms to SNS topic if cost alerts topic exists (for production)
+		// Note: Cost alerts topic is created later in the stack, so we'll reference it by name
+		// For now, alarms are created but not subscribed - can be manually subscribed or added after topic creation
 
 		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days for galleries, 15 minutes for wallet top-ups)
 		const transactionExpiryFn = new NodejsFunction(this, 'TransactionExpiryCheckFn', {

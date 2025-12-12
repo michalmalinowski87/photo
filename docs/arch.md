@@ -11,7 +11,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - **API Gateway HTTP API**: RESTful API endpoints with Cognito JWT authentication
 - **Lambda Functions**: Serverless compute for all business logic
 - **DynamoDB Tables**: 
-  - `Galleries` - Gallery metadata and configuration (with TTL for UNPAID drafts)
+  - `Galleries` - Gallery metadata and configuration (with EventBridge Scheduler for expiration)
   - `Orders` - Order tracking and billing (includes client selections)
   - `Wallets` - User wallet balances
   - `WalletLedger` - Transaction history
@@ -24,11 +24,12 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - **Cognito User Pool**: Authentication for photographers
 - **SES**: Email notifications
 - **EventBridge**: Scheduled tasks (expiry checks)
+- **EventBridge Scheduler**: Precise gallery expiration with exact timing (replaces DynamoDB TTL)
 
 ### Backend Functions
 
 #### Gallery Management
-- `galleries/create.ts` - Create new gallery as UNPAID draft with 3-day TTL
+- `galleries/create.ts` - Create new gallery as UNPAID draft with 3-day EventBridge Scheduler expiration
 - `galleries/get.ts` - Get gallery details (includes payment status and effective state)
 - `galleries/list.ts` - List user's galleries with status filtering (with GSI on ownerId)
 - `galleries/pay.ts` - Pay for unpaid gallery (uses existing UNPAID transaction)
@@ -73,7 +74,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 
 #### Payments
 - `payments/checkout.ts` - Create Stripe checkout session
-- `payments/webhook.ts` - Handle Stripe webhooks (removes TTL on payment success)
+- `payments/webhook.ts` - Handle Stripe webhooks (updates EventBridge schedule on payment success)
 - `payments/cancel.ts` - Handle Stripe checkout cancellation
 
 #### Clients Management
@@ -91,7 +92,8 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - `packages/delete.ts` - Delete package
 
 #### Expiry
-- `expiry/checkAndNotify.ts` - Scheduled check for expiring galleries (handles both UNPAID drafts with TTL and paid galleries with expiresAt)
+- `expiry/deleteExpiredGallery.ts` - Lambda invoked by EventBridge Scheduler at exact expiry time to delete galleries
+- `expiry/checkAndNotify.ts` - Scheduled check for expiring galleries (sends warning emails and migrates existing galleries to EventBridge Scheduler)
 
 ### Frontend Applications
 
@@ -152,7 +154,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
    - Step 4: Select client (new or existing)
    - Step 5: Review summary and enter initial payment amount
 4. Submits wizard → `POST /galleries`
-5. Gallery created as UNPAID draft with 3-day TTL
+5. Gallery created as UNPAID draft with 3-day EventBridge Scheduler expiration
 6. No immediate payment - photographer can pay later via "Opłać galerię" button
 7. Sets client password and pricing package (if provided in wizard)
 8. Uploads originals via presigned URLs

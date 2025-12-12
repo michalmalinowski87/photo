@@ -506,6 +506,31 @@ class ApiService {
     },
 
     /**
+     * Dev endpoint: Set gallery expiry date/time and create EventBridge schedule
+     * Only available in dev/staging environments
+     */
+    setExpiry: async (
+      galleryId: string,
+      expiresAt: string
+    ): Promise<{
+      galleryId: string;
+      expiresAt: string;
+      scheduleName: string;
+      message: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!expiresAt) {
+        throw new Error("expiresAt is required");
+      }
+      return await this._request(`/galleries/${galleryId}/dev/set-expiry`, {
+        method: "POST",
+        body: JSON.stringify({ expiresAt }),
+      });
+    },
+
+    /**
      * Get gallery images
      * @param sizes - Optional comma-separated list of sizes to request (thumb,preview,bigthumb)
      *                 If not provided, all sizes are returned (backward compatible)

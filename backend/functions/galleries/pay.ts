@@ -5,6 +5,7 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTransactionsByUser, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { recalculateStorageInternal } from './recalculateBytesUsed';
+import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -818,28 +819,66 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
 				const expiresAt = expiresAtDate.toISOString();
 				
+				// Cancel old EventBridge schedule (if exists) and create new one for paid expiry
+				const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
+				const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
+				const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
+				const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
+				
+				let newScheduleName: string | undefined;
+				if (deletionLambdaArn && scheduleRoleArn) {
+					try {
+						// Cancel old schedule (idempotent - won't fail if doesn't exist)
+						await cancelExpirySchedule(oldScheduleName);
+						logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
+						
+						// Create new schedule for paid expiry
+						newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+						logger.info('Created new EventBridge schedule for paid gallery', { galleryId, scheduleName: newScheduleName, expiresAt });
+					} catch (scheduleErr: any) {
+						logger.error('Failed to update EventBridge schedule for paid gallery', {
+							error: {
+								name: scheduleErr.name,
+								message: scheduleErr.message
+							},
+							galleryId,
+							expiresAt
+						});
+						// Continue even if schedule update fails - gallery state will still be updated
+					}
+				}
+				
 				// USER-CENTRIC FIX #4: Remove paymentLocked flag when payment succeeds
+				const updateExpr = newScheduleName
+					? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
+					: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked';
+				const exprValues: any = {
+					':s': 'PAID_ACTIVE',
+					':e': expiresAt,
+					':ss': gallery.selectionEnabled ? 'NOT_STARTED' : 'DISABLED',
+					':u': now
+				};
+				if (newScheduleName) {
+					exprValues[':sn'] = newScheduleName;
+				}
+				
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked',
+					UpdateExpression: updateExpr,
 					ExpressionAttributeNames: {
 						'#state': 'state',
 						'#ttl': 'ttl'
 					},
-					ExpressionAttributeValues: {
-						':s': 'PAID_ACTIVE',
-						':e': expiresAt,
-						':ss': gallery.selectionEnabled ? 'NOT_STARTED' : 'DISABLED',
-						':u': now
-					}
+					ExpressionAttributeValues: exprValues
 				}));
-				logger.info('Gallery state updated to PAID_ACTIVE', { galleryId, expiresAt });
+				logger.info('Gallery state updated to PAID_ACTIVE', { galleryId, expiresAt, scheduleName: newScheduleName });
 				
 				logger.info('Gallery paid via wallet, TTL removed, state updated to PAID_ACTIVE', {
 					galleryId,
 					transactionId,
-					expiresAt
+					expiresAt,
+					scheduleName: newScheduleName
 				});
 				
 				return {
