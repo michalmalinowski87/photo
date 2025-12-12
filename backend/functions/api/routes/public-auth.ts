@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand } from '@aws-sdk/client-cognito-identity-provider';
 
 const router = Router();
@@ -13,6 +13,10 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 /**
  * Check rate limit for email verification codes
  * Returns { allowed: boolean, remainingCodes: number, resetAt: number | null }
+ * 
+ * TTL is set at record creation (first attempt) to 1 hour from that moment.
+ * If TTL has elapsed (even if DynamoDB hasn't deleted it yet due to scheduler delay),
+ * we delete the record and start fresh.
  */
 async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ allowed: boolean; remainingCodes: number; resetAt: number | null }> {
 	const normalizedEmail = email.toLowerCase().trim();
@@ -30,6 +34,24 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 
 		const record = result.Item;
 		const now = Date.now();
+		const nowInSeconds = Math.floor(now / 1000);
+
+		// Check if TTL has elapsed (accounting for DynamoDB scheduler delay)
+		// If TTL is in the past, delete the record and start fresh
+		if (record.ttl && record.ttl < nowInSeconds) {
+			// TTL has elapsed, delete the record and allow fresh start
+			try {
+				await ddb.send(new DeleteCommand({
+					TableName: rateLimitTable,
+					Key: { email: normalizedEmail }
+				}));
+			} catch (deleteError: any) {
+				// Log but continue - record will be cleaned up by DynamoDB eventually
+				console.error('Failed to delete expired rate limit record:', deleteError);
+			}
+			return { allowed: true, remainingCodes: MAX_CODES_PER_HOUR, resetAt: null };
+		}
+
 		const windowStart = now - RATE_LIMIT_WINDOW_MS;
 
 		// Filter out codes sent outside the current window
@@ -37,8 +59,8 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 
 		if (recentCodes.length >= MAX_CODES_PER_HOUR) {
 			// Rate limit exceeded
-			const oldestCodeInWindow = Math.min(...recentCodes);
-			const resetAt = oldestCodeInWindow + RATE_LIMIT_WINDOW_MS;
+			// Reset time is based on when the TTL expires (1 hour from record creation)
+			const resetAt = record.ttl ? record.ttl * 1000 : now + RATE_LIMIT_WINDOW_MS;
 			return { 
 				allowed: false, 
 				remainingCodes: 0, 
@@ -46,24 +68,25 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 			};
 		}
 
-		// Update the record to remove old codes
+		// Update the record to remove old codes (but keep the original TTL)
 		if (recentCodes.length < record.codes.length) {
-			const ttl = Math.floor((now + RATE_LIMIT_WINDOW_MS) / 1000); // TTL in seconds
 			await ddb.send(new UpdateCommand({
 				TableName: rateLimitTable,
 				Key: { email: normalizedEmail },
-				UpdateExpression: 'SET codes = :codes, ttl = :ttl',
+				UpdateExpression: 'SET codes = :codes',
 				ExpressionAttributeValues: {
-					':codes': recentCodes,
-					':ttl': ttl
+					':codes': recentCodes
 				}
 			}));
 		}
 
+		// Reset time is based on when the TTL expires (1 hour from record creation)
+		const resetAt = record.ttl ? record.ttl * 1000 : null;
+
 		return { 
 			allowed: true, 
 			remainingCodes: MAX_CODES_PER_HOUR - recentCodes.length, 
-			resetAt: recentCodes.length > 0 ? Math.min(...recentCodes) + RATE_LIMIT_WINDOW_MS : null 
+			resetAt 
 		};
 	} catch (error: any) {
 		// On error, log but allow the request (fail open for availability)
@@ -74,10 +97,14 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 
 /**
  * Record a code send event for rate limiting
+ * 
+ * TTL is set to exactly 1 hour from now when creating a new record.
+ * For existing records, we preserve the original TTL (set at record creation).
  */
 async function recordCodeSend(email: string, rateLimitTable: string): Promise<void> {
 	const normalizedEmail = email.toLowerCase().trim();
 	const now = Date.now();
+	const nowInSeconds = Math.floor(now / 1000);
 
 	try {
 		const result = await ddb.send(new GetCommand({
@@ -85,24 +112,40 @@ async function recordCodeSend(email: string, rateLimitTable: string): Promise<vo
 			Key: { email: normalizedEmail }
 		}));
 
+		const existingRecord = result.Item;
 		const windowStart = now - RATE_LIMIT_WINDOW_MS;
-		const existingCodes = (result.Item?.codes || []).filter((timestamp: number) => timestamp > windowStart);
-		const updatedCodes = [...existingCodes, now];
 
-		// Calculate TTL based on the oldest code in the window (or current time if no codes)
-		// This ensures the record persists until the oldest code expires
-		const oldestCode = updatedCodes.length > 0 ? Math.min(...updatedCodes) : now;
-		const ttl = Math.floor((oldestCode + RATE_LIMIT_WINDOW_MS) / 1000); // TTL in seconds
+		// Check if we need to create a new record (no existing record or TTL expired)
+		const shouldCreateNewRecord = !existingRecord || 
+			(existingRecord.ttl && existingRecord.ttl < nowInSeconds);
 
-		await ddb.send(new PutCommand({
-			TableName: rateLimitTable,
-			Item: {
-				email: normalizedEmail,
-				codes: updatedCodes,
-				ttl: ttl,
-				lastSent: new Date(now).toISOString()
-			}
-		}));
+		if (shouldCreateNewRecord) {
+			// Create a new record with TTL set to 1 hour from now
+			const ttl = nowInSeconds + Math.floor(RATE_LIMIT_WINDOW_MS / 1000);
+			await ddb.send(new PutCommand({
+				TableName: rateLimitTable,
+				Item: {
+					email: normalizedEmail,
+					codes: [now],
+					ttl: ttl,
+					lastSent: new Date(now).toISOString()
+				}
+			}));
+		} else {
+			// Update existing record - preserve original TTL, just add new code
+			const existingCodes = (existingRecord.codes || []).filter((timestamp: number) => timestamp > windowStart);
+			const updatedCodes = [...existingCodes, now];
+
+			await ddb.send(new PutCommand({
+				TableName: rateLimitTable,
+				Item: {
+					email: normalizedEmail,
+					codes: updatedCodes,
+					ttl: existingRecord.ttl, // Preserve original TTL set at record creation
+					lastSent: new Date(now).toISOString()
+				}
+			}));
+		}
 	} catch (error: any) {
 		// Log error but don't fail the request
 		console.error('Failed to record code send:', error);
