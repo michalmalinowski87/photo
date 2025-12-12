@@ -244,6 +244,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			continue;
 		}
 		
+		// Skip test galleries - don't send expiry warnings for galleries with "Test" in the name
+		// This prevents test galleries from consuming email quota
+		const isTestGallery = galleryName?.toLowerCase().includes('test') || false;
+		if (isTestGallery) {
+			logger.info('Skipping test gallery (no expiry warnings)', { galleryId, galleryName });
+			continue;
+		}
+		
 		// Determine which warnings need to be sent
 		const needs7dWarning = isPaid && expiryDate > now && expiryDate <= sevenDaysFromNow && !expiryWarning7dSent;
 		const needs24hWarning = expiryDate > now && expiryDate <= twentyFourHoursFromNow && !expiryWarning24hSent;
@@ -257,7 +265,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				expiryDate,
 				isPaid,
 				needs7dWarning,
-				needs24hWarning
+				needs24hWarning,
+				expiryWarning7dSent, // Include flag values for reliability checks
+				expiryWarning24hSent
 			});
 		}
 	}
@@ -286,6 +296,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 			
 			const { galleryId, galleryName, clientEmail, expiryDate, isPaid, needs7dWarning, needs24hWarning, expiryWarning7dSent, expiryWarning24hSent } = item;
+			
+			// Double-check: Skip test galleries (safety check in case they slipped through)
+			const isTestGallery = galleryName?.toLowerCase().includes('test') || false;
+			if (isTestGallery) {
+				logger.info('Skipping test gallery in batch processing', { galleryId, galleryName });
+				return;
+			}
+			
 			const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
 			const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
 			
