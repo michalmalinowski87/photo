@@ -10,6 +10,7 @@ import { initAuth, confirmForgotPassword } from "../lib/auth";
 
 interface CognitoError extends Error {
   code?: string;
+  name?: string;
 }
 
 // Prevent static generation - this page uses client hooks
@@ -122,12 +123,12 @@ export default function ResetPassword() {
       }, 2000);
     } catch (err) {
       const error = err as CognitoError;
-      // Handle Cognito errors
-      if (error.code === "CodeMismatchException") {
+      // Handle Cognito errors - check both code and name properties for robustness
+      if (error.code === "CodeMismatchException" || error.name === "CodeMismatchException") {
         setError("Nieprawidłowy kod weryfikacyjny");
-      } else if (error.code === "ExpiredCodeException") {
+      } else if (error.code === "ExpiredCodeException" || error.name === "ExpiredCodeException") {
         setError("Kod weryfikacyjny wygasł. Wyślij nowy kod.");
-      } else if (error.code === "InvalidPasswordException") {
+      } else if (error.code === "InvalidPasswordException" || error.name === "InvalidPasswordException") {
         setError("Hasło nie spełnia wymagań bezpieczeństwa");
       } else if (error.message) {
         setError(error.message);

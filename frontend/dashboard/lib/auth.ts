@@ -26,6 +26,7 @@ interface TokenResponse {
 
 interface CognitoError extends Error {
   code?: string;
+  name?: string;
 }
 
 export function initAuth(userPoolId: string, clientId: string): CognitoUserPool | null {
