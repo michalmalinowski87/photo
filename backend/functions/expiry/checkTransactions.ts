@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { listTransactionsByUser, updateTransactionStatus } from '../../lib/src/transactions';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
@@ -131,7 +131,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}
 				}
 				
-				lastEvaluatedKey = scanResult.LastEvaluatedKey;
+				lastEvaluatedKey = queryResult.LastEvaluatedKey;
 			} while (lastEvaluatedKey);
 		}
 

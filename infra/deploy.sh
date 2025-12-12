@@ -66,6 +66,22 @@ echo ""
 # Change to infra directory
 cd "$SCRIPT_DIR"
 
+# Build Lambda layer (always rebuild to ensure dependencies are up to date)
+LAYER_DIR="$SCRIPT_DIR/layers/aws-sdk"
+echo "Building Lambda layer (AWS SDK v3 + Express)..."
+rm -rf "$LAYER_DIR/nodejs"
+mkdir -p "$LAYER_DIR/nodejs"
+cp "$LAYER_DIR/package.json" "$LAYER_DIR/nodejs/"
+cd "$LAYER_DIR/nodejs"
+npm install --production
+# Verify critical dependencies are installed
+if [ ! -d "node_modules/debug" ] || [ ! -d "node_modules/express" ]; then
+  echo "ERROR: Critical dependencies missing from layer!"
+  exit 1
+fi
+cd "$SCRIPT_DIR"
+echo "✓ Lambda layer built successfully ($(du -sh "$LAYER_DIR/nodejs/node_modules" | cut -f1))"
+
 # Build and deploy
 echo "Building infrastructure..."
 yarn build

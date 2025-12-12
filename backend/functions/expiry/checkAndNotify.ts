@@ -75,6 +75,83 @@ async function sendEmail(to: string, template: any, sender: string, logger: any,
 	}
 }
 
+/**
+ * Helper function to atomically set expiry warning flag AFTER successful email send
+ * Uses conditional update to prevent race conditions and duplicate sends
+ * Only sets flag if it's not already set (prevents duplicates)
+ */
+async function setExpiryWarningFlag(
+	galleriesTable: string,
+	galleryId: string,
+	flagName: 'expiryWarning7dSent' | 'expiryWarning24hSent',
+	logger: any
+): Promise<boolean> {
+	try {
+		// Use conditional update: only set flag if it's not already set
+		// This prevents duplicate emails even if function runs concurrently
+		await ddb.send(new UpdateCommand({
+			TableName: galleriesTable,
+			Key: { galleryId },
+			UpdateExpression: `SET ${flagName} = :sent`,
+			ConditionExpression: `attribute_not_exists(${flagName}) OR ${flagName} <> :sent`,
+			ExpressionAttributeValues: { ':sent': true }
+		}));
+		return true;
+	} catch (updateErr: any) {
+		// ConditionalCheckFailedException means flag was already set - this is OK
+		if (updateErr.name === 'ConditionalCheckFailedException') {
+			logger.info(`Expiry warning flag already set (skipping duplicate send)`, { 
+				galleryId, 
+				flagName 
+			});
+			return false; // Flag already set, don't send email
+		}
+		logger.warn(`Failed to update ${flagName} flag`, { 
+			error: updateErr.message, 
+			galleryId 
+		});
+		return false; // On error, log but don't fail - flag will be set on next successful send
+	}
+}
+
+/**
+ * Check if expiry warning flag is already set (without modifying it)
+ * Used to skip processing if email was already sent
+ */
+async function isExpiryWarningFlagSet(
+	galleriesTable: string,
+	galleryId: string,
+	flagName: 'expiryWarning7dSent' | 'expiryWarning24hSent',
+	currentValue: boolean | undefined
+): Promise<boolean> {
+	// If we already have the value from the scan, use it (most common case)
+	if (currentValue === true) {
+		return true;
+	}
+	// If explicitly false or undefined, it's not set
+	return false;
+}
+
+/**
+ * Process galleries in batches with rate limiting
+ */
+async function processGalleryBatch(
+	galleries: any[],
+	batchSize: number,
+	delayMs: number,
+	processFn: (gallery: any) => Promise<void>
+): Promise<void> {
+	for (let i = 0; i < galleries.length; i += batchSize) {
+		const batch = galleries.slice(i, i + batchSize);
+		await Promise.all(batch.map(processFn));
+		
+		// Add delay between batches to avoid overwhelming SES
+		if (i + batchSize < galleries.length) {
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+		}
+	}
+}
+
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
@@ -88,6 +165,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const now = Date.now();
 	const sevenDaysFromNow = now + 7 * 24 * 3600 * 1000;
 	const twentyFourHoursFromNow = now + 24 * 3600 * 1000;
+	
+	// Rate limiting: Maximum emails per execution to prevent quota exhaustion
+	// SES sandbox limit is 200/day, so we limit to 50 per run (4 runs/day = max 200)
+	const MAX_EMAILS_PER_RUN = 50;
+	let emailsSent = 0;
 	
 	// Scan galleries for expiry warnings
 	// Note: Deletion is handled by EventBridge Scheduler, not this function
@@ -116,6 +198,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	} while (lastEvaluatedKey);
 	
 	logger.info('Found galleries to check for expiry warnings', { count: allItems.length });
+	
+	// Filter galleries that need expiry warnings
+	const galleriesToProcess: any[] = [];
 	
 	for (const item of allItems) {
 		const galleryId = item.galleryId as string;
@@ -159,91 +244,164 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			continue;
 		}
 		
-		const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
-		const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
+		// Determine which warnings need to be sent
+		const needs7dWarning = isPaid && expiryDate > now && expiryDate <= sevenDaysFromNow && !expiryWarning7dSent;
+		const needs24hWarning = expiryDate > now && expiryDate <= twentyFourHoursFromNow && !expiryWarning24hSent;
 		
-		// Get owner email (from gallery or Cognito)
-		const ownerEmail = await getOwnerEmail(item, userPoolId, logger);
-		
-		// For UNPAID galleries: send 24h warning before expiry
-		if (!isPaid && expiryDate > now && expiryDate <= twentyFourHoursFromNow) {
-			const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
-			
-			// Send to photographer only (client doesn't need to know about unpaid drafts)
-			if (ownerEmail) {
-				await sendEmail(ownerEmail, template, sender, logger, 'UNPAID Gallery Expiry Warning 24h - Photographer');
-			}
-			
-			// Store notification in gallery (can be retrieved via API for in-app notifications)
-			try {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'SET expiryWarning24hSent = :sent',
-					ExpressionAttributeValues: { ':sent': true }
-				}));
-			} catch (updateErr: any) {
-				logger.warn('Failed to update expiryWarning24hSent flag', { error: updateErr.message, galleryId });
-			}
+		if (needs7dWarning || needs24hWarning) {
+			galleriesToProcess.push({
+				...item,
+				galleryId,
+				galleryName,
+				clientEmail,
+				expiryDate,
+				isPaid,
+				needs7dWarning,
+				needs24hWarning
+			});
 		}
-		
-		// For paid galleries: 7-day warning
-		if (isPaid && expiryDate > now && expiryDate <= sevenDaysFromNow && !expiryWarning7dSent) {
-			const template = createExpiryWarningEmail(galleryId, galleryName || galleryId, daysRemaining, link);
-			
-			// Send to photographer
-			if (ownerEmail) {
-				await sendEmail(ownerEmail, template, sender, logger, 'Expiry Warning 7d - Photographer');
-			}
-			
-			// Send to client
-			if (clientEmail) {
-				await sendEmail(clientEmail, template, sender, logger, 'Expiry Warning 7d - Client');
-			}
-			
-			// Mark as sent
-			try {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'SET expiryWarning7dSent = :sent',
-					ExpressionAttributeValues: { ':sent': true }
-				}));
-			} catch (updateErr: any) {
-				logger.warn('Failed to update expiryWarning7dSent flag', { error: updateErr.message, galleryId });
-			}
-		}
-		
-		// For paid galleries: 24-hour warning
-		if (isPaid && expiryDate > now && expiryDate <= twentyFourHoursFromNow && !expiryWarning24hSent) {
-			const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
-			
-			// Send to photographer
-			if (ownerEmail) {
-				await sendEmail(ownerEmail, template, sender, logger, 'Expiry Warning 24h - Photographer');
-			}
-			
-			// Send to client
-			if (clientEmail) {
-				await sendEmail(clientEmail, template, sender, logger, 'Expiry Warning 24h - Client');
-			}
-			
-			// Mark as sent
-			try {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'SET expiryWarning24hSent = :sent',
-					ExpressionAttributeValues: { ':sent': true }
-				}));
-			} catch (updateErr: any) {
-				logger.warn('Failed to update expiryWarning24hSent flag', { error: updateErr.message, galleryId });
-			}
-		}
-		
-		// Note: Gallery deletion is handled by EventBridge Scheduler
-		// This function only sends warning emails and migrates existing galleries
 	}
+	
+	logger.info('Galleries requiring expiry warnings', { 
+		total: galleriesToProcess.length,
+		rateLimit: MAX_EMAILS_PER_RUN
+	});
+	
+	// Process galleries in batches with rate limiting
+	const BATCH_SIZE = 10; // Process 10 galleries at a time
+	const BATCH_DELAY_MS = 1000; // 1 second delay between batches
+	
+	await processGalleryBatch(
+		galleriesToProcess.slice(0, MAX_EMAILS_PER_RUN), // Limit to max emails per run
+		BATCH_SIZE,
+		BATCH_DELAY_MS,
+		async (item: any) => {
+			// Check rate limit before processing
+			if (emailsSent >= MAX_EMAILS_PER_RUN) {
+				logger.warn('Rate limit reached, skipping remaining galleries', { 
+					emailsSent, 
+					maxAllowed: MAX_EMAILS_PER_RUN 
+				});
+				return;
+			}
+			
+			const { galleryId, galleryName, clientEmail, expiryDate, isPaid, needs7dWarning, needs24hWarning, expiryWarning7dSent, expiryWarning24hSent } = item;
+			const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
+			const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
+			
+			// Get owner email (from gallery or Cognito)
+			const ownerEmail = await getOwnerEmail(item, userPoolId, logger);
+			
+			// Helper to check and increment email count
+			const canSendEmail = (): boolean => emailsSent < MAX_EMAILS_PER_RUN;
+			const recordEmailSent = (sent: boolean): void => {
+				if (sent) emailsSent++;
+			};
+			
+			// For UNPAID galleries: send 24h warning before expiry
+			if (needs24hWarning && !isPaid && canSendEmail()) {
+				// Check if flag is already set (from scan data)
+				const alreadySent = await isExpiryWarningFlagSet(galleriesTable, galleryId, 'expiryWarning24hSent', expiryWarning24hSent);
+				if (alreadySent) {
+					return; // Already sent, skip
+				}
+				
+				const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
+				
+				// Send to photographer only (client doesn't need to know about unpaid drafts)
+				if (ownerEmail) {
+					const sent = await sendEmail(ownerEmail, template, sender, logger, 'UNPAID Gallery Expiry Warning 24h - Photographer');
+					if (sent) {
+						recordEmailSent(true);
+						// Only set flag AFTER successful email send - ensures reliability
+						await setExpiryWarningFlag(galleriesTable, galleryId, 'expiryWarning24hSent', logger);
+					}
+					// If email failed, flag remains unset so it will retry on next run
+				}
+			}
+			
+			// For paid galleries: 7-day warning
+			if (needs7dWarning && isPaid) {
+				// Check if flag is already set (from scan data)
+				const alreadySent = await isExpiryWarningFlagSet(galleriesTable, galleryId, 'expiryWarning7dSent', expiryWarning7dSent);
+				if (!alreadySent && canSendEmail()) {
+					const template = createExpiryWarningEmail(galleryId, galleryName || galleryId, daysRemaining, link);
+					let allEmailsSent = true;
+					
+					// Send to photographer
+					if (ownerEmail && canSendEmail()) {
+						const sent = await sendEmail(ownerEmail, template, sender, logger, 'Expiry Warning 7d - Photographer');
+						if (sent) {
+							recordEmailSent(true);
+						} else {
+							allEmailsSent = false;
+						}
+					}
+					
+					// Send to client
+					if (clientEmail && canSendEmail()) {
+						const sent = await sendEmail(clientEmail, template, sender, logger, 'Expiry Warning 7d - Client');
+						if (sent) {
+							recordEmailSent(true);
+						} else {
+							allEmailsSent = false;
+						}
+					}
+					
+					// Only set flag AFTER all emails sent successfully
+					if (allEmailsSent) {
+						await setExpiryWarningFlag(galleriesTable, galleryId, 'expiryWarning7dSent', logger);
+					}
+					// If any email failed, flag remains unset so it will retry on next run
+				}
+			}
+			
+			// For paid galleries: 24-hour warning
+			if (needs24hWarning && isPaid && canSendEmail()) {
+				// Check if flag is already set (from scan data)
+				const alreadySent = await isExpiryWarningFlagSet(galleriesTable, galleryId, 'expiryWarning24hSent', expiryWarning24hSent);
+				if (alreadySent) {
+					return; // Already sent, skip
+				}
+				
+				const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
+				let allEmailsSent = true;
+				
+				// Send to photographer
+				if (ownerEmail && canSendEmail()) {
+					const sent = await sendEmail(ownerEmail, template, sender, logger, 'Expiry Warning 24h - Photographer');
+					if (sent) {
+						recordEmailSent(true);
+					} else {
+						allEmailsSent = false;
+					}
+				}
+				
+				// Send to client
+				if (clientEmail && canSendEmail()) {
+					const sent = await sendEmail(clientEmail, template, sender, logger, 'Expiry Warning 24h - Client');
+					if (sent) {
+						recordEmailSent(true);
+					} else {
+						allEmailsSent = false;
+					}
+				}
+				
+				// Only set flag AFTER all emails sent successfully
+				if (allEmailsSent) {
+					await setExpiryWarningFlag(galleriesTable, galleryId, 'expiryWarning24hSent', logger);
+				}
+				// If any email failed, flag remains unset so it will retry on next run
+			}
+		}
+	);
+	
+	logger.info('Expiry warning check completed', {
+		totalGalleries: allItems.length,
+		galleriesProcessed: Math.min(galleriesToProcess.length, MAX_EMAILS_PER_RUN),
+		emailsSent,
+		rateLimitReached: emailsSent >= MAX_EMAILS_PER_RUN
+	});
 });
 
 

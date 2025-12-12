@@ -168,22 +168,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			isReminder: hasExistingOrders
 		});
 	} catch (err: any) {
+		const errorCode = err.code || err.name;
+		const errorMessage = err.message || 'Unknown error';
+		const isQuotaError = errorCode === 'Throttling' || 
+			errorCode === 'MessageRejected' ||
+			errorMessage.toLowerCase().includes('quota') ||
+			errorMessage.toLowerCase().includes('daily message quota');
+		
 		logger.error(`SES send failed - ${emailType} Email`, {
 			error: {
 				name: err.name,
-				message: err.message,
-				code: err.code,
+				message: errorMessage,
+				code: errorCode,
 				statusCode: err.$metadata?.httpStatusCode,
 				requestId: err.$metadata?.requestId,
+				isQuotaError,
 				stack: err.stack
 			},
 			galleryId,
 			clientEmail
 		});
+		
+		// For quota errors, provide a more helpful message
+		if (isQuotaError) {
+			return {
+				statusCode: 429, // Too Many Requests
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`,
+					message: 'Daily email sending limit reached. The email will be sent automatically once the limit resets (usually within 24 hours). You can still share the gallery link manually.',
+					quotaExceeded: true,
+					originalError: errorMessage
+				})
+			};
+		}
+		
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, message: err.message })
+			body: JSON.stringify({ 
+				error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, 
+				message: errorMessage 
+			})
 		};
 	}
 
@@ -219,22 +245,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			to: clientEmail
 		});
 	} catch (err: any) {
+		const errorCode = err.code || err.name;
+		const errorMessage = err.message || 'Unknown error';
+		const isQuotaError = errorCode === 'Throttling' || 
+			errorCode === 'MessageRejected' ||
+			errorMessage.toLowerCase().includes('quota') ||
+			errorMessage.toLowerCase().includes('daily message quota');
+		
 		logger.error('SES send failed - Gallery Password Email', {
 			error: {
 				name: err.name,
-				message: err.message,
-				code: err.code,
+				message: errorMessage,
+				code: errorCode,
 				statusCode: err.$metadata?.httpStatusCode,
 				requestId: err.$metadata?.requestId,
+				isQuotaError,
 				stack: err.stack
 			},
 			galleryId,
 			clientEmail
 		});
+		
+		// For quota errors, provide a more helpful message
+		if (isQuotaError) {
+			return {
+				statusCode: 429, // Too Many Requests
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Failed to send password email',
+					message: 'Daily email sending limit reached. You can still share the gallery link and password manually with your client.',
+					quotaExceeded: true,
+					originalError: errorMessage
+				})
+			};
+		}
+		
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to send password email', message: err.message })
+			body: JSON.stringify({ 
+				error: 'Failed to send password email', 
+				message: errorMessage 
+			})
 		};
 	}
 

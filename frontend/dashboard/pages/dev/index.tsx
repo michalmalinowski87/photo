@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Plus, Trash2, Clock } from "lucide-react";
+import { FlaskConical, Plus, Trash2, Clock, Activity } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
@@ -59,6 +59,14 @@ const devTools: DevTool[] = [
     icon: <Trash2 size={24} />,
     category: "Baza",
     color: "red",
+  },
+  {
+    title: "Metryki Lambda - Pamięć",
+    description: "Analiza wykorzystania pamięci funkcji Lambda - sprawdź czy nie przydzielasz za dużo pamięci",
+    path: "/dev/lambda-metrics",
+    icon: <Activity size={24} />,
+    category: "API",
+    color: "purple",
   },
 ];
 

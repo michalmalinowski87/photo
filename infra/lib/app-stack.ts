@@ -8,7 +8,7 @@ import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import { Runtime, LayerVersion } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, LayerVersion, Code } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
@@ -238,15 +238,55 @@ export class AppStack extends Stack {
 			userPoolClients: [userPoolClient]
 		});
 
+		// AWS SDK v3 Lambda Layer - shared across all functions to reduce bundle sizes
+		// Layer structure: nodejs/node_modules/@aws-sdk/...
+		// Path is relative to compiled output location (infra/dist/lib/)
+		// Layer directory MUST be pre-built (deploy.sh handles this automatically)
+		// CDK will zip the pre-built directory without Docker bundling
+		const layerPath = path.join(__dirname, '../../layers/aws-sdk');
+		const awsSdkLayer = new LayerVersion(this, 'AwsSdkLayer', {
+			code: Code.fromAsset(layerPath, {
+				// Only exclude root-level files, not files in node_modules
+				// This ensures all dependencies (including debug, finalhandler, etc.) are included
+				exclude: [
+					'README.md',
+					'build-layer.sh',
+					'*.ts',
+					'*.tsx',
+					'*.jsx'
+				]
+			}),
+			compatibleRuntimes: [Runtime.NODEJS_20_X],
+			description: 'AWS SDK v3 packages for Lambda functions',
+			layerVersionName: `PhotoHub-${props.stage}-aws-sdk-layer`
+		});
+
 		const defaultFnProps = {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 256,
 			timeout: Duration.seconds(10),
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'],
+				externalModules: [
+					'aws-sdk', // AWS SDK v2 (available in Lambda runtime)
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cloudwatch',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express' // Express framework (in layer for API and Auth functions)
+				],
 				minify: true,
 				treeShaking: true,
 				sourceMap: false,
+				format: 'cjs', // CommonJS format for better tree-shaking in Node.js
+				mainFields: ['module', 'main'], // Prefer ES modules for better tree-shaking
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			}
 		};
@@ -299,11 +339,27 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 512,
 			timeout: Duration.minutes(5),
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'],
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
 				minify: true,
 				treeShaking: true,
 				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: envVars
@@ -320,11 +376,27 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 256,
 			timeout: Duration.seconds(30),
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
-				minify: true, // Enable minification for smaller bundle
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
+				minify: true,
 				treeShaking: true,
 				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: envVars
@@ -358,11 +430,28 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 512, // Increased for Express overhead
 			timeout: Duration.seconds(30), // Increased timeout for complex operations
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
-				minify: true, // Enable minification for smaller bundle
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cloudwatch',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
+				minify: true,
 				treeShaking: true,
 				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: envVars
@@ -390,6 +479,15 @@ export class AppStack extends Stack {
 		// SES permissions
 		apiFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
+
+		// CloudWatch and Lambda permissions for metrics
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'cloudwatch:GetMetricStatistics',
+				'lambda:ListFunctions'
+			],
 			resources: ['*']
 		}));
 
@@ -690,12 +788,28 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 1024, // Increased memory for faster processing
 			timeout: Duration.minutes(15), // Maximum Lambda timeout for very large galleries
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'],
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
 				minify: true,
 				treeShaking: true,
-				sourceMap: false
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main']
 			},
 			environment: envVars
 		});
@@ -837,12 +951,28 @@ export class AppStack extends Stack {
 			runtime: Runtime.NODEJS_20_X,
 			memorySize: 512, // Sufficient for batch delete operations
 			timeout: Duration.minutes(2),
+			layers: [awsSdkLayer],
 			bundling: {
-				externalModules: ['aws-sdk'],
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
 				minify: true,
 				treeShaking: true,
-				sourceMap: false
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main']
 			},
 			environment: envVars
 		});

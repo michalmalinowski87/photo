@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.932.0",
+    "@aws-sdk/client-cloudwatch": "^3.932.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.932.0",
     "@aws-sdk/client-dynamodb": "^3.670.0",
     "@aws-sdk/client-lambda": "^3.932.0",

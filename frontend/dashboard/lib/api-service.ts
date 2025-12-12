@@ -1425,6 +1425,28 @@ class ApiService {
     },
 
     /**
+     * Get Lambda memory metrics
+     */
+    getLambdaMetrics: async (): Promise<{
+      metrics: Array<{
+        functionName: string;
+        allocatedMemoryMB: number;
+        maxMemoryUsedMB: number;
+        averageMemoryUsedMB: number;
+        memoryUtilizationPercent: number;
+        averageDurationMs: number;
+        maxDurationMs: number;
+        invocations: number;
+        errors: number;
+        recommendation: string;
+      }>;
+      period: string;
+      region: string;
+    }> => {
+      return await this._request("/dashboard/lambda-metrics");
+    },
+
+    /**
      * Get order statuses for CHANGES_REQUESTED orders (for polling)
      * Supports ETag/304 for efficient polling
      */
