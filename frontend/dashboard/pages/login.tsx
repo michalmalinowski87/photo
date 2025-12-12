@@ -250,12 +250,20 @@ export default function Login() {
           </div>
 
           <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Hasło
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                Hasło
+              </label>
+              <Link
+                href={`/forgot-password${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
+                className="text-sm text-primary font-medium hover:opacity-70 transition-opacity"
+              >
+                Zapomniałeś hasła?
+              </Link>
+            </div>
             <Input
               id="password"
               name="password"

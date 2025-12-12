@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand, ForgotPasswordCommand, ConfirmForgotPasswordCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -313,6 +313,302 @@ router.post('/resend-verification-code', async (req: Request, res: Response) => 
 		}
 
 		return res.status(500).json({ error: 'Failed to resend verification code', message: error.message });
+	}
+});
+
+/**
+ * Public endpoint for initiating password reset with rate limiting
+ */
+router.post('/forgot-password', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	// Use COGNITO_USER_POOL_CLIENT_ID (from infra) or COGNITO_CLIENT_ID (fallback)
+	const clientId = (envProc?.env?.COGNITO_USER_POOL_CLIENT_ID || envProc?.env?.COGNITO_CLIENT_ID) as string;
+	const rateLimitTable = envProc?.env?.EMAIL_CODE_RATE_LIMIT_TABLE as string;
+
+	if (!clientId) {
+		return res.status(500).json({ error: 'Missing Cognito client ID configuration' });
+	}
+
+	if (!rateLimitTable) {
+		return res.status(500).json({ error: 'Missing rate limit table configuration' });
+	}
+
+	const { email } = req.body;
+
+	if (!email) {
+		return res.status(400).json({ error: 'Email is required' });
+	}
+
+	const normalizedEmail = email.toLowerCase().trim();
+
+	// Validate email format
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	if (!emailRegex.test(normalizedEmail)) {
+		return res.status(400).json({ error: 'Invalid email format' });
+	}
+
+	// Check rate limit
+	const rateLimit = await checkRateLimit(normalizedEmail, rateLimitTable);
+	if (!rateLimit.allowed) {
+		const resetAt = rateLimit.resetAt || Date.now() + RATE_LIMIT_WINDOW_MS;
+		const minutesUntilReset = Math.ceil((resetAt - Date.now()) / (60 * 1000));
+		
+		logger?.warn('Password reset rate limit exceeded', { email: normalizedEmail });
+		return res.status(429).json({ 
+			error: 'Sprawdź swoją skrzynkę email - kod resetowania hasła mógł już dotrzeć. Sprawdź również folder spam. Jeśli nie otrzymałeś kodu, możesz spróbować ponownie za ' + minutesUntilReset + ' minut.',
+			code: 'RATE_LIMIT_EXCEEDED',
+			resetAt: resetAt,
+			minutesUntilReset: minutesUntilReset
+		});
+	}
+
+	// Check if user exists first (using admin API to avoid sending email if user doesn't exist)
+	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
+	let userExists = false;
+
+	if (userPoolId) {
+		try {
+			await cognito.send(new AdminGetUserCommand({
+				UserPoolId: userPoolId,
+				Username: normalizedEmail
+			}));
+			userExists = true;
+		} catch (checkError: any) {
+			// User doesn't exist - don't send email but still return success
+			if (checkError.name === 'UserNotFoundException') {
+				userExists = false;
+			} else {
+				// Other error checking user - log but continue (fail open for availability)
+				logger?.warn('Failed to check user existence', {
+					error: { name: checkError.name, message: checkError.message },
+					email: normalizedEmail
+				});
+				// Assume user exists to be safe (but we'll catch errors from ForgotPassword)
+				userExists = true;
+			}
+		}
+	}
+
+	// Only send email if user exists
+	if (userExists) {
+		try {
+			// Use public ForgotPassword API - sends verification code to email
+			await cognito.send(new ForgotPasswordCommand({
+				ClientId: clientId,
+				Username: normalizedEmail
+			}));
+
+			// Record the code send for rate limiting
+			await recordCodeSend(normalizedEmail, rateLimitTable);
+
+			logger?.info('Password reset code sent', { email: normalizedEmail });
+		} catch (error: any) {
+			logger?.error('Password reset failed', {
+				error: { name: error.name, message: error.message },
+				email: normalizedEmail
+			});
+
+			// Handle specific errors but still return success to prevent user enumeration
+			if (error.name === 'LimitExceededException') {
+				return res.status(429).json({ error: 'Zbyt wiele prób. Spróbuj za godzinę.' });
+			}
+			if (error.name === 'InvalidParameterException') {
+				return res.status(400).json({ error: 'Invalid email address' });
+			}
+
+			// For other errors, still record rate limit and return success
+			await recordCodeSend(normalizedEmail, rateLimitTable);
+		}
+	} else {
+		// User doesn't exist - still record rate limit to prevent enumeration
+		await recordCodeSend(normalizedEmail, rateLimitTable);
+		logger?.info('Password reset requested for non-existent user', { email: normalizedEmail });
+	}
+
+	// Always return success message to prevent user enumeration
+	return res.json({ message: 'Jeśli konto istnieje, kod resetowania hasła został wysłany na adres email.' });
+});
+
+/**
+ * Public endpoint for resending password reset code with rate limiting
+ */
+router.post('/resend-reset-code', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	// Use COGNITO_USER_POOL_CLIENT_ID (from infra) or COGNITO_CLIENT_ID (fallback)
+	const clientId = (envProc?.env?.COGNITO_USER_POOL_CLIENT_ID || envProc?.env?.COGNITO_CLIENT_ID) as string;
+	const rateLimitTable = envProc?.env?.EMAIL_CODE_RATE_LIMIT_TABLE as string;
+
+	if (!clientId) {
+		return res.status(500).json({ error: 'Missing Cognito client ID configuration' });
+	}
+
+	if (!rateLimitTable) {
+		return res.status(500).json({ error: 'Missing rate limit table configuration' });
+	}
+
+	const { email } = req.body;
+
+	if (!email) {
+		return res.status(400).json({ error: 'Email is required' });
+	}
+
+	const normalizedEmail = email.toLowerCase().trim();
+
+	// Validate email format
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	if (!emailRegex.test(normalizedEmail)) {
+		return res.status(400).json({ error: 'Invalid email format' });
+	}
+
+	// Check rate limit
+	const rateLimit = await checkRateLimit(normalizedEmail, rateLimitTable);
+	if (!rateLimit.allowed) {
+		const resetAt = rateLimit.resetAt || Date.now() + RATE_LIMIT_WINDOW_MS;
+		const minutesUntilReset = Math.ceil((resetAt - Date.now()) / (60 * 1000));
+		
+		logger?.warn('Resend reset code rate limit exceeded', { email: normalizedEmail });
+		return res.status(429).json({ 
+			error: 'Sprawdź swoją skrzynkę email - kod resetowania hasła mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości. Jeśli nadal nie możesz znaleźć kodu, możesz spróbować ponownie za ' + minutesUntilReset + ' minut.',
+			code: 'RATE_LIMIT_EXCEEDED',
+			resetAt: resetAt,
+			minutesUntilReset: minutesUntilReset
+		});
+	}
+
+	// Check if user exists first (using admin API to avoid sending email if user doesn't exist)
+	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
+	let userExists = false;
+
+	if (userPoolId) {
+		try {
+			await cognito.send(new AdminGetUserCommand({
+				UserPoolId: userPoolId,
+				Username: normalizedEmail
+			}));
+			userExists = true;
+		} catch (checkError: any) {
+			// User doesn't exist - don't send email but still return success
+			if (checkError.name === 'UserNotFoundException') {
+				userExists = false;
+			} else {
+				// Other error checking user - log but continue (fail open for availability)
+				logger?.warn('Failed to check user existence', {
+					error: { name: checkError.name, message: checkError.message },
+					email: normalizedEmail
+				});
+				// Assume user exists to be safe (but we'll catch errors from ForgotPassword)
+				userExists = true;
+			}
+		}
+	}
+
+	// Only send email if user exists
+	if (userExists) {
+		try {
+			// Use public ForgotPassword API again - same API as initial request
+			await cognito.send(new ForgotPasswordCommand({
+				ClientId: clientId,
+				Username: normalizedEmail
+			}));
+
+			// Record the code send for rate limiting
+			await recordCodeSend(normalizedEmail, rateLimitTable);
+
+			logger?.info('Password reset code resent', { email: normalizedEmail });
+		} catch (error: any) {
+			logger?.error('Resend reset code failed', {
+				error: { name: error.name, message: error.message },
+				email: normalizedEmail
+			});
+
+			if (error.name === 'LimitExceededException') {
+				return res.status(429).json({ error: 'Zbyt wiele prób. Spróbuj za godzinę.' });
+			}
+			if (error.name === 'InvalidParameterException') {
+				return res.status(400).json({ error: 'Invalid email address' });
+			}
+
+			// For other errors, still record rate limit and return success
+			await recordCodeSend(normalizedEmail, rateLimitTable);
+		}
+	} else {
+		// User doesn't exist - still record rate limit to prevent enumeration
+		await recordCodeSend(normalizedEmail, rateLimitTable);
+		logger?.info('Resend reset code requested for non-existent user', { email: normalizedEmail });
+	}
+
+	// Always return success message to prevent user enumeration
+	return res.json({ message: 'Jeśli konto istnieje, kod został wysłany' });
+});
+
+/**
+ * Public endpoint for confirming password reset with code and new password
+ */
+router.post('/confirm-forgot-password', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	// Use COGNITO_USER_POOL_CLIENT_ID (from infra) or COGNITO_CLIENT_ID (fallback)
+	const clientId = (envProc?.env?.COGNITO_USER_POOL_CLIENT_ID || envProc?.env?.COGNITO_CLIENT_ID) as string;
+
+	if (!clientId) {
+		return res.status(500).json({ error: 'Missing Cognito client ID configuration' });
+	}
+
+	const { email, code, password } = req.body;
+
+	if (!email || !code || !password) {
+		return res.status(400).json({ error: 'Email, code, and password are required' });
+	}
+
+	const normalizedEmail = email.toLowerCase().trim();
+
+	// Validate email format
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	if (!emailRegex.test(normalizedEmail)) {
+		return res.status(400).json({ error: 'Invalid email format' });
+	}
+
+	// Validate code format (6 digits)
+	if (!/^\d{6}$/.test(code)) {
+		return res.status(400).json({ error: 'Code must be 6 digits' });
+	}
+
+	try {
+		// Use public ConfirmForgotPassword API - confirms code and sets new password
+		await cognito.send(new ConfirmForgotPasswordCommand({
+			ClientId: clientId,
+			Username: normalizedEmail,
+			ConfirmationCode: code,
+			Password: password
+		}));
+
+		logger?.info('Password reset confirmed successfully', { email: normalizedEmail });
+		return res.json({ message: 'Hasło zostało zresetowane pomyślnie' });
+	} catch (error: any) {
+		logger?.error('Confirm password reset failed', {
+			error: { name: error.name, message: error.message },
+			email: normalizedEmail
+		});
+
+		if (error.name === 'CodeMismatchException') {
+			return res.status(400).json({ error: 'Nieprawidłowy kod weryfikacyjny' });
+		}
+		if (error.name === 'ExpiredCodeException') {
+			return res.status(400).json({ error: 'Kod weryfikacyjny wygasł. Wyślij nowy kod.' });
+		}
+		if (error.name === 'InvalidPasswordException') {
+			return res.status(400).json({ error: 'Hasło nie spełnia wymagań bezpieczeństwa' });
+		}
+		if (error.name === 'UserNotFoundException') {
+			return res.status(404).json({ error: 'User not found' });
+		}
+		if (error.name === 'InvalidParameterException') {
+			return res.status(400).json({ error: 'Invalid parameters' });
+		}
+
+		return res.status(500).json({ error: 'Failed to reset password', message: error.message });
 	}
 });
 

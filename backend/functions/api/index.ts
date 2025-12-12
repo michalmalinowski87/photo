@@ -5,8 +5,6 @@ import { requireAuth } from './middleware/auth';
 import { wrapHandler } from './routes/handlerWrapper';
 import { sanitizeErrorMessage } from '../../lib/src/error-utils';
 
-import { authRoutes } from './routes/auth';
-import { publicAuthRoutes } from './routes/public-auth';
 import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
 import * as galleriesListImages from '../galleries/listImages';
@@ -79,10 +77,6 @@ app.get('/health', (req: Request, res: Response) => {
 	res.json({ ok: true });
 });
 
-// Public auth routes (no auth required)
-// Signup and resend verification code endpoints with rate limiting
-app.use('/auth/public', publicAuthRoutes);
-
 // Public gallery routes (no auth required)
 // Client login endpoint - clients authenticate with gallery password, not Cognito
 app.post('/galleries/:id/client-login', wrapHandler(galleriesClientLogin.handler));
@@ -101,7 +95,7 @@ app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFi
 app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 
 // API Gateway validates tokens before requests reach Lambda, but we also check in middleware for extra safety
-app.use('/auth', requireAuth, authRoutes);
+// Auth routes are handled by separate auth Lambda function
 app.use('/galleries', requireAuth, galleriesRoutes);
 app.use('/clients', requireAuth, clientsRoutes);
 app.use('/packages', requireAuth, packagesRoutes);

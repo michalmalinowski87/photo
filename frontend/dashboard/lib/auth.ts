@@ -652,6 +652,157 @@ export function checkUserVerificationStatus(email: string): Promise<"verified" |
   });
 }
 
+export function forgotPassword(email: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    // Use backend API for password reset with rate limiting
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      reject(new Error("API URL not configured"));
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/auth/public/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Password reset failed" }));
+        
+        // Handle rate limit error
+        if (response.status === 429) {
+          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.name = "RateLimitExceeded";
+          (rateLimitError as any).resetAt = errorData.resetAt;
+          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          reject(rateLimitError);
+          return;
+        }
+
+        // Handle other errors
+        const error = new Error(errorData.error || "Password reset failed") as CognitoError;
+        reject(error);
+        return;
+      }
+
+      resolve();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Password reset failed"));
+    }
+  });
+}
+
+export function resendResetCode(email: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    // Use backend API for resending reset code with rate limiting
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      reject(new Error("API URL not configured"));
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/auth/public/resend-reset-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
+        
+        // Handle rate limit error
+        if (response.status === 429) {
+          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.name = "RateLimitExceeded";
+          (rateLimitError as any).resetAt = errorData.resetAt;
+          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          reject(rateLimitError);
+          return;
+        }
+
+        // Handle other errors
+        if (response.status === 404) {
+          const error = new Error(errorData.error || "User not found") as CognitoError;
+          error.code = "UserNotFoundException";
+          reject(error);
+          return;
+        }
+
+        const error = new Error(errorData.error || "Failed to resend code") as CognitoError;
+        reject(error);
+        return;
+      }
+
+      resolve();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Failed to resend code"));
+    }
+  });
+}
+
+export function confirmForgotPassword(email: string, code: string, password: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    // Use backend API for confirming password reset
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      reject(new Error("API URL not configured"));
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/auth/public/confirm-forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, code, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to reset password" }));
+        
+        // Handle Cognito errors
+        if (response.status === 400) {
+          const error = new Error(errorData.error || "Invalid code or password") as CognitoError;
+          if (errorData.error?.includes("Nieprawidłowy kod")) {
+            error.code = "CodeMismatchException";
+          } else if (errorData.error?.includes("wygasł")) {
+            error.code = "ExpiredCodeException";
+          } else if (errorData.error?.includes("Hasło nie spełnia")) {
+            error.code = "InvalidPasswordException";
+          }
+          reject(error);
+          return;
+        }
+
+        if (response.status === 404) {
+          const error = new Error(errorData.error || "User not found") as CognitoError;
+          error.code = "UserNotFoundException";
+          reject(error);
+          return;
+        }
+
+        const error = new Error(errorData.error || "Failed to reset password") as CognitoError;
+        reject(error);
+        return;
+      }
+
+      resolve();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Failed to reset password"));
+    }
+  });
+}
+
 export function signOut(): void {
   // Clear Cognito SDK session
   const user = getCurrentUser();

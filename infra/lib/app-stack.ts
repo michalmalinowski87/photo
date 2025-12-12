@@ -5,7 +5,7 @@ import { Bucket, BlockPublicAccess, HttpMethods, EventType } from 'aws-cdk-lib/a
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { AttributeType, BillingMode, Table, StreamViewType, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { UserPool, UserPoolClient } from 'aws-cdk-lib/aws-cognito';
+import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -192,8 +192,19 @@ export class AppStack extends Stack {
 
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
-			signInAliases: { email: true }
+			signInAliases: { email: true },
+			// Customize email verification templates (for signup) - removes "new" from message
+			userVerificationEmailSubject: 'Verify your account',
+			userVerificationEmailBody: 'The verification code to your account is {####}'
 		});
+		
+		// Customize email templates using CfnUserPool for full control
+		// Cognito uses VerificationMessageTemplate for code-based verification (both signup and password reset)
+		const cfnUserPool = userPool.node.defaultChild as CfnUserPool;
+		// Override verification email template - this affects both signup verification and password reset
+		// Removes "new" from the default message
+		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailSubject', 'Verify your account');
+		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailMessage', 'The verification code to your account is {####}');
 		
 		// Get callback URLs from context or environment, fallback to localhost for dev
 		// Note: Callback URLs must match exactly what's sent in the OAuth request
@@ -308,7 +319,45 @@ export class AppStack extends Stack {
 		orders.grantReadWriteData(zipFn);
 		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
 
-		// Single API Lambda function - handles all HTTP endpoints via Express router
+		// Auth Lambda function - handles all authentication endpoints (signup, login, password reset)
+		const authFn = new NodejsFunction(this, 'AuthFunction', {
+			entry: path.join(__dirname, '../../../backend/functions/auth/index.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.seconds(30),
+			bundling: {
+				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
+				minify: true, // Enable minification for smaller bundle
+				treeShaking: true,
+				sourceMap: false,
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: envVars
+		});
+
+		// Grant permissions to auth Lambda
+		emailCodeRateLimit.grantReadWriteData(authFn);
+		users.grantReadWriteData(authFn);
+		
+		// Cognito permissions for auth Lambda
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'cognito-idp:AdminInitiateAuth',
+				'cognito-idp:AdminSetUserPassword',
+				'cognito-idp:AdminGetUser',
+				'cognito-idp:AdminCreateUser',
+				'cognito-idp:AdminResendConfirmationCode',
+				'cognito-idp:ForgotPassword',
+				'cognito-idp:ConfirmForgotPassword',
+				'cognito-idp:SignUp',
+				'cognito-idp:ResendConfirmationCode',
+				'cognito-idp:ConfirmSignUp'
+			],
+			resources: [userPool.userPoolArn]
+		}));
+
+		// Single API Lambda function - handles all HTTP endpoints via Express router (except auth)
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
 			handler: 'handler',
@@ -317,7 +366,7 @@ export class AppStack extends Stack {
 			timeout: Duration.seconds(30), // Increased timeout for complex operations
 			bundling: {
 				externalModules: ['aws-sdk'], // Only externalize AWS SDK v2, v3 must be bundled
-				minify: false, // Disable minification to prevent AWS SDK v3 constructor issues
+				minify: true, // Enable minification for smaller bundle
 				treeShaking: true,
 				sourceMap: false,
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
@@ -342,11 +391,7 @@ export class AppStack extends Stack {
 		// S3 bucket
 		galleriesBucket.grantReadWrite(apiFn);
 
-		// Cognito permissions
-		apiFn.addToRolePolicy(new PolicyStatement({
-			actions: ['cognito-idp:AdminInitiateAuth', 'cognito-idp:AdminSetUserPassword', 'cognito-idp:AdminGetUser', 'cognito-idp:AdminCreateUser', 'cognito-idp:AdminResendConfirmationCode'],
-			resources: [userPool.userPoolArn]
-		}));
+		// Cognito permissions removed - auth Lambda handles all Cognito operations
 
 		// SES permissions
 		apiFn.addToRolePolicy(new PolicyStatement({
@@ -367,19 +412,27 @@ export class AppStack extends Stack {
 			// No authorizer - OPTIONS requests must be public for CORS to work
 		});
 
-		// Public routes (no authorizer required)
-		// Public auth endpoints (signup and resend verification code) with rate limiting
+		// Auth routes - handled by separate auth Lambda
+		// Public auth endpoints (signup, password reset) - no authorizer required
 		httpApi.addRoutes({
-			path: '/auth/public/signup',
-			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiPublicSignupIntegration', apiFn)
-			// No authorizer - public endpoint
+			path: '/auth/public/{proxy+}',
+			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('AuthPublicIntegration', authFn)
+			// No authorizer - public endpoints
 		});
+		// OPTIONS for protected auth endpoints - must be public for CORS preflight
 		httpApi.addRoutes({
-			path: '/auth/public/resend-verification-code',
-			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiPublicResendCodeIntegration', apiFn)
-			// No authorizer - public endpoint
+			path: '/auth/{proxy+}',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('AuthOptionsIntegration', authFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		// Protected auth endpoints (change password, business info) - require authorizer
+		httpApi.addRoutes({
+			path: '/auth/{proxy+}',
+			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
+			integration: new HttpLambdaIntegration('AuthIntegration', authFn),
+			authorizer // Protected endpoints require authentication
 		});
 		// Client login endpoint - clients authenticate with gallery password, not Cognito
 		httpApi.addRoutes({
