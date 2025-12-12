@@ -3,8 +3,7 @@ import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { Bucket, BlockPublicAccess, HttpMethods, EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
-import { AttributeType, BillingMode, Table, StreamViewType, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
-import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { AttributeType, BillingMode, Table, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -55,10 +54,9 @@ export class AppStack extends Stack {
 		const galleries = new Table(this, 'GalleriesTable', {
 			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
-			removalPolicy: RemovalPolicy.RETAIN,
-			// Enable DynamoDB Streams for TTL deletion events
-			// When TTL expires, DynamoDB automatically deletes the item and triggers the stream
-			stream: StreamViewType.OLD_IMAGE // Capture old image to get galleryId when TTL deletes
+			removalPolicy: RemovalPolicy.RETAIN
+			// Note: DynamoDB Streams were previously used for TTL deletions, but are no longer needed
+			// Gallery expiration is now handled by EventBridge Scheduler
 		});
 		galleries.addGlobalSecondaryIndex({
 			indexName: 'ownerId-index',
@@ -72,13 +70,8 @@ export class AppStack extends Stack {
 			sortKey: { name: 'createdAt', type: AttributeType.STRING }
 		});
 		
-		// Enable TTL on the galleries table using the 'ttl' attribute
-		// This allows DynamoDB to automatically delete expired items (typically within 48 hours)
-		const galleriesCfnTable = galleries.node.defaultChild as CfnTable;
-		galleriesCfnTable.timeToLiveSpecification = {
-			enabled: true,
-			attributeName: 'ttl'
-		};
+		// Note: TTL was previously enabled for gallery expiration, but is no longer used
+		// Gallery expiration is now handled by EventBridge Scheduler for precise timing
 
 		const payments = new Table(this, 'PaymentsTable', {
 			partitionKey: { name: 'paymentId', type: AttributeType.STRING },
@@ -662,36 +655,11 @@ export class AppStack extends Stack {
 		// Remove all individual HTTP Lambda functions - they're now handled by the single API Lambda
 		// Keeping only event-triggered and helper functions below
 
-		// DynamoDB Stream handler for TTL deletions - automatically triggered when gallery expires
-		const galleryExpiryStreamFn = new NodejsFunction(this, 'GalleryExpiryStreamFn', {
-			entry: path.join(__dirname, '../../../backend/functions/expiry/onGalleryExpired.ts'),
-			handler: 'handler',
-			...defaultFnProps,
-			timeout: Duration.minutes(5),
-			environment: envVars
-		});
-		galleriesDeleteHelperFn.grantInvoke(galleryExpiryStreamFn);
-		// Connect DynamoDB Stream to Lambda
-		galleryExpiryStreamFn.addEventSource(new DynamoEventSource(galleries, {
-			startingPosition: 'LATEST',
-			batchSize: 10,
-			maxBatchingWindow: Duration.seconds(5),
-			filters: [
-				{
-					pattern: JSON.stringify({
-						userIdentity: {
-							type: ['Service'],
-							principalId: ['dynamodb.amazonaws.com']
-						},
-						eventName: ['REMOVE']
-					})
-				}
-			]
-		}));
+		// Note: DynamoDB Stream handler for TTL deletions has been removed
+		// Gallery expiration is now handled by EventBridge Scheduler
 
-		// Expiry reminders schedule - sends warning emails and migrates existing galleries
-		// Also handles fallback deletion for galleries that expired before migration
-		// Deletion is now primarily handled automatically by DynamoDB TTL + Streams
+		// Expiry reminders schedule - sends warning emails
+		// Note: Gallery deletion is handled by EventBridge Scheduler, not DynamoDB TTL
 		const expiryFn = new NodejsFunction(this, 'ExpiryCheckFn', {
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkAndNotify.ts'),
 			handler: 'handler',

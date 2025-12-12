@@ -116,7 +116,7 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
      - `finalsLimitBytes`: Not set
      - `originalsBytesUsed: 0`
      - `finalsBytesUsed: 0`
-     - `ttl`: Set to 3 days from creation (DynamoDB TTL for automatic deletion)
+     - `expiresAt`: Set to 3 days from creation (EventBridge Scheduler for automatic deletion)
      - `selectionStatus`: `DISABLED` if selection disabled, otherwise `DISABLED` (until paid)
    - **No Transaction Created**: Transaction will be created when plan is selected and payment is initiated
    - **Response**: Returns `paid: false` with message "Wersja robocza została utworzona. Wygasa za 3 dni jeśli nie zostanie opłacona."
@@ -190,7 +190,7 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
      - Prevents concurrent uploads that could invalidate payment
    - **Payment Success** (via webhook or wallet):
      - Updates gallery: `state: 'PAID_ACTIVE'`
-     - **Removes TTL** (gallery no longer expires in 3 days)
+     - Updates `expiresAt` to full plan duration (replaces 3-day draft expiry)
      - **Removes `paymentLocked` flag** (allows uploads again)
      - Sets `expiresAt` to full plan duration
      - Sets `selectionStatus` to `NOT_STARTED` if selection enabled
@@ -225,10 +225,10 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
 
 4. **Draft Expiry Warning**
    - Scheduled job runs every 6 hours
-   - Checks for UNPAID galleries with TTL expiring within 24 hours
+   - Checks for UNPAID galleries with `expiresAt` expiring within 24 hours
    - Sends email notification to photographer
    - Stores notification flag (`expiryWarning24hSent: true`)
-   - **After 3 days**: DynamoDB TTL automatically deletes UNPAID gallery
+   - **After 3 days**: EventBridge Scheduler automatically deletes UNPAID gallery
 
 5. **Gallery Management**
    - **Gallery Detail Page**: Left sidebar shows:
@@ -251,7 +251,7 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
      - Client can access gallery immediately
 
 ### Key Endpoints
-- `POST /galleries` - Create new gallery (creates UNPAID draft without plan, 3-day TTL)
+- `POST /galleries` - Create new gallery (creates UNPAID draft without plan, 3-day expiry via EventBridge Scheduler)
 - `GET /galleries/{id}/calculate-plan` - Calculate best matching plan based on uploaded size
 - `POST /galleries/{id}/pay` - Pay for unpaid gallery (creates transaction, requires plan to be set first)
 - `POST /galleries/{id}/upgrade-plan` - Upgrade plan for paid gallery (pays difference only)
@@ -333,7 +333,7 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
    - `GET /payments/cancel` endpoint called
    - Transaction status updated to `CANCELED`
    - **`paymentLocked` flag automatically cleared** (allows uploads again)
-   - Gallery remains as UNPAID draft (TTL still active)
+   - Gallery remains as UNPAID draft (expiry schedule still active)
    - User can retry payment via "Opłać galerię" button
 
 2. **Retry Payment**
@@ -361,7 +361,7 @@ Photographers create galleries using a multi-step wizard, upload photos first, t
      - **Note**: `expiresAt` remains unchanged - keeps original expiry date
 
 3. **Draft Auto-Expiry**
-   - DynamoDB TTL automatically deletes UNPAID galleries after 3 days
+   - EventBridge Scheduler automatically deletes UNPAID galleries after 3 days (precise timing)
    - 24h before expiry: Email notification sent to photographer
    - After expiry: Gallery and associated transaction deleted automatically
 

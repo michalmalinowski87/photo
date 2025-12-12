@@ -206,11 +206,11 @@ async function processCheckoutSession(
 				
 				const updateExpr = gallery.selectionEnabled
 					? newScheduleName
-						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
-						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
 					: newScheduleName
-						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl, paymentLocked'
-						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE #ttl, paymentLocked';
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked';
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
 					':e': expiresAt,
@@ -220,8 +220,7 @@ async function processCheckoutSession(
 					':u': now
 				};
 				const exprNames: any = {
-					'#state': 'state',
-					'#ttl': 'ttl'
+					'#state': 'state'
 				};
 				if (gallery.selectionEnabled) {
 					exprValues[':ss'] = 'NOT_STARTED';

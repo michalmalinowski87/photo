@@ -5,11 +5,16 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const lambda = new LambdaClient({});
 
 /**
- * Lambda triggered by DynamoDB Streams when TTL expires and deletes a gallery
- * This handles cleanup of S3 objects and related resources
+ * @deprecated This Lambda is no longer used. Gallery expiration is now handled by EventBridge Scheduler.
  * 
- * DynamoDB TTL automatically deletes items when ttl attribute expires (typically within 48 hours)
- * This stream handler is triggered immediately when deletion occurs
+ * Previously: Lambda triggered by DynamoDB Streams when TTL expires and deletes a gallery
+ * This handled cleanup of S3 objects and related resources
+ * 
+ * DynamoDB TTL automatically deleted items when ttl attribute expired (typically within 48 hours)
+ * This stream handler was triggered immediately when deletion occurred
+ * 
+ * Migration: All galleries now use EventBridge Scheduler for precise expiration timing.
+ * The DynamoDB Stream infrastructure has been removed.
  */
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;

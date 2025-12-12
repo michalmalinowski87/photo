@@ -5,7 +5,6 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import { createExpiryWarningEmail, createExpiryFinalWarningEmail } from '../../lib/src/email';
-import { createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -90,21 +89,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const sevenDaysFromNow = now + 7 * 24 * 3600 * 1000;
 	const twentyFourHoursFromNow = now + 24 * 3600 * 1000;
 	
-	// Scan galleries for expiry warnings and migration
+	// Scan galleries for expiry warnings
 	// Note: Deletion is handled by EventBridge Scheduler, not this function
-	// This function:
-	// 1. Sends warning emails (7 days for paid, 24h for unpaid)
-	// 2. Migrates existing galleries to EventBridge Scheduler
+	// This function sends warning emails (7 days for paid, 24h for unpaid)
 	// Using scan is acceptable here since:
 	// 1. We run every 6 hours (4x per day) - reasonable cost vs frequency balance
 	// 2. Most galleries won't match the filter (expiring in next 7 days)
-	const nowISO = new Date(now).toISOString();
-	const sevenDaysFromNowISO = new Date(sevenDaysFromNow).toISOString();
-	
 	const allItems: any[] = [];
 	let lastEvaluatedKey: any = undefined;
 	
-	// Scan all galleries (we'll filter for both expiresAt and ttl)
+	// Scan all galleries
 	do {
 		const scanParams: any = {
 			TableName: galleriesTable
@@ -130,9 +124,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const expiresAt = item.expiresAt ? Date.parse(item.expiresAt as string) : undefined;
 		const expiryWarning7dSent = item.expiryWarning7dSent as boolean | undefined;
 		const expiryWarning24hSent = item.expiryWarning24hSent as boolean | undefined;
-		const ttl = item.ttl as number | undefined;
 		const state = item.state as string | undefined;
-		const expiryScheduleName = item.expiryScheduleName as string | undefined;
+		
+		// Skip if no expiry date
+		if (!expiresAt) {
+			continue;
+		}
 		
 		// Check payment status to determine if this is an UNPAID gallery
 		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
@@ -149,67 +146,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			isPaid = state === 'PAID_ACTIVE';
 		}
 		
-		// For UNPAID galleries, use TTL for expiry warnings
-		// For paid galleries, use expiresAt
-		let expiryDate: number | undefined;
-		if (!isPaid && ttl) {
-			expiryDate = ttl * 1000; // Convert Unix epoch seconds to milliseconds
-		} else if (expiresAt) {
-			expiryDate = expiresAt;
-		} else {
-			continue; // Skip if no expiry date
-		}
-		
-		// Migration: Create EventBridge schedule for galleries without expiryScheduleName
-		// This migrates existing galleries from DynamoDB TTL to EventBridge Scheduler
-		if (!expiryScheduleName) {
-			const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
-			const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
-			const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
-			
-			// Calculate expiresAt ISO string from expiryDate
-			const expiresAtISO = expiryDate ? new Date(expiryDate).toISOString() : undefined;
-			
-			if (deletionLambdaArn && scheduleRoleArn && expiresAtISO) {
-				try {
-					const scheduleName = await createExpirySchedule(galleryId, expiresAtISO, deletionLambdaArn, scheduleRoleArn, dlqArn);
-					
-					// Store schedule name in gallery
-					await ddb.send(new UpdateCommand({
-						TableName: galleriesTable,
-						Key: { galleryId },
-						UpdateExpression: 'SET expiryScheduleName = :sn',
-						ExpressionAttributeValues: {
-							':sn': scheduleName
-						}
-					}));
-					
-					logger.info('Created EventBridge schedule for existing gallery (migration)', {
-						galleryId,
-						scheduleName,
-						expiresAt: expiresAtISO,
-						isPaid
-					});
-				} catch (scheduleErr: any) {
-					logger.error('Failed to create EventBridge schedule for gallery (migration)', {
-						error: {
-							name: scheduleErr.name,
-							message: scheduleErr.message
-						},
-						galleryId,
-						expiresAt: expiresAtISO
-					});
-					// Continue with warning emails even if schedule creation fails
-				}
-			} else {
-				logger.warn('EventBridge Scheduler not configured - cannot migrate gallery', {
-					galleryId,
-					hasDeletionLambdaArn: !!deletionLambdaArn,
-					hasScheduleRoleArn: !!scheduleRoleArn,
-					hasExpiresAt: !!expiresAtISO
-				});
-			}
-		}
+		const expiryDate = expiresAt;
 		
 		// Only process if expiry is within 7 days (for paid) or 24h (for unpaid)
 		// Note: Actual deletion is handled by EventBridge Scheduler, not this function
@@ -228,7 +165,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Get owner email (from gallery or Cognito)
 		const ownerEmail = await getOwnerEmail(item, userPoolId, logger);
 		
-		// For UNPAID galleries: send 24h warning before TTL expiry
+		// For UNPAID galleries: send 24h warning before expiry
 		if (!isPaid && expiryDate > now && expiryDate <= twentyFourHoursFromNow) {
 			const template = createExpiryFinalWarningEmail(galleryId, galleryName || galleryId, link);
 			

@@ -88,7 +88,6 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 	const createdAtDate = new Date(now);
 	const expiresAtDate = new Date(createdAtDate.getTime() + 3 * 24 * 60 * 60 * 1000);
 	const expiresAt = expiresAtDate.toISOString();
-	const ttlExpiresAt = Math.floor(expiresAtDate.getTime() / 1000); // Keep for backward compatibility during migration
 
 	// Always create gallery as UNPAID draft - transaction created on-demand when user clicks "Opłać galerię"
 	// This ensures correct payment method (wallet/Stripe/mixed) based on actual wallet balance
@@ -98,7 +97,6 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		ownerEmail: string;
 		state: string;
 		expiresAt: string;
-		ttl: number;
 		originalsBytesUsed: number;
 		finalsBytesUsed: number;
 		selectionEnabled: boolean;
@@ -112,7 +110,6 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		ownerEmail,
 		state: 'DRAFT',
 		expiresAt,
-		ttl: ttlExpiresAt,
 		originalsBytesUsed: 0,
 		finalsBytesUsed: 0,
 		selectionEnabled: !!body.selectionEnabled,

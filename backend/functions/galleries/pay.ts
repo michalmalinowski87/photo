@@ -813,7 +813,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					logger.info('Transaction updated to PAID', { galleryId, transactionId });
 				}
 				
-				// Remove TTL and set normal expiry, update gallery state to PAID_ACTIVE
+				// Set normal expiry and update gallery state to PAID_ACTIVE
 				// CRITICAL: This MUST happen after transaction update to maintain consistency
 				const now = new Date().toISOString();
 				const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
@@ -850,8 +850,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				
 				// USER-CENTRIC FIX #4: Remove paymentLocked flag when payment succeeds
 				const updateExpr = newScheduleName
-					? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked'
-					: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE #ttl, paymentLocked';
+					? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+					: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
 					':e': expiresAt,
@@ -867,14 +867,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Key: { galleryId },
 					UpdateExpression: updateExpr,
 					ExpressionAttributeNames: {
-						'#state': 'state',
-						'#ttl': 'ttl'
+						'#state': 'state'
 					},
 					ExpressionAttributeValues: exprValues
 				}));
 				logger.info('Gallery state updated to PAID_ACTIVE', { galleryId, expiresAt, scheduleName: newScheduleName });
 				
-				logger.info('Gallery paid via wallet, TTL removed, state updated to PAID_ACTIVE', {
+				logger.info('Gallery paid via wallet, state updated to PAID_ACTIVE', {
 					galleryId,
 					transactionId,
 					expiresAt,

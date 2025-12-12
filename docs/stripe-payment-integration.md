@@ -189,8 +189,7 @@ The Lambda handler (`backend/functions/payments/webhook.ts`):
    **For `gallery_payment`:**
    - Activates gallery: Updates `galleriesTable`
      - Sets `state = 'PAID_ACTIVE'`
-     - Sets `expiresAt`
-     - Removes `ttl` (TTL attribute)
+     - Sets `expiresAt` to full plan duration
      - Updates storage limits
    - Creates order (if needed): Writes to `ordersTable`
 

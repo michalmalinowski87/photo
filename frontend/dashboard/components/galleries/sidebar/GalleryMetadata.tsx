@@ -28,22 +28,12 @@ export const GalleryMetadata = ({ shouldHideSecondaryElements }: GalleryMetadata
   const getExpiryDate = (): Date | null => {
     let expiryDate: Date | null = null;
 
-    if (!isPaid) {
-      // UNPAID draft: 3 days from creation (TTL expiry)
-      if (gallery.ttlExpiresAt && typeof gallery.ttlExpiresAt === "string") {
-        expiryDate = new Date(gallery.ttlExpiresAt);
-      } else if (gallery.ttl && typeof gallery.ttl === "number") {
-        // TTL is in Unix epoch seconds
-        expiryDate = new Date(gallery.ttl * 1000);
-      } else if (gallery.createdAt && typeof gallery.createdAt === "string") {
-        // Fallback: calculate 3 days from creation
-        expiryDate = new Date(new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000);
-      }
-    } else {
-      // PAID: use expiresAt from plan
-      if (gallery.expiresAt && typeof gallery.expiresAt === "string") {
-        expiryDate = new Date(gallery.expiresAt);
-      }
+    // Use expiresAt for both paid and unpaid galleries
+    if (gallery.expiresAt && typeof gallery.expiresAt === "string") {
+      expiryDate = new Date(gallery.expiresAt);
+    } else if (!isPaid && gallery.createdAt && typeof gallery.createdAt === "string") {
+      // Fallback for unpaid: calculate 3 days from creation
+      expiryDate = new Date(new Date(gallery.createdAt).getTime() + 3 * 24 * 60 * 60 * 1000);
     }
 
     return expiryDate;

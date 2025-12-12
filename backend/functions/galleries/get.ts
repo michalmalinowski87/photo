@@ -34,14 +34,11 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	let daysUntilExpiry: number | null = null;
-	let ttlExpiresAt: string | null = null;
-	if (!isPaid && gallery.ttl) {
-		const ttlSeconds = gallery.ttl;
-		const ttlDate = new Date(ttlSeconds * 1000);
+	if (gallery.expiresAt) {
+		const expiresAtDate = new Date(gallery.expiresAt);
 		const now = new Date();
-		const diffMs = ttlDate.getTime() - now.getTime();
+		const diffMs = expiresAtDate.getTime() - now.getTime();
 		daysUntilExpiry = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-		ttlExpiresAt = ttlDate.toISOString();
 	}
 
 	let coverPhotoUrl = gallery.coverPhotoUrl;
@@ -59,7 +56,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 
-	return {
+		return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({
@@ -68,8 +65,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			state: effectiveState,
 			paymentStatus,
 			isPaid,
-			daysUntilExpiry,
-			ttlExpiresAt
+			daysUntilExpiry
 		})
 	};
 });
