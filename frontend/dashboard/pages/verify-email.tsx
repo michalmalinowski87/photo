@@ -23,6 +23,8 @@ export default function VerifyEmail() {
   const [loading, setLoading] = useState<boolean>(false);
   const [resending, setResending] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0); // Seconds remaining
+  const [resendMessage, setResendMessage] = useState<string>(""); // Success or warning message for resend
+  const [resendMessageType, setResendMessageType] = useState<"success" | "warning" | "">(""); // Type of resend message
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -44,13 +46,22 @@ export default function VerifyEmail() {
 
   // Countdown timer for resend cooldown
   useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => {
-        setResendCooldown(resendCooldown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
+    if (resendCooldown <= 0) {
+      return;
     }
+    const timer = setTimeout(() => {
+      setResendCooldown(resendCooldown - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [resendCooldown]);
+
+  // Clear success message when cooldown reaches zero
+  useEffect(() => {
+    if (resendCooldown === 0 && resendMessageType === "success") {
+      setResendMessage("");
+      setResendMessageType("");
+    }
+  }, [resendCooldown, resendMessageType]);
 
   const handleVerify = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -96,6 +107,8 @@ export default function VerifyEmail() {
     }
 
     setError("");
+    setResendMessage("");
+    setResendMessageType("");
     setResending(true);
 
     try {
@@ -103,24 +116,25 @@ export default function VerifyEmail() {
       setError("");
       // Start 1-minute cooldown
       setResendCooldown(60);
-      // Show success message
-      // Note: In production, use toast notification instead of alert
-      // showToast("success", "Sukces", "Nowy kod weryfikacyjny został wysłany na Twój adres email");
+      // Show success message under the button
+      setResendMessage("Kod weryfikacyjny został wysłany ponownie. Sprawdź swoją skrzynkę email.");
+      setResendMessageType("success");
     } catch (err) {
       const error = err as CognitoError & { minutesUntilReset?: number };
       // Handle rate limit errors
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
         // Use the friendly message from backend, or provide a fallback
-        setError(error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości.");
+        const rateLimitMessage = error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości.";
+        setResendMessage(rateLimitMessage);
+        setResendMessageType("warning");
         // Still start cooldown even on rate limit error to prevent spam
         setResendCooldown(60);
         return;
       }
-      if (error.message) {
-        setError(error.message);
-      } else {
-        setError("Nie udało się wysłać nowego kodu. Spróbuj ponownie.");
-      }
+      // For other errors, show under the button as warning
+      const errorMessage = error.message || "Nie udało się wysłać nowego kodu. Spróbuj ponownie.";
+      setResendMessage(errorMessage);
+      setResendMessageType("warning");
       // Start cooldown even on error to prevent spam
       setResendCooldown(60);
     } finally {
@@ -190,7 +204,7 @@ export default function VerifyEmail() {
           </Button>
         </form>
 
-        <div className="mt-4 text-center">
+        <div className="mt-4 text-center space-y-2">
           <button
             type="button"
             onClick={handleResendCode}
@@ -199,6 +213,15 @@ export default function VerifyEmail() {
           >
             {resending ? "Wysyłanie..." : resendCooldown > 0 ? `Wyślij nowy kod (${resendCooldown}s)` : "Wyślij nowy kod"}
           </button>
+          {resendMessage && (
+            <div className={`text-sm px-3 py-2 rounded ${
+              resendMessageType === "success" 
+                ? "bg-green-500/15 border border-green-700 text-green-400" 
+                : "bg-error-500/15 border border-error-700 text-error-400"
+            }`}>
+              {resendMessage}
+            </div>
+          )}
         </div>
       </div>
 
