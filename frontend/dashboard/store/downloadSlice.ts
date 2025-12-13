@@ -6,6 +6,9 @@ export interface DownloadProgress {
   galleryId: string;
   status: "generating" | "downloading" | "error" | "success";
   error?: string;
+  fileCount?: number;
+  totalSize?: number; // in bytes
+  startedAt?: number; // timestamp
 }
 
 export interface DownloadSlice {

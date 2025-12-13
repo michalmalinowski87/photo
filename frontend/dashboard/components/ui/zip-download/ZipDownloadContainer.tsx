@@ -44,6 +44,9 @@ export const ZipDownloadContainer = () => {
             galleryId={download.galleryId}
             status={download.status}
             error={download.error}
+            fileCount={download.fileCount}
+            totalSize={download.totalSize}
+            startedAt={download.startedAt}
             onDismiss={() => removeDownload(download.id)}
           />
         </div>

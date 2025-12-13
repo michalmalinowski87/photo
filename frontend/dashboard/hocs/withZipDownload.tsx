@@ -75,29 +75,16 @@ export function withZipDownload<P extends object>(
             // Handle successful download
             updateDownload(downloadId, { status: "downloading" });
 
-            let blob: Blob;
-            let finalFilename: string;
-
-            if (result.blob) {
-              // Binary blob response
-              blob = result.blob;
-              finalFilename = result.filename || filename;
-            } else if (result.zip) {
-              // Base64 ZIP response (backward compatibility)
-              const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-              blob = new Blob([zipBlob], { type: "application/zip" });
-              finalFilename = result.filename || filename;
-            } else {
-              throw new Error("No ZIP data available");
+            if (!result.url) {
+              throw new Error("No ZIP URL available");
             }
 
-            const url = window.URL.createObjectURL(blob);
+            const finalFilename = result.filename || filename;
             const a = document.createElement("a");
-            a.href = url;
+            a.href = result.url;
             a.download = finalFilename;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
             updateDownload(downloadId, { status: "success" });
@@ -172,29 +159,16 @@ export function useZipDownload() {
           // Handle successful download
           updateDownload(downloadId, { status: "downloading" });
 
-          let blob: Blob;
-          let finalFilename: string;
-
-          if (result.blob) {
-            // Binary blob response
-            blob = result.blob;
-            finalFilename = result.filename || filename;
-          } else if (result.zip) {
-            // Base64 ZIP response (backward compatibility)
-            const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-            blob = new Blob([zipBlob], { type: "application/zip" });
-            finalFilename = result.filename || filename;
-          } else {
-            throw new Error("No ZIP data available");
+          if (!result.url) {
+            throw new Error("No ZIP URL available");
           }
 
-          const url = window.URL.createObjectURL(blob);
+          const finalFilename = result.filename || filename;
           const a = document.createElement("a");
-          a.href = url;
+          a.href = result.url;
           a.download = finalFilename;
           document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
           updateDownload(downloadId, { status: "success" });

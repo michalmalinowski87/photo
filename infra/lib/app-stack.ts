@@ -51,6 +51,11 @@ export class AppStack extends Stack {
 			exposedHeaders: ['ETag']
 		});
 
+		// ZIP cleanup: Scheduled Lambda function to delete ZIPs older than 2 hours
+		// Presigned URLs expire after 1 hour, so this gives a 1-hour safety margin
+		// This prevents S3 storage bloat from multiple ZIP generations
+		// Note: Using Lambda instead of lifecycle rule for precise control (only delete .zip files)
+
 		const galleries = new Table(this, 'GalleriesTable', {
 			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
@@ -337,8 +342,11 @@ export class AppStack extends Stack {
 			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
-			memorySize: 512,
-			timeout: Duration.minutes(5),
+			memorySize: 2048, // Increased to 2048MB for better CPU and network bandwidth
+			// Higher memory = proportionally more CPU + network bandwidth in Lambda
+			// Real-world tests show 2-4x faster network throughput at 2GB vs 512MB
+			// Max memory used was only 277MB, so we're CPU/network-throttled, not memory-bound
+			timeout: Duration.minutes(15), // Increased for large ZIPs (up to 15GB)
 			layers: [awsSdkLayer],
 			bundling: {
 				externalModules: [
@@ -362,7 +370,10 @@ export class AppStack extends Stack {
 				mainFields: ['module', 'main'],
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
-			environment: envVars
+			environment: {
+				...envVars,
+				AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1' // Enable HTTP connection reuse for S3 - 20-40% speedup
+			}
 		});
 		galleriesBucket.grantReadWrite(zipFn);
 		// Grant permission to update orders table to clear zipGenerating flag
@@ -428,8 +439,8 @@ export class AppStack extends Stack {
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
-			memorySize: 512, // Increased for Express overhead
-			timeout: Duration.seconds(30), // Increased timeout for complex operations
+			memorySize: 512, // Streaming uses minimal memory (~50-100MB), 512MB is sufficient
+			timeout: Duration.minutes(15), // Increased timeout for large ZIP generation (up to 15GB)
 			layers: [awsSdkLayer],
 			bundling: {
 				externalModules: [
@@ -492,7 +503,7 @@ export class AppStack extends Stack {
 		}));
 
 		// Lambda invoke permissions (for zip generation functions)
-		// Will be granted after zip functions are created
+		zipFn.grantInvoke(apiFn);
 
 		// Explicit OPTIONS route for CORS preflight - must come before catch-all route
 		// API Gateway HTTP API v2's built-in CORS may not work correctly with authorizers,
@@ -923,6 +934,24 @@ export class AppStack extends Stack {
 		new Rule(this, 'TransactionExpirySchedule', {
 			schedule: Schedule.rate(Duration.minutes(15)),
 			targets: [new LambdaFunction(transactionExpiryFn)]
+		});
+
+		// ZIP cleanup: Delete ZIP files older than 2 hours
+		// Presigned URLs expire after 1 hour, so this gives a 1-hour safety margin
+		// Prevents S3 storage bloat from multiple ZIP generations
+		const zipCleanupFn = new NodejsFunction(this, 'ZipCleanupFn', {
+			entry: path.join(__dirname, '../../../backend/functions/cleanup/deleteOldZips.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.minutes(5),
+			environment: envVars
+		});
+		galleriesBucket.grantReadWrite(zipCleanupFn);
+		// Run every hour to clean up old ZIPs
+		new Rule(this, 'ZipCleanupSchedule', {
+			schedule: Schedule.rate(Duration.hours(1)),
+			targets: [new LambdaFunction(zipCleanupFn)]
 		});
 
 		// Image resizing is now handled client-side via Uppy thumbnail generation

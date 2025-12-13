@@ -8,6 +8,9 @@ interface ZipDownloadProgressProps {
   galleryId: string;
   status: "generating" | "downloading" | "error" | "success";
   error?: string;
+  fileCount?: number;
+  totalSize?: number;
+  startedAt?: number;
   onDismiss: () => void;
 }
 
@@ -16,8 +19,32 @@ export const ZipDownloadProgress = ({
   galleryId: _galleryId,
   status,
   error,
+  fileCount,
+  totalSize,
+  startedAt,
   onDismiss,
 }: ZipDownloadProgressProps) => {
+  const formatSize = (bytes?: number): string => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const formatTime = (seconds?: number): string => {
+    if (!seconds) return "";
+    if (seconds < 60) return `~${Math.ceil(seconds)}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.ceil(seconds % 60);
+    return `~${minutes}m ${secs}s`;
+  };
+
+  const getElapsedTime = (): string => {
+    if (!startedAt) return "";
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    return formatTime(elapsed);
+  };
   const getStatusText = () => {
     switch (status) {
       case "generating":
@@ -67,23 +94,44 @@ export const ZipDownloadProgress = ({
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Zamówienie: {orderId}</p>
+          
           {status === "generating" && (
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-              Pobieranie rozpocznie się automatycznie po wygenerowaniu pliku
-            </p>
+            <>
+              {(fileCount || totalSize) && (
+                <div className="mt-1 space-y-0.5">
+                  {fileCount && (
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      Pliki: {fileCount}
+                    </p>
+                  )}
+                  {totalSize && (
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      Rozmiar: {formatSize(totalSize)}
+                    </p>
+                  )}
+                  {startedAt && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Upłynęło: {getElapsedTime()}
+                    </p>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                Pobieranie rozpocznie się automatycznie po wygenerowaniu pliku
+              </p>
+              <div className="mt-2">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                  <div
+                    className="bg-brand-500 h-1.5 rounded-full transition-all duration-300 animate-pulse"
+                    style={{ width: "60%" }}
+                  />
+                </div>
+              </div>
+            </>
           )}
+          
           {error && (
             <p className="text-xs text-error-600 dark:text-error-400 mt-1 break-words">{error}</p>
-          )}
-          {status === "generating" && (
-            <div className="mt-2">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                <div
-                  className="bg-brand-500 h-1.5 rounded-full transition-all duration-300 animate-pulse"
-                  style={{ width: "60%" }}
-                />
-              </div>
-            </div>
           )}
         </div>
       </div>

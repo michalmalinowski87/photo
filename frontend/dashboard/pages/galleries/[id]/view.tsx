@@ -308,31 +308,20 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                       return api.default.orders.downloadFinalZip(galleryId, orderId);
                     },
                   });
-                  // Convert to expected format (base64 ZIP for backward compatibility)
-                  if (result.zip) {
-                    return {
-                      data: { zip: result.zip, filename: result.filename },
-                      response: new Response(
-                        JSON.stringify({ zip: result.zip, filename: result.filename }),
-                        {
-                          status: 200,
-                        }
-                      ),
-                    };
-                  } else if (result.blob) {
-                    // Convert blob to base64 for backward compatibility
-                    const arrayBuffer = await result.blob.arrayBuffer();
-                    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-                    return {
-                      data: { zip: base64, filename: result.filename },
-                      response: new Response(
-                        JSON.stringify({ zip: base64, filename: result.filename }),
-                        {
-                          status: 200,
-                        }
-                      ),
-                    };
+                  // Convert to expected format (presigned URL)
+                  if (!result.url) {
+                    throw new Error('No ZIP URL available');
                   }
+
+                  return {
+                    data: { url: result.url, filename: result.filename },
+                    response: new Response(
+                      JSON.stringify({ url: result.url, filename: result.filename }),
+                      {
+                        status: 200,
+                      }
+                    ),
+                  };
                 }
               }
 

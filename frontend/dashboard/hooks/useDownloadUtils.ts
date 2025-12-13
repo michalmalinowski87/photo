@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useDownloadStore } from "../store";
 import { formatApiError } from "../lib/api-service";
 import { useDownloadFinalZip, useDownloadZip } from "./mutations/useOrderMutations";
+import api from "../lib/api-service";
 
 /**
  * Hook that provides download utility functions using React Query mutations
@@ -18,19 +19,39 @@ export function useDownloadUtils() {
 
       // Start download progress indicator
       const downloadId = `${galleryId}-${orderId}-finals-${Date.now()}`;
-      addDownload(downloadId, {
-        orderId,
-        galleryId,
-        status: "generating",
-      });
-
-      const pollForZip = async (): Promise<void> => {
+      const startedAt = Date.now();
+      
+      // Fetch file count before starting (optional, for display only)
+      const initializeDownload = async () => {
         try {
-          // Use mutation to download - it handles the actual download in onSuccess
-          // But we need to handle polling for 202 status, so we call the API directly
-          // and use the mutation's query key for caching
-          const api = await import("../lib/api-service");
-          const result = await api.default.orders.downloadFinalZip(galleryId, orderId);
+          const finalImages = await api.orders.getFinalImages(galleryId, orderId, { limit: 1 });
+          const fileCount = finalImages.totalCount ?? 0;
+          
+          addDownload(downloadId, {
+            orderId,
+            galleryId,
+            status: "generating",
+            fileCount,
+            startedAt,
+          });
+        } catch (err) {
+          // If we can't get file count, just start without it
+          addDownload(downloadId, {
+            orderId,
+            galleryId,
+            status: "generating",
+            startedAt,
+          });
+        }
+      };
+
+      void initializeDownload().then(() => {
+        const pollForZip = async (): Promise<void> => {
+          try {
+            // Use mutation to download - it handles the actual download in onSuccess
+            // But we need to handle polling for 202 status, so we call the API directly
+            // and use the mutation's query key for caching
+            const result = await api.orders.downloadFinalZip(galleryId, orderId);
 
           // Handle 202 - ZIP is being generated
           if (result.status === 202 || result.generating) {
@@ -44,29 +65,18 @@ export function useDownloadUtils() {
           // Handle successful download
           updateDownload(downloadId, { status: "downloading" });
 
-          let blob: Blob;
-          let filename: string;
-
-          if (result.blob) {
-            // Binary blob response
-            blob = result.blob;
-            filename = result.filename ?? `order-${orderId}-finals.zip`;
-          } else if (result.zip) {
-            // Base64 ZIP response (backward compatibility)
-            const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-            blob = new Blob([zipBlob], { type: "application/zip" });
-            filename = result.filename ?? `order-${orderId}-finals.zip`;
-          } else {
-            throw new Error("No ZIP data available");
+          if (!result.url) {
+            throw new Error("No ZIP URL available");
           }
 
-          const url = window.URL.createObjectURL(blob);
+          const filename = result.filename ?? `order-${orderId}-finals.zip`;
+
+          // Trigger download using presigned URL
           const a = document.createElement("a");
-          a.href = url;
+          a.href = result.url;
           a.download = filename;
           document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
           updateDownload(downloadId, { status: "success" });
@@ -76,10 +86,11 @@ export function useDownloadUtils() {
         } catch (err) {
           const errorMsg = formatApiError(err);
           updateDownload(downloadId, { status: "error", error: errorMsg });
-        }
-      };
+          }
+        };
 
-      void pollForZip();
+        void pollForZip();
+      });
     },
     [downloadFinalZipMutation]
   );
@@ -116,29 +127,18 @@ export function useDownloadUtils() {
           // Handle successful download
           updateDownload(downloadId, { status: "downloading" });
 
-          let blob: Blob;
-          let filename: string;
-
-          if (result.blob) {
-            // Binary blob response
-            blob = result.blob;
-            filename = result.filename ?? `${orderId}.zip`;
-          } else if (result.zip) {
-            // Base64 ZIP response (backward compatibility)
-            const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-            blob = new Blob([zipBlob], { type: "application/zip" });
-            filename = result.filename ?? `${orderId}.zip`;
-          } else {
-            throw new Error("No ZIP data available");
+          if (!result.url) {
+            throw new Error("No ZIP URL available");
           }
 
-          const url = window.URL.createObjectURL(blob);
+          const filename = result.filename ?? `${orderId}.zip`;
+
+          // Trigger download using presigned URL
           const a = document.createElement("a");
-          a.href = url;
+          a.href = result.url;
           a.download = filename;
           document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
           updateDownload(downloadId, { status: "success" });

@@ -205,36 +205,36 @@ export default function ProcessedPhotosView({
 					headers: { 'Authorization': `Bearer ${token}` }
 				});
 				const zipData = response.data;
-				if (zipData.zip) {
-					const zipBlob = Uint8Array.from(atob(zipData.zip), c => c.charCodeAt(0));
-					const blob = new Blob([zipBlob], { type: 'application/zip' });
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					a.href = url;
-					a.download = zipData.filename || `gallery-${galleryId}-order-${orderId}-final.zip`;
-					document.body.appendChild(a);
-					a.click();
-					document.body.removeChild(a);
-					URL.revokeObjectURL(url);
+				
+				if (!zipData.url) {
+					throw new Error('No ZIP URL available');
 				}
+
+				const filename = zipData.filename || `gallery-${galleryId}-order-${orderId}-final.zip`;
+				const a = document.createElement('a');
+				a.href = zipData.url;
+				a.download = filename;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
 			} else {
 				const response = await fetch(`${apiUrl}/galleries/${galleryId}/orders/${orderId}/final/zip`, {
 					method: 'POST',
 					headers: { 'Authorization': `Bearer ${token}` }
 				});
 				const data = await response.json();
-				if (data.zip) {
-					const zipBlob = Uint8Array.from(atob(data.zip), c => c.charCodeAt(0));
-					const blob = new Blob([zipBlob], { type: 'application/zip' });
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					a.href = url;
-					a.download = data.filename || `gallery-${galleryId}-order-${orderId}-final.zip`;
-					document.body.appendChild(a);
-					a.click();
-					document.body.removeChild(a);
-					URL.revokeObjectURL(url);
+				
+				if (!data.url) {
+					throw new Error('No ZIP URL available');
 				}
+
+				const filename = data.filename || `gallery-${galleryId}-order-${orderId}-final.zip`;
+				const a = document.createElement('a');
+				a.href = data.url;
+				a.download = filename;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
 			}
 		} catch (error) {
 			console.error('Failed to download ZIP:', error);

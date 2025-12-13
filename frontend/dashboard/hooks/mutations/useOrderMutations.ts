@@ -526,30 +526,19 @@ export function useDownloadZip() {
         return;
       }
 
-      let blob: Blob;
-      let filename: string;
-
-      if (result.blob) {
-        blob = result.blob;
-        filename = result.filename ?? `${variables.orderId}.zip`;
-      } else if (result.zip) {
-        // Base64 ZIP response (backward compatibility)
-        const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-        blob = new Blob([zipBlob], { type: "application/zip" });
-        filename = result.filename ?? `${variables.orderId}.zip`;
-      } else {
-        throw new Error("No ZIP file available");
+      if (!result.url) {
+        throw new Error("No ZIP URL available");
       }
 
-      // Trigger download
-      const url = URL.createObjectURL(blob);
+      const filename = result.filename ?? `${variables.orderId}.zip`;
+
+      // Trigger download using presigned URL
       const a = document.createElement("a");
-      a.href = url;
+      a.href = result.url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
       // Invalidate orders to refresh state
       void queryClient.invalidateQueries({
@@ -575,32 +564,20 @@ export function useDownloadFinalZip() {
         return;
       }
 
-      let blob: Blob;
-      let filename: string;
-
-      if (result.blob) {
-        blob = result.blob;
-        filename =
-          result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
-      } else if (result.zip) {
-        // Base64 ZIP response (backward compatibility)
-        const zipBlob = Uint8Array.from(atob(result.zip), (c) => c.charCodeAt(0));
-        blob = new Blob([zipBlob], { type: "application/zip" });
-        filename =
-          result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
-      } else {
-        throw new Error("No ZIP file available");
+      if (!result.url) {
+        throw new Error("No ZIP URL available");
       }
 
-      // Trigger download
-      const url = URL.createObjectURL(blob);
+      const filename =
+        result.filename ?? `gallery-${variables.galleryId}-order-${variables.orderId}-final.zip`;
+
+      // Trigger download using presigned URL
       const a = document.createElement("a");
-      a.href = url;
+      a.href = result.url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
       // Invalidate orders to refresh state
       void queryClient.invalidateQueries({

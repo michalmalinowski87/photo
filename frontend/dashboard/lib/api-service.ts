@@ -1107,7 +1107,7 @@ class ApiService {
     },
 
     /**
-     * Download order ZIP (returns URL or handles 202 for async generation)
+     * Download order ZIP (returns presigned URL or handles 202 for async generation)
      * Supports polling for 202 status codes
      */
     downloadZip: async (
@@ -1116,10 +1116,10 @@ class ApiService {
     ): Promise<{
       status?: number;
       generating?: boolean;
-      blob?: Blob;
       url?: string;
       filename?: string;
-      zip?: string; // Base64 ZIP for backward compatibility
+      size?: number;
+      expiresIn?: number;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -1143,33 +1143,28 @@ class ApiService {
         throw error;
       }
 
-      const contentType = response.headers.get("content-type");
-      const isZip = contentType?.includes("application/zip") ?? false;
-
-      if (isZip) {
-        const blob = await response.blob();
-        const contentDisposition = response.headers.get("content-disposition");
-        let filename = `${orderId}.zip`;
-        if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-          if (filenameMatch?.[1]) {
-            filename = filenameMatch[1].replace(/['"]/g, "");
-          }
-        }
-        return { blob, url: URL.createObjectURL(blob), filename };
-      } else {
-        // JSON response (backward compatibility with base64 ZIP)
-        const data = (await response.json()) as { zip?: string; filename?: string };
-        if (data.zip) {
-          return { zip: data.zip, filename: data.filename ?? `${orderId}.zip` };
-        }
-        throw new Error("No ZIP data available");
+      const data = (await response.json()) as { 
+        url: string; 
+        filename: string;
+        size?: number;
+        expiresIn?: number;
+      };
+      
+      if (!data.url) {
+        throw new Error("No ZIP URL available");
       }
+
+      return {
+        url: data.url,
+        filename: data.filename ?? `${orderId}.zip`,
+        size: data.size,
+        expiresIn: data.expiresIn
+      };
     },
 
     /**
      * Download final images ZIP for an order
-     * Supports polling for 202 status codes
+     * Returns presigned URL for download
      */
     downloadFinalZip: async (
       galleryId: string,
@@ -1177,10 +1172,10 @@ class ApiService {
     ): Promise<{
       status?: number;
       generating?: boolean;
-      blob?: Blob;
       url?: string;
       filename?: string;
-      zip?: string; // Base64 ZIP for backward compatibility
+      size?: number;
+      expiresIn?: number;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -1205,31 +1200,23 @@ class ApiService {
         throw error;
       }
 
-      const contentType = response.headers.get("content-type");
-      const isZip = contentType?.includes("application/zip") ?? false;
-
-      if (isZip) {
-        const blob = await response.blob();
-        const contentDisposition = response.headers.get("content-disposition");
-        let filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
-        if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-          if (filenameMatch?.[1]) {
-            filename = filenameMatch[1].replace(/['"]/g, "");
-          }
-        }
-        return { blob, url: URL.createObjectURL(blob), filename };
-      } else {
-        // JSON response (backward compatibility with base64 ZIP)
-        const data = (await response.json()) as { zip?: string; filename?: string };
-        if (data.zip) {
-          return {
-            zip: data.zip,
-            filename: data.filename ?? `gallery-${galleryId}-order-${orderId}-final.zip`,
-          };
-        }
-        throw new Error("No ZIP data available");
+      const data = (await response.json()) as { 
+        url: string; 
+        filename: string;
+        size?: number;
+        expiresIn?: number;
+      };
+      
+      if (!data.url) {
+        throw new Error("No ZIP URL available");
       }
+
+      return {
+        url: data.url,
+        filename: data.filename ?? `gallery-${galleryId}-order-${orderId}-final.zip`,
+        size: data.size,
+        expiresIn: data.expiresIn
+      };
     },
   };
 

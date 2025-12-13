@@ -1,11 +1,13 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
-import archiver from 'archiver';
-import { Readable } from 'stream';
+import { S3Client, ListObjectsV2Command, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { createHash } from 'crypto';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -104,8 +106,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		// List final images for this order
-		// Final images are stored at: galleries/{galleryId}/final/{orderId}/{filename}
+		// Check if final images exist and get list for hash generation
 		const prefix = `galleries/${galleryId}/final/${orderId}/`;
 		const listResponse = await s3.send(new ListObjectsV2Command({
 			Bucket: bucket,
@@ -120,146 +121,267 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		// Create ZIP archive
-		const archive = archiver('zip', { zlib: { level: 9 } });
-		const chunks: Buffer[] = [];
+		// Generate hash of final files list to validate ZIP freshness
+		// Filter out previews/thumbs and sort for consistent hashing
+		const finalFiles = listResponse.Contents
+			.map(obj => obj.Key || '')
+			.filter(key => {
+				const filename = key.replace(prefix, '');
+				return filename && 
+					!filename.includes('/previews/') && 
+					!filename.includes('/thumbs/') && 
+					!filename.includes('/');
+			})
+			.sort();
+		
+		const finalFilesHash = createHash('sha256')
+			.update(JSON.stringify(finalFiles))
+			.digest('hex')
+			.substring(0, 16); // Use first 16 chars for shorter hash
 
-		archive.on('data', (chunk: Buffer) => {
-			chunks.push(chunk);
-		});
-
-		archive.on('error', (err: Error) => {
-			console.error('Archive error:', err);
-			throw err;
-		});
-
-		// Helper function to validate and add a file to the ZIP
-		const addFileToZip = async (s3Key: string, zipFilename: string): Promise<boolean> => {
-			try {
-				const getObjectResponse = await s3.send(new GetObjectCommand({
-					Bucket: bucket,
-					Key: s3Key
-				}));
-
-				// Defensive check: file must exist and have a body
-				if (!getObjectResponse.Body) {
-					console.warn(`Skipping ${s3Key}: no body in S3 response`);
-					return false;
-				}
-
-				// Defensive check: file must have non-zero size
-				const contentLength = getObjectResponse.ContentLength || 0;
-				if (contentLength === 0) {
-					console.warn(`Skipping ${s3Key}: file size is 0`);
-					return false;
-				}
-
-				// Read file into buffer
-				const stream = getObjectResponse.Body as Readable;
-				const buffers: Buffer[] = [];
-				for await (const chunk of stream) {
-					buffers.push(Buffer.from(chunk));
-				}
-				const fileBuffer = Buffer.concat(buffers);
-
-				// Defensive check: verify buffer size matches expected size and is not empty
-				if (fileBuffer.length === 0) {
-					console.warn(`Skipping ${s3Key}: file buffer is empty`);
-					return false;
-				}
-
-				// Add to ZIP
-				archive.append(fileBuffer, { name: zipFilename });
-				console.log(`Added ${zipFilename} to ZIP (${fileBuffer.length} bytes)`);
-				return true;
-			} catch (err: any) {
-				// Handle file not found or other errors gracefully
-				if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
-					console.warn(`Skipping ${s3Key}: file not found`);
-				} else {
-					console.error(`Failed to add ${s3Key} to ZIP:`, {
-						error: err.message,
-						name: err.name,
-						code: err.code
-					});
-				}
-				return false;
-			}
-		};
-
-		// Process each final file
-		// CRITICAL: Exclude previews/ and thumbs/ subdirectories - only include actual final images
-		let filesAdded = 0;
-		for (const obj of listResponse.Contents) {
-			const fullKey = obj.Key || '';
-			const filename = fullKey.replace(prefix, '');
-			
-			// Skip empty filenames
-			if (!filename) continue;
-
-			// Skip previews and thumbnails - only include files directly under final/{orderId}/
-			if (filename.includes('/previews/') || filename.includes('/thumbs/') || filename.includes('/')) {
-				continue;
-			}
-
-			// Add file to ZIP
-			if (await addFileToZip(fullKey, filename)) {
-				filesAdded++;
-			}
-		}
-
-		// Ensure at least one file was added
-		if (filesAdded === 0) {
-			return {
-				statusCode: 404,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'No valid final images found to include in ZIP' })
-			};
-		}
-
-		// Finalize the archive and wait for completion
-		const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-			archive.once('end', () => {
-				const buffer = Buffer.concat(chunks);
-				console.log('Final ZIP created', {
-					filesAdded,
-					zipSize: buffer.length
-				});
-				resolve(buffer);
-			});
-			
-			archive.once('error', reject);
-			archive.finalize();
-		});
-
-		// Validate ZIP buffer
-		if (zipBuffer.length === 0) {
+		// Prepare ZIP filename and S3 key
+		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
+		const zipKey = `galleries/${galleryId}/orders/${orderId}/final-zip/${filename}`;
+		const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
+		
+		if (!zipFnName) {
 			return {
 				statusCode: 500,
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'ZIP archive is empty' })
+				body: JSON.stringify({ error: 'ZIP generation service not configured' })
 			};
 		}
 
-		// Return ZIP as binary (base64-encoded for API Gateway)
-		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
+		// Always check S3 first - ZIP might exist even if flag is still set (race condition)
+		// This handles the case where ZIP was created but flag wasn't cleared yet
+		// or flag might be cleared but ZIP not yet visible (S3 eventual consistency)
+		let zipSize: number | undefined;
+		let zipExists = false;
+		let zipHashMatches = false;
 		
+		try {
+			const headResponse = await s3.send(new HeadObjectCommand({
+				Bucket: bucket,
+				Key: zipKey
+			}));
+			zipSize = headResponse.ContentLength;
+			zipExists = true;
+			
+			// Check if ZIP hash matches current final files hash
+			const zipHashFromMetadata = headResponse.Metadata?.['finalfiles-hash'];
+			const zipHashFromOrder = order.finalZipFilesHash;
+			const storedHash = zipHashFromMetadata || zipHashFromOrder;
+			
+			if (storedHash === finalFilesHash) {
+				zipHashMatches = true;
+				console.log('Final ZIP found in S3 with matching hash', { 
+					galleryId, 
+					orderId, 
+					zipKey, 
+					zipSize,
+					hash: finalFilesHash
+				});
+			} else {
+				console.log('Final ZIP exists but hash mismatch - will regenerate', {
+					galleryId,
+					orderId,
+					storedHash,
+					currentHash: finalFilesHash,
+					reason: storedHash ? 'final files changed' : 'no hash stored'
+				});
+			}
+		} catch (headErr: any) {
+			if (headErr.name === 'NoSuchKey' || headErr.name === 'NotFound') {
+				zipExists = false;
+			} else {
+				throw headErr;
+			}
+		}
+		
+		// If ZIP exists AND hash matches, clear generating flag (if still set) and return URL
+		if (zipExists && zipHashMatches) {
+			// Clear flag if it's still set (idempotent operation)
+			if (order.finalZipGenerating) {
+				try {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'REMOVE finalZipGenerating, finalZipGeneratingSince'
+					}));
+					console.log('Cleared finalZipGenerating flag', { galleryId, orderId });
+				} catch (clearErr: any) {
+					// Log but don't fail - ZIP exists, we can still return URL
+					console.error('Failed to clear finalZipGenerating flag', {
+						error: clearErr.message,
+						galleryId,
+						orderId
+					});
+				}
+			}
+			
+			// Generate presigned URL and return
+			const getObjectCmd = new GetObjectCommand({
+				Bucket: bucket,
+				Key: zipKey,
+				ResponseContentDisposition: `attachment; filename="${filename}"`
+			});
+			const presignedUrl = await getSignedUrl(s3, getObjectCmd, { expiresIn: 3600 });
+			
+			return {
+				statusCode: 200,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					url: presignedUrl,
+					filename,
+					size: zipSize,
+					expiresIn: 3600
+				})
+			};
+		}
+		
+		// ZIP doesn't exist yet - check if it's generating
+		const isGenerating = order.finalZipGenerating === true;
+		const zipGeneratingSince = order.finalZipGeneratingSince as number | undefined;
+		
+		// If ZIP has been generating for more than 5 minutes (300 seconds), clear the flag and retry
+		// This handles cases where the Lambda crashed or was never invoked
+		// Reduced from 15 minutes to 5 minutes for faster recovery
+		if (isGenerating && zipGeneratingSince) {
+			const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+			if (zipGeneratingSince < fiveMinutesAgo) {
+				console.log('Final ZIP generation timeout (5 minutes) - clearing flag and retrying', {
+					galleryId,
+					orderId,
+					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
+					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
+				});
+				// Clear the flag to allow retry
+				try {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'REMOVE finalZipGenerating, finalZipGeneratingSince'
+					}));
+				} catch (clearErr: any) {
+					console.error('Failed to clear finalZipGenerating flag', clearErr.message);
+				}
+				// Fall through to start new generation
+			} else {
+				// Still generating (within timeout), return 202
+				const elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
+				console.log('Final ZIP still generating', { galleryId, orderId, elapsedSeconds });
+				return {
+					statusCode: 202,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						status: 'generating',
+						message: 'ZIP is still being generated. Please check again in a moment.',
+						orderId,
+						galleryId,
+						elapsedSeconds
+					})
+				};
+			}
+		} else if (isGenerating) {
+			// Generating but no timestamp - clear flag and retry
+			console.log('Final ZIP generating flag set but no timestamp - clearing and retrying', { galleryId, orderId });
+			try {
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'REMOVE finalZipGenerating, finalZipGeneratingSince'
+				}));
+			} catch (clearErr: any) {
+				console.error('Failed to clear finalZipGenerating flag', clearErr.message);
+			}
+			// Fall through to start new generation
+		}
+		
+		// Not generating - start generation
+		try {
+			console.log('Starting final ZIP generation', { galleryId, orderId, finalFilesHash });
+			const lambda = new LambdaClient({});
+			const payload = Buffer.from(JSON.stringify({ 
+				galleryId, 
+				orderId, 
+				type: 'final',
+				finalFilesHash // Pass hash to ZIP generation function
+			}));
+			
+			// Start async generation (fire and forget)
+			const invokeResponse = await lambda.send(new InvokeCommand({ 
+				FunctionName: zipFnName, 
+				Payload: payload, 
+				InvocationType: 'Event' // Async invocation
+			}));
+			
+			// Check for invocation errors (FunctionError indicates the invocation itself failed)
+			if (invokeResponse.FunctionError) {
+				const errorPayload = invokeResponse.Payload ? JSON.parse(new TextDecoder().decode(invokeResponse.Payload)) : null;
+				throw new Error(`Lambda invocation failed: ${invokeResponse.FunctionError}. ${errorPayload?.errorMessage || ''}`);
+			}
+			
+			console.log('Lambda invoked for final ZIP generation', { 
+				galleryId, 
+				orderId, 
+				zipFnName,
+				statusCode: invokeResponse.StatusCode,
+				functionError: invokeResponse.FunctionError
+			});
+			
+			// Mark order as generating with timestamp and store hash
+			await ddb.send(new UpdateCommand({
+				TableName: ordersTable,
+				Key: { galleryId, orderId },
+				UpdateExpression: 'SET finalZipGenerating = :g, finalZipGeneratingSince = :ts, finalZipFilesHash = :h',
+				ExpressionAttributeValues: { 
+					':g': true,
+					':ts': Date.now(),
+					':h': finalFilesHash
+				}
+			}));
+			
+			console.log('Order marked as generating final ZIP', { galleryId, orderId });
+		} catch (err: any) {
+			console.error('Failed to start final ZIP generation', {
+				error: err.message,
+				galleryId,
+				orderId,
+				zipFnName
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Failed to start ZIP generation', 
+					message: err.message
+				})
+			};
+		}
+		
+		// Return generating status
 		return {
-			statusCode: 200,
-			headers: {
-				'content-type': 'application/zip',
-				'content-disposition': `attachment; filename="${filename}"`,
-				'content-length': zipBuffer.length.toString()
-			},
-			body: zipBuffer.toString('base64'),
-			isBase64Encoded: true
+			statusCode: 202,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				status: 'generating',
+				message: 'ZIP is being generated. Please check again in a moment.',
+				orderId,
+				galleryId
+			})
 		};
 	} catch (error: any) {
-		console.error('Final ZIP generation failed:', error);
+		console.error('Final ZIP download failed:', error);
+		
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'ZIP generation failed', message: error.message })
+			body: JSON.stringify({ 
+				error: 'Failed to generate download URL', 
+				message: error.message,
+				galleryId,
+				orderId
+			})
 		};
 	}
 });
