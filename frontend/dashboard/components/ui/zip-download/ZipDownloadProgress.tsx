@@ -1,5 +1,5 @@
 import { X, Check } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 import { Loading } from "../loading/Loading";
 
@@ -32,19 +32,34 @@ export const ZipDownloadProgress = ({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  const formatTime = (seconds?: number): string => {
-    if (!seconds) return "";
-    if (seconds < 60) return `~${Math.ceil(seconds)}s`;
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
-    const secs = Math.ceil(seconds % 60);
-    return `~${minutes}m ${secs}s`;
+    const secs = seconds % 60;
+    return `${minutes}m ${secs}s`;
   };
 
-  const getElapsedTime = (): string => {
-    if (!startedAt) return "";
-    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-    return formatTime(elapsed);
-  };
+  // Real-time elapsed time that updates every second
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => {
+    if (!startedAt) return 0;
+    return Math.floor((Date.now() - startedAt) / 1000);
+  });
+
+  useEffect(() => {
+    if (!startedAt || status !== "generating") {
+      return;
+    }
+
+    // Update immediately
+    setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+
+    // Then update every second
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt, status]);
   const getStatusText = () => {
     switch (status) {
       case "generating":
@@ -97,25 +112,18 @@ export const ZipDownloadProgress = ({
           
           {status === "generating" && (
             <>
-              {(fileCount || totalSize) && (
-                <div className="mt-1 space-y-0.5">
-                  {fileCount && (
-                    <p className="text-xs text-gray-600 dark:text-gray-300">
-                      Pliki: {fileCount}
-                    </p>
-                  )}
-                  {totalSize && (
-                    <p className="text-xs text-gray-600 dark:text-gray-300">
-                      Rozmiar: {formatSize(totalSize)}
-                    </p>
-                  )}
-                  {startedAt && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Upłynęło: {getElapsedTime()}
-                    </p>
-                  )}
-                </div>
-              )}
+              <div className="mt-1 space-y-0.5">
+                {totalSize && (
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    Rozmiar: {formatSize(totalSize)}
+                  </p>
+                )}
+                {startedAt && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Upłynęło: {formatTime(elapsedSeconds)}
+                  </p>
+                )}
+              </div>
               <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                 Pobieranie rozpocznie się automatycznie po wygenerowaniu pliku
               </p>

@@ -121,21 +121,32 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		// Generate hash of final files list to validate ZIP freshness
-		// Filter out previews/thumbs and sort for consistent hashing
-		const finalFiles = listResponse.Contents
-			.map(obj => obj.Key || '')
-			.filter(key => {
-				const filename = key.replace(prefix, '');
-				return filename && 
-					!filename.includes('/previews/') && 
-					!filename.includes('/thumbs/') && 
-					!filename.includes('/');
+		// Generate hash of final files with metadata to validate ZIP freshness
+		// Includes filename + ETag + size + lastModified to detect content changes
+		// If photographer reuploads file with same name but different content, ETag changes
+		const finalFilesWithMetadata = listResponse.Contents
+			.map(obj => {
+				const filename = (obj.Key || '').replace(prefix, '');
+				return {
+					filename,
+					etag: obj.ETag || '',
+					size: obj.Size || 0,
+					lastModified: obj.LastModified?.getTime() || 0
+				};
 			})
-			.sort();
+			.filter(item => {
+				// Only include files directly in final/{orderId}/, not in subdirectories
+				return item.filename && 
+					!item.filename.includes('/previews/') && 
+					!item.filename.includes('/thumbs/') && 
+					!item.filename.includes('/bigthumbs/') &&
+					!item.filename.includes('/'); // No subdirectories
+			})
+			.sort((a, b) => a.filename.localeCompare(b.filename)); // Sort by filename for consistency
 		
+		// Hash includes filename + metadata to detect content changes
 		const finalFilesHash = createHash('sha256')
-			.update(JSON.stringify(finalFiles))
+			.update(JSON.stringify(finalFilesWithMetadata))
 			.digest('hex')
 			.substring(0, 16); // Use first 16 chars for shorter hash
 
@@ -243,17 +254,26 @@ export const handler = lambdaLogger(async (event: any) => {
 		const isGenerating = order.finalZipGenerating === true;
 		const zipGeneratingSince = order.finalZipGeneratingSince as number | undefined;
 		
-		// If ZIP has been generating for more than 5 minutes (300 seconds), clear the flag and retry
-		// This handles cases where the Lambda crashed or was never invoked
-		// Reduced from 15 minutes to 5 minutes for faster recovery
+		// Timeout protection: Clear flag only if generation has exceeded Lambda timeout
+		// Lambda timeout is 15 minutes - we use 16 minutes (960 seconds) to account for any delays
+		// This ensures:
+		// 1. If Lambda completes successfully → it clears the flag itself
+		// 2. If Lambda times out/crashes → we clear the flag after Lambda would have timed out
+		// 3. If Lambda is still running → we don't interfere with legitimate long-running operations
+		const LAMBDA_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+		const TIMEOUT_BUFFER_MS = 1 * 60 * 1000; // 1 minute buffer
+		const MAX_GENERATION_TIME_MS = LAMBDA_TIMEOUT_MS + TIMEOUT_BUFFER_MS; // 16 minutes total
+		
 		if (isGenerating && zipGeneratingSince) {
-			const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-			if (zipGeneratingSince < fiveMinutesAgo) {
-				console.log('Final ZIP generation timeout (5 minutes) - clearing flag and retrying', {
+			const timeoutThreshold = Date.now() - MAX_GENERATION_TIME_MS;
+			if (zipGeneratingSince < timeoutThreshold) {
+				console.log('Final ZIP generation timeout - clearing flag and retrying', {
 					galleryId,
 					orderId,
 					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
-					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
+					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000),
+					lambdaTimeoutSeconds: LAMBDA_TIMEOUT_MS / 1000,
+					reason: 'Exceeded Lambda timeout threshold - Lambda would have timed out or crashed'
 				});
 				// Clear the flag to allow retry
 				try {
@@ -267,7 +287,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				}
 				// Fall through to start new generation
 			} else {
-				// Still generating (within timeout), return 202
+				// Still generating (within timeout), return 202 with elapsed time
 				const elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
 				console.log('Final ZIP still generating', { galleryId, orderId, elapsedSeconds });
 				return {

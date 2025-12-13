@@ -338,15 +338,25 @@ export class AppStack extends Stack {
 
 		// Downloads zip - helper function invoked by API Lambda and other functions
 		// Created before apiFn so DOWNLOADS_ZIP_FN_NAME can be added to envVars
+		// Dead Letter Queue for failed ZIP generation (production reliability)
+		const zipGenerationDLQ = new Queue(this, 'ZipGenerationDLQ', {
+			queueName: `PhotoHub-${props.stage}-ZipGenerationDLQ`,
+			encryption: QueueEncryption.SQS_MANAGED,
+			retentionPeriod: Duration.days(14), // Retain failed jobs for 14 days for debugging
+			visibilityTimeout: Duration.minutes(16) // Slightly longer than Lambda timeout
+		});
+		
 		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
 			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
-			memorySize: 2048, // Increased to 2048MB for better CPU and network bandwidth
-			// Higher memory = proportionally more CPU + network bandwidth in Lambda
-			// Real-world tests show 2-4x faster network throughput at 2GB vs 512MB
-			// Max memory used was only 277MB, so we're CPU/network-throttled, not memory-bound
+			memorySize: 1024, // Optimized to 1024MB - best performance with 15MB parts and 12 concurrency
+			// Balanced configuration providing optimal throughput for ZIP generation
+			// Connection reuse enabled (AWS_NODEJS_CONNECTION_REUSE_ENABLED=1) for efficient S3 operations
 			timeout: Duration.minutes(15), // Increased for large ZIPs (up to 15GB)
+			deadLetterQueue: zipGenerationDLQ, // DLQ for failed async invocations
+			// Note: reservedConcurrentExecutions removed to avoid account limit conflicts
+			// Lambda will auto-scale naturally. Concurrency is controlled at application level (12 concurrent downloads)
 			layers: [awsSdkLayer],
 			bundling: {
 				externalModules: [
@@ -378,7 +388,23 @@ export class AppStack extends Stack {
 		galleriesBucket.grantReadWrite(zipFn);
 		// Grant permission to update orders table to clear zipGenerating flag
 		orders.grantReadWriteData(zipFn);
+		// Grant DLQ permissions
+		zipGenerationDLQ.grantSendMessages(zipFn);
 		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+		
+		// CloudWatch alarm for ZIP generation failures (DLQ messages)
+		const zipDLQAlarm = new Alarm(this, 'ZipGenerationDLQAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-ZipGenerationDLQ-Messages`,
+			alarmDescription: 'Alert when ZIP generation DLQ has messages (failed ZIP generations)',
+			metric: zipGenerationDLQ.metricApproximateNumberOfMessagesVisible({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			evaluationPeriods: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
 
 		// Auth Lambda function - handles all authentication endpoints (signup, login, password reset)
 		const authFn = new NodejsFunction(this, 'AuthFunction', {

@@ -97,11 +97,52 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
-	// Generate hash of selectedKeys to validate ZIP freshness
-	// If selectedKeys change (photos added/removed), hash changes and ZIP must be regenerated
-	const selectedKeysSorted = [...order.selectedKeys].sort(); // Sort for consistent hashing
+	// Generate hash of selectedKeys with file metadata to validate ZIP freshness
+	// Includes filename + ETag + size + lastModified to detect content changes
+	// If photographer reuploads file with same name but different content, ETag changes
+	const selectedKeys = order.selectedKeys || [];
+	
+	// Fetch metadata for all selected files in parallel (with concurrency limit)
+	const pLimit = require('p-limit');
+	const limit = pLimit(10); // Limit concurrent HeadObject calls
+	
+	const filesWithMetadata = await Promise.all(
+		selectedKeys.map(key => 
+			limit(async () => {
+				const s3Key = `galleries/${galleryId}/originals/${key}`;
+				try {
+					const headResponse = await s3.send(new HeadObjectCommand({
+						Bucket: bucket,
+						Key: s3Key
+					}));
+					return {
+						filename: key,
+						etag: headResponse.ETag || '',
+						size: headResponse.ContentLength || 0,
+						lastModified: headResponse.LastModified?.getTime() || 0
+					};
+				} catch (headErr: any) {
+					if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
+						// File doesn't exist - include in hash with null values to detect missing files
+						return {
+							filename: key,
+							etag: '',
+							size: 0,
+							lastModified: 0,
+							missing: true
+						};
+					}
+					throw headErr;
+				}
+			})
+		)
+	);
+	
+	// Sort by filename for consistent hashing
+	filesWithMetadata.sort((a, b) => a.filename.localeCompare(b.filename));
+	
 	const selectedKeysHash = createHash('sha256')
-		.update(JSON.stringify(selectedKeysSorted))
+		.update(JSON.stringify(filesWithMetadata))
 		.digest('hex')
 		.substring(0, 16); // Use first 16 chars for shorter hash
 
@@ -196,34 +237,89 @@ export const handler = lambdaLogger(async (event: any) => {
 		// ZIP doesn't exist yet - check if it's generating
 		if (order.zipGenerating) {
 			const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
-			const elapsedSeconds = zipGeneratingSince ? Math.round((Date.now() - zipGeneratingSince) / 1000) : 'unknown';
-			console.log('ZIP still generating', { galleryId, orderId, elapsedSeconds });
-			return {
-				statusCode: 202,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ 
-					status: 'generating',
-					message: 'ZIP is still being generated. Please check again in a moment.',
-					orderId,
-					galleryId,
-					elapsedSeconds
-				})
-			};
+			
+			// Check if generation has exceeded Lambda timeout
+			const LAMBDA_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+			const TIMEOUT_BUFFER_MS = 1 * 60 * 1000; // 1 minute buffer
+			const MAX_GENERATION_TIME_MS = LAMBDA_TIMEOUT_MS + TIMEOUT_BUFFER_MS; // 16 minutes total
+			
+			if (zipGeneratingSince) {
+				const timeoutThreshold = Date.now() - MAX_GENERATION_TIME_MS;
+				if (zipGeneratingSince < timeoutThreshold) {
+					// Generation has timed out - clear flag and fall through to start new generation
+					console.log('ZIP generation timeout detected - clearing flag', {
+						galleryId,
+						orderId,
+						zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
+						elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000),
+						reason: 'Exceeded Lambda timeout threshold'
+					});
+					try {
+						await ddb.send(new UpdateCommand({
+							TableName: ordersTable,
+							Key: { galleryId, orderId },
+							UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+						}));
+					} catch (clearErr: any) {
+						console.error('Failed to clear zipGenerating flag', clearErr.message);
+					}
+					// Fall through to start new generation
+				} else {
+					// Still generating (within timeout), return 202
+					const elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
+					console.log('ZIP still generating', { galleryId, orderId, elapsedSeconds });
+					return {
+						statusCode: 202,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ 
+							status: 'generating',
+							message: 'ZIP is still being generated. Please check again in a moment.',
+							orderId,
+							galleryId,
+							elapsedSeconds
+						})
+					};
+				}
+			} else {
+				// Generating but no timestamp - clear flag and fall through
+				console.log('ZIP generating flag set but no timestamp - clearing flag', { galleryId, orderId });
+				try {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+					}));
+				} catch (clearErr: any) {
+					console.error('Failed to clear zipGenerating flag', clearErr.message);
+				}
+				// Fall through to start new generation
+			}
 		}
 		
 		// ZIP doesn't exist and not generating - start generation
 		const isGenerating = order.zipGenerating === true;
 		const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
 		
-		// If ZIP has been generating for more than 60 seconds, clear the flag and retry
+		// Timeout protection: Clear flag only if generation has exceeded Lambda timeout
+		// Lambda timeout is 15 minutes - we use 16 minutes (960 seconds) to account for any delays
+		// This ensures:
+		// 1. If Lambda completes successfully → it clears the flag itself
+		// 2. If Lambda times out/crashes → we clear the flag after Lambda would have timed out
+		// 3. If Lambda is still running → we don't interfere with legitimate long-running operations
+		const LAMBDA_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+		const TIMEOUT_BUFFER_MS = 1 * 60 * 1000; // 1 minute buffer
+		const MAX_GENERATION_TIME_MS = LAMBDA_TIMEOUT_MS + TIMEOUT_BUFFER_MS; // 16 minutes total
+		
 		if (isGenerating && zipGeneratingSince) {
-			const oneMinuteAgo = Date.now() - (60 * 1000);
-			if (zipGeneratingSince < oneMinuteAgo) {
+			const timeoutThreshold = Date.now() - MAX_GENERATION_TIME_MS;
+			if (zipGeneratingSince < timeoutThreshold) {
 				console.log('ZIP generation timeout - clearing flag and retrying', {
 					galleryId,
 					orderId,
 					zipGeneratingSince: new Date(zipGeneratingSince).toISOString(),
-					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000)
+					elapsedSeconds: Math.round((Date.now() - zipGeneratingSince) / 1000),
+					lambdaTimeoutSeconds: LAMBDA_TIMEOUT_MS / 1000,
+					reason: 'Exceeded Lambda timeout threshold - Lambda would have timed out or crashed'
 				});
 				// Clear the flag to allow retry
 				try {
@@ -237,7 +333,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				}
 				// Fall through to start new generation
 			} else {
-				// Still generating, return 202
+				// Still generating (within timeout), return 202 with elapsed time
 				const elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
 				return {
 					statusCode: 202,
