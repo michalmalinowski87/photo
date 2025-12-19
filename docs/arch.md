@@ -12,6 +12,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 - **Lambda Functions**: Serverless compute for all business logic
 - **DynamoDB Tables**: 
   - `Galleries` - Gallery metadata and configuration (with EventBridge Scheduler for expiration)
+  - `Images` - Image metadata (filename, size, lastModified, S3 key, type) with GSIs for time-based queries and order filtering
   - `Orders` - Order tracking and billing (includes client selections)
   - `Wallets` - User wallet balances
   - `WalletLedger` - Transaction history
@@ -20,6 +21,8 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
   - `Packages` - Pricing package templates (with GSI on ownerId)
   - `Notifications` - In-app notifications (planned)
 - **S3 Bucket**: Storage for originals, previews, thumbnails, final assets, ZIPs, and archives
+  - Image metadata is stored in DynamoDB `Images` table for efficient querying
+  - Original and final images can be deleted from S3 while metadata remains in DynamoDB for display purposes
 - **CloudFront**: CDN for serving previews and thumbnails
 - **Cognito User Pool**: Authentication for photographers
 - **SES**: Email notifications
@@ -62,11 +65,26 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 
 #### Uploads & Downloads
 - `uploads/presign.ts` - Generate presigned S3 upload URLs
+- `uploads/completeUpload.ts` - Complete simple PUT uploads and write image metadata to DynamoDB
+- `uploads/completeMultipart.ts` - Complete multipart uploads and write image metadata to DynamoDB
 - `downloads/createZip.ts` - Create ZIP of selected photos
+- `galleries/listImages.ts` - List gallery images (queries DynamoDB Images table, not S3)
+- `galleries/downloadUnselectedOriginals.ts` - Download ZIP of unselected originals (queries DynamoDB)
+- `orders/listFinalImages.ts` - List final images for an order (queries DynamoDB Images table)
 
 #### Image Processing
 - Image resizing is now handled client-side via Uppy thumbnail generation plugin
 - No server-side Lambda function needed
+
+#### Image Metadata Storage
+- Image metadata (filename, size, lastModified, S3 key, type, orderId) is stored in DynamoDB `Images` table
+- Primary key: `galleryId` (partition) + `imageKey` (sort key: `original#{filename}` or `final#{orderId}#{filename}`)
+- Global Secondary Indexes:
+  - `galleryId-lastModified-index`: For time-based queries (newest first)
+  - `galleryId-orderId-index`: For filtering final images by orderId (sparse GSI)
+- Metadata is written synchronously during upload completion (`completeUpload.ts`, `completeMultipart.ts`)
+- Deletion operations delete from DynamoDB first, then S3 (prevents orphaned S3 objects)
+- This allows gallery operations to work even when original/final images are deleted from S3
 
 #### Processing
 - `processed/complete.ts` - Mark order as delivered

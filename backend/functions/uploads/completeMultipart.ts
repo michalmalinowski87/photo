@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, CompleteMultipartUploadCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const s3 = new S3Client({});
@@ -94,18 +94,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		const logger = (context as any)?.logger;
 		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 		
-		// Get file size: prefer from request, fallback to HeadObjectCommand
+		// Get file size and metadata: prefer from request, fallback to HeadObjectCommand
 		let actualFileSize = fileSize;
-		if (!actualFileSize || actualFileSize <= 0) {
+		let etag: string | undefined = response.ETag?.replace(/"/g, ''); // Remove quotes from ETag
+		let lastModified: number = Date.now();
+		if (!actualFileSize || actualFileSize <= 0 || !etag) {
 			try {
 				const headResponse = await s3.send(new HeadObjectCommand({
 					Bucket: bucket,
 					Key: key
 				}));
 				actualFileSize = headResponse.ContentLength || 0;
+				etag = headResponse.ETag?.replace(/"/g, '') || etag;
+				lastModified = headResponse.LastModified?.getTime() || Date.now();
 			} catch (headErr: any) {
-				logger?.warn('Failed to get file size after multipart completion', {
+				logger?.warn('Failed to get file metadata after multipart completion', {
 					error: headErr.message,
 					galleryId,
 					key
@@ -134,12 +139,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				if (isOriginal || (isFinal && isValidFinal)) {
 					// Extract filename from key for logging (no maps needed - we store only totals)
 					let filename: string;
+					let orderId: string | undefined;
 					if (isOriginal) {
 						filename = key.split('/originals/')[1];
 					} else {
 						// For finals: galleries/{galleryId}/final/{orderId}/{filename}
 						// We already validated it has exactly 2 parts above
 						const parts = key.split('/final/')[1].split('/');
+						orderId = parts[0];
 						filename = parts[parts.length - 1]; // Get last part (filename)
 					}
 					
@@ -164,6 +171,78 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						UpdateExpression: `ADD ${updateExpressions.join(', ')}`,
 						ExpressionAttributeValues: expressionValues
 					}));
+
+					// Write image metadata to ImagesTable
+					if (imagesTable) {
+						// Construct imageKey: format "original#{filename}" or "final#{orderId}#{filename}"
+						const imageKey = isOriginal 
+							? `original#${filename}`
+							: `final#${orderId}#${filename}`;
+
+						try {
+							await ddb.send(new PutCommand({
+								TableName: imagesTable,
+								Item: {
+									galleryId,
+									imageKey,
+									type: isOriginal ? 'original' : 'final',
+									filename,
+									orderId: isFinal ? orderId : undefined,
+									s3Key: key,
+									size: actualFileSize,
+									lastModified,
+									etag: etag || '',
+									hasPreview: false,
+									hasBigThumb: false,
+									hasThumb: false
+								},
+								// Conditional write: only update if ETag changed or record doesn't exist
+								ConditionExpression: 'attribute_not_exists(etag) OR etag <> :etag OR lastModified < :lm',
+								ExpressionAttributeValues: {
+									':etag': etag || '',
+									':lm': lastModified
+								}
+							}));
+
+							logger?.info('Wrote image metadata to DynamoDB', {
+								galleryId,
+								imageKey,
+								filename,
+								type: isOriginal ? 'original' : 'final',
+								etag,
+								lastModified
+							});
+						} catch (metadataErr: any) {
+							// If conditional check failed (ETag matches and newer), that's okay - idempotent retry
+							if (metadataErr.name === 'ConditionalCheckFailedException') {
+								logger?.info('Image metadata already exists with same or newer ETag (idempotent retry)', {
+									galleryId,
+									imageKey,
+									etag
+								});
+							} else {
+								// Metadata write failed - this is critical, log error but don't fail upload
+								logger?.error('Failed to write image metadata to DynamoDB', {
+									error: metadataErr.message,
+									galleryId,
+									imageKey,
+									key
+								});
+								// Still return success but note metadata failure
+								return {
+									statusCode: 500,
+									headers: { 'content-type': 'application/json' },
+									body: JSON.stringify({ 
+										error: 'Upload completed but metadata write failed',
+										message: 'File uploaded successfully but failed to record metadata. Please retry.',
+										key: response.Key,
+										etag: response.ETag,
+										location: response.Location
+									})
+								};
+							}
+						}
+					}
 					
 					logger?.info('Updated gallery storage totals after multipart upload (atomic)', {
 						galleryId,
@@ -189,6 +268,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				success: true,
+				metadataWritten: true,
 				key: response.Key,
 				etag: response.ETag,
 				location: response.Location,

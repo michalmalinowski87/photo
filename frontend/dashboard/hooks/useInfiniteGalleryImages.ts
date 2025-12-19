@@ -50,9 +50,10 @@ export function useInfiniteGalleryImages({
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
+      // Always request all image sizes (thumb, preview, bigthumb) regardless of type
       const response = await api.galleries.getImages(
         galleryId,
-        type,
+        "thumb,preview,bigthumb",
         {
           limit,
           cursor: pageParam as string | null | undefined,

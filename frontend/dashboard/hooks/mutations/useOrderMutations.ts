@@ -15,6 +15,20 @@ export function useApproveChangeRequest() {
     onSuccess: (_, variables) => {
       // Reset polling timer after successful mutation
       resetTimer();
+
+      // Optimistically clear zipGenerating flag since approving change request means
+      // old ZIP is invalid and new one will be generated when client approves new selection
+      const orderDetailKey = queryKeys.orders.detail(variables.galleryId, variables.orderId);
+      const existingOrder = queryClient.getQueryData<Order>(orderDetailKey);
+      if (existingOrder) {
+        queryClient.setQueryData<Order>(orderDetailKey, {
+          ...existingOrder,
+          zipGenerating: false,
+          zipGeneratingSince: undefined,
+          zipProgress: undefined,
+        });
+      }
+
       // Invalidate order detail, orders by gallery, and gallery detail
       void queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
@@ -25,10 +39,18 @@ export function useApproveChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
+      // Invalidate ZIP status queries to refetch immediately
+      void queryClient.invalidateQueries({
+        queryKey: ["zipStatus", variables.galleryId, variables.orderId],
+      });
       // Invalidate gallery list queries to update sidebar badge
       // Approving a change request removes the order from CHANGES_REQUESTED status
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
+      });
+      // Invalidate gallery images query to refresh unselectedCount when order status changes
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
       });
     },
   });
@@ -67,6 +89,10 @@ export function useDenyChangeRequest() {
       // Denying a change request removes the order from CHANGES_REQUESTED status
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
+      });
+      // Invalidate gallery images query to refresh unselectedCount when order status changes
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
       });
     },
   });
@@ -325,6 +351,11 @@ export function useSendFinalLink() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
+      // Invalidate gallery images query to refresh unselectedCount when order status changes
+      // This ensures the "Niewybrane" count updates correctly
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+      });
     },
   });
 }
@@ -447,6 +478,10 @@ export function useDeleteFinalImage() {
         // Also invalidate orders list to update status in lists
         void queryClient.invalidateQueries({
           queryKey: queryKeys.orders.byGallery(variables.galleryId),
+        });
+        // Invalidate gallery images query to refresh unselectedCount when order status changes
+        void queryClient.invalidateQueries({
+          queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
         });
       });
 
@@ -649,6 +684,10 @@ export function useUploadFinalPhotos() {
       // Invalidate gallery list to refresh finalsBytesUsed for publish button state
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
+      });
+      // Invalidate gallery images query to refresh unselectedCount when order status changes
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
       });
     },
   });

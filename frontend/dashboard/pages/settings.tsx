@@ -9,7 +9,7 @@ import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 interface PasswordForm {
   currentPassword: string;
@@ -305,7 +305,11 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" variant="primary" disabled={updateBusinessInfoMutation.isPending}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={updateBusinessInfoMutation.isPending}
+                >
                   {updateBusinessInfoMutation.isPending ? "Zapisywanie..." : "Zapisz informacje"}
                 </Button>
               </div>

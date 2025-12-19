@@ -508,11 +508,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	
 	try {
 		// Force immediate recalculation (bypasses cache) - critical for payment accuracy
-		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-		if (!bucket) {
-			logger?.warn('GALLERIES_BUCKET not set, skipping recalculation before payment', { galleryId });
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+		if (!imagesTable) {
+			logger?.warn('IMAGES_TABLE not set, skipping recalculation before payment', { galleryId });
 		} else {
-			const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+			const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, imagesTable, gallery, logger, true);
 			logger?.info('Triggered on-demand storage recalculation before payment', { galleryId });
 		
 		// Extract recalculated value from result

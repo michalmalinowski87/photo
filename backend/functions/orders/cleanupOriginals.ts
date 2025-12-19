@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, DeleteCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, DeleteObjectsCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
@@ -11,10 +11,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 
-	if (!galleriesTable || !ordersTable || !bucket) {
+	if (!galleriesTable || !imagesTable || !ordersTable || !bucket) {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -91,31 +92,96 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return `${fname.substring(0, lastDot)}.webp`;
 	};
 
-	// Get sizes of original files before deletion (for updating originalsBytesUsed)
+	// Get sizes of original files from DynamoDB before deletion (for updating originalsBytesUsed)
 	let totalOriginalsSize = 0;
+	const imageKeysToDelete: string[] = [];
+	
 	for (const key of selectedKeys) {
-		const originalKey = `galleries/${galleryId}/originals/${key}`;
+		const imageKey = `original#${key}`;
+		imageKeysToDelete.push(imageKey);
 		
+		try {
+			// Get file size from DynamoDB record
+			const imageRecord = await ddb.send(new GetCommand({
+				TableName: imagesTable,
+				Key: { galleryId, imageKey }
+			}));
+			
+			if (imageRecord.Item) {
+				totalOriginalsSize += imageRecord.Item.size || 0;
+			} else {
+				// Record not found - try S3 as fallback
+		const originalKey = `galleries/${galleryId}/originals/${key}`;
 		try {
 			const headResponse = await s3.send(new HeadObjectCommand({
 				Bucket: bucket,
 				Key: originalKey
 			}));
 			totalOriginalsSize += headResponse.ContentLength || 0;
-		} catch (err: any) {
-			if (err.name !== 'NotFound') {
-				logger?.warn('Failed to get original file size', { 
-					error: err.message, 
+				} catch (headErr: any) {
+					if (headErr.name !== 'NotFound') {
+						logger?.warn('Failed to get original file size from S3', { 
+							error: headErr.message, 
 					originalKey,
 					galleryId,
 					orderId
 				});
 			}
-			// If file not found, continue - it might have been deleted already
+				}
+			}
+		} catch (err: any) {
+			logger?.warn('Failed to get original file size from DynamoDB', { 
+				error: err.message, 
+				imageKey,
+				galleryId,
+				orderId
+			});
+			// Continue - will try to delete anyway
 		}
 	}
 
-	// Prepare files to delete: originals, previews, thumbnails, and bigthumbs
+	// 1. Delete from DynamoDB first (use transactions for batch deletes)
+	let dynamoDbDeletedCount = 0;
+	try {
+		// Delete in batches of 25 (DynamoDB transaction limit)
+		for (let i = 0; i < imageKeysToDelete.length; i += 25) {
+			const batch = imageKeysToDelete.slice(i, i + 25);
+			const transactItems = batch.map(imageKey => ({
+				Delete: {
+					TableName: imagesTable,
+					Key: { galleryId, imageKey }
+				}
+			}));
+
+			await ddb.send(new TransactWriteCommand({
+				TransactItems: transactItems
+			}));
+			dynamoDbDeletedCount += batch.length;
+		}
+		logger?.info('Deleted image metadata from DynamoDB', {
+			galleryId,
+			orderId,
+			deletedCount: dynamoDbDeletedCount
+		});
+	} catch (dbErr: any) {
+		logger?.error('Failed to delete image metadata from DynamoDB', {
+			error: dbErr.message,
+			galleryId,
+			orderId
+		});
+		// Don't proceed with S3 deletion if DynamoDB deletion failed
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Cleanup failed',
+				message: 'Failed to delete image metadata from DynamoDB. Please retry.',
+				details: dbErr.message
+			})
+		};
+	}
+
+	// 2. Delete from S3 (originals, previews, thumbnails, and bigthumbs)
 	const toDelete: { Key: string }[] = [];
 	for (const key of selectedKeys) {
 		// Delete original (keeps original extension)
@@ -220,7 +286,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId, 
 			orderId, 
 			selectedKeysCount: selectedKeys.length,
-			deletedCount,
+			dynamoDbDeletedCount,
+			s3DeletedCount: deletedCount,
 			totalOriginalsSizeRemoved: totalOriginalsSize
 		});
 
@@ -232,7 +299,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleryId,
 				orderId,
 				selectedKeysCount: selectedKeys.length,
-				deletedCount,
+				dynamoDbDeletedCount,
+				s3DeletedCount: deletedCount,
 				originalsSizeRemoved: totalOriginalsSize
 			})
 		};

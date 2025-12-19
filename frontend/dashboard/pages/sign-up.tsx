@@ -5,7 +5,12 @@ import React, { useState, useEffect, useRef } from "react";
 import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { PasswordInputWithStrength, PasswordInputWithToggle, PasswordStrengthResult, PasswordStrengthValidator } from "../components/ui/password-strength-validator";
+import {
+  PasswordInputWithStrength,
+  PasswordInputWithToggle,
+  PasswordStrengthResult,
+  PasswordStrengthValidator,
+} from "../components/ui/password-strength-validator";
 import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 
 interface CognitoError extends Error {
@@ -13,7 +18,7 @@ interface CognitoError extends Error {
 }
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default function SignUp() {
   const router = useRouter();
@@ -24,7 +29,9 @@ export default function SignUp() {
   const [loading, setLoading] = useState<boolean>(false);
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
-  const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(null);
+  const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
+    null
+  );
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -56,17 +63,17 @@ export default function SignUp() {
     };
 
     updatePosition();
-    
+
     if (password) {
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
-      
+      window.addEventListener("scroll", updatePosition, true);
+      window.addEventListener("resize", updatePosition);
+
       return () => {
-        window.removeEventListener('scroll', updatePosition, true);
-        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+        window.removeEventListener("resize", updatePosition);
       };
     }
-    
+
     return undefined;
   }, [password]);
 
@@ -104,7 +111,10 @@ export default function SignUp() {
       // Handle rate limit errors
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
         // Use the friendly message from backend, or provide a fallback
-        setError(error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam.");
+        setError(
+          error.message ||
+            "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam."
+        );
         return;
       }
       // Handle Cognito errors
@@ -113,7 +123,7 @@ export default function SignUp() {
         try {
           const verificationStatus = await checkUserVerificationStatus(email);
           const returnUrl = router.query.returnUrl ?? "/";
-          
+
           if (verificationStatus === "verified") {
             // User exists and is verified - redirect to login
             void router.push(
@@ -149,7 +159,9 @@ export default function SignUp() {
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+            PhotoCloud
+          </span>
         </Link>
       </div>
 
@@ -195,7 +207,7 @@ export default function SignUp() {
               autoComplete="new-password"
               minLength={8}
             />
-            
+
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
               <PasswordInputWithToggle
@@ -219,12 +231,12 @@ export default function SignUp() {
 
             {/* Password Strength Validator - Fixed Positioned Side Card */}
             {password && passwordStrength && validatorPosition && (
-              <div 
+              <div
                 className="fixed w-72 z-50 hidden md:block pointer-events-auto"
                 style={{
                   top: `${validatorPosition.top}px`,
                   left: `${validatorPosition.left}px`,
-                  maxHeight: 'calc(100vh - 2rem)',
+                  maxHeight: "calc(100vh - 2rem)",
                 }}
               >
                 <div className="rounded-lg border border-border bg-card p-4 shadow-lg max-h-full overflow-y-auto">
@@ -239,10 +251,10 @@ export default function SignUp() {
             )}
           </div>
 
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="w-full" 
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
             disabled={loading || !passwordStrength?.meetsMinimum}
           >
             {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}

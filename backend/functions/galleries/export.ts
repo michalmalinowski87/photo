@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { pbkdf2Sync } from 'crypto';
@@ -77,16 +77,44 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Find final assets or selected photos
 		let photoKeys: string[] = [];
 		
-		// Check for final assets first
-		const finalPrefix = `galleries/${galleryId}/final/`;
-		const finalList = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: finalPrefix
-		}));
+		// Check for final assets first - query DynamoDB
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+		if (imagesTable) {
+			let allFinalImageRecords: any[] = [];
+			let lastEvaluatedKey: any = undefined;
+
+			do {
+				const queryParams: any = {
+					TableName: imagesTable,
+					KeyConditionExpression: 'galleryId = :g',
+					FilterExpression: '#type = :type',
+					ExpressionAttributeNames: {
+						'#type': 'type'
+					},
+					ExpressionAttributeValues: {
+						':g': galleryId,
+						':type': 'final'
+					},
+					ProjectionExpression: 'orderId, filename',
+					Limit: 1000
+				};
+
+				if (lastEvaluatedKey) {
+					queryParams.ExclusiveStartKey = lastEvaluatedKey;
+				}
+
+				const queryResponse = await ddb.send(new QueryCommand(queryParams));
+				allFinalImageRecords.push(...(queryResponse.Items || []));
+				lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+			} while (lastEvaluatedKey);
+
+			if (allFinalImageRecords.length > 0) {
+				// Format as orderId/filename to match expected format
+				photoKeys = allFinalImageRecords.map(record => `${record.orderId}/${record.filename}`);
+			}
+		}
 		
-		if (finalList.Contents && finalList.Contents.length > 0) {
-			photoKeys = finalList.Contents.map(obj => obj.Key!.replace(finalPrefix, ''));
-		} else {
+		if (photoKeys.length === 0) {
 			// Fall back to selected photos from latest order
 			if (ordersTable && gallery.currentOrderId) {
 				const order = await ddb.send(new GetCommand({
@@ -99,6 +127,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
+		// Fall back to selected photos from latest order if no final images found
 		if (photoKeys.length === 0) {
 			return {
 				statusCode: 404,
@@ -109,7 +138,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Generate presigned URLs (24 hour expiry)
 		const urls = await Promise.all(photoKeys.map(async (key) => {
-			const s3Key = finalPrefix + key;
+			// Determine S3 key based on whether it's a final image (orderId/filename) or selected key
+			const s3Key = key.includes('/') 
+				? `galleries/${galleryId}/final/${key}` 
+				: `galleries/${galleryId}/originals/${key}`;
 			const url = await getSignedUrl(
 				s3,
 				new GetObjectCommand({

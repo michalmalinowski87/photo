@@ -84,9 +84,10 @@ export async function refetchFirstPageOnly(
       }
 
       // Fetch first page directly from API (cursor = null)
+      // Always request all image sizes (thumb, preview, bigthumb) regardless of type
       const response = await api.galleries.getImages(
         galleryId,
-        type,
+        "thumb,preview,bigthumb",
         {
           limit,
           cursor: null,

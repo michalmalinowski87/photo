@@ -12,7 +12,7 @@ import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { shareTokensWithOtherDomains } from "../lib/token-sharing";
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 interface CognitoError extends Error {
   code?: string;
@@ -206,104 +206,103 @@ export default function Login() {
 
   return (
     <>
-      <MobileWarningModal
-        isOpen={showMobileWarning}
-        onClose={() => setShowMobileWarning(false)}
-      />
+      <MobileWarningModal isOpen={showMobileWarning} onClose={() => setShowMobileWarning(false)} />
       <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
         <div className="flex items-center w-full py-8 border-b border-border/80">
           <Link href="/galleries" className="flex items-center gap-x-2">
-            <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
+            <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+              PhotoCloud
+            </span>
           </Link>
         </div>
 
-      <div className="flex flex-col w-full mt-8">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Zaloguj się</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Zaloguj się, aby zarządzać swoimi galeriami i klientami
-        </p>
+        <div className="flex flex-col w-full mt-8">
+          <h2 className="text-2xl font-semibold mb-2 text-foreground">Zaloguj się</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Zaloguj się, aby zarządzać swoimi galeriami i klientami
+          </p>
 
-        {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSignIn} className="w-full space-y-4">
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Email
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="twoj@email.com"
-              autoComplete="email"
-              className="w-full"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <form onSubmit={handleSignIn} className="w-full space-y-4">
+            <div className="space-y-2">
               <label
-                htmlFor="password"
+                htmlFor="email"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300"
               >
-                Hasło
+                Email
               </label>
-              <Link
-                href={`/forgot-password${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
-                className="text-sm text-primary font-medium hover:opacity-70 transition-opacity"
-              >
-                Zapomniałeś hasła?
-              </Link>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="twoj@email.com"
+                autoComplete="email"
+                className="w-full"
+              />
             </div>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Wprowadź hasło"
-              autoComplete="current-password"
-              className="w-full"
-            />
-          </div>
 
-          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
-            {loading ? "Logowanie..." : "Zaloguj się"}
-          </Button>
-        </form>
-      </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  Hasło
+                </label>
+                <Link
+                  href={`/forgot-password${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
+                  className="text-sm text-primary font-medium hover:opacity-70 transition-opacity"
+                >
+                  Zapomniałeś hasła?
+                </Link>
+              </div>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Wprowadź hasło"
+                autoComplete="current-password"
+                className="w-full"
+              />
+            </div>
 
-      <div className="flex flex-col items-start w-full mt-8">
-        <p className="text-sm text-muted-foreground">
-          Logując się, akceptujesz nasze{" "}
-          <Link href="/terms" className="text-primary font-bold">
-            Warunki korzystania{" "}
-          </Link>
-          i{" "}
-          <Link href="/privacy" className="text-primary font-bold">
-            Politykę prywatności
-          </Link>
-        </p>
-      </div>
+            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+              {loading ? "Logowanie..." : "Zaloguj się"}
+            </Button>
+          </form>
+        </div>
 
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
-          Nie masz konta?{" "}
-          <Link href="/sign-up" className="text-primary font-bold">
-            Zarejestruj się
-          </Link>
-        </p>
+        <div className="flex flex-col items-start w-full mt-8">
+          <p className="text-sm text-muted-foreground">
+            Logując się, akceptujesz nasze{" "}
+            <Link href="/terms" className="text-primary font-bold">
+              Warunki korzystania{" "}
+            </Link>
+            i{" "}
+            <Link href="/privacy" className="text-primary font-bold">
+              Politykę prywatności
+            </Link>
+          </p>
+        </div>
+
+        <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
+          <p className="text-sm text-muted-foreground">
+            Nie masz konta?{" "}
+            <Link href="/sign-up" className="text-primary font-bold">
+              Zarejestruj się
+            </Link>
+          </p>
+        </div>
       </div>
-    </div>
     </>
   );
 }

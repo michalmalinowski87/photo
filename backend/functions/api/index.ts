@@ -25,7 +25,6 @@ import * as selectionsApprove from '../../functions/selections/approveSelection'
 import * as selectionsChangeRequest from '../../functions/selections/changeRequest';
 import * as ordersListFinalImages from '../../functions/orders/listFinalImages';
 import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip';
-import { processedRoutes } from './routes/processed';
 import { dashboardRoutes } from './routes/dashboard';
 
 const app = express();
@@ -107,7 +106,6 @@ app.use('/downloads', requireAuth, downloadsRoutes);
 // Orders routes handle their own paths (some under /galleries, some under /orders)
 app.use('/', requireAuth, ordersRoutes);
 app.use('/galleries', requireAuth, selectionsRoutes);
-app.use('/galleries', requireAuth, processedRoutes);
 app.use('/dashboard', requireAuth, dashboardRoutes);
 
 app.use((req: Request, res: Response) => {

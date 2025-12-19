@@ -1,4 +1,4 @@
-import { Home, Download, CheckCircle2, XCircle, Check, Send } from "lucide-react";
+import { Home, CheckCircle2, XCircle, Check, Send } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useCallback, useState } from "react";
 
@@ -17,6 +17,7 @@ import { useGalleryType } from "../../hocs/withGalleryType";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 import { Tooltip } from "../../ui/tooltip/Tooltip";
+import { ZipDownloadButton } from "../../orders/ZipDownloadButton";
 
 interface OrderActionsSectionProps {
   orderId: string;
@@ -209,30 +210,37 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
         )}
 
         {/* Download Selected Originals ZIP */}
-        {/* Don't check isGalleryFetching - placeholderData keeps gallery data during refetches */}
-        {!isLoading && gallery && gallery.selectionEnabled !== false && canDownloadZipValue && (
-          <Button
-            size="md"
-            variant="outline"
-            onClick={handleDownloadZip}
-            className="w-full justify-start"
-            startIcon={<Download size={20} />}
-          >
-            Pobierz wybrane oryginały (ZIP)
-          </Button>
-        )}
+        {/* Show only when deliveryStatus === 'CLIENT_APPROVED' or later, hide before approval */}
+        {!isLoading &&
+          gallery &&
+          gallery.selectionEnabled !== false &&
+          canDownloadZipValue &&
+          order &&
+          (order.deliveryStatus === "CLIENT_APPROVED" ||
+            order.deliveryStatus === "PREPARING_DELIVERY" ||
+            order.deliveryStatus === "DELIVERED") && (
+            <div className="w-full">
+              <ZipDownloadButton
+                galleryId={galleryIdStr || ""}
+                orderId={orderId}
+                type="original"
+                deliveryStatus={order.deliveryStatus}
+                className="w-full justify-start"
+              />
+            </div>
+          )}
 
-        {/* Download Finals - Only show if finals are uploaded */}
-        {orderHasFinals && (
-          <Button
-            size="md"
-            variant="outline"
-            onClick={handleDownloadFinals}
-            className="w-full justify-start"
-            startIcon={<Download size={20} />}
-          >
-            Pobierz finały (ZIP)
-          </Button>
+        {/* Download Finals - Only show if order is DELIVERED */}
+        {order && order.deliveryStatus === "DELIVERED" && (
+          <div className="w-full">
+            <ZipDownloadButton
+              galleryId={galleryIdStr || ""}
+              orderId={orderId}
+              type="final"
+              deliveryStatus={order.deliveryStatus}
+              className="w-full justify-start"
+            />
+          </div>
         )}
 
         {/* Change Request Actions */}

@@ -109,7 +109,7 @@ export const ZipDownloadProgress = ({
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Zamówienie: {orderId}</p>
-          
+
           {status === "generating" && (
             <>
               <div className="mt-1 space-y-0.5">
@@ -137,7 +137,7 @@ export const ZipDownloadProgress = ({
               </div>
             </>
           )}
-          
+
           {error && (
             <p className="text-xs text-error-600 dark:text-error-400 mt-1 break-words">{error}</p>
           )}

@@ -14,6 +14,32 @@ interface OrderStatus {
   amount: number;
   state: string;
   updatedAt: string;
+  zipStatusUserSelected?: {
+    isGenerating: boolean;
+    type: "original";
+    progress?: {
+      processed: number;
+      total: number;
+      percent: number;
+      status?: string;
+      message?: string;
+      error?: string;
+    };
+    ready: boolean;
+  };
+  zipStatusFinal?: {
+    isGenerating: boolean;
+    type: "final";
+    progress?: {
+      processed: number;
+      total: number;
+      percent: number;
+      status?: string;
+      message?: string;
+      error?: string;
+    };
+    ready: boolean;
+  };
 }
 
 interface OrderStatusResponse {
@@ -175,8 +201,17 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
 
     // Update caches for all orders in the response
     data.orders.forEach((orderStatus) => {
-      const { orderId, galleryId, deliveryStatus, paymentStatus, amount, state, updatedAt } =
-        orderStatus;
+      const {
+        orderId,
+        galleryId,
+        deliveryStatus,
+        paymentStatus,
+        amount,
+        state,
+        updatedAt,
+        zipStatusUserSelected,
+        zipStatusFinal,
+      } = orderStatus;
 
       // Update order detail cache
       const orderDetailKey = queryKeys.orders.detail(galleryId, orderId);
@@ -185,6 +220,8 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       // Track if status changed for gallery list invalidation
       let statusChanged = false;
       let oldDeliveryStatus: string | undefined;
+      let userSelectedZipStatusChanged = false;
+      let finalZipStatusChanged = false;
 
       if (existingOrder) {
         // Merge status fields with existing order data
@@ -203,6 +240,68 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           updatedAt,
         };
 
+        // Update user-selected ZIP generation flags
+        // Backend always includes zipStatusUserSelected if zipSelectedKeysHash is set
+        // Use isGenerating and ready flags from backend - no guessing!
+        if (zipStatusUserSelected !== undefined) {
+          const wasGenerating = existingOrder.zipGenerating || false;
+          const isNowGenerating = zipStatusUserSelected.isGenerating;
+
+          updatedOrder.zipGenerating = zipStatusUserSelected.isGenerating;
+          updatedOrder.zipGeneratingSince = zipStatusUserSelected.isGenerating
+            ? Date.now()
+            : undefined;
+          // Store ready flag from backend - this is the source of truth!
+          (updatedOrder as any).zipReady = zipStatusUserSelected.ready || false;
+          if (zipStatusUserSelected.progress) {
+            updatedOrder.zipProgress = zipStatusUserSelected.progress as any;
+          }
+
+          // Track status change for invalidation (only when generating state changes)
+          userSelectedZipStatusChanged = wasGenerating !== isNowGenerating;
+        } else {
+          // zipStatusUserSelected is undefined - this means no ZIP was ever attempted (no zipSelectedKeysHash)
+          // Clear any existing flags from cache
+          if (existingOrder.zipGenerating) {
+            updatedOrder.zipGenerating = false;
+            updatedOrder.zipGeneratingSince = undefined;
+            updatedOrder.zipProgress = undefined;
+            (updatedOrder as any).zipReady = false;
+            userSelectedZipStatusChanged = true;
+          }
+        }
+
+        // Update final ZIP generation flags
+        // Backend always includes zipStatusFinal if finalZipFilesHash is set
+        // Use isGenerating and ready flags from backend - no guessing!
+        if (zipStatusFinal !== undefined) {
+          const wasGenerating = existingOrder.finalZipGenerating || false;
+          const isNowGenerating = zipStatusFinal.isGenerating;
+
+          updatedOrder.finalZipGenerating = zipStatusFinal.isGenerating;
+          updatedOrder.finalZipGeneratingSince = zipStatusFinal.isGenerating
+            ? Date.now()
+            : undefined;
+          // Store ready flag from backend - this is the source of truth!
+          (updatedOrder as any).finalZipReady = zipStatusFinal.ready || false;
+          // For finals, we also store progress in zipProgress (same field, different context)
+          if (zipStatusFinal.progress) {
+            updatedOrder.zipProgress = zipStatusFinal.progress as any;
+          }
+
+          // Track status change for invalidation (only when generating state changes)
+          finalZipStatusChanged = wasGenerating !== isNowGenerating;
+        } else {
+          // zipStatusFinal is undefined - this means no final ZIP was ever attempted (no finalZipFilesHash)
+          // Clear any existing flags from cache
+          if (existingOrder.finalZipGenerating) {
+            updatedOrder.finalZipGenerating = false;
+            updatedOrder.finalZipGeneratingSince = undefined;
+            (updatedOrder as any).finalZipReady = false;
+            finalZipStatusChanged = true;
+          }
+        }
+
         // Update the cache - setQueryData automatically notifies subscribers
         queryClient.setQueryData<Order>(orderDetailKey, updatedOrder);
 
@@ -216,22 +315,70 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
             type: "active",
           });
         }
+
+        // Invalidate ZIP status queries when ZIP generation completes or starts
+        // This ensures useZipStatusPolling refetches immediately to get the latest status
+        if (userSelectedZipStatusChanged) {
+          // Use the same query key format as useZipStatusPolling: ['zipStatus', galleryId, orderId, type]
+          const zipStatusKey = ["zipStatus", galleryId, orderId, "original"];
+          // Invalidate and refetch immediately to get ready status
+          void queryClient.invalidateQueries({
+            queryKey: zipStatusKey,
+            type: "active",
+            refetchType: "active", // Force immediate refetch for active queries
+          });
+        }
+
+        if (finalZipStatusChanged) {
+          // Use the same query key format as useZipStatusPolling: ['zipStatus', galleryId, orderId, type]
+          const zipStatusKey = ["zipStatus", galleryId, orderId, "final"];
+          // Invalidate and refetch immediately to get ready status
+          void queryClient.invalidateQueries({
+            queryKey: zipStatusKey,
+            type: "active",
+            refetchType: "active", // Force immediate refetch for active queries
+          });
+        }
       } else {
         // If order doesn't exist in cache, create minimal order object
         // Use function updater to ensure React Query detects the change
-        queryClient.setQueryData<Order>(
-          orderDetailKey,
-          () =>
-            ({
-              orderId,
-              galleryId,
-              deliveryStatus,
-              paymentStatus,
-              amount,
-              state,
-              updatedAt,
-            }) as Order
-        );
+        const newOrder: Order = {
+          orderId,
+          galleryId,
+          deliveryStatus,
+          paymentStatus,
+          amount,
+          state,
+          updatedAt,
+        } as Order;
+
+        // Add user-selected ZIP status if provided
+        if (zipStatusUserSelected !== undefined) {
+          (newOrder as any).zipGenerating = zipStatusUserSelected.isGenerating;
+          (newOrder as any).zipGeneratingSince = zipStatusUserSelected.isGenerating
+            ? Date.now()
+            : undefined;
+          // Store ready flag from backend - this is the source of truth!
+          (newOrder as any).zipReady = zipStatusUserSelected.ready || false;
+          if (zipStatusUserSelected.progress) {
+            (newOrder as any).zipProgress = zipStatusUserSelected.progress;
+          }
+        }
+
+        // Add final ZIP status if provided
+        if (zipStatusFinal !== undefined) {
+          (newOrder as any).finalZipGenerating = zipStatusFinal.isGenerating;
+          (newOrder as any).finalZipGeneratingSince = zipStatusFinal.isGenerating
+            ? Date.now()
+            : undefined;
+          // Store ready flag from backend - this is the source of truth!
+          (newOrder as any).finalZipReady = zipStatusFinal.ready || false;
+          if (zipStatusFinal.progress) {
+            (newOrder as any).zipProgress = zipStatusFinal.progress;
+          }
+        }
+
+        queryClient.setQueryData<Order>(orderDetailKey, newOrder);
       }
 
       // Invalidate gallery list queries when order status changes to/from CHANGES_REQUESTED

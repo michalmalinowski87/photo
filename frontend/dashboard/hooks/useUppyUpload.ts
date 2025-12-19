@@ -64,29 +64,55 @@ async function validateStorageLimits(
     const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
     // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
     // Uppy's onBeforeUpload callback requires synchronous validation during upload initialization.
-    const validationResult = await api.galleries.validateUploadLimits(galleryId);
+    // Pass upload size to backend so it can calculate projected usage and next tier plan correctly
+    const validationResult = await api.galleries.validateUploadLimits(galleryId, totalSize);
 
-    if (!validationResult.withinLimit) {
-      const excessBytes =
-        (validationResult.uploadedSizeBytes ?? 0) +
-        totalSize -
-        (validationResult.originalsLimitBytes ?? 0);
+    // If no limit is set (draft gallery), allow upload
+    if (!validationResult.originalsLimitBytes) {
+      return true;
+    }
 
-      if (excessBytes > 0) {
+    // Backend now checks projected usage (current + upload) and returns withinLimit accordingly
+    // CRITICAL: Check withinLimit explicitly - backend returns 200 OK but with withinLimit: false when limit would be exceeded
+    if (validationResult.withinLimit === false) {
+      // Backend has calculated excess bytes and next tier plan based on projected usage
+      onValidationNeeded?.({
+        uploadedSizeBytes: validationResult.uploadedSizeBytes,
+        originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
+        excessBytes: validationResult.excessBytes ?? 0,
+        nextTierPlan: validationResult.nextTierPlan,
+        nextTierPriceCents: validationResult.nextTierPriceCents,
+        nextTierLimitBytes: validationResult.nextTierLimitBytes,
+        isSelectionGallery: validationResult.isSelectionGallery,
+      });
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    // Handle 400 errors from backend (when limit would be exceeded)
+    // The API service throws errors for non-200 status codes, but we need to extract the body
+    const apiError = error as {
+      status?: number;
+      body?: { withinLimit?: boolean; [key: string]: unknown };
+    };
+    if (apiError.status === 400 && apiError.body) {
+      // Backend returned 400 with validation details in body
+      const body = apiError.body;
+      if (body.withinLimit === false) {
         onValidationNeeded?.({
-          uploadedSizeBytes: (validationResult.uploadedSizeBytes ?? 0) + totalSize,
-          originalsLimitBytes: validationResult.originalsLimitBytes ?? 0,
-          excessBytes,
-          nextTierPlan: validationResult.nextTierPlan,
-          nextTierPriceCents: validationResult.nextTierPriceCents,
-          nextTierLimitBytes: validationResult.nextTierLimitBytes,
-          isSelectionGallery: validationResult.isSelectionGallery,
+          uploadedSizeBytes: (body.uploadedSizeBytes as number) ?? 0,
+          originalsLimitBytes: (body.originalsLimitBytes as number) ?? 0,
+          excessBytes: (body.excessBytes as number) ?? 0,
+          nextTierPlan: body.nextTierPlan as string | undefined,
+          nextTierPriceCents: body.nextTierPriceCents as number | undefined,
+          nextTierLimitBytes: body.nextTierLimitBytes as number | undefined,
+          isSelectionGallery: body.isSelectionGallery as boolean | undefined,
         });
         return false;
       }
     }
-    return true;
-  } catch (error) {
+    // For other errors, re-throw to let Uppy handle them
     throw error;
   }
 }
@@ -371,6 +397,38 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         const failedCount = result.failed.length;
         const totalFiles = successfulCount + failedCount;
 
+        // Ignore complete event if no files were processed
+        // This happens when:
+        // 1. Validation fails before upload starts (onBeforeUpload returns false)
+        // 2. User manually cancels before any uploads start
+        // 3. Upload never actually started for any reason
+        // In all these cases, we should NOT show the completion overlay
+        if (totalFiles === 0) {
+          // No files were uploaded - reset state and return early to prevent showing completion overlay
+          setUploading(false);
+          setIsPaused(false);
+          setUploadComplete(false);
+          setUploadResult(null);
+          setUploadStats(null);
+          setUploadProgress(INITIAL_PROGRESS);
+          speedCalculationRef.current = null;
+          uploadStartTimeRef.current = null;
+          return;
+        }
+
+        // Also check if upload never actually started (uploadStartTimeRef not set)
+        // This is an additional safety check for edge cases
+        if (!uploadStartTimeRef.current) {
+          // Upload was never started - reset state and return early
+          setUploading(false);
+          setIsPaused(false);
+          setUploadComplete(false);
+          setUploadResult(null);
+          setUploadStats(null);
+          setUploadProgress(INITIAL_PROGRESS);
+          return;
+        }
+
         // Calculate upload statistics
         const endTime = Date.now();
         const startTime = uploadStartTimeRef.current;
@@ -399,13 +457,25 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         };
         setUploadStats(stats);
 
-        // Set complete state FIRST to prevent flash of upload button
-        // React will batch these updates together
+        // Determine if we need finalization BEFORE setting any state
+        // This ensures isFinalizing is set correctly before the overlay opens
+        // ALL successful uploads need finalization (metadata processing, query invalidation, etc.)
+        const needsFinalization = successfulCount > 0;
+
+        // Set finalizing state FIRST, synchronously, before opening the overlay
+        // This prevents the brief flash of "Upload Completed" with OK button before switching to "Processing"
+        if (needsFinalization) {
+          setIsFinalizing(true);
+        }
+
+        // Batch state updates together to ensure they're processed atomically
+        // This prevents the overlay from rendering with isFinalizing=false before it updates
         setUploadComplete(true);
         setUploadResult({ successful: successfulCount, failed: failedCount });
         setUploading(false);
         setIsPaused(false);
         setUploadProgress(INITIAL_PROGRESS);
+
         speedCalculationRef.current = null;
         uploadStartTimeRef.current = null;
 
@@ -413,6 +483,37 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
         if (successfulCount > 0) {
           try {
+            // Wait for all metadata writes to complete before proceeding
+            // Get metadata write promises from uppy instance
+            const metadataWritePromises = (uppy as any).__metadataWritePromises as
+              | Map<string, Promise<boolean>>
+              | undefined;
+
+            if (metadataWritePromises && metadataWritePromises.size > 0) {
+              // Wait for all metadata writes to complete
+              const metadataResults = await Promise.allSettled(
+                Array.from(metadataWritePromises.values())
+              );
+
+              // Check if any metadata writes failed
+              const failedMetadataWrites = metadataResults.filter(
+                (result) =>
+                  result.status === "rejected" ||
+                  (result.status === "fulfilled" && result.value === false)
+              );
+
+              if (failedMetadataWrites.length > 0) {
+                console.warn(
+                  `[useUppyUpload] ${failedMetadataWrites.length} metadata writes failed`,
+                  {
+                    total: metadataWritePromises.size,
+                    failed: failedMetadataWrites.length,
+                  }
+                );
+                // Continue anyway - images are uploaded, metadata can be fixed later
+              }
+            }
+
             // Get successful files for size calculation
             const successfulFiles = result.successful || [];
             await handlePostUploadActions(
@@ -552,7 +653,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     // Attempt to delete all files with s3KeyShort from S3
     // Silently ignore errors (files that don't exist, network errors, etc.)
     if (filesWithS3Key.length > 0) {
-      const { galleryId, orderId, type } = configRef.current;
+      const { galleryId, orderId, type, reloadGallery } = configRef.current;
 
       try {
         // Extract filenames from s3KeyShort for all files
@@ -572,20 +673,38 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           return;
         }
 
+        let deletionSucceeded = false;
         if (type === "finals" && orderId) {
           // Delete final images in batch
           // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
           // Uppy's cancelUpload requires synchronous cleanup during upload cancellation lifecycle.
-          await api.orders.deleteFinalImage(galleryId, orderId, filenames).catch(() => {
+          try {
+            await api.orders.deleteFinalImage(galleryId, orderId, filenames);
+            deletionSucceeded = true;
+          } catch {
             // Silently ignore - files might not exist or already deleted
-          });
+          }
         } else {
           // Delete original images in batch
           // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
           // Uppy's cancelUpload requires synchronous cleanup during upload cancellation lifecycle.
-          await api.galleries.deleteImage(galleryId, filenames).catch(() => {
+          try {
+            await api.galleries.deleteImage(galleryId, filenames);
+            deletionSucceeded = true;
+          } catch {
             // Silently ignore - files might not exist or already deleted
-          });
+          }
+        }
+
+        // Reload gallery after successful deletion to sync state (originalsBytesUsed, image list, etc.)
+        // This ensures UI reflects the actual state after cancellation cleanup
+        if (deletionSucceeded && reloadGallery) {
+          // Use setTimeout to ensure deletion completes before reload
+          setTimeout(() => {
+            void reloadGallery().catch(() => {
+              // Silently ignore reload errors - gallery will sync on next manual refresh
+            });
+          }, 500);
         }
       } catch {
         // Silently ignore all errors

@@ -4,6 +4,8 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-
 import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
@@ -267,14 +269,53 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Note: Originals cleanup is now optional and manual (via cleanup-originals endpoint)
 	// Photographer can choose to clean up originals, previews, and thumbnails when marking as delivered
 	const now = new Date().toISOString();
+	const onOrderDeliveredFnName = envProc?.env?.ON_ORDER_DELIVERED_FN_NAME as string;
+	
+	// Set finalZipGenerating flag atomically with DELIVERED status to prevent duplicate stream triggers
+	// The flag will be cleared by onOrderDelivered Lambda after ZIP generation completes
+	// This ensures stream handler skips if explicit handler already triggered
+	const updateExpr = onOrderDeliveredFnName
+		? 'SET deliveryStatus = :d, deliveredAt = :t, finalZipGenerating = :g, finalZipGeneratingSince = :ts'
+		: 'SET deliveryStatus = :d, deliveredAt = :t';
+	const updateValues: any = {
+		':d': 'DELIVERED',
+		':t': now
+	};
+	if (onOrderDeliveredFnName) {
+		updateValues[':g'] = true;
+		updateValues[':ts'] = Date.now();
+	}
+	
 	try {
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId },
-			UpdateExpression: 'SET deliveryStatus = :d, deliveredAt = :t',
-			ExpressionAttributeValues: { ':d': 'DELIVERED', ':t': now }
+			UpdateExpression: updateExpr,
+			ExpressionAttributeValues: updateValues
 		}));
-		logger.info('Order marked as DELIVERED', { galleryId, orderId, deliveredAt: now });
+		logger.info('Order marked as DELIVERED', { galleryId, orderId, deliveredAt: now, finalZipGeneratingSet: !!onOrderDeliveredFnName });
+		
+		// Trigger onOrderDelivered Lambda asynchronously to pre-generate finals ZIP and cleanup
+		if (onOrderDeliveredFnName) {
+			try {
+				const lambda = new LambdaClient({});
+				const payload = Buffer.from(JSON.stringify({ galleryId, orderId }));
+				await lambda.send(new InvokeCommand({
+					FunctionName: onOrderDeliveredFnName,
+					Payload: payload,
+					InvocationType: 'Event' // Async invocation
+				}));
+				logger.info('Triggered onOrderDelivered Lambda', { galleryId, orderId, fnName: onOrderDeliveredFnName });
+			} catch (lambdaErr: any) {
+				// Log but don't fail - ZIP pre-generation and cleanup are best effort
+				logger.error('Failed to trigger onOrderDelivered Lambda', {
+					error: lambdaErr.message,
+					galleryId,
+					orderId,
+					fnName: onOrderDeliveredFnName
+				});
+			}
+		}
 	} catch (err: any) {
 		logger.error('Failed to mark order as DELIVERED', {
 			error: err.message,

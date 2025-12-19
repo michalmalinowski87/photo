@@ -310,7 +310,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                   });
                   // Convert to expected format (presigned URL)
                   if (!result.url) {
-                    throw new Error('No ZIP URL available');
+                    throw new Error("No ZIP URL available");
                   }
 
                   return {

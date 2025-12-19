@@ -1,22 +1,19 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { recalculateStorageInternal } from '../galleries/recalculateBytesUsed';
 
-const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 
-	if (!bucket || !galleriesTable || !ordersTable) {
+	if (!galleriesTable || !ordersTable) {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -93,17 +90,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		selectionEnabled: gallery.selectionEnabled
 	});
 
-	// SERVER-SIDE CHECK: List all final photos that actually exist in S3
-	// This prevents client-side manipulation - we check actual S3 state, not client claims
-	const prefix = `galleries/${galleryId}/final/${orderId}/`;
-	const finalFilesResponse = await s3.send(new ListObjectsV2Command({
-		Bucket: bucket,
-		Prefix: prefix
-	}));
-	const finalFiles = (finalFilesResponse.Contents || []).map(obj => {
-		const fullKey = obj.Key || '';
-		return fullKey.replace(prefix, '');
-	}).filter((key): key is string => Boolean(key) && !key.includes('/'));
+	// SERVER-SIDE CHECK: Query DynamoDB for final photos that exist
+	// This prevents client-side manipulation - we check actual DynamoDB state, not client claims
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+	if (!imagesTable) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing IMAGES_TABLE environment variable' })
+		};
+	}
+
+	let allFinalImageRecords: any[] = [];
+	let lastEvaluatedKey: any = undefined;
+
+	do {
+		const queryParams: any = {
+			TableName: imagesTable,
+			IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+			KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+			FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+			ExpressionAttributeNames: {
+				'#type': 'type'
+			},
+			ExpressionAttributeValues: {
+				':g': galleryId,
+				':orderId': orderId,
+				':type': 'final'
+			},
+			ProjectionExpression: 'filename',
+			Limit: 1000
+		};
+
+		if (lastEvaluatedKey) {
+			queryParams.ExclusiveStartKey = lastEvaluatedKey;
+		}
+
+		const queryResponse = await ddb.send(new QueryCommand(queryParams));
+		allFinalImageRecords.push(...(queryResponse.Items || []));
+		lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+	} while (lastEvaluatedKey);
+
+	const finalFiles = allFinalImageRecords.map(record => record.filename);
 
 	// Note: finalsBytesUsed is tracked via storage recalculation when images are uploaded
 	// (same as originalsBytesUsed for originals). No need to recalculate here to avoid double-counting.
@@ -201,9 +229,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Trigger storage recalculation after final uploads complete
 	// This ensures accurate storage values immediately after upload (bypasses 5-minute cache)
 	try {
-		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-		if (bucket) {
-			await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		if (imagesTable) {
+			await recalculateStorageInternal(galleryId, galleriesTable, imagesTable, gallery, logger, true);
 		}
 		logger?.info('Triggered storage recalculation after final upload completion', { galleryId, orderId });
 	} catch (recalcErr: any) {

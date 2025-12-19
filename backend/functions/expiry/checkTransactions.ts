@@ -2,6 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { listTransactionsByUser, updateTransactionStatus } from '../../lib/src/transactions';
+import { cancelExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
@@ -116,6 +117,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 								}
 							} else {
 								// Fallback: delete directly
+								// Cancel EventBridge schedule if it exists before deletion
+								const scheduleName = (gallery as any).expiryScheduleName || getScheduleName(galleryId);
+								try {
+									await cancelExpirySchedule(scheduleName);
+									logger?.info('Canceled EventBridge schedule before fallback gallery deletion', { galleryId, scheduleName });
+								} catch (scheduleErr: any) {
+									logger?.warn('Failed to cancel EventBridge schedule in fallback deletion (may not exist)', {
+										error: scheduleErr.message,
+										galleryId,
+										scheduleName
+									});
+									// Continue with deletion even if schedule cancellation fails
+								}
+								
 								await ddb.send(new DeleteCommand({
 									TableName: galleriesTable,
 									Key: { galleryId }

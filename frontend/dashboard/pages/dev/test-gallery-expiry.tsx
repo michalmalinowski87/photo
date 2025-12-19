@@ -49,12 +49,12 @@ export default function TestGalleryExpiry() {
     isOriginal: boolean
   ): Promise<void> {
     const key = isOriginal ? `originals/${filename}` : filename;
-    const presignResponse = await api.uploads.getPresignedUrl({
+    const presignResponse = (await api.uploads.getPresignedUrl({
       galleryId,
       key,
       contentType: "image/jpeg",
       fileSize: blob.size,
-    }) as { url: string; key?: string; expiresInSeconds?: number }; // Backend returns key but TypeScript type doesn't include it
+    })) as { url: string; key?: string; expiresInSeconds?: number }; // Backend returns key but TypeScript type doesn't include it
 
     await fetch(presignResponse.url, {
       method: "PUT",
@@ -65,26 +65,23 @@ export default function TestGalleryExpiry() {
     // Complete upload - construct the full S3 key (backend returns galleries/{galleryId}/{key})
     // If presignResponse.key exists, use it; otherwise construct it
     const s3Key = presignResponse.key || `galleries/${galleryId}/${key}`;
-    
+
     if (!s3Key) {
       const errorMsg = `Failed to get S3 key from presign response. Response: ${JSON.stringify(presignResponse)}`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     if (!blob.size || blob.size === 0) {
       const errorMessage = `Invalid file size: ${blob.size}`;
       console.error(errorMessage);
       throw new Error(errorMessage);
     }
-    
-    await api.uploads.completeUpload(
-      galleryId,
-      {
-        key: s3Key,
-        fileSize: blob.size,
-      }
-    );
+
+    await api.uploads.completeUpload(galleryId, {
+      key: s3Key,
+      fileSize: blob.size,
+    });
   }
 
   // Upload final image
@@ -169,11 +166,15 @@ export default function TestGalleryExpiry() {
           await (api.orders as any).markFinalUploadComplete(gallery.galleryId, order.orderId);
         }
       } catch (finalErr) {
-        console.warn('Failed to mark final upload complete (non-critical):', finalErr);
+        console.warn("Failed to mark final upload complete (non-critical):", finalErr);
       }
 
       setProgress({ step: "done", message: "Galerie utworzona pomyślnie!" });
-      showToast("success", "Sukces", "Galerie testowa utworzona z 2 zdjęciami oryginalnymi i 2 finalnymi!");
+      showToast(
+        "success",
+        "Sukces",
+        "Galerie testowa utworzona z 2 zdjęciami oryginalnymi i 2 finalnymi!"
+      );
     } catch (error) {
       showToast("error", "Błąd", `Nie udało się utworzyć galerii: ${String(error)}`);
       console.error("Failed to create gallery:", error);
@@ -190,7 +191,11 @@ export default function TestGalleryExpiry() {
       const expiresAt = new Date(`${expiryDate}T${expiryTime}`).toISOString();
       const result = await api.galleries.setExpiry(galleryId, expiresAt);
 
-      showToast("success", "Sukces", `Data wygaśnięcia ustawiona: ${new Date(expiresAt).toLocaleString()}`);
+      showToast(
+        "success",
+        "Sukces",
+        `Data wygaśnięcia ustawiona: ${new Date(expiresAt).toLocaleString()}`
+      );
       setDeletionStatus({
         exists: true,
         expiresAt: result.expiresAt,
@@ -202,7 +207,8 @@ export default function TestGalleryExpiry() {
     } catch (error: any) {
       let errorMessage = "Nieznany błąd";
       if (error?.body?.error === "Missing required environment variables") {
-        errorMessage = "Brak wymaganych zmiennych środowiskowych. Upewnij się, że infrastruktura została wdrożona z najnowszym kodem.";
+        errorMessage =
+          "Brak wymaganych zmiennych środowiskowych. Upewnij się, że infrastruktura została wdrożona z najnowszym kodem.";
       } else if (error?.body?.message) {
         errorMessage = error.body.message;
       } else if (error?.message) {
@@ -411,9 +417,7 @@ export default function TestGalleryExpiry() {
                   <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
                     <Clock className="w-5 h-5" />
                     <span className="font-semibold">Oczekiwanie na wygaśnięcie</span>
-                    {isPolling && (
-                      <Loader2 className="w-4 h-4 animate-spin ml-2" />
-                    )}
+                    {isPolling && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
                   </div>
                   {deletionStatus.expiresAt && (
                     <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
@@ -462,4 +466,3 @@ export default function TestGalleryExpiry() {
     </div>
   );
 }
-

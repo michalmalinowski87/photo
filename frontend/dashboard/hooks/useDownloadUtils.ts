@@ -20,13 +20,13 @@ export function useDownloadUtils() {
       // Start download progress indicator
       const downloadId = `${galleryId}-${orderId}-finals-${Date.now()}`;
       const startedAt = Date.now();
-      
+
       // Fetch file count before starting (optional, for display only)
       const initializeDownload = async () => {
         try {
           const finalImages = await api.orders.getFinalImages(galleryId, orderId, { limit: 1 });
           const fileCount = finalImages.totalCount ?? 0;
-          
+
           addDownload(downloadId, {
             orderId,
             galleryId,
@@ -53,39 +53,39 @@ export function useDownloadUtils() {
             // and use the mutation's query key for caching
             const result = await api.orders.downloadFinalZip(galleryId, orderId);
 
-          // Handle 202 - ZIP is being generated
-          if (result.status === 202 || result.generating) {
-            updateDownload(downloadId, { status: "generating" });
+            // Handle 202 - ZIP is being generated
+            if (result.status === 202 || result.generating) {
+              updateDownload(downloadId, { status: "generating" });
+              setTimeout(() => {
+                void pollForZip();
+              }, 2000);
+              return;
+            }
+
+            // Handle successful download
+            updateDownload(downloadId, { status: "downloading" });
+
+            if (!result.url) {
+              throw new Error("No ZIP URL available");
+            }
+
+            const filename = result.filename ?? `order-${orderId}-finals.zip`;
+
+            // Trigger download using presigned URL
+            const a = document.createElement("a");
+            a.href = result.url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            updateDownload(downloadId, { status: "success" });
             setTimeout(() => {
-              void pollForZip();
-            }, 2000);
-            return;
-          }
-
-          // Handle successful download
-          updateDownload(downloadId, { status: "downloading" });
-
-          if (!result.url) {
-            throw new Error("No ZIP URL available");
-          }
-
-          const filename = result.filename ?? `order-${orderId}-finals.zip`;
-
-          // Trigger download using presigned URL
-          const a = document.createElement("a");
-          a.href = result.url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          updateDownload(downloadId, { status: "success" });
-          setTimeout(() => {
-            removeDownload(downloadId);
-          }, 3000);
-        } catch (err) {
-          const errorMsg = formatApiError(err);
-          updateDownload(downloadId, { status: "error", error: errorMsg });
+              removeDownload(downloadId);
+            }, 3000);
+          } catch (err) {
+            const errorMsg = formatApiError(err);
+            updateDownload(downloadId, { status: "error", error: errorMsg });
           }
         };
 

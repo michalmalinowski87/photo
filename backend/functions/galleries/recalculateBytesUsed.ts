@@ -1,11 +1,9 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3 = new S3Client({});
 
 /**
  * Cache TTL: 5 minutes
@@ -16,72 +14,87 @@ const s3 = new S3Client({});
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Calculate originals size from S3 by scanning the originals directory
- * @param bucket - S3 bucket name
+ * Calculate originals size from DynamoDB Images table
+ * @param imagesTable - DynamoDB Images table name
  * @param galleryId - Gallery ID
  * @returns Total size in bytes of all original images
  */
-async function calculateOriginalsSizeFromS3(bucket: string, galleryId: string): Promise<number> {
+async function calculateOriginalsSizeFromDynamoDB(imagesTable: string, galleryId: string): Promise<number> {
 	let totalSize = 0;
-	let continuationToken: string | undefined;
-	const prefix = `galleries/${galleryId}/originals/`;
+	let lastEvaluatedKey: any = undefined;
 
 	do {
-		const listResponse = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: prefix,
-			ContinuationToken: continuationToken
-		}));
+		const queryParams: any = {
+			TableName: imagesTable,
+			KeyConditionExpression: 'galleryId = :g',
+			FilterExpression: '#type = :type',
+			ExpressionAttributeNames: {
+				'#type': 'type'
+			},
+			ExpressionAttributeValues: {
+				':g': galleryId,
+				':type': 'original'
+			},
+			ProjectionExpression: 'size', // Only fetch size attribute for efficiency
+			Limit: 1000
+		};
 
-		if (listResponse.Contents) {
-			totalSize += listResponse.Contents.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+		if (lastEvaluatedKey) {
+			queryParams.ExclusiveStartKey = lastEvaluatedKey;
 		}
 
-		continuationToken = listResponse.NextContinuationToken;
-	} while (continuationToken);
+		const queryResponse = await ddb.send(new QueryCommand(queryParams));
+		
+		if (queryResponse.Items) {
+			totalSize += queryResponse.Items.reduce((sum, item) => sum + (item.size || 0), 0);
+		}
+
+		lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+	} while (lastEvaluatedKey);
 
 	return totalSize;
 }
 
 /**
- * Calculate finals size from S3 by scanning the final directory
- * Excludes previews/thumbs subdirectories - only counts files directly under order directories
- * @param bucket - S3 bucket name
+ * Calculate finals size from DynamoDB Images table
+ * Only counts final images (type = 'final'), excludes previews/thumbs
+ * @param imagesTable - DynamoDB Images table name
  * @param galleryId - Gallery ID
  * @param logger - Optional logger instance
  * @returns Total size in bytes of all final images
  */
-async function calculateFinalsSizeFromS3(bucket: string, galleryId: string, logger?: any): Promise<number> {
+async function calculateFinalsSizeFromDynamoDB(imagesTable: string, galleryId: string, logger?: any): Promise<number> {
 	let totalSize = 0;
-	let continuationToken: string | undefined;
-	const prefix = `galleries/${galleryId}/final/`;
+	let lastEvaluatedKey: any = undefined;
 
 	do {
-		const listResponse = await s3.send(new ListObjectsV2Command({
-			Bucket: bucket,
-			Prefix: prefix,
-			ContinuationToken: continuationToken
-		}));
+		const queryParams: any = {
+			TableName: imagesTable,
+			KeyConditionExpression: 'galleryId = :g',
+			FilterExpression: '#type = :type',
+			ExpressionAttributeNames: {
+				'#type': 'type'
+			},
+			ExpressionAttributeValues: {
+				':g': galleryId,
+				':type': 'final'
+			},
+			ProjectionExpression: 'size', // Only fetch size attribute for efficiency
+			Limit: 1000
+		};
 
-		if (listResponse.Contents) {
-			// Only count final images directly under order directories, exclude previews/thumbs in subdirectories
-			// Structure: galleries/{galleryId}/final/{orderId}/{filename}
-			// We want to exclude: galleries/{galleryId}/final/{orderId}/previews/... and .../thumbs/...
-			const filtered = listResponse.Contents.filter(obj => {
-				const key = obj.Key || '';
-				const relativePath = key.replace(prefix, '');
-				// Count only files directly under order directories (not in previews/ or thumbs/ subdirectories)
-				// A valid path should be: {orderId}/{filename} with no additional slashes
-				const pathParts = relativePath.split('/');
-				// Should have exactly 2 parts: orderId and filename
-				return pathParts.length === 2 && pathParts[0] && pathParts[1];
-			});
-			
-			totalSize += filtered.reduce((sum, obj) => sum + (obj.Size || 0), 0);
+		if (lastEvaluatedKey) {
+			queryParams.ExclusiveStartKey = lastEvaluatedKey;
 		}
 
-		continuationToken = listResponse.NextContinuationToken;
-	} while (continuationToken);
+		const queryResponse = await ddb.send(new QueryCommand(queryParams));
+		
+		if (queryResponse.Items) {
+			totalSize += queryResponse.Items.reduce((sum, item) => sum + (item.size || 0), 0);
+		}
+
+		lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+	} while (lastEvaluatedKey);
 
 	return totalSize;
 }
@@ -90,9 +103,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 
-	if (!galleriesTable || !bucket) {
+	if (!galleriesTable || !imagesTable) {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -129,7 +142,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Call the shared recalculation logic (debouncing removed - called explicitly when needed)
-	return await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger);
+	return await recalculateStorageInternal(galleryId, galleriesTable, imagesTable, gallery, logger);
 });
 
 /**
@@ -137,7 +150,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
  * 
  * @param galleryId - Gallery ID to recalculate
  * @param galleriesTable - DynamoDB table name
- * @param bucket - S3 bucket name
+ * @param imagesTable - DynamoDB Images table name
  * @param gallery - Gallery object from DynamoDB (can be undefined, will be fetched if needed)
  * @param logger - Logger instance
  * @param forceRecalc - If true, bypasses cache and forces recalculation (default: false)
@@ -145,24 +158,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
  * @returns Promise with status code and body containing recalculated storage values
  * 
  * Caching behavior:
- * - If forceRecalc is true: Always recalculates from S3
+ * - If forceRecalc is true: Always recalculates from DynamoDB
  * - If forceRecalc is false: Checks cache age (5-minute TTL)
  *   - If cache is fresh (< 5 minutes old): Returns cached values
- *   - If cache is stale (>= 5 minutes old): Recalculates from S3
+ *   - If cache is stale (>= 5 minutes old): Recalculates from DynamoDB
  * 
  * Usage:
  * - Critical operations (pay, validateUploadLimits): forceRecalc = true
  * - Display operations (list galleries, sidebar): forceRecalc = false
  * 
- * Note: Recalculation uses S3 ListObjectsV2Command scans. This is acceptable since:
- * - Recalculation is rare (only when needed for verification/fixing)
- * - Totals are maintained accurately via atomic ADD/SUBTRACT during uploads/deletes
- * - Caching prevents excessive scans for display operations
+ * Note: Recalculation sums sizes from DynamoDB Images table - much faster than S3 listing
  */
 export async function recalculateStorageInternal(
 	galleryId: string,
 	galleriesTable: string,
-	bucket: string,
+	imagesTable: string,
 	gallery: any,
 	logger: any,
 	forceRecalc: boolean = false
@@ -219,8 +229,8 @@ export async function recalculateStorageInternal(
 		}
 	}
 	
-	// Cache is stale or forceRecalc is true - recalculate from S3
-	logger?.info('Recalculating storage from S3', {
+	// Cache is stale or forceRecalc is true - recalculate from DynamoDB
+	logger?.info('Recalculating storage from DynamoDB', {
 		galleryId,
 		forceRecalc,
 		cacheAge: gallery.lastBytesUsedRecalculatedAt 
@@ -228,11 +238,11 @@ export async function recalculateStorageInternal(
 			: 'never'
 	});
 	
-	// Calculate actual sizes from S3 for both originals and finals
-	const originalsSize = await calculateOriginalsSizeFromS3(bucket, galleryId);
-	const finalsSize = await calculateFinalsSizeFromS3(bucket, galleryId, logger);
+	// Calculate actual sizes from DynamoDB for both originals and finals
+	const originalsSize = await calculateOriginalsSizeFromDynamoDB(imagesTable, galleryId);
+	const finalsSize = await calculateFinalsSizeFromDynamoDB(imagesTable, galleryId, logger);
 	
-	logger?.info('Calculated storage sizes from S3', { 
+	logger?.info('Calculated storage sizes from DynamoDB', { 
 		galleryId, 
 		originalsSize, 
 		finalsSize
@@ -311,10 +321,10 @@ export async function recalculateStorageInternal(
 				}));
 				
 				if (retryGallery.Item) {
-					// Recalculate sizes from S3 again (they should be the same, but ensure we have latest)
+					// Recalculate sizes from DynamoDB again (they should be the same, but ensure we have latest)
 					const retryGalleryData = retryGallery.Item as any;
-					const retryOriginalsSize = await calculateOriginalsSizeFromS3(bucket, galleryId);
-					const retryFinalsSize = await calculateFinalsSizeFromS3(bucket, galleryId, logger);
+					const retryOriginalsSize = await calculateOriginalsSizeFromDynamoDB(imagesTable, galleryId);
+					const retryFinalsSize = await calculateFinalsSizeFromDynamoDB(imagesTable, galleryId, logger);
 					const retryTotalBytes = retryOriginalsSize + retryFinalsSize;
 					const retryTimestamp = new Date().toISOString();
 					

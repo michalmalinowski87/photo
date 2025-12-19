@@ -67,6 +67,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
+	// Parse request body to get optional upload size
+	let pendingUploadSizeBytes = 0;
+	try {
+		if (event.body) {
+			const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+			pendingUploadSizeBytes = body.uploadSizeBytes ?? 0;
+		}
+	} catch {
+		// Ignore parsing errors, use default 0
+	}
+
 	// Enforce owner-only access
 	const requester = getUserIdFromEvent(event);
 	const galleryGet = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
@@ -82,12 +93,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Trigger on-demand recalculation to ensure DB is accurate before validation
 	// This is critical - user may have uploaded/deleted images just before checking limits
-	// Then use the recalculated value (which comes from S3) to avoid duplicate S3 calls
+	// Then use the recalculated value (which comes from DynamoDB) to avoid duplicate queries
 	let uploadedSizeBytes = gallery.originalsBytesUsed || 0;
 	
 	try {
 		// Force immediate recalculation (bypasses cache) - critical for upload validation accuracy
-		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, bucket, gallery, logger, true);
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+		if (!imagesTable) {
+			logger?.warn('IMAGES_TABLE not set, skipping recalculation before validation', { galleryId });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing IMAGES_TABLE environment variable' })
+			};
+		}
+		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, imagesTable, gallery, logger, true);
 		logger?.info('Triggered on-demand storage recalculation before validation', { galleryId });
 		
 		// Extract recalculated value from result
@@ -132,7 +152,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		uploadedSizeBytes = gallery.originalsBytesUsed || 0;
 	}
 	
-	logger?.info('Validated upload limits', { galleryId, uploadedSizeBytes });
+	// Calculate projected usage (current + upload size)
+	const projectedUsage = uploadedSizeBytes + pendingUploadSizeBytes;
+	logger?.info('Validated upload limits', { galleryId, uploadedSizeBytes, pendingUploadSizeBytes, projectedUsage });
 
 	// Check if gallery has plan and limits
 	const originalsLimitBytes = gallery.originalsLimitBytes;
@@ -150,26 +172,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Check if limit is exceeded
-	const isExceeded = uploadedSizeBytes > originalsLimitBytes;
-	const excessBytes = isExceeded ? uploadedSizeBytes - originalsLimitBytes : 0;
+	// Check if limit would be exceeded with the upload
+	const wouldExceedLimit = projectedUsage > originalsLimitBytes;
+	const excessBytes = wouldExceedLimit ? projectedUsage - originalsLimitBytes : 0;
 
-	if (!isExceeded) {
+	if (!wouldExceedLimit) {
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				withinLimit: true,
-				uploadedSizeBytes,
+				uploadedSizeBytes: projectedUsage,
 				originalsLimitBytes,
-				usedPercentage: (uploadedSizeBytes / originalsLimitBytes) * 100
+				usedPercentage: (projectedUsage / originalsLimitBytes) * 100
 			})
 		};
 	}
 
-	// Limit exceeded - calculate next tier plan
+	// Limit would be exceeded - calculate next tier plan based on projected usage
 	const currentPlan = gallery.plan;
-	const nextTierPlan = getNextTierPlanForUpload(currentPlan, uploadedSizeBytes);
+	const nextTierPlan = getNextTierPlanForUpload(currentPlan, projectedUsage);
 	const nextTierMetadata = nextTierPlan ? PRICING_PLANS[nextTierPlan] : null;
 
 	// Calculate pricing for next tier
@@ -181,11 +203,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({
 			withinLimit: false,
-			error: 'Storage limit exceeded',
-			uploadedSizeBytes,
+			error: 'Storage limit would be exceeded',
+			uploadedSizeBytes: projectedUsage,
 			originalsLimitBytes,
 			excessBytes,
-			usedPercentage: (uploadedSizeBytes / originalsLimitBytes) * 100,
+			usedPercentage: (projectedUsage / originalsLimitBytes) * 100,
 			nextTierPlan: nextTierPlan as string,
 			nextTierPriceCents,
 			nextTierLimitBytes: nextTierMetadata?.storageLimitBytes || 0,

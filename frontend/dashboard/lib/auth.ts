@@ -483,10 +483,12 @@ export function signUp(email: string, password: string): Promise<ISignUpResult["
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Sign up failed" }));
-        
+
         // Handle rate limit error
         if (response.status === 429) {
-          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          const rateLimitError = new Error(
+            errorData.error || "Rate limit exceeded"
+          ) as CognitoError;
           rateLimitError.code = errorData.code || "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
           (rateLimitError as any).resetAt = errorData.resetAt;
@@ -570,10 +572,12 @@ export function resendConfirmationCode(email: string): Promise<void> {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
-        
+
         // Handle rate limit error
         if (response.status === 429) {
-          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          const rateLimitError = new Error(
+            errorData.error || "Rate limit exceeded"
+          ) as CognitoError;
           rateLimitError.code = errorData.code || "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
           (rateLimitError as any).resetAt = errorData.resetAt;
@@ -607,7 +611,9 @@ export function resendConfirmationCode(email: string): Promise<void> {
  * @param email The email to check
  * @returns Promise resolving to 'verified' if user exists and is verified, 'unverified' if user exists but is not verified, or 'not_found' if user doesn't exist
  */
-export function checkUserVerificationStatus(email: string): Promise<"verified" | "unverified" | "not_found"> {
+export function checkUserVerificationStatus(
+  email: string
+): Promise<"verified" | "unverified" | "not_found"> {
   return new Promise((resolve) => {
     if (!userPool) {
       resolve("not_found");
@@ -635,7 +641,10 @@ export function checkUserVerificationStatus(email: string): Promise<"verified" |
         if (cognitoError.code === "UserNotConfirmedException") {
           // User exists but email is not verified
           resolve("unverified");
-        } else if (cognitoError.code === "NotAuthorizedException" || cognitoError.code === "UserNotFoundException") {
+        } else if (
+          cognitoError.code === "NotAuthorizedException" ||
+          cognitoError.code === "UserNotFoundException"
+        ) {
           // User doesn't exist or wrong password - but since we're checking with dummy password,
           // NotAuthorizedException means user exists and is verified (wrong password)
           // UserNotFoundException means user doesn't exist
@@ -673,10 +682,12 @@ export function forgotPassword(email: string): Promise<void> {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Password reset failed" }));
-        
+
         // Handle rate limit error
         if (response.status === 429) {
-          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          const rateLimitError = new Error(
+            errorData.error || "Rate limit exceeded"
+          ) as CognitoError;
           rateLimitError.code = errorData.code || "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
           (rateLimitError as any).resetAt = errorData.resetAt;
@@ -718,10 +729,12 @@ export function resendResetCode(email: string): Promise<void> {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
-        
+
         // Handle rate limit error
         if (response.status === 429) {
-          const rateLimitError = new Error(errorData.error || "Rate limit exceeded") as CognitoError;
+          const rateLimitError = new Error(
+            errorData.error || "Rate limit exceeded"
+          ) as CognitoError;
           rateLimitError.code = errorData.code || "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
           (rateLimitError as any).resetAt = errorData.resetAt;
@@ -750,7 +763,11 @@ export function resendResetCode(email: string): Promise<void> {
   });
 }
 
-export function confirmForgotPassword(email: string, code: string, password: string): Promise<void> {
+export function confirmForgotPassword(
+  email: string,
+  code: string,
+  password: string
+): Promise<void> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for confirming password reset
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -769,8 +786,10 @@ export function confirmForgotPassword(email: string, code: string, password: str
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to reset password" }));
-        
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Failed to reset password" }));
+
         // Handle Cognito errors
         if (response.status === 400) {
           const error = new Error(errorData.error || "Invalid code or password") as CognitoError;

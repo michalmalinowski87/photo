@@ -825,22 +825,36 @@ export function createUppyInstance(config: UppyConfigOptions): any {
       const galleryId = config.galleryId;
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       const fileSize = (file.size ?? 0) as number;
-      // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
-      // Uppy's AwsS3 plugin requires synchronous multipart completion callback during upload lifecycle.
-      const response = await api.uploads.completeMultipartUpload(galleryId, {
-        uploadId,
-        key,
-        fileSize, // Pass fileSize to backend
-        parts: parts.map((p) => ({
-          partNumber: p.PartNumber,
-          etag: p.ETag,
-        })),
-      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const fileId = file.id as string;
 
-      return {
-        location: response.location ?? "",
-        etag: response.etag ?? "",
-      };
+      // Complete multipart upload and track metadata write
+      try {
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's AwsS3 plugin requires synchronous multipart completion callback during upload lifecycle.
+        const response = await api.uploads.completeMultipartUpload(galleryId, {
+          uploadId,
+          key,
+          fileSize, // Pass fileSize to backend
+          parts: parts.map((p) => ({
+            partNumber: p.PartNumber,
+            etag: p.ETag,
+          })),
+        });
+
+        // Track metadata write completion
+        const metadataWritten = response.metadataWritten === true;
+        metadataWritePromises.set(fileId, Promise.resolve(metadataWritten));
+
+        return {
+          location: response.location ?? "",
+          etag: response.etag ?? "",
+        };
+      } catch (error) {
+        // If upload completion fails, track as failed metadata write
+        metadataWritePromises.set(fileId, Promise.resolve(false));
+        throw error;
+      }
     },
     // Type compatibility issue with Uppy's internal types - acceptable given Uppy's type system limitations
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-misused-promises
@@ -931,6 +945,9 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     });
   }
 
+  // Track metadata write completion per file (shared between simple PUT and multipart)
+  const metadataWritePromises = new Map<string, Promise<boolean>>();
+
   // Handle simple PUT upload completion (not multipart)
   // Call completion endpoint to update storage immediately
   uppy.on("upload-success", async (file, _response) => {
@@ -957,23 +974,35 @@ export function createUppyInstance(config: UppyConfigOptions): any {
       return;
     }
 
-    // Call completion endpoint to update storage
+    // Call completion endpoint to update storage and write metadata
     const galleryId = config.galleryId;
-    try {
-      // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
-      // Uppy's upload-success event handler requires synchronous completion callback during upload lifecycle.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await api.uploads.completeUpload(galleryId, {
-        key: s3Key,
-        fileSize,
-      });
-    } catch (error) {
-      // Log but don't fail - upload was successful, storage can be recalculated
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      console.error("Failed to complete upload (storage update):", errorMessage);
-    }
+    const metadataPromise = (async () => {
+      try {
+        // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
+        // Uppy's upload-success event handler requires synchronous completion callback during upload lifecycle.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const result = await api.uploads.completeUpload(galleryId, {
+          key: s3Key,
+          fileSize,
+        });
+        // Check if metadata was written successfully
+        return result.metadataWritten === true;
+      } catch (error) {
+        // Log error - metadata write failed
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        console.error("Failed to complete upload (metadata write):", errorMessage);
+        return false;
+      }
+    })();
+
+    // Store promise for tracking completion
+    metadataWritePromises.set(typedFile.id, metadataPromise);
   });
+
+  // Expose metadataWritePromises to config for tracking completion
+  // Store it on the uppy instance so it can be accessed from useUppyUpload
+  (uppy as any).__metadataWritePromises = metadataWritePromises;
 
   if (config.onComplete) {
     uppy.on("complete", (result) => {

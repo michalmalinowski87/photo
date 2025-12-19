@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { VirtuosoGrid } from "react-virtuoso";
 
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
 import { type TypedUppyFile } from "../../lib/uppy-config";
@@ -622,117 +623,157 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                     <FilesGridDebugger uppy={uppy} />
                   )}
                   <div
-                    className="grid gap-4"
-                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                    style={{
+                      height: "calc(70vh - 200px)",
+                      minHeight: "400px",
+                      maxHeight: "calc(90vh - 300px)",
+                    }}
                   >
-                    {files.map((file) => {
-                      // Get fresh file state from Uppy to ensure we have latest isPaused value
-                      const freshFile = (uppy?.getFile(file.id) ?? file) as TypedUppyFile;
-                      const status = getFileStatus(freshFile);
-                      const progress = getFileProgress(freshFile);
-                      const thumbnail = getThumbnail(freshFile);
+                    <VirtuosoGrid
+                      totalCount={files.length}
+                      data={files}
+                      overscan={200}
+                      itemContent={(index) => {
+                        const file = files[index];
+                        if (!file) return null;
 
-                      return (
-                        <div
-                          key={freshFile.id}
-                          className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-                        >
-                          <div className="aspect-square relative">
-                            {thumbnail ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={thumbnail}
-                                alt={freshFile.name ?? "Image"}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                                <ImageIcon className="w-12 h-12 text-gray-400" strokeWidth={2} />
+                        // Get fresh file state from Uppy to ensure we have latest isPaused value
+                        const freshFile = (uppy?.getFile(file.id) ?? file) as TypedUppyFile;
+                        const status = getFileStatus(freshFile);
+                        const progress = getFileProgress(freshFile);
+                        const thumbnail = getThumbnail(freshFile);
+
+                        return (
+                          <div className="p-2 h-full">
+                            <div className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden h-full">
+                              <div className="aspect-square relative">
+                                {thumbnail ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={thumbnail}
+                                    alt={freshFile.name ?? "Image"}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                    <ImageIcon
+                                      className="w-12 h-12 text-gray-400"
+                                      strokeWidth={2}
+                                    />
+                                  </div>
+                                )}
+                                {(status === "uploading" || status === "paused") && (
+                                  <div className="absolute inset-0 z-10">
+                                    <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
+                                    <button
+                                      onClick={() => {
+                                        pauseResumeFile(freshFile.id);
+                                      }}
+                                      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
+                                      type="button"
+                                    >
+                                      <Tooltip
+                                        content={status === "paused" ? "Wznów" : "Wstrzymaj"}
+                                      >
+                                        {status === "paused" ? (
+                                          <Play className="w-8 h-8 text-white fill-current" />
+                                        ) : (
+                                          <Pause className="w-8 h-8 text-white fill-current" />
+                                        )}
+                                      </Tooltip>
+                                    </button>
+                                    <div className="absolute bottom-6 left-0 right-0 text-center z-10">
+                                      <p className="text-white text-xs font-bold drop-shadow-lg">
+                                        {Math.round(progress)}%
+                                      </p>
+                                    </div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60">
+                                      <div
+                                        className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm"
+                                        style={{
+                                          width: `${Math.max(0, Math.min(100, progress))}%`,
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                )}
+                                {status === "completed" && (
+                                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                                    <Check size={16} />
+                                  </div>
+                                )}
+                                {status === "error" && (
+                                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                                    <X size={16} />
+                                  </div>
+                                )}
+                                {status !== "uploading" && !uploadComplete && (
+                                  <button
+                                    onClick={() => handleRemoveFile(freshFile.id)}
+                                    className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
+                                    type="button"
+                                  >
+                                    <Tooltip content="Usuń">
+                                      <X size={16} />
+                                    </Tooltip>
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            {(status === "uploading" || status === "paused") && (
-                              <div className="absolute inset-0 z-10">
-                                <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
-                                <button
-                                  onClick={() => {
-                                    pauseResumeFile(freshFile.id);
-                                  }}
-                                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
-                                  type="button"
+                              <div className="p-2">
+                                <p
+                                  className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
+                                  title={freshFile.name}
                                 >
-                                  <Tooltip content={status === "paused" ? "Wznów" : "Wstrzymaj"}>
-                                    {status === "paused" ? (
-                                      <Play className="w-8 h-8 text-white fill-current" />
-                                    ) : (
-                                      <Pause className="w-8 h-8 text-white fill-current" />
-                                    )}
-                                  </Tooltip>
-                                </button>
-                                <div className="absolute bottom-6 left-0 right-0 text-center z-10">
-                                  <p className="text-white text-xs font-bold drop-shadow-lg">
-                                    {Math.round(progress)}%
-                                  </p>
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60">
-                                  <div
-                                    className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm"
-                                    style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-                            )}
-                            {status === "completed" && (
-                              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <Check size={16} />
-                              </div>
-                            )}
-                            {status === "error" && (
-                              <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                                <X size={16} />
-                              </div>
-                            )}
-                            {status !== "uploading" && !uploadComplete && (
-                              <button
-                                onClick={() => handleRemoveFile(freshFile.id)}
-                                className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
-                                type="button"
-                              >
-                                <Tooltip content="Usuń">
-                                  <X size={16} />
-                                </Tooltip>
-                              </button>
-                            )}
-                          </div>
-                          <div className="p-2">
-                            <p
-                              className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
-                              title={freshFile.name}
-                            >
-                              {freshFile.name}
-                            </p>
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatFileSize(freshFile.size ?? 0)}
-                              </p>
-                              {status === "uploading" && (
-                                <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
-                                  {Math.round(progress)}%
+                                  {freshFile.name}
                                 </p>
-                              )}
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {formatFileSize(freshFile.size ?? 0)}
+                                  </p>
+                                  {status === "uploading" && (
+                                    <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
+                                      {Math.round(progress)}%
+                                    </p>
+                                  )}
+                                </div>
+                                {status === "error" && freshFile.error && (
+                                  <p
+                                    className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
+                                    title={String(freshFile.error)}
+                                  >
+                                    {String(freshFile.error)}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            {status === "error" && freshFile.error && (
-                              <p
-                                className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
-                                title={String(freshFile.error)}
-                              >
-                                {String(freshFile.error)}
-                              </p>
-                            )}
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      }}
+                      style={{ height: "100%" }}
+                      components={{
+                        List: (() => {
+                          const VirtuosoGridList = React.forwardRef<
+                            HTMLDivElement,
+                            { style?: React.CSSProperties; children?: React.ReactNode }
+                          >(({ style, children }, ref) => (
+                            <div
+                              ref={ref}
+                              style={{
+                                ...style,
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                                gap: "1rem",
+                              }}
+                            >
+                              {children}
+                            </div>
+                          ));
+                          VirtuosoGridList.displayName = "VirtuosoGridList";
+                          return VirtuosoGridList;
+                        })(),
+                      }}
+                    />
                   </div>
                 </>
               )}

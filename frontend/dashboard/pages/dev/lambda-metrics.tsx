@@ -2,7 +2,15 @@
 
 import type { GetServerSideProps } from "next";
 import React, { useState, useEffect } from "react";
-import { Activity, TrendingDown, TrendingUp, AlertCircle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  TrendingDown,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 
@@ -154,7 +162,8 @@ export default function LambdaMetrics() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 dark:text-gray-400">
-              Brak danych. Funkcje Lambda mogą nie być jeszcze wywołane lub nie ma danych dla tego okresu.
+              Brak danych. Funkcje Lambda mogą nie być jeszcze wywołane lub nie ma danych dla tego
+              okresu.
             </p>
           </div>
         ) : (
@@ -194,7 +203,10 @@ export default function LambdaMetrics() {
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {metrics.map((metric) => (
-                    <tr key={metric.functionName} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr
+                      key={metric.functionName}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
                           {formatFunctionName(metric.functionName)}
@@ -212,7 +224,9 @@ export default function LambdaMetrics() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-white">
-                          {metric.averageMemoryUsedMB > 0 ? `${metric.averageMemoryUsedMB} MB` : "-"}
+                          {metric.averageMemoryUsedMB > 0
+                            ? `${metric.averageMemoryUsedMB} MB`
+                            : "-"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -223,16 +237,22 @@ export default function LambdaMetrics() {
                                 metric.memoryUtilizationPercent < 50
                                   ? "bg-yellow-500"
                                   : metric.memoryUtilizationPercent < 70
-                                  ? "bg-green-500"
-                                  : metric.memoryUtilizationPercent < 90
-                                  ? "bg-blue-500"
-                                  : "bg-red-500"
+                                    ? "bg-green-500"
+                                    : metric.memoryUtilizationPercent < 90
+                                      ? "bg-blue-500"
+                                      : "bg-red-500"
                               }`}
-                              style={{ width: `${Math.min(metric.memoryUtilizationPercent, 100)}%` }}
+                              style={{
+                                width: `${Math.min(metric.memoryUtilizationPercent, 100)}%`,
+                              }}
                             />
                           </div>
-                          <span className={`text-sm font-medium ${getUtilizationColor(metric.memoryUtilizationPercent)}`}>
-                            {metric.memoryUtilizationPercent > 0 ? `${metric.memoryUtilizationPercent}%` : "-"}
+                          <span
+                            className={`text-sm font-medium ${getUtilizationColor(metric.memoryUtilizationPercent)}`}
+                          >
+                            {metric.memoryUtilizationPercent > 0
+                              ? `${metric.memoryUtilizationPercent}%`
+                              : "-"}
                           </span>
                         </div>
                       </td>
@@ -258,16 +278,22 @@ export default function LambdaMetrics() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium ${
-                          metric.errors > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"
-                        }`}>
+                        <div
+                          className={`text-sm font-medium ${
+                            metric.errors > 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-gray-900 dark:text-white"
+                          }`}
+                        >
                           {metric.errors.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-start gap-2">
                           {getRecommendationIcon(metric.recommendation)}
-                          <span className={`text-sm ${getRecommendationColor(metric.recommendation)}`}>
+                          <span
+                            className={`text-sm ${getRecommendationColor(metric.recommendation)}`}
+                          >
                             {metric.recommendation}
                           </span>
                         </div>
@@ -285,14 +311,19 @@ export default function LambdaMetrics() {
           <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Łączne funkcje</div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{metrics.length}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {metrics.length}
+              </div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Średnie wykorzystanie</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Średnie wykorzystanie
+              </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.round(
                   metrics.reduce((sum, m) => sum + m.memoryUtilizationPercent, 0) / metrics.length
-                )}%
+                )}
+                %
               </div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -303,11 +334,13 @@ export default function LambdaMetrics() {
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Łączne błędy</div>
-              <div className={`text-2xl font-bold ${
-                metrics.reduce((sum, m) => sum + m.errors, 0) > 0
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-gray-900 dark:text-white"
-              }`}>
+              <div
+                className={`text-2xl font-bold ${
+                  metrics.reduce((sum, m) => sum + m.errors, 0) > 0
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-gray-900 dark:text-white"
+                }`}
+              >
                 {metrics.reduce((sum, m) => sum + m.errors, 0).toLocaleString()}
               </div>
             </div>
@@ -317,4 +350,3 @@ export default function LambdaMetrics() {
     </div>
   );
 }
-

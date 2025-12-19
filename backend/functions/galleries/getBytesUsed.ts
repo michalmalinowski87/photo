@@ -25,12 +25,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const requesterId = getUserIdFromEvent(event);
 	requireOwnerOr403(gallery.ownerId, requesterId);
 	
-	// If force recalculation is requested, recalculate from S3
+	// If force recalculation is requested, recalculate from DynamoDB
 	if (forceRecalc) {
 		logger?.info('Force recalculation requested for getBytesUsed', { galleryId: id });
-		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-		if (bucket) {
-			const recalcResult = await recalculateStorageInternal(id, tableName, bucket, gallery, logger, true);
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+		if (imagesTable) {
+			const recalcResult = await recalculateStorageInternal(id, tableName, imagesTable, gallery, logger, true);
 		
 		if (recalcResult.statusCode === 200) {
 			try {

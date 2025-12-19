@@ -1,14 +1,12 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createChangeRequestDeniedEmail } from '../../lib/src/email';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3 = new S3Client({});
 const ses = new SESClient({});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -106,30 +104,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// If final photos exist, order was in PREPARING_DELIVERY, otherwise CLIENT_APPROVED
 	let previousStatus = 'CLIENT_APPROVED'; // Default revert status
 	
-	if (bucket) {
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+	if (imagesTable) {
 		try {
-			// Check if final photos exist (optimized: MaxKeys=1, stops after first match)
-			const prefix = `galleries/${galleryId}/final/${targetOrderId}/`;
-			const finalFilesResponse = await s3.send(new ListObjectsV2Command({
-				Bucket: bucket,
-				Prefix: prefix,
-				MaxKeys: 1 // Only need to know if at least one file exists - stops after first match
+			// Check if final photos exist by querying DynamoDB (limit 1 for efficiency)
+			const finalFilesResponse = await ddb.send(new QueryCommand({
+				TableName: imagesTable,
+				IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+				KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+				FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+				ExpressionAttributeNames: {
+					'#type': 'type'
+				},
+				ExpressionAttributeValues: {
+					':g': galleryId,
+					':orderId': targetOrderId,
+					':type': 'final'
+				},
+				Limit: 1 // Only need to know if at least one file exists
 			}));
 
-			// Filter out subdirectories (previews/, thumbs/, bigthumbs/) - only count direct files
-			const hasFinalPhotos = (finalFilesResponse.Contents || []).some(obj => {
-				const objKey = obj.Key || '';
-				return objKey.startsWith(prefix) && 
-					objKey !== prefix && 
-					!objKey.substring(prefix.length).includes('/');
-			});
-
+			const hasFinalPhotos = (finalFilesResponse.Items?.length || 0) > 0;
 			previousStatus = hasFinalPhotos ? 'PREPARING_DELIVERY' : 'CLIENT_APPROVED';
-		} catch (s3Error: any) {
+		} catch (dbError: any) {
 			logger?.warn('Failed to check final photos, defaulting to CLIENT_APPROVED', {
 				error: {
-					name: s3Error.name,
-					message: s3Error.message
+					name: dbError.name,
+					message: dbError.message
 				},
 				galleryId,
 				orderId: targetOrderId

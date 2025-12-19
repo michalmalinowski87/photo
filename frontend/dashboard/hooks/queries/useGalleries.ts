@@ -117,7 +117,8 @@ export function useGalleryImages(
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      const response = await api.galleries.getImages(galleryId, type);
+      // Always request all image sizes (thumb, preview, bigthumb) regardless of type
+      const response = await api.galleries.getImages(galleryId, "thumb,preview,bigthumb");
       return (response.images || []) as GalleryImage[];
     },
     enabled: !!galleryId,

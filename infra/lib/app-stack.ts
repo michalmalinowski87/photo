@@ -1,14 +1,14 @@
 // @ts-nocheck
 import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Bucket, BlockPublicAccess, HttpMethods, EventType } from 'aws-cdk-lib/aws-s3';
+import { Bucket, BlockPublicAccess, HttpMethods, EventType, CfnBucket } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
-import { AttributeType, BillingMode, Table, CfnTable } from 'aws-cdk-lib/aws-dynamodb';
+import { AttributeType, BillingMode, Table, CfnTable, StreamViewType } from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import { Runtime, LayerVersion, Code } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, LayerVersion, Code, StartingPosition } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
@@ -21,7 +21,7 @@ import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
-import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { SqsEventSource, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import * as path from 'path';
 
@@ -50,6 +50,13 @@ export class AppStack extends Stack {
 			allowedHeaders: ['*'],
 			exposedHeaders: ['ETag']
 		});
+
+		// Configure S3 Intelligent-Tiering for ZIP files
+		// Provides automatic cost savings (down to ~40-68% lower after 30-90 days) while keeping instant access forever
+		// Small monitoring fee (~$0.0025/month per ZIP) is negligible compared to storage savings
+		// Note: Intelligent-Tiering cannot be used as a lifecycle transition target
+		// Objects must be uploaded directly to Intelligent-Tiering storage class
+		// This is configured in createZip.ts when uploading ZIP files to S3
 
 		// ZIP cleanup: Scheduled Lambda function to delete ZIPs older than 2 hours
 		// Presigned URLs expire after 1 hour, so this gives a 1-hour safety margin
@@ -100,7 +107,8 @@ export class AppStack extends Stack {
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'orderId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
-		removalPolicy: RemovalPolicy.RETAIN
+		removalPolicy: RemovalPolicy.RETAIN,
+		stream: StreamViewType.NEW_AND_OLD_IMAGES // Enable streams to detect deliveryStatus changes
 	});
 	// GSI for querying orders by owner (for dashboard stats)
 	orders.addGlobalSecondaryIndex({
@@ -188,6 +196,25 @@ export class AppStack extends Stack {
 		enabled: true,
 		attributeName: 'ttl'
 	};
+
+	const images = new Table(this, 'ImagesTable', {
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'imageKey', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	// GSI for time-based queries (newest first)
+	images.addGlobalSecondaryIndex({
+		indexName: 'galleryId-lastModified-index',
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'lastModified', type: AttributeType.NUMBER }
+	});
+	// Sparse GSI for filtering final images by orderId
+	images.addGlobalSecondaryIndex({
+		indexName: 'galleryId-orderId-index',
+		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
+		sortKey: { name: 'orderId', type: AttributeType.STRING }
+	});
 
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
@@ -333,7 +360,8 @@ export class AppStack extends Stack {
 			WALLETS_TABLE: wallet.tableName,
 			WALLET_LEDGER_TABLE: walletLedger.tableName,
 			ORDERS_TABLE: orders.tableName,
-			TRANSACTIONS_TABLE: transactions.tableName
+			TRANSACTIONS_TABLE: transactions.tableName,
+			IMAGES_TABLE: images.tableName
 		};
 
 		// Downloads zip - helper function invoked by API Lambda and other functions
@@ -388,9 +416,174 @@ export class AppStack extends Stack {
 		galleriesBucket.grantReadWrite(zipFn);
 		// Grant permission to update orders table to clear zipGenerating flag
 		orders.grantReadWriteData(zipFn);
+		// Grant permission to read galleries table for expiration date
+		galleries.grantReadData(zipFn);
+		// Grant permission to read images table for final ZIP generation (queries GSI galleryId-orderId-index)
+		images.grantReadData(zipFn);
+		// Explicitly grant Query permission on Images table GSI (grantReadData should include this, but being explicit)
+		zipFn.addToRolePolicy(new PolicyStatement({
+			actions: ['dynamodb:Query'],
+			resources: [
+				images.tableArn,
+				`${images.tableArn}/index/*` // Include all GSIs
+			]
+		}));
 		// Grant DLQ permissions
 		zipGenerationDLQ.grantSendMessages(zipFn);
 		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
+		
+		// Lambda function to handle order delivery (pre-generate finals ZIP and trigger cleanup)
+		const onOrderDeliveredFn = new NodejsFunction(this, 'OnOrderDeliveredFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderDelivered.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.minutes(5),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				IMAGES_TABLE: images.tableName,
+				ORDERS_TABLE: orders.tableName,
+				GALLERIES_BUCKET: galleriesBucket.bucketName,
+				DOWNLOADS_ZIP_FN_NAME: zipFn.functionName,
+				CLEANUP_DELIVERED_ORDER_FN_NAME: '' // Will be set after cleanup function is created
+			}
+		});
+		orders.grantReadWriteData(onOrderDeliveredFn);
+		images.grantReadData(onOrderDeliveredFn);
+		galleriesBucket.grantRead(onOrderDeliveredFn);
+		zipFn.grantInvoke(onOrderDeliveredFn);
+		envVars['ON_ORDER_DELIVERED_FN_NAME'] = onOrderDeliveredFn.functionName;
+		
+		// Lambda function to cleanup originals/finals after order is delivered
+		const cleanupDeliveredOrderFn = new NodejsFunction(this, 'CleanupDeliveredOrderFn', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/cleanupDeliveredOrder.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512,
+			timeout: Duration.minutes(10), // May need time for large batches
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				GALLERIES_TABLE: galleries.tableName,
+				IMAGES_TABLE: images.tableName,
+				ORDERS_TABLE: orders.tableName,
+				GALLERIES_BUCKET: galleriesBucket.bucketName
+			}
+		});
+		orders.grantReadWriteData(cleanupDeliveredOrderFn);
+		images.grantReadWriteData(cleanupDeliveredOrderFn);
+		galleriesBucket.grantReadWrite(cleanupDeliveredOrderFn);
+		envVars['CLEANUP_DELIVERED_ORDER_FN_NAME'] = cleanupDeliveredOrderFn.functionName;
+		
+		// Update onOrderDeliveredFn environment with cleanup function name
+		onOrderDeliveredFn.addEnvironment('CLEANUP_DELIVERED_ORDER_FN_NAME', cleanupDeliveredOrderFn.functionName);
+		// Grant onOrderDeliveredFn permission to invoke cleanupDeliveredOrderFn
+		cleanupDeliveredOrderFn.grantInvoke(onOrderDeliveredFn);
+		
+		// Lambda function to process DynamoDB stream events and automatically trigger onOrderDelivered
+		// This ensures final ZIP generation happens even if order is marked DELIVERED outside of sendFinalLink/complete
+		// Processes stream records and filters for MODIFY events where deliveryStatus changes to DELIVERED
+		const orderDeliveredStreamProcessor = new NodejsFunction(this, 'OrderDeliveredStreamProcessor', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderDeliveredStreamProcessor.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.minutes(2),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-lambda'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				ON_ORDER_DELIVERED_FN_NAME: onOrderDeliveredFn.functionName
+			}
+		});
+		onOrderDeliveredFn.grantInvoke(orderDeliveredStreamProcessor);
+		
+		// Connect DynamoDB stream to Lambda function
+		// The Lambda function filters for MODIFY events where deliveryStatus changes to DELIVERED
+		orderDeliveredStreamProcessor.addEventSource(new DynamoEventSource(orders, {
+			startingPosition: StartingPosition.LATEST,
+			batchSize: 10,
+			maxBatchingWindow: Duration.seconds(5)
+		}));
+		
+		// Lambda function to process order status changes and trigger ZIP generation for selected originals
+		// Handles CLIENT_APPROVED and PREPARING_DELIVERY (from CHANGES_REQUESTED) status changes
+		// This ensures ZIP generation happens even if status changes outside of approveSelection function
+		const orderStatusChangeProcessor = new NodejsFunction(this, 'OrderStatusChangeProcessor', {
+			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderStatusChange.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512,
+			timeout: Duration.minutes(2),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				DOWNLOADS_ZIP_FN_NAME: zipFn.functionName,
+				ORDERS_TABLE: orders.tableName,
+				GALLERIES_BUCKET: galleriesBucket.bucketName
+			}
+		});
+		orders.grantReadWriteData(orderStatusChangeProcessor);
+		zipFn.grantInvoke(orderStatusChangeProcessor);
+		
+		// Connect DynamoDB stream to Lambda function
+		// The Lambda function filters for MODIFY events where deliveryStatus changes to CLIENT_APPROVED or PREPARING_DELIVERY
+		orderStatusChangeProcessor.addEventSource(new DynamoEventSource(orders, {
+			startingPosition: StartingPosition.LATEST,
+			batchSize: 10,
+			maxBatchingWindow: Duration.seconds(5)
+		}));
 		
 		// CloudWatch alarm for ZIP generation failures (DLQ messages)
 		const zipDLQAlarm = new Alarm(this, 'ZipGenerationDLQAlarm', {
@@ -501,6 +694,7 @@ export class AppStack extends Stack {
 		wallet.grantReadWriteData(apiFn);
 		walletLedger.grantReadWriteData(apiFn);
 		orders.grantReadWriteData(apiFn);
+		images.grantReadWriteData(apiFn);
 		transactions.grantReadWriteData(apiFn);
 		clients.grantReadWriteData(apiFn);
 		packages.grantReadWriteData(apiFn);
@@ -530,6 +724,7 @@ export class AppStack extends Stack {
 
 		// Lambda invoke permissions (for zip generation functions)
 		zipFn.grantInvoke(apiFn);
+		onOrderDeliveredFn.grantInvoke(apiFn);
 
 		// Explicit OPTIONS route for CORS preflight - must come before catch-all route
 		// API Gateway HTTP API v2's built-in CORS may not work correctly with authorizers,
@@ -855,6 +1050,7 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(galleryExpiryDeletionFn);
 		transactions.grantReadWriteData(galleryExpiryDeletionFn);
 		orders.grantReadWriteData(galleryExpiryDeletionFn);
+		images.grantReadWriteData(galleryExpiryDeletionFn);
 		galleriesBucket.grantReadWrite(galleryExpiryDeletionFn);
 		galleryExpiryDeletionFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
@@ -962,23 +1158,9 @@ export class AppStack extends Stack {
 			targets: [new LambdaFunction(transactionExpiryFn)]
 		});
 
-		// ZIP cleanup: Delete ZIP files older than 2 hours
-		// Presigned URLs expire after 1 hour, so this gives a 1-hour safety margin
-		// Prevents S3 storage bloat from multiple ZIP generations
-		const zipCleanupFn = new NodejsFunction(this, 'ZipCleanupFn', {
-			entry: path.join(__dirname, '../../../backend/functions/cleanup/deleteOldZips.ts'),
-			handler: 'handler',
-			runtime: Runtime.NODEJS_20_X,
-			memorySize: 256,
-			timeout: Duration.minutes(5),
-			environment: envVars
-		});
-		galleriesBucket.grantReadWrite(zipCleanupFn);
-		// Run every hour to clean up old ZIPs
-		new Rule(this, 'ZipCleanupSchedule', {
-			schedule: Schedule.rate(Duration.hours(1)),
-			targets: [new LambdaFunction(zipCleanupFn)]
-		});
+		// ZIP cleanup: No longer needed
+		// ZIP files now expire automatically via S3 Expires header set to match gallery expiration
+		// This ensures ZIPs are deleted when galleries expire, eliminating the need for scheduled cleanup
 
 		// Image resizing is now handled client-side via Uppy thumbnail generation
 		// No server-side resize Lambda needed
@@ -1035,6 +1217,7 @@ export class AppStack extends Stack {
 		// Grant permissions to read/write galleries (for storage usage updates) and orders (for order status updates)
 		galleries.grantReadWriteData(deleteBatchFn);
 		orders.grantReadWriteData(deleteBatchFn);
+		images.grantReadWriteData(deleteBatchFn);
 		// Storage recalculation is now on-demand - no need to invoke Lambda after deletes
 		
 		// Configure Lambda to consume from SQS with batching

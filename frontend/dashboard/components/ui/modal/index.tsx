@@ -28,12 +28,12 @@ export const Modal = ({
   useEffect(() => {
     if (typeof document !== "undefined") {
       const checkAuthPage = () => {
-        const hasAuthDark = 
-          document.documentElement.classList.contains("auth-dark") || 
+        const hasAuthDark =
+          document.documentElement.classList.contains("auth-dark") ||
           document.body.classList.contains("auth-dark");
         setIsAuthPage(hasAuthDark);
       };
-      
+
       checkAuthPage();
       // Also check when modal opens
       if (isOpen) {

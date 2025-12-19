@@ -4,14 +4,13 @@ import {
 	GetObjectCommand, 
 	HeadObjectCommand,
 	DeleteObjectCommand,
-	ListObjectsV2Command,
 	CreateMultipartUploadCommand,
 	UploadPartCommand,
 	CompleteMultipartUploadCommand,
 	AbortMultipartUploadCommand
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import pLimit from 'p-limit';
@@ -150,10 +149,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-		// Determine ZIP key based on type
-		const zipKey = isFinal 
-			? `galleries/${galleryId}/orders/${orderId}/final-zip/gallery-${galleryId}-order-${orderId}-final.zip`
-			: `galleries/${galleryId}/zips/${orderId}.zip`;
+	// Fetch gallery to get expiration date
+	// ZIP should expire at the same time as the gallery
+	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	let zipExpiresAt: Date | undefined;
+	
+	if (galleriesTable) {
+		try {
+			const galleryGet = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			
+			const gallery = galleryGet.Item as any;
+			if (gallery?.expiresAt) {
+				zipExpiresAt = new Date(gallery.expiresAt);
+				console.log('Gallery expiration found, ZIP will expire at same time', {
+					requestId,
+					galleryId,
+					expiresAt: gallery.expiresAt,
+					zipExpiresAt: zipExpiresAt.toISOString()
+				});
+			} else {
+				console.warn('Gallery has no expiresAt - ZIP will not have expiration', {
+					requestId,
+					galleryId
+				});
+			}
+		} catch (galleryErr: any) {
+			// Log but don't fail - expiration is optional
+			console.warn('Failed to fetch gallery expiration', {
+				error: galleryErr.message,
+				galleryId,
+				requestId
+			});
+		}
+	}
+
+	// Determine ZIP key based on type
+	const zipKey = isFinal 
+		? `galleries/${galleryId}/orders/${orderId}/final-zip/gallery-${galleryId}-order-${orderId}-final.zip`
+		: `galleries/${galleryId}/zips/${orderId}.zip`;
 		
 		// Compute current hash for content validation
 		// Both hashes are computed in the calling functions for consistency:
@@ -164,49 +200,65 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let currentHash: string | undefined;
 		
 		if (isFinal) {
-			// Use provided hash, or compute from S3 file list if not provided
+			// Use provided hash, or compute from DynamoDB if not provided
 			if (finalFilesHash) {
 				currentHash = finalFilesHash;
 			} else {
-				// Fallback: fetch file list and compute hash with metadata
-				const prefix = `galleries/${galleryId}/final/${orderId}/`;
-				const listResponse = await s3.send(new ListObjectsV2Command({
-					Bucket: bucket,
-					Prefix: prefix
-				}));
-				
-				if (listResponse.Contents && listResponse.Contents.length > 0) {
-					const finalFilesWithMetadata = listResponse.Contents
-						.map(obj => {
-							const filename = (obj.Key || '').replace(prefix, '');
-							return {
-								filename,
-								etag: obj.ETag || '',
-								size: obj.Size || 0,
-								lastModified: obj.LastModified?.getTime() || 0
-							};
-						})
-						.filter(item => {
-							return item.filename && 
-								!item.filename.includes('/previews/') && 
-								!item.filename.includes('/thumbs/') && 
-								!item.filename.includes('/bigthumbs/') &&
-								!item.filename.includes('/');
-						})
-						.sort((a, b) => a.filename.localeCompare(b.filename));
-					
-					currentHash = createHash('sha256')
-						.update(JSON.stringify(finalFilesWithMetadata))
-						.digest('hex')
-						.substring(0, 16);
-					
-					console.log('Computed finalFilesHash from metadata (not provided)', {
-						requestId,
-						galleryId,
-						orderId,
-						hash: currentHash,
-						filesCount: finalFilesWithMetadata.length
-					});
+				// Fallback: fetch file list from DynamoDB and compute hash with metadata
+				const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+				if (imagesTable) {
+					let allFinalImageRecords: any[] = [];
+					let lastEvaluatedKey: any = undefined;
+
+					do {
+						const queryParams: any = {
+							TableName: imagesTable,
+							IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+							KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+							FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+							ExpressionAttributeNames: {
+								'#type': 'type'
+							},
+							ExpressionAttributeValues: {
+								':g': galleryId,
+								':orderId': orderId,
+								':type': 'final'
+							},
+							Limit: 1000
+						};
+
+						if (lastEvaluatedKey) {
+							queryParams.ExclusiveStartKey = lastEvaluatedKey;
+						}
+
+						const queryResponse = await ddb.send(new QueryCommand(queryParams));
+						allFinalImageRecords.push(...(queryResponse.Items || []));
+						lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+					} while (lastEvaluatedKey);
+
+					if (allFinalImageRecords.length > 0) {
+						const finalFilesWithMetadata = allFinalImageRecords
+							.map(record => ({
+								filename: record.filename,
+								etag: record.etag || '',
+								size: record.size || 0,
+								lastModified: record.lastModified || 0
+							}))
+							.sort((a, b) => a.filename.localeCompare(b.filename));
+						
+						currentHash = createHash('sha256')
+							.update(JSON.stringify(finalFilesWithMetadata))
+							.digest('hex')
+							.substring(0, 16);
+						
+						console.log('Computed finalFilesHash from DynamoDB metadata (not provided)', {
+							requestId,
+							galleryId,
+							orderId,
+							hash: currentHash,
+							filesCount: finalFilesWithMetadata.length
+						});
+					}
 				}
 			}
 		} else {
@@ -294,32 +346,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Clear generating flag if still set
 				const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 				if (ordersTable) {
-					try {
-						if (isFinal) {
-							const updateExpr = finalFilesHash
-								? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
-								: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
-							const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
-							await ddb.send(new UpdateCommand({
-								TableName: ordersTable,
-								Key: { galleryId, orderId },
-								UpdateExpression: updateExpr,
-								ExpressionAttributeValues: updateValues
-							}));
-						} else {
-							// Clear original ZIP flag and store hash
-							const updateExpr = currentHash
-								? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
-								: 'REMOVE zipGenerating, zipGeneratingSince';
-							const updateValues = currentHash ? { ':h': currentHash } : undefined;
-							
-							await ddb.send(new UpdateCommand({
-								TableName: ordersTable,
-								Key: { galleryId, orderId },
-								UpdateExpression: updateExpr,
-								ExpressionAttributeValues: updateValues
-							}));
-						}
+			try {
+				if (isFinal) {
+					const updateExpr = finalFilesHash
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt';
+					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: updateExpr,
+						ExpressionAttributeValues: updateValues
+					}));
+				} else {
+					// Clear original ZIP flag and store hash, remove progress fields
+					const updateExpr = currentHash
+						? 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt';
+					const updateValues = currentHash ? { ':h': currentHash } : undefined;
+					
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: updateExpr,
+						ExpressionAttributeValues: updateValues
+					}));
+				}
 					} catch (clearErr: any) {
 						console.warn('Failed to clear generating flag for existing ZIP', {
 							error: clearErr.message,
@@ -397,32 +449,49 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let lastUploadPromise = Promise.resolve<void>(undefined);
 
 		try {
-		// For final ZIPs, fetch file list from S3
+		// For final ZIPs, fetch file list from DynamoDB
 		let finalKeys: string[] = [];
 		if (isFinal) {
-			const prefix = `galleries/${galleryId}/final/${orderId}/`;
-			const listResponse = await s3.send(new ListObjectsV2Command({
-				Bucket: bucket,
-				Prefix: prefix
-			}));
+			const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+			if (imagesTable) {
+				let allFinalImageRecords: any[] = [];
+				let lastEvaluatedKey: any = undefined;
 
-			if (!listResponse.Contents || listResponse.Contents.length === 0) {
-				throw new Error(`No final images found for order ${orderId}`);
+				do {
+					const queryParams: any = {
+						TableName: imagesTable,
+						IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+						KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+						FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+						ExpressionAttributeNames: {
+							'#type': 'type'
+						},
+						ExpressionAttributeValues: {
+							':g': galleryId,
+							':orderId': orderId,
+							':type': 'final'
+						},
+						ProjectionExpression: 'filename',
+						Limit: 1000
+					};
+
+					if (lastEvaluatedKey) {
+						queryParams.ExclusiveStartKey = lastEvaluatedKey;
+					}
+
+					const queryResponse = await ddb.send(new QueryCommand(queryParams));
+					allFinalImageRecords.push(...(queryResponse.Items || []));
+					lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+				} while (lastEvaluatedKey);
+
+				finalKeys = allFinalImageRecords.map(record => record.filename);
+			} else {
+				throw new Error('IMAGES_TABLE environment variable not set');
 			}
 
-			// Extract filenames, filtering out previews/thumbs subdirectories
-			finalKeys = listResponse.Contents
-				.map(obj => obj.Key || '')
-				.map(key => key.replace(prefix, '')) // Extract filename
-				.filter(filename => {
-					// Only include files directly in final/{orderId}/, not in subdirectories
-					return filename && 
-						!filename.includes('/previews/') && 
-						!filename.includes('/thumbs/') && 
-						!filename.includes('/bigthumbs/') &&
-						!filename.includes('/'); // No subdirectories
-				})
-				.sort();
+			if (finalKeys.length === 0) {
+				throw new Error(`No final images found for order ${orderId}`);
+			}
 
 			console.log('Fetched final files from S3', {
 				galleryId,
@@ -449,12 +518,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Create multipart upload at start
-		const createMultipartResponse = await s3.send(new CreateMultipartUploadCommand({
+		// Set expiration to match gallery expiration (if available)
+		const createMultipartParams: any = {
 			Bucket: bucket,
 			Key: zipKey,
 			ContentType: 'application/zip',
+			StorageClass: 'INTELLIGENT_TIERING', // Use Intelligent-Tiering for automatic cost optimization
 			Metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-		}));
+		};
+		
+		// Add Expires header if gallery expiration is available
+		// This ensures ZIP is automatically deleted by S3 when gallery expires
+		if (zipExpiresAt) {
+			createMultipartParams.Expires = zipExpiresAt;
+		}
+		
+		const createMultipartResponse = await s3.send(new CreateMultipartUploadCommand(createMultipartParams));
 
 		if (!createMultipartResponse.UploadId) {
 			throw new Error('Failed to create multipart upload');
@@ -673,8 +752,55 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		let processed = 0;
 		let lastProgressLog = Date.now();
+		let lastProgressUpdate = Date.now();
 		const PROGRESS_LOG_INTERVAL = 5000; // Log every 5 seconds for production (reduced verbosity)
+		const PROGRESS_UPDATE_INTERVAL = 5000; // Update DynamoDB every 5 seconds
 		const TIMEOUT_WARNING_MS = 2 * 60 * 1000; // Warn if less than 2 minutes remaining
+		
+		// Helper function to update progress in DynamoDB
+		const updateProgressInDynamoDB = async (processedCount: number, totalCount: number) => {
+			const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+			if (!ordersTable) return;
+			
+			const progressPercent = Math.round((processedCount / totalCount) * 100);
+			const now = Date.now();
+			
+			try {
+				if (isFinal) {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'SET finalZipProgress = :p, finalZipProgressTotal = :t, finalZipProgressPercent = :percent, finalZipProgressUpdatedAt = :ts',
+						ExpressionAttributeValues: {
+							':p': processedCount,
+							':t': totalCount,
+							':percent': progressPercent,
+							':ts': now
+						}
+					}));
+				} else {
+					await ddb.send(new UpdateCommand({
+						TableName: ordersTable,
+						Key: { galleryId, orderId },
+						UpdateExpression: 'SET zipProgress = :p, zipProgressTotal = :t, zipProgressPercent = :percent, zipProgressUpdatedAt = :ts',
+						ExpressionAttributeValues: {
+							':p': processedCount,
+							':t': totalCount,
+							':percent': progressPercent,
+							':ts': now
+						}
+					}));
+				}
+			} catch (updateErr: any) {
+				// Log but don't fail - progress updates are best effort
+				console.warn('Failed to update progress in DynamoDB', {
+					error: updateErr.message,
+					galleryId,
+					orderId,
+					isFinal
+				});
+			}
+		};
 		
 		const fileTasks = validKeys.map(key => {
 			// Construct S3 key based on type
@@ -707,6 +833,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					console.log(`Progress: ${processed}/${validKeys.length} files added`, logData);
 					lastProgressLog = now;
 				}
+				
+				// Update progress in DynamoDB periodically
+				if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+					await updateProgressInDynamoDB(processed, validKeys.length);
+					lastProgressUpdate = now;
+				}
+				
 				return result;
 			});
 		});
@@ -770,11 +903,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Validate ZIP signature (PK header) from first part
-		if (!firstPartBuffer || firstPartBuffer.length < 2) {
+		// For small ZIPs, all data might be in currentPartBuffer (single part upload)
+		// For larger ZIPs, firstPartBuffer contains the first part
+		const bufferToValidate = firstPartBuffer && firstPartBuffer.length >= 2 
+			? firstPartBuffer 
+			: (currentPartBuffer.length >= 2 ? currentPartBuffer : null);
+		
+		if (!bufferToValidate || bufferToValidate.length < 2) {
 			throw new Error('ZIP archive is empty or too small');
 		}
 
-		const zipSignature = firstPartBuffer.slice(0, 2).toString('ascii');
+		const zipSignature = bufferToValidate.slice(0, 2).toString('ascii');
 		if (zipSignature !== 'PK') {
 			throw new Error(`Invalid ZIP signature: ${zipSignature}. ZIP creation failed.`);
 		}
@@ -825,10 +964,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		if (ordersTable) {
 			try {
 				if (isFinal) {
-					// Clear final ZIP flags and store hash
+					// Clear final ZIP flags and store hash, remove progress fields
 					const updateExpr = finalFilesHash
-						? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
-						: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt';
 					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -838,10 +977,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						ExpressionAttributeValues: updateValues
 					}));
 				} else {
-					// Clear original ZIP flag and store hash
+					// Clear original ZIP flag and store hash, remove progress fields
 					const updateExpr = currentHash
-						? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
-						: 'REMOVE zipGenerating, zipGeneratingSince';
+						? 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt';
 					const updateValues = currentHash ? { ':h': currentHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -929,22 +1068,36 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		// Clear ZIP generating flag on failure so user can retry
+		// Clear ZIP generating flag on failure and store error in progress so UI can show it
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 		if (ordersTable && galleryId && orderId) {
 			try {
+				// Use available variables - parts.length is always available, use it for progress
+				const errorProgress = {
+					status: 'error',
+					message: error.message,
+					processed: parts.length, // Number of parts uploaded before failure
+					total: parts.length > 0 ? parts.length : 1, // Estimate based on parts
+					progressPercent: 0, // Can't calculate accurately without knowing total files
+					elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+					isFinal: isFinal,
+					error: error.message
+				};
+				
 				const updateExpr = isFinal
-					? 'REMOVE finalZipGenerating, finalZipGeneratingSince'
-					: 'REMOVE zipGenerating, zipGeneratingSince';
+					? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET zipProgress = :p'
+					: 'REMOVE zipGenerating, zipGeneratingSince SET zipProgress = :p';
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
 					Key: { galleryId, orderId },
-					UpdateExpression: updateExpr
+					UpdateExpression: updateExpr,
+					ExpressionAttributeValues: { ':p': errorProgress }
 				}));
-				console.log(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after failure`, { 
+				console.log(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag and stored error progress after failure`, { 
 					galleryId, 
 					orderId,
-					isFinal 
+					isFinal,
+					error: error.message
 				});
 			} catch (clearErr: any) {
 				// Log but don't fail - we're already in error state

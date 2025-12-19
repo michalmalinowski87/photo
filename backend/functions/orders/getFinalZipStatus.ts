@@ -1,13 +1,16 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
 
+/**
+ * Get final ZIP generation status and progress
+ * Returns status, progress information, and ready state
+ */
 export const handler = lambdaLogger(async (event: any) => {
 	const envProc = (globalThis as any).process;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
@@ -34,6 +37,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	try {
+		// Verify gallery exists
 		const galleryGet = await ddb.send(new GetCommand({
 			TableName: galleriesTable,
 			Key: { galleryId }
@@ -47,7 +51,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		// Supports both owner (Cognito) and client (JWT) tokens
+		// Verify access
 		const access = verifyGalleryAccess(event, galleryId, gallery);
 		if (!access.isOwner && !access.isClient) {
 			return {
@@ -57,6 +61,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
+		// Get order
 		const orderGet = await ddb.send(new GetCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId }
@@ -70,71 +75,76 @@ export const handler = lambdaLogger(async (event: any) => {
 			};
 		}
 
-		if (order.deliveryStatus === 'CANCELLED') {
-			return {
-				statusCode: 400,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Cannot download ZIP for canceled order' })
-			};
-		}
-
-		// Check if ZIP exists in S3 - this endpoint only returns presigned URLs, no generation
-		const expectedZipKey = `galleries/${galleryId}/zips/${orderId}.zip`;
-		
-		let zipSize: number | undefined;
+		// Check if ZIP exists in S3
+		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
+		const zipKey = `galleries/${galleryId}/orders/${orderId}/final-zip/${filename}`;
 		let zipExists = false;
+		let zipSize: number | undefined;
 		
 		try {
 			const headResponse = await s3.send(new HeadObjectCommand({
 				Bucket: bucket,
-				Key: expectedZipKey
+				Key: zipKey
 			}));
-			zipSize = headResponse.ContentLength;
 			zipExists = true;
+			zipSize = headResponse.ContentLength;
 		} catch (headErr: any) {
-			if (headErr.name === 'NoSuchKey' || headErr.name === 'NotFound') {
-				zipExists = false;
-			} else {
+			if (headErr.name !== 'NotFound' && headErr.name !== 'NoSuchKey') {
 				throw headErr;
 			}
 		}
-		
-		// If ZIP exists, return presigned URL
+
+		// Determine status
+		let status: 'ready' | 'generating' | 'not_started' = 'not_started';
+		let generating = false;
+		let elapsedSeconds: number | undefined;
+		let progress: {
+			processed: number;
+			total: number;
+			percent: number;
+		} | undefined;
+
 		if (zipExists) {
-			const getObjectCmd = new GetObjectCommand({
-				Bucket: bucket,
-				Key: expectedZipKey,
-				ResponseContentDisposition: `attachment; filename="${orderId}.zip"`
-			});
-			const presignedUrl = await getSignedUrl(s3, getObjectCmd, { expiresIn: 3600 });
+			status = 'ready';
+		} else if (order.finalZipGenerating) {
+			status = 'generating';
+			generating = true;
+			const zipGeneratingSince = order.finalZipGeneratingSince as number | undefined;
+			if (zipGeneratingSince) {
+				elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
+			}
 			
-			return {
-				statusCode: 200,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					url: presignedUrl,
-					filename: `${orderId}.zip`,
-					size: zipSize,
-					expiresIn: 3600
-				})
-			};
+			// Include progress if available
+			if (order.finalZipProgress !== undefined && order.finalZipProgressTotal !== undefined) {
+				progress = {
+					processed: order.finalZipProgress as number,
+					total: order.finalZipProgressTotal as number,
+					percent: order.finalZipProgressPercent as number || Math.round((order.finalZipProgress as number / order.finalZipProgressTotal as number) * 100)
+				};
+			}
 		}
-		
-		// ZIP doesn't exist - return 404
+
 		return {
-			statusCode: 404,
+			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: 'ZIP not found',
-				message: 'ZIP file does not exist for this order. The ZIP may still be generating.'
+			body: JSON.stringify({
+				galleryId,
+				orderId,
+				status,
+				generating,
+				ready: status === 'ready',
+				zipExists,
+				zipSize,
+				elapsedSeconds,
+				progress
 			})
 		};
 	} catch (error: any) {
-		console.error('Failed to generate download URL:', error);
+		console.error('Failed to get final ZIP status:', error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to generate download URL', message: error.message })
+			body: JSON.stringify({ error: 'Failed to get final ZIP status', message: error.message })
 		};
 	}
 });

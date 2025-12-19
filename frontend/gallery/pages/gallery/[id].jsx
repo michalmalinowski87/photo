@@ -57,8 +57,9 @@ function ClientGallery({ token, clientId, galleryId, galleryName: initialGallery
 		}
 		try {
 			// Load images, selection, delivered orders, and all orders (to check for PREPARING_DELIVERY) in parallel with JWT authentication
+			// For dev: request all images (limit=10000) - ignore pagination/optimizations
 			const [imagesResponse, selectionResponse, deliveredOrdersResponse, allOrdersResponse] = await Promise.allSettled([
-				apiFetch(`${apiUrl}/galleries/${galleryId}/images`, {
+				apiFetch(`${apiUrl}/galleries/${galleryId}/images?limit=10000`, {
 					headers: { 'Authorization': `Bearer ${token}` }
 				}),
 				apiFetch(`${apiUrl}/galleries/${galleryId}/selections`, {

@@ -5,7 +5,12 @@ import React, { useState, useEffect, useRef } from "react";
 import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { PasswordInputWithStrength, PasswordInputWithToggle, PasswordStrengthResult, PasswordStrengthValidator } from "../components/ui/password-strength-validator";
+import {
+  PasswordInputWithStrength,
+  PasswordInputWithToggle,
+  PasswordStrengthResult,
+  PasswordStrengthValidator,
+} from "../components/ui/password-strength-validator";
 import { initAuth, confirmForgotPassword } from "../lib/auth";
 
 interface CognitoError extends Error {
@@ -14,7 +19,7 @@ interface CognitoError extends Error {
 }
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default function ResetPassword() {
   const router = useRouter();
@@ -27,7 +32,9 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState<boolean>(false);
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
-  const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(null);
+  const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
+    null
+  );
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -40,7 +47,7 @@ export default function ResetPassword() {
     // Get email and code from query params
     const emailParam = router.query.email;
     const codeParam = router.query.code;
-    
+
     if (emailParam) {
       setEmail(decodeURIComponent(typeof emailParam === "string" ? emailParam : emailParam[0]));
     } else {
@@ -50,7 +57,9 @@ export default function ResetPassword() {
     }
 
     if (codeParam) {
-      const decodedCode = decodeURIComponent(typeof codeParam === "string" ? codeParam : codeParam[0]);
+      const decodedCode = decodeURIComponent(
+        typeof codeParam === "string" ? codeParam : codeParam[0]
+      );
       setCode(decodedCode.replace(/\D/g, "").slice(0, 6));
     }
   }, [router]);
@@ -70,20 +79,19 @@ export default function ResetPassword() {
     };
 
     updatePosition();
-    
+
     if (password) {
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
-      
+      window.addEventListener("scroll", updatePosition, true);
+      window.addEventListener("resize", updatePosition);
+
       return () => {
-        window.removeEventListener('scroll', updatePosition, true);
-        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+        window.removeEventListener("resize", updatePosition);
       };
     }
-    
+
     return undefined;
   }, [password]);
-
 
   const handleResetPassword = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -128,7 +136,10 @@ export default function ResetPassword() {
         setError("Nieprawidłowy kod weryfikacyjny");
       } else if (error.code === "ExpiredCodeException" || error.name === "ExpiredCodeException") {
         setError("Kod weryfikacyjny wygasł. Wyślij nowy kod.");
-      } else if (error.code === "InvalidPasswordException" || error.name === "InvalidPasswordException") {
+      } else if (
+        error.code === "InvalidPasswordException" ||
+        error.name === "InvalidPasswordException"
+      ) {
         setError("Hasło nie spełnia wymagań bezpieczeństwa");
       } else if (error.message) {
         setError(error.message);
@@ -139,7 +150,6 @@ export default function ResetPassword() {
       setLoading(false);
     }
   };
-
 
   if (success) {
     return (
@@ -161,7 +171,9 @@ export default function ResetPassword() {
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+            PhotoCloud
+          </span>
         </Link>
       </div>
 
@@ -200,7 +212,7 @@ export default function ResetPassword() {
               autoComplete="new-password"
               minLength={8}
             />
-            
+
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
               <PasswordInputWithToggle
@@ -224,12 +236,12 @@ export default function ResetPassword() {
 
             {/* Password Strength Validator - Fixed Positioned Side Card */}
             {password && passwordStrength && validatorPosition && (
-              <div 
+              <div
                 className="fixed w-72 z-50 hidden md:block pointer-events-auto"
                 style={{
                   top: `${validatorPosition.top}px`,
                   left: `${validatorPosition.left}px`,
-                  maxHeight: 'calc(100vh - 2rem)',
+                  maxHeight: "calc(100vh - 2rem)",
                 }}
               >
                 <div className="rounded-lg border border-border bg-card p-4 shadow-lg max-h-full overflow-y-auto">
@@ -244,18 +256,16 @@ export default function ResetPassword() {
             )}
           </div>
 
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="w-full" 
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
             disabled={loading || !passwordStrength?.meetsMinimum}
           >
             {loading ? "Resetowanie..." : "Zresetuj hasło"}
           </Button>
         </form>
-
       </div>
     </div>
   );
 }
-

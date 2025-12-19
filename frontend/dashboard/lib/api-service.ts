@@ -736,7 +736,8 @@ class ApiService {
      * Validate upload limits after upload completes
      */
     validateUploadLimits: async (
-      galleryId: string
+      galleryId: string,
+      uploadSizeBytes?: number
     ): Promise<{
       withinLimit: boolean;
       uploadedSizeBytes: number;
@@ -752,6 +753,7 @@ class ApiService {
       }
       return await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
         method: "POST",
+        body: JSON.stringify({ uploadSizeBytes: uploadSizeBytes ?? 0 }),
       });
     },
 
@@ -784,6 +786,30 @@ class ApiService {
       return await this._request(`/galleries/${galleryId}/upgrade-plan`, {
         method: "POST",
         body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Download unselected originals as ZIP
+     * Generates ZIP on-demand with short TTL (2 hours)
+     * Returns orderId for polling ZIP status
+     */
+    downloadUnselectedOriginals: async (
+      galleryId: string
+    ): Promise<{
+      status: string;
+      message: string;
+      galleryId: string;
+      orderId: string;
+      unselectedCount: number;
+      warning?: string;
+      zipKey: string;
+    }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      return await this._request(`/galleries/${galleryId}/unselected-originals/zip`, {
+        method: "POST",
       });
     },
   };
@@ -1143,13 +1169,13 @@ class ApiService {
         throw error;
       }
 
-      const data = (await response.json()) as { 
-        url: string; 
+      const data = (await response.json()) as {
+        url: string;
         filename: string;
         size?: number;
         expiresIn?: number;
       };
-      
+
       if (!data.url) {
         throw new Error("No ZIP URL available");
       }
@@ -1158,7 +1184,7 @@ class ApiService {
         url: data.url,
         filename: data.filename ?? `${orderId}.zip`,
         size: data.size,
-        expiresIn: data.expiresIn
+        expiresIn: data.expiresIn,
       };
     },
 
@@ -1166,6 +1192,56 @@ class ApiService {
      * Download final images ZIP for an order
      * Returns presigned URL for download
      */
+    /**
+     * Get ZIP generation status and progress for selected originals
+     */
+    getZipStatus: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      status: "ready" | "generating" | "not_started";
+      generating: boolean;
+      ready: boolean;
+      zipExists: boolean;
+      zipSize?: number;
+      elapsedSeconds?: number;
+      progress?: {
+        processed: number;
+        total: number;
+        percent: number;
+      };
+    }> => {
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/zip/status`);
+    },
+
+    /**
+     * Get final ZIP generation status and progress
+     */
+    getFinalZipStatus: async (
+      galleryId: string,
+      orderId: string
+    ): Promise<{
+      status: "ready" | "generating" | "not_started";
+      generating: boolean;
+      ready: boolean;
+      zipExists: boolean;
+      zipSize?: number;
+      elapsedSeconds?: number;
+      progress?: {
+        processed: number;
+        total: number;
+        percent: number;
+      };
+    }> => {
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/zip/status`);
+    },
+
     downloadFinalZip: async (
       galleryId: string,
       orderId: string
@@ -1200,13 +1276,13 @@ class ApiService {
         throw error;
       }
 
-      const data = (await response.json()) as { 
-        url: string; 
+      const data = (await response.json()) as {
+        url: string;
         filename: string;
         size?: number;
         expiresIn?: number;
       };
-      
+
       if (!data.url) {
         throw new Error("No ZIP URL available");
       }
@@ -1215,7 +1291,7 @@ class ApiService {
         url: data.url,
         filename: data.filename ?? `gallery-${galleryId}-order-${orderId}-final.zip`,
         size: data.size,
-        expiresIn: data.expiresIn
+        expiresIn: data.expiresIn,
       };
     },
   };

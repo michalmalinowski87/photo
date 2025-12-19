@@ -1,9 +1,11 @@
 import { lambdaLogger } from '../../../packages/logger/src';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import type { LambdaEvent, LambdaContext, GalleryItem } from '../../lib/src/lambda-types';
 
+const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 /**
@@ -14,12 +16,14 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaContext) => {
 	const envProc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 
-	if (!galleriesTable) {
+	if (!galleriesTable || !imagesTable || !bucket) {
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Missing GALLERIES_TABLE environment variable' })
+			body: JSON.stringify({ error: 'Missing required environment variables' })
 		};
 	}
 
@@ -97,12 +101,14 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 
 		// Extract filename from key for logging (no maps needed - we store only totals)
 		let filename: string;
+		let orderId: string | undefined;
 		if (isOriginal) {
 			filename = key.split('/originals/')[1];
 		} else {
 			// For finals: galleries/{galleryId}/final/{orderId}/{filename}
 			// We already validated it has exactly 2 parts above
 			const parts = key.split('/final/')[1].split('/');
+			orderId = parts[0];
 			filename = parts[parts.length - 1]; // Get last part (filename)
 		}
 
@@ -130,6 +136,90 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 			ExpressionAttributeValues: expressionValues
 		}));
 
+		// Write image metadata to ImagesTable
+		// Fetch ETag from S3 for idempotency
+		let etag: string | undefined;
+		let lastModified: number = Date.now();
+		try {
+			const headResponse = await s3.send(new HeadObjectCommand({
+				Bucket: bucket,
+				Key: key
+			}));
+			etag = headResponse.ETag?.replace(/"/g, ''); // Remove quotes from ETag
+			lastModified = headResponse.LastModified?.getTime() || Date.now();
+		} catch (headErr: any) {
+			logger?.warn('Failed to fetch ETag from S3, using current timestamp', {
+				error: headErr.message,
+				key
+			});
+		}
+
+		// Construct imageKey: format "original#{filename}" or "final#{orderId}#{filename}"
+		const imageKey = isOriginal 
+			? `original#${filename}`
+			: `final#${orderId}#${filename}`;
+
+		// Write metadata with conditional update (only if ETag changed or record doesn't exist)
+		try {
+			await ddb.send(new PutCommand({
+				TableName: imagesTable,
+				Item: {
+					galleryId,
+					imageKey,
+					type: isOriginal ? 'original' : 'final',
+					filename,
+					orderId: isFinal ? orderId : undefined,
+					s3Key: key,
+					size: fileSize,
+					lastModified,
+					etag: etag || '',
+					hasPreview: false, // Will be updated when thumbnails are uploaded
+					hasBigThumb: false,
+					hasThumb: false
+				},
+				// Conditional write: only update if ETag changed or record doesn't exist
+				ConditionExpression: 'attribute_not_exists(etag) OR etag <> :etag OR lastModified < :lm',
+				ExpressionAttributeValues: {
+					':etag': etag || '',
+					':lm': lastModified
+				}
+			}));
+
+			logger?.info('Wrote image metadata to DynamoDB', {
+				galleryId,
+				imageKey,
+				filename,
+				type: isOriginal ? 'original' : 'final',
+				etag,
+				lastModified
+			});
+		} catch (metadataErr: any) {
+			// If conditional check failed (ETag matches and newer), that's okay - idempotent retry
+			if (metadataErr.name === 'ConditionalCheckFailedException') {
+				logger?.info('Image metadata already exists with same or newer ETag (idempotent retry)', {
+					galleryId,
+					imageKey,
+					etag
+				});
+			} else {
+				// Metadata write failed - this is critical, return error
+				logger?.error('Failed to write image metadata to DynamoDB', {
+					error: metadataErr.message,
+					galleryId,
+					imageKey,
+					key
+				});
+				return {
+					statusCode: 500,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Upload completed but metadata write failed',
+						message: 'File uploaded successfully but failed to record metadata. Please retry.'
+					})
+				};
+			}
+		}
+
 		logger?.info('Updated gallery storage totals after simple PUT upload (atomic)', {
 			galleryId,
 			key,
@@ -143,6 +233,7 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
 				success: true,
+				metadataWritten: true,
 				message: 'Upload completed and storage updated'
 			})
 		};
@@ -156,14 +247,13 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 			fileSize
 		});
 
-		// Still return success since the upload itself was successful
+		// Storage update failed - still return error since metadata write is critical
 		return {
-			statusCode: 200,
+			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ 
-				success: true,
-				message: 'Upload completed (storage update failed, can be recalculated)',
-				warning: 'Storage update failed'
+				error: 'Storage update failed',
+				message: 'Upload completed but storage update failed. Please retry.'
 			})
 		};
 	}

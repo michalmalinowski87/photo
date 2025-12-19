@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { S3Client, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -16,9 +16,13 @@ function getWebpFilename(fname: string): string {
 }
 
 /**
- * Process a single delete operation
+ * Process a single delete operation (for MANUAL deletions only)
+ * 
+ * IMPORTANT: This function is used for manual deletions (user-initiated via API).
+ * For automatic cleanup after DELIVERED, use cleanupDeliveredOrder.ts which does NOT delete DynamoDB records.
+ * 
  * Returns file size for storage update (only for original/final files, not thumbnails)
- * Uses S3 HeadObjectCommand to get file size (simple, scales infinitely, avoids 400KB DynamoDB limit)
+ * Deletes from DynamoDB first, then S3 (prevents orphaned S3 objects)
  */
 async function processDelete(
 	deleteRequest: {
@@ -30,59 +34,117 @@ async function processDelete(
 	},
 	bucket: string,
 	galleriesTable: string,
+	imagesTable: string,
 	logger: any
 ): Promise<{ galleryId: string; success: boolean; fileSize?: number; type: 'original' | 'final'; filename: string }> {
 	const { type, galleryId, orderId, filename, originalKey } = deleteRequest;
 	
 	try {
-		// Get file size from S3 using HeadObjectCommand (simple, scales infinitely, avoids 400KB DynamoDB limit)
-		// HeadObject is cheap ($0.0004 per 1000 requests) and fast (~50ms)
+		// Construct imageKey for DynamoDB
+		const imageKey = type === 'original'
+			? `original#${filename}`
+			: `final#${orderId}#${filename}`;
+
+		// 1. Delete from DynamoDB first (get file size from record if available)
 		let fileSize = 0;
-		
 		try {
-			const headResponse = await s3.send(new HeadObjectCommand({
-				Bucket: bucket,
-				Key: originalKey
+			// Try to get file size from DynamoDB record before deleting
+			const imageRecord = await ddb.send(new GetCommand({
+				TableName: imagesTable,
+				Key: { galleryId, imageKey }
 			}));
-			
-			fileSize = headResponse.ContentLength || 0;
-			
-			if (fileSize <= 0) {
-				logger?.warn('File size is 0 or negative from S3 HeadObject', {
+
+			if (imageRecord.Item) {
+				fileSize = imageRecord.Item.size || 0;
+				logger?.info('Retrieved file size from DynamoDB record', {
+					galleryId,
+					filename,
+					fileSize,
+					type,
+					imageKey
+				});
+			}
+
+			// Delete from DynamoDB
+			await ddb.send(new DeleteCommand({
+				TableName: imagesTable,
+				Key: { galleryId, imageKey }
+			}));
+
+			logger?.info('Deleted image metadata from DynamoDB', {
+				galleryId,
+				filename,
+				type,
+				imageKey
+			});
+		} catch (dbErr: any) {
+			if (dbErr.name === 'ResourceNotFoundException' || dbErr.name === 'ConditionalCheckFailedException') {
+				// Record doesn't exist - that's okay, continue with S3 deletion
+				logger?.warn('Image metadata not found in DynamoDB (may have been deleted already)', {
 					galleryId,
 					filename,
 					type,
-					key: originalKey
+					imageKey
+				});
+			} else {
+				// DynamoDB delete failed - don't delete from S3 (prevent orphaned S3 objects)
+				logger?.error('Failed to delete image metadata from DynamoDB', {
+					error: dbErr.message,
+					galleryId,
+					filename,
+					type,
+					imageKey
 				});
 				return { galleryId, success: false, type, filename };
 			}
-			
-			logger?.info('Retrieved file size from S3 HeadObject', {
-				galleryId,
-				filename,
-				fileSize,
-				type,
-				key: originalKey
-			});
-		} catch (headErr: any) {
-			if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
-				logger?.warn('File not found in S3 during delete', {
+		}
+
+		// 2. If file size not found in DynamoDB, try S3 HeadObject as fallback
+		if (fileSize === 0) {
+			try {
+				const headResponse = await s3.send(new HeadObjectCommand({
+					Bucket: bucket,
+					Key: originalKey
+				}));
+				
+				fileSize = headResponse.ContentLength || 0;
+				
+				if (fileSize <= 0) {
+					logger?.warn('File size is 0 or negative from S3 HeadObject', {
+						galleryId,
+						filename,
+						type,
+						key: originalKey
+					});
+				} else {
+					logger?.info('Retrieved file size from S3 HeadObject (fallback)', {
+						galleryId,
+						filename,
+						fileSize,
+						type,
+						key: originalKey
+					});
+				}
+			} catch (headErr: any) {
+				if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
+					logger?.warn('File not found in S3 during delete', {
+						galleryId,
+						filename,
+						type,
+						key: originalKey
+					});
+					// File doesn't exist - mark as success (idempotent)
+					return { galleryId, success: true, fileSize: 0, type, filename };
+				}
+				logger?.warn('Failed to get file size from S3 HeadObject (non-critical)', {
+					error: headErr.message,
 					galleryId,
 					filename,
 					type,
 					key: originalKey
 				});
-				// File doesn't exist - skip storage update but mark as success (idempotent)
-				return { galleryId, success: true, fileSize: 0, type, filename };
+				// Continue with deletion even if HeadObject fails
 			}
-			logger?.error('Failed to get file size from S3 HeadObject', {
-				error: headErr.message,
-				galleryId,
-				filename,
-				type,
-				key: originalKey
-			});
-			throw headErr;
 		}
 
 		// Construct S3 keys for all files to delete
@@ -106,7 +168,8 @@ async function processDelete(
 			bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${webpFilename}`;
 		}
 
-		// Delete from S3 (original/final, previews, thumbs, bigthumbs)
+		// 3. Delete from S3 (original/final, previews, thumbs, bigthumbs)
+		// Only delete from S3 after successful DynamoDB deletion
 		const deleteResults = await Promise.allSettled([
 			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: originalKey })),
 			s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: previewKey })),
@@ -205,11 +268,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryBytesToSubtract = new Map<string, { originals: number; finals: number }>(); // Track bytes to subtract per gallery
 
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+
+	if (!imagesTable) {
+		logger?.error('Missing IMAGES_TABLE environment variable');
+		return;
+	}
 
 	for (let i = 0; i < deletes.length; i += BATCH_SIZE) {
 		const batch = deletes.slice(i, i + BATCH_SIZE);
 		const results = await Promise.allSettled(
-			batch.map(deleteReq => processDelete(deleteReq, bucket, galleriesTable, logger))
+			batch.map(deleteReq => processDelete(deleteReq, bucket, galleriesTable, imagesTable, logger))
 		);
 
 		// Collect gallery IDs, track final image deletes, and accumulate file sizes for storage updates
@@ -349,19 +418,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const finalPrefix = `galleries/${galleryId}/final/${orderId}/`;
 				
 				try {
-					// Check if order has any remaining finals using S3 listing
+					// Check if order has any remaining finals using DynamoDB query
 					// This is order-specific and only used for status management (not storage calculation)
-					const listResponse = await s3.send(new ListObjectsV2Command({
-						Bucket: bucket,
-						Prefix: finalPrefix,
-						MaxKeys: 100 // Only need to check if any files exist
+					const remainingFinalsQuery = await ddb.send(new QueryCommand({
+						TableName: imagesTable,
+						IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+						KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+						FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+						ExpressionAttributeNames: {
+							'#type': 'type'
+						},
+						ExpressionAttributeValues: {
+							':g': galleryId,
+							':orderId': orderId,
+							':type': 'final'
+						},
+						Limit: 1 // Only need to check if any files exist
 					}));
 					
-					const remainingFinals = (listResponse.Contents || []).filter(obj => {
-						const objKey = obj.Key || '';
-						// Only count files directly under the prefix, not subdirectories
-						return objKey.startsWith(finalPrefix) && objKey !== finalPrefix && !objKey.substring(finalPrefix.length).includes('/');
-					});
+					const remainingFinals = remainingFinalsQuery.Items || [];
 					
 					// If directory is empty, check if we need to revert order status
 					if (remainingFinals.length === 0) {

@@ -13,7 +13,7 @@ interface CognitoError extends Error {
 }
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default function VerifyEmail() {
   const router = useRouter();
@@ -125,7 +125,9 @@ export default function VerifyEmail() {
       // Handle rate limit errors
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
         // Use the friendly message from backend, or provide a fallback
-        const rateLimitMessage = error.message || "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości.";
+        const rateLimitMessage =
+          error.message ||
+          "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam i wszystkie wcześniejsze wiadomości.";
         setResendMessage(rateLimitMessage);
         setResendMessageType("warning");
         // Still start cooldown even on rate limit error to prevent spam
@@ -163,7 +165,9 @@ export default function VerifyEmail() {
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+            PhotoCloud
+          </span>
         </Link>
       </div>
 
@@ -195,12 +199,7 @@ export default function VerifyEmail() {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="w-full" 
-            disabled={loading}
-          >
+          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
             {loading ? "Weryfikowanie..." : "Zweryfikuj konto"}
           </Button>
         </form>
@@ -212,14 +211,20 @@ export default function VerifyEmail() {
             disabled={resending || resendCooldown > 0}
             className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            {resending ? "Wysyłanie..." : resendCooldown > 0 ? `Wyślij nowy kod (${resendCooldown}s)` : "Wyślij nowy kod"}
+            {resending
+              ? "Wysyłanie..."
+              : resendCooldown > 0
+                ? `Wyślij nowy kod (${resendCooldown}s)`
+                : "Wyślij nowy kod"}
           </button>
           {resendMessage && (
-            <div className={`text-sm px-3 py-2 rounded ${
-              resendMessageType === "success" 
-                ? "bg-green-500/15 border border-green-700 text-green-400" 
-                : "bg-error-500/15 border border-error-700 text-error-400"
-            }`}>
+            <div
+              className={`text-sm px-3 py-2 rounded ${
+                resendMessageType === "success"
+                  ? "bg-green-500/15 border border-green-700 text-green-400"
+                  : "bg-error-500/15 border border-error-700 text-error-400"
+              }`}
+            >
               {resendMessage}
             </div>
           )}

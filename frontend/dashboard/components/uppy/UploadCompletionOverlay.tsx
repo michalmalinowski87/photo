@@ -73,7 +73,7 @@ export const UploadCompletionOverlay = ({
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse" />
                       <p className="text-sm font-medium text-brand-600 dark:text-brand-400">
-                        Finalizowanie przesyłania...
+                        Przetwarzanie metadanych i przygotowywanie zdjęć...
                       </p>
                     </div>
                   </div>

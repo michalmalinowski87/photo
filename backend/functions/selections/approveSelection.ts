@@ -1,16 +1,19 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getJWTFromEvent } from '../../lib/src/jwt';
 import { createSelectionApprovedEmail } from '../../lib/src/email';
+import { createHash } from 'crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
 const lambda = new LambdaClient({});
+const s3 = new S3Client({});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -18,6 +21,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
+	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	if (!galleriesTable || !ordersTable) return { statusCode: 500, body: 'Missing tables' };
 
 	const galleryId = event?.pathParameters?.id;
@@ -88,43 +92,160 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let orderId: string | undefined;
 	let orderNumber: number | undefined;
 	
+	// Compute hash BEFORE updating order status - needed for ZIP generation
+	let selectedKeysHash: string | undefined;
+	if (zipFnName && bucket && selectedKeys.length > 0) {
+		try {
+			const pLimit = require('p-limit');
+			const limit = pLimit(10); // Limit concurrent HeadObject calls
+			
+			const filesWithMetadata = await Promise.all(
+				selectedKeys.map(key => 
+					limit(async () => {
+						const s3Key = `galleries/${galleryId}/originals/${key}`;
+						try {
+							const headResponse = await s3.send(new HeadObjectCommand({
+								Bucket: bucket,
+								Key: s3Key
+							}));
+							return {
+								filename: key,
+								etag: headResponse.ETag || '',
+								size: headResponse.ContentLength || 0,
+								lastModified: headResponse.LastModified?.getTime() || 0
+							};
+						} catch (headErr: any) {
+							if (headErr.name === 'NotFound' || headErr.name === 'NoSuchKey') {
+								// File doesn't exist - include in hash with null values to detect missing files
+								return {
+									filename: key,
+									etag: '',
+									size: 0,
+									lastModified: 0,
+									missing: true
+								};
+							}
+							throw headErr;
+						}
+					})
+				)
+			);
+			
+			// Sort by filename for consistent hashing
+			filesWithMetadata.sort((a, b) => a.filename.localeCompare(b.filename));
+			
+			selectedKeysHash = createHash('sha256')
+				.update(JSON.stringify(filesWithMetadata))
+				.digest('hex')
+				.substring(0, 16); // Use first 16 chars for shorter hash
+		} catch (hashErr: any) {
+			// Log but continue - hash computation failure shouldn't block order creation
+			logger.warn('Failed to compute selectedKeysHash', {
+				error: hashErr.message,
+				galleryId
+			});
+		}
+	}
+
 	if (existingOrder) {
 		orderId = existingOrder.orderId;
 		orderNumber = existingOrder.orderNumber; // Preserve existing orderNumber
+		
+		// Check if final photos already exist for this order
+		// If they do, status should be PREPARING_DELIVERY, not CLIENT_APPROVED
+		let hasFinalPhotos = false;
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+		if (imagesTable && orderId) {
+			try {
+				// Query DynamoDB to check if any final images exist for this order
+				const finalFilesResponse = await ddb.send(new QueryCommand({
+					TableName: imagesTable,
+					IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+					KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+					FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+					ExpressionAttributeNames: {
+						'#type': 'type'
+					},
+					ExpressionAttributeValues: {
+						':g': galleryId,
+						':orderId': orderId,
+						':type': 'final'
+					},
+					Limit: 1 // We only need to know if any files exist
+				}));
+				hasFinalPhotos = (finalFilesResponse.Items?.length || 0) > 0;
+			} catch (finalCheckErr: any) {
+				// Log but continue - if check fails, default to CLIENT_APPROVED
+				logger.warn('Failed to check for existing final photos', {
+					error: finalCheckErr.message,
+					galleryId,
+					orderId
+				});
+			}
+		}
+		
+		// Determine delivery status based on whether final photos exist
+		// If final photos exist, status should be PREPARING_DELIVERY (photographer already did the work)
+		// Otherwise, status should be CLIENT_APPROVED (ready for photographer to process)
+		const deliveryStatus = hasFinalPhotos ? 'PREPARING_DELIVERY' : 'CLIENT_APPROVED';
+		
+		// Set zipGenerating flag BEFORE updating status
+		// This prevents race condition where order status poll happens before flag is set
+		// Clear old ZIP-related fields when updating order (new selection = new ZIP needed)
+		// IMPORTANT: Always generate ZIP when selection is approved, regardless of status
+		// This is because the selection changed (via change request), so ZIP needs to be regenerated
+		// Status is PREPARING_DELIVERY if finals exist, but ZIP generation still happens
+		const updateExpr = selectedKeysHash
+			? 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, zipSelectedKeysHash = :h REMOVE canceledAt, zipKey, zipProgress'
+			: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts REMOVE canceledAt, zipKey, zipSelectedKeysHash, zipProgress';
+		
+		const updateValues: any = {
+			':ds': deliveryStatus,
+			':sk': selectedKeys,
+			':sc': selectedCount,
+			':oc': overageCount,
+			':ocents': overageCents,
+			':tc': totalCents,
+			':u': now,
+			':g': true,
+			':ts': Date.now()
+		};
+		if (selectedKeysHash) {
+			updateValues[':h'] = selectedKeysHash;
+		}
+		
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId },
-			UpdateExpression: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u REMOVE canceledAt, zipKey',
-			ExpressionAttributeValues: {
-				':ds': 'CLIENT_APPROVED',
-				':sk': selectedKeys,
-				':sc': selectedCount,
-				':oc': overageCount,
-				':ocents': overageCents,
-				':tc': totalCents,
-				':u': now
-			}
+			UpdateExpression: updateExpr,
+			ExpressionAttributeValues: updateValues
 		}));
 	} else {
 		// Create new order - reuse gallery from earlier fetch
 		orderNumber = (gallery?.lastOrderNumber ?? 0) + 1;
 		orderId = `${orderNumber}-${Date.now()}`;
+		const orderItem: any = {
+			galleryId,
+			orderId,
+			orderNumber,
+			ownerId: gallery.ownerId, // Denormalize ownerId for efficient querying
+			deliveryStatus: 'CLIENT_APPROVED',
+			paymentStatus: 'UNPAID',
+			selectedKeys,
+			selectedCount,
+			overageCount,
+			overageCents,
+			totalCents,
+			createdAt: now,
+			zipGenerating: true,
+			zipGeneratingSince: Date.now()
+		};
+		if (selectedKeysHash) {
+			orderItem.zipSelectedKeysHash = selectedKeysHash;
+		}
 		await ddb.send(new PutCommand({
 			TableName: ordersTable,
-			Item: {
-				galleryId,
-				orderId,
-				orderNumber,
-				ownerId: gallery.ownerId, // Denormalize ownerId for efficient querying
-				deliveryStatus: 'CLIENT_APPROVED',
-				paymentStatus: 'UNPAID',
-				selectedKeys,
-				selectedCount,
-				overageCount,
-				overageCents,
-				totalCents,
-				createdAt: now
-			}
+			Item: orderItem
 		}));
 	}
 	await ddb.send(new UpdateCommand({
@@ -140,8 +261,70 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}));
 	
-	
-	// ZIPs are now generated on-demand only, not automatically
+	// Pre-generate ZIP in background after order creation/update
+	// Always regenerate ZIP when selection is approved (new or changed selection)
+	// This includes both CLIENT_APPROVED and PREPARING_DELIVERY statuses
+	// For PREPARING_DELIVERY: selection changed via change request, so ZIP must be regenerated
+	// For CLIENT_APPROVED: normal flow, ZIP generation needed
+	// Note: zipGenerating flag is already set above BEFORE order status update to prevent race conditions
+	const shouldGenerateZip = zipFnName && bucket && orderId && selectedKeys.length > 0 && selectedKeysHash;
+	if (shouldGenerateZip) {
+		try {
+			// Invoke ZIP generation Lambda asynchronously
+			// Hash was already computed above, so we can use it here
+			const payload = Buffer.from(JSON.stringify({ 
+				galleryId, 
+				keys: selectedKeys, 
+				orderId,
+				selectedKeysHash // Pass hash to ZIP generation function
+			}));
+			
+			await lambda.send(new InvokeCommand({ 
+				FunctionName: zipFnName, 
+				Payload: payload, 
+				InvocationType: 'Event' // Async invocation
+			}));
+			
+			logger.info('ZIP generation Lambda invoked for pre-generation', { galleryId, orderId, zipFnName });
+		} catch (zipErr: any) {
+			// Log but don't fail - ZIP generation is best effort, user can still download later
+			// Clear the flag if Lambda invocation failed
+			try {
+				await ddb.send(new UpdateCommand({
+					TableName: ordersTable,
+					Key: { galleryId, orderId },
+					UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince, zipSelectedKeysHash'
+				}));
+			} catch (clearErr: any) {
+				logger.warn('Failed to clear zipGenerating flag after Lambda invocation failure', {
+					error: clearErr.message,
+					galleryId,
+					orderId
+				});
+			}
+			logger.error('Failed to start ZIP pre-generation', {
+				error: zipErr.message,
+				galleryId,
+				orderId,
+				zipFnName
+			});
+		}
+	} else if (zipFnName && bucket && orderId && selectedKeys.length > 0 && !selectedKeysHash) {
+		// Hash computation failed - clear the flag we set optimistically
+		try {
+			await ddb.send(new UpdateCommand({
+				TableName: ordersTable,
+				Key: { galleryId, orderId },
+				UpdateExpression: 'REMOVE zipGenerating, zipGeneratingSince'
+			}));
+		} catch (clearErr: any) {
+			logger.warn('Failed to clear zipGenerating flag after hash computation failure', {
+				error: clearErr.message,
+				galleryId,
+				orderId
+			});
+		}
+	}
 
 	// Notify photographer with summary (best effort)
 	const sender = (globalThis as any).process?.env?.SENDER_EMAIL as string;

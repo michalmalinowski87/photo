@@ -57,15 +57,13 @@ export const MobileWarningModal = ({ isOpen, onClose }: MobileWarningModalProps)
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-yellow-900/30 flex items-center justify-center">
             <Smartphone className="w-5 h-5 text-yellow-400" />
           </div>
-          <h2 className="text-xl font-semibold text-foreground">
-            Ostrzeżenie o kompatybilności
-          </h2>
+          <h2 className="text-xl font-semibold text-foreground">Ostrzeżenie o kompatybilności</h2>
         </div>
 
         <div className="mb-6">
           <p className="text-sm text-muted-foreground mb-3">
-            Dashboard jest zoptymalizowany dla komputerów stacjonarnych.
-            Dedykowana wersja mobilna jest w przygotowaniu.
+            Dashboard jest zoptymalizowany dla komputerów stacjonarnych. Dedykowana wersja mobilna
+            jest w przygotowaniu.
           </p>
 
           <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 mb-3">

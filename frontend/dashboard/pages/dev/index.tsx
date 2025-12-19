@@ -30,7 +30,8 @@ const devTools: DevTool[] = [
   },
   {
     title: "Test wygaśnięcia galerii",
-    description: "Utwórz galerię z 2 oryginalnymi i 2 finalnymi zdjęciami, ustaw datę wygaśnięcia i śledź proces usuwania",
+    description:
+      "Utwórz galerię z 2 oryginalnymi i 2 finalnymi zdjęciami, ustaw datę wygaśnięcia i śledź proces usuwania",
     path: "/dev/test-gallery-expiry",
     icon: <Clock size={24} />,
     category: "Galerie",
@@ -62,7 +63,8 @@ const devTools: DevTool[] = [
   },
   {
     title: "Metryki Lambda - Pamięć",
-    description: "Analiza wykorzystania pamięci funkcji Lambda - sprawdź czy nie przydzielasz za dużo pamięci",
+    description:
+      "Analiza wykorzystania pamięci funkcji Lambda - sprawdź czy nie przydzielasz za dużo pamięci",
     path: "/dev/lambda-metrics",
     icon: <Activity size={24} />,
     category: "API",

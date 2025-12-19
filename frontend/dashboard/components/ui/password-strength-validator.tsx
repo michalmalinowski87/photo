@@ -162,9 +162,7 @@ export const PasswordStrengthValidator: React.FC<PasswordStrengthValidatorProps>
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Siła hasła</span>
-          <span className={cn("font-medium", config.textColor)}>
-            {config.label}
-          </span>
+          <span className={cn("font-medium", config.textColor)}>{config.label}</span>
         </div>
 
         {/* Progress Bar Container */}
@@ -186,22 +184,21 @@ export const PasswordStrengthValidator: React.FC<PasswordStrengthValidatorProps>
       {/* Requirements Checklist */}
       <div className="space-y-1.5">
         {requirements.map((req) => (
-          <div
-            key={req.key}
-            className="flex items-center gap-2 text-xs transition-colors"
-          >
+          <div key={req.key} className="flex items-center gap-2 text-xs transition-colors">
             {req.met ? (
-              <Check className="w-3.5 h-3.5 flex-shrink-0 !text-green-500" stroke="#22c55e" strokeWidth={2.5} />
+              <Check
+                className="w-3.5 h-3.5 flex-shrink-0 !text-green-500"
+                stroke="#22c55e"
+                strokeWidth={2.5}
+              />
             ) : (
-              <X className="w-3.5 h-3.5 flex-shrink-0 !text-red-500" stroke="#ef4444" strokeWidth={2.5} />
+              <X
+                className="w-3.5 h-3.5 flex-shrink-0 !text-red-500"
+                stroke="#ef4444"
+                strokeWidth={2.5}
+              />
             )}
-            <span
-              className={cn(
-                req.met
-                  ? "text-foreground"
-                  : "text-muted-foreground"
-              )}
-            >
+            <span className={cn(req.met ? "text-foreground" : "text-muted-foreground")}>
               {req.label}
             </span>
           </div>
@@ -211,8 +208,7 @@ export const PasswordStrengthValidator: React.FC<PasswordStrengthValidatorProps>
   );
 };
 
-interface PasswordInputWithStrengthProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+interface PasswordInputWithStrengthProps extends React.InputHTMLAttributes<HTMLInputElement> {
   password: string;
   onPasswordChange: (value: string) => void;
   minLength?: number;
@@ -223,69 +219,69 @@ interface PasswordInputWithStrengthProps
 export const PasswordInputWithStrength = React.forwardRef<
   HTMLInputElement,
   PasswordInputWithStrengthProps
->(({
-  password,
-  onPasswordChange,
-  minLength = 8,
-  showToggle = true,
-  onStrengthChange,
-  className,
-  ...inputProps
-}, ref) => {
-  const [showPassword, setShowPassword] = useState(false);
+>(
+  (
+    {
+      password,
+      onPasswordChange,
+      minLength = 8,
+      showToggle = true,
+      onStrengthChange,
+      className,
+      ...inputProps
+    },
+    ref
+  ) => {
+    const [showPassword, setShowPassword] = useState(false);
 
-  return (
-    <>
-      {/* Password Input */}
-      <div className="relative">
-        <input
-          ref={ref}
-          type={showPassword ? "text" : "password"}
-          value={password}
-          onChange={(e) => onPasswordChange(e.target.value)}
-          className={cn(
-            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300",
-            className
-          )}
-          {...inputProps}
-        />
-        {showToggle && (
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
-            aria-label={showPassword ? "Ukryj hasło" : "Pokaż hasło"}
-          >
-            {showPassword ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
+    return (
+      <>
+        {/* Password Input */}
+        <div className="relative">
+          <input
+            ref={ref}
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
+            className={cn(
+              "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300",
+              className
             )}
-          </button>
-        )}
-      </div>
-
-      {/* Mobile: Show below input */}
-      {password && (
-        <div className="mt-4 md:hidden">
-          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-            <PasswordStrengthValidator
-              password={password}
-              minLength={minLength}
-              onStrengthChange={onStrengthChange}
-              showToggle={false}
-            />
-          </div>
+            {...inputProps}
+          />
+          {showToggle && (
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+              aria-label={showPassword ? "Ukryj hasło" : "Pokaż hasło"}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          )}
         </div>
-      )}
-    </>
-  );
-});
+
+        {/* Mobile: Show below input */}
+        {password && (
+          <div className="mt-4 md:hidden">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <PasswordStrengthValidator
+                password={password}
+                minLength={minLength}
+                onStrengthChange={onStrengthChange}
+                showToggle={false}
+              />
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+);
 
 PasswordInputWithStrength.displayName = "PasswordInputWithStrength";
 
-interface PasswordInputWithToggleProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+interface PasswordInputWithToggleProps extends React.InputHTMLAttributes<HTMLInputElement> {
   value: string;
   onValueChange: (value: string) => void;
   showToggle?: boolean;
@@ -319,11 +315,7 @@ export const PasswordInputWithToggle: React.FC<PasswordInputWithToggleProps> = (
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
           aria-label={showPassword ? "Ukryj hasło" : "Pokaż hasło"}
         >
-          {showPassword ? (
-            <EyeOff className="w-4 h-4" />
-          ) : (
-            <Eye className="w-4 h-4" />
-          )}
+          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
       )}
     </div>

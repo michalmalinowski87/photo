@@ -797,7 +797,7 @@ export const NextStepsOverlay = () => {
                     }}
                   >
                     <span
-                      className={`text-[14px] font-medium tracking-[-0.01em] whitespace-nowrap ${
+                      className={`text-[14px] font-medium tracking-[-0.01em] whitespace-nowrap block ${
                         step.completed
                           ? "text-success-700 dark:text-success-400"
                           : isDisabled
@@ -822,7 +822,7 @@ export const NextStepsOverlay = () => {
                     content={tooltipContent}
                     side="top"
                     align={!nextStepsOverlayExpanded ? "end" : "center"}
-                    fullWidth={!nextStepsOverlayExpanded}
+                    fullWidth={true}
                   >
                     {stepButton}
                   </Tooltip>

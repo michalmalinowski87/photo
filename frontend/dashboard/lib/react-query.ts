@@ -82,6 +82,11 @@ export const queryKeys = {
       [...queryKeys.orders.detail(galleryId, orderId), "final-images"] as const,
     finalImagesInfinite: (galleryId: string, orderId: string) =>
       [...queryKeys.orders.detail(galleryId, orderId), "final-images", "infinite"] as const,
+    zipStatus: (
+      galleryId: string,
+      orderId: string,
+      type: "original" | "final" | "unselected-originals"
+    ) => [...queryKeys.orders.detail(galleryId, orderId), "zip-status", type] as const,
   },
   wallet: {
     all: ["wallet"] as const,

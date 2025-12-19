@@ -89,7 +89,13 @@ interface WizardData {
   initialPaymentAmountCents: number;
 }
 
-function SubmitButton({ onSubmit: _onSubmit, disabled }: { onSubmit: () => void; disabled: boolean }) {
+function SubmitButton({
+  onSubmit: _onSubmit,
+  disabled,
+}: {
+  onSubmit: () => void;
+  disabled: boolean;
+}) {
   return (
     <button
       type="submit"
@@ -810,8 +816,8 @@ const CreateGalleryWizard = ({
                   </div>
                 );
               })()}
-            {currentStep > 1 && (
-              currentStep === 4 ? (
+            {currentStep > 1 &&
+              (currentStep === 4 ? (
                 <form onSubmit={handleFormSubmit}>
                   <SubmitButton onSubmit={handleSubmit} disabled={loading} />
                 </form>
@@ -829,8 +835,7 @@ const CreateGalleryWizard = ({
                     </>
                   )}
                 </button>
-              )
-            )}
+              ))}
           </div>
           {currentStep === 1 && <div />}
         </div>

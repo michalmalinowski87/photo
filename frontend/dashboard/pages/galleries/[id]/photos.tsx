@@ -1801,14 +1801,16 @@ export default function GalleryPhotos() {
                 </button>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {unselectedImages.length > 0 && (
-                    <button
-                      onClick={handleDeleteAllUnselectedClick}
-                      disabled={isBulkDeleting}
-                      className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 size={16} />
-                      <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={handleDeleteAllUnselectedClick}
+                        disabled={isBulkDeleting}
+                        className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={16} />
+                        <span>Usuń Wszystkie Niewybrane Zdjęcia</span>
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => toggleSection("unselected")}
@@ -1906,6 +1908,8 @@ export default function GalleryPhotos() {
             type: "originals",
             onValidationNeeded: (data) => {
               setLimitExceededData(data);
+              // Close the upload modal when limit is exceeded
+              handleUploadModalClose();
             },
             onUploadComplete: () => {
               setUploadModalOpen(false);
@@ -1946,10 +1950,14 @@ export default function GalleryPhotos() {
             // Reload gallery after upgrade
             await reloadGallery();
             setLimitExceededData(null);
+            // Upload modal is already closed from onValidationNeeded, but ensure it's closed
+            handleUploadModalClose();
           }}
           onCancel={() => {
             // User cancelled - just close the modal
             setLimitExceededData(null);
+            // Upload modal is already closed from onValidationNeeded, but ensure it's closed
+            handleUploadModalClose();
           }}
         />
       )}

@@ -1,7 +1,8 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createLambdaErrorResponse } from '../../lib/src/error-utils';
@@ -14,10 +15,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
 
-	if (!bucket || !galleriesTable || !ordersTable) {
+	if (!bucket || !galleriesTable || !imagesTable || !ordersTable) {
 		return createLambdaErrorResponse(
 			new Error('Missing required environment variables'),
 			'Missing required environment variables',
@@ -103,20 +105,44 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// OPTIMIZATION: List final images and previews/thumbs in parallel
-		// Final images are stored at: galleries/{galleryId}/final/{orderId}/{filename}
-		const prefix = `galleries/${galleryId}/final/${orderId}/`;
+		// Query DynamoDB for final images instead of S3 listing
+		// Query using galleryId PK and filter by type = 'final' and orderId
 		const previewsPrefix = `galleries/${galleryId}/final/${orderId}/previews/`;
 		const bigThumbsPrefix = `galleries/${galleryId}/final/${orderId}/bigthumbs/`;
 		const thumbsPrefix = `galleries/${galleryId}/final/${orderId}/thumbs/`;
 
-		// Fetch all folders in parallel for optimal performance
-		const [finalsListResponse, previewsListResponse, bigThumbsListResponse, thumbsListResponse] = await Promise.all([
-			s3.send(new ListObjectsV2Command({
-				Bucket: bucket,
-				Prefix: prefix,
-				Delimiter: '/' // Only return objects directly under this prefix, not subdirectories
-			})),
+		// Query DynamoDB for final images for this order
+		let allFinalImageRecords: any[] = [];
+		let lastEvaluatedKey: any = undefined;
+
+		do {
+			const queryParams: any = {
+				TableName: imagesTable,
+				IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+				KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+				FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+				ExpressionAttributeNames: {
+					'#type': 'type'
+				},
+				ExpressionAttributeValues: {
+					':g': galleryId,
+					':orderId': orderId,
+					':type': 'final'
+				},
+				Limit: 1000 // DynamoDB query limit
+			};
+
+			if (lastEvaluatedKey) {
+				queryParams.ExclusiveStartKey = lastEvaluatedKey;
+			}
+
+			const queryResponse = await ddb.send(new QueryCommand(queryParams));
+			allFinalImageRecords.push(...(queryResponse.Items || []));
+			lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+		} while (lastEvaluatedKey);
+
+		// Fetch preview/thumb folders to check existence (still use S3 listing for these)
+		const [previewsListResponse, bigThumbsListResponse, thumbsListResponse] = await Promise.all([
 			s3.send(new ListObjectsV2Command({
 				Bucket: bucket,
 				Prefix: previewsPrefix
@@ -131,13 +157,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}))
 		]);
 
+		// Helper to extract base filename (without extension) for matching
+		// S3 keys are stored as IMG_4723.webp, DynamoDB has IMG_4723.jpg
+		// We need to match on base name (IMG_4723) regardless of extension
+		const getBaseFilename = (filename: string): string => {
+			const lastDot = filename.lastIndexOf('.');
+			return lastDot === -1 ? filename : filename.substring(0, lastDot);
+		};
+
 		// Process preview images (for matching with finals)
+		// Extract base filename (without .webp extension) for matching
 		const previewFiles = new Map<string, any>(
 			(previewsListResponse.Contents || [])
 				.map(obj => {
 					const fullKey = obj.Key || '';
-					const filename = fullKey.replace(previewsPrefix, '').replace('.webp', '');
-					return filename ? [filename, obj] : null;
+					const filenameWithExt = fullKey.replace(previewsPrefix, '').replace('.webp', '');
+					const baseFilename = getBaseFilename(filenameWithExt);
+					return baseFilename ? [baseFilename, obj] : null;
 				})
 				.filter((entry): entry is [string, any] => entry !== null)
 		);
@@ -146,7 +182,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const bigThumbKeys = new Set(
 			(bigThumbsListResponse.Contents || []).map(obj => {
 				const fullKey = obj.Key || '';
-				return fullKey.replace(bigThumbsPrefix, '').replace('.webp', '');
+				const filenameWithExt = fullKey.replace(bigThumbsPrefix, '').replace('.webp', '');
+				return getBaseFilename(filenameWithExt);
 			}).filter(Boolean)
 		);
 
@@ -154,41 +191,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const thumbKeys = new Set(
 			(thumbsListResponse.Contents || []).map(obj => {
 				const fullKey = obj.Key || '';
-				return fullKey.replace(thumbsPrefix, '').replace('.webp', '');
+				const filenameWithExt = fullKey.replace(thumbsPrefix, '').replace('.webp', '');
+				return getBaseFilename(filenameWithExt);
 			}).filter(Boolean)
 		);
 
-		// Generate WebP filename helper (replace extension with .webp)
-		const getWebpFilename = (fname: string) => {
-			const lastDot = fname.lastIndexOf('.');
-			if (lastDot === -1) return `${fname}.webp`;
-			return `${fname.substring(0, lastDot)}.webp`;
-		};
-
-		// Process final images
-		const finalFiles = (finalsListResponse.Contents || [])
-			.map(obj => {
-				const fullKey = obj.Key || '';
-				// Ensure the key matches our expected prefix exactly
-				if (!fullKey.startsWith(prefix)) {
-					return null;
-				}
-				const filename = fullKey.replace(prefix, '');
-				// Skip if empty or contains slashes (subdirectories) - skip processed previews/thumbs
-				if (!filename || filename.includes('/') || filename.startsWith('previews/') || filename.startsWith('thumbs/')) {
-					return null;
-				}
-				return { filename, obj };
-			})
-			.filter((entry): entry is { filename: string; obj: any } => entry !== null);
-
-		// Sort by LastModified timestamp (newest first), with filename as secondary sort key
-		// This ensures accurate ordering for fast consecutive uploads
-		const sortedFinalFiles = finalFiles
-			.map(({ filename, obj }) => ({
-				filename,
-				obj,
-				lastModified: obj.LastModified ? new Date(obj.LastModified).getTime() : 0
+		// Sort final images by lastModified (newest first), with filename as secondary sort key
+		const sortedFinalFiles = allFinalImageRecords
+			.map(record => ({
+				filename: record.filename,
+				lastModified: record.lastModified || 0,
+				size: record.size || 0,
+				s3Key: record.s3Key
 			}))
 			.sort((a, b) => {
 				// Primary sort: by timestamp descending (newest first)
@@ -199,49 +213,128 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return a.filename.localeCompare(b.filename);
 			});
 
-		// Build images array from sorted files
-		const allImages = sortedFinalFiles.map(({ filename, obj }) => {
-			const finalKey = `galleries/${galleryId}/final/${orderId}/${filename}`;
-			
-			// Generate WebP preview/thumb keys (for display)
-			const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
-			const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
-			const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
-			const previewWebpKey = getWebpFilename(previewKey);
-			const bigThumbWebpKey = getWebpFilename(bigThumbKey);
-			const thumbWebpKey = getWebpFilename(thumbKey);
-			
-			// Check if WebP versions exist
-			const hasPreviewWebp = previewFiles.has(filename);
-			const hasBigThumbWebp = bigThumbKeys.has(filename);
-			const hasThumbWebp = thumbKeys.has(filename);
-			
-			// Build CloudFront URLs - encode path segments
-			const buildCloudFrontUrl = (hasFile: boolean, key: string): string | null => {
-				return (hasFile && cloudfrontDomain)
-					? `https://${cloudfrontDomain}/${key.split('/').map(encodeURIComponent).join('/')}`
-					: null;
-			};
-			
-			const finalUrl = cloudfrontDomain 
-				? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
-				: null;
-			
-			// Processed WebP URLs for display (three-tier optimization)
-			const previewUrl = buildCloudFrontUrl(hasPreviewWebp, previewWebpKey);
-			const bigThumbUrl = buildCloudFrontUrl(hasBigThumbWebp, bigThumbWebpKey);
-			const thumbUrl = buildCloudFrontUrl(hasThumbWebp, thumbWebpKey);
+		// Generate WebP filename helper (replace extension with .webp)
+		const getWebpFilename = (fname: string) => {
+			const lastDot = fname.lastIndexOf('.');
+			if (lastDot === -1) return `${fname}.webp`;
+			return `${fname.substring(0, lastDot)}.webp`;
+		};
 
-			return {
-				key: filename,
-				finalUrl, // Original unprocessed URL (for download)
-				previewUrl, // Processed WebP preview (1400px) for full-screen viewing
-				bigThumbUrl, // Processed WebP big thumb (600px) for masonry grid
-				thumbUrl, // Processed WebP thumbnail (300x300) for CMS grid
-				size: obj.Size || 0,
-				lastModified: obj.LastModified?.toISOString()
-			};
-		});
+		// Build images array from DynamoDB records with fallback URLs
+		const allImages = await Promise.all(
+			sortedFinalFiles.map(async (record) => {
+				const filename = record.filename;
+				const finalKey = record.s3Key || `galleries/${galleryId}/final/${orderId}/${filename}`;
+				
+				// Generate WebP preview/thumb keys (for display)
+				const previewKey = `galleries/${galleryId}/final/${orderId}/previews/${filename}`;
+				const bigThumbKey = `galleries/${galleryId}/final/${orderId}/bigthumbs/${filename}`;
+				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${filename}`;
+				const previewWebpKey = getWebpFilename(previewKey);
+				const bigThumbWebpKey = getWebpFilename(bigThumbKey);
+				const thumbWebpKey = getWebpFilename(thumbKey);
+				
+				// Check if WebP versions exist by matching base filename (without extension)
+				// DynamoDB filename might be IMG_4723.jpg, S3 keys are IMG_4723.webp
+				const baseFilename = getBaseFilename(filename);
+				const hasPreviewWebp = previewFiles.has(baseFilename);
+				const hasBigThumbWebp = bigThumbKeys.has(baseFilename);
+				const hasThumbWebp = thumbKeys.has(baseFilename);
+				
+				// Build CloudFront URLs - encode path segments
+				const buildCloudFrontUrl = (hasFile: boolean, key: string): string | null => {
+					return (hasFile && cloudfrontDomain)
+						? `https://${cloudfrontDomain}/${key.split('/').map(encodeURIComponent).join('/')}`
+						: null;
+				};
+				
+				const finalUrl = cloudfrontDomain 
+					? `https://${cloudfrontDomain}/${finalKey.split('/').map(encodeURIComponent).join('/')}`
+					: null;
+				
+				// Always generate CloudFront URLs for all sizes (client-side fallback handles missing files)
+				// This ensures consistency - URLs are always present, even if files don't exist yet
+				const previewUrl = buildCloudFrontUrl(true, previewWebpKey);
+				const bigThumbUrl = buildCloudFrontUrl(true, bigThumbWebpKey);
+				const thumbUrl = buildCloudFrontUrl(true, thumbWebpKey);
+
+				// Generate S3 presigned URLs as fallback (24 hour expiry)
+				// Always generate for all sizes - client-side fallback handles missing files gracefully
+				// These will be used if CloudFront returns 403/404 or fails
+				let previewUrlFallback: string | null = null;
+				let bigThumbUrlFallback: string | null = null;
+				let thumbUrlFallback: string | null = null;
+				let finalUrlFallback: string | null = null;
+
+				try {
+					// Helper function to generate presigned URL
+					const generatePresignedUrl = async (key: string): Promise<string | null> => {
+						try {
+							const cmd = new GetObjectCommand({
+								Bucket: bucket,
+								Key: key
+							});
+							return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
+						} catch (err: any) {
+							// Log but don't fail - fallback URLs are optional
+							// File may not exist (e.g., thumbnails not generated yet)
+							// Client-side fallback will handle this gracefully
+							return null;
+						}
+					};
+
+					// Generate presigned URLs in parallel for better performance
+					// Always generate for all sizes - client fallback handles missing files
+					const presignedUrlPromises: Promise<void>[] = [];
+
+					presignedUrlPromises.push(
+						generatePresignedUrl(previewWebpKey)
+							.then(url => { previewUrlFallback = url; })
+					);
+
+					presignedUrlPromises.push(
+						generatePresignedUrl(bigThumbWebpKey)
+							.then(url => { bigThumbUrlFallback = url; })
+					);
+
+					presignedUrlPromises.push(
+						generatePresignedUrl(thumbWebpKey)
+							.then(url => { thumbUrlFallback = url; })
+					);
+
+					// Always generate presigned URL for final image (ultimate fallback)
+					presignedUrlPromises.push(
+						generatePresignedUrl(finalKey)
+							.then(url => { finalUrlFallback = url; })
+					);
+
+					// Wait for all presigned URL generations to complete
+					await Promise.all(presignedUrlPromises);
+				} catch (err: any) {
+					// Log error but don't fail - fallback URLs are optional
+					logger.warn('Failed to generate presigned URLs for fallback', {
+						filename,
+						error: err.message
+					});
+				}
+
+				return {
+					key: filename,
+					finalUrl, // CloudFront URL for original final image
+					finalUrlFallback, // S3 presigned URL fallback for final image
+					previewUrl, // CloudFront WebP preview (1400px) for full-screen viewing
+					previewUrlFallback, // S3 presigned URL fallback for preview
+					bigThumbUrl, // CloudFront WebP big thumb (600px) for masonry grid
+					bigThumbUrlFallback, // S3 presigned URL fallback for big thumb
+					thumbUrl, // CloudFront WebP thumbnail (300x300) for CMS grid
+					thumbUrlFallback, // S3 presigned URL fallback for thumb
+					size: record.size || 0,
+					lastModified: record.lastModified 
+						? new Date(record.lastModified).toISOString()
+						: undefined
+				};
+			})
+		);
 
 		// Calculate total count (before pagination)
 		const totalCount = allImages.length;
@@ -263,7 +356,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					// Invalid cursor - treat as no cursor
 					logger.warn('Invalid cursor values', { cursorTimestamp, cursorFilename, galleryId, orderId });
 				} else {
-					// Find cursor position by timestamp and filename
+					// Find cursor position by timestamp and filename in sortedFinalFiles
 					const cursorIndex = sortedFinalFiles.findIndex(item => 
 						item.filename === cursorFilename && item.lastModified === cursorTimestamp
 					);

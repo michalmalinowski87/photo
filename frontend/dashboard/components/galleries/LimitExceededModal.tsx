@@ -156,35 +156,35 @@ export const LimitExceededModal = ({
     : "";
 
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
             Przekroczono limit miejsca w galerii
           </h2>
 
           <div className="mb-6 space-y-3">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-gray-700 mb-2">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                 <strong>Użyte miejsce:</strong> {usedMB} MB / {limitMB} MB
               </p>
-              <p className="text-sm text-red-600 font-semibold">
+              <p className="text-sm text-red-600 dark:text-red-400 font-semibold">
                 <strong>Nadmiar:</strong> {excessMB} MB
               </p>
             </div>
 
             {nextTierPlan && nextTierPriceCents && nextTierLimitBytes && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-lg mb-2">Zaktualizuj plan</h3>
-                <p className="text-sm text-gray-700 mb-2">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-white">Zaktualizuj plan</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                   <strong>Następny plan:</strong> {nextTierPlan}
                 </p>
-                <p className="text-sm text-gray-700 mb-2">
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                   <strong>Limit:</strong> {nextTierGB} GB
                 </p>
-                <p className="text-sm text-gray-700 mb-2">
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                   <strong>Cena:</strong> {formatPrice(nextTierPriceCents)}
-                  {!isSelectionGallery && <span className="text-green-600 ml-1">(zniżka 20%)</span>}
+                  {!isSelectionGallery && <span className="text-green-600 dark:text-green-400 ml-1">(zniżka 20%)</span>}
                 </p>
               </div>
             )}
@@ -192,7 +192,7 @@ export const LimitExceededModal = ({
 
           <div className="flex flex-col sm:flex-row gap-3 justify-end">
             <Button variant="secondary" onClick={handleCancel} disabled={isProcessing}>
-              Anuluj i usuń pliki
+              Anuluj i wyczyść pliki
             </Button>
             {nextTierPlan && (
               <Button variant="primary" onClick={handleUpgrade} disabled={isProcessing}>

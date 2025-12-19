@@ -12,7 +12,7 @@ interface CognitoError extends Error {
 }
 
 // Prevent static generation - this page uses client hooks
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -58,7 +58,10 @@ export default function ForgotPassword() {
       const error = err as CognitoError & { minutesUntilReset?: number };
       // Handle rate limit errors
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
-        setError(error.message || "Sprawdź swoją skrzynkę email - kod resetowania hasła mógł już dotrzeć. Sprawdź również folder spam.");
+        setError(
+          error.message ||
+            "Sprawdź swoją skrzynkę email - kod resetowania hasła mógł już dotrzeć. Sprawdź również folder spam."
+        );
         return;
       }
       // Handle other errors
@@ -72,19 +75,21 @@ export default function ForgotPassword() {
     }
   };
 
-
   return (
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href="/galleries" className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: '#465fff' }}>PhotoCloud</span>
+          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+            PhotoCloud
+          </span>
         </Link>
       </div>
 
       <div className="flex flex-col w-full mt-8">
         <h2 className="text-2xl font-semibold mb-2 text-foreground">Resetowanie hasła</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Wprowadź adres email powiązany z Twoim kontem. Wyślemy Ci kod weryfikacyjny do resetowania hasła.
+          Wprowadź adres email powiązany z Twoim kontem. Wyślemy Ci kod weryfikacyjny do resetowania
+          hasła.
         </p>
 
         {error && (
@@ -111,12 +116,7 @@ export default function ForgotPassword() {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="w-full" 
-            disabled={loading}
-          >
+          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
             {loading ? "Wysyłanie..." : "Wyślij kod resetowania"}
           </Button>
         </form>
@@ -125,7 +125,7 @@ export default function ForgotPassword() {
       <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
         <p className="text-sm text-muted-foreground">
           Pamiętasz hasło?{" "}
-          <Link 
+          <Link
             href={`/login${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
             className="text-primary font-bold hover:opacity-70 transition-opacity"
           >
@@ -136,4 +136,3 @@ export default function ForgotPassword() {
     </div>
   );
 }
-

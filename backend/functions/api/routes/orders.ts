@@ -20,6 +20,8 @@ import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
 import * as ordersUploadFinalComplete from '../../../functions/orders/uploadFinalComplete';
 import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOriginals';
+import * as ordersGetZipStatus from '../../../functions/orders/getZipStatus';
+import * as ordersGetFinalZipStatus from '../../../functions/orders/getFinalZipStatus';
 
 const router = Router();
 
@@ -28,6 +30,8 @@ const router = Router();
 // orders/delivered route is registered as public route in index.ts (no requireAuth)
 router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
 router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));
+router.get('/galleries/:id/orders/:orderId/zip/status', wrapHandler(ordersGetZipStatus.handler));
+router.get('/galleries/:id/orders/:orderId/final/zip/status', wrapHandler(ordersGetFinalZipStatus.handler));
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));
 // orders/:orderId/zip route is registered as public route in index.ts (no requireAuth)
 router.post('/galleries/:id/orders/:orderId/mark-paid', wrapHandler(ordersMarkPaid.handler));

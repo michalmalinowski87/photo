@@ -4,7 +4,12 @@ import { cn } from "../../utils/cn";
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
-function Input({ ref, className, type, ...props }: InputProps & { ref?: React.Ref<HTMLInputElement> }) {
+function Input({
+  ref,
+  className,
+  type,
+  ...props
+}: InputProps & { ref?: React.Ref<HTMLInputElement> }) {
   return (
     <input
       type={type}

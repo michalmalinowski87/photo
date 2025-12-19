@@ -28,7 +28,15 @@ import { makeQueryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
 
 // Routes that should use the auth layout (login template)
-const AUTH_ROUTES = ["/login", "/sign-up", "/verify-email", "/auth/auth-callback", "/forgot-password", "/verify-reset-code", "/reset-password"];
+const AUTH_ROUTES = [
+  "/login",
+  "/sign-up",
+  "/verify-email",
+  "/auth/auth-callback",
+  "/forgot-password",
+  "/verify-reset-code",
+  "/reset-password",
+];
 
 // Filter route names that should NOT be treated as gallery IDs
 const FILTER_ROUTES = [
