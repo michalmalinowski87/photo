@@ -20,6 +20,10 @@ interface PlanSelectionGridProps {
   selectionEnabled: boolean;
   onDurationChange: (duration: Duration) => void;
   onPlanKeyChange: (planKey: PlanKey) => void;
+  disabledPlanSizes?: ("1GB" | "3GB" | "10GB")[];
+  mode?: "publish" | "limitExceeded";
+  currentPlanKey?: string;
+  currentPlanPriceCents?: number;
 }
 
 export const PlanSelectionGrid = ({
@@ -29,6 +33,10 @@ export const PlanSelectionGrid = ({
   selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
+  disabledPlanSizes = [],
+  mode = "publish",
+  currentPlanKey,
+  currentPlanPriceCents = 0,
 }: PlanSelectionGridProps) => {
   // Get all plans grouped by storage
   const allPlans = React.useMemo(() => getAllPlansGroupedByStorage(), []);
@@ -43,21 +51,44 @@ export const PlanSelectionGrid = ({
       <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
         {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
           const isSelected = selectedDuration === duration;
+          
+          // Check if this duration is shorter than current plan duration
+          const isShorterDuration = mode === "limitExceeded" && currentPlanKey
+            ? (() => {
+                const currentPlan = getPlan(currentPlanKey);
+                if (currentPlan) {
+                  // Use expiryDays for comparison (more reliable than duration string)
+                  const durationDays: Record<Duration, number> = { "1m": 30, "3m": 90, "12m": 365 };
+                  const currentDurationDays = currentPlan.expiryDays;
+                  const newDurationDays = durationDays[duration];
+                  return newDurationDays < currentDurationDays;
+                }
+                return false;
+              })()
+            : false;
+          
+          const isDisabled = mode === "limitExceeded" && isShorterDuration;
+          
           return (
             <button
               key={duration}
               onClick={() => {
-                onDurationChange(duration);
-                // Update selected plan to match the suggested storage with new duration
-                const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
-                if (planKey) {
-                  onPlanKeyChange(planKey);
+                if (!isDisabled) {
+                  onDurationChange(duration);
+                  // Update selected plan to match the suggested storage with new duration
+                  const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
+                  if (planKey) {
+                    onPlanKeyChange(planKey);
+                  }
                 }
               }}
+              disabled={isDisabled}
               className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                isSelected
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                isDisabled
+                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-600"
+                  : isSelected
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               }`}
             >
               {duration === "1m" ? "1 miesiąc" : duration === "3m" ? "3 miesiące" : "12 miesięcy"}
@@ -81,32 +112,51 @@ export const PlanSelectionGrid = ({
             return null;
           }
 
-          const price = calculatePriceWithDiscount(planKey, selectionEnabled);
+          const fullPrice = calculatePriceWithDiscount(planKey, selectionEnabled);
+          // For upgrades, calculate the upgrade price (difference)
+          const upgradePrice = mode === "limitExceeded" && currentPlanPriceCents > 0
+            ? Math.max(0, fullPrice - currentPlanPriceCents)
+            : fullPrice;
+          const displayPrice = mode === "limitExceeded" && planKey === currentPlanKey
+            ? 0 // Current plan - no upgrade needed
+            : upgradePrice;
+          
           const isSuggested = suggestedStorage === storage;
           const isSelected = selectedPlanKey === planKey || (isSuggested && !selectedPlanKey);
+          const isDisabled = disabledPlanSizes.includes(storage) || (mode === "limitExceeded" && planKey === currentPlanKey);
 
           // Calculate photo estimates using utility function
           const photoEstimate = calculatePhotoEstimateFromStorage(storage);
 
           return (
-            <div
+            <Tooltip
               key={storage}
-              onClick={() => {
-                // Just update the selected plan - duration is already correct
-                // since we only show plans for the selected duration
-                onPlanKeyChange(planKey);
-              }}
-              className={`relative rounded-lg border-2 p-5 cursor-pointer transition-all ${
-                isSelected
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md"
-                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600"
-              }`}
+              content={isDisabled ? "Ten plan jest już aktywny. Wybierz większy plan." : undefined}
+              side="top"
+              maxWidth="16rem"
             >
+              <div
+                onClick={() => {
+                  if (isDisabled) {
+                    return;
+                  }
+                  // Just update the selected plan - duration is already correct
+                  // since we only show plans for the selected duration
+                  onPlanKeyChange(planKey);
+                }}
+                className={`relative rounded-lg border-2 p-5 transition-all ${
+                  isDisabled
+                    ? "opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900"
+                    : isSelected
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md cursor-pointer"
+                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+                }`}
+              >
               {/* Suggested Badge */}
               {isSuggested && (
                 <div className="absolute top-3 right-3">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                    <CheckCircle2 size={12} className="fill-current" />
+                    <CheckCircle2 size={12} />
                     Sugerowany
                   </span>
                 </div>
@@ -138,12 +188,34 @@ export const PlanSelectionGrid = ({
               </div>
 
               <div className="mb-4">
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatPrice(price)}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
-                {!selectionEnabled && (
-                  <div className="text-xs text-green-600 dark:text-green-400 mt-1">Zniżka 20%</div>
+                {mode === "limitExceeded" && planKey !== currentPlanKey && currentPlanPriceCents > 0 ? (
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatPrice(displayPrice)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      ({formatPrice(fullPrice)} - {formatPrice(currentPlanPriceCents)})
+                    </div>
+                  </div>
+                ) : mode === "limitExceeded" && planKey === currentPlanKey ? (
+                  <div>
+                    <div className="text-lg font-semibold text-gray-600 dark:text-gray-400">
+                      Aktualny plan
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {formatPrice(fullPrice)} / miesiąc
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatPrice(displayPrice)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
+                    {!selectionEnabled && (
+                      <div className="text-xs text-green-600 dark:text-green-400 mt-1">Zniżka 20%</div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -151,26 +223,27 @@ export const PlanSelectionGrid = ({
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                   <CheckCircle2
                     size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                    className="text-green-500 dark:text-green-400 flex-shrink-0"
                   />
                   <span>Galeria chroniona hasłem</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                   <CheckCircle2
                     size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                    className="text-green-500 dark:text-green-400 flex-shrink-0"
                   />
                   <span>Wybór zdjęć przez klienta</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                   <CheckCircle2
                     size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0 fill-current"
+                    className="text-green-500 dark:text-green-400 flex-shrink-0"
                   />
                   <span>Wsparcie techniczne</span>
                 </div>
               </div>
-            </div>
+              </div>
+            </Tooltip>
           );
         })}
       </div>

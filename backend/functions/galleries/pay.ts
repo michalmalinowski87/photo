@@ -190,6 +190,34 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	requireOwnerOr403(gallery.ownerId, ownerId);
 
+	// Check if gallery is already paid (from transactions) - needed for both dry run and regular payment
+	// CRITICAL: This must use transactions as source of truth, not gallery.state
+	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	let isPaid = false;
+	if (transactionsTable) {
+		try {
+			const paidTransaction = await getPaidTransactionForGallery(galleryId);
+			isPaid = !!paidTransaction;
+			logger.info('Payment status check', { 
+				galleryId, 
+				isPaid, 
+				hasPaidTransaction: !!paidTransaction,
+				galleryState: gallery.state 
+			});
+		} catch (err) {
+			logger.warn('Failed to check paid transaction, falling back to gallery state', { 
+				error: err,
+				galleryId,
+				galleryState: gallery.state 
+			});
+			// Fall back to gallery state only if transaction check fails
+			isPaid = gallery.state === 'PAID_ACTIVE';
+		}
+	} else {
+		// If transactions table not configured, use gallery state
+		isPaid = gallery.state === 'PAID_ACTIVE';
+	}
+
 	// Parse request body for dryRun parameter
 	let body: any = {};
 	try {
@@ -262,11 +290,35 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let plan: string | undefined;
 		let galleryPriceCents: number | undefined;
 		
+		// Check if this is an upgrade scenario in dry run
+		let isUpgradeDryRun = false;
+		let priceDifferenceCentsDryRun = 0;
+		
 		if (body.plan && body.priceCents) {
 			// Plan provided in request body (for dry run before plan is set)
 			plan = body.plan;
 			galleryPriceCents = typeof body.priceCents === 'number' ? body.priceCents : parseInt(body.priceCents, 10);
-			logger.info('Dry run using plan from request body', { plan, galleryPriceCents });
+			
+			// Check if this is an upgrade (gallery already paid and different plan)
+			if (isPaid && gallery.plan && gallery.plan !== plan && galleryPriceCents) {
+				const currentPlan = PRICING_PLANS[gallery.plan as PlanKey];
+				const newPlan = PRICING_PLANS[plan as PlanKey];
+				if (currentPlan && newPlan && newPlan.storageLimitBytes > currentPlan.storageLimitBytes) {
+					isUpgradeDryRun = true;
+					const isSelectionGallery = gallery.selectionEnabled !== false;
+					const currentPriceCents = calculatePriceWithDiscount(gallery.plan as PlanKey, isSelectionGallery);
+					priceDifferenceCentsDryRun = galleryPriceCents - currentPriceCents;
+					logger.info('Dry run upgrade detected', { 
+						currentPlan: gallery.plan, 
+						newPlan: plan, 
+						currentPrice: currentPriceCents,
+						newPrice: galleryPriceCents,
+						priceDifference: priceDifferenceCentsDryRun
+					});
+				}
+			}
+			
+			logger.info('Dry run using plan from request body', { plan, galleryPriceCents, isUpgrade: isUpgradeDryRun });
 		} else if (gallery.plan && gallery.priceCents) {
 			// Use plan from gallery (existing behavior)
 			plan = gallery.plan;
@@ -285,8 +337,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 		
 		// At this point, galleryPriceCents is guaranteed to be defined (we return early if not)
-		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		const totalAmountCents = galleryPriceCents!;
+		// For upgrades, use price difference; for regular payments, use full price
+		if (!galleryPriceCents) {
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Gallery plan not set',
+					message: 'Please provide plan and priceCents in request body, or set plan on gallery first.'
+				})
+			};
+		}
+		const totalAmountCents = isUpgradeDryRun ? priceDifferenceCentsDryRun : galleryPriceCents;
 		
 		// Calculate wallet vs stripe amounts based on current wallet balance (read-only)
 		// Use full wallet if sufficient, otherwise full Stripe (no partial payments)
@@ -313,10 +375,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 		
 		// Calculate Stripe fee if Stripe will be used (for warning display)
+		// For upgrades, calculate fee on price difference; for regular payments, calculate on full price
 		let stripeFeeCents = 0;
 		if (stripeAmountCents > 0) {
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-			stripeFeeCents = calculateStripeFee(galleryPriceCents!);
+			const feeBaseAmount = isUpgradeDryRun ? priceDifferenceCentsDryRun : (galleryPriceCents || 0);
+			if (feeBaseAmount > 0) {
+				stripeFeeCents = calculateStripeFee(feeBaseAmount);
+			}
 		}
 		
 		// Return dry run response - NO DATABASE WRITES
@@ -334,47 +399,94 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Check if gallery is already paid (from transactions) - use same logic as get.ts and list.ts
-	// CRITICAL: This must use transactions as source of truth, not gallery.state
-	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
-	let isPaid = false;
-	if (transactionsTable) {
-		try {
-			const paidTransaction = await getPaidTransactionForGallery(galleryId);
-			isPaid = !!paidTransaction;
-			logger.info('Payment status check', { 
-				galleryId, 
-				isPaid, 
-				hasPaidTransaction: !!paidTransaction,
-				galleryState: gallery.state 
-			});
-		} catch (err) {
-			logger.warn('Failed to check paid transaction, falling back to gallery state', { 
-				error: err,
-				galleryId,
-				galleryState: gallery.state 
-			});
-			// Fall back to gallery state only if transaction check fails
-			isPaid = gallery.state === 'PAID_ACTIVE';
-		}
-	} else {
-		// If transactions table not configured, use gallery state
-		isPaid = gallery.state === 'PAID_ACTIVE';
-	}
-
 	// In dry run mode, allow checking even if paid (for UI display purposes)
-	// In non-dry-run mode, reject if already paid
+	// In non-dry-run mode, check if this is an upgrade scenario
 	if (isPaid && !dryRun) {
-		logger.warn('Payment attempt for already paid gallery', { 
-			galleryId, 
-			isPaid,
-			galleryState: gallery.state 
-		});
-		return {
-			statusCode: 400,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Gallery is already paid' })
-		};
+		// Check if this is an upgrade scenario (different plan being selected)
+		const currentPlanKey = gallery.plan;
+		const requestedPlan = body.plan || gallery.plan;
+		
+		// If no plan provided or same plan, reject
+		if (!requestedPlan || !PRICING_PLANS[requestedPlan as PlanKey]) {
+			logger.warn('Payment attempt for already paid gallery without valid plan', { 
+				galleryId, 
+				isPaid,
+				galleryState: gallery.state,
+				requestedPlan
+			});
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Gallery is already paid' })
+			};
+		}
+		
+		// Check if this is an upgrade (different plan with larger storage)
+		if (currentPlanKey && currentPlanKey !== requestedPlan) {
+			const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
+			const newPlan = PRICING_PLANS[requestedPlan as PlanKey];
+			
+			// Only allow upgrade if new plan has larger storage
+			if (newPlan && currentPlan && newPlan.storageLimitBytes > currentPlan.storageLimitBytes) {
+				// Also check that new plan doesn't have shorter duration than current plan
+				if (newPlan.expiryDays < currentPlan.expiryDays) {
+					logger.warn('Payment attempt for already paid gallery with shorter duration upgrade', { 
+						galleryId, 
+						isPaid,
+						currentPlan: currentPlanKey,
+						requestedPlan,
+						currentDurationDays: currentPlan.expiryDays,
+						newDurationDays: newPlan.expiryDays
+					});
+					return {
+						statusCode: 400,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ 
+							error: 'Invalid upgrade',
+							message: 'Cannot upgrade to a plan with shorter duration than current plan'
+						})
+					};
+				}
+				
+				logger.info('Detected upgrade scenario - will handle as upgrade', {
+					galleryId,
+					currentPlan: currentPlanKey,
+					newPlan: requestedPlan
+				});
+				// Continue with upgrade logic below (will be handled after plan extraction)
+			} else {
+				logger.warn('Payment attempt for already paid gallery with invalid upgrade', { 
+					galleryId, 
+					isPaid,
+					currentPlan: currentPlanKey,
+					requestedPlan,
+					currentStorage: currentPlan?.storageLimitBytes,
+					newStorage: newPlan?.storageLimitBytes
+				});
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Invalid upgrade',
+						message: 'New plan must have larger storage limit than current plan'
+					})
+				};
+			}
+		} else {
+			// Same plan or no current plan - reject
+			logger.warn('Payment attempt for already paid gallery with same plan', { 
+				galleryId, 
+				isPaid,
+				galleryState: gallery.state,
+				currentPlan: currentPlanKey,
+				requestedPlan
+			});
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Gallery is already paid' })
+			};
+		}
 	}
 
 	// Find existing UNPAID transaction for this gallery
@@ -621,7 +733,44 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let plan = gallery.plan;
 	let galleryPriceCents = gallery.priceCents;
 	
-	let totalAmountCents = galleryPriceCents;
+	// Check if this is an upgrade scenario (gallery already paid, different plan selected)
+	let isUpgrade = false;
+	let priceDifferenceCents = 0;
+	let currentPlanKey: string | undefined;
+	let newPlanKey: string | undefined;
+	
+	if (isPaid) {
+		currentPlanKey = gallery.plan;
+		newPlanKey = body.plan || gallery.plan;
+		
+		if (currentPlanKey && newPlanKey && currentPlanKey !== newPlanKey) {
+			const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
+			const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+			
+			if (currentPlan && newPlan && newPlan.storageLimitBytes > currentPlan.storageLimitBytes) {
+				isUpgrade = true;
+				const isSelectionGallery = gallery.selectionEnabled !== false;
+				const currentPriceCents = calculatePriceWithDiscount(currentPlanKey as PlanKey, isSelectionGallery);
+				const newPriceCents = calculatePriceWithDiscount(newPlanKey as PlanKey, isSelectionGallery);
+				priceDifferenceCents = newPriceCents - currentPriceCents;
+				
+				// Update plan and price for upgrade
+				plan = newPlanKey;
+				galleryPriceCents = newPriceCents;
+				
+				logger.info('Processing upgrade via pay endpoint', {
+					galleryId,
+					currentPlan: currentPlanKey,
+					newPlan: newPlanKey,
+					currentPriceCents,
+					newPriceCents,
+					priceDifferenceCents
+				});
+			}
+		}
+	}
+	
+	let totalAmountCents = isUpgrade ? priceDifferenceCents : galleryPriceCents;
 	
 	// Calculate wallet vs stripe amounts
 	let walletAmountCents = 0;
@@ -654,17 +803,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		try {
 			// Build composites list for frontend display
-			const composites: string[] = [`Gallery Plan ${plan}`];
+			let composites: string[] = [];
+			let transactionType: 'GALLERY_PLAN' | 'GALLERY_PLAN_UPGRADE' = 'GALLERY_PLAN';
+			let transactionMetadata: any = {};
 			
-			// USER-CENTRIC FIX #6 & #11: Store plan details in transaction metadata (not just gallery)
-			// This prevents race conditions where plan is overwritten before payment completes
-			// Also store plan calculation timestamp to detect stale calculations
-			const planCalculationTimestamp = gallery.planCalculationTimestamp || new Date().toISOString();
+			if (isUpgrade && currentPlanKey && newPlanKey) {
+				// Upgrade transaction
+				transactionType = 'GALLERY_PLAN_UPGRADE';
+				const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
+				const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+				composites = [
+					`Plan Upgrade: ${newPlan?.label || newPlanKey}`,
+					`- Already purchased: ${currentPlan?.label || currentPlanKey} (${((galleryPriceCents - priceDifferenceCents) / 100).toFixed(2)} PLN)`,
+					`- Upgrade cost: ${(priceDifferenceCents / 100).toFixed(2)} PLN`
+				];
+				transactionMetadata = {
+					plan: newPlanKey,
+					previousPlan: currentPlanKey,
+					priceDifferenceCents,
+					currentPriceCents: galleryPriceCents - priceDifferenceCents,
+					newPriceCents: galleryPriceCents
+				};
+			} else {
+				// Regular payment transaction
+				composites = [`Gallery Plan ${plan}`];
+				const planCalculationTimestamp = gallery.planCalculationTimestamp || new Date().toISOString();
+				transactionMetadata = {
+					plan,
+					priceCents: galleryPriceCents,
+					originalsLimitBytes: gallery.originalsLimitBytes,
+					finalsLimitBytes: gallery.finalsLimitBytes,
+					planCalculationTimestamp,
+					// Store original plan details for upgrade calculations later
+					originalPlan: plan,
+					originalPriceCents: galleryPriceCents,
+					originalSelectionEnabled: gallery.selectionEnabled !== false
+				};
+			}
 			
 			// Create transaction with UNPAID status
 			const newTransactionId = await createTransaction(
 				ownerId,
-				'GALLERY_PLAN',
+				transactionType,
 				totalAmountCents,
 				{
 					galleryId,
@@ -672,17 +852,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					stripeAmountCents,
 					paymentMethod: walletAmountCents > 0 ? 'WALLET' : 'STRIPE' as any,
 					composites,
-					metadata: {
-						plan,
-						priceCents: galleryPriceCents,
-						originalsLimitBytes: gallery.originalsLimitBytes,
-						finalsLimitBytes: gallery.finalsLimitBytes,
-						planCalculationTimestamp,
-						// Store original plan details for upgrade calculations later
-						originalPlan: plan,
-						originalPriceCents: galleryPriceCents,
-						originalSelectionEnabled: gallery.selectionEnabled !== false
-					}
+					metadata: transactionMetadata
 				}
 			);
 			
@@ -816,8 +986,48 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Set normal expiry and update gallery state to PAID_ACTIVE
 				// CRITICAL: This MUST happen after transaction update to maintain consistency
 				const now = new Date().toISOString();
-				const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
-				const expiresAt = expiresAtDate.toISOString();
+				
+				// For upgrades, extend expiry from original plan start date if new plan has longer duration
+				// For new payments, calculate new expiry from now
+				let expiresAt: string;
+				if (isUpgrade && gallery.expiresAt && currentPlanKey && newPlanKey) {
+					const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
+					const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+					
+					if (currentPlan && newPlan && newPlan.expiryDays > currentPlan.expiryDays) {
+						// Calculate original plan start date from current expiry and plan duration
+						const currentExpiresAt = new Date(gallery.expiresAt);
+						const originalStartDate = new Date(currentExpiresAt.getTime() - currentPlan.expiryDays * 24 * 60 * 60 * 1000);
+						
+						// Extend expiry from original start date using new plan duration
+						const newExpiresAtDate = new Date(originalStartDate.getTime() + newPlan.expiryDays * 24 * 60 * 60 * 1000);
+						expiresAt = newExpiresAtDate.toISOString();
+						
+						logger.info('Upgrade detected - extending expiry from original start date', { 
+							galleryId, 
+							currentPlan: currentPlanKey,
+							newPlan: newPlanKey,
+							originalStartDate: originalStartDate.toISOString(),
+							originalExpiry: gallery.expiresAt,
+							newExpiry: expiresAt,
+							currentDurationDays: currentPlan.expiryDays,
+							newDurationDays: newPlan.expiryDays
+						});
+					} else {
+						// Same or shorter duration - keep original expiry date
+						expiresAt = gallery.expiresAt;
+						logger.info('Upgrade detected - keeping original expiry date (same or shorter duration)', { 
+							galleryId, 
+							currentPlan: currentPlanKey,
+							newPlan: newPlanKey,
+							expiresAt 
+						});
+					}
+				} else {
+					// Calculate new expiry for new payments
+					const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
+					expiresAt = expiresAtDate.toISOString();
+				}
 				
 				// Cancel old EventBridge schedule (if exists) and create new one for paid expiry
 				const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
@@ -849,29 +1059,66 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 				
 				// USER-CENTRIC FIX #4: Remove paymentLocked flag when payment succeeds
-				const updateExpr = newScheduleName
-					? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
-					: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+				// For upgrades, also update plan, price, and storage limits
+				let updateExpr: string;
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
 					':e': expiresAt,
 					':ss': gallery.selectionEnabled ? 'NOT_STARTED' : 'DISABLED',
 					':u': now
 				};
-				if (newScheduleName) {
-					exprValues[':sn'] = newScheduleName;
+				const exprNames: any = {
+					'#state': 'state'
+				};
+				
+				if (isUpgrade && newPlanKey) {
+					// Upgrade: update plan, price, and storage limits, keep expiry
+					const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+					if (newPlan) {
+						updateExpr = newScheduleName
+							? 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+							: 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+						exprValues[':p'] = newPlanKey;
+						exprValues[':price'] = galleryPriceCents;
+						exprValues[':olb'] = newPlan.storageLimitBytes;
+						exprValues[':flb'] = newPlan.storageLimitBytes;
+						exprNames['#plan'] = 'plan';
+						if (newScheduleName) {
+							exprValues[':sn'] = newScheduleName;
+						}
+						logger.info('Upgrade: updating plan and storage limits', { 
+							galleryId, 
+							newPlan: newPlanKey, 
+							newPrice: galleryPriceCents,
+							newStorage: newPlan.storageLimitBytes
+						});
+					} else {
+						// Fallback to regular update if plan not found
+						updateExpr = newScheduleName
+							? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+							: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+						if (newScheduleName) {
+							exprValues[':sn'] = newScheduleName;
+						}
+					}
+				} else {
+					// Regular payment: update state and expiry
+					updateExpr = newScheduleName
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+					if (newScheduleName) {
+						exprValues[':sn'] = newScheduleName;
+					}
 				}
 				
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
 					UpdateExpression: updateExpr,
-					ExpressionAttributeNames: {
-						'#state': 'state'
-					},
+					ExpressionAttributeNames: exprNames,
 					ExpressionAttributeValues: exprValues
 				}));
-				logger.info('Gallery state updated to PAID_ACTIVE', { galleryId, expiresAt, scheduleName: newScheduleName });
+				logger.info('Gallery state updated to PAID_ACTIVE', { galleryId, expiresAt, scheduleName: newScheduleName, isUpgrade });
 				
 				logger.info('Gallery paid via wallet, state updated to PAID_ACTIVE', {
 					galleryId,
@@ -952,10 +1199,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
 		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)
 		// For gallery payments, user pays fees (we add fees to the amount charged)
-		// IMPORTANT: Calculate fee on FULL plan price (galleryPriceCents), not on stripeAmountCents
-		// This ensures the fee is calculated correctly on the full 7 PLN plan, not on the reduced amount after wallet deduction
+		// IMPORTANT: For upgrades, calculate fee on price difference; for regular payments, calculate on full plan price
+		// Example: Upgrade from 7 PLN to 10 PLN (3 PLN difference), Stripe should charge 3 PLN + fee calculated on 3 PLN
 		// Example: Plan is 7 PLN, wallet covers 2 PLN, Stripe should charge 5 PLN + fee calculated on 7 PLN
-		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(galleryPriceCents) : 0;
+		const feeBaseAmount = isUpgrade ? priceDifferenceCents : galleryPriceCents;
+		const stripeFeeCents = stripeAmountCents > 0 ? calculateStripeFee(feeBaseAmount) : 0;
 		const totalChargeAmountCents = stripeAmountCents + stripeFeeCents;
 		
 		// Build line items from transaction
@@ -964,19 +1212,41 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Gallery plan line item
 		// Show the portion being paid via Stripe (stripeAmountCents), but the description mentions the full plan price
 		if (galleryPriceCents > 0 && stripeAmountCents > 0) {
-			lineItems.push({
-				price_data: {
-					currency: 'pln',
-					product_data: {
-						name: `Gallery: ${galleryId}`,
-						description: walletAmountCents > 0
-							? `PhotoCloud gallery payment - ${plan} plan (${(galleryPriceCents / 100).toFixed(2)} PLN total, ${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
-							: `PhotoCloud gallery payment - ${plan} plan`
+			if (isUpgrade && currentPlanKey && newPlanKey) {
+				// Upgrade: show upgrade breakdown
+				const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
+				const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+				const currentPriceCents = galleryPriceCents - priceDifferenceCents;
+				
+				lineItems.push({
+					price_data: {
+						currency: 'pln',
+						product_data: {
+							name: `Plan Upgrade: ${newPlan?.label || newPlanKey}`,
+							description: walletAmountCents > 0
+								? `Already purchased: ${currentPlan?.label || currentPlanKey} (${(currentPriceCents / 100).toFixed(2)} PLN)\nUpgrade cost: ${(priceDifferenceCents / 100).toFixed(2)} PLN (${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
+								: `Already purchased: ${currentPlan?.label || currentPlanKey} (${(currentPriceCents / 100).toFixed(2)} PLN)\nUpgrade cost: ${(priceDifferenceCents / 100).toFixed(2)} PLN`
+						},
+						unit_amount: stripeAmountCents
 					},
-					unit_amount: stripeAmountCents
-				},
-				quantity: 1
-			});
+					quantity: 1
+				});
+			} else {
+				// Regular payment
+				lineItems.push({
+					price_data: {
+						currency: 'pln',
+						product_data: {
+							name: `Gallery: ${galleryId}`,
+							description: walletAmountCents > 0
+								? `PhotoCloud gallery payment - ${plan} plan (${(galleryPriceCents / 100).toFixed(2)} PLN total, ${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
+								: `PhotoCloud gallery payment - ${plan} plan`
+						},
+						unit_amount: stripeAmountCents
+					},
+					quantity: 1
+				});
+			}
 		}
 		
 		// Add Stripe processing fee as separate line item (user pays fees)
@@ -995,6 +1265,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 		
+		// For upgrades, update gallery plan before creating Stripe session (similar to upgradePlan.ts)
+		if (isUpgrade && newPlanKey) {
+			const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+			if (newPlan) {
+				await ddb.send(new UpdateCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					UpdateExpression: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
+					ExpressionAttributeNames: {
+						'#plan': 'plan'
+					},
+					ExpressionAttributeValues: {
+						':plan': newPlanKey,
+						':price': galleryPriceCents,
+						':olb': newPlan.storageLimitBytes,
+						':flb': newPlan.storageLimitBytes,
+						':u': new Date().toISOString()
+					}
+				}));
+				logger.info('Updated gallery plan before Stripe checkout (upgrade)', {
+					galleryId,
+					newPlan: newPlanKey,
+					newPrice: galleryPriceCents
+				});
+			}
+		}
+		
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			mode: 'payment',
@@ -1003,12 +1300,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			cancel_url: cancelUrl,
 			metadata: {
 				userId: ownerId,
-				type: 'gallery_payment',
+				type: isUpgrade ? 'gallery_plan_upgrade' : 'gallery_payment',
 				galleryId,
 				transactionId: transactionId,
 				walletAmountCents: walletAmountCents.toString(),
 				stripeAmountCents: stripeAmountCents.toString(),
-				redirectUrl: finalRedirectUrl
+				redirectUrl: finalRedirectUrl,
+				...(isUpgrade && newPlanKey ? {
+					plan: newPlanKey,
+					newPriceCents: galleryPriceCents.toString()
+				} : {})
 			}
 		});
 

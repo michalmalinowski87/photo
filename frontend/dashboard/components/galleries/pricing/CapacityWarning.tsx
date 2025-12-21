@@ -20,7 +20,7 @@ export const CapacityWarning = ({
         <div className="flex items-start">
           <AlertTriangle
             size={20}
-            className="text-yellow-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0 fill-current"
+            className="text-yellow-600 dark:text-warning-400 mt-0.5 mr-2 flex-shrink-0"
           />
           <div>
             <p className="text-sm font-semibold text-yellow-800 dark:text-warning-300 mb-1">

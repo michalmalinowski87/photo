@@ -67,12 +67,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Parse request body to get optional upload size
+	// Parse request body to get optional upload size and type
 	let pendingUploadSizeBytes = 0;
+	let uploadType: 'originals' | 'finals' = 'originals';
 	try {
 		if (event.body) {
 			const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
 			pendingUploadSizeBytes = body.uploadSizeBytes ?? 0;
+			uploadType = body.type === 'finals' ? 'finals' : 'originals';
 		}
 	} catch {
 		// Ignore parsing errors, use default 0
@@ -94,7 +96,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Trigger on-demand recalculation to ensure DB is accurate before validation
 	// This is critical - user may have uploaded/deleted images just before checking limits
 	// Then use the recalculated value (which comes from DynamoDB) to avoid duplicate queries
-	let uploadedSizeBytes = gallery.originalsBytesUsed || 0;
+	// Use the appropriate bytes field based on upload type
+	let uploadedSizeBytes = uploadType === 'finals' 
+		? (gallery.finalsBytesUsed || 0)
+		: (gallery.originalsBytesUsed || 0);
 	
 	try {
 		// Force immediate recalculation (bypasses cache) - critical for upload validation accuracy
@@ -108,13 +113,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 		const recalcResult = await recalculateStorageInternal(galleryId, galleriesTable, imagesTable, gallery, logger, true);
-		logger?.info('Triggered on-demand storage recalculation before validation', { galleryId });
+		logger?.info('Triggered on-demand storage recalculation before validation', { galleryId, uploadType });
 		
 		// Extract recalculated value from result
 		if (recalcResult?.body) {
 			try {
 				const body = JSON.parse(recalcResult.body);
-				if (body.originalsBytesUsed !== undefined) {
+				if (uploadType === 'finals' && body.finalsBytesUsed !== undefined) {
+					uploadedSizeBytes = body.finalsBytesUsed;
+					logger?.info('Using recalculated finalsBytesUsed from on-demand recalculation', {
+						galleryId,
+						finalsBytesUsed: uploadedSizeBytes
+					});
+				} else if (uploadType === 'originals' && body.originalsBytesUsed !== undefined) {
 					uploadedSizeBytes = body.originalsBytesUsed;
 					logger?.info('Using recalculated originalsBytesUsed from on-demand recalculation', {
 						galleryId,
@@ -129,7 +140,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 				if (updatedGalleryGet.Item) {
 					gallery = updatedGalleryGet.Item;
-					uploadedSizeBytes = updatedGalleryGet.Item.originalsBytesUsed || 0;
+					uploadedSizeBytes = uploadType === 'finals'
+						? (updatedGalleryGet.Item.finalsBytesUsed || 0)
+						: (updatedGalleryGet.Item.originalsBytesUsed || 0);
 				}
 			}
 		} else {
@@ -140,26 +153,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}));
 			if (updatedGalleryGet.Item) {
 				gallery = updatedGalleryGet.Item;
-				uploadedSizeBytes = updatedGalleryGet.Item.originalsBytesUsed || 0;
+				uploadedSizeBytes = uploadType === 'finals'
+					? (updatedGalleryGet.Item.finalsBytesUsed || 0)
+					: (updatedGalleryGet.Item.originalsBytesUsed || 0);
 			}
 		}
 	} catch (recalcErr: any) {
 		logger?.warn('Failed to recalculate storage before validation, using stored total', {
 			error: recalcErr.message,
-			galleryId
+			galleryId,
+			uploadType
 		});
 		// Fallback: Use stored total if recalculation fails (should be accurate from atomic operations)
-		uploadedSizeBytes = gallery.originalsBytesUsed || 0;
+		uploadedSizeBytes = uploadType === 'finals'
+			? (gallery.finalsBytesUsed || 0)
+			: (gallery.originalsBytesUsed || 0);
 	}
 	
 	// Calculate projected usage (current + upload size)
 	const projectedUsage = uploadedSizeBytes + pendingUploadSizeBytes;
-	logger?.info('Validated upload limits', { galleryId, uploadedSizeBytes, pendingUploadSizeBytes, projectedUsage });
+	logger?.info('Validated upload limits', { galleryId, uploadType, uploadedSizeBytes, pendingUploadSizeBytes, projectedUsage });
 
-	// Check if gallery has plan and limits
-	const originalsLimitBytes = gallery.originalsLimitBytes;
+	// Check if gallery has plan and limits - use appropriate limit based on upload type
+	const limitBytes = uploadType === 'finals' 
+		? (gallery.finalsLimitBytes || gallery.originalsLimitBytes) // Finals can use originals limit if not set separately
+		: gallery.originalsLimitBytes;
 	
-	if (!originalsLimitBytes) {
+	if (!limitBytes) {
 		// No plan set yet - this is expected for draft galleries
 		return {
 			statusCode: 200,
@@ -173,8 +193,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Check if limit would be exceeded with the upload
-	const wouldExceedLimit = projectedUsage > originalsLimitBytes;
-	const excessBytes = wouldExceedLimit ? projectedUsage - originalsLimitBytes : 0;
+	const wouldExceedLimit = projectedUsage > limitBytes;
+	const excessBytes = wouldExceedLimit ? projectedUsage - limitBytes : 0;
 
 	if (!wouldExceedLimit) {
 		return {
@@ -183,13 +203,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			body: JSON.stringify({
 				withinLimit: true,
 				uploadedSizeBytes: projectedUsage,
-				originalsLimitBytes,
-				usedPercentage: (projectedUsage / originalsLimitBytes) * 100
+				originalsLimitBytes: uploadType === 'originals' ? limitBytes : undefined,
+				finalsLimitBytes: uploadType === 'finals' ? limitBytes : undefined,
+				usedPercentage: (projectedUsage / limitBytes) * 100
 			})
 		};
 	}
 
 	// Limit would be exceeded - calculate next tier plan based on projected usage
+	// For finals, we still suggest upgrading the plan (which increases both originals and finals limits)
 	const currentPlan = gallery.plan;
 	const nextTierPlan = getNextTierPlanForUpload(currentPlan, projectedUsage);
 	const nextTierMetadata = nextTierPlan ? PRICING_PLANS[nextTierPlan] : null;
@@ -203,11 +225,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({
 			withinLimit: false,
-			error: 'Storage limit would be exceeded',
+			error: `${uploadType === 'finals' ? 'Finals' : 'Storage'} limit would be exceeded`,
 			uploadedSizeBytes: projectedUsage,
-			originalsLimitBytes,
+			originalsLimitBytes: uploadType === 'originals' ? limitBytes : undefined,
+			finalsLimitBytes: uploadType === 'finals' ? limitBytes : undefined,
 			excessBytes,
-			usedPercentage: (projectedUsage / originalsLimitBytes) * 100,
+			usedPercentage: (projectedUsage / limitBytes) * 100,
 			nextTierPlan: nextTierPlan as string,
 			nextTierPriceCents,
 			nextTierLimitBytes: nextTierMetadata?.storageLimitBytes || 0,

@@ -737,24 +737,48 @@ class ApiService {
      */
     validateUploadLimits: async (
       galleryId: string,
-      uploadSizeBytes?: number
+      uploadSizeBytes?: number,
+      type: "originals" | "finals" = "originals"
     ): Promise<{
       withinLimit: boolean;
       uploadedSizeBytes: number;
       originalsLimitBytes?: number;
+      finalsLimitBytes?: number;
       excessBytes?: number;
       nextTierPlan?: string;
       nextTierPriceCents?: number;
       nextTierLimitBytes?: number;
       isSelectionGallery?: boolean;
     }> => {
+      console.log("=== [api-service] validateUploadLimits CALLED ===", {
+        galleryId,
+        uploadSizeBytes,
+        type,
+      });
+      
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      return await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
-        method: "POST",
-        body: JSON.stringify({ uploadSizeBytes: uploadSizeBytes ?? 0 }),
-      });
+      
+      try {
+        const result = await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
+          method: "POST",
+          body: JSON.stringify({ 
+            uploadSizeBytes: uploadSizeBytes ?? 0,
+            type: type,
+          }),
+        });
+        console.log("=== [api-service] validateUploadLimits SUCCESS ===", result);
+        return result;
+      } catch (error) {
+        console.error("=== [api-service] validateUploadLimits ERROR ===", {
+          error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStatus: (error as { status?: number }).status,
+          errorBody: (error as { body?: unknown }).body,
+        });
+        throw error;
+      }
     },
 
     /**

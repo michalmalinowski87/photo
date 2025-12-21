@@ -167,7 +167,7 @@ const HomePage = async () => {
                     </CardContent>
                     <CardFooter className="w-full space-x-1 mt-auto">
                       {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
                       ))}
                     </CardFooter>
                   </Card>
@@ -195,7 +195,7 @@ const HomePage = async () => {
                     </CardContent>
                     <CardFooter className="w-full space-x-1 mt-auto">
                       {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
                       ))}
                     </CardFooter>
                   </Card>
@@ -223,7 +223,7 @@ const HomePage = async () => {
                     </CardContent>
                     <CardFooter className="w-full space-x-1 mt-auto">
                       {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
                       ))}
                     </CardFooter>
                   </Card>

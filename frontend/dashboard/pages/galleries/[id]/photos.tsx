@@ -16,7 +16,7 @@ import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
-import { LimitExceededModal } from "../../../components/galleries/LimitExceededModal";
+import { PublishGalleryWizard } from "../../../components/galleries/PublishGalleryWizard";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
 import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
@@ -446,6 +446,8 @@ export default function GalleryPhotos() {
   const hasLoggedGalleryReadyRef = useRef<string>("");
   // Track if we've already processed the upload query parameter
   const hasProcessedUploadParamRef = useRef<boolean>(false);
+  // Track if we've already processed payment success to prevent infinite loops
+  const hasProcessedPaymentSuccessRef = useRef<string>("");
 
   // Get order delivery status for an image (defined early to avoid use-before-define)
   const getImageOrderStatus = useCallback(
@@ -528,7 +530,104 @@ export default function GalleryPhotos() {
   // Reset the processed flag when galleryId changes (for navigation between galleries)
   useEffect(() => {
     hasProcessedUploadParamRef.current = false;
+    hasProcessedPaymentSuccessRef.current = "";
   }, [galleryId]);
+
+  // Handle payment redirects for limit exceeded flow (including wallet top-up)
+  useEffect(() => {
+    if (typeof window === "undefined" || !galleryId || !router.isReady) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const paymentSuccess = params.get("payment") === "success";
+    const limitExceededParam = params.get("limitExceeded") === "true";
+    const durationParam = params.get("duration");
+    const planKeyParam = params.get("planKey");
+    const galleryIdParam = params.get("galleryId");
+
+    // Check if this is a wallet top-up redirect (has galleryId param but not a direct gallery payment)
+    const isWalletTopUpRedirect = paymentSuccess && 
+      limitExceededParam && 
+      galleryIdParam === galleryId && 
+      !params.get("gallery"); // Not a direct gallery payment
+
+    // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
+    if (isWalletTopUpRedirect && planKeyParam) {
+      // Clean URL params but preserve limitExceeded, duration, and planKey for wizard
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("payment");
+      newUrl.searchParams.delete("galleryId");
+      // Keep limitExceeded, duration, and planKey so wizard can restore state
+      window.history.replaceState({}, "", newUrl.toString());
+
+      // Reopen wizard with preserved state
+      setLimitExceededWizardOpen(true);
+      return;
+    }
+
+    // Handle direct payment success (Stripe payment for upgrade)
+    if (paymentSuccess && limitExceededParam && planKeyParam && !isWalletTopUpRedirect) {
+      // Create a unique key for this payment success to prevent re-processing
+      const paymentSuccessKey = `${galleryId}-${paymentSuccess}-${limitExceededParam}-${planKeyParam}`;
+
+      // Check if we've already processed this payment success
+      if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey) {
+        return;
+      }
+
+      // Mark as processed immediately to prevent re-running
+      hasProcessedPaymentSuccessRef.current = paymentSuccessKey;
+
+      // Clean URL params immediately to prevent effect from re-running
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("payment");
+      newUrl.searchParams.delete("limitExceeded");
+      newUrl.searchParams.delete("duration");
+      newUrl.searchParams.delete("planKey");
+      window.history.replaceState({}, "", newUrl.toString());
+
+      // Coming back from payment - reopen wizard with preserved state
+      setLimitExceededWizardOpen(true);
+
+      // Poll for gallery plan update
+      const pollForPlanUpdate = async () => {
+        let pollAttempts = 0;
+        const maxPollAttempts = 30; // Poll for up to 30 seconds
+        const pollInterval = 1000; // 1 second
+
+        const poll = async (): Promise<void> => {
+          try {
+            await reloadGallery();
+            const updatedGallery = await reloadGallery();
+
+            // Check if plan was updated
+            if (updatedGallery?.plan && planKeyParam && updatedGallery.plan === planKeyParam) {
+              // Plan updated successfully
+              setShowUpgradeSuccessModal(true);
+              setLimitExceededWizardOpen(false);
+              setLimitExceededData(null);
+              return;
+            }
+
+            pollAttempts++;
+            if (pollAttempts >= maxPollAttempts) {
+              // Stop polling after max attempts
+              return;
+            } else {
+              setTimeout(poll, pollInterval);
+            }
+          } catch (error) {
+            console.error("Error polling for plan update:", error);
+          }
+        };
+
+        await poll();
+      };
+
+      void pollForPlanUpdate();
+    }
+  }, [galleryId, router.isReady, reloadGallery]);
 
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
@@ -652,6 +751,8 @@ export default function GalleryPhotos() {
     nextTierLimitBytes?: number;
     isSelectionGallery?: boolean;
   } | null>(null);
+  const [limitExceededWizardOpen, setLimitExceededWizardOpen] = useState(false);
+  const [showUpgradeSuccessModal, setShowUpgradeSuccessModal] = useState(false);
 
   // Reload gallery after upload (simple refetch)
   const reloadGalleryAfterUpload = useCallback(async () => {
@@ -1908,6 +2009,7 @@ export default function GalleryPhotos() {
             type: "originals",
             onValidationNeeded: (data) => {
               setLimitExceededData(data);
+              setLimitExceededWizardOpen(true);
               // Close the upload modal when limit is exceeded
               handleUploadModalClose();
             },
@@ -1931,36 +2033,53 @@ export default function GalleryPhotos() {
         />
       )}
 
-      {/* Limit Exceeded Modal */}
-      {limitExceededData && (
-        <LimitExceededModal
-          isOpen={!!limitExceededData}
+      {/* Limit Exceeded Wizard */}
+      {galleryId && limitExceededData && (
+        <PublishGalleryWizard
+          isOpen={limitExceededWizardOpen}
           onClose={() => {
+            setLimitExceededWizardOpen(false);
             setLimitExceededData(null);
           }}
           galleryId={galleryId as string}
-          uploadedSizeBytes={limitExceededData.uploadedSizeBytes}
-          originalsLimitBytes={limitExceededData.originalsLimitBytes}
-          excessBytes={limitExceededData.excessBytes}
-          nextTierPlan={limitExceededData.nextTierPlan}
-          nextTierPriceCents={limitExceededData.nextTierPriceCents}
-          nextTierLimitBytes={limitExceededData.nextTierLimitBytes}
-          isSelectionGallery={limitExceededData.isSelectionGallery}
-          onUpgrade={async () => {
+          mode="limitExceeded"
+          limitExceededData={limitExceededData}
+          renderAsModal={true}
+          initialState={
+            router.isReady && typeof window !== "undefined"
+              ? {
+                  duration: new URLSearchParams(window.location.search).get("duration") || undefined,
+                  planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
+                }
+              : null
+          }
+          onUpgradeSuccess={async () => {
             // Reload gallery after upgrade
             await reloadGallery();
+            setLimitExceededWizardOpen(false);
             setLimitExceededData(null);
-            // Upload modal is already closed from onValidationNeeded, but ensure it's closed
-            handleUploadModalClose();
-          }}
-          onCancel={() => {
-            // User cancelled - just close the modal
-            setLimitExceededData(null);
-            // Upload modal is already closed from onValidationNeeded, but ensure it's closed
-            handleUploadModalClose();
+            setShowUpgradeSuccessModal(true);
           }}
         />
       )}
+
+      {/* Upgrade Success Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={showUpgradeSuccessModal}
+        onClose={() => {
+          setShowUpgradeSuccessModal(false);
+        }}
+        onConfirm={() => {
+          setShowUpgradeSuccessModal(false);
+          // Optionally reopen upload modal
+          openModal("photos-upload-modal");
+        }}
+        title="Limit zwiększony pomyślnie!"
+        message="Twój plan został zaktualizowany. Możesz teraz kontynuować przesyłanie zdjęć."
+        confirmText="Kontynuuj przesyłanie"
+        cancelText="Zamknij"
+        variant="info"
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

@@ -194,7 +194,7 @@ export const PlanRecommendationSection = ({
           </div>
           {planRecommendation.isNearCapacity && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-              <AlertTriangle size={16} className="fill-current" />
+              <AlertTriangle size={16} />
               Galeria jest prawie pełna. Rozważ wybór większego planu.
             </p>
           )}

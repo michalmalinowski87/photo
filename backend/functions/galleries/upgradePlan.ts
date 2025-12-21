@@ -5,6 +5,7 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery, createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
+import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -221,24 +222,94 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Update transaction status
 				await updateTransactionStatus(requester, transactionId, 'PAID', {});
 
-				// USER-CENTRIC FIX #7: Keep original expiry date, only upgrade storage size
-				// User paid for original duration, upgrade should not extend it
-				// Only update plan, price, and storage limits - keep expiresAt unchanged
+				// Calculate expiry date extension from original plan start date if new plan has longer duration
+				let expiresAt = gallery.expiresAt;
+				let newScheduleName: string | undefined;
+				
+				if (newPlan.expiryDays > currentPlan.expiryDays && gallery.expiresAt) {
+					// Calculate original plan start date from current expiry and plan duration
+					const currentExpiresAt = new Date(gallery.expiresAt);
+					const originalStartDate = new Date(currentExpiresAt.getTime() - currentPlan.expiryDays * 24 * 60 * 60 * 1000);
+					
+					// Extend expiry from original start date using new plan duration
+					const newExpiresAtDate = new Date(originalStartDate.getTime() + newPlan.expiryDays * 24 * 60 * 60 * 1000);
+					expiresAt = newExpiresAtDate.toISOString();
+					
+					logger.info('Upgrade detected - extending expiry from original start date', {
+						galleryId,
+						currentPlan: currentPlanKey,
+						newPlan: newPlanKey,
+						originalStartDate: originalStartDate.toISOString(),
+						originalExpiry: gallery.expiresAt,
+						newExpiry: expiresAt,
+						currentDurationDays: currentPlan.expiryDays,
+						newDurationDays: newPlan.expiryDays
+					});
+					
+					// Update EventBridge schedule for new expiry date
+					const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
+					const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
+					const dlqArn = envProc?.env?.GALLERY_EXPIRY_DLQ_ARN as string;
+					
+					if (deletionLambdaArn && scheduleRoleArn) {
+						try {
+							const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
+							await cancelExpirySchedule(oldScheduleName);
+							logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
+							
+							newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+							logger.info('Created new EventBridge schedule for upgraded gallery', { galleryId, scheduleName: newScheduleName, expiresAt });
+						} catch (scheduleErr: any) {
+							logger.error('Failed to update EventBridge schedule for upgraded gallery', {
+								error: {
+									name: scheduleErr.name,
+									message: scheduleErr.message
+								},
+								galleryId,
+								expiresAt
+							});
+							// Continue even if schedule update fails
+						}
+					}
+				} else {
+					logger.info('Upgrade detected - keeping original expiry date (same or shorter duration)', {
+						galleryId,
+						currentPlan: currentPlanKey,
+						newPlan: newPlanKey,
+						expiresAt
+					});
+				}
+				
+				// Update gallery with new plan, price, storage limits, and expiry (if extended)
+				const updateExpr = expiresAt !== gallery.expiresAt
+					? (newScheduleName
+						? 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, expiryScheduleName = :sn, updatedAt = :u'
+						: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, updatedAt = :u')
+					: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u';
+				
+				const exprValues: any = {
+					':plan': newPlanKey,
+					':price': newPriceCents,
+					':olb': newPlan.storageLimitBytes,
+					':flb': newPlan.storageLimitBytes,
+					':u': now
+				};
+				
+				if (expiresAt !== gallery.expiresAt) {
+					exprValues[':e'] = expiresAt;
+					if (newScheduleName) {
+						exprValues[':sn'] = newScheduleName;
+					}
+				}
+				
 				await ddb.send(new UpdateCommand({
 					TableName: galleriesTable,
 					Key: { galleryId },
-					UpdateExpression: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
+					UpdateExpression: updateExpr,
 					ExpressionAttributeNames: {
 						'#plan': 'plan'
 					},
-					ExpressionAttributeValues: {
-						':plan': newPlanKey,
-						':price': newPriceCents,
-						':olb': newPlan.storageLimitBytes,
-						':flb': newPlan.storageLimitBytes,
-						':u': now
-						// Note: expiresAt is NOT updated - keeps original expiry date
-					}
+					ExpressionAttributeValues: exprValues
 				}));
 
 				return {

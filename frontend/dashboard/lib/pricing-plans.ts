@@ -187,3 +187,62 @@ export function getAllPlansGroupedByStorage(): {
       ),
   }));
 }
+
+/**
+ * Extract duration from plan key (e.g., "1GB-12m" → "12m")
+ */
+export function extractDurationFromPlanKey(planKey: string): Duration | null {
+  if (planKey.includes("-1m")) {
+    return "1m";
+  }
+  if (planKey.includes("-3m")) {
+    return "3m";
+  }
+  if (planKey.includes("-12m")) {
+    return "12m";
+  }
+  return null;
+}
+
+/**
+ * Extract storage size from plan key (e.g., "1GB-12m" → "1GB")
+ */
+export function extractStorageFromPlanKey(planKey: string): "1GB" | "3GB" | "10GB" | null {
+  if (planKey.startsWith("1GB-")) {
+    return "1GB";
+  }
+  if (planKey.startsWith("3GB-")) {
+    return "3GB";
+  }
+  if (planKey.startsWith("10GB-")) {
+    return "10GB";
+  }
+  return null;
+}
+
+/**
+ * Calculate the best plan for a given uploaded size and duration
+ * Returns the smallest plan that fits the uploaded size
+ */
+export function calculateBestPlan(uploadedSizeBytes: number, duration: Duration): PlanKey {
+  const plansForDuration = getPlanKeysByDuration(duration);
+  
+  // Sort by storage size (ascending)
+  const sortedPlans = plansForDuration.sort((a, b) => {
+    const planA = getPlan(a);
+    const planB = getPlan(b);
+    if (!planA || !planB) return 0;
+    return planA.storageLimitBytes - planB.storageLimitBytes;
+  });
+  
+  // Find the smallest plan that fits the uploaded size
+  for (const planKey of sortedPlans) {
+    const plan = getPlan(planKey);
+    if (plan && plan.storageLimitBytes >= uploadedSizeBytes) {
+      return planKey;
+    }
+  }
+  
+  // If no plan fits, return the largest plan
+  return sortedPlans[sortedPlans.length - 1];
+}

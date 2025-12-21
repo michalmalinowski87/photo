@@ -33,7 +33,7 @@ export default function NotificationDropdown() {
         >
           <span className="absolute inline-flex w-full h-full bg-orange-400 rounded-full opacity-75 animate-ping"></span>
         </span>
-        <Bell size={20} className="fill-current" />
+        <Bell size={20} />
       </button>
       <Dropdown
         isOpen={isOpen}
@@ -46,7 +46,7 @@ export default function NotificationDropdown() {
             onClick={toggleDropdown}
             className="text-gray-500 transition dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
           >
-            <X size={24} className="fill-current" />
+            <X size={24} />
           </button>
         </div>
         <ul className="flex flex-col h-auto overflow-y-auto">

@@ -147,6 +147,16 @@ async function retryWithBackoff<T>(
         errorWithStatus.status === 0; // Network error
 
       if (!isRetryable || attempt >= maxRetries) {
+        // Log non-retryable errors (like 400 limit exceeded)
+        if (errorWithStatus.status === 400) {
+          console.log("[uppy-config] Non-retryable 400 error:", {
+            error: lastError,
+            errorMessage: lastError.message,
+            errorStatus: errorWithStatus.status,
+            attempt,
+            maxRetries,
+          });
+        }
         throw lastError;
       }
 
@@ -231,10 +241,23 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
           }
         });
       }).catch((error) => {
+        // Preserve the original error so we can extract limit exceeded details
+        const apiError = error as Error & { status?: number; body?: unknown };
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
+        
+        // Create error with preserved details
+        const enhancedError = new Error(errorMessage) as Error & { 
+          status?: number; 
+          body?: unknown;
+          originalError?: unknown;
+        };
+        enhancedError.status = apiError.status;
+        enhancedError.body = apiError.body;
+        enhancedError.originalError = error;
+        
         finalsFiles.forEach((req) => {
-          req.reject(new Error(errorMessage));
+          req.reject(enhancedError);
         });
         throw error;
       });
@@ -280,10 +303,23 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
           }
         });
       }).catch((error) => {
+        // Preserve the original error so we can extract limit exceeded details
+        const apiError = error as Error & { status?: number; body?: unknown };
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
+        
+        // Create error with preserved details
+        const enhancedError = new Error(errorMessage) as Error & { 
+          status?: number; 
+          body?: unknown;
+          originalError?: unknown;
+        };
+        enhancedError.status = apiError.status;
+        enhancedError.body = apiError.body;
+        enhancedError.originalError = error;
+        
         originalsFiles.forEach((req) => {
-          req.reject(new Error(errorMessage));
+          req.reject(enhancedError);
         });
         throw error;
       });
@@ -686,10 +722,25 @@ export function createUppyInstance(config: UppyConfigOptions): any {
               const multipartResponse = await retryWithBackoff(async () => {
                 // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
                 // Uppy's AwsS3 plugin requires synchronous multipart upload creation during upload initialization.
-                return await api.uploads.createMultipartUpload(galleryId, {
-                  orderId: config.orderId,
-                  files,
-                });
+                try {
+                  return await api.uploads.createMultipartUpload(galleryId, {
+                    orderId: config.orderId,
+                    files,
+                  });
+                } catch (error) {
+                  // Log the error before retry logic handles it
+                  console.log("[uppy-config] createMultipartUpload error:", {
+                    error,
+                    errorMessage: error instanceof Error ? error.message : String(error),
+                    errorStatus: (error as { status?: number }).status,
+                    errorBody: (error as { body?: unknown }).body,
+                    galleryId,
+                    orderId: config.orderId,
+                    type: config.type,
+                    fileCount: files.length,
+                  });
+                  throw error; // Re-throw for retry logic
+                }
               });
 
               // Map responses back to files
@@ -711,10 +762,39 @@ export function createUppyInstance(config: UppyConfigOptions): any {
                 }
               });
             } catch (error) {
+              // Preserve the original error so we can extract limit exceeded details
+              // The error might be an ApiError with status and body properties
+              const apiError = error as Error & { status?: number; body?: unknown };
               const errorMessage =
                 error instanceof Error ? error.message : "Failed to create multipart upload";
+              
+              console.log("[uppy-config] createMultipartUpload catch block:", {
+                error,
+                errorMessage,
+                errorStatus: apiError.status,
+                errorBody: apiError.body,
+                pendingFiles: pendingArray.length,
+                type: config.type,
+              });
+              
+              // Create error with preserved details
+              const enhancedError = new Error(errorMessage) as Error & { 
+                status?: number; 
+                body?: unknown;
+                originalError?: unknown;
+              };
+              enhancedError.status = apiError.status;
+              enhancedError.body = apiError.body;
+              enhancedError.originalError = error;
+              
               pendingArray.forEach((req) => {
-                req.reject(new Error(errorMessage));
+                console.log("[uppy-config] Rejecting file request:", {
+                  fileId: req.fileId,
+                  fileName: req.fileName,
+                  error: enhancedError.message,
+                  errorStatus: enhancedError.status,
+                });
+                req.reject(enhancedError);
               });
             }
           })();
@@ -882,26 +962,45 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   // Add preprocessor for upload validation (runs before upload starts)
   // Preprocessors execute before upload begins, perfect for validation
   if (config.onBeforeUpload) {
+    console.log("[uppy-config] Registering onBeforeUpload preprocessor");
     uppy.addPreProcessor(async (fileIds) => {
+      console.log("[uppy-config] Preprocessor called:", {
+        fileIds,
+        fileCount: fileIds.length,
+        type: config.type,
+      });
+      
       const files = fileIds
         .map((id) => uppy.getFile(id))
         .filter((f) => f !== null) as TypedUppyFile[];
 
+      console.log("[uppy-config] Files extracted:", {
+        fileCount: files.length,
+        fileNames: files.map(f => f.name),
+      });
+
       try {
+        console.log("[uppy-config] Calling onBeforeUpload callback");
         const shouldProceed = await config.onBeforeUpload?.(files);
+        console.log("[uppy-config] onBeforeUpload returned:", shouldProceed);
+        
         if (!shouldProceed) {
           // Cancel all uploads if validation fails
           // This prevents upload from starting
+          console.log("[uppy-config] Validation failed, cancelling upload");
           uppy.cancelAll();
           // Don't throw - just cancel silently, validation callback handles UI
           return;
         }
       } catch (error) {
+        console.error("[uppy-config] Error in preprocessor:", error);
         // If validation throws an error, cancel upload
         uppy.cancelAll();
         throw error;
       }
     });
+  } else {
+    console.warn("[uppy-config] No onBeforeUpload callback provided!");
   }
 
   if (config.onUploadProgress) {

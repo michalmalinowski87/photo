@@ -67,6 +67,7 @@ function detectPaymentType(
   const paymentSuccess = params.get("payment") === "success";
   const galleryParam = params.get("gallery");
   const publishParam = params.get("publish");
+  const limitExceededParam = params.get("limitExceeded");
   const galleryIdParam = params.get("galleryId");
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
 
@@ -74,7 +75,9 @@ function detectPaymentType(
   const isWalletTopUp =
     paymentSuccess &&
     galleryParam !== galleryIdStr && // Not a gallery payment
-    (galleryIdParam === galleryIdStr || publishParam === "true"); // Has wallet top-up context params
+    (galleryIdParam === galleryIdStr || 
+     publishParam === "true" || 
+     limitExceededParam === "true"); // Has wallet top-up context params (publish or upgrade)
 
   return {
     isWalletTopUp,
@@ -85,11 +88,14 @@ function detectPaymentType(
 }
 
 /**
- * Cleans URL parameters, preserving specific params for publish wizard
+ * Cleans URL parameters, preserving specific params for publish wizard or upgrade wizard
  */
 function cleanUrlParams(preserveParams: {
   publish?: string | null;
   galleryId?: string | null;
+  limitExceeded?: string | null;
+  duration?: string | null;
+  planKey?: string | null;
 }): void {
   if (typeof window === "undefined") {
     return;
@@ -99,8 +105,17 @@ function cleanUrlParams(preserveParams: {
   if (preserveParams.publish === "true") {
     newParams.set("publish", preserveParams.publish);
   }
+  if (preserveParams.limitExceeded === "true") {
+    newParams.set("limitExceeded", preserveParams.limitExceeded);
+  }
   if (preserveParams.galleryId) {
     newParams.set("galleryId", preserveParams.galleryId);
+  }
+  if (preserveParams.duration) {
+    newParams.set("duration", preserveParams.duration);
+  }
+  if (preserveParams.planKey) {
+    newParams.set("planKey", preserveParams.planKey);
   }
 
   const newParamsStr = newParams.toString();
@@ -117,14 +132,20 @@ async function handleWalletTopUpSuccess(
   _galleryIdStr: string,
   loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void,
-  preserveParams: { publish?: string | null; galleryId?: string | null }
+  preserveParams: { 
+    publish?: string | null; 
+    galleryId?: string | null;
+    limitExceeded?: string | null;
+    duration?: string | null;
+    planKey?: string | null;
+  }
 ): Promise<void> {
   showToast("success", "Sukces", "Portfel został doładowany pomyślnie!");
 
   // Reload gallery orders
   await loadOrders();
 
-  // Clean URL params but preserve publish/galleryId if present
+  // Clean URL params but preserve publish/galleryId/limitExceeded/duration/planKey if present
   cleanUrlParams(preserveParams);
 
   // Note: Wallet balance is only refreshed on wallet page and publish wizard
@@ -244,6 +265,7 @@ export default function GalleryDetail() {
   const [walletBalance, _setWalletBalance] = useState<number>(0);
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
+  const [isRedirectingToOrder, setIsRedirectingToOrder] = useState<boolean>(false);
 
   // Mutations
   const payGalleryMutation = usePayGallery();
@@ -362,9 +384,13 @@ export default function GalleryDetail() {
     // Handle wallet top-up success (will load orders with fresh data)
     if (paymentDetection.isWalletTopUp) {
       void (async () => {
+        const params = new URLSearchParams(window.location.search);
         await handleWalletTopUpSuccess(galleryIdStr, loadOrders, showToast, {
           publish: paymentDetection.publishParam,
           galleryId: paymentDetection.galleryIdParam,
+          limitExceeded: params.get("limitExceeded"),
+          duration: params.get("duration"),
+          planKey: params.get("planKey"),
         });
       })();
       return;
@@ -446,16 +472,22 @@ export default function GalleryDetail() {
   // Redirect non-selection galleries to order view
   useEffect(() => {
     if (!galleryIdForQuery || !gallery || !isNonSelectionGallery || !router.isReady) {
+      setIsRedirectingToOrder(false);
       return;
     }
 
     // Only redirect if we're on the gallery detail page (not already on order page)
     if (router.pathname === "/galleries/[id]" && !router.asPath.includes("/orders/")) {
+      // Set redirecting state immediately to prevent rendering orders list
+      setIsRedirectingToOrder(true);
+      
       // Use orders from React Query
       if (orders.length > 0) {
         const firstOrder = orders[0];
         if (firstOrder?.orderId) {
           void router.replace(`/galleries/${galleryIdForQuery}/orders/${firstOrder.orderId}`);
+        } else {
+          setIsRedirectingToOrder(false);
         }
       } else {
         // If no orders in cache, refetch and redirect
@@ -467,14 +499,21 @@ export default function GalleryDetail() {
               const firstOrder = fetchedOrders[0];
               if (firstOrder?.orderId) {
                 void router.replace(`/galleries/${galleryIdForQuery}/orders/${firstOrder.orderId}`);
+              } else {
+                setIsRedirectingToOrder(false);
               }
+            } else {
+              setIsRedirectingToOrder(false);
             }
           } catch (err) {
             console.error("Failed to fetch orders for redirect:", err);
+            setIsRedirectingToOrder(false);
           }
         };
         void redirectToOrder();
       }
+    } else {
+      setIsRedirectingToOrder(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -669,6 +708,37 @@ export default function GalleryDetail() {
 
   if (!gallery) {
     return null; // Error is handled by GalleryLayoutWrapper
+  }
+
+  // For non-selection galleries, check if we need to redirect to order view
+  // This prevents flashing the orders list before redirect
+  const shouldRedirectToOrder =
+    isNonSelectionGallery &&
+    router.isReady &&
+    router.pathname === "/galleries/[id]" &&
+    !router.asPath.includes("/orders/");
+
+  // If we're redirecting to order view for non-selection gallery, show loading instead of orders list
+  if (shouldRedirectToOrder && isNonSelectionGallery) {
+    // If we have orders available, show loading while redirect happens (useEffect will handle redirect)
+    if (orders.length > 0 && orders[0]?.orderId) {
+      return (
+        <>
+          <NextStepsOverlay />
+          <FullPageLoading text="Przekierowywanie..." />
+        </>
+      );
+    }
+    // If we're waiting for orders to load, show loading
+    if (orderLoading || isRedirectingToOrder) {
+      return (
+        <>
+          <NextStepsOverlay />
+          <FullPageLoading text="Przekierowywanie..." />
+        </>
+      );
+    }
+    // If orders failed to load or are empty, fall through to show empty state
   }
 
   return (

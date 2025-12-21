@@ -15,6 +15,9 @@ interface UsePlanPaymentOptions {
   galleryId: string;
   onSuccess?: () => void;
   onClose?: () => void;
+  mode?: "publish" | "limitExceeded";
+  selectedDuration?: string;
+  selectedPlanKey?: string;
 }
 
 interface RedirectInfo {
@@ -23,7 +26,14 @@ interface RedirectInfo {
   checkoutUrl?: string;
 }
 
-export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPaymentOptions) => {
+export const usePlanPayment = ({
+  galleryId,
+  onSuccess,
+  onClose,
+  mode = "publish",
+  selectedDuration,
+  selectedPlanKey,
+}: UsePlanPaymentOptions) => {
   const { showToast } = useToast();
   const payGalleryMutation = usePayGallery();
   const updateGalleryMutation = useUpdateGallery();
@@ -47,6 +57,24 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
           return;
         }
 
+        // Construct redirect URL back to the current page (needed for both Stripe and wallet flows)
+        const params = new URLSearchParams();
+        params.set("payment", "success");
+        if (mode === "limitExceeded") {
+          params.set("limitExceeded", "true");
+          if (selectedDuration) {
+            params.set("duration", selectedDuration);
+          }
+          if (selectedPlanKey) {
+            params.set("planKey", selectedPlanKey);
+          }
+        }
+
+        const redirectUrl =
+          typeof window !== "undefined"
+            ? `${window.location.origin}${window.location.pathname}?${params.toString()}`
+            : undefined;
+
         // First, call dry run to determine payment method
         const dryRunResult = await payGalleryMutation.mutateAsync({
           galleryId,
@@ -63,21 +91,30 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
           dryRunResult.stripeAmountCents &&
           dryRunResult.stripeAmountCents > 0
         ) {
-          // Update gallery first
-          await updateGalleryMutation.mutateAsync({
-            galleryId,
-            data: {
-              plan: selectedPlan.planKey,
-              priceCents: selectedPlan.priceCents,
-              originalsLimitBytes: planMetadata.storageLimitBytes,
-              finalsLimitBytes: planMetadata.storageLimitBytes,
-            },
-          });
+          // For upgrades (limitExceeded mode), don't update gallery plan before payment
+          // The backend needs to see the current plan to detect the upgrade
+          // For regular payments (publish mode), update gallery plan first
+          if (mode === "publish") {
+            await updateGalleryMutation.mutateAsync({
+              galleryId,
+              data: {
+                plan: selectedPlan.planKey,
+                priceCents: selectedPlan.priceCents,
+                originalsLimitBytes: planMetadata.storageLimitBytes,
+                finalsLimitBytes: planMetadata.storageLimitBytes,
+              },
+            });
+          }
 
           // Get actual payment result
+          // Pass plan and priceCents explicitly for upgrade detection
           const paymentResult = await payGalleryMutation.mutateAsync({
             galleryId,
-            options: {},
+            options: {
+              plan: selectedPlan.planKey,
+              priceCents: selectedPlan.priceCents,
+              redirectUrl,
+            },
           });
 
           if (paymentResult.checkoutUrl) {
@@ -93,27 +130,28 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
         }
 
         // If wallet payment, proceed directly
-        // First, update gallery with the selected plan details
-        await updateGalleryMutation.mutateAsync({
-          galleryId,
-          data: {
-            plan: selectedPlan.planKey,
-            priceCents: selectedPlan.priceCents,
-            originalsLimitBytes: planMetadata.storageLimitBytes,
-            finalsLimitBytes: planMetadata.storageLimitBytes,
-          },
-        });
-
-        // Construct redirect URL back to the current page
-        const redirectUrl =
-          typeof window !== "undefined"
-            ? `${window.location.origin}${window.location.pathname}?payment=success`
-            : undefined;
+        // For upgrades (limitExceeded mode), don't update gallery plan before payment
+        // The backend needs to see the current plan to detect the upgrade
+        // For regular payments (publish mode), update gallery plan first
+        if (mode === "publish") {
+          await updateGalleryMutation.mutateAsync({
+            galleryId,
+            data: {
+              plan: selectedPlan.planKey,
+              priceCents: selectedPlan.priceCents,
+              originalsLimitBytes: planMetadata.storageLimitBytes,
+              finalsLimitBytes: planMetadata.storageLimitBytes,
+            },
+          });
+        }
 
         // Now proceed to payment
+        // Pass plan and priceCents explicitly for upgrade detection
         const paymentResult = await payGalleryMutation.mutateAsync({
           galleryId,
           options: {
+            plan: selectedPlan.planKey,
+            priceCents: selectedPlan.priceCents,
             redirectUrl,
           },
         });
@@ -140,7 +178,17 @@ export const usePlanPayment = ({ galleryId, onSuccess, onClose }: UsePlanPayment
         setIsProcessing(false);
       }
     },
-    [galleryId, showToast, onSuccess, onClose, payGalleryMutation, updateGalleryMutation]
+    [
+      galleryId,
+      showToast,
+      onSuccess,
+      onClose,
+      payGalleryMutation,
+      updateGalleryMutation,
+      mode,
+      selectedDuration,
+      selectedPlanKey,
+    ]
   );
 
   return {

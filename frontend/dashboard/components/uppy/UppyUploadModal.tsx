@@ -677,9 +677,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                         content={status === "paused" ? "Wznów" : "Wstrzymaj"}
                                       >
                                         {status === "paused" ? (
-                                          <Play className="w-8 h-8 text-white fill-current" />
+                                          <Play className="w-8 h-8 text-white" />
                                         ) : (
-                                          <Pause className="w-8 h-8 text-white fill-current" />
+                                          <Pause className="w-8 h-8 text-white" />
                                         )}
                                       </Tooltip>
                                     </button>

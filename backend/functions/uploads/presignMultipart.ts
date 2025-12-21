@@ -79,10 +79,13 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	const MAX_DRAFT_SIZE_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB (largest plan)
 	
-	// Calculate total size for originals uploads
-	let totalFileSize = 0;
+	// Calculate total size for uploads - separate originals and finals
+	let totalOriginalsSize = 0;
+	let totalFinalsSize = 0;
 	const originalsFiles = files.filter(f => f.key.startsWith('originals/'));
+	const finalsFiles = files.filter(f => f.key.startsWith('final/'));
 	
+	// Validate originals uploads
 	if (originalsFiles.length > 0) {
 		// Validate all originals have fileSize
 		for (const file of originalsFiles) {
@@ -96,14 +99,14 @@ export const handler = lambdaLogger(async (event: any) => {
 					})
 				};
 			}
-			totalFileSize += file.fileSize;
+			totalOriginalsSize += file.fileSize;
 		}
 
 		// Check storage limits BEFORE upload
 		if (!gallery.originalsLimitBytes) {
 			// Draft gallery - limit to largest plan
 			const currentSize = gallery.originalsBytesUsed || 0;
-			if (currentSize + totalFileSize > MAX_DRAFT_SIZE_BYTES) {
+			if (currentSize + totalOriginalsSize > MAX_DRAFT_SIZE_BYTES) {
 				const usedGB = (currentSize / (1024 * 1024 * 1024)).toFixed(2);
 				const limitGB = (MAX_DRAFT_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(0);
 				return {
@@ -114,17 +117,17 @@ export const handler = lambdaLogger(async (event: any) => {
 						message: `Cannot upload batch. Current usage: ${usedGB} GB / ${limitGB} GB. Please pay for gallery first to select a plan.`,
 						currentSizeBytes: currentSize,
 						limitBytes: MAX_DRAFT_SIZE_BYTES,
-						totalFileSizeBytes: totalFileSize
+						totalFileSizeBytes: totalOriginalsSize
 					})
 				};
 			}
 		} else {
 			// Paid gallery - check against plan limit using DB
 			const currentSize = gallery.originalsBytesUsed || 0;
-			if (currentSize + totalFileSize > gallery.originalsLimitBytes) {
+			if (currentSize + totalOriginalsSize > gallery.originalsLimitBytes) {
 				const usedMB = (currentSize / (1024 * 1024)).toFixed(2);
 				const limitMB = (gallery.originalsLimitBytes / (1024 * 1024)).toFixed(2);
-				const batchMB = (totalFileSize / (1024 * 1024)).toFixed(2);
+				const batchMB = (totalOriginalsSize / (1024 * 1024)).toFixed(2);
 				return {
 					statusCode: 400,
 					headers: { 'content-type': 'application/json' },
@@ -133,7 +136,66 @@ export const handler = lambdaLogger(async (event: any) => {
 						message: `Cannot upload batch (${batchMB} MB). Current usage: ${usedMB} MB / ${limitMB} MB. Please upgrade your plan.`,
 						currentSizeBytes: currentSize,
 						limitBytes: gallery.originalsLimitBytes,
-						totalFileSizeBytes: totalFileSize
+						totalFileSizeBytes: totalOriginalsSize
+					})
+				};
+			}
+		}
+	}
+	
+	// Validate finals uploads
+	if (finalsFiles.length > 0) {
+		// Validate all finals have fileSize
+		for (const file of finalsFiles) {
+			if (file.fileSize === undefined || file.fileSize === null) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'fileSize required',
+						message: `fileSize is required for finals upload: ${file.key}`
+					})
+				};
+			}
+			totalFinalsSize += file.fileSize;
+		}
+
+		// Check finals storage limits BEFORE upload
+		const finalsLimitBytes = gallery.finalsLimitBytes || gallery.originalsLimitBytes; // Use originals limit if finals limit not set
+		if (!finalsLimitBytes) {
+			// Draft gallery - limit to largest plan
+			const currentSize = gallery.finalsBytesUsed || 0;
+			if (currentSize + totalFinalsSize > MAX_DRAFT_SIZE_BYTES) {
+				const usedGB = (currentSize / (1024 * 1024 * 1024)).toFixed(2);
+				const limitGB = (MAX_DRAFT_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(0);
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Finals storage limit exceeded',
+						message: `Cannot upload finals batch. Current usage: ${usedGB} GB / ${limitGB} GB. Please pay for gallery first to select a plan.`,
+						currentSizeBytes: currentSize,
+						limitBytes: MAX_DRAFT_SIZE_BYTES,
+						totalFileSizeBytes: totalFinalsSize
+					})
+				};
+			}
+		} else {
+			// Paid gallery - check against plan limit using DB
+			const currentSize = gallery.finalsBytesUsed || 0;
+			if (currentSize + totalFinalsSize > finalsLimitBytes) {
+				const usedMB = (currentSize / (1024 * 1024)).toFixed(2);
+				const limitMB = (finalsLimitBytes / (1024 * 1024)).toFixed(2);
+				const batchMB = (totalFinalsSize / (1024 * 1024)).toFixed(2);
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Finals storage limit exceeded',
+						message: `Cannot upload finals batch (${batchMB} MB). Current usage: ${usedMB} MB / ${limitMB} MB. Please upgrade your plan.`,
+						currentSizeBytes: currentSize,
+						limitBytes: finalsLimitBytes,
+						totalFileSizeBytes: totalFinalsSize
 					})
 				};
 			}

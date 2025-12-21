@@ -1,9 +1,10 @@
 import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
+import { PublishGalleryWizard } from "../../../../components/galleries/PublishGalleryWizard";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
@@ -133,6 +134,17 @@ export default function OrderDetail() {
   const [, setOptimisticFinalsBytes] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
+  const [limitExceededData, setLimitExceededData] = useState<{
+    uploadedSizeBytes: number;
+    originalsLimitBytes: number;
+    excessBytes: number;
+    nextTierPlan?: string;
+    nextTierPriceCents?: number;
+    nextTierLimitBytes?: number;
+    isSelectionGallery?: boolean;
+  } | null>(null);
+  const [limitExceededWizardOpen, setLimitExceededWizardOpen] = useState(false);
+  const [showUpgradeSuccessModal, setShowUpgradeSuccessModal] = useState(false);
 
   // Define hook early so derived state can use its refs
   // Note: Optimistic updates are now handled in the mutation, so we don't need manual state
@@ -280,9 +292,118 @@ export default function OrderDetail() {
     }
   }, [galleryId, orderId]);
 
+  // Track if we've already processed payment success to prevent infinite loops
+  const hasProcessedPaymentSuccessRef = useRef<string>("");
+
+  // Reset the processed flag when galleryId changes
+  useEffect(() => {
+    hasProcessedPaymentSuccessRef.current = "";
+  }, [galleryId]);
+
+  // Handle payment redirects for limit exceeded flow (finals) - including wallet top-up
+  useEffect(() => {
+    if (typeof window === "undefined" || !galleryId || !router.isReady) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const paymentSuccess = params.get("payment") === "success";
+    const upgradeFlow = params.get("upgrade") === "true";
+    const limitExceededParam = params.get("limitExceeded") === "true";
+    const durationParam = params.get("duration");
+    const planKeyParam = params.get("planKey");
+    const galleryIdParam = params.get("galleryId");
+
+    // Check if this is a wallet top-up redirect (has galleryId param but not a direct gallery payment)
+    const isWalletTopUpRedirect = paymentSuccess && 
+      (upgradeFlow || limitExceededParam) && 
+      galleryIdParam === galleryId && 
+      !params.get("gallery"); // Not a direct gallery payment
+
+    // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
+    if (isWalletTopUpRedirect && planKeyParam) {
+      // Clean URL params but preserve limitExceeded, duration, and planKey for wizard
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("payment");
+      newUrl.searchParams.delete("upgrade");
+      newUrl.searchParams.delete("galleryId");
+      // Keep limitExceeded, duration, and planKey so wizard can restore state
+      window.history.replaceState({}, "", newUrl.toString());
+
+      // Reopen wizard with preserved state
+      setLimitExceededWizardOpen(true);
+      return;
+    }
+
+    // Handle direct payment success (Stripe payment for upgrade)
+    if (paymentSuccess && (upgradeFlow || limitExceededParam) && planKeyParam && !isWalletTopUpRedirect) {
+      // Create a unique key for this payment success to prevent re-processing
+      const paymentSuccessKey = `${galleryId}-${paymentSuccess}-${upgradeFlow || limitExceededParam}-${planKeyParam}`;
+
+      // Check if we've already processed this payment success
+      if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey) {
+        return;
+      }
+
+      // Mark as processed immediately to prevent re-running
+      hasProcessedPaymentSuccessRef.current = paymentSuccessKey;
+
+      // Clean URL params immediately to prevent effect from re-running
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("payment");
+      newUrl.searchParams.delete("upgrade");
+      newUrl.searchParams.delete("limitExceeded");
+      newUrl.searchParams.delete("duration");
+      newUrl.searchParams.delete("planKey");
+      window.history.replaceState({}, "", newUrl.toString());
+
+      // Coming back from payment - reopen wizard with preserved state
+      setLimitExceededWizardOpen(true);
+
+      // Poll for gallery plan update
+      const pollForPlanUpdate = async () => {
+        let pollAttempts = 0;
+        const maxPollAttempts = 30; // Poll for up to 30 seconds
+        const pollInterval = 1000; // 1 second
+
+        const poll = async (): Promise<void> => {
+          try {
+            await reloadGallery();
+            const updatedGallery = await reloadGallery();
+
+            // Check if plan was updated
+            if (updatedGallery?.plan && planKeyParam && updatedGallery.plan === planKeyParam) {
+              // Plan updated successfully
+              setShowUpgradeSuccessModal(true);
+              setLimitExceededWizardOpen(false);
+              setLimitExceededData(null);
+              return;
+            }
+
+            pollAttempts++;
+            if (pollAttempts >= maxPollAttempts) {
+              // Stop polling after max attempts
+              return;
+            } else {
+              setTimeout(poll, pollInterval);
+            }
+          } catch (error) {
+            console.error("Error polling for plan update:", error);
+          }
+        };
+
+        await poll();
+      };
+
+      void pollForPlanUpdate();
+    }
+  }, [galleryId, router.isReady, reloadGallery]);
+
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
     setUploadModalOpen(false);
+    // Don't clear limitExceededData here - it's cleared explicitly when the wizard closes
+    // This prevents race conditions when closing due to limit exceeded
 
     // If modal was auto-opened from recovery and user closes it, clear the recovery flag
     // so the global recovery modal doesn't keep showing
@@ -645,6 +766,17 @@ export default function OrderDetail() {
             galleryId: galleryId as string,
             orderId: orderId as string,
             type: "finals",
+            onValidationNeeded: (data) => {
+              console.log("[OrderDetail] onValidationNeeded called:", data);
+              setLimitExceededData(data);
+              setLimitExceededWizardOpen(true);
+              console.log("[OrderDetail] State updated:", {
+                limitExceededData: data,
+                limitExceededWizardOpen: true,
+              });
+              // Close the upload modal when limit is exceeded
+              handleUploadModalClose();
+            },
             onUploadComplete: () => {
               setUploadModalOpen(false);
             },
@@ -664,6 +796,65 @@ export default function OrderDetail() {
           }}
         />
       )}
+
+      {/* Limit Exceeded Wizard for Finals */}
+      {(() => {
+        console.log("[OrderDetail] Rendering wizard check:", {
+          galleryId,
+          hasLimitExceededData: !!limitExceededData,
+          limitExceededWizardOpen,
+          shouldRender: !!(galleryId && limitExceededData),
+        });
+        return null;
+      })()}
+      {galleryId && limitExceededData && (
+        <PublishGalleryWizard
+          isOpen={limitExceededWizardOpen}
+          onClose={() => {
+            console.log("[OrderDetail] Wizard onClose called");
+            setLimitExceededWizardOpen(false);
+            setLimitExceededData(null);
+          }}
+          galleryId={galleryId as string}
+          mode="limitExceeded"
+          limitExceededData={limitExceededData}
+          renderAsModal={true}
+          initialState={
+            router.isReady && typeof window !== "undefined"
+              ? {
+                  duration: new URLSearchParams(window.location.search).get("duration") || undefined,
+                  planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
+                }
+              : null
+          }
+          onUpgradeSuccess={async () => {
+            console.log("[OrderDetail] onUpgradeSuccess called");
+            // Reload gallery after upgrade
+            await reloadGallery();
+            setLimitExceededWizardOpen(false);
+            setLimitExceededData(null);
+            setShowUpgradeSuccessModal(true);
+          }}
+        />
+      )}
+
+      {/* Upgrade Success Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={showUpgradeSuccessModal}
+        onClose={() => {
+          setShowUpgradeSuccessModal(false);
+        }}
+        onConfirm={() => {
+          setShowUpgradeSuccessModal(false);
+          // Optionally reopen upload modal
+          setUploadModalOpen(true);
+        }}
+        title="Limit zwiększony pomyślnie!"
+        message="Twój plan został zaktualizowany. Możesz teraz kontynuować przesyłanie zdjęć finalnych."
+        confirmText="Kontynuuj przesyłanie"
+        cancelText="Zamknij"
+        variant="info"
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

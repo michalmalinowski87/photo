@@ -16,6 +16,9 @@ interface SuggestedPlanSectionProps {
   selectionEnabled: boolean;
   onDurationChange: (duration: Duration) => void;
   onPlanKeyChange: (planKey: PlanKey | null) => void;
+  mode?: "publish" | "limitExceeded";
+  currentPlanKey?: string;
+  currentPlanPriceCents?: number;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -32,6 +35,9 @@ export const SuggestedPlanSection = ({
   selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
+  mode = "publish",
+  currentPlanKey,
+  currentPlanPriceCents = 0,
 }: SuggestedPlanSectionProps) => {
   // Get selected plan details
   const selectedPlan = React.useMemo(() => {
@@ -85,19 +91,48 @@ export const SuggestedPlanSection = ({
               const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
               const isSelected =
                 selectedPlanKey === planKey || (!selectedPlanKey && selectedDuration === duration);
-              const price = planKey ? calculatePriceWithDiscount(planKey, selectionEnabled) : 0;
+              const fullPrice = planKey ? calculatePriceWithDiscount(planKey, selectionEnabled) : 0;
+              // For upgrades, show the upgrade price (difference)
+              const displayPrice = mode === "limitExceeded" && currentPlanPriceCents > 0 && planKey === currentPlanKey
+                ? 0 // Current plan - no upgrade needed
+                : mode === "limitExceeded" && currentPlanPriceCents > 0
+                  ? Math.max(0, fullPrice - currentPlanPriceCents)
+                  : fullPrice;
+
+              // Check if this duration is shorter than current plan duration
+              const isShorterDuration = mode === "limitExceeded" && currentPlanKey && planKey
+                ? (() => {
+                    const currentPlan = getPlan(currentPlanKey);
+                    const plan = getPlan(planKey);
+                    if (currentPlan && plan) {
+                      // Use expiryDays for comparison (more reliable than duration string)
+                      const durationDays: Record<Duration, number> = { "1m": 30, "3m": 90, "12m": 365 };
+                      const currentDurationDays = currentPlan.expiryDays;
+                      const newDurationDays = durationDays[duration];
+                      return newDurationDays < currentDurationDays;
+                    }
+                    return false;
+                  })()
+                : false;
+
+              const isDisabled = mode === "limitExceeded" && (planKey === currentPlanKey || isShorterDuration);
 
               return (
                 <button
                   key={duration}
                   onClick={() => {
-                    onDurationChange(duration);
-                    onPlanKeyChange(planKey);
+                    if (!isDisabled) {
+                      onDurationChange(duration);
+                      onPlanKeyChange(planKey);
+                    }
                   }}
+                  disabled={isDisabled}
                   className={`px-4 py-2 rounded-lg transition-all font-medium ${
-                    isSelected
-                      ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                      : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"
+                    isDisabled
+                      ? "opacity-50 cursor-not-allowed outline-2 outline-gray-300 dark:outline-gray-600 outline bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                      : isSelected
+                        ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"
                   }`}
                 >
                   <div className="text-sm">
@@ -107,23 +142,36 @@ export const SuggestedPlanSection = ({
                         ? "3 miesiące"
                         : "12 miesięcy"}
                   </div>
-                  <div className="text-xs mt-0.5">{formatPrice(price)}</div>
+                  <div className="text-xs mt-0.5">
+                    {mode === "limitExceeded" && planKey === currentPlanKey
+                      ? "Aktualny plan"
+                      : isShorterDuration
+                        ? "Krótszy okres"
+                      : formatPrice(displayPrice)}
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
         <div className="text-right ml-4">
-          {selectedPlan && (
-            <>
-              <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {formatPrice(selectedPlan.priceCents)}
-              </p>
-              {!selectionEnabled && (
-                <p className="text-sm text-green-600 dark:text-green-400 mt-1">(zniżka 20%)</p>
-              )}
-            </>
-          )}
+          {selectedPlan && (() => {
+            const fullPrice = selectedPlan.priceCents;
+            const upgradePrice = mode === "limitExceeded" && currentPlanPriceCents > 0
+              ? Math.max(0, fullPrice - currentPlanPriceCents)
+              : fullPrice;
+
+            return (
+              <>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  {formatPrice(upgradePrice)}
+                </p>
+                {!selectionEnabled && mode !== "limitExceeded" && (
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">(zniżka 20%)</p>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
