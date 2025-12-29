@@ -1,6 +1,6 @@
 import { Home, CheckCircle2, XCircle, Check, Send } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 
 import {
   useApproveChangeRequest,
@@ -32,7 +32,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
     galleryIdStr && typeof galleryIdStr === "string" ? galleryIdStr : undefined;
 
   // Use React Query for data
-  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
+  const { data: gallery, isLoading, isFetching } = useGallery(galleryIdForQuery);
   const { data: orderData } = useOrder(galleryIdForQuery, orderId);
   const { isNonSelectionGallery } = useGalleryType();
 
@@ -65,6 +65,16 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   // Use mutation loading states instead of local state
   const sendFinalsLoading = sendFinalsToClientMutation.isPending;
   const markPaidLoading = markOrderPaidMutation.isPending;
+  
+  // Track last known paid state to prevent flicker during refetches
+  const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
+  
+  // Update ref when gallery data changes (but not during refetches)
+  useEffect(() => {
+    if (!isFetching && gallery) {
+      lastKnownIsPaidRef.current = gallery.isPaid ?? false;
+    }
+  }, [gallery, isFetching]);
 
   // Compute values from React Query data
   const orderHasFinals = order
@@ -166,9 +176,16 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
     return null;
   }
 
-  const isPaid = gallery?.isPaid ?? false;
+  // Use last known paid state during refetches to prevent flicker
+  // Otherwise use current gallery state
+  const effectiveIsPaid =
+    isFetching && lastKnownIsPaidRef.current !== undefined
+      ? lastKnownIsPaidRef.current
+      : gallery?.isPaid ?? false;
+  const isPaid = effectiveIsPaid;
 
   // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid
+  // Use effectiveIsPaid to prevent flicker during refetches (e.g., status polling)
   const shouldShowPublishButton =
     isNonSelectionGallery && order.deliveryStatus === "AWAITING_FINAL_PHOTOS" && !isPaid;
 
@@ -212,6 +229,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
         {/* Download Selected Originals ZIP */}
         {/* Show only when deliveryStatus === 'CLIENT_APPROVED' or later, hide before approval */}
         {!isLoading &&
+          !isFetching &&
           gallery &&
           gallery.selectionEnabled !== false &&
           canDownloadZipValue &&

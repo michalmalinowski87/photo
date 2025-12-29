@@ -1,6 +1,6 @@
 import { Plus, Share2, Copy, ExternalLink } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 
 import { useSendGalleryToClient } from "../../../hooks/mutations/useGalleryMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
@@ -25,7 +25,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
   // Use React Query hooks (must be called before any early returns)
-  const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
+  const { data: gallery, isLoading, isFetching } = useGallery(galleryIdForQuery);
   const { data: galleryOrders = [], isLoading: isLoadingOrders } = useOrders(galleryIdForQuery);
   const sendGalleryLinkToClientMutation = useSendGalleryToClient();
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
@@ -34,6 +34,16 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
+  
+  // Track last known paid state to prevent flicker during refetches
+  const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
+  
+  // Update ref when gallery data changes (but not during refetches)
+  useEffect(() => {
+    if (!isFetching && gallery) {
+      lastKnownIsPaidRef.current = gallery.isPaid ?? false;
+    }
+  }, [gallery, isFetching]);
   // Use mutation loading state instead of local state
   const sendLinkLoading = sendGalleryLinkToClientMutation.isPending;
 
@@ -72,7 +82,13 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
       ? `${window.location.origin}/gallery/${galleryIdStr}`
       : "";
 
-  const isPaid = gallery?.isPaid ?? false;
+  // Use last known paid state during refetches to prevent flicker
+  // Otherwise use current gallery state
+  const effectiveIsPaid =
+    isFetching && lastKnownIsPaidRef.current !== undefined
+      ? lastKnownIsPaidRef.current
+      : gallery?.isPaid ?? false;
+  const isPaid = effectiveIsPaid;
 
   // For selective galleries: check original photos
   // For non-selective galleries: check final images
@@ -82,6 +98,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Always show publish button when gallery is not paid (regardless of photos)
   // But disable it when there are no photos
+  // Use effectiveIsPaid to prevent flicker during refetches (e.g., status polling)
   const shouldShowPublishButton = !isPaid && gallery && !isLoading;
 
   // Defensive check: don't render if no gallery URL
@@ -144,6 +161,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   const shouldShowShareButton =
     !isLoading &&
+    !isFetching &&
     !isLoadingOrders &&
     gallery &&
     isPaid &&
