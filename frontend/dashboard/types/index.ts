@@ -34,6 +34,7 @@ export interface Gallery {
   paymentStatus?: string;
   selectionEnabled?: boolean;
   nextStepsCompleted?: boolean;
+  nextStepsOverlayDismissed?: boolean; // User explicitly dismissed the overlay
   createdAt?: string;
   clientFirstName?: string;
   clientLastName?: string;

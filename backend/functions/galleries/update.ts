@@ -76,6 +76,11 @@ export const handler = lambdaLogger(async (event: any) => {
 		expressionAttributeValues[':nextStepsCompleted'] = body.nextStepsCompleted;
 	}
 	
+	if (body.nextStepsOverlayDismissed !== undefined && typeof body.nextStepsOverlayDismissed === 'boolean') {
+		setExpressions.push('nextStepsOverlayDismissed = :nextStepsOverlayDismissed');
+		expressionAttributeValues[':nextStepsOverlayDismissed'] = body.nextStepsOverlayDismissed;
+	}
+	
 	if (body.coverPhotoUrl !== undefined) {
 		if (body.coverPhotoUrl === null || body.coverPhotoUrl === '') {
 			removeExpressions.push('#cover');

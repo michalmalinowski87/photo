@@ -50,7 +50,7 @@ export const NextStepsOverlay = () => {
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
   // Get all data directly from React Query stores
-  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryIdForQuery);
+  const { data: gallery, isLoading: galleryLoading, isFetching: galleryFetching } = useGallery(galleryIdForQuery);
   const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
   const galleryCreationLoading = useGalleryCreationLoading();
@@ -238,14 +238,18 @@ export const NextStepsOverlay = () => {
     });
   }, [gallery?.originalsBytesUsed]);
 
-  // Check if all applicable steps are completed (calculate before early return)
+  // Check if gallery has completed setup - prioritize database flag to prevent flicker
+  // If nextStepsCompleted is true in gallery data, use that directly (don't recalculate)
+  const galleryCompletedSetup = gallery?.nextStepsCompleted === true;
+  
+  // Only calculate allCompleted if gallery doesn't have the flag set yet
+  // This prevents flicker from recalculating when data updates
   const applicableSteps = steps.filter((step) => step.completed !== null);
   const allCompleted =
-    applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
-
-  // Check if gallery has completed setup from gallery object OR if all steps are completed
-  // This prevents the overlay from showing when orders exist but nextStepsCompleted flag isn't set yet
-  const galleryCompletedSetup = gallery?.nextStepsCompleted === true || allCompleted;
+    !galleryCompletedSetup && applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
+  
+  // Use either the database flag OR the calculated value (but prioritize database flag)
+  const isCompleted = galleryCompletedSetup || allCompleted;
 
   // Measure and report width to context (if available)
   useEffect(() => {
@@ -300,12 +304,23 @@ export const NextStepsOverlay = () => {
     // Hide overlay during gallery creation to avoid blinking
     const shouldBeVisible = intendedVisible && !galleryCreationLoading;
     const newVisible = Boolean(shouldBeVisible);
-    const newExpanded = Boolean(nextStepsOverlayExpanded);
+    // Expand overlay on initial mount if it should be visible (first appearance)
+    // Use persisted state only if we've already initialized, otherwise expand by default
+    const newExpanded = hasInitializedVisibilityRef.current 
+      ? Boolean(nextStepsOverlayExpanded) 
+      : (shouldBeVisible ? true : Boolean(nextStepsOverlayExpanded));
 
-    // On initial mount, if we have a persisted visible state, preserve it during loading
-    // This prevents the overlay from disappearing when navigating between routes
-    // Also preserve state during gallery creation to prevent blinking
-    const shouldPreserveState = (currentOverlayVisible && galleryLoading) || galleryCreationLoading;
+    // On initial mount, preserve persisted state to prevent flicker on refresh
+    // If persisted state says hidden (false), keep it hidden until we have definitive proof it should be visible
+    // This prevents the overlay from flashing when React Query returns stale cached data on refresh
+    // Key fix: If persisted state is false on initial mount, keep it hidden (respect user's previous dismissal)
+    // Only show if persisted state is true OR if we're not on initial mount anymore
+    const isInitialMount = !hasInitializedVisibilityRef.current;
+    const shouldPreserveHiddenState = 
+      isInitialMount && 
+      !currentOverlayVisible;
+    const shouldPreserveVisibleState = (currentOverlayVisible && galleryLoading) || galleryCreationLoading;
+    const shouldPreserveState = shouldPreserveHiddenState || shouldPreserveVisibleState;
     const finalVisible = shouldPreserveState ? currentOverlayVisible : newVisible;
     const finalExpanded = newExpanded;
 
@@ -325,6 +340,7 @@ export const NextStepsOverlay = () => {
     tutorialDisabled,
     gallery,
     galleryLoading,
+    galleryFetching,
     galleryCreationLoading,
     steps.length,
     nextStepsOverlayExpanded,
@@ -374,6 +390,7 @@ export const NextStepsOverlay = () => {
   const prevGalleryCreationLoadingRef = useRef<boolean | null>(null);
   const suppressUpdatesRef = useRef<boolean>(false);
   const pendingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track if we should suppress updates until fresh data arrives (when persisted state was false)
 
   useEffect(() => {
     if (!overlayContext || !hasInitializedVisibilityRef.current) {
@@ -384,6 +401,7 @@ export const NextStepsOverlay = () => {
     const prev = prevVisibilityRef.current;
     const prevGalleryCreationLoading = prevGalleryCreationLoadingRef.current;
 
+
     // If galleryCreationLoading is active, suppress all visibility updates and hide overlay
     if (galleryCreationLoading) {
       suppressUpdatesRef.current = true;
@@ -392,10 +410,17 @@ export const NextStepsOverlay = () => {
         clearTimeout(pendingUpdateTimeoutRef.current);
         pendingUpdateTimeoutRef.current = null;
       }
-      // Hide overlay immediately if it's visible
-      if (overlayContext.nextStepsVisible) {
+      // Hide overlay immediately if it's visible and mark as dismissed in gallery
+      if (overlayContext.nextStepsVisible && gallery?.galleryId) {
         setOverlayVisible(false);
         prev.visible = false;
+        // Mark overlay as dismissed in gallery data (stored in React Query cache)
+        updateGalleryMutation.mutate({
+          galleryId: gallery.galleryId,
+          data: {
+            nextStepsOverlayDismissed: true,
+          },
+        });
       }
       prevGalleryCreationLoadingRef.current = galleryCreationLoading;
       return;
@@ -411,8 +436,8 @@ export const NextStepsOverlay = () => {
       if (pendingUpdateTimeoutRef.current) {
         clearTimeout(pendingUpdateTimeoutRef.current);
       }
-      // Capture intended expanded state for the timeout
-      const targetExpanded = newExpanded;
+      // When overlay first appears after gallery creation, expand it by default
+      const targetExpanded = true; // Always expand on first appearance after creation
       // Schedule update after state stabilizes (longer delay to let all updates settle)
       pendingUpdateTimeoutRef.current = setTimeout(() => {
         suppressUpdatesRef.current = false;
@@ -452,15 +477,21 @@ export const NextStepsOverlay = () => {
     }
 
     // Normal update logic - only when not suppressing
+    
+    // Only update visibility if:
+    // 1. We're not respecting persisted hidden state, OR
+    // 2. The new visibility matches what we want (show when it should be visible)
+    const effectiveNewVisible = newVisible;
+    
     const visibilityChanged =
-      overlayContext.nextStepsVisible !== newVisible && prev.visible !== newVisible;
+      overlayContext.nextStepsVisible !== effectiveNewVisible && prev.visible !== effectiveNewVisible;
     const expandedChanged =
       overlayContext.nextStepsExpanded !== newExpanded && prev.expanded !== newExpanded;
 
     if (visibilityChanged || expandedChanged) {
       if (visibilityChanged) {
-        setOverlayVisible(newVisible);
-        prev.visible = newVisible;
+        setOverlayVisible(effectiveNewVisible);
+        prev.visible = effectiveNewVisible;
       }
       if (expandedChanged) {
         setOverlayExpanded(newExpanded);
@@ -498,7 +529,7 @@ export const NextStepsOverlay = () => {
       gallery?.galleryId &&
       !galleryLoading &&
       steps.length > 0 &&
-      !galleryCompletedSetup &&
+      !gallery?.nextStepsCompleted && // Only update if database flag isn't set yet
       !isUpdatingCompletionRef.current // Prevent multiple updates
     ) {
       // Mark that we're updating to prevent duplicate calls
@@ -512,11 +543,12 @@ export const NextStepsOverlay = () => {
       // Then hide completely and mark as completed in database after 3 seconds
       const timeoutId = setTimeout(async () => {
         try {
-          // Update gallery in database to mark setup as completed
+          // Update gallery in database to mark setup as completed and overlay as dismissed
           await updateGalleryMutation.mutateAsync({
             galleryId: gallery.galleryId,
             data: {
               nextStepsCompleted: true,
+              nextStepsOverlayDismissed: true,
             },
           });
 
@@ -558,11 +590,26 @@ export const NextStepsOverlay = () => {
       loadTutorialPreference();
     }
 
+    if (!gallery?.galleryId) {
+      showToast("error", "Błąd", "Brak danych galerii");
+      return;
+    }
+
     setIsSavingPreference(true);
     try {
+      // Update gallery to mark overlay as dismissed (this is the primary source of truth now)
+      await updateGalleryMutation.mutateAsync({
+        galleryId: gallery.galleryId,
+        data: {
+          nextStepsOverlayDismissed: true,
+        },
+      });
+      
+      // Also update business info preference for consistency
       await updateBusinessInfoMutation.mutateAsync({
         tutorialNextStepsDisabled: true,
       });
+      
       setTutorialDisabled(true);
       showToast("info", "Ukryto", "Ten panel nie będzie już wyświetlany");
     } catch (error) {
@@ -572,20 +619,6 @@ export const NextStepsOverlay = () => {
       setIsSavingPreference(false);
     }
   };
-
-  // Calculate visibility (but keep component mounted to prevent flickering)
-  // Hide if: gallery setup already completed, tutorial disabled, no gallery, loading, no steps, or in settings/publish view
-  // Use the memoized calculated visibility
-  const calculatedVisible = calculatedVisibility.visible;
-
-  // On initial mount, use persisted overlay state to prevent flash
-  // After initialization, use calculated value
-  // This prevents the overlay from disappearing during route changes
-  const isVisible = hasInitializedVisibilityRef.current
-    ? calculatedVisible
-    : currentOverlayVisible !== false
-      ? currentOverlayVisible || calculatedVisible
-      : calculatedVisible;
 
   // Check if gallery is paid for send step (only if gallery exists)
   const isPaid = gallery
@@ -655,43 +688,56 @@ export const NextStepsOverlay = () => {
     }
   };
 
-  // Don't render at all if tutorial is permanently disabled
-  if (tutorialDisabled === true) {
+  // Dead simple visibility logic
+  // Don't show overlay if gallery is loading/fetching or not available yet (prevents flicker from stale cache)
+  if (galleryLoading || galleryFetching || !gallery) {
     return null;
   }
+  
+  const overlayDismissed = gallery.nextStepsOverlayDismissed === true;
+  const calculatedVisible = calculatedVisibility.visible;
+  const shouldShow = !overlayDismissed && !isCompleted && !tutorialDisabled && calculatedVisible;
+
+  // Don't render if dismissed, completed, or tutorial disabled
+  if (overlayDismissed || isCompleted || tutorialDisabled === true) {
+    return null;
+  }
+
+  // Use expansion state from context (set synchronously in useLayoutEffect) to prevent flicker
+  const isExpanded = overlayContext?.nextStepsExpanded ?? nextStepsOverlayExpanded;
 
   return (
     <div
       ref={overlayRef}
       className={`fixed bottom-4 right-4 z-40 max-w-[calc(100vw-2rem)] ${
-        isVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        shouldShow ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
       style={{
-        width: nextStepsOverlayExpanded ? "17rem" : "4rem",
+        width: isExpanded ? "17rem" : "4rem",
         transition: "width 400ms cubic-bezier(0.4, 0, 0.2, 1)",
         transformOrigin: "bottom right",
       }}
-      data-expanded={nextStepsOverlayExpanded}
+      data-expanded={isExpanded}
     >
       {/* Main container with refined shadows and backdrop */}
       <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-theme-xl overflow-hidden transition-all duration-300 hover:shadow-theme-lg">
         {/* Header with refined typography and spacing */}
         <button
           onClick={() => {
-            setNextStepsOverlayExpanded(!nextStepsOverlayExpanded);
+            setNextStepsOverlayExpanded(!isExpanded);
           }}
           className={`w-full flex items-center ${
-            nextStepsOverlayExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
+            isExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
           } border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
-          aria-label={nextStepsOverlayExpanded ? "Zwiń" : "Rozwiń"}
+          aria-label={isExpanded ? "Zwiń" : "Rozwiń"}
         >
-          {nextStepsOverlayExpanded ? (
+          {isExpanded ? (
             <>
               <h3
                 className="text-[16px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
                 style={{
                   transition: "opacity 200ms ease-out",
-                  opacity: nextStepsOverlayExpanded && widthReached13rem ? 1 : 0,
+                  opacity: isExpanded && widthReached13rem ? 1 : 0,
                 }}
               >
                 Ukończ konfigurację
@@ -713,7 +759,7 @@ export const NextStepsOverlay = () => {
 
         {/* Content with refined spacing and visual hierarchy */}
         <div ref={contentRef}>
-          <div className={`px-5 ${nextStepsOverlayExpanded ? "py-5" : "py-4"} space-y-2.5`}>
+          <div className={`px-5 ${isExpanded ? "py-5" : "py-4"} space-y-2.5`}>
             {steps.map((step) => {
               if (step.completed === null) {
                 return null;
@@ -754,9 +800,9 @@ export const NextStepsOverlay = () => {
                   }}
                   disabled={step.completed || isDisabled}
                   className={`group w-full flex items-center ${
-                    nextStepsOverlayExpanded ? "gap-3.5 px-3.5 py-3.5" : "justify-center py-2.5"
+                    isExpanded ? "gap-3.5 px-3.5 py-3.5" : "justify-center py-2.5"
                   } rounded-xl text-left transition-all duration-200 ${
-                    nextStepsOverlayExpanded
+                    isExpanded
                       ? step.completed
                         ? "bg-gradient-to-br from-success-50 to-success-25 dark:from-success-950/30 dark:to-success-900/20 cursor-default shadow-sm"
                         : isDisabled
@@ -789,11 +835,11 @@ export const NextStepsOverlay = () => {
                   {/* Label with refined typography */}
                   <div
                     className={`flex-1 ${
-                      nextStepsOverlayExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
+                      isExpanded ? "opacity-100" : "opacity-0 w-0 overflow-hidden"
                     }`}
                     style={{
                       transition: "opacity 200ms ease-out",
-                      transitionDelay: nextStepsOverlayExpanded ? "450ms" : "0ms",
+                      transitionDelay: isExpanded ? "450ms" : "0ms",
                     }}
                   >
                     <span
@@ -813,7 +859,7 @@ export const NextStepsOverlay = () => {
 
               // Wrap with tooltip when collapsed or when disabled publish step
               if (
-                !nextStepsOverlayExpanded ||
+                !isExpanded ||
                 (step.id === "publish" && isDisabled && !hasPhotos)
               ) {
                 return (
@@ -821,7 +867,7 @@ export const NextStepsOverlay = () => {
                     key={step.id}
                     content={tooltipContent}
                     side="top"
-                    align={!nextStepsOverlayExpanded ? "end" : "center"}
+                    align={!isExpanded ? "end" : "center"}
                     fullWidth={true}
                   >
                     {stepButton}
@@ -844,28 +890,29 @@ export const NextStepsOverlay = () => {
             {/* Visible button that fades in - using div to avoid browser button styling artifacts */}
             <div
               onClick={() => {
-                if (!isSavingPreference && tutorialDisabled !== null && nextStepsOverlayExpanded) {
+                // Allow click even if tutorialDisabled is null - handleDontShowAgain will load it if needed
+                if (!isSavingPreference && isExpanded) {
                   void handleDontShowAgain();
                 }
               }}
-              className={`relative w-full text-[12px] font-medium text-center py-1.5 cursor-pointer select-none ${
-                isSavingPreference || tutorialDisabled === null || !nextStepsOverlayExpanded
-                  ? "opacity-40 cursor-not-allowed"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              className={`relative w-full text-[12px] font-medium text-center py-1.5 select-none ${
+                isSavingPreference || !isExpanded
+                  ? "opacity-40 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                  : "cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
               style={{
                 transition: "opacity 200ms ease-out",
-                transitionDelay: nextStepsOverlayExpanded ? "600ms" : "0ms",
-                opacity: nextStepsOverlayExpanded ? 1 : 0,
-                pointerEvents: nextStepsOverlayExpanded ? "auto" : "none",
+                transitionDelay: isExpanded ? "600ms" : "0ms",
+                opacity: isExpanded ? 1 : 0,
+                pointerEvents: isExpanded && !isSavingPreference ? "auto" : "none",
                 background: "transparent",
                 border: "none",
                 outline: "none",
                 boxShadow: "none",
-                borderRadius: nextStepsOverlayExpanded ? "0.375rem" : "0",
+                borderRadius: isExpanded ? "0.375rem" : "0",
               }}
               onMouseEnter={(e) => {
-                if (nextStepsOverlayExpanded && !isSavingPreference && tutorialDisabled !== null) {
+                if (isExpanded && !isSavingPreference) {
                   e.currentTarget.style.background = "rgba(243, 244, 246, 0.5)";
                 }
               }}
@@ -873,7 +920,7 @@ export const NextStepsOverlay = () => {
                 e.currentTarget.style.background = "transparent";
               }}
               onMouseDown={(e) => {
-                if (nextStepsOverlayExpanded && !isSavingPreference && tutorialDisabled !== null) {
+                if (isExpanded && !isSavingPreference) {
                   e.currentTarget.style.background = "rgba(229, 231, 235, 0.5)";
                 }
               }}
@@ -882,7 +929,7 @@ export const NextStepsOverlay = () => {
               }}
               role="button"
               tabIndex={
-                nextStepsOverlayExpanded && !isSavingPreference && tutorialDisabled !== null
+                isExpanded && !isSavingPreference
                   ? 0
                   : -1
               }
@@ -890,8 +937,7 @@ export const NextStepsOverlay = () => {
                 if (
                   (e.key === "Enter" || e.key === " ") &&
                   !isSavingPreference &&
-                  tutorialDisabled !== null &&
-                  nextStepsOverlayExpanded
+                  isExpanded
                 ) {
                   e.preventDefault();
                   void handleDontShowAgain();

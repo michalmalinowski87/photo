@@ -346,7 +346,6 @@ export default function OrderDetail() {
     const paymentSuccess = params.get("payment") === "success";
     const upgradeFlow = params.get("upgrade") === "true";
     const limitExceededParam = params.get("limitExceeded") === "true";
-    const durationParam = params.get("duration");
     const planKeyParam = params.get("planKey");
     const galleryIdParam = params.get("galleryId");
 
@@ -358,13 +357,36 @@ export default function OrderDetail() {
 
     // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
     if (isWalletTopUpRedirect && planKeyParam) {
+      // Restore limitExceededData from URL params if available (same as photos page)
+      const uploadedSizeBytesParam = params.get("uploadedSizeBytes");
+      const originalsLimitBytesParam = params.get("originalsLimitBytes");
+      const excessBytesParam = params.get("excessBytes");
+      const isSelectionGalleryParam = params.get("isSelectionGallery");
+
+      if (uploadedSizeBytesParam && originalsLimitBytesParam && excessBytesParam) {
+        setLimitExceededData({
+          uploadedSizeBytes: parseInt(uploadedSizeBytesParam, 10),
+          originalsLimitBytes: parseInt(originalsLimitBytesParam, 10),
+          excessBytes: parseInt(excessBytesParam, 10),
+          isSelectionGallery: isSelectionGalleryParam === "true",
+        });
+      }
+
       // Clean URL params but preserve limitExceeded, duration, and planKey for wizard
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete("payment");
       newUrl.searchParams.delete("upgrade");
       newUrl.searchParams.delete("galleryId");
+      // Clean up limitExceededData params after restoring them
+      newUrl.searchParams.delete("uploadedSizeBytes");
+      newUrl.searchParams.delete("originalsLimitBytes");
+      newUrl.searchParams.delete("excessBytes");
+      newUrl.searchParams.delete("isSelectionGallery");
       // Keep limitExceeded, duration, and planKey so wizard can restore state
       window.history.replaceState({}, "", newUrl.toString());
+
+      // Reload gallery to ensure we have fresh data
+      void reloadGallery();
 
       // Reopen wizard with preserved state
       setLimitExceededWizardOpen(true);
