@@ -53,8 +53,10 @@ export const WalletTopUpSection = ({
       return;
     }
 
-    // Show redirect overlay IMMEDIATELY when button is clicked
+    // Show redirect overlay IMMEDIATELY when button is clicked (before any async operations)
+    // This provides instant feedback, especially important in wizards where buttons get disabled
     setShowTopUpRedirect(true);
+    setTopUpCheckoutUrl(undefined); // Reset URL, will be set when API responds
 
     try {
       // Construct redirect URL back to the current page, preserving existing query parameters
@@ -72,15 +74,17 @@ export const WalletTopUpSection = ({
         redirectUrl,
       });
 
+      // Update checkout URL once we receive it (overlay is already visible)
       if (data.checkoutUrl) {
-        // Update checkout URL once we receive it
         setTopUpCheckoutUrl(data.checkoutUrl);
       } else {
+        // No checkout URL means we're not redirecting to Stripe - hide overlay
         const errorMsg = "Nie otrzymano URL do płatności";
         showToast("error", "Błąd", errorMsg);
         setShowTopUpRedirect(false);
       }
     } catch (err) {
+      // Error occurred - hide overlay and show error
       const errorMsg = formatApiError(err as Error);
       showToast("error", "Błąd", errorMsg);
       setShowTopUpRedirect(false);

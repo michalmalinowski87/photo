@@ -78,6 +78,8 @@ export const PublishGalleryWizard = ({
   const { data: gallery } = useGallery(galleryId);
   const [pricingData, setPricingData] = useState<PricingModalData | null>(null);
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey | null>(null);
+  const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
+  const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
   const hasInitializedPlan = React.useRef(false);
 
@@ -422,6 +424,11 @@ export const PublishGalleryWizard = ({
         return;
       }
 
+      // Show redirect overlay IMMEDIATELY when button is clicked (before any async operations)
+      // This provides instant feedback, especially important in wizards where buttons get disabled
+      setShowTopUpRedirect(true);
+      setTopUpCheckoutUrl(undefined); // Reset URL, will be set when API responds
+
       try {
         // Construct redirect URL with wizard state
         const params = new URLSearchParams();
@@ -456,13 +463,20 @@ export const PublishGalleryWizard = ({
           redirectUrl,
         });
 
+        // Update checkout URL once we receive it (overlay is already visible)
         if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
+          setTopUpCheckoutUrl(data.checkoutUrl);
         } else {
-          showToast("error", "Błąd", "Nie otrzymano URL do płatności");
+          // No checkout URL means we're not redirecting to Stripe - hide overlay
+          const errorMsg = "Nie otrzymano URL do płatności";
+          showToast("error", "Błąd", errorMsg);
+          setShowTopUpRedirect(false);
         }
       } catch (err) {
-        showToast("error", "Błąd", formatApiError(err as Error));
+        // Error occurred - hide overlay and show error
+        const errorMsg = formatApiError(err as Error);
+        showToast("error", "Błąd", errorMsg);
+        setShowTopUpRedirect(false);
       }
     },
     [
@@ -739,11 +753,14 @@ export const PublishGalleryWizard = ({
         </div>
       )}
 
-      {/* Stripe Redirect Overlay */}
+      {/* Stripe Redirect Overlay for plan payment */}
       <StripeRedirectOverlay
         isVisible={showRedirectOverlay}
         checkoutUrl={redirectInfo?.checkoutUrl}
       />
+
+      {/* Stripe Redirect Overlay for wallet topup */}
+      <StripeRedirectOverlay isVisible={showTopUpRedirect} checkoutUrl={topUpCheckoutUrl} />
     </div>
   );
 
