@@ -16,8 +16,8 @@ import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
-import { PublishGalleryWizard } from "../../../components/galleries/PublishGalleryWizard";
 import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
+import { PublishGalleryWizard } from "../../../components/galleries/PublishGalleryWizard";
 import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
@@ -293,7 +293,11 @@ export default function GalleryPhotos() {
 
   // Fetch statistics only (first page with stats, but we don't need all images)
   // This gives us total counts without loading all images
-  const { data: statsData, isLoading: statsLoading, dataUpdatedAt: statsDataUpdatedAt } = useInfiniteGalleryImages({
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    dataUpdatedAt: statsDataUpdatedAt,
+  } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 1, // Only need stats, so minimal limit
@@ -559,9 +563,10 @@ export default function GalleryPhotos() {
     const galleryIdParam = params.get("galleryId");
 
     // Check if this is a wallet top-up redirect (has galleryId param but not a direct gallery payment)
-    const isWalletTopUpRedirect = paymentSuccess && 
-      limitExceededParam && 
-      galleryIdParam === galleryId && 
+    const isWalletTopUpRedirect =
+      paymentSuccess &&
+      limitExceededParam &&
+      galleryIdParam === galleryId &&
       !params.get("gallery"); // Not a direct gallery payment
 
     // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
@@ -648,7 +653,7 @@ export default function GalleryPhotos() {
         try {
           // Reload gallery once and check the result
           await reloadGallery();
-          
+
           // Get the updated gallery from the hook (React Query will have updated it)
           const currentGallery = galleryRaw && typeof galleryRaw === "object" ? galleryRaw : null;
 
@@ -842,7 +847,7 @@ export default function GalleryPhotos() {
         const uploadedSizeBytes = gallery.originalsBytesUsed;
         const originalsLimitBytes = gallery.originalsLimitBytes;
         const excessBytes = Math.max(0, uploadedSizeBytes - originalsLimitBytes);
-        
+
         setLimitExceededData({
           uploadedSizeBytes,
           originalsLimitBytes,
@@ -1659,7 +1664,7 @@ export default function GalleryPhotos() {
       // Fallback to actual image count if stats not available
       return sectionImages.length;
     }
-    
+
     // Also check if we have cached data from a previous expansion of unselected section
     // This ensures we use fresh data even when section is collapsed
     if (galleryIdForQuery) {
@@ -1670,16 +1675,21 @@ export default function GalleryPhotos() {
         undefined,
         true // filterUnselected: true
       );
-      const cachedUnselectedData = queryClient.getQueryData(unselectedQueryKey) as {
-        pages?: Array<{ stats?: { unselectedCount?: number } }>;
-      } | undefined;
+      const cachedUnselectedData = queryClient.getQueryData(unselectedQueryKey);
       if (cachedUnselectedData?.pages?.[0]?.stats?.unselectedCount !== undefined) {
         return Number(cachedUnselectedData.pages[0].stats.unselectedCount);
       }
     }
-    
+
     return null;
-  }, [expandedSection, currentSectionQuery.data, currentSectionQuery.dataUpdatedAt, sectionImages.length, galleryIdForQuery, queryClient]);
+  }, [
+    expandedSection,
+    currentSectionQuery.data,
+    currentSectionQuery.dataUpdatedAt,
+    sectionImages.length,
+    galleryIdForQuery,
+    queryClient,
+  ]);
 
   // Use backend statistics for total unselected count
   // Prefer count from filtered query (more accurate, always fresh)
@@ -2192,7 +2202,8 @@ export default function GalleryPhotos() {
           initialState={
             router.isReady && typeof window !== "undefined"
               ? {
-                  duration: new URLSearchParams(window.location.search).get("duration") || undefined,
+                  duration:
+                    new URLSearchParams(window.location.search).get("duration") || undefined,
                   planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
                 }
               : null

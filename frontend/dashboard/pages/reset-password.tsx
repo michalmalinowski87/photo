@@ -102,7 +102,7 @@ export default function ResetPassword() {
       return;
     }
 
-    if (!code || code.length !== 6) {
+    if (code?.length !== 6) {
       setError("Wprowadź 6-cyfrowy kod weryfikacyjny");
       return;
     }

@@ -71,7 +71,7 @@ async function validateStorageLimits(
     hasCallback: !!onValidationNeeded,
     callbackType: typeof onValidationNeeded,
   });
-  
+
   try {
     const totalSize = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
     // NOTE: This direct API call is necessary for Uppy to work and should not be refactored to React Query.
@@ -82,10 +82,11 @@ async function validateStorageLimits(
     console.log("[validateStorageLimits] API response:", validationResult);
 
     // If no limit is set (draft gallery), allow upload
-    const limitBytes = type === 'finals' 
-      ? (validationResult.finalsLimitBytes ?? validationResult.originalsLimitBytes)
-      : validationResult.originalsLimitBytes;
-    
+    const limitBytes =
+      type === "finals"
+        ? (validationResult.finalsLimitBytes ?? validationResult.originalsLimitBytes)
+        : validationResult.originalsLimitBytes;
+
     if (!limitBytes) {
       console.log("[validateStorageLimits] No limit set, allowing upload");
       return true;
@@ -117,20 +118,20 @@ async function validateStorageLimits(
       error,
       errorMessage: error instanceof Error ? error.message : String(error),
       errorType: typeof error,
-      errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+      errorKeys: error && typeof error === "object" ? Object.keys(error) : [],
     });
     // Handle 400 errors from backend (when limit would be exceeded)
     // The API service throws errors for non-200 status codes, but we need to extract the body
     const apiError = error as {
       status?: number;
-      body?: { 
-        withinLimit?: boolean; 
+      body?: {
+        withinLimit?: boolean;
         originalsLimitBytes?: number;
         finalsLimitBytes?: number;
-        [key: string]: unknown 
+        [key: string]: unknown;
       };
     };
-    
+
     // Log the error for debugging
     console.log("[validateStorageLimits] Error caught:", {
       status: apiError.status,
@@ -138,9 +139,10 @@ async function validateStorageLimits(
       body: apiError.body,
       bodyString: JSON.stringify(apiError.body, null, 2),
       type,
-      errorKeys: apiError.body && typeof apiError.body === 'object' ? Object.keys(apiError.body) : [],
+      errorKeys:
+        apiError.body && typeof apiError.body === "object" ? Object.keys(apiError.body) : [],
     });
-    
+
     if (apiError.status === 400 && apiError.body) {
       // Backend returned 400 with validation details in body
       const body = apiError.body as {
@@ -156,16 +158,21 @@ async function validateStorageLimits(
         nextTierLimitBytes?: number;
         isSelectionGallery?: boolean;
       };
-      
+
       console.log("[validateStorageLimits] Parsed error body:", body);
-      
+
       // Backend returns withinLimit: false in the body when limits are exceeded
       // Also check if excessBytes exists (indicates limit exceeded even if withinLimit is not set)
-      const isLimitExceeded = body.withinLimit === false || 
-                              (body.withinLimit === undefined && body.excessBytes !== undefined) ||
-                              (body.error && typeof body.error === 'string' && body.error.toLowerCase().includes('limit')) ||
-                              (body.message && typeof body.message === 'string' && body.message.toLowerCase().includes('limit'));
-      
+      const isLimitExceeded =
+        body.withinLimit === false ||
+        (body.withinLimit === undefined && body.excessBytes !== undefined) ||
+        (body.error &&
+          typeof body.error === "string" &&
+          body.error.toLowerCase().includes("limit")) ||
+        (body.message &&
+          typeof body.message === "string" &&
+          body.message.toLowerCase().includes("limit"));
+
       console.log("[validateStorageLimits] Is limit exceeded?", {
         isLimitExceeded,
         withinLimit: body.withinLimit,
@@ -173,13 +180,14 @@ async function validateStorageLimits(
         errorMessage: body.error,
         message: body.message,
       });
-      
+
       if (isLimitExceeded) {
         // For finals, use finalsLimitBytes if available, otherwise fall back to originalsLimitBytes
-        const limitBytes = type === 'finals'
-          ? (body.finalsLimitBytes ?? body.originalsLimitBytes ?? 0)
-          : (body.originalsLimitBytes ?? 0);
-        
+        const limitBytes =
+          type === "finals"
+            ? (body.finalsLimitBytes ?? body.originalsLimitBytes ?? 0)
+            : (body.originalsLimitBytes ?? 0);
+
         console.log("[validateStorageLimits] Limit exceeded detected:", {
           type,
           limitBytes,
@@ -187,12 +195,12 @@ async function validateStorageLimits(
           excessBytes: body.excessBytes,
           hasCallback: !!onValidationNeeded,
         });
-        
+
         // Ensure we have valid data before calling the callback
         // For finals, we might not have uploadedSizeBytes but we have excessBytes
         const uploadedSizeBytes = body.uploadedSizeBytes ?? 0;
         const excessBytes = body.excessBytes ?? 0;
-        
+
         if (limitBytes > 0 && (uploadedSizeBytes > 0 || excessBytes > 0)) {
           const validationData = {
             uploadedSizeBytes,
@@ -203,7 +211,7 @@ async function validateStorageLimits(
             nextTierLimitBytes: body.nextTierLimitBytes,
             isSelectionGallery: body.isSelectionGallery,
           };
-          
+
           console.log("[validateStorageLimits] Calling onValidationNeeded with:", validationData);
           if (onValidationNeeded) {
             onValidationNeeded(validationData);
@@ -221,7 +229,10 @@ async function validateStorageLimits(
           });
         }
       } else {
-        console.log("[validateStorageLimits] Not a limit exceeded error, withinLimit:", body.withinLimit);
+        console.log(
+          "[validateStorageLimits] Not a limit exceeded error, withinLimit:",
+          body.withinLimit
+        );
       }
     }
     // For other errors, re-throw to let Uppy handle them
@@ -466,7 +477,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     }
 
     // Helper function to extract limit exceeded data from error
-    const extractLimitExceededData = (error: unknown): {
+    const extractLimitExceededData = (
+      error: unknown
+    ): {
       uploadedSizeBytes: number;
       originalsLimitBytes: number;
       excessBytes: number;
@@ -476,9 +489,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       isSelectionGallery?: boolean;
     } | null => {
       // Try to extract error from various formats
-      const errorObj = error as { 
-        message?: string; 
-        body?: { 
+      const errorObj = error as {
+        message?: string;
+        body?: {
           error?: string;
           message?: string;
           uploadedSizeBytes?: number;
@@ -495,28 +508,30 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         };
         response?: { body?: unknown };
       };
-      
+
       const body = errorObj.body || (errorObj.response?.body as typeof errorObj.body);
       if (!body) return null;
-      
+
       // Check if this is a limit exceeded error
       const errorMessage = body.error || body.message || errorObj.message || "";
-      const isLimitError = errorMessage.toLowerCase().includes("limit") || 
-                          errorMessage.toLowerCase().includes("exceeded") ||
-                          body.excessBytes !== undefined;
-      
+      const isLimitError =
+        errorMessage.toLowerCase().includes("limit") ||
+        errorMessage.toLowerCase().includes("exceeded") ||
+        body.excessBytes !== undefined;
+
       if (!isLimitError) return null;
-      
+
       // Extract limit bytes - for finals, prefer finalsLimitBytes
-      const limitBytes = configRef.current.type === 'finals'
-        ? (body.finalsLimitBytes ?? body.limitBytes ?? body.originalsLimitBytes ?? 0)
-        : (body.originalsLimitBytes ?? body.limitBytes ?? 0);
-      
+      const limitBytes =
+        configRef.current.type === "finals"
+          ? (body.finalsLimitBytes ?? body.limitBytes ?? body.originalsLimitBytes ?? 0)
+          : (body.originalsLimitBytes ?? body.limitBytes ?? 0);
+
       const currentSize = body.uploadedSizeBytes ?? body.currentSizeBytes ?? 0;
       const uploadSize = body.totalFileSizeBytes ?? 0;
       const uploadedSizeBytes = currentSize + uploadSize;
-      const excessBytes = body.excessBytes ?? (uploadedSizeBytes - limitBytes);
-      
+      const excessBytes = body.excessBytes ?? uploadedSizeBytes - limitBytes;
+
       if (limitBytes > 0 && uploadedSizeBytes > 0) {
         return {
           uploadedSizeBytes,
@@ -528,7 +543,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           isSelectionGallery: body.isSelectionGallery,
         };
       }
-      
+
       return null;
     };
 
@@ -539,7 +554,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       hasOnValidationNeeded: !!config.onValidationNeeded,
       hasOnBeforeUpload: true, // We're about to add it
     });
-    
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const uppy = createUppyInstance({
       galleryId: config.galleryId,
@@ -552,9 +567,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           galleryId: configRef.current.galleryId,
           orderId: configRef.current.orderId,
           hasCallback: !!configRef.current.onValidationNeeded,
-          fileNames: files.map(f => f.name),
+          fileNames: files.map((f) => f.name),
         });
-        
+
         // Validate storage limits for both originals and finals
         try {
           console.log("[useUppyUpload] Calling validateStorageLimits");
@@ -572,7 +587,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
             errorMessage: error instanceof Error ? error.message : String(error),
             errorStatus: (error as { status?: number }).status,
           });
-          
+
           // Check if this is a limit exceeded error (400) - if so, validateStorageLimits should have handled it
           const apiError = error as { status?: number; body?: unknown };
           if (apiError.status === 400) {
@@ -606,7 +621,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           type: configRef.current.type,
           fileName: file?.name,
         });
-        
+
         // Try to extract limit exceeded data from error
         const limitData = extractLimitExceededData(error);
         if (limitData && configRef.current.onValidationNeeded) {
@@ -614,7 +629,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           configRef.current.onValidationNeeded(limitData);
           return;
         }
-        
+
         // Call custom error handler if provided, otherwise show default toast
         if (configRef.current.onUploadError) {
           configRef.current.onUploadError(error, file);
@@ -645,21 +660,25 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
         const successfulCount = result.successful.length;
         const failedCount = result.failed.length;
         const totalFiles = successfulCount + failedCount;
-        
+
         // Check failed files for limit exceeded errors
         if (failedCount > 0 && configRef.current.onValidationNeeded) {
           console.log("[useUppyUpload] Checking failed files for limit exceeded errors:", {
             failedCount,
             type: configRef.current.type,
-            failedFiles: result.failed.map(f => ({ name: f.name, id: f.id })),
+            failedFiles: result.failed.map((f) => ({ name: f.name, id: f.id })),
           });
-          
+
           for (const failedFile of result.failed) {
             // Uppy stores error information in the file's response or error property
             // Check various possible error locations
             const fileAny = failedFile as any;
-            const fileError = fileAny.error || fileAny.response?.error || fileAny.response?.body?.error || fileAny.response;
-            
+            const fileError =
+              fileAny.error ||
+              fileAny.response?.error ||
+              fileAny.response?.body?.error ||
+              fileAny.response;
+
             if (fileError) {
               console.log("[useUppyUpload] Failed file error details:", {
                 fileName: failedFile.name,
@@ -670,10 +689,12 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
                 errorBody: fileError?.body,
                 errorKeys: fileError ? Object.keys(fileError) : [],
               });
-              
+
               const limitData = extractLimitExceededData(fileError);
               if (limitData) {
-                console.log("[useUppyUpload] Limit exceeded detected in failed file, calling callback");
+                console.log(
+                  "[useUppyUpload] Limit exceeded detected in failed file, calling callback"
+                );
                 configRef.current.onValidationNeeded(limitData);
                 return; // Exit early, don't process other files
               }

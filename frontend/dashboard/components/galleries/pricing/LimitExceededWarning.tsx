@@ -29,17 +29,14 @@ export const LimitExceededWarning = ({
             Przekroczono limit miejsca w galerii
           </p>
           <p className="text-sm text-red-700 dark:text-red-200 mb-2">
-            Przekroczono limit o{" "}
-            {parseFloat(excessGB) >= 1 ? `${excessGB} GB` : `${excessMB} MB`}. Obecny limit:{" "}
-            {limitGB} GB, użyto: {usedGB} GB.
+            Przekroczono limit o {parseFloat(excessGB) >= 1 ? `${excessGB} GB` : `${excessMB} MB`}.
+            Obecny limit: {limitGB} GB, użyto: {usedGB} GB.
           </p>
           <p className="text-xs text-red-600 dark:text-red-300">
-            Wybierz większy plan, aby zwiększyć limit i kontynuować
-            przesyłanie zdjęć.
+            Wybierz większy plan, aby zwiększyć limit i kontynuować przesyłanie zdjęć.
           </p>
         </div>
       </div>
     </div>
   );
 };
-

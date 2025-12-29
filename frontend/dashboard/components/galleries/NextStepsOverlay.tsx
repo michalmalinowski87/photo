@@ -50,7 +50,11 @@ export const NextStepsOverlay = () => {
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
   // Get all data directly from React Query stores
-  const { data: gallery, isLoading: galleryLoading, isFetching: galleryFetching } = useGallery(galleryIdForQuery);
+  const {
+    data: gallery,
+    isLoading: galleryLoading,
+    isFetching: galleryFetching,
+  } = useGallery(galleryIdForQuery);
   const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
   const galleryCreationLoading = useGalleryCreationLoading();
@@ -241,13 +245,15 @@ export const NextStepsOverlay = () => {
   // Check if gallery has completed setup - prioritize database flag to prevent flicker
   // If nextStepsCompleted is true in gallery data, use that directly (don't recalculate)
   const galleryCompletedSetup = gallery?.nextStepsCompleted === true;
-  
+
   // Only calculate allCompleted if gallery doesn't have the flag set yet
   // This prevents flicker from recalculating when data updates
   const applicableSteps = steps.filter((step) => step.completed !== null);
   const allCompleted =
-    !galleryCompletedSetup && applicableSteps.length > 0 && applicableSteps.every((step) => step.completed);
-  
+    !galleryCompletedSetup &&
+    applicableSteps.length > 0 &&
+    applicableSteps.every((step) => step.completed);
+
   // Use either the database flag OR the calculated value (but prioritize database flag)
   const isCompleted = galleryCompletedSetup || allCompleted;
 
@@ -306,9 +312,11 @@ export const NextStepsOverlay = () => {
     const newVisible = Boolean(shouldBeVisible);
     // Expand overlay on initial mount if it should be visible (first appearance)
     // Use persisted state only if we've already initialized, otherwise expand by default
-    const newExpanded = hasInitializedVisibilityRef.current 
-      ? Boolean(nextStepsOverlayExpanded) 
-      : (shouldBeVisible ? true : Boolean(nextStepsOverlayExpanded));
+    const newExpanded = hasInitializedVisibilityRef.current
+      ? Boolean(nextStepsOverlayExpanded)
+      : shouldBeVisible
+        ? true
+        : Boolean(nextStepsOverlayExpanded);
 
     // On initial mount, preserve persisted state to prevent flicker on refresh
     // If persisted state says hidden (false), keep it hidden until we have definitive proof it should be visible
@@ -316,10 +324,9 @@ export const NextStepsOverlay = () => {
     // Key fix: If persisted state is false on initial mount, keep it hidden (respect user's previous dismissal)
     // Only show if persisted state is true OR if we're not on initial mount anymore
     const isInitialMount = !hasInitializedVisibilityRef.current;
-    const shouldPreserveHiddenState = 
-      isInitialMount && 
-      !currentOverlayVisible;
-    const shouldPreserveVisibleState = (currentOverlayVisible && galleryLoading) || galleryCreationLoading;
+    const shouldPreserveHiddenState = isInitialMount && !currentOverlayVisible;
+    const shouldPreserveVisibleState =
+      (currentOverlayVisible && galleryLoading) || galleryCreationLoading;
     const shouldPreserveState = shouldPreserveHiddenState || shouldPreserveVisibleState;
     const finalVisible = shouldPreserveState ? currentOverlayVisible : newVisible;
     const finalExpanded = newExpanded;
@@ -401,7 +408,6 @@ export const NextStepsOverlay = () => {
     const prev = prevVisibilityRef.current;
     const prevGalleryCreationLoading = prevGalleryCreationLoadingRef.current;
 
-
     // If galleryCreationLoading is active, suppress all visibility updates and hide overlay
     if (galleryCreationLoading) {
       suppressUpdatesRef.current = true;
@@ -477,14 +483,15 @@ export const NextStepsOverlay = () => {
     }
 
     // Normal update logic - only when not suppressing
-    
+
     // Only update visibility if:
     // 1. We're not respecting persisted hidden state, OR
     // 2. The new visibility matches what we want (show when it should be visible)
     const effectiveNewVisible = newVisible;
-    
+
     const visibilityChanged =
-      overlayContext.nextStepsVisible !== effectiveNewVisible && prev.visible !== effectiveNewVisible;
+      overlayContext.nextStepsVisible !== effectiveNewVisible &&
+      prev.visible !== effectiveNewVisible;
     const expandedChanged =
       overlayContext.nextStepsExpanded !== newExpanded && prev.expanded !== newExpanded;
 
@@ -604,12 +611,12 @@ export const NextStepsOverlay = () => {
           nextStepsOverlayDismissed: true,
         },
       });
-      
+
       // Also update business info preference for consistency
       await updateBusinessInfoMutation.mutateAsync({
         tutorialNextStepsDisabled: true,
       });
-      
+
       setTutorialDisabled(true);
       showToast("info", "Ukryto", "Ten panel nie będzie już wyświetlany");
     } catch (error) {
@@ -693,7 +700,7 @@ export const NextStepsOverlay = () => {
   if (galleryLoading || galleryFetching || !gallery) {
     return null;
   }
-  
+
   const overlayDismissed = gallery.nextStepsOverlayDismissed === true;
   const calculatedVisible = calculatedVisibility.visible;
   const shouldShow = !overlayDismissed && !isCompleted && !tutorialDisabled && calculatedVisible;
@@ -858,10 +865,7 @@ export const NextStepsOverlay = () => {
               );
 
               // Wrap with tooltip when collapsed or when disabled publish step
-              if (
-                !isExpanded ||
-                (step.id === "publish" && isDisabled && !hasPhotos)
-              ) {
+              if (!isExpanded || (step.id === "publish" && isDisabled && !hasPhotos)) {
                 return (
                   <Tooltip
                     key={step.id}
@@ -928,17 +932,9 @@ export const NextStepsOverlay = () => {
                 e.currentTarget.style.background = "transparent";
               }}
               role="button"
-              tabIndex={
-                isExpanded && !isSavingPreference
-                  ? 0
-                  : -1
-              }
+              tabIndex={isExpanded && !isSavingPreference ? 0 : -1}
               onKeyDown={(e) => {
-                if (
-                  (e.key === "Enter" || e.key === " ") &&
-                  !isSavingPreference &&
-                  isExpanded
-                ) {
+                if ((e.key === "Enter" || e.key === " ") && !isSavingPreference && isExpanded) {
                   e.preventDefault();
                   void handleDontShowAgain();
                 }

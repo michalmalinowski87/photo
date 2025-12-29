@@ -211,7 +211,7 @@ export async function refetchFirstPageOnly(
         queryKey,
         refetchType: "none", // Don't refetch, just notify subscribers of the cache update
       });
-      
+
       // Also notify queries with the same base key but different parameters (e.g., stats query with limit: 1)
       // This ensures the stats query subscribers are also notified
       const baseQueryKey = queryKey.slice(0, 3); // ["galleries", "detail", galleryId]

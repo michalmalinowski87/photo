@@ -1,7 +1,5 @@
 "use client";
 
-import type { GetServerSideProps } from "next";
-import React, { useState, useEffect } from "react";
 import {
   Activity,
   TrendingDown,
@@ -11,6 +9,9 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
+import type { GetServerSideProps } from "next";
+import React, { useState, useEffect } from "react";
+
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 

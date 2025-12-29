@@ -226,7 +226,7 @@ export function extractStorageFromPlanKey(planKey: string): "1GB" | "3GB" | "10G
  */
 export function calculateBestPlan(uploadedSizeBytes: number, duration: Duration): PlanKey {
   const plansForDuration = getPlanKeysByDuration(duration);
-  
+
   // Sort by storage size (ascending)
   const sortedPlans = plansForDuration.sort((a, b) => {
     const planA = getPlan(a);
@@ -234,7 +234,7 @@ export function calculateBestPlan(uploadedSizeBytes: number, duration: Duration)
     if (!planA || !planB) return 0;
     return planA.storageLimitBytes - planB.storageLimitBytes;
   });
-  
+
   // Find the smallest plan that fits the uploaded size
   for (const planKey of sortedPlans) {
     const plan = getPlan(planKey);
@@ -242,7 +242,7 @@ export function calculateBestPlan(uploadedSizeBytes: number, duration: Duration)
       return planKey;
     }
   }
-  
+
   // If no plan fits, return the largest plan
   return sortedPlans[sortedPlans.length - 1];
 }

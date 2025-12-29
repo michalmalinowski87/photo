@@ -1,11 +1,12 @@
-import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useZipStatusPolling } from "../../hooks/useZipStatusPolling";
-import { useDownloadZip, useDownloadFinalZip } from "../../hooks/mutations/useOrderMutations";
 import { Download, Loader2 } from "lucide-react";
-import Button from "../ui/button/Button";
+import React from "react";
+
+import { useDownloadZip, useDownloadFinalZip } from "../../hooks/mutations/useOrderMutations";
+import { useZipStatusPolling } from "../../hooks/useZipStatusPolling";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
+import Button from "../ui/button/Button";
 
 interface ZipDownloadButtonProps {
   galleryId: string;

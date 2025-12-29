@@ -14,10 +14,10 @@ import { useModal } from "../../../hooks/useModal";
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
+import { ZipDownloadButton } from "../../orders/ZipDownloadButton";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 import { Tooltip } from "../../ui/tooltip/Tooltip";
-import { ZipDownloadButton } from "../../orders/ZipDownloadButton";
 
 interface OrderActionsSectionProps {
   orderId: string;
@@ -231,7 +231,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
           )}
 
         {/* Download Finals - Only show if order is DELIVERED */}
-        {order && order.deliveryStatus === "DELIVERED" && (
+        {order?.deliveryStatus === "DELIVERED" && (
           <div className="w-full">
             <ZipDownloadButton
               galleryId={galleryIdStr || ""}

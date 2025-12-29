@@ -245,17 +245,17 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
         const apiError = error as Error & { status?: number; body?: unknown };
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
-        
+
         // Create error with preserved details
-        const enhancedError = new Error(errorMessage) as Error & { 
-          status?: number; 
+        const enhancedError = new Error(errorMessage) as Error & {
+          status?: number;
           body?: unknown;
           originalError?: unknown;
         };
         enhancedError.status = apiError.status;
         enhancedError.body = apiError.body;
         enhancedError.originalError = error;
-        
+
         finalsFiles.forEach((req) => {
           req.reject(enhancedError);
         });
@@ -307,17 +307,17 @@ async function processBatchRequest(queue: BatchQueue): Promise<void> {
         const apiError = error as Error & { status?: number; body?: unknown };
         const errorMessage =
           error instanceof Error ? error.message : "Failed to get presigned URLs";
-        
+
         // Create error with preserved details
-        const enhancedError = new Error(errorMessage) as Error & { 
-          status?: number; 
+        const enhancedError = new Error(errorMessage) as Error & {
+          status?: number;
           body?: unknown;
           originalError?: unknown;
         };
         enhancedError.status = apiError.status;
         enhancedError.body = apiError.body;
         enhancedError.originalError = error;
-        
+
         originalsFiles.forEach((req) => {
           req.reject(enhancedError);
         });
@@ -767,7 +767,7 @@ export function createUppyInstance(config: UppyConfigOptions): any {
               const apiError = error as Error & { status?: number; body?: unknown };
               const errorMessage =
                 error instanceof Error ? error.message : "Failed to create multipart upload";
-              
+
               console.log("[uppy-config] createMultipartUpload catch block:", {
                 error,
                 errorMessage,
@@ -776,17 +776,17 @@ export function createUppyInstance(config: UppyConfigOptions): any {
                 pendingFiles: pendingArray.length,
                 type: config.type,
               });
-              
+
               // Create error with preserved details
-              const enhancedError = new Error(errorMessage) as Error & { 
-                status?: number; 
+              const enhancedError = new Error(errorMessage) as Error & {
+                status?: number;
                 body?: unknown;
                 originalError?: unknown;
               };
               enhancedError.status = apiError.status;
               enhancedError.body = apiError.body;
               enhancedError.originalError = error;
-              
+
               pendingArray.forEach((req) => {
                 console.log("[uppy-config] Rejecting file request:", {
                   fileId: req.fileId,
@@ -969,21 +969,21 @@ export function createUppyInstance(config: UppyConfigOptions): any {
         fileCount: fileIds.length,
         type: config.type,
       });
-      
+
       const files = fileIds
         .map((id) => uppy.getFile(id))
         .filter((f) => f !== null) as TypedUppyFile[];
 
       console.log("[uppy-config] Files extracted:", {
         fileCount: files.length,
-        fileNames: files.map(f => f.name),
+        fileNames: files.map((f) => f.name),
       });
 
       try {
         console.log("[uppy-config] Calling onBeforeUpload callback");
         const shouldProceed = await config.onBeforeUpload?.(files);
         console.log("[uppy-config] onBeforeUpload returned:", shouldProceed);
-        
+
         if (!shouldProceed) {
           // Cancel all uploads if validation fails
           // This prevents upload from starting

@@ -26,7 +26,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Use React Query hooks (must be called before any early returns)
   const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
-  const { data: galleryOrders = [] } = useOrders(galleryIdForQuery);
+  const { data: galleryOrders = [], isLoading: isLoadingOrders } = useOrders(galleryIdForQuery);
   const sendGalleryLinkToClientMutation = useSendGalleryToClient();
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
   const { startPublishFlow } = usePublishFlow();
@@ -144,6 +144,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   const shouldShowShareButton =
     !isLoading &&
+    !isLoadingOrders &&
     gallery &&
     isPaid &&
     Boolean(gallery.selectionEnabled) &&

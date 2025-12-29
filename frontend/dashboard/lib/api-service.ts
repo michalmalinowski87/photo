@@ -755,17 +755,17 @@ class ApiService {
         uploadSizeBytes,
         type,
       });
-      
+
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      
+
       try {
         const result = await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
           method: "POST",
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             uploadSizeBytes: uploadSizeBytes ?? 0,
-            type: type,
+            type,
           }),
         });
         console.log("=== [api-service] validateUploadLimits SUCCESS ===", result);

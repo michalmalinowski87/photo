@@ -51,24 +51,29 @@ export const PlanSelectionGrid = ({
       <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
         {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
           const isSelected = selectedDuration === duration;
-          
+
           // Check if this duration is shorter than current plan duration
-          const isShorterDuration = mode === "limitExceeded" && currentPlanKey
-            ? (() => {
-                const currentPlan = getPlan(currentPlanKey);
-                if (currentPlan) {
-                  // Use expiryDays for comparison (more reliable than duration string)
-                  const durationDays: Record<Duration, number> = { "1m": 30, "3m": 90, "12m": 365 };
-                  const currentDurationDays = currentPlan.expiryDays;
-                  const newDurationDays = durationDays[duration];
-                  return newDurationDays < currentDurationDays;
-                }
-                return false;
-              })()
-            : false;
-          
+          const isShorterDuration =
+            mode === "limitExceeded" && currentPlanKey
+              ? (() => {
+                  const currentPlan = getPlan(currentPlanKey);
+                  if (currentPlan) {
+                    // Use expiryDays for comparison (more reliable than duration string)
+                    const durationDays: Record<Duration, number> = {
+                      "1m": 30,
+                      "3m": 90,
+                      "12m": 365,
+                    };
+                    const currentDurationDays = currentPlan.expiryDays;
+                    const newDurationDays = durationDays[duration];
+                    return newDurationDays < currentDurationDays;
+                  }
+                  return false;
+                })()
+              : false;
+
           const isDisabled = mode === "limitExceeded" && isShorterDuration;
-          
+
           return (
             <button
               key={duration}
@@ -114,16 +119,20 @@ export const PlanSelectionGrid = ({
 
           const fullPrice = calculatePriceWithDiscount(planKey, selectionEnabled);
           // For upgrades, calculate the upgrade price (difference)
-          const upgradePrice = mode === "limitExceeded" && currentPlanPriceCents > 0
-            ? Math.max(0, fullPrice - currentPlanPriceCents)
-            : fullPrice;
-          const displayPrice = mode === "limitExceeded" && planKey === currentPlanKey
-            ? 0 // Current plan - no upgrade needed
-            : upgradePrice;
-          
+          const upgradePrice =
+            mode === "limitExceeded" && currentPlanPriceCents > 0
+              ? Math.max(0, fullPrice - currentPlanPriceCents)
+              : fullPrice;
+          const displayPrice =
+            mode === "limitExceeded" && planKey === currentPlanKey
+              ? 0 // Current plan - no upgrade needed
+              : upgradePrice;
+
           const isSuggested = suggestedStorage === storage;
           const isSelected = selectedPlanKey === planKey || (isSuggested && !selectedPlanKey);
-          const isDisabled = disabledPlanSizes.includes(storage) || (mode === "limitExceeded" && planKey === currentPlanKey);
+          const isDisabled =
+            disabledPlanSizes.includes(storage) ||
+            (mode === "limitExceeded" && planKey === currentPlanKey);
 
           // Calculate photo estimates using utility function
           const photoEstimate = calculatePhotoEstimateFromStorage(storage);
@@ -152,96 +161,100 @@ export const PlanSelectionGrid = ({
                       : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
                 }`}
               >
-              {/* Suggested Badge */}
-              {isSuggested && (
-                <div className="absolute top-3 right-3">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                    <CheckCircle2 size={12} />
-                    Sugerowany
-                  </span>
-                </div>
-              )}
-
-              {/* Selected Checkmark */}
-              {isSelected && !isSuggested && (
-                <div className="absolute top-3 right-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" strokeWidth={2} />
+                {/* Suggested Badge */}
+                {isSuggested && (
+                  <div className="absolute top-3 right-3">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                      <CheckCircle2 size={12} />
+                      Sugerowany
+                    </span>
                   </div>
-                </div>
-              )}
-
-              <div className="mb-2">
-                <h4 className="text-xl font-bold text-gray-900 dark:text-white">{storage}</h4>
-                <div className="mt-1 flex items-center gap-1">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {photoEstimate.displayText}
-                  </p>
-                  <Tooltip content={photoEstimate.tooltipText} side="top" maxWidth="16rem">
-                    <Info
-                      size={12}
-                      className="text-gray-400 dark:text-gray-500 cursor-help"
-                      strokeWidth={2}
-                    />
-                  </Tooltip>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                {mode === "limitExceeded" && planKey !== currentPlanKey && currentPlanPriceCents > 0 ? (
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatPrice(displayPrice)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      ({formatPrice(fullPrice)} - {formatPrice(currentPlanPriceCents)})
-                    </div>
-                  </div>
-                ) : mode === "limitExceeded" && planKey === currentPlanKey ? (
-                  <div>
-                    <div className="text-lg font-semibold text-gray-600 dark:text-gray-400">
-                      Aktualny plan
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formatPrice(fullPrice)} / miesiąc
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatPrice(displayPrice)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
-                    {!selectionEnabled && (
-                      <div className="text-xs text-green-600 dark:text-green-400 mt-1">Zniżka 20%</div>
-                    )}
-                  </>
                 )}
-              </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <CheckCircle2
-                    size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0"
-                  />
-                  <span>Galeria chroniona hasłem</span>
+                {/* Selected Checkmark */}
+                {isSelected && !isSuggested && (
+                  <div className="absolute top-3 right-3">
+                    <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" strokeWidth={2} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mb-2">
+                  <h4 className="text-xl font-bold text-gray-900 dark:text-white">{storage}</h4>
+                  <div className="mt-1 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {photoEstimate.displayText}
+                    </p>
+                    <Tooltip content={photoEstimate.tooltipText} side="top" maxWidth="16rem">
+                      <Info
+                        size={12}
+                        className="text-gray-400 dark:text-gray-500 cursor-help"
+                        strokeWidth={2}
+                      />
+                    </Tooltip>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <CheckCircle2
-                    size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0"
-                  />
-                  <span>Wybór zdjęć przez klienta</span>
+
+                <div className="mb-4">
+                  {mode === "limitExceeded" &&
+                  planKey !== currentPlanKey &&
+                  currentPlanPriceCents > 0 ? (
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {formatPrice(displayPrice)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        ({formatPrice(fullPrice)} - {formatPrice(currentPlanPriceCents)})
+                      </div>
+                    </div>
+                  ) : mode === "limitExceeded" && planKey === currentPlanKey ? (
+                    <div>
+                      <div className="text-lg font-semibold text-gray-600 dark:text-gray-400">
+                        Aktualny plan
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {formatPrice(fullPrice)} / miesiąc
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {formatPrice(displayPrice)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
+                      {!selectionEnabled && (
+                        <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          Zniżka 20%
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <CheckCircle2
-                    size={16}
-                    className="text-green-500 dark:text-green-400 flex-shrink-0"
-                  />
-                  <span>Wsparcie techniczne</span>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <CheckCircle2
+                      size={16}
+                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                    />
+                    <span>Galeria chroniona hasłem</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <CheckCircle2
+                      size={16}
+                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                    />
+                    <span>Wybór zdjęć przez klienta</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <CheckCircle2
+                      size={16}
+                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                    />
+                    <span>Wsparcie techniczne</span>
+                  </div>
                 </div>
-              </div>
               </div>
             </Tooltip>
           );

@@ -60,7 +60,7 @@ export default function OrderDetail() {
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
   const { isNonSelectionGallery } = useGalleryType();
-  
+
   // Import gallery creation flow state
   const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
   const galleryCreationTargetId = useUnifiedStore((state) => state.galleryCreationTargetId);
@@ -76,8 +76,12 @@ export default function OrderDetail() {
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
   const { gallery } = useGallery();
-  const { data: order, refetch: refetchOrder, isLoading: orderLoading } = useOrder(galleryIdForQuery, orderIdForQuery);
-  
+  const {
+    data: order,
+    refetch: refetchOrder,
+    isLoading: orderLoading,
+  } = useOrder(galleryIdForQuery, orderIdForQuery);
+
   // Clear gallery creation flow when order page is fully ready
   useEffect(() => {
     // Only clear if flow is active and we're on the target gallery
@@ -350,9 +354,10 @@ export default function OrderDetail() {
     const galleryIdParam = params.get("galleryId");
 
     // Check if this is a wallet top-up redirect (has galleryId param but not a direct gallery payment)
-    const isWalletTopUpRedirect = paymentSuccess && 
-      (upgradeFlow || limitExceededParam) && 
-      galleryIdParam === galleryId && 
+    const isWalletTopUpRedirect =
+      paymentSuccess &&
+      (upgradeFlow || limitExceededParam) &&
+      galleryIdParam === galleryId &&
       !params.get("gallery"); // Not a direct gallery payment
 
     // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
@@ -394,7 +399,12 @@ export default function OrderDetail() {
     }
 
     // Handle direct payment success (Stripe payment for upgrade)
-    if (paymentSuccess && (upgradeFlow || limitExceededParam) && planKeyParam && !isWalletTopUpRedirect) {
+    if (
+      paymentSuccess &&
+      (upgradeFlow || limitExceededParam) &&
+      planKeyParam &&
+      !isWalletTopUpRedirect
+    ) {
       // Create a unique key for this payment success to prevent re-processing
       const paymentSuccessKey = `${galleryId}-${paymentSuccess}-${upgradeFlow || limitExceededParam}-${planKeyParam}`;
 
@@ -880,7 +890,8 @@ export default function OrderDetail() {
           initialState={
             router.isReady && typeof window !== "undefined"
               ? {
-                  duration: new URLSearchParams(window.location.search).get("duration") || undefined,
+                  duration:
+                    new URLSearchParams(window.location.search).get("duration") || undefined,
                   planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
                 }
               : null
@@ -911,7 +922,7 @@ export default function OrderDetail() {
         message="Twój plan został zaktualizowany. Możesz teraz przesłać zdjęcia."
         confirmText="OK"
         variant="info"
-      /> 
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

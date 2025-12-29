@@ -20,7 +20,7 @@ export function useCreateGallery() {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.galleries.detail(data.galleryId),
         });
-        
+
         // Invalidate orders query for this gallery to ensure components see the newly created order
         // This is critical for non-selective galleries where an order is created immediately
         void queryClient.invalidateQueries({

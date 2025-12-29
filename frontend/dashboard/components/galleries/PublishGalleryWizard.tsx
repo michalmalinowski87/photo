@@ -221,11 +221,14 @@ export const PublishGalleryWizard = ({
   // Extract storage size from suggested plan or calculate from uploaded size
   const suggestedStorage = useMemo(() => {
     let result: "1GB" | "3GB" | "10GB" = "1GB";
-    
+
     if (mode === "limitExceeded" && limitExceededData?.uploadedSizeBytes) {
       // Calculate suggested plan based on uploaded size and current duration
       const durationToUse = currentPlanDuration || "3m"; // Default to 3m if not available
-      const suggestedPlanKey = calculateBestPlan(limitExceededData.uploadedSizeBytes, durationToUse);
+      const suggestedPlanKey = calculateBestPlan(
+        limitExceededData.uploadedSizeBytes,
+        durationToUse
+      );
       const storage = extractStorageFromPlanKey(suggestedPlanKey);
       if (storage) {
         result = storage;
@@ -236,22 +239,25 @@ export const PublishGalleryWizard = ({
       const match = pricingData.suggestedPlan.name.match(/^(\d+GB)/);
       result = (match ? match[1] : "1GB") as "1GB" | "3GB" | "10GB";
     }
-    
+
     return result;
-  }, [mode, limitExceededData?.uploadedSizeBytes, currentPlanDuration, pricingData?.suggestedPlan?.name]);
+  }, [
+    mode,
+    limitExceededData?.uploadedSizeBytes,
+    currentPlanDuration,
+    pricingData?.suggestedPlan?.name,
+  ]);
 
   // Calculate current plan price for upgrade scenarios
   // Use gallery's selectionEnabled status (or limitExceededData if available) to determine discount
   const currentPlanPriceCents = useMemo(() => {
     if (mode === "limitExceeded" && gallery?.plan) {
-      const isSelectionGallery = mode === "limitExceeded" && limitExceededData
-        ? limitExceededData.isSelectionGallery !== false
-        : gallery.selectionEnabled !== false;
-      
-      return calculatePriceWithDiscount(
-        gallery.plan as PlanKey,
-        isSelectionGallery
-      );
+      const isSelectionGallery =
+        mode === "limitExceeded" && limitExceededData
+          ? limitExceededData.isSelectionGallery !== false
+          : gallery.selectionEnabled !== false;
+
+      return calculatePriceWithDiscount(gallery.plan as PlanKey, isSelectionGallery);
     }
     return 0;
   }, [mode, gallery?.plan, gallery?.selectionEnabled, limitExceededData?.isSelectionGallery]);
@@ -265,7 +271,12 @@ export const PublishGalleryWizard = ({
       return gallery.selectionEnabled !== false;
     }
     return pricingData?.selectionEnabled !== false;
-  }, [mode, limitExceededData?.isSelectionGallery, gallery?.selectionEnabled, pricingData?.selectionEnabled]);
+  }, [
+    mode,
+    limitExceededData?.isSelectionGallery,
+    gallery?.selectionEnabled,
+    pricingData?.selectionEnabled,
+  ]);
 
   // Get selected plan details
   const selectedPlan = useMemo(() => {
@@ -276,7 +287,7 @@ export const PublishGalleryWizard = ({
           selectedPlanKey,
           isSelectionGalleryForPricing
         );
-        
+
         return {
           planKey: selectedPlanKey,
           priceCents: fullPriceCents, // Backend calculates upgrade difference, but we'll display difference in UI
@@ -289,7 +300,7 @@ export const PublishGalleryWizard = ({
       const plan = getPlan(planKey);
       if (plan) {
         const fullPriceCents = calculatePriceWithDiscount(planKey, isSelectionGalleryForPricing);
-        
+
         return {
           planKey,
           priceCents: fullPriceCents, // Backend calculates upgrade difference, but we'll display difference in UI
@@ -315,7 +326,11 @@ export const PublishGalleryWizard = ({
       return;
     }
 
-    if (mode === "limitExceeded" && limitExceededData?.nextTierPlan && limitExceededData?.uploadedSizeBytes) {
+    if (
+      mode === "limitExceeded" &&
+      limitExceededData?.nextTierPlan &&
+      limitExceededData?.uploadedSizeBytes
+    ) {
       // Wait for currentPlanDuration to be available if gallery data is still loading
       // This ensures we calculate suggestedStorage correctly
       if (!currentPlanDuration && gallery?.plan) {
@@ -326,10 +341,13 @@ export const PublishGalleryWizard = ({
       // which might change and cause re-initialization
       const extractedDuration = extractDurationFromPlanKey(limitExceededData.nextTierPlan);
       const durationToUse: Duration = currentPlanDuration || extractedDuration || "1m";
-      
+
       // Calculate suggested plan based on uploaded size and duration
-      const calculatedSuggestedPlanKey = calculateBestPlan(limitExceededData.uploadedSizeBytes, durationToUse);
-      
+      const calculatedSuggestedPlanKey = calculateBestPlan(
+        limitExceededData.uploadedSizeBytes,
+        durationToUse
+      );
+
       if (calculatedSuggestedPlanKey) {
         setSelectedDuration(durationToUse);
         setSelectedPlanKey(calculatedSuggestedPlanKey);
@@ -377,7 +395,8 @@ export const PublishGalleryWizard = ({
   // Check if wallet balance is sufficient
   // For upgrades, use display price (difference); for new purchases, use full price
   const walletBalance = walletBalanceCents ?? 0;
-  const priceToCheck = mode === "limitExceeded" ? displayPriceCents : (selectedPlan?.priceCents ?? 0);
+  const priceToCheck =
+    mode === "limitExceeded" ? displayPriceCents : (selectedPlan?.priceCents ?? 0);
   const isBalanceSufficient = selectedPlan ? walletBalance >= priceToCheck : false;
   const balanceShortfall = selectedPlan ? Math.max(0, priceToCheck - walletBalance) : 0;
 
@@ -446,7 +465,15 @@ export const PublishGalleryWizard = ({
         showToast("error", "Błąd", formatApiError(err as Error));
       }
     },
-    [mode, galleryId, selectedDuration, selectedPlanKey, limitExceededData, showToast, createCheckoutMutation]
+    [
+      mode,
+      galleryId,
+      selectedDuration,
+      selectedPlanKey,
+      limitExceededData,
+      showToast,
+      createCheckoutMutation,
+    ]
   );
 
   const wizardContent = !isOpen ? null : (
@@ -513,7 +540,8 @@ export const PublishGalleryWizard = ({
               </div>
             </div>
           </div>
-        ) : (mode === "limitExceeded" && limitExceededData) || (mode === "publish" && pricingData) ? (
+        ) : (mode === "limitExceeded" && limitExceededData) ||
+          (mode === "publish" && pricingData) ? (
           <div className="flex items-start justify-center p-8 min-h-full">
             <div className="w-full max-w-6xl mx-auto space-y-6">
               {mode === "limitExceeded" && limitExceededData ? (
@@ -629,7 +657,7 @@ export const PublishGalleryWizard = ({
                 onDurationChange={(duration) => {
                   // Always allow user-initiated duration changes
                   setSelectedDuration(duration);
-                  
+
                   // Update plan to match the new duration with suggested storage
                   const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
                   if (planKey) {
@@ -665,10 +693,7 @@ export const PublishGalleryWizard = ({
           variant="primary"
           onClick={handlePublish}
           disabled={
-            isProcessing ||
-            pricingLoading ||
-            !selectedPlan ||
-            (mode === "publish" && !hasPhotos)
+            isProcessing || pricingLoading || !selectedPlan || (mode === "publish" && !hasPhotos)
           }
           className="flex-1"
         >
@@ -684,7 +709,7 @@ export const PublishGalleryWizard = ({
 
       {/* Processing Overlay - blocks wizard during payment processing */}
       {isProcessing && (
-        <div 
+        <div
           className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
@@ -730,7 +755,7 @@ export const PublishGalleryWizard = ({
   // If renderAsModal is true, wrap in backdrop and portal covering full page
   if (renderAsModal) {
     const modalContent = (
-      <div 
+      <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-6"
         onClick={(e) => {
           // Prevent closing modal by clicking backdrop during processing
@@ -759,4 +784,3 @@ export const PublishGalleryWizard = ({
   // Otherwise, render inline (like in gallery view)
   return wizardContent;
 };
-

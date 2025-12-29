@@ -75,9 +75,7 @@ function detectPaymentType(
   const isWalletTopUp =
     paymentSuccess &&
     galleryParam !== galleryIdStr && // Not a gallery payment
-    (galleryIdParam === galleryIdStr || 
-     publishParam === "true" || 
-     limitExceededParam === "true"); // Has wallet top-up context params (publish or upgrade)
+    (galleryIdParam === galleryIdStr || publishParam === "true" || limitExceededParam === "true"); // Has wallet top-up context params (publish or upgrade)
 
   return {
     isWalletTopUp,
@@ -132,8 +130,8 @@ async function handleWalletTopUpSuccess(
   _galleryIdStr: string,
   loadOrders: () => Promise<void>,
   showToast: (type: "success" | "error", title: string, message: string) => void,
-  preserveParams: { 
-    publish?: string | null; 
+  preserveParams: {
+    publish?: string | null;
     galleryId?: string | null;
     limitExceeded?: string | null;
     duration?: string | null;
@@ -480,7 +478,7 @@ export default function GalleryDetail() {
     if (router.pathname === "/galleries/[id]" && !router.asPath.includes("/orders/")) {
       // Set redirecting state immediately to prevent rendering orders list
       setIsRedirectingToOrder(true);
-      
+
       // Use orders from React Query
       if (orders.length > 0) {
         const firstOrder = orders[0];

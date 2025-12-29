@@ -93,29 +93,36 @@ export const SuggestedPlanSection = ({
                 selectedPlanKey === planKey || (!selectedPlanKey && selectedDuration === duration);
               const fullPrice = planKey ? calculatePriceWithDiscount(planKey, selectionEnabled) : 0;
               // For upgrades, show the upgrade price (difference)
-              const displayPrice = mode === "limitExceeded" && currentPlanPriceCents > 0 && planKey === currentPlanKey
-                ? 0 // Current plan - no upgrade needed
-                : mode === "limitExceeded" && currentPlanPriceCents > 0
-                  ? Math.max(0, fullPrice - currentPlanPriceCents)
-                  : fullPrice;
+              const displayPrice =
+                mode === "limitExceeded" && currentPlanPriceCents > 0 && planKey === currentPlanKey
+                  ? 0 // Current plan - no upgrade needed
+                  : mode === "limitExceeded" && currentPlanPriceCents > 0
+                    ? Math.max(0, fullPrice - currentPlanPriceCents)
+                    : fullPrice;
 
               // Check if this duration is shorter than current plan duration
-              const isShorterDuration = mode === "limitExceeded" && currentPlanKey && planKey
-                ? (() => {
-                    const currentPlan = getPlan(currentPlanKey);
-                    const plan = getPlan(planKey);
-                    if (currentPlan && plan) {
-                      // Use expiryDays for comparison (more reliable than duration string)
-                      const durationDays: Record<Duration, number> = { "1m": 30, "3m": 90, "12m": 365 };
-                      const currentDurationDays = currentPlan.expiryDays;
-                      const newDurationDays = durationDays[duration];
-                      return newDurationDays < currentDurationDays;
-                    }
-                    return false;
-                  })()
-                : false;
+              const isShorterDuration =
+                mode === "limitExceeded" && currentPlanKey && planKey
+                  ? (() => {
+                      const currentPlan = getPlan(currentPlanKey);
+                      const plan = getPlan(planKey);
+                      if (currentPlan && plan) {
+                        // Use expiryDays for comparison (more reliable than duration string)
+                        const durationDays: Record<Duration, number> = {
+                          "1m": 30,
+                          "3m": 90,
+                          "12m": 365,
+                        };
+                        const currentDurationDays = currentPlan.expiryDays;
+                        const newDurationDays = durationDays[duration];
+                        return newDurationDays < currentDurationDays;
+                      }
+                      return false;
+                    })()
+                  : false;
 
-              const isDisabled = mode === "limitExceeded" && (planKey === currentPlanKey || isShorterDuration);
+              const isDisabled =
+                mode === "limitExceeded" && (planKey === currentPlanKey || isShorterDuration);
 
               return (
                 <button
@@ -147,7 +154,7 @@ export const SuggestedPlanSection = ({
                       ? "Aktualny plan"
                       : isShorterDuration
                         ? "Krótszy okres"
-                      : formatPrice(displayPrice)}
+                        : formatPrice(displayPrice)}
                   </div>
                 </button>
               );
@@ -155,23 +162,25 @@ export const SuggestedPlanSection = ({
           </div>
         </div>
         <div className="text-right ml-4">
-          {selectedPlan && (() => {
-            const fullPrice = selectedPlan.priceCents;
-            const upgradePrice = mode === "limitExceeded" && currentPlanPriceCents > 0
-              ? Math.max(0, fullPrice - currentPlanPriceCents)
-              : fullPrice;
+          {selectedPlan &&
+            (() => {
+              const fullPrice = selectedPlan.priceCents;
+              const upgradePrice =
+                mode === "limitExceeded" && currentPlanPriceCents > 0
+                  ? Math.max(0, fullPrice - currentPlanPriceCents)
+                  : fullPrice;
 
-            return (
-              <>
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                  {formatPrice(upgradePrice)}
-                </p>
-                {!selectionEnabled && mode !== "limitExceeded" && (
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">(zniżka 20%)</p>
-                )}
-              </>
-            );
-          })()}
+              return (
+                <>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                    {formatPrice(upgradePrice)}
+                  </p>
+                  {!selectionEnabled && mode !== "limitExceeded" && (
+                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">(zniżka 20%)</p>
+                  )}
+                </>
+              );
+            })()}
         </div>
       </div>
 
