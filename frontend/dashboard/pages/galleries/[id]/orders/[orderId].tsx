@@ -33,6 +33,7 @@ import { useToast } from "../../../../hooks/useToast";
 import { formatApiError } from "../../../../lib/api-service";
 import { removeFileExtension } from "../../../../lib/filename-utils";
 import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/order-utils";
+import { useUnifiedStore } from "../../../../store/unifiedStore";
 import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from types/index.ts
@@ -59,6 +60,13 @@ export default function OrderDetail() {
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
   const { reloadGallery } = useGallery();
   const { isNonSelectionGallery } = useGalleryType();
+  
+  // Import gallery creation flow state
+  const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
+  const galleryCreationTargetId = useUnifiedStore((state) => state.galleryCreationTargetId);
+  const setGalleryCreationFlowActive = useUnifiedStore(
+    (state) => state.setGalleryCreationFlowActive
+  );
 
   // Get gallery and order from React Query
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
@@ -68,7 +76,35 @@ export default function OrderDetail() {
   const orderIdForQuery = orderIdStr && typeof orderIdStr === "string" ? orderIdStr : undefined;
 
   const { gallery } = useGallery();
-  const { data: order, refetch: refetchOrder } = useOrder(galleryIdForQuery, orderIdForQuery);
+  const { data: order, refetch: refetchOrder, isLoading: orderLoading } = useOrder(galleryIdForQuery, orderIdForQuery);
+  
+  // Clear gallery creation flow when order page is fully ready
+  useEffect(() => {
+    // Only clear if flow is active and we're on the target gallery
+    if (!galleryCreationFlowActive || !galleryIdStr || galleryCreationTargetId !== galleryIdStr) {
+      return;
+    }
+
+    // Check if page is fully ready:
+    // - Gallery is loaded
+    // - Order is loaded (not loading)
+    // - Router is ready
+    const isPageReady = !!gallery && !!order && !orderLoading && router.isReady;
+
+    if (isPageReady) {
+      // Clear the flow - overlay will appear
+      setGalleryCreationFlowActive(false);
+    }
+  }, [
+    galleryCreationFlowActive,
+    galleryCreationTargetId,
+    galleryIdStr,
+    gallery,
+    order,
+    orderLoading,
+    router.isReady,
+    setGalleryCreationFlowActive,
+  ]);
 
   // Use infinite scroll for originals (client selected images)
   const {
