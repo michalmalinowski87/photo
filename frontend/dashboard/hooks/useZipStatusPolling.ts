@@ -60,7 +60,6 @@ export function useZipStatusPolling({
       }
 
       isPollingRef.current = true;
-      const pollStartTime = Date.now();
 
       try {
         const result =
@@ -68,27 +67,11 @@ export function useZipStatusPolling({
             ? await api.orders.getFinalZipStatus(galleryId, orderId)
             : await api.orders.getZipStatus(galleryId, orderId);
 
-        const pollDuration = Date.now() - pollStartTime;
         updateLastPollTime();
 
         return result;
       } catch (pollError: unknown) {
-        const pollDuration = Date.now() - pollStartTime;
-        const errorDetails =
-          pollError instanceof Error
-            ? {
-                name: pollError.name,
-                message: pollError.message,
-                stack: pollError.stack,
-              }
-            : pollError;
-        console.error("[ZipStatusPolling] Poll failed", {
-          error: errorDetails,
-          duration: `${pollDuration}ms`,
-          galleryId,
-          orderId,
-          type,
-        });
+        
         throw pollError instanceof Error ? pollError : new Error(String(pollError));
       } finally {
         isPollingRef.current = false;

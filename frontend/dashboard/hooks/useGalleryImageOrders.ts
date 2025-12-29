@@ -164,7 +164,7 @@ export function useGalleryImageOrders(
 
       // For other errors, log but don't show toast - this is not critical
       // eslint-disable-next-line no-console
-      console.error("[useGalleryImageOrders] loadApprovedSelections: Error", err);
+      
     }
   }, [galleryIdForQuery, refetch, computeDerivedData]);
 

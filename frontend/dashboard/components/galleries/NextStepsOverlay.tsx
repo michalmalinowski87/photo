@@ -147,7 +147,7 @@ export const NextStepsOverlay = () => {
         businessInfo?.tutorialClientSendDisabled === true;
       setTutorialDisabled(disabled ?? false);
     } catch (error) {
-      console.error("Failed to load tutorial preference:", error);
+      
       // Default to showing if we can't load preference
       setTutorialDisabled(false);
     }
@@ -562,7 +562,7 @@ export const NextStepsOverlay = () => {
           // React Query will automatically refetch and update the cache
           // No need for manual optimistic updates
         } catch (error) {
-          console.error("Failed to mark gallery setup as completed:", error);
+          
           // Reset flag on error so user can retry
           isUpdatingCompletionRef.current = false;
         }
@@ -620,7 +620,7 @@ export const NextStepsOverlay = () => {
       setTutorialDisabled(true);
       showToast("info", "Ukryto", "Ten panel nie będzie już wyświetlany");
     } catch (error) {
-      console.error("Failed to save tutorial preference:", error);
+      
       showToast("error", "Błąd", "Nie udało się zapisać preferencji");
     } finally {
       setIsSavingPreference(false);

@@ -263,7 +263,6 @@ export default function OrderDetail() {
     try {
       // Refetch order if needed - images are automatically loaded via React Query hooks
       await refetchOrder().catch((err: unknown) => {
-        console.error("Failed to load order:", err);
         const errorMsg = formatApiError(err);
         setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
         showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
@@ -456,7 +455,7 @@ export default function OrderDetail() {
               setTimeout(poll, pollInterval);
             }
           } catch (error) {
-            console.error("Error polling for plan update:", error);
+            // Error polling for plan update
           }
         };
 
@@ -835,13 +834,8 @@ export default function OrderDetail() {
             orderId: orderId as string,
             type: "finals",
             onValidationNeeded: (data) => {
-              console.log("[OrderDetail] onValidationNeeded called:", data);
               setLimitExceededData(data);
               setLimitExceededWizardOpen(true);
-              console.log("[OrderDetail] State updated:", {
-                limitExceededData: data,
-                limitExceededWizardOpen: true,
-              });
               // Close the upload modal when limit is exceeded
               handleUploadModalClose();
             },
@@ -866,20 +860,10 @@ export default function OrderDetail() {
       )}
 
       {/* Limit Exceeded Wizard for Finals */}
-      {(() => {
-        console.log("[OrderDetail] Rendering wizard check:", {
-          galleryId,
-          hasLimitExceededData: !!limitExceededData,
-          limitExceededWizardOpen,
-          shouldRender: !!(galleryId && limitExceededData),
-        });
-        return null;
-      })()}
       {galleryId && limitExceededData && (
         <PublishGalleryWizard
           isOpen={limitExceededWizardOpen}
           onClose={() => {
-            console.log("[OrderDetail] Wizard onClose called");
             setLimitExceededWizardOpen(false);
             setLimitExceededData(null);
           }}
@@ -897,7 +881,6 @@ export default function OrderDetail() {
               : null
           }
           onUpgradeSuccess={async () => {
-            console.log("[OrderDetail] onUpgradeSuccess called");
             // Reload gallery after upgrade
             await reloadGallery();
             setLimitExceededWizardOpen(false);

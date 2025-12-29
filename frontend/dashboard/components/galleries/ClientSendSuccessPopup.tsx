@@ -42,7 +42,7 @@ export const ClientSendSuccessPopup = ({
           onClose();
         }
       } catch (error) {
-        console.error("Failed to load tutorial preference:", error);
+        
         // Default to showing if we can't load preference
         setTutorialDisabled(false);
       }
@@ -65,7 +65,7 @@ export const ClientSendSuccessPopup = ({
         showToast("info", "Ukryto", "Ten komunikat nie będzie już wyświetlany");
         onClose();
       } catch (error) {
-        console.error("Failed to save tutorial preference:", error);
+        
         showToast("error", "Błąd", "Nie udało się zapisać preferencji");
         setDontShowAgain(false);
       } finally {

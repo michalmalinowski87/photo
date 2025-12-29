@@ -141,7 +141,7 @@ export async function calculateBestPlanSafe(
   try {
     return await calculateBestPlan(galleryId, duration, queryClient);
   } catch (error) {
-    console.error("Failed to calculate plan:", error);
+    
     return null;
   }
 }

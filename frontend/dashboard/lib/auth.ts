@@ -905,7 +905,7 @@ export function invalidateSession(keepRefreshToken: boolean = false): void {
  */
 export function triggerSessionExpired(): void {
   if (typeof window === "undefined") {
-    console.error("This function can only be called in the browser");
+    
     return;
   }
 
@@ -1000,7 +1000,7 @@ export async function redirectToCognito(returnUrl: string | null = null): Promis
 
   // Ensure we're in browser environment
   if (typeof window === "undefined") {
-    console.error("redirectToCognito can only be called in browser environment");
+    
     return;
   }
 
@@ -1008,7 +1008,7 @@ export async function redirectToCognito(returnUrl: string | null = null): Promis
   const redirectUri = `${window.location.origin}/auth/auth-callback`;
 
   if (!redirectUri || redirectUri.trim() === "") {
-    console.error("Cannot redirect to Cognito: redirectUri is empty");
+    
     return;
   }
 

@@ -140,9 +140,7 @@ class ApiService {
     if (typeof window !== "undefined") {
       this.baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
       if (!this.baseUrl) {
-        console.error(
-          "NEXT_PUBLIC_API_URL is not configured. API requests will fail. Please set NEXT_PUBLIC_API_URL in your environment variables."
-        );
+        // NEXT_PUBLIC_API_URL is not configured
       }
     }
   }
@@ -174,8 +172,7 @@ class ApiService {
         "API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable."
       ) as ApiError;
       error.status = 500;
-      // Don't throw immediately - log and prevent the request
-      console.error("[ApiService] API URL not configured. Request to", endpoint, "was blocked.");
+      // Don't throw immediately - prevent the request
       throw error;
     }
 
@@ -750,12 +747,6 @@ class ApiService {
       nextTierLimitBytes?: number;
       isSelectionGallery?: boolean;
     }> => {
-      console.log("=== [api-service] validateUploadLimits CALLED ===", {
-        galleryId,
-        uploadSizeBytes,
-        type,
-      });
-
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
@@ -768,15 +759,8 @@ class ApiService {
             type,
           }),
         });
-        console.log("=== [api-service] validateUploadLimits SUCCESS ===", result);
         return result;
       } catch (error) {
-        console.error("=== [api-service] validateUploadLimits ERROR ===", {
-          error,
-          errorMessage: error instanceof Error ? error.message : String(error),
-          errorStatus: (error as { status?: number }).status,
-          errorBody: (error as { body?: unknown }).body,
-        });
         throw error;
       }
     },

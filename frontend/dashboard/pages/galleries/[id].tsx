@@ -194,7 +194,7 @@ async function pollGalleryPaymentStatus(
         setTimeout(poll, pollInterval);
       }
     } catch (error) {
-      console.error("Error polling payment status:", error);
+      
       // On error, just reload once and stop polling
       if (reloadGallery) {
         await reloadGallery();
@@ -318,7 +318,7 @@ export default function GalleryDetail() {
 
       // For other errors, show toast
       // eslint-disable-next-line no-console
-      console.error("[GalleryDetail] loadOrders: Error", err);
+      
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
     }
   };
@@ -504,7 +504,7 @@ export default function GalleryDetail() {
               setIsRedirectingToOrder(false);
             }
           } catch (err) {
-            console.error("Failed to fetch orders for redirect:", err);
+            
             setIsRedirectingToOrder(false);
           }
         };

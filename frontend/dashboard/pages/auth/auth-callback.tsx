@@ -54,14 +54,14 @@ export default function AuthCallback() {
       // Exchange authorization code for tokens
       // redirectUri must match exactly what was used in the authorization request
       if (typeof window === "undefined") {
-        console.error("Cannot exchange tokens: window is undefined");
+        
         return;
       }
 
       const redirectUri = `${window.location.origin}/auth/auth-callback`;
 
       if (!redirectUri) {
-        console.error("Cannot exchange tokens: redirectUri is empty");
+        
         hasRedirected.current = true;
         const dashboardUrl = window.location.origin;
         const returnUrl = state

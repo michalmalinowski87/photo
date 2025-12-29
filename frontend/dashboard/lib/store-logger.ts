@@ -44,32 +44,7 @@ class StoreLogger {
       this.logs.shift();
     }
 
-    // Format data for better readability
-    const formattedData = this.formatData(data);
-    const prefix = `%c[${category}]%c`;
-    const message = `${action}${formattedData ? ` ${formattedData}` : ""}`;
-
-    const categoryColor = this.getCategoryColor(category);
-    const style1 = `color: ${categoryColor}; font-weight: bold;`;
-    const style2 = "color: inherit;";
-
-    switch (level) {
-      case "error":
-        // eslint-disable-next-line no-console
-        console.error(prefix, style1, style2, message);
-        break;
-      case "warn":
-        // eslint-disable-next-line no-console
-        console.warn(prefix, style1, style2, message);
-        break;
-      case "debug":
-        // eslint-disable-next-line no-console
-        console.debug(prefix, style1, style2, message);
-        break;
-      default:
-        // eslint-disable-next-line no-console
-        console.log(prefix, style1, style2, message);
-    }
+    // Console logging removed
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

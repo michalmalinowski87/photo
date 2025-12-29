@@ -147,16 +147,6 @@ async function retryWithBackoff<T>(
         errorWithStatus.status === 0; // Network error
 
       if (!isRetryable || attempt >= maxRetries) {
-        // Log non-retryable errors (like 400 limit exceeded)
-        if (errorWithStatus.status === 400) {
-          console.log("[uppy-config] Non-retryable 400 error:", {
-            error: lastError,
-            errorMessage: lastError.message,
-            errorStatus: errorWithStatus.status,
-            attempt,
-            maxRetries,
-          });
-        }
         throw lastError;
       }
 
@@ -728,17 +718,6 @@ export function createUppyInstance(config: UppyConfigOptions): any {
                     files,
                   });
                 } catch (error) {
-                  // Log the error before retry logic handles it
-                  console.log("[uppy-config] createMultipartUpload error:", {
-                    error,
-                    errorMessage: error instanceof Error ? error.message : String(error),
-                    errorStatus: (error as { status?: number }).status,
-                    errorBody: (error as { body?: unknown }).body,
-                    galleryId,
-                    orderId: config.orderId,
-                    type: config.type,
-                    fileCount: files.length,
-                  });
                   throw error; // Re-throw for retry logic
                 }
               });
@@ -768,15 +747,6 @@ export function createUppyInstance(config: UppyConfigOptions): any {
               const errorMessage =
                 error instanceof Error ? error.message : "Failed to create multipart upload";
 
-              console.log("[uppy-config] createMultipartUpload catch block:", {
-                error,
-                errorMessage,
-                errorStatus: apiError.status,
-                errorBody: apiError.body,
-                pendingFiles: pendingArray.length,
-                type: config.type,
-              });
-
               // Create error with preserved details
               const enhancedError = new Error(errorMessage) as Error & {
                 status?: number;
@@ -788,12 +758,6 @@ export function createUppyInstance(config: UppyConfigOptions): any {
               enhancedError.originalError = error;
 
               pendingArray.forEach((req) => {
-                console.log("[uppy-config] Rejecting file request:", {
-                  fileId: req.fileId,
-                  fileName: req.fileName,
-                  error: enhancedError.message,
-                  errorStatus: enhancedError.status,
-                });
                 req.reject(enhancedError);
               });
             }
@@ -962,45 +926,27 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   // Add preprocessor for upload validation (runs before upload starts)
   // Preprocessors execute before upload begins, perfect for validation
   if (config.onBeforeUpload) {
-    console.log("[uppy-config] Registering onBeforeUpload preprocessor");
     uppy.addPreProcessor(async (fileIds) => {
-      console.log("[uppy-config] Preprocessor called:", {
-        fileIds,
-        fileCount: fileIds.length,
-        type: config.type,
-      });
-
       const files = fileIds
         .map((id) => uppy.getFile(id))
         .filter((f) => f !== null) as TypedUppyFile[];
 
-      console.log("[uppy-config] Files extracted:", {
-        fileCount: files.length,
-        fileNames: files.map((f) => f.name),
-      });
-
       try {
-        console.log("[uppy-config] Calling onBeforeUpload callback");
         const shouldProceed = await config.onBeforeUpload?.(files);
-        console.log("[uppy-config] onBeforeUpload returned:", shouldProceed);
 
         if (!shouldProceed) {
           // Cancel all uploads if validation fails
           // This prevents upload from starting
-          console.log("[uppy-config] Validation failed, cancelling upload");
           uppy.cancelAll();
           // Don't throw - just cancel silently, validation callback handles UI
           return;
         }
       } catch (error) {
-        console.error("[uppy-config] Error in preprocessor:", error);
         // If validation throws an error, cancel upload
         uppy.cancelAll();
         throw error;
       }
     });
-  } else {
-    console.warn("[uppy-config] No onBeforeUpload callback provided!");
   }
 
   if (config.onUploadProgress) {
@@ -1087,10 +1033,6 @@ export function createUppyInstance(config: UppyConfigOptions): any {
         // Check if metadata was written successfully
         return result.metadataWritten === true;
       } catch (error) {
-        // Log error - metadata write failed
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        console.error("Failed to complete upload (metadata write):", errorMessage);
         return false;
       }
     })();

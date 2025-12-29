@@ -103,7 +103,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         // React Query will automatically refetch order due to invalidation
       } catch (err) {
         // Error is handled by mutation
-        console.error("Failed to deny change request:", err);
+        
       }
     },
     [galleryIdStr, orderIdStr, denyChangeRequestMutation, closeDenyModal]

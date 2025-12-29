@@ -60,7 +60,6 @@ function clearPKCEVerifier() {
 let userPool = null;
 export function initAuth(userPoolId, clientId) {
 	if (!userPoolId || !clientId) {
-		console.warn('Cognito config missing');
 		return null;
 	}
 	if (!userPool) {
@@ -141,7 +140,6 @@ export async function redirectToAuth(returnUrl = null, callbackPath = '/auth/cal
 	const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
 	
 	if (!userPoolDomain || !clientId) {
-		console.error('Cognito configuration missing');
 		return;
 	}
 	
@@ -271,7 +269,7 @@ export async function exchangeCodeForTokens(code, redirectUri) {
 				}
 			}
 		} catch (err) {
-			console.warn('Failed to set up CognitoUser session:', err);
+			// Failed to set up CognitoUser session
 		}
 	}
 	

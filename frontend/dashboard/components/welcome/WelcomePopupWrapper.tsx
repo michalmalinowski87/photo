@@ -91,7 +91,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
         }
       } catch (_err) {
         // Error fetching wallet/transactions - don't show popup
-        console.error("Welcome popup check failed:", _err);
+        
       } finally {
         setChecking(false);
       }
@@ -108,7 +108,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
       await updateBusinessInfoMutation.mutateAsync({ welcomePopupShown: true });
     } catch (_err) {
       // Log error but don't block - settings update is not critical
-      console.error("Failed to update business info:", _err);
+      
     }
   };
 

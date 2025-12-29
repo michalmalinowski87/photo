@@ -141,7 +141,7 @@ export function usePlanRecommendation({
         }
       } catch (error) {
         if (currentRequest === requestCounter) {
-          console.error("Failed to refresh plan recommendation:", error);
+          
           setPlanRecommendation(null);
           setUploadedSizeBytes(0);
         }
@@ -235,7 +235,7 @@ export function usePlanRecommendation({
         if (isCancelled) {
           return;
         }
-        console.error("Failed to refresh data:", error);
+        
       } finally {
         if (!isCancelled) {
           setIsLoadingPlanRecommendation(false);
@@ -312,7 +312,7 @@ export function usePlanRecommendation({
           setUploadedSizeBytes(0);
         }
       } catch (error: unknown) {
-        console.error("Failed to load uploaded size:", error);
+        
         setPlanRecommendation(null);
         setUploadedSizeBytes(0);
       } finally {

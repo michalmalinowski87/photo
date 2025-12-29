@@ -105,10 +105,8 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
       }
 
       isPollingRef.current = true;
-      const pollStartTime = Date.now();
       try {
         const response = await api.dashboard.getOrderStatuses(etagRef.current);
-        const pollDuration = Date.now() - pollStartTime;
 
         // Use ETag from response (backend-generated MD5 hash)
         // Backend should always send ETag, but handle cases where it might be missing
@@ -121,14 +119,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           // No ETag in response - this is unexpected if we sent If-None-Match
           // Only warn if we had a previous ETag (meaning we sent If-None-Match header)
           if (hadPreviousEtag) {
-            console.warn(
-              "[OrderStatusPolling] Response missing ETag header (expected one since If-None-Match was sent)",
-              {
-                orderCount: response.orders?.length ?? 0,
-                duration: `${pollDuration}ms`,
-                previousEtag: etagRef.current,
-              }
-            );
+            // ETag missing warning removed
           }
           // Keep existing ETag (or undefined if first request)
           // Don't update etagRef since we didn't get a new one
@@ -136,20 +127,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
 
         return response;
       } catch (pollError: unknown) {
-        const pollDuration = Date.now() - pollStartTime;
-        const errorDetails =
-          pollError instanceof Error
-            ? {
-                name: pollError.name,
-                message: pollError.message,
-                stack: pollError.stack,
-              }
-            : pollError;
-        console.error("[OrderStatusPolling] Poll failed", {
-          error: errorDetails,
-          duration: `${pollDuration}ms`,
-          etag: etagRef.current ?? "none",
-        });
+        
         throw pollError instanceof Error ? pollError : new Error(String(pollError));
       } finally {
         isPollingRef.current = false;
@@ -553,20 +531,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
   // Handle errors (log but don't break polling)
   useEffect(() => {
     if (error) {
-      console.error("[OrderStatusPolling] Poll error (will retry on next interval)", {
-        error:
-          error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
-            : error,
-        enablePolling,
-        interval: interval ? `${interval / 1000}s` : "false",
-        isLeader,
-        etag: etagRef.current ?? "none",
-      });
+      // Error logging removed
       // Still update last poll time to prevent rapid retries
       updateLastPollTime();
     }

@@ -74,7 +74,6 @@ export async function refetchFirstPageOnly(
       }
 
       const galleryId = queryKey[2] as string;
-      const type = (queryKey[5] as "originals" | "finals" | "thumb") || "thumb";
       const limit = (queryKey[6] as number) || 50;
       const filterOrderId = queryKey[7] as string | undefined;
       const filterUnselected = queryKey[8] as boolean | undefined;
@@ -231,11 +230,6 @@ export async function refetchFirstPageOnly(
       });
     } catch (error) {
       // Log error but don't fail the entire operation
-      console.warn(
-        "[refetchFirstPageOnly] Failed to refetch first page for query:",
-        query.queryKey,
-        error
-      );
     }
   });
 
@@ -283,11 +277,6 @@ export async function resetInfiniteQueryAndRefetchFirstPage(
       });
     } catch (error) {
       // Log error but don't fail the entire operation
-      console.warn(
-        "[resetInfiniteQueryAndRefetchFirstPage] Failed to reset and refetch query:",
-        query.queryKey,
-        error
-      );
     }
   });
 

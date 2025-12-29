@@ -9,7 +9,6 @@ function clearUserPoolCache() {
 
 export function initAuth(userPoolId: string, clientId: string) {
     if (!userPoolId || !clientId) {
-        console.warn('Cognito config missing')
         return null
     }
     if (!userPool) {
@@ -252,7 +251,6 @@ export async function redirectToCognito(returnUrl: string | null = null, callbac
     const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
     
     if (!userPoolDomain || !clientId) {
-        console.error('Cognito configuration missing')
         return
     }
     

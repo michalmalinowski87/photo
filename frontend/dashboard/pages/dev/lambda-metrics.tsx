@@ -55,7 +55,7 @@ export default function LambdaMetrics() {
       setPeriod(response.period || "7 days");
       setRegion(response.region || "");
     } catch (error: any) {
-      console.error("Error fetching Lambda metrics:", error);
+      
       showToast({
         title: "Błąd",
         description: error.response?.data?.message || "Nie udało się pobrać metryk Lambda",

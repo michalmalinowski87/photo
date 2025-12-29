@@ -122,7 +122,7 @@ export const PublishGalleryWizard = ({
           // If no orders found, just close the wizard
           onClose();
         } catch (err) {
-          console.error("Failed to fetch orders after payment:", err);
+          
           onClose();
         }
       } else {

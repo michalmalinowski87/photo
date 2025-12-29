@@ -686,7 +686,6 @@ export default function GalleryPhotos() {
             }, pollInterval);
           }
         } catch (error) {
-          console.error("Error polling for plan update:", error);
           // Stop polling on error
           isPollingRef.current = false;
           if (pollTimeoutIdRef.current) {
@@ -1695,10 +1694,6 @@ export default function GalleryPhotos() {
   // Prefer count from filtered query (more accurate, always fresh)
   // Include statsDataUpdatedAt in calculation to ensure reactivity when query updates
   const totalUnselectedCount = useMemo(() => {
-    console.log("statsDataUpdatedAt", statsDataUpdatedAt);
-    console.log("imageStats", imageStats);
-    console.log("unselectedCountFromFilteredQuery", unselectedCountFromFilteredQuery);
-
     if (unselectedCountFromFilteredQuery !== null) {
       return unselectedCountFromFilteredQuery;
     }

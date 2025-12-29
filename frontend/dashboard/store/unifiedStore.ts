@@ -77,7 +77,7 @@ export const useUnifiedStore = create<UnifiedStore>()(
                   state.setNextStepsOverlayExpanded(nextStepsOverlayExpanded);
                 }
               } catch (err) {
-                console.error("[UnifiedStore] Error rehydrating state", err);
+                
                 state.setTheme("light");
               }
             } else {

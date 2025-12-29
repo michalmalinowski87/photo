@@ -94,7 +94,7 @@ export function FinalsTab({
       toggleSelectionMode();
     } catch (error) {
       // Error handling should be done by parent
-      console.error("Bulk delete failed:", error);
+      
     } finally {
       setIsBulkDeleting(false);
     }
