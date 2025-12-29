@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+import { refetchFirstPageOnly } from "../../lib/react-query-helpers";
 import type { Gallery, GalleryImage, Order } from "../../types";
 import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
@@ -48,9 +49,17 @@ export function useApproveChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
       });
-      // Invalidate gallery images query to refresh unselectedCount when order status changes
-      void queryClient.invalidateQueries({
-        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+      // Refetch first page of gallery images query to refresh unselectedCount when order status changes
+      void refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 3 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === variables.galleryId &&
+          key[3] === "images"
+        );
       });
     },
   });
@@ -90,9 +99,17 @@ export function useDenyChangeRequest() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
       });
-      // Invalidate gallery images query to refresh unselectedCount when order status changes
-      void queryClient.invalidateQueries({
-        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+      // Refetch first page of gallery images query to refresh unselectedCount when order status changes
+      void refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 3 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === variables.galleryId &&
+          key[3] === "images"
+        );
       });
     },
   });
@@ -351,10 +368,19 @@ export function useSendFinalLink() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.detail(variables.galleryId),
       });
-      // Invalidate gallery images query to refresh unselectedCount when order status changes
-      // This ensures the "Niewybrane" count updates correctly
-      void queryClient.invalidateQueries({
-        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+      // Refetch first page of ALL gallery images queries to refresh unselectedCount when order status changes
+      // This includes both the stats query (limit: 1) and filtered queries (filterUnselected, filterOrderId)
+      // This ensures the "Niewybrane" count updates correctly immediately after approval
+      void refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 3 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === variables.galleryId &&
+          key[3] === "images"
+        );
       });
     },
   });
@@ -479,9 +505,17 @@ export function useDeleteFinalImage() {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.orders.byGallery(variables.galleryId),
         });
-        // Invalidate gallery images query to refresh unselectedCount when order status changes
-        void queryClient.invalidateQueries({
-          queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+        // Refetch first page of gallery images query to refresh unselectedCount when order status changes
+        void refetchFirstPageOnly(queryClient, (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key.length >= 3 &&
+            key[0] === "galleries" &&
+            key[1] === "detail" &&
+            key[2] === variables.galleryId &&
+            key[3] === "images"
+          );
         });
       });
 
@@ -685,9 +719,17 @@ export function useUploadFinalPhotos() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
       });
-      // Invalidate gallery images query to refresh unselectedCount when order status changes
-      void queryClient.invalidateQueries({
-        queryKey: [...queryKeys.galleries.detail(variables.galleryId), "images"],
+      // Refetch first page of gallery images query to refresh unselectedCount when order status changes
+      void refetchFirstPageOnly(queryClient, (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key.length >= 3 &&
+          key[0] === "galleries" &&
+          key[1] === "detail" &&
+          key[2] === variables.galleryId &&
+          key[3] === "images"
+        );
       });
     },
   });

@@ -850,11 +850,10 @@ export default function OrderDetail() {
           setUploadModalOpen(true);
         }}
         title="Limit zwiększony pomyślnie!"
-        message="Twój plan został zaktualizowany. Możesz teraz kontynuować przesyłanie zdjęć finalnych."
-        confirmText="Kontynuuj przesyłanie"
-        cancelText="Zamknij"
+        message="Twój plan został zaktualizowany. Możesz teraz przesłać zdjęcia."
+        confirmText="OK"
         variant="info"
-      />
+      /> 
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

@@ -298,11 +298,22 @@ async function processCheckoutSession(
 						const now = new Date().toISOString();
 						
 						// Calculate expiry date extension from original plan start date
+						// Use previousPlan from metadata (source of truth) - gallery.plan is still the old plan
 						let expiresAt = gallery.expiresAt;
-						const currentPlanKey = gallery.plan;
+						const currentPlanKey = session.metadata?.previousPlan || gallery.plan;
 						let newScheduleName: string | undefined;
 						
-						if (currentPlanKey && gallery.expiresAt) {
+						logger.info('Processing upgrade expiry extension', {
+							galleryId,
+							userId,
+							newPlanKey,
+							currentPlanKeyFromMetadata: session.metadata?.previousPlan,
+							currentPlanKeyFromGallery: gallery.plan,
+							effectiveCurrentPlanKey: currentPlanKey,
+							currentExpiry: gallery.expiresAt
+						});
+						
+						if (currentPlanKey && gallery.expiresAt && currentPlanKey !== newPlanKey) {
 							const currentPlan = PRICING_PLANS[currentPlanKey as keyof typeof PRICING_PLANS];
 							
 							if (currentPlan && planMetadata.expiryDays > currentPlan.expiryDays) {
@@ -365,9 +376,9 @@ async function processCheckoutSession(
 						// Update gallery with new plan, price, storage limits, and expiry (if extended)
 						const updateExpr = expiresAt !== gallery.expiresAt
 							? (newScheduleName
-								? 'SET plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, expiryScheduleName = :sn, updatedAt = :u REMOVE paymentLocked'
-								: 'SET plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, updatedAt = :u REMOVE paymentLocked')
-							: 'SET plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked';
+								? 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, expiryScheduleName = :sn, updatedAt = :u REMOVE paymentLocked'
+								: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, updatedAt = :u REMOVE paymentLocked')
+							: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked';
 						
 						const exprValues: any = {
 							':plan': newPlanKey,
@@ -388,6 +399,9 @@ async function processCheckoutSession(
 							TableName: galleriesTable,
 							Key: { galleryId },
 							UpdateExpression: updateExpr,
+							ExpressionAttributeNames: {
+								'#plan': 'plan'
+							},
 							ExpressionAttributeValues: exprValues
 						}));
 						
@@ -631,6 +645,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							logger.info('Transaction status updated to CANCELED (session expired)', { transactionId, userId });
 							
 							// USER-CENTRIC FIX: Clear paymentLocked flag when session expires
+							// No rollback needed - gallery plan is only updated after successful payment
 							if (transaction.galleryId && galleriesTable) {
 								try {
 									await ddb.send(new UpdateCommand({
@@ -672,6 +687,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							logger.info('Transaction status updated to FAILED', { transactionId, userId });
 							
 							// USER-CENTRIC FIX: Clear paymentLocked flag when payment fails
+							// No rollback needed - gallery plan is only updated after successful payment
 							if (transaction.galleryId && galleriesTable) {
 								try {
 									await ddb.send(new UpdateCommand({
@@ -713,6 +729,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							logger.info('Transaction status updated to CANCELED (payment intent canceled)', { transactionId, userId });
 							
 							// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
+							// No rollback needed - gallery plan is only updated after successful payment
 							if (transaction.galleryId && galleriesTable) {
 								try {
 									await ddb.send(new UpdateCommand({

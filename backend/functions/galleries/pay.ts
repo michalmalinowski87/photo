@@ -121,74 +121,158 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
-	const envProc = (globalThis as any).process;
-	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
-	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
-	// Always use wallet if available (no need for useWallet parameter)
+	
+	logger.info('Pay endpoint handler invoked', {
+		httpMethod: event?.httpMethod,
+		path: event?.path,
+		pathParameters: event?.pathParameters,
+		hasBody: !!event?.body,
+		bodyType: typeof event?.body,
+		bodyLength: typeof event?.body === 'string' ? event.body.length : undefined,
+		requestId: context?.awsRequestId,
+	});
 
-	if (!galleriesTable) {
-		logger.error('Missing GALLERIES_TABLE environment variable');
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Missing GALLERIES_TABLE' })
-		};
-	}
+	try {
+		const envProc = (globalThis as any).process;
+		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		const walletsTable = envProc?.env?.WALLETS_TABLE as string;
+		const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
+		const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
+		const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+		// Always use wallet if available (no need for useWallet parameter)
 
-	if (!stripeSecretKey || stripeSecretKey.trim() === '' || stripeSecretKey.includes('...')) {
-		logger.error('Missing or invalid STRIPE_SECRET_KEY environment variable', {
-			hasEnvProc: !!envProc,
-			hasEnv: !!envProc?.env,
-			hasStripeKey: !!stripeSecretKey,
+		logger.info('Environment variables loaded', {
+			hasGalleriesTable: !!galleriesTable,
+			hasWalletsTable: !!walletsTable,
+			hasLedgerTable: !!ledgerTable,
+			hasStripeSecretKey: !!stripeSecretKey,
 			stripeKeyLength: stripeSecretKey?.length || 0,
-			stripeKeyPrefix: stripeSecretKey?.substring(0, 10) || 'N/A',
-			envKeys: envProc?.env ? Object.keys(envProc.env).filter(k => k.includes('STRIPE') || k.includes('stripe')) : [],
-			allEnvKeys: envProc?.env ? Object.keys(envProc.env).slice(0, 10) : [] // First 10 keys for debugging
+			hasApiUrl: !!apiUrl,
 		});
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Stripe not configured' })
-		};
-	}
 
-	const galleryId = event?.pathParameters?.id;
-	if (!galleryId) {
-		return {
-			statusCode: 400,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Missing galleryId' })
-		};
-	}
+		if (!galleriesTable) {
+			logger.error('Missing GALLERIES_TABLE environment variable');
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing GALLERIES_TABLE' })
+			};
+		}
 
-	const ownerId = getUserIdFromEvent(event);
-	if (!ownerId) {
-		return {
-			statusCode: 401,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Unauthorized' })
-		};
-	}
+		if (!stripeSecretKey || stripeSecretKey.trim() === '' || stripeSecretKey.includes('...')) {
+			logger.error('Missing or invalid STRIPE_SECRET_KEY environment variable', {
+				hasEnvProc: !!envProc,
+				hasEnv: !!envProc?.env,
+				hasStripeKey: !!stripeSecretKey,
+				stripeKeyLength: stripeSecretKey?.length || 0,
+				stripeKeyPrefix: stripeSecretKey?.substring(0, 10) || 'N/A',
+				envKeys: envProc?.env ? Object.keys(envProc.env).filter(k => k.includes('STRIPE') || k.includes('stripe')) : [],
+				allEnvKeys: envProc?.env ? Object.keys(envProc.env).slice(0, 10) : [] // First 10 keys for debugging
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Stripe not configured' })
+			};
+		}
 
-	// Get gallery
-	const galleryGet = await ddb.send(new GetCommand({
-		TableName: galleriesTable,
-		Key: { galleryId }
-	}));
+		const galleryId = event?.pathParameters?.id;
+		if (!galleryId) {
+			logger.error('Missing galleryId in path parameters', {
+				pathParameters: event?.pathParameters,
+				path: event?.path
+			});
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing galleryId' })
+			};
+		}
 
-	let gallery = galleryGet.Item as any;
-	if (!gallery) {
-		return {
-			statusCode: 404,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Gallery not found' })
-		};
-	}
+		logger.info('Processing payment request', {
+			galleryId,
+			hasBody: !!event?.body,
+			bodyType: typeof event?.body
+		});
 
-	requireOwnerOr403(gallery.ownerId, ownerId);
+		const ownerId = getUserIdFromEvent(event);
+		if (!ownerId) {
+			logger.error('Unauthorized - no userId found in event', {
+				galleryId,
+				hasHeaders: !!event?.headers,
+				hasAuthorizer: !!event?.requestContext?.authorizer
+			});
+			return {
+				statusCode: 401,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized' })
+			};
+		}
+
+		logger.info('User authenticated', {
+			galleryId,
+			ownerId
+		});
+
+		// Get gallery
+		logger.info('Fetching gallery from database', { galleryId });
+		let gallery: any;
+		try {
+			const galleryGet = await ddb.send(new GetCommand({
+				TableName: galleriesTable,
+				Key: { galleryId }
+			}));
+			gallery = galleryGet.Item as any;
+			
+			if (!gallery) {
+				logger.error('Gallery not found in database', { galleryId });
+				return {
+					statusCode: 404,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Gallery not found' })
+				};
+			}
+			
+			logger.info('Gallery fetched successfully', {
+				galleryId,
+				state: gallery.state,
+				plan: gallery.plan,
+				hasPriceCents: !!gallery.priceCents
+			});
+		} catch (galleryErr: any) {
+			logger.error('Failed to fetch gallery from database', {
+				error: {
+					name: galleryErr?.name,
+					message: galleryErr?.message,
+					code: galleryErr?.code,
+					stack: galleryErr?.stack
+				},
+				galleryId,
+				tableName: galleriesTable
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Internal server error', message: 'Failed to fetch gallery' })
+			};
+		}
+
+		try {
+			requireOwnerOr403(gallery.ownerId, ownerId);
+			logger.info('Ownership verified', { galleryId, ownerId });
+		} catch (authErr: any) {
+			logger.error('Ownership verification failed', {
+				error: authErr?.message,
+				galleryId,
+				galleryOwnerId: gallery.ownerId,
+				requestOwnerId: ownerId
+			});
+			return {
+				statusCode: 403,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Forbidden', message: authErr?.message || 'Access denied' })
+			};
+		}
 
 	// Check if gallery is already paid (from transactions) - needed for both dry run and regular payment
 	// CRITICAL: This must use transactions as source of truth, not gallery.state
@@ -666,12 +750,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 		}
 	} catch (recalcErr: any) {
-		logger?.error('Failed to recalculate storage before payment', {
-			error: recalcErr.message,
-			galleryId
+		logger.error('Failed to recalculate storage before payment', {
+			error: {
+				name: recalcErr?.name,
+				message: recalcErr?.message,
+				code: recalcErr?.code,
+				stack: recalcErr?.stack
+			},
+			galleryId,
+			imagesTable: envProc?.env?.IMAGES_TABLE
 		});
 		// Use current gallery value - this is acceptable as storage is tracked in real-time
 		currentUploadedSize = (gallery.originalsBytesUsed || 0) + (gallery.finalsBytesUsed || 0);
+		logger.warn('Using gallery storage values without recalculation', {
+			galleryId,
+			originalsBytesUsed: gallery.originalsBytesUsed,
+			finalsBytesUsed: gallery.finalsBytesUsed,
+			currentUploadedSize
+		});
 	}
 
 	// Check if uploaded size exceeds plan limit
@@ -881,13 +977,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		} catch (err: any) {
 			logger.error('Failed to create transaction', {
-				error: err.message,
-				galleryId
+				error: {
+					name: err?.name,
+					message: err?.message,
+					code: err?.code,
+					stack: err?.stack
+				},
+				galleryId,
+				ownerId,
+				totalAmountCents,
+				transactionType: isUpgrade ? 'GALLERY_PLAN_UPGRADE' : 'GALLERY_PLAN'
 			});
 			return {
 				statusCode: 500,
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Failed to create transaction: ' + err.message })
+				body: JSON.stringify({ error: 'Failed to create transaction', message: err?.message || 'Unknown error' })
 			};
 		}
 	}
@@ -990,9 +1094,28 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// For upgrades, extend expiry from original plan start date if new plan has longer duration
 				// For new payments, calculate new expiry from now
 				let expiresAt: string;
-				if (isUpgrade && gallery.expiresAt && currentPlanKey && newPlanKey) {
-					const currentPlan = PRICING_PLANS[currentPlanKey as PlanKey];
-					const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
+				
+				// Use plan from transaction metadata if available (for upgrades, this is the new plan)
+				// Fall back to newPlanKey or plan variable
+				const effectiveNewPlanKey = existingTransaction.metadata?.plan || newPlanKey || plan;
+				const effectiveCurrentPlanKey = existingTransaction.metadata?.previousPlan || currentPlanKey || gallery.plan;
+				
+				if (isUpgrade && gallery.expiresAt && effectiveCurrentPlanKey && effectiveNewPlanKey) {
+					const currentPlan = PRICING_PLANS[effectiveCurrentPlanKey as PlanKey];
+					const newPlan = PRICING_PLANS[effectiveNewPlanKey as PlanKey];
+					
+					logger.info('Checking expiry extension for upgrade', {
+						galleryId,
+						isUpgrade,
+						hasExpiresAt: !!gallery.expiresAt,
+						effectiveCurrentPlanKey,
+						effectiveNewPlanKey,
+						currentPlanExists: !!currentPlan,
+						newPlanExists: !!newPlan,
+						currentPlanExpiryDays: currentPlan?.expiryDays,
+						newPlanExpiryDays: newPlan?.expiryDays,
+						currentExpiry: gallery.expiresAt
+					});
 					
 					if (currentPlan && newPlan && newPlan.expiryDays > currentPlan.expiryDays) {
 						// Calculate original plan start date from current expiry and plan duration
@@ -1005,8 +1128,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						
 						logger.info('Upgrade detected - extending expiry from original start date', { 
 							galleryId, 
-							currentPlan: currentPlanKey,
-							newPlan: newPlanKey,
+							currentPlan: effectiveCurrentPlanKey,
+							newPlan: effectiveNewPlanKey,
 							originalStartDate: originalStartDate.toISOString(),
 							originalExpiry: gallery.expiresAt,
 							newExpiry: expiresAt,
@@ -1018,8 +1141,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						expiresAt = gallery.expiresAt;
 						logger.info('Upgrade detected - keeping original expiry date (same or shorter duration)', { 
 							galleryId, 
-							currentPlan: currentPlanKey,
-							newPlan: newPlanKey,
+							currentPlan: effectiveCurrentPlanKey,
+							newPlan: effectiveNewPlanKey,
+							currentPlanExpiryDays: currentPlan?.expiryDays,
+							newPlanExpiryDays: newPlan?.expiryDays,
 							expiresAt 
 						});
 					}
@@ -1027,6 +1152,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					// Calculate new expiry for new payments
 					const expiresAtDate = new Date(new Date(now).getTime() + expiryDays * 24 * 60 * 60 * 1000);
 					expiresAt = expiresAtDate.toISOString();
+					logger.info('Not an upgrade or missing data - calculating expiry from now', {
+						galleryId,
+						isUpgrade,
+						hasExpiresAt: !!gallery.expiresAt,
+						effectiveCurrentPlanKey,
+						effectiveNewPlanKey,
+						expiryDays,
+						expiresAt
+					});
 				}
 				
 				// Cancel old EventBridge schedule (if exists) and create new one for paid expiry
@@ -1063,7 +1197,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				let updateExpr: string;
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
-					':e': expiresAt,
 					':ss': gallery.selectionEnabled ? 'NOT_STARTED' : 'DISABLED',
 					':u': now
 				};
@@ -1072,12 +1205,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				};
 				
 				if (isUpgrade && newPlanKey) {
-					// Upgrade: update plan, price, and storage limits, keep expiry
+					// Upgrade: update plan, price, storage limits, and expiry (if extended)
 					const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
 					if (newPlan) {
-						updateExpr = newScheduleName
-							? 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
-							: 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+						// Include expiresAt in update if it changed (longer duration upgrade)
+						const expiresAtChanged = expiresAt !== gallery.expiresAt;
+						
+						if (expiresAtChanged) {
+							// Expiry was extended - include it in update
+							updateExpr = newScheduleName
+								? 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+								: 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+							exprValues[':e'] = expiresAt;
+						} else {
+							// Expiry unchanged - don't include it
+							updateExpr = newScheduleName
+								? 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+								: 'SET #state = :s, #plan = :p, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+						}
+						
 						exprValues[':p'] = newPlanKey;
 						exprValues[':price'] = galleryPriceCents;
 						exprValues[':olb'] = newPlan.storageLimitBytes;
@@ -1086,17 +1232,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						if (newScheduleName) {
 							exprValues[':sn'] = newScheduleName;
 						}
-						logger.info('Upgrade: updating plan and storage limits', { 
+						logger.info('Upgrade: updating plan, storage limits, and expiry', { 
 							galleryId, 
 							newPlan: newPlanKey, 
 							newPrice: galleryPriceCents,
-							newStorage: newPlan.storageLimitBytes
+							newStorage: newPlan.storageLimitBytes,
+							expiresAtChanged,
+							oldExpiry: gallery.expiresAt,
+							newExpiry: expiresAtChanged ? expiresAt : gallery.expiresAt
 						});
 					} else {
 						// Fallback to regular update if plan not found
 						updateExpr = newScheduleName
 							? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
 							: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+						exprValues[':e'] = expiresAt;
 						if (newScheduleName) {
 							exprValues[':sn'] = newScheduleName;
 						}
@@ -1106,6 +1256,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					updateExpr = newScheduleName
 						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
 						: 'SET #state = :s, expiresAt = :e, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked';
+					exprValues[':e'] = expiresAt;
 					if (newScheduleName) {
 						exprValues[':sn'] = newScheduleName;
 					}
@@ -1142,8 +1293,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-	// If payment was already completed via wallet, return success
-	if (paid) {
+		// If payment was already completed via wallet, return success
+		if (paid) {
 		return {
 			statusCode: 200,
 			headers: { 'content-type': 'application/json' },
@@ -1158,26 +1309,49 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// If no Stripe amount needed (wallet-only payment), but wallet payment failed, return error
-	if (stripeAmountCents === 0) {
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Wallet payment failed. Please try again or contact support.' })
-		};
-	}
+		// If no Stripe amount needed (wallet-only payment), but wallet payment failed, return error
+		if (stripeAmountCents === 0) {
+			logger.error('Wallet payment failed but no Stripe fallback available', {
+				galleryId,
+				transactionId,
+				totalAmountCents,
+				walletBalance,
+				paid
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Wallet payment failed. Please try again or contact support.' })
+			};
+			}
 
-	// If not fully paid with wallet, create Stripe checkout
-	if (!stripeSecretKey) {
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Stripe not configured and wallet payment failed' })
-		};
-	}
+		// If not fully paid with wallet, create Stripe checkout
+		if (!stripeSecretKey) {
+			logger.error('Stripe not configured and wallet payment failed', {
+				galleryId,
+				transactionId,
+				totalAmountCents,
+				walletBalance,
+				paid
+			});
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Stripe not configured and wallet payment failed' })
+			};
+		}
 
-	try {
-		const stripe = new Stripe(stripeSecretKey);
+		logger.info('Creating Stripe checkout session', {
+			galleryId,
+			transactionId,
+			totalAmountCents,
+			stripeAmountCents,
+			walletAmountCents,
+			isUpgrade
+		});
+
+		try {
+			const stripe = new Stripe(stripeSecretKey);
 		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		// ALWAYS use redirectUrl from request body if provided (this is the primary method)
 		// Fallback to default only if redirectUrl is not provided
@@ -1265,33 +1439,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 		
-		// For upgrades, update gallery plan before creating Stripe session (similar to upgradePlan.ts)
-		if (isUpgrade && newPlanKey) {
-			const newPlan = PRICING_PLANS[newPlanKey as PlanKey];
-			if (newPlan) {
-				await ddb.send(new UpdateCommand({
-					TableName: galleriesTable,
-					Key: { galleryId },
-					UpdateExpression: 'SET #plan = :plan, priceCents = :price, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u',
-					ExpressionAttributeNames: {
-						'#plan': 'plan'
-					},
-					ExpressionAttributeValues: {
-						':plan': newPlanKey,
-						':price': galleryPriceCents,
-						':olb': newPlan.storageLimitBytes,
-						':flb': newPlan.storageLimitBytes,
-						':u': new Date().toISOString()
-					}
-				}));
-				logger.info('Updated gallery plan before Stripe checkout (upgrade)', {
-					galleryId,
-					newPlan: newPlanKey,
-					newPrice: galleryPriceCents
-				});
-			}
-		}
-		
+		// For upgrades, store plan info in session metadata (don't update gallery until payment succeeds)
+		// This prevents free upgrades if user closes browser without completing payment
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
 			mode: 'payment',
@@ -1306,8 +1455,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				walletAmountCents: walletAmountCents.toString(),
 				stripeAmountCents: stripeAmountCents.toString(),
 				redirectUrl: finalRedirectUrl,
-				...(isUpgrade && newPlanKey ? {
+				...(isUpgrade && newPlanKey && currentPlanKey ? {
 					plan: newPlanKey,
+					previousPlan: currentPlanKey,
 					newPriceCents: galleryPriceCents.toString()
 				} : {})
 			}
@@ -1365,18 +1515,52 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	} catch (err: any) {
 		logger.error('Stripe checkout creation failed for gallery payment', {
 			error: {
-				name: err.name,
-				message: err.message,
-				code: err.code,
-				type: err.type,
-				stack: err.stack
+				name: err?.name,
+				message: err?.message,
+				code: err?.code,
+				type: err?.type,
+				stack: err?.stack
 			},
-			galleryId
+			galleryId,
+			transactionId,
+			stripeAmountCents,
+			walletAmountCents,
+			totalAmountCents
 		});
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Failed to create checkout session', message: err.message })
+			body: JSON.stringify({ error: 'Failed to create checkout session', message: err?.message || 'Unknown error' })
+		};
+	}
+	} catch (err: any) {
+		// Top-level error handler for any unhandled errors
+		const errorMessage = err?.message || err?.toString() || 'Unknown error';
+		const errorName = err?.name || 'UnknownError';
+		const errorStack = err?.stack || 'No stack trace';
+		
+		logger.error('Unhandled error in pay endpoint handler', {
+			error: {
+				name: errorName,
+				message: errorMessage,
+				stack: errorStack,
+				code: err?.code,
+				type: err?.type,
+				statusCode: err?.statusCode,
+			},
+			galleryId: event?.pathParameters?.id,
+			httpMethod: event?.httpMethod,
+			path: event?.path,
+			requestId: context?.awsRequestId,
+		});
+		
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ 
+				error: 'Internal server error', 
+				message: 'An unexpected error occurred' 
+			})
 		};
 	}
 });

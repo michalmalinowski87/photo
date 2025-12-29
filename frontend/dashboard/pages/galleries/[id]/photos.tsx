@@ -293,12 +293,15 @@ export default function GalleryPhotos() {
 
   // Fetch statistics only (first page with stats, but we don't need all images)
   // This gives us total counts without loading all images
-  const { data: statsData, isLoading: statsLoading } = useInfiniteGalleryImages({
+  const { data: statsData, isLoading: statsLoading, dataUpdatedAt: statsDataUpdatedAt } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 1, // Only need stats, so minimal limit
     options: {
       enabled: !!galleryIdForQuery,
+      // Ensure stats query refetches when data might be stale (e.g., after order status changes)
+      // This works together with refetchFirstPageOnly to ensure stats are always fresh
+      staleTime: 0, // Always consider stats stale so they refetch when invalidated
       // getNextPageParam and initialPageParam are handled by the hook itself
     } as Parameters<typeof useInfiniteGalleryImages>[0]["options"],
   });
@@ -399,8 +402,9 @@ export default function GalleryPhotos() {
       staleTime: Infinity, // Never consider data stale - use cached data indefinitely unless manually invalidated
       // gcTime: how long inactive queries stay in cache (garbage collection time)
       gcTime: 60 * 60 * 1000, // 60 minutes - keep cached sections available very long
-      // Don't refetch on mount if we have cached data - use cached data immediately
-      refetchOnMount: false,
+      // Refetch on mount when query re-enables (e.g., when expanding a section)
+      // This ensures the query fetches even if cached data exists, fixing the first-click issue
+      refetchOnMount: "always", // Always refetch when query enables, even with cached data
       // Don't refetch on window focus
       refetchOnWindowFocus: false,
       // Don't refetch on reconnect
@@ -448,6 +452,10 @@ export default function GalleryPhotos() {
   const hasProcessedUploadParamRef = useRef<boolean>(false);
   // Track if we've already processed payment success to prevent infinite loops
   const hasProcessedPaymentSuccessRef = useRef<string>("");
+  // Track if polling is active to prevent multiple polling instances
+  const isPollingRef = useRef<boolean>(false);
+  // Track polling timeout ID for cleanup
+  const pollTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get order delivery status for an image (defined early to avoid use-before-define)
   const getImageOrderStatus = useCallback(
@@ -531,18 +539,22 @@ export default function GalleryPhotos() {
   useEffect(() => {
     hasProcessedUploadParamRef.current = false;
     hasProcessedPaymentSuccessRef.current = "";
+    isPollingRef.current = false;
+    if (pollTimeoutIdRef.current) {
+      clearTimeout(pollTimeoutIdRef.current);
+      pollTimeoutIdRef.current = null;
+    }
   }, [galleryId]);
 
   // Handle payment redirects for limit exceeded flow (including wallet top-up)
   useEffect(() => {
     if (typeof window === "undefined" || !galleryId || !router.isReady) {
-      return;
+      return undefined;
     }
 
     const params = new URLSearchParams(window.location.search);
     const paymentSuccess = params.get("payment") === "success";
     const limitExceededParam = params.get("limitExceeded") === "true";
-    const durationParam = params.get("duration");
     const planKeyParam = params.get("planKey");
     const galleryIdParam = params.get("galleryId");
 
@@ -554,30 +566,65 @@ export default function GalleryPhotos() {
 
     // Handle wallet top-up redirect: reopen wizard with preserved state (no polling needed)
     if (isWalletTopUpRedirect && planKeyParam) {
+      // Create a unique key for this payment success to prevent re-processing
+      const paymentSuccessKey = `${galleryId}-wallet-topup-${planKeyParam}`;
+
+      // Check if we've already processed this payment success
+      if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey) {
+        return undefined;
+      }
+
+      // Mark as processed immediately to prevent re-running
+      hasProcessedPaymentSuccessRef.current = paymentSuccessKey;
+
+      // Restore limitExceededData from URL params if available
+      const uploadedSizeBytesParam = params.get("uploadedSizeBytes");
+      const originalsLimitBytesParam = params.get("originalsLimitBytes");
+      const excessBytesParam = params.get("excessBytes");
+      const isSelectionGalleryParam = params.get("isSelectionGallery");
+
+      if (uploadedSizeBytesParam && originalsLimitBytesParam && excessBytesParam) {
+        setLimitExceededData({
+          uploadedSizeBytes: parseInt(uploadedSizeBytesParam, 10),
+          originalsLimitBytes: parseInt(originalsLimitBytesParam, 10),
+          excessBytes: parseInt(excessBytesParam, 10),
+          isSelectionGallery: isSelectionGalleryParam === "true",
+        });
+      }
+
       // Clean URL params but preserve limitExceeded, duration, and planKey for wizard
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete("payment");
       newUrl.searchParams.delete("galleryId");
+      // Clean up limitExceededData params after restoring them
+      newUrl.searchParams.delete("uploadedSizeBytes");
+      newUrl.searchParams.delete("originalsLimitBytes");
+      newUrl.searchParams.delete("excessBytes");
+      newUrl.searchParams.delete("isSelectionGallery");
       // Keep limitExceeded, duration, and planKey so wizard can restore state
       window.history.replaceState({}, "", newUrl.toString());
 
-      // Reopen wizard with preserved state
+      // Reload gallery to ensure we have fresh data
+      void reloadGallery();
+
+      // Reopen wizard with preserved state - user can continue with upgrade
       setLimitExceededWizardOpen(true);
-      return;
+      return undefined;
     }
 
     // Handle direct payment success (Stripe payment for upgrade)
     if (paymentSuccess && limitExceededParam && planKeyParam && !isWalletTopUpRedirect) {
       // Create a unique key for this payment success to prevent re-processing
-      const paymentSuccessKey = `${galleryId}-${paymentSuccess}-${limitExceededParam}-${planKeyParam}`;
+      const paymentSuccessKey = `${galleryId}-direct-payment-${planKeyParam}`;
 
-      // Check if we've already processed this payment success
-      if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey) {
-        return;
+      // Check if we've already processed this payment success or if polling is already active
+      if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey || isPollingRef.current) {
+        return undefined;
       }
 
       // Mark as processed immediately to prevent re-running
       hasProcessedPaymentSuccessRef.current = paymentSuccessKey;
+      isPollingRef.current = true;
 
       // Clean URL params immediately to prevent effect from re-running
       const newUrl = new URL(window.location.href);
@@ -587,47 +634,79 @@ export default function GalleryPhotos() {
       newUrl.searchParams.delete("planKey");
       window.history.replaceState({}, "", newUrl.toString());
 
-      // Coming back from payment - reopen wizard with preserved state
-      setLimitExceededWizardOpen(true);
-
       // Poll for gallery plan update
-      const pollForPlanUpdate = async () => {
-        let pollAttempts = 0;
-        const maxPollAttempts = 30; // Poll for up to 30 seconds
-        const pollInterval = 1000; // 1 second
+      let pollAttempts = 0;
+      const maxPollAttempts = 30; // Poll for up to 30 seconds
+      const pollInterval = 1000; // 1 second
 
-        const poll = async (): Promise<void> => {
-          try {
-            await reloadGallery();
-            const updatedGallery = await reloadGallery();
+      const poll = async (): Promise<void> => {
+        // Check if polling should stop (component unmounted or effect re-run)
+        if (!isPollingRef.current) {
+          return;
+        }
 
-            // Check if plan was updated
-            if (updatedGallery?.plan && planKeyParam && updatedGallery.plan === planKeyParam) {
-              // Plan updated successfully
-              setShowUpgradeSuccessModal(true);
-              setLimitExceededWizardOpen(false);
-              setLimitExceededData(null);
-              return;
+        try {
+          // Reload gallery once and check the result
+          await reloadGallery();
+          
+          // Get the updated gallery from the hook (React Query will have updated it)
+          const currentGallery = galleryRaw && typeof galleryRaw === "object" ? galleryRaw : null;
+
+          if (currentGallery?.plan && planKeyParam && currentGallery.plan === planKeyParam) {
+            // Plan updated successfully - stop polling and show success modal
+            isPollingRef.current = false;
+            if (pollTimeoutIdRef.current) {
+              clearTimeout(pollTimeoutIdRef.current);
+              pollTimeoutIdRef.current = null;
             }
-
-            pollAttempts++;
-            if (pollAttempts >= maxPollAttempts) {
-              // Stop polling after max attempts
-              return;
-            } else {
-              setTimeout(poll, pollInterval);
-            }
-          } catch (error) {
-            console.error("Error polling for plan update:", error);
+            setShowUpgradeSuccessModal(true);
+            setLimitExceededWizardOpen(false);
+            setLimitExceededData(null);
+            return;
           }
-        };
 
-        await poll();
+          pollAttempts++;
+          if (pollAttempts >= maxPollAttempts) {
+            // Stop polling after max attempts
+            isPollingRef.current = false;
+            if (pollTimeoutIdRef.current) {
+              clearTimeout(pollTimeoutIdRef.current);
+              pollTimeoutIdRef.current = null;
+            }
+            return;
+          } else {
+            // Schedule next poll
+            pollTimeoutIdRef.current = setTimeout(() => {
+              void poll();
+            }, pollInterval);
+          }
+        } catch (error) {
+          console.error("Error polling for plan update:", error);
+          // Stop polling on error
+          isPollingRef.current = false;
+          if (pollTimeoutIdRef.current) {
+            clearTimeout(pollTimeoutIdRef.current);
+            pollTimeoutIdRef.current = null;
+          }
+        }
       };
 
-      void pollForPlanUpdate();
+      // Start polling
+      void poll();
+
+      // Return cleanup function to stop polling if effect re-runs
+      return () => {
+        isPollingRef.current = false;
+        if (pollTimeoutIdRef.current) {
+          clearTimeout(pollTimeoutIdRef.current);
+          pollTimeoutIdRef.current = null;
+        }
+      };
     }
-  }, [galleryId, router.isReady, reloadGallery]);
+
+    // No payment success params found - return undefined
+    return undefined;
+  }, [galleryId, router.isReady, reloadGallery, galleryRaw]);
 
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
@@ -753,6 +832,26 @@ export default function GalleryPhotos() {
   } | null>(null);
   const [limitExceededWizardOpen, setLimitExceededWizardOpen] = useState(false);
   const [showUpgradeSuccessModal, setShowUpgradeSuccessModal] = useState(false);
+
+  // Restore limitExceededData when wizard should be open but data is missing
+  // This handles the case when returning from wallet top-up
+  useEffect(() => {
+    if (limitExceededWizardOpen && !limitExceededData && gallery) {
+      // Restore limitExceededData from gallery data
+      if (gallery.originalsBytesUsed !== undefined && gallery.originalsLimitBytes !== undefined) {
+        const uploadedSizeBytes = gallery.originalsBytesUsed;
+        const originalsLimitBytes = gallery.originalsLimitBytes;
+        const excessBytes = Math.max(0, uploadedSizeBytes - originalsLimitBytes);
+        
+        setLimitExceededData({
+          uploadedSizeBytes,
+          originalsLimitBytes,
+          excessBytes,
+          isSelectionGallery: gallery.selectionEnabled !== false,
+        });
+      }
+    }
+  }, [limitExceededWizardOpen, limitExceededData, gallery]);
 
   // Reload gallery after upload (simple refetch)
   const reloadGalleryAfterUpload = useCallback(async () => {
@@ -1548,11 +1647,56 @@ export default function GalleryPhotos() {
     return sectionImages;
   }, [expandedSection, sectionImages]);
 
+  // Get unselected count from the filtered query when unselected section is expanded
+  // Also check if we have cached data from a previous expansion (more accurate than stats query)
+  const unselectedCountFromFilteredQuery = useMemo(() => {
+    // Check current section query if expanded
+    if (expandedSection === "unselected" && currentSectionQuery.data) {
+      const firstPage = currentSectionQuery.data.pages[0];
+      if (firstPage?.stats?.unselectedCount !== undefined) {
+        return Number(firstPage.stats.unselectedCount);
+      }
+      // Fallback to actual image count if stats not available
+      return sectionImages.length;
+    }
+    
+    // Also check if we have cached data from a previous expansion of unselected section
+    // This ensures we use fresh data even when section is collapsed
+    if (galleryIdForQuery) {
+      const unselectedQueryKey = queryKeys.galleries.infiniteImages(
+        galleryIdForQuery,
+        "thumb",
+        50,
+        undefined,
+        true // filterUnselected: true
+      );
+      const cachedUnselectedData = queryClient.getQueryData(unselectedQueryKey) as {
+        pages?: Array<{ stats?: { unselectedCount?: number } }>;
+      } | undefined;
+      if (cachedUnselectedData?.pages?.[0]?.stats?.unselectedCount !== undefined) {
+        return Number(cachedUnselectedData.pages[0].stats.unselectedCount);
+      }
+    }
+    
+    return null;
+  }, [expandedSection, currentSectionQuery.data, currentSectionQuery.dataUpdatedAt, sectionImages.length, galleryIdForQuery, queryClient]);
+
   // Use backend statistics for total unselected count
-  const totalUnselectedCount =
-    imageStats && typeof imageStats === "object" && "unselectedCount" in imageStats
-      ? (Number(imageStats.unselectedCount) ?? 0)
-      : 0;
+  // Prefer count from filtered query (more accurate, always fresh)
+  // Include statsDataUpdatedAt in calculation to ensure reactivity when query updates
+  const totalUnselectedCount = useMemo(() => {
+    console.log("statsDataUpdatedAt", statsDataUpdatedAt);
+    console.log("imageStats", imageStats);
+    console.log("unselectedCountFromFilteredQuery", unselectedCountFromFilteredQuery);
+
+    if (unselectedCountFromFilteredQuery !== null) {
+      return unselectedCountFromFilteredQuery;
+    }
+    if (imageStats && typeof imageStats === "object" && "unselectedCount" in imageStats) {
+      return Number(imageStats.unselectedCount) ?? 0;
+    }
+    return 0;
+  }, [unselectedCountFromFilteredQuery, imageStats, statsDataUpdatedAt, statsData]);
 
   // Handler for deleting all unselected images
   const handleDeleteAllUnselectedClick = useCallback(() => {
@@ -2075,9 +2219,8 @@ export default function GalleryPhotos() {
           openModal("photos-upload-modal");
         }}
         title="Limit zwiększony pomyślnie!"
-        message="Twój plan został zaktualizowany. Możesz teraz kontynuować przesyłanie zdjęć."
-        confirmText="Kontynuuj przesyłanie"
-        cancelText="Zamknij"
+        message="Twój plan został zaktualizowany. Możesz teraz przesłać zdjęcia."
+        confirmText="OK"
         variant="info"
       />
 

@@ -206,9 +206,28 @@ export async function refetchFirstPageOnly(
 
       // Force React Query to notify subscribers by invalidating with refetchType: 'none'
       // This ensures components re-render even if structural sharing would prevent it
+      // Also notify all queries that match the base key pattern to ensure stats queries are updated
       void queryClient.invalidateQueries({
         queryKey,
         refetchType: "none", // Don't refetch, just notify subscribers of the cache update
+      });
+      
+      // Also notify queries with the same base key but different parameters (e.g., stats query with limit: 1)
+      // This ensures the stats query subscribers are also notified
+      const baseQueryKey = queryKey.slice(0, 3); // ["galleries", "detail", galleryId]
+      void queryClient.invalidateQueries({
+        predicate: (q) => {
+          const qKey = q.queryKey as unknown[];
+          return (
+            Array.isArray(qKey) &&
+            qKey.length >= 3 &&
+            qKey[0] === baseQueryKey[0] &&
+            qKey[1] === baseQueryKey[1] &&
+            qKey[2] === baseQueryKey[2] &&
+            qKey[3] === "images"
+          );
+        },
+        refetchType: "none", // Don't refetch, just notify subscribers
       });
     } catch (error) {
       // Log error but don't fail the entire operation

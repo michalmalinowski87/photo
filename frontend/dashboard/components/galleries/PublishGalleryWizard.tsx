@@ -205,14 +205,14 @@ export const PublishGalleryWizard = ({
 
   // Extract current plan storage size and duration for limit exceeded mode
   const currentPlanStorage = useMemo(() => {
-    if (mode === "limitExceeded" && gallery?.plan) {
+    if (mode === "limitExceeded" && gallery?.plan && typeof gallery.plan === "string") {
       return extractStorageFromPlanKey(gallery.plan);
     }
     return null;
   }, [mode, gallery?.plan]);
 
   const currentPlanDuration = useMemo(() => {
-    if (mode === "limitExceeded" && gallery?.plan) {
+    if (mode === "limitExceeded" && gallery?.plan && typeof gallery.plan === "string") {
       return extractDurationFromPlanKey(gallery.plan);
     }
     return null;
@@ -408,6 +408,15 @@ export const PublishGalleryWizard = ({
         const params = new URLSearchParams();
         if (mode === "limitExceeded") {
           params.set("limitExceeded", "true");
+          // Store limitExceededData in URL params so we can restore it when coming back
+          if (limitExceededData) {
+            params.set("uploadedSizeBytes", limitExceededData.uploadedSizeBytes.toString());
+            params.set("originalsLimitBytes", limitExceededData.originalsLimitBytes.toString());
+            params.set("excessBytes", limitExceededData.excessBytes.toString());
+            if (limitExceededData.isSelectionGallery !== undefined) {
+              params.set("isSelectionGallery", limitExceededData.isSelectionGallery.toString());
+            }
+          }
         } else {
           params.set("publish", "true");
         }
@@ -437,7 +446,7 @@ export const PublishGalleryWizard = ({
         showToast("error", "Błąd", formatApiError(err as Error));
       }
     },
-    [mode, galleryId, selectedDuration, selectedPlanKey, showToast, createCheckoutMutation]
+    [mode, galleryId, selectedDuration, selectedPlanKey, limitExceededData, showToast, createCheckoutMutation]
   );
 
   const wizardContent = !isOpen ? null : (
@@ -580,29 +589,17 @@ export const PublishGalleryWizard = ({
                     : pricingData?.selectionEnabled !== false
                 }
                 mode={mode}
-                currentPlanKey={gallery?.plan}
+                currentPlanKey={typeof gallery?.plan === "string" ? gallery.plan : undefined}
                 currentPlanPriceCents={currentPlanPriceCents}
                 onDurationChange={(duration) => {
-                  // Don't override if we've already initialized and have a selected plan
-                  if (hasInitializedPlan.current && selectedPlanKey) {
-                    // Only update duration if the selected plan matches the new duration
-                    const currentPlan = getPlan(selectedPlanKey);
-                    const currentPlanDuration =
-                      currentPlan?.duration === "1 miesiąc"
-                        ? "1m"
-                        : currentPlan?.duration === "3 miesiące"
-                          ? "3m"
-                          : "12m";
-                    if (currentPlanDuration === duration) {
-                      setSelectedDuration(duration);
-                      return;
-                    }
-                    return;
-                  }
+                  // Always update duration when clicking in SuggestedPlanSection
+                  // This ensures PlanSelectionGrid duration selector stays in sync
                   setSelectedDuration(duration);
                   const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
                   if (planKey) {
                     setSelectedPlanKey(planKey);
+                    // Mark as initialized when user explicitly selects a plan
+                    hasInitializedPlan.current = true;
                   }
                 }}
                 onPlanKeyChange={(planKey) => {
@@ -624,55 +621,21 @@ export const PublishGalleryWizard = ({
                     : pricingData?.selectionEnabled !== false
                 }
                 mode={mode}
-                currentPlanKey={gallery?.plan}
+                currentPlanKey={typeof gallery?.plan === "string" ? gallery.plan : undefined}
                 currentPlanPriceCents={currentPlanPriceCents}
                 disabledPlanSizes={
                   mode === "limitExceeded" && currentPlanStorage ? [currentPlanStorage] : []
                 }
                 onDurationChange={(duration) => {
-                  // Don't override if we've already initialized and have a selected plan
-                  if (hasInitializedPlan.current && selectedPlanKey) {
-                    // Only update duration if the selected plan matches the new duration
-                    const currentPlan = getPlan(selectedPlanKey);
-                    const currentPlanDuration =
-                      currentPlan?.duration === "1 miesiąc"
-                        ? "1m"
-                        : currentPlan?.duration === "3 miesiące"
-                          ? "3m"
-                          : "12m";
-                    if (currentPlanDuration === duration) {
-                      setSelectedDuration(duration);
-                      return;
-                    }
-                    // If duration doesn't match, only update if user explicitly changed it
-                    // Don't auto-update based on suggestedStorage changes
-                    return;
-                  }
-                  
+                  // Always allow user-initiated duration changes
                   setSelectedDuration(duration);
-                  // Only reset to suggested plan if no explicit plan is selected
-                  // or if the current selected plan doesn't match the new duration
-                  if (!selectedPlanKey) {
-                    const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
-                    if (planKey) {
-                      setSelectedPlanKey(planKey);
-                    }
-                  } else {
-                    // Check if current selected plan matches the new duration
-                    const currentPlan = getPlan(selectedPlanKey);
-                    const currentPlanDuration =
-                      currentPlan?.duration === "1 miesiąc"
-                        ? "1m"
-                        : currentPlan?.duration === "3 miesiące"
-                          ? "3m"
-                          : "12m";
-                    if (currentPlanDuration !== duration) {
-                      // Selected plan doesn't match new duration, reset to suggested
-                      const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
-                      if (planKey) {
-                        setSelectedPlanKey(planKey);
-                      }
-                    }
+                  
+                  // Update plan to match the new duration with suggested storage
+                  const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
+                  if (planKey) {
+                    setSelectedPlanKey(planKey);
+                    // Mark as initialized when user explicitly changes duration/plan
+                    hasInitializedPlan.current = true;
                   }
                 }}
                 onPlanKeyChange={(planKey) => {

@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+import { refetchFirstPageOnly } from "../../lib/react-query-helpers";
 import type { Order } from "../../types";
 import { useSingleTabPolling } from "../useSingleTabPolling";
 
@@ -313,6 +314,21 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           void queryClient.refetchQueries({
             queryKey: orderDetailKey,
             type: "active",
+          });
+
+          // When order status changes (especially to CLIENT_APPROVED), refetch ALL gallery images queries
+          // This includes both the stats query (limit: 1) and filtered queries (filterUnselected, filterOrderId)
+          // This ensures the "Niewybrane" count updates correctly when client approves selection
+          void refetchFirstPageOnly(queryClient, (query) => {
+            const key = query.queryKey;
+            return (
+              Array.isArray(key) &&
+              key.length >= 3 &&
+              key[0] === "galleries" &&
+              key[1] === "detail" &&
+              key[2] === galleryId &&
+              key[3] === "images"
+            );
           });
         }
 

@@ -30,6 +30,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const session = await stripe.checkout.sessions.retrieve(sessionId);
 			if (session.metadata?.redirectUrl) {
 				redirectUrl = session.metadata.redirectUrl;
+				
+				// Add payment=success parameter to redirect URL for wallet top-up and gallery payments
+				// This allows the frontend to detect successful payments and reopen wizards if needed
+				const url = new URL(redirectUrl);
+				if (!url.searchParams.has('payment')) {
+					url.searchParams.set('payment', 'success');
+					redirectUrl = url.toString();
+				}
 			}
 		} catch (error: any) {
 			logger?.error('Failed to retrieve Stripe session', {
