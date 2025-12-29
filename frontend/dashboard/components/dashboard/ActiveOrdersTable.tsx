@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
+import { formatOrderDisplay } from "../../lib/orderDisplay";
 import type { Order } from "../../types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
@@ -171,11 +172,7 @@ export const ActiveOrdersTable = ({
                 const orderId = typeof orderObj.orderId === "string" ? orderObj.orderId : "";
                 const galleryName =
                   typeof orderObj.galleryName === "string" ? orderObj.galleryName : "";
-                const orderNumber =
-                  typeof orderObj.orderNumber === "string" ||
-                  typeof orderObj.orderNumber === "number"
-                    ? String(orderObj.orderNumber)
-                    : "";
+                const orderNumber = formatOrderDisplay(orderObj);
                 const deliveryStatus =
                   typeof orderObj.deliveryStatus === "string" ? orderObj.deliveryStatus : "";
                 const paymentStatus =

@@ -12,6 +12,7 @@ import { useOrder, useOrderFinalImages } from "../../../hooks/queries/useOrders"
 import { useDownloadUtils } from "../../../hooks/useDownloadUtils";
 import { useModal } from "../../../hooks/useModal";
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
+import { formatOrderDisplay } from "../../../lib/orderDisplay";
 import type { Order } from "../../../types";
 import { useGalleryType } from "../../hocs/withGalleryType";
 import { ZipDownloadButton } from "../../orders/ZipDownloadButton";
@@ -195,13 +196,14 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
     return null;
   }
 
+  const displayOrderNumber = formatOrderDisplay(order);
+
   return (
     <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
       <div className="px-3 mb-3">
-        <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-          Zlecenie
+        <div className="text-base font-medium text-gray-900 dark:text-white">
+          Zlecenie #{displayOrderNumber}
         </div>
-        <div className="text-base font-medium text-gray-900 dark:text-white">{orderId}</div>
       </div>
 
       <div className="space-y-2.5 px-3">
@@ -328,7 +330,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
         }}
         onConfirm={handleMarkOrderPaidConfirm}
         title="Oznacz zlecenie jako opłacone"
-        message={`Czy na pewno chcesz oznaczyć zlecenie #${order.orderNumber ?? orderId} jako opłacone?\n\nTa operacja jest nieodwracalna.`}
+        message={`Czy na pewno chcesz oznaczyć zlecenie #${displayOrderNumber} jako opłacone?\n\nTa operacja jest nieodwracalna.`}
         confirmText="Oznacz jako opłacone"
         cancelText="Anuluj"
         variant="info"
@@ -344,7 +346,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
         }}
         onConfirm={handleSendFinalsToClientConfirm}
         title="Wyślij finały do klienta"
-        message={`Czy na pewno chcesz wysłać finały dla zlecenia #${order.orderNumber ?? orderId} do klienta?\n\nTa operacja jest nieodwracalna. Klient otrzyma email z linkiem do pobrania finalnych zdjęć.`}
+        message={`Czy na pewno chcesz wysłać finały dla zlecenia #${displayOrderNumber} do klienta?\n\nTa operacja jest nieodwracalna. Klient otrzyma email z linkiem do pobrania finalnych zdjęć.`}
         confirmText="Wyślij finały"
         cancelText="Anuluj"
         variant="info"

@@ -6,6 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { pbkdf2Sync } from 'crypto';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -44,7 +45,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const password = body?.password;
-	const requester = event?.requestContext?.authorizer?.jwt?.claims?.sub;
 
 	// Get gallery
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
@@ -57,11 +57,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	// Verify access: owner or client with password
+	// Verify access: owner (Cognito) or client with password
+	// Use verifyGalleryAccess for owner check, then fall back to password verification for clients
+	const access = verifyGalleryAccess(event, galleryId, gallery);
 	let hasAccess = false;
-	if (requester && gallery.ownerId === requester) {
+	
+	if (access.isOwner) {
+		// Owner has access
 		hasAccess = true;
 	} else if (password && verifyPassword(password, gallery.clientPasswordHash, gallery.clientPasswordSalt, gallery.clientPasswordIter)) {
+		// Client with correct password has access
 		hasAccess = true;
 	}
 
@@ -69,7 +74,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return {
 			statusCode: 403,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Forbidden' })
+			body: JSON.stringify({ error: 'Forbidden', message: 'Access denied. You must be the gallery owner or provide the correct client password.' })
 		};
 	}
 

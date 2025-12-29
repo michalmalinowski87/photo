@@ -9,6 +9,7 @@ import {
 } from "../../hooks/mutations/useOrderMutations";
 import api from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { queryKeys } from "../../lib/react-query";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
@@ -244,7 +245,7 @@ export const OrdersModal = ({
                             className="text-brand-500 hover:text-brand-600"
                             onClick={onClose}
                           >
-                            #{typeof order.orderNumber === "string" ? order.orderNumber : ""}
+                            #{formatOrderDisplay(order)}
                           </Link>
                         </TableCell>
                         <TableCell className="px-3 py-5 whitespace-nowrap align-middle">

@@ -35,6 +35,7 @@ import { usePageLogger } from "../../../hooks/usePageLogger";
 import { useToast } from "../../../hooks/useToast";
 import { removeFileExtension } from "../../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../../lib/image-fallback";
+import { formatOrderDisplay } from "../../../lib/orderDisplay";
 import { queryKeys } from "../../../lib/react-query";
 import { storeLogger } from "../../../lib/store-logger";
 import { useModalStore } from "../../../store";
@@ -1935,10 +1936,7 @@ export default function GalleryPhotos() {
               // Always show order section even if no images loaded yet (for display purposes)
               const sectionId = `order-${orderId}`;
               const isExpanded = expandedSection === sectionId;
-              const orderDisplayNumber =
-                order.orderNumber !== undefined && order.orderNumber !== null
-                  ? String(order.orderNumber)
-                  : orderId.slice(-8);
+              const orderDisplayNumber = formatOrderDisplay(order);
 
               const handleGoToOrder = (e: React.MouseEvent) => {
                 e.stopPropagation();

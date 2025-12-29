@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrder } from "../../hooks/queries/useOrders";
 import { useNavigation } from "../../hooks/useNavigation";
+import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { useGalleryType } from "../hocs/withGalleryType";
 import Button from "../ui/button/Button";
 
@@ -32,10 +33,7 @@ export function OrderHeader() {
   const effectiveGalleryId =
     galleryIdStr ?? (typeof galleryId === "string" ? galleryId : (currentGallery?.galleryId ?? ""));
 
-  const effectiveOrderId = typeof order.orderId === "string" ? order.orderId : orderIdForQuery;
-  const orderNumber = order.orderNumber ?? undefined;
-  const displayOrderNumber =
-    orderNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : effectiveGalleryId.slice(-8));
+  const displayOrderNumber = formatOrderDisplay(order);
 
   const handleBackToGallery = () => {
     if (effectiveGalleryId) {

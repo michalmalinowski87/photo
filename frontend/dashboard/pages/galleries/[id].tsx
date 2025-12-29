@@ -25,6 +25,7 @@ import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
+import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
 
@@ -818,9 +819,7 @@ export default function GalleryDetail() {
                         }`}
                       >
                         <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
-                          #
-                          {order.orderNumber ??
-                            (typeof order.orderId === "string" ? order.orderId.slice(-8) : "")}
+                          #{formatOrderDisplay(order)}
                         </TableCell>
                         <TableCell className="px-3 py-5 align-middle">
                           {getDeliveryStatusBadge(
