@@ -52,7 +52,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 
 		// Verify access
-		const access = verifyGalleryAccess(event, galleryId, gallery);
+		const access = await verifyGalleryAccess(event, galleryId, gallery);
 		if (!access.isOwner && !access.isClient) {
 			return {
 				statusCode: 401,

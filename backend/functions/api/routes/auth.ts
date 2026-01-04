@@ -1,13 +1,32 @@
 import { Router, Request, Response } from 'express';
 import { getUserIdFromEvent } from '../../../lib/src/auth';
 import { reqToEvent } from './helpers';
+import { wrapHandler } from './handlerWrapper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, AdminInitiateAuthCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+// User deletion endpoints moved to separate Lambda (userDeletion.ts)
+
+// Dev endpoints (only available in dev/staging) - loaded conditionally to avoid bundling issues
+let devSetUserLastLogin: any = null;
+let devTriggerUserDeletion: any = null;
+let devTriggerInactivityScanner: any = null;
+
+try {
+	// Path is relative to this file: backend/functions/api/routes/auth.ts
+	// So ../../dev/ resolves to backend/functions/dev/
+	devSetUserLastLogin = require('../../dev/setUserLastLogin');
+	devTriggerUserDeletion = require('../../dev/triggerUserDeletion');
+	devTriggerInactivityScanner = require('../../dev/triggerInactivityScanner');
+} catch (e) {
+	// Ignore - dev modules not available during bundling or runtime
+}
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
+const ses = new SESClient({});
 
 router.get('/business-info', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
@@ -227,6 +246,25 @@ router.post('/change-password', async (req: Request, res: Response) => {
 		return res.status(500).json({ error: 'Failed to change password', message: error.message });
 	}
 });
+
+// User deletion endpoints moved to separate Lambda (userDeletion.ts):
+// - POST /auth/request-deletion
+// - POST /auth/cancel-deletion
+// - GET /auth/deletion-status
+// - GET /auth/undo-deletion/:token
+
+// Dev endpoints (only available in dev/staging)
+if (devSetUserLastLogin) {
+	router.post('/dev/set-last-login/:userId', wrapHandler(devSetUserLastLogin.handler));
+}
+
+if (devTriggerUserDeletion) {
+	router.post('/dev/trigger-deletion/:userId', wrapHandler(devTriggerUserDeletion.handler));
+}
+
+if (devTriggerInactivityScanner) {
+	router.post('/dev/trigger-inactivity-scanner', wrapHandler(devTriggerInactivityScanner.handler));
+}
 
 export { router as authRoutes };
 

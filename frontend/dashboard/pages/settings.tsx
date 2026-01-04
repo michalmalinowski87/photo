@@ -1,12 +1,17 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
+import { DeleteAccountModal } from "../components/ui/modal/DeleteAccountModal";
+import { DeletionPendingBanner } from "../components/ui/modal/DeletionPendingBanner";
 import { useAuth } from "../context/AuthProvider";
 import { useChangePassword, useUpdateBusinessInfo } from "../hooks/mutations/useAuthMutations";
-import { useBusinessInfo } from "../hooks/queries/useAuth";
+import { useRequestDeletion, useCancelDeletion } from "../hooks/mutations/useUserDeletionMutations";
+import { useBusinessInfo, useDeletionStatus } from "../hooks/queries/useAuth";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
+import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 
 // Prevent static generation - this page uses client hooks
 export const dynamic = "force-dynamic";
@@ -28,11 +33,17 @@ interface BusinessForm {
 export default function Settings() {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
 
   // React Query hooks
   const { data: businessInfo, isLoading: loading } = useBusinessInfo();
+  const { data: deletionStatus } = useDeletionStatus();
   const changePasswordMutation = useChangePassword();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();
+  const requestDeletionMutation = useRequestDeletion();
+  const cancelDeletionMutation = useCancelDeletion();
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
@@ -112,6 +123,37 @@ export default function Settings() {
       await updateBusinessInfoMutation.mutateAsync(businessForm);
 
       showToast("success", "Sukces", "Informacje biznesowe zostały zaktualizowane");
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err as Error));
+    }
+  };
+
+  const handleDeleteAccount = async (email: string): Promise<void> => {
+    try {
+      await requestDeletionMutation.mutateAsync(email);
+      setShowDeleteModal(false);
+      showToast("success", "Sukces", "Prośba o usunięcie konta została wysłana. Sprawdź email.");
+    } catch (err) {
+      showToast("error", "Błąd", formatApiError(err as Error));
+    }
+  };
+
+  const handleCancelDeletion = async (): Promise<void> => {
+    try {
+      await cancelDeletionMutation.mutateAsync();
+      showToast("success", "Sukces", "Usunięcie konta zostało anulowane. Zostaniesz wylogowany.");
+      // Sign out and redirect to login
+      setTimeout(() => {
+        signOut();
+        const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
+        const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002";
+        if (userPoolDomain) {
+          const logoutUrl = getHostedUILogoutUrl(userPoolDomain, landingUrl);
+          window.location.href = logoutUrl;
+        } else {
+          router.push("/login");
+        }
+      }, 2000);
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
     }
@@ -315,8 +357,44 @@ export default function Settings() {
               </div>
             </form>
           </div>
+
+          {/* Deletion Status Banner */}
+          {deletionStatus?.status === "pendingDeletion" && deletionStatus.deletionScheduledAt && (
+            <DeletionPendingBanner
+              deletionScheduledAt={deletionStatus.deletionScheduledAt}
+              deletionReason={deletionStatus.deletionReason}
+              onUndo={handleCancelDeletion}
+              loading={cancelDeletionMutation.isPending}
+            />
+          )}
+
+          {/* Delete Account Section */}
+          {deletionStatus?.status !== "pendingDeletion" && (
+            <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
+                Usuń konto
+              </h2>
+              <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
+                Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale usunięte.
+              </p>
+              <Button
+                variant="danger"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                Usuń konto
+              </Button>
+            </div>
+          )}
         </>
       )}
+
+      <DeleteAccountModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteAccount}
+        userEmail={loginEmail || user?.email || ""}
+        loading={requestDeletionMutation.isPending}
+      />
     </div>
   );
 }

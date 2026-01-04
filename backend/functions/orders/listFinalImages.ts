@@ -6,6 +6,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-d
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createLambdaErrorResponse } from '../../lib/src/error-utils';
+import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -17,7 +18,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-	const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
+	const stage = envProc?.env?.STAGE || 'dev';
+	// Read CloudFront domain from SSM Parameter Store (avoids circular dependency in CDK)
+	const cloudfrontDomain = await getConfigValueFromSsm(stage, 'CloudFrontDomain') || undefined;
 
 	if (!bucket || !galleriesTable || !imagesTable || !ordersTable) {
 		return createLambdaErrorResponse(
@@ -75,7 +78,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Verify access - supports both owner (Cognito) and client (JWT) tokens
-		const access = verifyGalleryAccess(event, galleryId, gallery);
+		const access = await verifyGalleryAccess(event, galleryId, gallery);
 		if (!access.isOwner && !access.isClient) {
 			return createLambdaErrorResponse(
 				new Error('Unauthorized'),

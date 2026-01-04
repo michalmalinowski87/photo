@@ -129,6 +129,7 @@ export const queryKeys = {
   auth: {
     all: ["auth"] as const,
     businessInfo: () => [...queryKeys.auth.all, "businessInfo"] as const,
+    deletionStatus: () => [...queryKeys.auth.all, "deletionStatus"] as const,
   },
   uploads: {
     all: ["uploads"] as const,

@@ -48,7 +48,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 
 		// Supports both owner (Cognito) and client (JWT) tokens
-		const access = verifyGalleryAccess(event, galleryId, gallery);
+		const access = await verifyGalleryAccess(event, galleryId, gallery);
 		if (!access.isOwner && !access.isClient) {
 			return {
 				statusCode: 401,

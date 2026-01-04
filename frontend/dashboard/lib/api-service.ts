@@ -2029,6 +2029,86 @@ class ApiService {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
     },
+
+    /**
+     * Request account deletion
+     */
+    requestDeletion: async (email: string): Promise<{
+      deletionScheduledAt: string;
+      status: string;
+    }> => {
+      if (!email) {
+        throw new Error("Email is required");
+      }
+      return await this._request("/auth/request-deletion", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+    },
+
+    /**
+     * Cancel pending deletion
+     */
+    cancelDeletion: async (): Promise<void> => {
+      return await this._request("/auth/cancel-deletion", {
+        method: "POST",
+      });
+    },
+
+    /**
+     * Get deletion status
+     */
+    getDeletionStatus: async (): Promise<{
+      deletionScheduledAt?: string;
+      status: string;
+      deletionReason?: "manual" | "inactivity";
+    }> => {
+      return await this._request("/auth/deletion-status");
+    },
+
+    /**
+     * Dev: Set user's lastLoginAt (simulate inactivity)
+     */
+    devSetLastLogin: async (userId: string, lastLoginAt: string | number): Promise<{
+      userId: string;
+      lastLoginAt: string;
+      message: string;
+    }> => {
+      return await this._request(`/auth/dev/set-last-login/${userId}`, {
+        method: "POST",
+        body: JSON.stringify({ lastLoginAt }),
+      });
+    },
+
+    /**
+     * Dev: Trigger user deletion immediately (skip 3-day wait)
+     */
+    devTriggerDeletion: async (
+      userId: string,
+      options?: { immediate?: boolean; minutesFromNow?: number }
+    ): Promise<{
+      userId: string;
+      deletionScheduledAt: string;
+      immediate: boolean;
+      message: string;
+    }> => {
+      return await this._request(`/auth/dev/trigger-deletion/${userId}`, {
+        method: "POST",
+        body: JSON.stringify(options || { immediate: true }),
+      });
+    },
+
+    /**
+     * Dev: Trigger inactivity scanner manually
+     */
+    devTriggerInactivityScanner: async (): Promise<{
+      message: string;
+      result: any;
+    }> => {
+      return await this._request("/auth/dev/trigger-inactivity-scanner", {
+        method: "POST",
+      });
+    },
   };
 }
 

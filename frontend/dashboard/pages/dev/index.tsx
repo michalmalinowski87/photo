@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Plus, Trash2, Clock, Activity } from "lucide-react";
+import { FlaskConical, Plus, Trash2, Clock, Activity, UserX } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
@@ -69,6 +69,15 @@ const devTools: DevTool[] = [
     icon: <Activity size={24} />,
     category: "API",
     color: "purple",
+  },
+  {
+    title: "Test usuwania konta",
+    description:
+      "Symuluj nieaktywność użytkownika, wyzwól usunięcie konta natychmiastowo lub zaplanuj na przyszłość",
+    path: "/dev/test-user-deletion",
+    icon: <UserX size={24} />,
+    category: "API",
+    color: "red",
   },
 ];
 

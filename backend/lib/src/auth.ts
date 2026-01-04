@@ -43,11 +43,11 @@ export function getCognitoUserIdFromToken(token: string): string | null {
  * Verify gallery access - supports both Cognito (owner) and client JWT tokens
  * Returns access information for use in endpoints
  */
-export function verifyGalleryAccess(
+export async function verifyGalleryAccess(
 	event: any,
 	galleryId: string,
 	gallery: any
-): { isOwner: boolean; isClient: boolean; userId?: string; clientId?: string } {
+): Promise<{ isOwner: boolean; isClient: boolean; userId?: string; clientId?: string }> {
 	// Check Cognito token from API Gateway authorizer (if present)
 	const cognitoUserIdFromAuthorizer = getUserIdFromEvent(event);
 	if (cognitoUserIdFromAuthorizer && gallery.ownerId === cognitoUserIdFromAuthorizer) {
@@ -74,7 +74,7 @@ export function verifyGalleryAccess(
 		}
 
 		// Try client JWT token
-		const jwtPayload = getJWTFromEvent(event);
+		const jwtPayload = await getJWTFromEvent(event);
 		if (jwtPayload && jwtPayload.galleryId === galleryId) {
 			return {
 				isOwner: false,

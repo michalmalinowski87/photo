@@ -2,12 +2,14 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { ddbGet } from '../../lib/src/ddb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
 
 export const handler = lambdaLogger(async (event: any) => {
 	const id = event?.pathParameters?.id;
 	if (!id) return { statusCode: 400, body: 'missing id' };
 	const envProc = (globalThis as any).process;
 	const tableName = envProc && envProc.env ? (envProc.env.GALLERIES_TABLE as string) : '';
+	const stage = envProc?.env?.STAGE || 'dev';
 	const gallery = await ddbGet<any>(tableName, { galleryId: id });
 	if (!gallery) {
 		return { statusCode: 404, body: JSON.stringify({ error: 'not found' }) };
@@ -42,7 +44,8 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 
 	let coverPhotoUrl = gallery.coverPhotoUrl;
-	const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
+	// Read CloudFront domain from SSM Parameter Store (avoids circular dependency in CDK)
+	const cloudfrontDomain = await getConfigValueFromSsm(stage, 'CloudFrontDomain') || undefined;
 	if (coverPhotoUrl && cloudfrontDomain) {
 		const isS3Url = coverPhotoUrl.includes('.s3.') || coverPhotoUrl.includes('s3.amazonaws.com');
 		const isCloudFrontUrl = coverPhotoUrl.includes(cloudfrontDomain);

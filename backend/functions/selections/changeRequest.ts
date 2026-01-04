@@ -18,7 +18,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (!galleryId) return { statusCode: 400, body: 'missing id' };
 
 	// Verify JWT token
-	const jwtPayload = getJWTFromEvent(event);
+	const jwtPayload = await getJWTFromEvent(event);
 	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
 		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
 	}

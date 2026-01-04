@@ -23,3 +23,21 @@ export function useBusinessInfo(
     ...options,
   });
 }
+
+interface DeletionStatus {
+  deletionScheduledAt?: string;
+  status: string;
+  deletionReason?: "manual" | "inactivity";
+}
+
+export function useDeletionStatus(
+  options?: Omit<UseQueryOptions<DeletionStatus>, "queryKey" | "queryFn">
+) {
+  return useQuery<DeletionStatus>({
+    queryKey: queryKeys.auth.deletionStatus(),
+    queryFn: () => api.auth.getDeletionStatus(),
+    staleTime: 30 * 1000, // Check deletion status frequently
+    refetchInterval: 60 * 1000, // Refetch every minute when component is mounted
+    ...options,
+  });
+}

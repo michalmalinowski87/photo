@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { listTransactionsByUser } from '../../lib/src/transactions';
 import { createLambdaErrorResponse } from '../../lib/src/error-utils';
+import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -317,7 +318,9 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 		}
 
-		const cloudfrontDomain = envProc?.env?.CLOUDFRONT_DOMAIN as string;
+		const stage = envProc?.env?.STAGE || 'dev';
+		// Read CloudFront domain from SSM Parameter Store (avoids circular dependency in CDK)
+		const cloudfrontDomain = await getConfigValueFromSsm(stage, 'CloudFrontDomain') || undefined;
 		
 		// Transform galleries (lightweight operation)
 		const galleries = allGalleryItems.map((g: any) => {

@@ -137,7 +137,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const clientId = gallery.clientEmail || galleryId;
 
 	// Generate JWT token (valid for 7 days)
-	const token = signJWT({
+	const token = await signJWT({
 		galleryId,
 		clientId
 	}, 7 * 24 * 3600);

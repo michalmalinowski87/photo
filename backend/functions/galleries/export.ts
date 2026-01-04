@@ -59,7 +59,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Verify access: owner (Cognito) or client with password
 	// Use verifyGalleryAccess for owner check, then fall back to password verification for clients
-	const access = verifyGalleryAccess(event, galleryId, gallery);
+	const access = await verifyGalleryAccess(event, galleryId, gallery);
 	let hasAccess = false;
 	
 	if (access.isOwner) {

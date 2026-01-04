@@ -99,7 +99,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Verify access: Only photographer (owner) can delete photos
-	const access = verifyGalleryAccess(event, galleryId, gallery);
+	const access = await verifyGalleryAccess(event, galleryId, gallery);
 	if (!access.isOwner) {
 		return {
 			statusCode: 403,

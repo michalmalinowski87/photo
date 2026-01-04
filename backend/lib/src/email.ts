@@ -165,3 +165,59 @@ export function createGalleryDeletedEmail(galleryId: string, galleryName: string
 	};
 }
 
+export function createDeletionRequestEmail(userEmail: string, undoLink: string, deletionDate: string): EmailTemplate {
+	const deletionDateFormatted = new Date(deletionDate).toLocaleDateString('pl-PL', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+
+	return {
+		subject: 'Potwierdzenie prośby o usunięcie konta',
+		text: `Witaj,\n\nOtrzymaliśmy prośbę o usunięcie Twojego konta.\n\nTwoje konto zostanie usunięte: ${deletionDateFormatted}\n\nJeśli nie prosiłeś o usunięcie konta lub chcesz anulować tę operację, kliknij poniższy link:\n\n${undoLink}\n\nTen link będzie ważny do momentu usunięcia konta.\n\nKonsekwencje usunięcia konta:\n- Twoje konto, profil, galerie, zdjęcia, klienci i pakiety zostaną trwale usunięte\n- Galerie klientów będą zachowane do momentu ich wygaśnięcia\n- Dane finansowe (saldo portfela, transakcje i faktury) zostaną zachowane zgodnie z wymogami prawnymi`,
+		html: `<h2>Potwierdzenie prośby o usunięcie konta</h2><p>Witaj,</p><p>Otrzymaliśmy prośbę o usunięcie Twojego konta.</p><div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-weight: bold;">Data usunięcia konta: <strong>${deletionDateFormatted}</strong></p></div><p>Jeśli nie prosiłeś o usunięcie konta lub chcesz anulować tę operację, kliknij poniższy link:</p><p><a href="${undoLink}" style="display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Anuluj usunięcie konta</a></p><p><small>Ten link będzie ważny do momentu usunięcia konta.</small></p><div style="background: #f5f5f5; padding: 12px; margin: 16px 0; border-radius: 4px;"><p style="margin: 0; font-weight: bold;">Konsekwencje usunięcia konta:</p><ul style="margin: 8px 0 0 0;"><li>Twoje konto, profil, galerie, zdjęcia, klienci i pakiety zostaną trwale usunięte</li><li>Galerie klientów będą zachowane do momentu ich wygaśnięcia</li><li>Dane finansowe (saldo portfela, transakcje i faktury) zostaną zachowane zgodnie z wymogami prawnymi</li></ul></div>`
+	};
+}
+
+export function createDeletionCancelledEmail(userEmail: string): EmailTemplate {
+	return {
+		subject: 'Usunięcie konta zostało anulowane',
+		text: `Witaj,\n\nUsunięcie Twojego konta zostało pomyślnie anulowane.\n\nTwoje konto pozostaje aktywne i możesz z niego normalnie korzystać.\n\nJeśli masz pytania, skontaktuj się z nami.`,
+		html: `<h2>Usunięcie konta zostało anulowane</h2><p>Witaj,</p><p>Usunięcie Twojego konta zostało pomyślnie anulowane.</p><p>Twoje konto pozostaje aktywne i możesz z niego normalnie korzystać.</p><p>Jeśli masz pytania, skontaktuj się z nami.</p>`
+	};
+}
+
+export function createDeletionCompletedEmail(userEmail: string): EmailTemplate {
+	return {
+		subject: 'Twoje konto zostało usunięte',
+		text: `Witaj,\n\nTwoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.\n\nWszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.\n\nDziękujemy za korzystanie z naszych usług.`,
+		html: `<h2>Twoje konto zostało usunięte</h2><p>Witaj,</p><p>Twoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.</p><p>Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.</p><p>Dziękujemy za korzystanie z naszych usług.</p>`
+	};
+}
+
+export function createInactivityReminderEmail(userEmail: string, daysUntilDeletion: number): EmailTemplate {
+	return {
+		subject: 'Twoje konto jest nieaktywne',
+		text: `Witaj,\n\nZauważyliśmy, że Twoje konto nie było używane od 11 miesięcy.\n\nJeśli nie zalogujesz się w ciągu najbliższych ${daysUntilDeletion} dni, Twoje konto zostanie automatycznie usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).\n\nAby zachować konto, po prostu zaloguj się do systemu.`,
+		html: `<h2>Twoje konto jest nieaktywne</h2><p>Witaj,</p><p>Zauważyliśmy, że Twoje konto nie było używane od 11 miesięcy.</p><div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-weight: bold;">Jeśli nie zalogujesz się w ciągu najbliższych <strong>${daysUntilDeletion}</strong> dni, Twoje konto zostanie automatycznie usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).</p></div><p>Aby zachować konto, po prostu zaloguj się do systemu.</p>`
+	};
+}
+
+export function createInactivityFinalWarningEmail(userEmail: string, deletionDate: string): EmailTemplate {
+	const deletionDateFormatted = new Date(deletionDate).toLocaleDateString('pl-PL', {
+		day: 'numeric',
+		month: 'long',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+
+	return {
+		subject: '🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte',
+		text: `Witaj,\n\nTo jest ostatnie ostrzeżenie przed usunięciem Twojego konta.\n\nTwoje konto nie było używane od 12 miesięcy i zostanie automatycznie usunięte: ${deletionDateFormatted}\n\nJeśli chcesz zachować konto, zaloguj się TERAZ. Po zalogowaniu usunięcie zostanie automatycznie anulowane.\n\nJeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).`,
+		html: `<h2>🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte</h2><p>Witaj,</p><p>To jest ostatnie ostrzeżenie przed usunięciem Twojego konta.</p><div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-weight: bold; color: #721c24;">Twoje konto nie było używane od 12 miesięcy i zostanie automatycznie usunięte: <strong>${deletionDateFormatted}</strong></p></div><p>Jeśli chcesz zachować konto, <strong>zaloguj się TERAZ</strong>. Po zalogowaniu usunięcie zostanie automatycznie anulowane.</p><p>Jeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).</p>`
+	};
+}
+

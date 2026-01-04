@@ -1,5 +1,5 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { CloudWatchClient, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
+import { CloudWatchClient, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 
@@ -74,119 +74,196 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Get metrics for each function
 		const endTime = new Date();
 		const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
-		const period = 3600; // 1 hour periods
+		const period = 300; // 5 minute periods (CloudWatch standard granularity)
 
 		const metricsPromises = functions.map(async (fn) => {
 			const functionName = fn.FunctionName!;
 			const allocatedMemoryMB = fn.MemorySize || 256;
 
-			// Get MaxMemoryUsed metric
-			const maxMemoryCmd = new GetMetricStatisticsCommand({
-				Namespace: 'AWS/Lambda',
-				MetricName: 'MaxMemoryUsed',
-				Dimensions: [{ Name: 'FunctionName', Value: functionName }],
-				StartTime: startTime,
-				EndTime: endTime,
-				Period: period,
-				Statistics: ['Maximum', 'Average']
-			});
+			try {
+				// Use GetMetricData for better reliability (recommended by AWS)
+				// This API is more reliable and handles larger time ranges better
+				const metricDataCmd = new GetMetricDataCommand({
+					MetricDataQueries: [
+						{
+							Id: 'maxMemory',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'MaxMemoryUsed',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Maximum'
+							},
+							ReturnData: true
+						},
+						{
+							Id: 'avgMemory',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'MaxMemoryUsed',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Average'
+							},
+							ReturnData: true
+						},
+						{
+							Id: 'duration',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'Duration',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Average'
+							},
+							ReturnData: true
+						},
+						{
+							Id: 'maxDuration',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'Duration',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Maximum'
+							},
+							ReturnData: true
+						},
+						{
+							Id: 'invocations',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'Invocations',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Sum'
+							},
+							ReturnData: true
+						},
+						{
+							Id: 'errors',
+							MetricStat: {
+								Metric: {
+									Namespace: 'AWS/Lambda',
+									MetricName: 'Errors',
+									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
+								},
+								Period: period,
+								Stat: 'Sum'
+							},
+							ReturnData: true
+						}
+					],
+					StartTime: startTime,
+					EndTime: endTime
+				});
 
-			// Get Duration metric
-			const durationCmd = new GetMetricStatisticsCommand({
-				Namespace: 'AWS/Lambda',
-				MetricName: 'Duration',
-				Dimensions: [{ Name: 'FunctionName', Value: functionName }],
-				StartTime: startTime,
-				EndTime: endTime,
-				Period: period,
-				Statistics: ['Maximum', 'Average']
-			});
+				const metricData = await cloudwatch.send(metricDataCmd);
 
-			// Get Invocations metric
-			const invocationsCmd = new GetMetricStatisticsCommand({
-				Namespace: 'AWS/Lambda',
-				MetricName: 'Invocations',
-				Dimensions: [{ Name: 'FunctionName', Value: functionName }],
-				StartTime: startTime,
-				EndTime: endTime,
-				Period: period,
-				Statistics: ['Sum']
-			});
+				// Extract metric results
+				const maxMemoryResult = metricData.MetricDataResults?.find(r => r.Id === 'maxMemory');
+				const avgMemoryResult = metricData.MetricDataResults?.find(r => r.Id === 'avgMemory');
+				const durationResult = metricData.MetricDataResults?.find(r => r.Id === 'duration');
+				const maxDurationResult = metricData.MetricDataResults?.find(r => r.Id === 'maxDuration');
+				const invocationsResult = metricData.MetricDataResults?.find(r => r.Id === 'invocations');
+				const errorsResult = metricData.MetricDataResults?.find(r => r.Id === 'errors');
 
-			// Get Errors metric
-			const errorsCmd = new GetMetricStatisticsCommand({
-				Namespace: 'AWS/Lambda',
-				MetricName: 'Errors',
-				Dimensions: [{ Name: 'FunctionName', Value: functionName }],
-				StartTime: startTime,
-				EndTime: endTime,
-				Period: period,
-				Statistics: ['Sum']
-			});
+				// Extract values from GetMetricData format
+				// Values are in bytes for MaxMemoryUsed, milliseconds for Duration
+				const maxMemoryValues = maxMemoryResult?.Values || [];
+				const avgMemoryValues = avgMemoryResult?.Values || [];
+				const durationValues = durationResult?.Values || [];
+				const maxDurationValues = maxDurationResult?.Values || [];
+				const invocationsValues = invocationsResult?.Values || [];
+				const errorsValues = errorsResult?.Values || [];
 
-			const [maxMemoryData, durationData, invocationsData, errorsData] = await Promise.all([
-				cloudwatch.send(maxMemoryCmd),
-				cloudwatch.send(durationCmd),
-				cloudwatch.send(invocationsCmd),
-				cloudwatch.send(errorsCmd)
-			]);
+				// Calculate metrics
+				const maxMemoryUsedMB = maxMemoryValues.length > 0
+					? Math.max(...maxMemoryValues.map(v => Number(v) || 0)) / (1024 * 1024)
+					: 0;
 
-			// Extract maximum values
-			const maxMemoryUsedMB = maxMemoryData.Datapoints?.length > 0
-				? Math.max(...maxMemoryData.Datapoints.map(d => d.Maximum || 0)) / (1024 * 1024)
-				: 0;
+				const avgMemoryUsedMB = avgMemoryValues.length > 0
+					? avgMemoryValues.reduce((sum, v) => sum + (Number(v) || 0), 0) / avgMemoryValues.length / (1024 * 1024)
+					: 0;
 
-			const avgMemoryUsedMB = maxMemoryData.Datapoints?.length > 0
-				? maxMemoryData.Datapoints.reduce((sum, d) => sum + (d.Average || 0), 0) / maxMemoryData.Datapoints.length / (1024 * 1024)
-				: 0;
+				const avgDurationMs = durationValues.length > 0
+					? durationValues.reduce((sum, v) => sum + (Number(v) || 0), 0) / durationValues.length
+					: 0;
 
-			const avgDurationMs = durationData.Datapoints?.length > 0
-				? durationData.Datapoints.reduce((sum, d) => sum + (d.Average || 0), 0) / durationData.Datapoints.length
-				: 0;
+				const maxDurationMs = maxDurationValues.length > 0
+					? Math.max(...maxDurationValues.map(v => Number(v) || 0))
+					: 0;
 
-			const maxDurationMs = durationData.Datapoints?.length > 0
-				? Math.max(...durationData.Datapoints.map(d => d.Maximum || 0))
-				: 0;
+				const invocations = invocationsValues.reduce((sum, v) => sum + (Number(v) || 0), 0);
+				const errors = errorsValues.reduce((sum, v) => sum + (Number(v) || 0), 0);
 
-			const invocations = invocationsData.Datapoints?.reduce((sum, d) => sum + (d.Sum || 0), 0) || 0;
-			const errors = errorsData.Datapoints?.reduce((sum, d) => sum + (d.Sum || 0), 0) || 0;
+				// Log for debugging if we have invocations but no memory data
+				if (invocations > 0 && maxMemoryUsedMB === 0) {
+					console.log(`Function ${functionName}: ${invocations} invocations but no memory data. Status: ${maxMemoryResult?.StatusCode || 'Unknown'}`);
+				}
 
-			const memoryUtilizationPercent = allocatedMemoryMB > 0
-				? (maxMemoryUsedMB / allocatedMemoryMB) * 100
-				: 0;
+				const memoryUtilizationPercent = allocatedMemoryMB > 0
+					? (maxMemoryUsedMB / allocatedMemoryMB) * 100
+					: 0;
 
-			// Generate recommendation
-			let recommendation = 'Optimal';
-			// Check if function has been invoked - if invocations > 0 but memory is 0, there might be a metrics delay
-			if (maxMemoryUsedMB === 0 && invocations === 0) {
-				recommendation = 'No data - function may not have been invoked recently';
-			} else if (maxMemoryUsedMB === 0 && invocations > 0) {
-				// Function has been invoked but memory metrics are not available yet (CloudWatch delay)
-				recommendation = `Active (${invocations} invocations) - Memory metrics may be delayed in CloudWatch`;
-			} else if (memoryUtilizationPercent < 50) {
-				const suggestedMB = Math.max(128, Math.ceil(maxMemoryUsedMB * 1.5 / 64) * 64); // Round to nearest 64MB
-				recommendation = `Over-allocated - Consider reducing to ${suggestedMB}MB (saves ~${Math.round((allocatedMemoryMB - suggestedMB) / allocatedMemoryMB * 100)}% cost)`;
-			} else if (memoryUtilizationPercent > 90) {
-				const suggestedMB = Math.ceil(allocatedMemoryMB * 1.5 / 64) * 64; // Round to nearest 64MB
-				recommendation = `Near limit - Consider increasing to ${suggestedMB}MB to avoid OOM errors`;
-			} else if (memoryUtilizationPercent >= 50 && memoryUtilizationPercent <= 70) {
-				recommendation = 'Optimal allocation';
-			} else {
-				recommendation = 'Good allocation (70-90% utilization)';
+				// Generate recommendation
+				let recommendation = 'Optimal';
+				// Check if function has been invoked - if invocations > 0 but memory is 0, there might be a metrics delay
+				if (maxMemoryUsedMB === 0 && invocations === 0) {
+					recommendation = 'No data - function may not have been invoked recently';
+				} else if (maxMemoryUsedMB === 0 && invocations > 0) {
+					// Function has been invoked but memory metrics are not available yet (CloudWatch delay)
+					recommendation = `Active (${invocations} invocations) - Memory metrics may be delayed in CloudWatch`;
+				} else if (memoryUtilizationPercent < 50) {
+					const suggestedMB = Math.max(128, Math.ceil(maxMemoryUsedMB * 1.5 / 64) * 64); // Round to nearest 64MB
+					recommendation = `Over-allocated - Consider reducing to ${suggestedMB}MB (saves ~${Math.round((allocatedMemoryMB - suggestedMB) / allocatedMemoryMB * 100)}% cost)`;
+				} else if (memoryUtilizationPercent > 90) {
+					const suggestedMB = Math.ceil(allocatedMemoryMB * 1.5 / 64) * 64; // Round to nearest 64MB
+					recommendation = `Near limit - Consider increasing to ${suggestedMB}MB to avoid OOM errors`;
+				} else if (memoryUtilizationPercent >= 50 && memoryUtilizationPercent <= 70) {
+					recommendation = 'Optimal allocation';
+				} else {
+					recommendation = 'Good allocation (70-90% utilization)';
+				}
+
+				return {
+					functionName,
+					allocatedMemoryMB,
+					maxMemoryUsedMB: Math.round(maxMemoryUsedMB * 10) / 10,
+					averageMemoryUsedMB: Math.round(avgMemoryUsedMB * 10) / 10,
+					memoryUtilizationPercent: Math.round(memoryUtilizationPercent * 10) / 10,
+					averageDurationMs: Math.round(avgDurationMs),
+					maxDurationMs: Math.round(maxDurationMs),
+					invocations: Math.round(invocations),
+					errors: Math.round(errors),
+					recommendation
+				} as LambdaMemoryMetric;
+			} catch (error: any) {
+				console.error(`Error fetching metrics for ${functionName}:`, error);
+				// Return zero values but still include the function in results
+				return {
+					functionName,
+					allocatedMemoryMB,
+					maxMemoryUsedMB: 0,
+					averageMemoryUsedMB: 0,
+					memoryUtilizationPercent: 0,
+					averageDurationMs: 0,
+					maxDurationMs: 0,
+					invocations: 0,
+					errors: 0,
+					recommendation: `Error fetching metrics: ${error.message}`
+				} as LambdaMemoryMetric;
 			}
-
-			return {
-				functionName,
-				allocatedMemoryMB,
-				maxMemoryUsedMB: Math.round(maxMemoryUsedMB * 10) / 10,
-				averageMemoryUsedMB: Math.round(avgMemoryUsedMB * 10) / 10,
-				memoryUtilizationPercent: Math.round(memoryUtilizationPercent * 10) / 10,
-				averageDurationMs: Math.round(avgDurationMs),
-				maxDurationMs: Math.round(maxDurationMs),
-				invocations: Math.round(invocations),
-				errors: Math.round(errors),
-				recommendation
-			} as LambdaMemoryMetric;
 		});
 
 		const metrics = await Promise.all(metricsPromises);

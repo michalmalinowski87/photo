@@ -23,6 +23,7 @@ import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { SqsEventSource, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { StringParameter, ParameterType } from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 
 interface AppStackProps extends StackProps {
@@ -310,6 +311,7 @@ export class AppStack extends Stack {
 					'@aws-sdk/client-scheduler',
 					'@aws-sdk/client-ses',
 					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
 					'@aws-sdk/lib-dynamodb',
 					'@aws-sdk/s3-request-presigner',
 					'express' // Express framework (in layer for API and Auth functions)
@@ -337,24 +339,88 @@ export class AppStack extends Stack {
 			console.log('✓ STRIPE_SECRET_KEY is available at CDK synthesis time (length:', stripeKeyFromEnv.length, 'chars)');
 		}
 
+		// Create SSM parameters for configurable values (can be changed without redeploying)
+		// These parameters are read at runtime by Lambda functions
+		const ssmParameterPrefix = `/PhotoHub/${props.stage}`;
+		
+		// JWT Secret - SecureString for encryption
+		const jwtSecretParam = new StringParameter(this, 'JwtSecretParam', {
+			parameterName: `${ssmParameterPrefix}/JwtSecret`,
+			stringValue: jwtSecret,
+			type: ParameterType.SECURE_STRING,
+			description: 'JWT secret for client gallery authentication'
+		});
+
+		// Stripe configuration - SecureString for encryption
+		const stripeSecretKeyParam = new StringParameter(this, 'StripeSecretKeyParam', {
+			parameterName: `${ssmParameterPrefix}/StripeSecretKey`,
+			stringValue: stripeKeyFromEnv || '',
+			type: ParameterType.SECURE_STRING,
+			description: 'Stripe secret key for payment processing'
+		});
+
+		const stripeWebhookSecretParam = new StringParameter(this, 'StripeWebhookSecretParam', {
+			parameterName: `${ssmParameterPrefix}/StripeWebhookSecret`,
+			stringValue: process.env.STRIPE_WEBHOOK_SECRET || '',
+			type: ParameterType.SECURE_STRING,
+			description: 'Stripe webhook secret for webhook verification'
+		});
+
+		// Email configuration
+		const senderEmailParam = new StringParameter(this, 'SenderEmailParam', {
+			parameterName: `${ssmParameterPrefix}/SenderEmail`,
+			stringValue: process.env.SENDER_EMAIL || '',
+			description: 'SES verified sender email address'
+		});
+
+		// Public URLs configuration
+		const publicApiUrlParam = new StringParameter(this, 'PublicApiUrlParam', {
+			parameterName: `${ssmParameterPrefix}/PublicApiUrl`,
+			stringValue: process.env.PUBLIC_API_URL || '',
+			description: 'Public API Gateway URL'
+		});
+
+		const publicGalleryUrlParam = new StringParameter(this, 'PublicGalleryUrlParam', {
+			parameterName: `${ssmParameterPrefix}/PublicGalleryUrl`,
+			stringValue: process.env.PUBLIC_GALLERY_URL || '',
+			description: 'Public gallery frontend URL'
+		});
+
+		const publicDashboardUrlParam = new StringParameter(this, 'PublicDashboardUrlParam', {
+			parameterName: `${ssmParameterPrefix}/PublicDashboardUrl`,
+			stringValue: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000',
+			description: 'Public dashboard frontend URL'
+		});
+
+		// CORS Origins configuration
+		const corsOriginsParam = new StringParameter(this, 'CorsOriginsParam', {
+			parameterName: `${ssmParameterPrefix}/CorsOrigins`,
+			stringValue: corsOrigins.join(','),
+			description: 'Comma-separated list of allowed CORS origins'
+		});
+
+		// SSM Parameter Store policy for Lambda functions to read configuration
+		const ssmPolicy = new PolicyStatement({
+			actions: [
+				'ssm:GetParameter',
+				'ssm:GetParameters'
+			],
+			resources: [
+				`arn:aws:ssm:${this.region}:${this.account}:parameter${ssmParameterPrefix}/*`
+			]
+		});
+
 		const envVars: Record<string, string> = {
 			STAGE: props.stage,
 			GALLERIES_BUCKET: galleriesBucket.bucketName,
 			COGNITO_USER_POOL_ID: userPool.userPoolId,
 			COGNITO_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
 			COGNITO_DOMAIN: userPoolDomain.domainName,
-			JWT_SECRET: jwtSecret,
 			CLIENTS_TABLE: clients.tableName,
 			PACKAGES_TABLE: packages.tableName,
 			NOTIFICATIONS_TABLE: notifications.tableName,
 			USERS_TABLE: users.tableName,
 			EMAIL_CODE_RATE_LIMIT_TABLE: emailCodeRateLimit.tableName,
-			SENDER_EMAIL: process.env.SENDER_EMAIL || '',
-			STRIPE_SECRET_KEY: stripeKeyFromEnv || '',
-			STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
-			PUBLIC_API_URL: process.env.PUBLIC_API_URL || '',
-			PUBLIC_GALLERY_URL: process.env.PUBLIC_GALLERY_URL || '',
-			PUBLIC_DASHBOARD_URL: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000',
 			GALLERIES_TABLE: galleries.tableName,
 			PAYMENTS_TABLE: payments.tableName,
 			WALLETS_TABLE: wallet.tableName,
@@ -430,6 +496,7 @@ export class AppStack extends Stack {
 		}));
 		// Grant DLQ permissions
 		zipGenerationDLQ.grantSendMessages(zipFn);
+		zipFn.addToRolePolicy(ssmPolicy);
 		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
 		
 		// Lambda function to handle order delivery (pre-generate finals ZIP and trigger cleanup)
@@ -618,6 +685,7 @@ export class AppStack extends Stack {
 					'@aws-sdk/client-scheduler',
 					'@aws-sdk/client-ses',
 					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
 					'@aws-sdk/lib-dynamodb',
 					'@aws-sdk/s3-request-presigner',
 					'express'
@@ -653,6 +721,17 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 
+		// SSM Parameter Store permissions for reading configuration
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'ssm:GetParameter',
+				'ssm:GetParameters'
+			],
+			resources: [
+				`arn:aws:ssm:${this.region}:${this.account}:parameter${ssmParameterPrefix}/*`
+			]
+		}));
+
 		// Single API Lambda function - handles all HTTP endpoints via Express router (except auth)
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
@@ -673,6 +752,7 @@ export class AppStack extends Stack {
 					'@aws-sdk/client-scheduler',
 					'@aws-sdk/client-ses',
 					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
 					'@aws-sdk/lib-dynamodb',
 					'@aws-sdk/s3-request-presigner',
 					'express'
@@ -720,6 +800,17 @@ export class AppStack extends Stack {
 				'lambda:ListFunctions'
 			],
 			resources: ['*']
+		}));
+
+		// SSM Parameter Store permissions for reading configuration
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'ssm:GetParameter',
+				'ssm:GetParameters'
+			],
+			resources: [
+				`arn:aws:ssm:${this.region}:${this.account}:parameter${ssmParameterPrefix}/*`
+			]
 		}));
 
 		// Lambda invoke permissions (for zip generation functions)
@@ -869,6 +960,13 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(paymentsWebhookFn);
 		orders.grantReadWriteData(paymentsWebhookFn);
 
+		// SSM Parameter Store permissions for payment functions
+		paymentsCheckoutFn.addToRolePolicy(ssmPolicy);
+		paymentsWebhookFn.addToRolePolicy(ssmPolicy);
+		paymentsSuccessFn.addToRolePolicy(ssmPolicy);
+		paymentsCancelFn.addToRolePolicy(ssmPolicy);
+		paymentsCheckStatusFn.addToRolePolicy(ssmPolicy);
+
 		// Create EventBridge rule for Stripe partner events
 		// Stripe sends events directly to EventBridge partner event bus, which routes them to Lambda
 		const stripeEventSourceName = 'aws.partner/stripe.com/ed_test_61ThbOqJLCV8JR42e16Tc793AKNJz6JQrPoxvHJd2XxQ';
@@ -980,6 +1078,7 @@ export class AppStack extends Stack {
 			actions: ['cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
+		galleriesDeleteHelperFn.addToRolePolicy(ssmPolicy);
 		envVars['GALLERIES_DELETE_FN_NAME'] = galleriesDeleteHelperFn.functionName;
 
 		// Remove all individual HTTP Lambda functions - they're now handled by the single API Lambda
@@ -1006,6 +1105,7 @@ export class AppStack extends Stack {
 			actions: ['cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
+		expiryFn.addToRolePolicy(ssmPolicy);
 		// Run every 6 hours for more frequent expiry checks and warnings
 		new Rule(this, 'ExpirySchedule', {
 			schedule: Schedule.rate(Duration.hours(6)),
@@ -1032,6 +1132,7 @@ export class AppStack extends Stack {
 					'@aws-sdk/client-scheduler',
 					'@aws-sdk/client-ses',
 					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
 					'@aws-sdk/lib-dynamodb',
 					'@aws-sdk/s3-request-presigner',
 					'express'
@@ -1060,6 +1161,7 @@ export class AppStack extends Stack {
 			actions: ['cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
+		galleryExpiryDeletionFn.addToRolePolicy(ssmPolicy);
 		
 		// Dead Letter Queue for failed schedule executions
 		const galleryExpiryDLQ = new Queue(this, 'GalleryExpiryDLQ', {
@@ -1151,6 +1253,7 @@ export class AppStack extends Stack {
 		transactions.grantReadWriteData(transactionExpiryFn);
 		galleries.grantReadWriteData(transactionExpiryFn);
 		galleriesDeleteHelperFn.grantInvoke(transactionExpiryFn);
+		transactionExpiryFn.addToRolePolicy(ssmPolicy);
 		// Run every 15 minutes to check for expired wallet top-ups
 		// Also checks gallery transactions (3 days expiry)
 		new Rule(this, 'TransactionExpirySchedule', {
@@ -1200,6 +1303,7 @@ export class AppStack extends Stack {
 					'@aws-sdk/client-scheduler',
 					'@aws-sdk/client-ses',
 					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
 					'@aws-sdk/lib-dynamodb',
 					'@aws-sdk/s3-request-presigner',
 					'express'
