@@ -13,7 +13,6 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import { ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
@@ -232,6 +231,8 @@ export class AppStack extends Stack {
 		// Removes "new" from the default message
 		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailSubject', 'Verify your account');
 		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailMessage', 'The verification code to your account is {####}');
+		
+		// Note: PostAuthentication Lambda trigger will be added later to avoid circular dependencies
 		
 		// Get callback URLs from context or environment, fallback to localhost for dev
 		// Note: Callback URLs must match exactly what's sent in the OAuth request
@@ -979,14 +980,9 @@ export class AppStack extends Stack {
 		);
 		
 		// Create rule on the partner event bus (not the default event bus)
-		// For partner event buses, the source field in events is the event bus name
-		// Since all events on this bus are from Stripe, we could omit source filter,
-		// but including it makes the rule more explicit and secure
 		const stripeEventRule = new Rule(this, 'StripeEventRule', {
 			eventBus: stripePartnerEventBus,
 			eventPattern: {
-				// Source is the event bus name for partner event buses
-				// This matches: aws.partner/stripe.com/ed_test_61ThbOqJLCV8JR42e16Tc793AKNJz6JQrPoxvHJd2XxQ
 				source: [stripeEventSourceName],
 				'detail-type': [
 					'checkout.session.completed',
@@ -1242,6 +1238,254 @@ export class AppStack extends Stack {
 		// Note: Cost alerts topic is created later in the stack, so we'll reference it by name
 		// For now, alarms are created but not subscribed - can be manually subscribed or added after topic creation
 
+		// User Deletion System
+		// Dead Letter Queue for failed user deletion schedule executions
+		const userDeletionDLQ = new Queue(this, 'UserDeletionDLQ', {
+			queueName: `PhotoHub-${props.stage}-UserDeletionDLQ`,
+			encryption: QueueEncryption.SQS_MANAGED,
+			retentionPeriod: Duration.days(14), // Retain failed jobs for 14 days for debugging
+			visibilityTimeout: Duration.minutes(16) // Slightly longer than Lambda timeout (15 minutes)
+		});
+
+		// PerformUserDeletion Lambda - Main Lambda that performs actual user deletion
+		const performUserDeletionFn = new NodejsFunction(this, 'PerformUserDeletionFn', {
+			entry: path.join(__dirname, '../../../backend/functions/users/performUserDeletion.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 1024, // Increased memory for faster processing
+			timeout: Duration.minutes(15), // Maximum Lambda timeout for very large user accounts
+			deadLetterQueue: userDeletionDLQ,
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-cloudfront',
+					'@aws-sdk/client-cognito-identity-provider',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-sqs',
+					'@aws-sdk/client-ssm',
+					'@aws-sdk/lib-dynamodb',
+					'@aws-sdk/s3-request-presigner',
+					'express'
+				],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main']
+			},
+			environment: envVars
+		});
+
+		// Grant permissions to PerformUserDeletion Lambda
+		users.grantReadWriteData(performUserDeletionFn);
+		galleries.grantReadWriteData(performUserDeletionFn);
+		orders.grantReadWriteData(performUserDeletionFn);
+		packages.grantReadWriteData(performUserDeletionFn);
+		images.grantReadWriteData(performUserDeletionFn);
+		wallet.grantReadWriteData(performUserDeletionFn);
+		walletLedger.grantReadWriteData(performUserDeletionFn);
+		transactions.grantReadWriteData(performUserDeletionFn);
+		galleriesBucket.grantReadWrite(performUserDeletionFn);
+		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
+		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['cognito-idp:AdminDeleteUser'],
+			resources: [userPool.userPoolArn]
+		}));
+		// Grant EventBridge Scheduler permission to delete schedules
+		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['scheduler:DeleteSchedule'],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		performUserDeletionFn.addToRolePolicy(ssmPolicy);
+
+		// IAM role for EventBridge Scheduler to invoke PerformUserDeletion Lambda
+		const userDeletionSchedulerRole = new Role(this, 'UserDeletionSchedulerRole', {
+			assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
+			description: 'Role for EventBridge Scheduler to invoke user deletion Lambda'
+		});
+		performUserDeletionFn.grantInvoke(userDeletionSchedulerRole);
+
+		// InactivityScanner Lambda - Scans for inactive users and schedules deletions
+		const inactivityScannerFn = new NodejsFunction(this, 'InactivityScannerFn', {
+			entry: path.join(__dirname, '../../../backend/functions/users/inactivityScanner.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.minutes(5),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ses',
+					'@aws-sdk/client-ssm',
+					'@aws-sdk/lib-dynamodb'
+				],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main']
+			},
+			environment: {
+				...envVars,
+				USER_DELETION_LAMBDA_ARN: performUserDeletionFn.functionArn,
+				USER_DELETION_SCHEDULE_ROLE_ARN: userDeletionSchedulerRole.roleArn,
+				USER_DELETION_DLQ_ARN: userDeletionDLQ.queueArn
+			}
+		});
+
+		// Grant permissions to InactivityScanner Lambda
+		users.grantReadWriteData(inactivityScannerFn);
+		inactivityScannerFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
+		// Grant EventBridge Scheduler permissions to create/cancel schedules
+		inactivityScannerFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'scheduler:CreateSchedule',
+				'scheduler:DeleteSchedule',
+				'scheduler:GetSchedule',
+				'scheduler:UpdateSchedule'
+			],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		// Grant IAM PassRole permission so Lambda can pass the scheduler role to EventBridge Scheduler
+		inactivityScannerFn.addToRolePolicy(new PolicyStatement({
+			actions: ['iam:PassRole'],
+			resources: [userDeletionSchedulerRole.roleArn]
+		}));
+		inactivityScannerFn.addToRolePolicy(ssmPolicy);
+
+		// EventBridge Rule for InactivityScanner - runs daily at 2 AM UTC
+		// Using Schedule.expression() with raw cron string to avoid CDK's automatic weekDay default
+		new Rule(this, 'InactivityScannerSchedule', {
+			schedule: Schedule.expression('cron(0 2 * * ? *)'), // 2 AM UTC daily (minute hour day month weekDay year)
+			targets: [new LambdaFunction(inactivityScannerFn)]
+		});
+
+		// PostAuthentication Lambda - Updates lastLoginAt and cancels inactivity deletions
+		const postAuthenticationFn = new NodejsFunction(this, 'PostAuthenticationFn', {
+			entry: path.join(__dirname, '../../../backend/functions/auth/postAuthentication.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.seconds(10),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-scheduler',
+					'@aws-sdk/client-ssm',
+					'@aws-sdk/lib-dynamodb'
+				],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock'),
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main']
+			},
+			environment: envVars
+		});
+
+		// Grant permissions to PostAuthentication Lambda
+		users.grantReadWriteData(postAuthenticationFn);
+		// Grant EventBridge Scheduler permission to cancel schedules
+		postAuthenticationFn.addToRolePolicy(new PolicyStatement({
+			actions: ['scheduler:DeleteSchedule'],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		postAuthenticationFn.addToRolePolicy(ssmPolicy);
+
+		// Note: Cognito Lambda trigger permission will be granted automatically when the trigger is configured
+		// via AWS Console or CLI. The trigger configuration process grants the necessary permission.
+		// We don't create the permission here to avoid circular dependency issues in CDK.
+		// 
+		// To configure the trigger after deployment:
+		// 1. AWS Console: Cognito > User Pools > <Pool> > User pool properties > Lambda triggers > Post authentication
+		// 2. AWS CLI: aws cognito-idp update-user-pool --user-pool-id <POOL_ID> --lambda-config PostAuthentication=<LAMBDA_ARN>
+		//
+		// The Lambda ARN is available in stack outputs: PostAuthenticationLambdaArn
+
+		// Grant API Lambda permission to create/cancel user deletion schedules
+		// (API Lambda handles manual deletion requests)
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'scheduler:CreateSchedule',
+				'scheduler:DeleteSchedule',
+				'scheduler:GetSchedule',
+				'scheduler:UpdateSchedule'
+			],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: ['iam:PassRole'],
+			resources: [userDeletionSchedulerRole.roleArn]
+		}));
+		// Grant API Lambda permission to invoke PerformUserDeletion Lambda (for dev endpoints)
+		performUserDeletionFn.grantInvoke(apiFn);
+
+		// Create SSM Parameters for user deletion configuration
+		// These are read at runtime by Lambda functions
+		const userDeletionLambdaArnParam = new StringParameter(this, 'UserDeletionLambdaArnParam', {
+			parameterName: `${ssmParameterPrefix}/UserDeletionLambdaArn`,
+			stringValue: performUserDeletionFn.functionArn,
+			description: 'ARN of PerformUserDeletion Lambda function'
+		});
+
+		const userDeletionScheduleRoleArnParam = new StringParameter(this, 'UserDeletionScheduleRoleArnParam', {
+			parameterName: `${ssmParameterPrefix}/UserDeletionScheduleRoleArn`,
+			stringValue: userDeletionSchedulerRole.roleArn,
+			description: 'IAM role ARN for EventBridge Scheduler to invoke user deletion Lambda'
+		});
+
+		const userDeletionDlqArnParam = new StringParameter(this, 'UserDeletionDlqArnParam', {
+			parameterName: `${ssmParameterPrefix}/UserDeletionDlqArn`,
+			stringValue: userDeletionDLQ.queueArn,
+			description: 'Dead Letter Queue ARN for failed user deletion schedule executions'
+		});
+
+		// CloudWatch alarms for user deletion
+		const userDeletionErrorAlarm = new Alarm(this, 'UserDeletionErrorAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-UserDeletion-Errors`,
+			alarmDescription: 'Alert when user deletion Lambda has errors',
+			metric: performUserDeletionFn.metricErrors({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+
+		const userDeletionDLQAlarm = new Alarm(this, 'UserDeletionDLQAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-UserDeletionDLQ-Messages`,
+			alarmDescription: 'Alert when user deletion DLQ has messages (failed deletions)',
+			metric: userDeletionDLQ.metricApproximateNumberOfMessagesVisible({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+
 		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days for galleries, 15 minutes for wallet top-ups)
 		const transactionExpiryFn = new NodejsFunction(this, 'TransactionExpiryCheckFn', {
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkTransactions.ts'),
@@ -1326,11 +1570,10 @@ export class AppStack extends Stack {
 		
 		// Configure Lambda to consume from SQS with batching
 		// Batch size: 10 delete operations per invocation (optimal balance: cost vs memory/timeout)
-		// Max concurrency: 5 (prevents overwhelming DynamoDB and S3)
+		// Note: maxConcurrency removed temporarily to avoid CloudFormation validation issues
 		deleteBatchFn.addEventSource(new SqsEventSource(deleteQueue, {
 			batchSize: 10, // Process up to 10 delete operations per Lambda invocation
-			maxBatchingWindow: Duration.seconds(5), // Wait up to 5 seconds to batch more operations
-			maxConcurrency: 5 // Limit concurrent executions to prevent DynamoDB/S3 throttling
+			maxBatchingWindow: Duration.seconds(5) // Wait up to 5 seconds to batch more operations
 		}));
 		
 		// Grant Lambda permission to consume from queue
@@ -1343,8 +1586,9 @@ export class AppStack extends Stack {
 		// Grant API Lambda permission to invoke batch delete Lambda (for deletePhoto, deleteFinalImage, and batch delete endpoints)
 		deleteBatchFn.grantInvoke(apiFn);
 		
-		// Update API Lambda environment with DELETE_BATCH_FN_NAME (added after apiFn was created)
+		// Update API Lambda environment with delete-related variables (added after apiFn was created)
 		apiFn.addEnvironment('DELETE_BATCH_FN_NAME', deleteBatchFn.functionName);
+		apiFn.addEnvironment('DELETE_QUEUE_URL', deleteQueue.queueUrl);
 
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
@@ -1492,6 +1736,10 @@ export class AppStack extends Stack {
 		new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
 		new CfnOutput(this, 'PreviewsDomainName', { value: dist.distributionDomainName });
 		new CfnOutput(this, 'PreviewsDistributionId', { value: dist.distributionId });
+		new CfnOutput(this, 'PostAuthenticationLambdaArn', {
+			value: postAuthenticationFn.functionArn,
+			description: 'ARN of PostAuthentication Lambda - configure this as Post Authentication trigger in Cognito User Pool'
+		});
 	}
 }
 
