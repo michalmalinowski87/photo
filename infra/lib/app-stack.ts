@@ -23,7 +23,7 @@ import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { SqsEventSource, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { StringParameter, ParameterType } from 'aws-cdk-lib/aws-ssm';
+import { StringParameter, ParameterType, CfnParameter } from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 
 interface AppStackProps extends StackProps {
@@ -344,25 +344,25 @@ export class AppStack extends Stack {
 		const ssmParameterPrefix = `/PhotoHub/${props.stage}`;
 		
 		// JWT Secret - SecureString for encryption
+		// Note: Using StringParameter without type property - CDK will create as String type
+		// For SecureString, parameters should be created manually or migrated to Secrets Manager
 		const jwtSecretParam = new StringParameter(this, 'JwtSecretParam', {
 			parameterName: `${ssmParameterPrefix}/JwtSecret`,
 			stringValue: jwtSecret,
-			type: ParameterType.SECURE_STRING,
 			description: 'JWT secret for client gallery authentication'
 		});
 
-		// Stripe configuration - SecureString for encryption
+		// Stripe configuration - Using String type (SecureString deprecated in CDK)
+		// For production, consider migrating to AWS Secrets Manager
 		const stripeSecretKeyParam = new StringParameter(this, 'StripeSecretKeyParam', {
 			parameterName: `${ssmParameterPrefix}/StripeSecretKey`,
 			stringValue: stripeKeyFromEnv || '',
-			type: ParameterType.SECURE_STRING,
 			description: 'Stripe secret key for payment processing'
 		});
 
 		const stripeWebhookSecretParam = new StringParameter(this, 'StripeWebhookSecretParam', {
 			parameterName: `${ssmParameterPrefix}/StripeWebhookSecret`,
 			stringValue: process.env.STRIPE_WEBHOOK_SECRET || '',
-			type: ParameterType.SECURE_STRING,
 			description: 'Stripe webhook secret for webhook verification'
 		});
 
