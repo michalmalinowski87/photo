@@ -47,7 +47,13 @@ export interface LambdaContext extends Context {
 		debug: (msg: string, details?: Record<string, unknown>) => void;
 		info: (msg: string, details?: Record<string, unknown>) => void;
 		warn: (msg: string, details?: Record<string, unknown>) => void;
-		error: (msg: string, details?: Record<string, unknown>) => void;
+		error: (msg: string, details?: Record<string, unknown>, error?: Error | unknown) => void;
+		withContext: (context: Record<string, unknown>) => {
+			debug: (msg: string, details?: Record<string, unknown>) => void;
+			info: (msg: string, details?: Record<string, unknown>) => void;
+			warn: (msg: string, details?: Record<string, unknown>) => void;
+			error: (msg: string, details?: Record<string, unknown>, error?: Error | unknown) => void;
+		};
 	};
 }
 

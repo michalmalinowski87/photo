@@ -19,7 +19,8 @@ export function wrapHandler(handler: Handler) {
 			try {
 				bodyString = JSON.stringify(req.body);
 			} catch (err) {
-				console.error('Failed to stringify req.body:', err);
+				const logger = (req as any).logger;
+				logger?.error('Failed to stringify req.body', {}, err);
 				bodyString = '';
 			}
 		}
@@ -66,7 +67,8 @@ export function wrapHandler(handler: Handler) {
 				if (result.isBase64Encoded && typeof body === 'string') {
 					try {
 						const buffer = Buffer.from(body, 'base64');
-						console.log('Decoding base64 binary response', {
+						const logger = (req as any).logger;
+						logger?.debug('Decoding base64 binary response', {
 							originalSize: body.length,
 							decodedSize: buffer.length,
 							contentType: headers['content-type']
@@ -79,7 +81,8 @@ export function wrapHandler(handler: Handler) {
 						res.end(buffer);
 						return;
 					} catch (decodeErr: any) {
-						console.error('Failed to decode base64 body:', decodeErr);
+						const logger = (req as any).logger;
+						logger?.error('Failed to decode base64 body', {}, decodeErr);
 						return res.status(500).json({ error: 'Failed to decode binary response' });
 					}
 				}
@@ -102,7 +105,8 @@ export function wrapHandler(handler: Handler) {
 
 			return res.status(500).json({ error: 'Invalid handler response' });
 		} catch (error: any) {
-			console.error('Handler error:', error);
+			const logger = (req as any).logger;
+			logger?.error('Handler error', {}, error);
 			const safeMessage = sanitizeErrorMessage(error);
 			return res.status(500).json({ error: 'Internal server error', message: safeMessage });
 		}

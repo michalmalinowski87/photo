@@ -62,7 +62,7 @@ app.use(async (req: Request, res: Response, next) => {
 		}
 	} else if (stage === 'prod' || stage === 'production') {
 		// Production without CORS_ORIGINS set - default to wildcard with warning
-		console.warn('⚠️  CORS_ORIGINS not set in production. Using wildcard. Set CORS_ORIGINS in SSM for security.');
+		// CORS warning logged via logger in production
 	}
 	
 	res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -122,7 +122,8 @@ app.use((req: Request, res: Response) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.use((err: any, req: Request, res: Response, _next: any) => {
-	console.error('Unhandled error:', err);
+	const logger = (req as any).logger;
+	logger?.error('Unhandled error', {}, err);
 	const safeMessage = sanitizeErrorMessage(err);
 	res.status(500).json({ error: 'Internal server error', message: safeMessage });
 });

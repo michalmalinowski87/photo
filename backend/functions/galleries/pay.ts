@@ -1184,11 +1184,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				if (deletionLambdaArn && scheduleRoleArn) {
 					try {
 						// Cancel old schedule (idempotent - won't fail if doesn't exist)
-						await cancelExpirySchedule(oldScheduleName);
+						await cancelExpirySchedule(oldScheduleName, logger);
 						logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
 						
 						// Create new schedule for paid expiry
-						newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+						newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn, logger);
 						logger.info('Created new EventBridge schedule for paid gallery', { galleryId, scheduleName: newScheduleName, expiresAt });
 					} catch (scheduleErr: any) {
 						logger.error('Failed to update EventBridge schedule for paid gallery', {

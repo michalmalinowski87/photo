@@ -1,5 +1,11 @@
 import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand, GetScheduleCommand, UpdateScheduleCommand } from '@aws-sdk/client-scheduler';
 
+// Logger type and factory - imported dynamically to avoid TypeScript path issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const loggerModule = require('../../../packages/logger/src');
+const createLogger = loggerModule.createLogger;
+type Logger = typeof loggerModule.Logger extends (infer T) ? T : any;
+
 const scheduler = new SchedulerClient({});
 
 /**
@@ -17,6 +23,7 @@ export function getScheduleName(galleryId: string): string {
  * @param deletionLambdaArn - ARN of the Lambda function to invoke
  * @param scheduleRoleArn - IAM role ARN for EventBridge Scheduler to invoke Lambda
  * @param dlqArn - Optional Dead Letter Queue ARN for failed schedule executions
+ * @param logger - Optional logger instance for structured logging
  * @returns The schedule name
  */
 export async function createExpirySchedule(
@@ -24,8 +31,10 @@ export async function createExpirySchedule(
 	expiresAt: string,
 	deletionLambdaArn: string,
 	scheduleRoleArn: string,
-	dlqArn?: string
+	dlqArn?: string,
+	logger?: Logger
 ): Promise<string> {
+	const log = logger || createLogger({ component: 'expiry-scheduler' });
 	const scheduleName = getScheduleName(galleryId);
 	const expiresAtDate = new Date(expiresAt);
 	
@@ -46,6 +55,15 @@ export async function createExpirySchedule(
 	const minutes = String(scheduleTime.getUTCMinutes()).padStart(2, '0');
 	const seconds = String(scheduleTime.getUTCSeconds()).padStart(2, '0');
 	const scheduleExpression = `at(${year}-${month}-${day}T${hours}:${minutes}:${seconds})`;
+	
+	log.info('Creating expiry schedule', {
+		galleryId,
+		scheduleName,
+		expiresAt,
+		scheduleTime: scheduleTime.toISOString(),
+		scheduleExpression,
+		hasDlq: !!dlqArn
+	});
 	
 	try {
 		const scheduleConfig: any = {
@@ -74,12 +92,20 @@ export async function createExpirySchedule(
 		
 		await scheduler.send(new CreateScheduleCommand(scheduleConfig));
 		
+		log.info('Expiry schedule created successfully', { galleryId, scheduleName });
 		return scheduleName;
 	} catch (error: any) {
 		// If schedule already exists, that's okay - it means it was already created
 		if (error.name === 'ConflictException' || error.name === 'ResourceAlreadyExistsException') {
+			log.info('Expiry schedule already exists', { galleryId, scheduleName });
 			return scheduleName;
 		}
+		log.error('Failed to create expiry schedule', {
+			galleryId,
+			scheduleName,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		throw error;
 	}
 }
@@ -87,19 +113,31 @@ export async function createExpirySchedule(
 /**
  * Cancels an EventBridge schedule for gallery expiration
  * @param scheduleName - Schedule name to cancel
+ * @param logger - Optional logger instance for structured logging
  * @returns True if schedule was deleted, false if it didn't exist
  */
-export async function cancelExpirySchedule(scheduleName: string): Promise<boolean> {
+export async function cancelExpirySchedule(scheduleName: string, logger?: Logger): Promise<boolean> {
+	const log = logger || createLogger({ component: 'expiry-scheduler' });
+	
+	log.info('Cancelling expiry schedule', { scheduleName });
+	
 	try {
 		await scheduler.send(new DeleteScheduleCommand({
 			Name: scheduleName
 		}));
+		log.info('Expiry schedule cancelled successfully', { scheduleName });
 		return true;
 	} catch (error: any) {
 		// If schedule doesn't exist, that's okay - it means it was already deleted or never created
 		if (error.name === 'ResourceNotFoundException') {
+			log.info('Expiry schedule not found (already deleted or never created)', { scheduleName });
 			return false;
 		}
+		log.error('Failed to cancel expiry schedule', {
+			scheduleName,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		throw error;
 	}
 }
@@ -111,6 +149,7 @@ export async function cancelExpirySchedule(scheduleName: string): Promise<boolea
  * @param deletionLambdaArn - ARN of the Lambda function to invoke
  * @param scheduleRoleArn - IAM role ARN for EventBridge Scheduler to invoke Lambda
  * @param dlqArn - Optional Dead Letter Queue ARN for failed schedule executions
+ * @param logger - Optional logger instance for structured logging
  * @returns The schedule name
  */
 export async function updateExpirySchedule(
@@ -118,8 +157,10 @@ export async function updateExpirySchedule(
 	expiresAt: string,
 	deletionLambdaArn: string,
 	scheduleRoleArn: string,
-	dlqArn?: string
+	dlqArn?: string,
+	logger?: Logger
 ): Promise<string> {
+	const log = logger || createLogger({ component: 'expiry-scheduler' });
 	const scheduleName = getScheduleName(galleryId);
 	const expiresAtDate = new Date(expiresAt);
 	
@@ -138,6 +179,14 @@ export async function updateExpirySchedule(
 	const minutes = String(scheduleTime.getUTCMinutes()).padStart(2, '0');
 	const seconds = String(scheduleTime.getUTCSeconds()).padStart(2, '0');
 	const scheduleExpression = `at(${year}-${month}-${day}T${hours}:${minutes}:${seconds})`;
+	
+	log.info('Updating expiry schedule', {
+		galleryId,
+		scheduleName,
+		expiresAt,
+		scheduleTime: scheduleTime.toISOString(),
+		scheduleExpression
+	});
 	
 	try {
 		const scheduleConfig: any = {
@@ -166,12 +215,20 @@ export async function updateExpirySchedule(
 		
 		await scheduler.send(new UpdateScheduleCommand(scheduleConfig));
 		
+		log.info('Expiry schedule updated successfully', { galleryId, scheduleName });
 		return scheduleName;
 	} catch (error: any) {
 		// If schedule doesn't exist, create it instead
 		if (error.name === 'ResourceNotFoundException') {
-			return createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+			log.info('Schedule not found, creating new schedule', { galleryId, scheduleName });
+			return createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn, log);
 		}
+		log.error('Failed to update expiry schedule', {
+			galleryId,
+			scheduleName,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		throw error;
 	}
 }
@@ -179,18 +236,28 @@ export async function updateExpirySchedule(
 /**
  * Gets schedule details including state and execution time
  * @param scheduleName - Schedule name to check
+ * @param logger - Optional logger instance for structured logging
  * @returns Schedule details or null if not found
  */
-export async function getSchedule(scheduleName: string): Promise<any | null> {
+export async function getSchedule(scheduleName: string, logger?: Logger): Promise<any | null> {
+	const log = logger || createLogger({ component: 'expiry-scheduler' });
+	
 	try {
 		const result = await scheduler.send(new GetScheduleCommand({
 			Name: scheduleName
 		}));
+		log.debug('Retrieved schedule details', { scheduleName, state: result.State });
 		return result;
 	} catch (error: any) {
 		if (error.name === 'ResourceNotFoundException') {
+			log.debug('Schedule not found', { scheduleName });
 			return null;
 		}
+		log.error('Failed to get schedule', {
+			scheduleName,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		throw error;
 	}
 }
@@ -198,10 +265,11 @@ export async function getSchedule(scheduleName: string): Promise<any | null> {
 /**
  * Checks if a schedule exists
  * @param scheduleName - Schedule name to check
+ * @param logger - Optional logger instance for structured logging
  * @returns True if schedule exists, false otherwise
  */
-export async function scheduleExists(scheduleName: string): Promise<boolean> {
-	const schedule = await getSchedule(scheduleName);
+export async function scheduleExists(scheduleName: string, logger?: Logger): Promise<boolean> {
+	const schedule = await getSchedule(scheduleName, logger);
 	return schedule !== null;
 }
 

@@ -117,7 +117,7 @@ export function createServerlessHandler(app: Express) {
 				}
 			}
 
-			console.log('Lambda handler invoked:', { method, path, hasBody: !!body });
+			// Logging handled by lambdaLogger wrapper
 
 			const reqStream = new Readable();
 			reqStream.push(body || '');
@@ -151,7 +151,7 @@ export function createServerlessHandler(app: Express) {
 			// Safety timeout: if no response is sent within 25 seconds, return 503
 			const timeoutId = setTimeout(() => {
 				if (!resolved) {
-					console.error('Lambda handler timeout: No response sent within 25 seconds', { 
+					(context as any).logger?.error('Lambda handler timeout: No response sent within 25 seconds', { 
 						method, 
 						path,
 						remainingTime: context.getRemainingTimeInMillis ? context.getRemainingTimeInMillis() : 'unknown'
@@ -253,7 +253,7 @@ export function createServerlessHandler(app: Express) {
 
 			const next = (err?: any) => {
 				if (err) {
-					console.error('Express error:', err);
+					(context as any).logger?.error('Express error', {}, err);
 					const safeMessage = sanitizeErrorMessage(err);
 					safeResolve(createResponse(
 						500,
@@ -276,7 +276,7 @@ export function createServerlessHandler(app: Express) {
 				
 				if (result != null && typeof result === 'object' && typeof result.then === 'function') {
 					result.catch((err: any) => {
-						console.error('Unhandled async error:', err);
+						(context as any).logger?.error('Unhandled async error', {}, err);
 						const safeMessage = sanitizeErrorMessage(err);
 						safeResolve(createResponse(
 							500,
@@ -286,7 +286,7 @@ export function createServerlessHandler(app: Express) {
 					});
 				}
 			} catch (err: any) {
-				console.error('Express app execution error:', err);
+				(context as any).logger?.error('Express app execution error', {}, err);
 				const safeMessage = sanitizeErrorMessage(err);
 				safeResolve(createResponse(
 					500,
@@ -296,7 +296,10 @@ export function createServerlessHandler(app: Express) {
 			}
 		});
 		} catch (err: any) {
-			console.error('Handler error:', err);
+			// Logging handled by lambdaLogger wrapper, but log here if context available
+			if ((context as any).logger) {
+				(context as any).logger.error('Handler error', {}, err);
+			}
 			
 			const possibleMethod = getMethod(event);
 			if (isOptionsRequest(possibleMethod, event.headers) || !possibleMethod) {

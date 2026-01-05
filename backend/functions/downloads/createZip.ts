@@ -53,10 +53,11 @@ interface MultipartPart {
 }
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any).logger;
 	const startTime = Date.now();
 	const requestId = context?.requestId || context?.awsRequestId || 'unknown';
 	
-	console.log('ZIP generation Lambda invoked', {
+	logger?.info('ZIP generation Lambda invoked', {
 		requestId,
 		eventType: typeof event,
 		hasBody: !!event.body,
@@ -68,7 +69,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	if (!bucket) {
-		console.error('Missing GALLERIES_BUCKET environment variable');
+		logger?.error('Missing GALLERIES_BUCKET environment variable');
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
@@ -93,10 +94,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			payload = event;
 		}
 	} catch (parseErr: any) {
-		console.error('Failed to parse event payload', {
+		logger?.error('Failed to parse event payload', {
 			error: parseErr.message,
 			event: JSON.stringify(event).substring(0, 500)
-		});
+		}, parseErr);
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
@@ -107,7 +108,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const { galleryId, keys, orderId, type, finalFilesHash, selectedKeysHash } = payload;
 	const isFinal = type === 'final';
 	
-		console.log('ZIP generation started', {
+	logger?.info('ZIP generation started', {
 			requestId,
 			galleryId,
 			orderId,
@@ -122,7 +123,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	
 	// Validate required fields based on type
 	if (!galleryId || !orderId) {
-		console.error('Missing required fields', {
+		logger?.error('Missing required fields', {
 			hasGalleryId: !!galleryId,
 			hasOrderId: !!orderId,
 			payload
@@ -137,7 +138,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// For original ZIPs, keys must be provided
 	// For final ZIPs, we'll fetch keys from S3
 	if (!isFinal && (!keys || !Array.isArray(keys))) {
-		console.error('Missing keys for original ZIP', {
+		logger?.error('Missing keys for original ZIP', {
 			hasKeys: !!keys,
 			keysIsArray: Array.isArray(keys),
 			payload
@@ -164,21 +165,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const gallery = galleryGet.Item as any;
 			if (gallery?.expiresAt) {
 				zipExpiresAt = new Date(gallery.expiresAt);
-				console.log('Gallery expiration found, ZIP will expire at same time', {
+				logger?.info('Gallery expiration found, ZIP will expire at same time', {
 					requestId,
 					galleryId,
 					expiresAt: gallery.expiresAt,
 					zipExpiresAt: zipExpiresAt.toISOString()
 				});
 			} else {
-				console.warn('Gallery has no expiresAt - ZIP will not have expiration', {
+				logger?.warn('Gallery has no expiresAt - ZIP will not have expiration', {
 					requestId,
 					galleryId
 				});
 			}
 		} catch (galleryErr: any) {
 			// Log but don't fail - expiration is optional
-			console.warn('Failed to fetch gallery expiration', {
+			logger?.warn('Failed to fetch gallery expiration', {
 				error: galleryErr.message,
 				galleryId,
 				requestId
@@ -251,7 +252,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							.digest('hex')
 							.substring(0, 16);
 						
-						console.log('Computed finalFilesHash from DynamoDB metadata (not provided)', {
+						logger?.info('Computed finalFilesHash from DynamoDB metadata (not provided)', {
 							requestId,
 							galleryId,
 							orderId,
@@ -307,7 +308,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					.digest('hex')
 					.substring(0, 16);
 				
-				console.warn('Computed hash in ZIP generation with metadata (should be provided by caller)', {
+				logger?.warn('Computed hash in ZIP generation with metadata (should be provided by caller)', {
 					requestId,
 					galleryId,
 					orderId,
@@ -332,7 +333,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			
 			if (currentHash && storedHashFromMetadata === currentHash) {
 				// ZIP exists with matching hash - this is an idempotent retry, return success
-				console.log('ZIP already exists with matching hash (idempotency check)', {
+				logger?.info('ZIP already exists with matching hash (idempotency check)', {
 					requestId,
 					galleryId,
 					orderId,
@@ -373,7 +374,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}));
 				}
 					} catch (clearErr: any) {
-						console.warn('Failed to clear generating flag for existing ZIP', {
+						logger?.warn('Failed to clear generating flag for existing ZIP', {
 							error: clearErr.message,
 							galleryId,
 							orderId
@@ -394,7 +395,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				};
 			} else {
 				// ZIP exists but hash mismatch - content changed, must regenerate
-				console.log('ZIP exists but hash mismatch - will regenerate', {
+					logger?.info('ZIP exists but hash mismatch - will regenerate', {
 					requestId,
 					galleryId,
 					orderId,
@@ -411,14 +412,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						Bucket: bucket,
 						Key: zipKey
 					}));
-					console.log('Deleted old ZIP with mismatched hash', {
+					logger?.info('Deleted old ZIP with mismatched hash', {
 						requestId,
 						galleryId,
 						orderId,
 						zipKey
 					});
 				} catch (deleteErr: any) {
-					console.warn('Failed to delete old ZIP (will overwrite)', {
+					logger?.warn('Failed to delete old ZIP (will overwrite)', {
 						error: deleteErr.message,
 						galleryId,
 						orderId,
@@ -431,7 +432,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			// ZIP doesn't exist - proceed with generation
 			if (headErr.name !== 'NotFound' && headErr.name !== 'NoSuchKey') {
 				// Unexpected error checking for existing ZIP
-				console.warn('Error checking for existing ZIP (proceeding anyway)', {
+				logger?.warn('Error checking for existing ZIP (proceeding anyway)', {
 					error: headErr.message,
 					name: headErr.name,
 					galleryId,
@@ -493,7 +494,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				throw new Error(`No final images found for order ${orderId}`);
 			}
 
-			console.log('Fetched final files from S3', {
+			logger?.info('Fetched final files from S3', {
 				galleryId,
 				orderId,
 				finalKeysCount: finalKeys.length,
@@ -540,7 +541,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		multipartUploadId = createMultipartResponse.UploadId;
-		console.log('Multipart upload created', {
+		logger?.info('Multipart upload created', {
 			requestId,
 			galleryId,
 			orderId,
@@ -564,16 +565,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Set up error handler
 		archive.on('error', (err: Error) => {
-			console.error('Archive error:', err);
+			logger?.error('Archive error', {}, err);
 			archiveError = err;
 		});
 
 		// Set up warning handler
 		archive.on('warning', (err: Error & { code?: string }) => {
 			if (err.code === 'ENOENT') {
-				console.warn('Archive warning:', err.message);
+				logger?.warn('Archive warning', { message: err.message });
 			} else {
-				console.error('Archive warning:', err);
+				logger?.error('Archive warning', {}, err);
 				archiveError = err;
 			}
 		});
@@ -623,7 +624,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							etag: uploadPartResponse.ETag
 						});
 
-						console.log('Uploaded multipart part', {
+						logger?.debug('Uploaded multipart part', {
 							partNumber: partNum,
 							partSize: partData.length,
 							totalParts: parts.length,
@@ -635,7 +636,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							throw new Error(`ZIP too large: exceeds S3 maximum of ${MAX_PARTS} parts`);
 						}
 					} catch (partErr: any) {
-						console.error(`Failed to upload part ${partNum}:`, {
+						logger?.error(`Failed to upload part ${partNum}`, {
 							error: partErr.message,
 							name: partErr.name
 						});
@@ -663,14 +664,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 				// Defensive check: file must exist and have a body
 				if (!getObjectResponse.Body) {
-					console.warn(`Skipping ${s3Key}: no body in S3 response`);
+					logger?.warn(`Skipping ${s3Key}: no body in S3 response`);
 					return false;
 				}
 
 				// Defensive check: file must have non-zero size
 				const contentLength = getObjectResponse.ContentLength || 0;
 				if (contentLength === 0) {
-					console.warn(`Skipping ${s3Key}: file size is 0`);
+					logger?.warn(`Skipping ${s3Key}: file size is 0`);
 					return false;
 				}
 
@@ -679,7 +680,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				
 				// Critical: Attach error handlers early and permanently
 				s3Stream.on('error', (err) => {
-					console.error(`S3 stream error for ${s3Key}:`, err);
+					logger?.error(`S3 stream error for ${s3Key}`, {}, err);
 					s3Stream.resume(); // Prevent hanging in paused state
 				});
 				
@@ -690,12 +691,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				
 				filesAdded++;
 				totalBytesAdded += contentLength;
-				console.log(`Added ${zipFilename} to ZIP (${contentLength} bytes)`);
+				logger?.debug(`Added ${zipFilename} to ZIP (${contentLength} bytes)`);
 				return true;
 			} catch (err: any) {
 				// Handle file not found - don't retry
 				if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
-					console.warn(`Skipping ${s3Key}: file not found`);
+					logger?.warn(`Skipping ${s3Key}: file not found`);
 					return false;
 				}
 				
@@ -712,7 +713,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Retry transient errors with exponential backoff
 				if (isRetryable && retryCount < MAX_RETRIES) {
 					const delay = getRetryDelay(retryCount);
-					console.warn(`Retrying ${s3Key} (attempt ${retryCount + 1}/${MAX_RETRIES + 1}) after ${delay}ms:`, {
+					logger?.warn(`Retrying ${s3Key} (attempt ${retryCount + 1}/${MAX_RETRIES + 1}) after ${delay}ms`, {
 						error: err.message,
 						code: err.code
 					});
@@ -722,7 +723,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 				
 				// Non-retryable error or max retries exceeded
-				console.error(`Failed to add ${s3Key} to ZIP:`, {
+				logger?.error(`Failed to add ${s3Key} to ZIP`, {
 					error: err.message,
 					name: err.name,
 					code: err.code,
@@ -737,13 +738,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const validKeys = filesToZip.filter(key => {
 			// Validate key format
 			if (!key || typeof key !== 'string') {
-				console.warn('Skipping invalid key', { key, galleryId, orderId, isFinal });
+				logger?.warn('Skipping invalid key', { key, galleryId, orderId, isFinal });
 				return false;
 			}
 			
 			// Skip previews/thumbs paths (shouldn't happen for final files, but be safe)
 			if (key.includes('/previews/') || key.includes('/thumbs/') || key.includes('/bigthumbs/') || (key.includes('/') && !isFinal)) {
-				console.warn('Skipping preview/thumb/path key', { key, galleryId, orderId, isFinal });
+				logger?.warn('Skipping preview/thumb/path key', { key, galleryId, orderId, isFinal });
 				return false;
 			}
 			
@@ -793,7 +794,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 			} catch (updateErr: any) {
 				// Log but don't fail - progress updates are best effort
-				console.warn('Failed to update progress in DynamoDB', {
+				logger?.warn('Failed to update progress in DynamoDB', {
 					error: updateErr.message,
 					galleryId,
 					orderId,
@@ -830,7 +831,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						logData.remainingTimeMs = remainingTime;
 					}
 					
-					console.log(`Progress: ${processed}/${validKeys.length} files added`, logData);
+					logger?.info(`Progress: ${processed}/${validKeys.length} files added`, logData);
 					lastProgressLog = now;
 				}
 				
@@ -854,7 +855,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Finalize the archive and wait for completion
 		try {
 			await archive.finalize(); // Built-in Promise
-			console.log('Archive finalized', {
+			logger?.info('Archive finalized', {
 				filesAdded,
 				totalBytesAdded,
 				zipSize: zipTotalSize,
@@ -862,7 +863,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				compressionRatio: '0% (store mode)'
 			});
 		} catch (err: any) {
-			console.error('Archive finalize failed:', err);
+			logger?.error('Archive finalize failed', {}, err);
 			archiveError = err;
 			throw err;
 		}
@@ -895,7 +896,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				etag: uploadPartResponse.ETag
 			});
 
-			console.log('Uploaded final multipart part', {
+			logger?.debug('Uploaded final multipart part', {
 				partNumber: currentPartNumber,
 				partSize: currentPartBuffer.length,
 				totalParts: parts.length
@@ -942,7 +943,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const durationMs = Date.now() - startTime;
 		const remainingTime = context?.getRemainingTimeInMillis?.();
 		
-		console.log('ZIP created successfully', {
+		logger?.info('ZIP created successfully', {
 			requestId,
 			galleryId,
 			orderId,
@@ -992,12 +993,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 			} catch (updateErr: any) {
 				// Log but don't fail - ZIP is created successfully
-				console.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag:`, {
+				logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag`, {
 					error: updateErr.message,
 					galleryId,
 					orderId,
 					isFinal
-				});
+				}, updateErr);
 			}
 		}
 
@@ -1015,18 +1016,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const durationMs = Date.now() - startTime;
 		const remainingTime = context?.getRemainingTimeInMillis?.();
 		
-		console.error('ZIP generation failed', {
+		logger?.error('ZIP generation failed', {
 			requestId,
 			galleryId: galleryId || 'unknown',
 			orderId: orderId || 'unknown',
-			error: error.message,
 			errorName: error.name,
-			errorStack: error.stack?.substring(0, 500),
+			errorMessage: error.message,
 			durationSeconds: Math.round(durationMs / 1000),
 			remainingTimeMs: remainingTime || 'unknown',
 			multipartUploadId: multipartUploadId || 'none',
 			partsUploaded: parts.length
-		});
+		}, error);
 		
 		// Wait for any pending upload operations to complete or timeout
 		if (lastUploadPromise) {
@@ -1036,7 +1036,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 30000))
 				]);
 			} catch (cleanupErr: any) {
-				console.warn('Error waiting for upload queue:', {
+				logger?.warn('Error waiting for upload queue', {
 					error: cleanupErr.message,
 					galleryId,
 					orderId
@@ -1052,19 +1052,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Key: zipKey,
 					UploadId: multipartUploadId
 				}));
-				console.log('Aborted multipart upload after failure', {
+				logger?.info('Aborted multipart upload after failure', {
 					galleryId,
 					orderId,
 					uploadId: multipartUploadId
 				});
 			} catch (abortErr: any) {
 				// Log but don't fail - we're already in error state
-				console.error('Failed to abort multipart upload:', {
+				logger?.error('Failed to abort multipart upload', {
 					error: abortErr.message,
 					galleryId,
 					orderId,
 					uploadId: multipartUploadId
-				});
+				}, abortErr);
 			}
 		}
 		
@@ -1093,7 +1093,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					UpdateExpression: updateExpr,
 					ExpressionAttributeValues: { ':p': errorProgress }
 				}));
-				console.log(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag and stored error progress after failure`, { 
+				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag and stored error progress after failure`, { 
 					galleryId, 
 					orderId,
 					isFinal,
@@ -1101,12 +1101,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				});
 			} catch (clearErr: any) {
 				// Log but don't fail - we're already in error state
-				console.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after error:`, {
+				logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after error`, {
 					error: clearErr.message,
 					galleryId,
 					orderId,
 					isFinal
-				});
+				}, clearErr);
 			}
 		}
 		

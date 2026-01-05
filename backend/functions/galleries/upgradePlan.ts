@@ -256,10 +256,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					if (deletionLambdaArn && scheduleRoleArn) {
 						try {
 							const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
-							await cancelExpirySchedule(oldScheduleName);
+							await cancelExpirySchedule(oldScheduleName, logger);
 							logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
 							
-							newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+							newScheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn, logger);
 							logger.info('Created new EventBridge schedule for upgraded gallery', { galleryId, scheduleName: newScheduleName, expiresAt });
 						} catch (scheduleErr: any) {
 							logger.error('Failed to update EventBridge schedule for upgraded gallery', {

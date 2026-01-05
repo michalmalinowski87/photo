@@ -168,7 +168,7 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 	
 	if (deletionLambdaArn && scheduleRoleArn) {
 		try {
-			const scheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+			const scheduleName = await createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn, logger);
 			
 			// Store schedule name in gallery
 			await ddb.send(new UpdateCommand({

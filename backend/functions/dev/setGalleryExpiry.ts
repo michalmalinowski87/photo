@@ -93,7 +93,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Cancel old schedule if it exists
 		const oldScheduleName = gallery.expiryScheduleName || getScheduleName(galleryId);
 		try {
-			await cancelExpirySchedule(oldScheduleName);
+			await cancelExpirySchedule(oldScheduleName, logger);
 			logger.info('Canceled old EventBridge schedule', { galleryId, oldScheduleName });
 		} catch (cancelErr: any) {
 			// Ignore if schedule doesn't exist
@@ -108,7 +108,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			expiresAt,
 			deletionLambdaArn,
 			scheduleRoleArn,
-			dlqArn
+			dlqArn,
+			logger
 		);
 		logger.info('Created new EventBridge schedule', { galleryId, scheduleName: newScheduleName, expiresAt });
 

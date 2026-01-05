@@ -120,7 +120,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 								// Cancel EventBridge schedule if it exists before deletion
 								const scheduleName = (gallery as any).expiryScheduleName || getScheduleName(galleryId);
 								try {
-									await cancelExpirySchedule(scheduleName);
+									await cancelExpirySchedule(scheduleName, logger);
 									logger?.info('Canceled EventBridge schedule before fallback gallery deletion', { galleryId, scheduleName });
 								} catch (scheduleErr: any) {
 									logger?.warn('Failed to cancel EventBridge schedule in fallback deletion (may not exist)', {
