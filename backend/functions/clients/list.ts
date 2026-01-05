@@ -249,7 +249,12 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('List clients failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('List clients failed', {
+			userId: requester,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return createLambdaErrorResponse(error, 'Failed to list clients', 500);
 	}
 });

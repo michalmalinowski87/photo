@@ -140,7 +140,13 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Failed to get final ZIP status:', error);
+		const logger = (context as any).logger;
+		logger?.error('Failed to get final ZIP status', {
+			galleryId: event?.pathParameters?.id,
+			orderId: event?.pathParameters?.orderId,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },

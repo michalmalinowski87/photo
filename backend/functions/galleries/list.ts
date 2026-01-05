@@ -91,7 +91,8 @@ export const handler = lambdaLogger(async (event: any) => {
 					
 					return allOrders;
 				} catch (err) {
-					console.warn('Failed to pre-fetch orders:', err);
+					const logger = (context as any).logger;
+					logger?.warn('Failed to pre-fetch orders', {}, err);
 					return [];
 				}
 			})() : Promise.resolve([]),
@@ -120,7 +121,8 @@ export const handler = lambdaLogger(async (event: any) => {
 					
 					return paidTransactions;
 				} catch (err) {
-					console.warn('Failed to batch query transactions:', err);
+					const logger = (context as any).logger;
+					logger?.warn('Failed to batch query transactions', {}, err);
 					return new Map<string, boolean>();
 				}
 			})() : Promise.resolve(new Map<string, boolean>()),
@@ -155,7 +157,8 @@ export const handler = lambdaLogger(async (event: any) => {
 					
 					return clientsByEmail;
 				} catch (err) {
-					console.warn('Failed to pre-fetch clients:', err);
+					const logger = (context as any).logger;
+					logger?.warn('Failed to pre-fetch clients', {}, err);
 					return new Map<string, { firstName?: string; lastName?: string }>();
 				}
 			})() : Promise.resolve(new Map<string, { firstName?: string; lastName?: string }>())
@@ -253,7 +256,8 @@ export const handler = lambdaLogger(async (event: any) => {
 							allGalleryItems.push(...batchResult.Responses[galleriesTable]);
 					}
 					} catch (err) {
-						console.warn('BatchGet failed, falling back to querying all galleries:', err);
+						const logger = (context as any).logger;
+						logger?.warn('BatchGet failed, falling back to querying all galleries', {}, err);
 						// Fallback to querying all galleries
 						needsAllGalleries = true;
 				}
@@ -453,7 +457,8 @@ export const handler = lambdaLogger(async (event: any) => {
 				if (result.status === 'fulfilled') {
 					return result.value;
 				} else {
-					console.warn('Failed to enrich gallery:', result.reason);
+					const logger = (context as any).logger;
+					logger?.warn('Failed to enrich gallery', {}, result.reason);
 					return null;
 				}
 			})
@@ -595,7 +600,12 @@ export const handler = lambdaLogger(async (event: any) => {
 		})
 		};
 	} catch (error: any) {
-		console.error('List galleries failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('List galleries failed', {
+			userId: requester,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return createLambdaErrorResponse(error, 'Failed to list galleries', 500);
 	}
 });

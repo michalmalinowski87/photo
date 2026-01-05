@@ -88,7 +88,7 @@ async function processCheckoutSession(
 
 		// Credit wallet
 		try {
-			const newBalance = await creditWallet(userId, amountCents, paymentId, walletsTable, ledgerTable);
+			const newBalance = await creditWallet(userId, amountCents, paymentId, walletsTable, ledgerTable, logger);
 			logger.info('Wallet credited successfully', { 
 				userId, 
 				amountCents, 
@@ -433,8 +433,16 @@ async function processCheckoutSession(
 }
 
 // Helper function to credit wallet (used internally by processCheckoutSession)
-async function creditWallet(userId: string, amountCents: number, txnId: string, walletsTable: string, ledgerTable: string) {
+async function creditWallet(userId: string, amountCents: number, txnId: string, walletsTable: string, ledgerTable: string, logger?: any) {
 	const now = new Date().toISOString();
+	
+	logger?.info('Crediting wallet', {
+		userId,
+		amountCents,
+		txnId,
+		walletsTable,
+		ledgerTable
+	});
 	
 	// Get current wallet balance
 	const walletGet = await ddb.send(new GetCommand({
@@ -444,6 +452,13 @@ async function creditWallet(userId: string, amountCents: number, txnId: string, 
 	
 	const currentBalance = walletGet.Item?.balanceCents || 0;
 	const newBalance = currentBalance + amountCents;
+	
+	logger?.debug('Wallet balance retrieved for credit', {
+		userId,
+		currentBalance,
+		creditAmount: amountCents,
+		newBalance
+	});
 
 	// Update wallet balance atomically
 	await ddb.send(new UpdateCommand({
@@ -465,9 +480,17 @@ async function creditWallet(userId: string, amountCents: number, txnId: string, 
 			type: 'TOP_UP',
 			amountCents,
 			refId: txnId,
-			createdAt: now
-		}
-	}));
+		createdAt: now
+	}
+}));
+
+	logger?.info('Wallet credit successful', {
+		userId,
+		amountCents,
+		oldBalance: currentBalance,
+		newBalance,
+		txnId
+	});
 
 	return newBalance;
 }

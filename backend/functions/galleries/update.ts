@@ -111,7 +111,12 @@ export const handler = lambdaLogger(async (event: any) => {
 						Key: s3Key
 					}));
 				} catch (s3Err: any) {
-					console.warn('Failed to delete cover image from S3', { error: s3Err.message, galleryId: id });
+					const logger = (context as any).logger;
+					logger?.warn('Failed to delete cover image from S3', {
+						galleryId: id,
+						errorName: s3Err.name,
+						errorMessage: s3Err.message
+					});
 				}
 			}
 		} else if (typeof body.coverPhotoUrl === 'string') {
@@ -147,9 +152,11 @@ export const handler = lambdaLogger(async (event: any) => {
 						}));
 					}
 				} catch (s3Err: any) {
-					console.warn('Failed to delete old cover image from S3', { 
-						error: s3Err.message, 
-						galleryId: id 
+					const logger = (context as any).logger;
+					logger?.warn('Failed to delete old cover image from S3', {
+						galleryId: id,
+						errorName: s3Err.name,
+						errorMessage: s3Err.message
 					});
 				}
 			}

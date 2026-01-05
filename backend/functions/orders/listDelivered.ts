@@ -42,7 +42,12 @@ export const handler = lambdaLogger(async (event: any, _context: any) => {
 		orders = ordersQuery.Items || [];
 	} catch (gsiError: any) {
 		// Fallback: Query all orders for gallery and filter by status
-		console.warn('GSI not available, using fallback query:', gsiError.message);
+		const logger = (context as any).logger;
+		logger?.warn('GSI not available, using fallback query', {
+			galleryId: event?.pathParameters?.id,
+			errorName: gsiError.name,
+			errorMessage: gsiError.message
+		});
 		const allOrdersQuery = await ddb.send(new QueryCommand({
 			TableName: ordersTable,
 			KeyConditionExpression: 'galleryId = :g',

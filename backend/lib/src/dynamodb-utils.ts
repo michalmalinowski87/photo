@@ -59,6 +59,8 @@ export async function queryOrdersByOwnerWithFallback(
 	} catch (gsiError: any) {
 		// Fallback: If GSI query fails (e.g., index not ready or orders missing ownerId),
 		// use the old method of querying by galleries
+		// Note: This is a library function, logger would need to be passed in
+		// For now, we'll use console.warn but it should be replaced when logger is available
 		console.warn('GSI query failed, falling back to gallery-based queries:', gsiError.message);
 
 		// Query galleries for this owner

@@ -25,14 +25,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 	const hasClaims = !!requestContext.authorizer?.jwt?.claims;
 	
 	if (!userId) {
-		console.log('Auth check failed:', {
+		const logger = (req as any).logger;
+		logger?.warn('Auth check failed', {
 			path: req.path,
 			method: req.method,
 			hasRequestContext: !!requestContext,
 			hasAuthorizer,
 			hasJWT,
 			hasClaims,
-			authorizerKeys: requestContext.authorizer ? Object.keys(requestContext.authorizer) : []
+			authorizerKeys: requestContext.authorizer ? Object.keys(requestContext.authorizer) : [],
+			ip: req.ip || req.headers['x-forwarded-for']
 		});
 		return res.status(401).json({ 
 			error: 'Unauthorized',
@@ -63,11 +65,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 		} catch (error: any) {
 			// If we can't check user status, log but don't block (fail open for availability)
 			// In production, you might want to fail closed for security
-			console.error('Failed to check user deletion status', {
-				error: error.message,
+			const logger = (req as any).logger;
+			logger?.error('Failed to check user deletion status', {
 				userId,
-				path: req.path
-			});
+				path: req.path,
+				errorName: error.name,
+				errorMessage: error.message
+			}, error);
 			// Continue - don't block requests if DynamoDB check fails
 		}
 	}

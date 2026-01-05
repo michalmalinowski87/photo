@@ -6,7 +6,8 @@ import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const stage = envProc?.env?.STAGE || 'dev';
 	
@@ -66,7 +67,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		let finalRedirectUrl = redirectUrl;
 		if (!finalRedirectUrl) {
 			// Log warning if redirectUrl is missing - this should not happen in normal flow
-			console.warn('redirectUrl not provided in request, using default', { type, galleryId });
+			logger?.warn('redirectUrl not provided in request, using default', { type, galleryId });
 			finalRedirectUrl = type === 'wallet_topup' 
 				? `${dashboardUrl}/wallet?payment=success`
 				: galleryId 
@@ -98,11 +99,12 @@ export const handler = lambdaLogger(async (event: any) => {
 						}
 					);
 				} catch (txnErr: any) {
-					console.error('Failed to create wallet top-up transaction', {
-						error: txnErr.message,
+					logger?.error('Failed to create wallet top-up transaction', {
 						userId: requester,
-						amountCents
-					});
+						amountCents,
+						errorName: txnErr.name,
+						errorMessage: txnErr.message
+					}, txnErr);
 					// Continue with Stripe session creation even if transaction creation fails
 				}
 			}
@@ -152,10 +154,11 @@ export const handler = lambdaLogger(async (event: any) => {
 					stripeSessionId: session.id
 				});
 			} catch (updateErr: any) {
-				console.error('Failed to update transaction with Stripe session ID', {
-					error: updateErr.message,
-					transactionId
-				});
+				logger?.error('Failed to update transaction with Stripe session ID', {
+					transactionId,
+					errorName: updateErr.name,
+					errorMessage: updateErr.message
+				}, updateErr);
 			}
 		}
 
@@ -169,7 +172,14 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Stripe checkout creation failed:', error);
+		logger?.error('Stripe checkout creation failed', {
+			userId: requester,
+			type,
+			galleryId: body?.galleryId,
+			amountCents,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },

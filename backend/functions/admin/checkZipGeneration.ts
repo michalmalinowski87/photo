@@ -1,3 +1,5 @@
+import { lambdaLogger } from '../../../packages/logger/src';
+
 /**
  * Admin function to manually check and trigger ZIP generation
  * 
@@ -36,7 +38,15 @@
  */
 
 // Placeholder export - function not yet implemented
-export const handler = async () => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any).logger;
+	logger?.info('Admin ZIP check function called (not implemented)', {
+		path: event?.path,
+		method: event?.httpMethod,
+		galleryId: event?.pathParameters?.galleryId,
+		orderId: event?.pathParameters?.orderId
+	});
+	
 	return {
 		statusCode: 501,
 		headers: { 'content-type': 'application/json' },
@@ -45,5 +55,5 @@ export const handler = async () => {
 			message: 'Admin ZIP check function is not yet implemented'
 		})
 	};
-};
+});
 

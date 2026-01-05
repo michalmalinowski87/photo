@@ -156,7 +156,13 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Final ZIP download failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('Final ZIP download failed', {
+			galleryId: event?.pathParameters?.id,
+			orderId: event?.pathParameters?.orderId,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		
 		return {
 			statusCode: 500,

@@ -87,7 +87,12 @@ export const handler = lambdaLogger(async (event: any) => {
 			lastEvaluatedKey = ordersQuery.LastEvaluatedKey;
 		} catch (gsiError: any) {
 			// Fallback: If GSI query fails, use gallery-based queries with pagination
-			console.warn('GSI query failed, falling back to gallery-based queries:', gsiError.message);
+			const logger = (context as any).logger;
+			logger?.warn('GSI query failed, falling back to gallery-based queries', {
+				ownerId,
+				errorName: gsiError.name,
+				errorMessage: gsiError.message
+			});
 			
 			const galleriesQuery = await ddb.send(new QueryCommand({
 				TableName: galleriesTable,
@@ -160,7 +165,8 @@ export const handler = lambdaLogger(async (event: any) => {
 						});
 					});
 				} catch (batchError) {
-					console.warn('BatchGetItem failed, falling back to individual queries:', batchError);
+					const logger = (context as any).logger;
+					logger?.warn('BatchGetItem failed, falling back to individual queries', {}, batchError);
 					// Fallback: query all galleries if batch fails
 					const galleriesQuery = await ddb.send(new QueryCommand({
 						TableName: galleriesTable,

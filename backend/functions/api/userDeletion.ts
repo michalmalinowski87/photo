@@ -81,5 +81,5 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 	});
 });
 
-export const handler = createServerlessHandler(app);
+export const handler = lambdaLogger(createServerlessHandler(app));
 

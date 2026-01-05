@@ -21,7 +21,8 @@ interface LambdaMemoryMetric {
 	recommendation: string;
 }
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
+	const logger = (context as any).logger;
 	const ownerId = getUserIdFromEvent(event);
 	if (!ownerId) {
 		return {
@@ -209,7 +210,11 @@ export const handler = lambdaLogger(async (event: any) => {
 
 				// Log for debugging if we have invocations but no memory data
 				if (invocations > 0 && maxMemoryUsedMB === 0) {
-					console.log(`Function ${functionName}: ${invocations} invocations but no memory data. Status: ${maxMemoryResult?.StatusCode || 'Unknown'}`);
+					logger?.debug(`Function ${functionName}: ${invocations} invocations but no memory data`, {
+						functionName,
+						invocations,
+						status: maxMemoryResult?.StatusCode || 'Unknown'
+					});
 				}
 
 				const memoryUtilizationPercent = allocatedMemoryMB > 0
@@ -249,7 +254,11 @@ export const handler = lambdaLogger(async (event: any) => {
 					recommendation
 				} as LambdaMemoryMetric;
 			} catch (error: any) {
-				console.error(`Error fetching metrics for ${functionName}:`, error);
+				logger?.error(`Error fetching metrics for ${functionName}`, {
+					functionName,
+					errorName: error.name,
+					errorMessage: error.message
+				}, error);
 				// Return zero values but still include the function in results
 				return {
 					functionName,
@@ -281,7 +290,11 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Error fetching Lambda metrics:', error);
+		logger?.error('Error fetching Lambda metrics', {
+			ownerId,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },

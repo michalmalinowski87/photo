@@ -130,7 +130,13 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Failed to generate download URL:', error);
+		const logger = (context as any).logger;
+		logger?.error('Failed to generate download URL', {
+			galleryId: event?.pathParameters?.id,
+			orderId: event?.pathParameters?.orderId,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },

@@ -61,13 +61,21 @@ async function getWalletBalance(userId: string, walletsTable: string): Promise<n
 	}
 }
 
-async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, transactionId: string, isDryRun?: boolean): Promise<boolean> {
+async function debitWallet(userId: string, amountCents: number, walletsTable: string, ledgerTable: string, transactionId: string, isDryRun?: boolean, logger?: any): Promise<boolean> {
 	// CRITICAL SAFETY CHECK: Never debit wallet in dry run mode
 	if (isDryRun === true) {
 		throw new Error('CRITICAL: Attempted to debit wallet in dry run mode - this should never happen!');
 	}
 	
 	const now = new Date().toISOString();
+	
+	logger?.info('Debiting wallet', {
+		userId,
+		amountCents,
+		transactionId,
+		walletsTable,
+		ledgerTable
+	});
 	
 	try {
 		const walletGet = await ddb.send(new GetCommand({
@@ -76,7 +84,20 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 		}));
 		
 		const currentBalance = walletGet.Item?.balanceCents || 0;
+		logger?.debug('Wallet balance retrieved', {
+			userId,
+			currentBalance,
+			requestedDebit: amountCents,
+			sufficientFunds: currentBalance >= amountCents
+		});
+		
 		if (currentBalance < amountCents) {
+			logger?.warn('Insufficient wallet balance', {
+				userId,
+				currentBalance,
+				requestedDebit: amountCents,
+				shortfall: amountCents - currentBalance
+			});
 			return false;
 		}
 
@@ -108,6 +129,14 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 				}
 			}));
 
+			logger?.info('Wallet debit successful', {
+				userId,
+				amountCents,
+				oldBalance: currentBalance,
+				newBalance,
+				transactionId
+			});
+
 			return true;
 		} catch (err: any) {
 			if (err.name === 'ConditionalCheckFailedException') {
@@ -116,7 +145,8 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 			throw err;
 		}
 	} catch (error) {
-		console.error('Wallet debit failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('Wallet debit failed', {}, error);
 		return false;
 	}
 }
@@ -1069,7 +1099,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				walletBalance,
 				dryRun: false // Explicitly log that dryRun is false
 			});
-			paid = await debitWallet(ownerId, totalAmountCents, walletsTable, ledgerTable, transactionId, false);
+			paid = await debitWallet(ownerId, totalAmountCents, walletsTable, ledgerTable, transactionId, false, logger);
 			if (paid) {
 				walletAmountCents = totalAmountCents;
 				stripeAmountCents = 0;

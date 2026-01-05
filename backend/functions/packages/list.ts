@@ -171,7 +171,12 @@ export const handler = lambdaLogger(async (event: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('List packages failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('List packages failed', {
+			userId: requester,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return createLambdaErrorResponse(error, 'Failed to list packages', 500);
 	}
 });

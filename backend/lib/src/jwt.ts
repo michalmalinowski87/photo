@@ -31,6 +31,8 @@ async function getJwtSecret(): Promise<string> {
 					throw new Error('JWT_SECRET is required in production (check SSM Parameter Store or JWT_SECRET env var)');
 				}
 				// In development, allow fallback but warn
+				// Note: This is a library function, logger would need to be passed in
+				// For now, we'll use console.warn but it should be replaced when logger is available
 				console.warn('⚠️  JWT_SECRET not set, using insecure default. This should only be used in development.');
 				jwtSecretCache = 'change-me-in-production';
 				return jwtSecretCache;

@@ -264,7 +264,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			})
 		};
 	} catch (error: any) {
-		console.error('Export failed:', error);
+		const logger = (context as any).logger;
+		logger?.error('Export failed', {
+			galleryId: event?.pathParameters?.id,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },

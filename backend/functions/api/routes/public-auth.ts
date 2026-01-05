@@ -47,7 +47,11 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 				}));
 			} catch (deleteError: any) {
 				// Log but continue - record will be cleaned up by DynamoDB eventually
-				console.error('Failed to delete expired rate limit record:', deleteError);
+				const logger = (req as any).logger;
+				logger?.warn('Failed to delete expired rate limit record', {
+					email: normalizedEmail,
+					error: deleteError.message
+				}, deleteError);
 			}
 			return { allowed: true, remainingCodes: MAX_CODES_PER_HOUR, resetAt: null };
 		}
@@ -90,7 +94,12 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 		};
 	} catch (error: any) {
 		// On error, log but allow the request (fail open for availability)
-		console.error('Rate limit check failed:', error);
+		const logger = (req as any).logger;
+		logger?.error('Rate limit check failed', {
+			email: normalizedEmail,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 		return { allowed: true, remainingCodes: MAX_CODES_PER_HOUR, resetAt: null };
 	}
 }
@@ -148,7 +157,12 @@ async function recordCodeSend(email: string, rateLimitTable: string): Promise<vo
 		}
 	} catch (error: any) {
 		// Log error but don't fail the request
-		console.error('Failed to record code send:', error);
+		const logger = (req as any).logger;
+		logger?.error('Failed to record code send', {
+			email: normalizedEmail,
+			errorName: error.name,
+			errorMessage: error.message
+		}, error);
 	}
 }
 
