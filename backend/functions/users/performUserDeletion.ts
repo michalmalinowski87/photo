@@ -7,6 +7,7 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { cancelUserDeletionSchedule } from '../../lib/src/user-deletion-scheduler';
 import { createDeletionCompletedEmail } from '../../lib/src/email';
 import { deleteGallery } from '../../lib/src/gallery-deletion';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -97,18 +98,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const packagesTable = envProc?.env?.PACKAGES_TABLE as string;
+	const clientsTable = envProc?.env?.CLIENTS_TABLE as string;
 	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
-	const bucket = envProc?.env?.BUCKET_NAME as string;
+	// Use GALLERIES_BUCKET to match infrastructure (BUCKET_NAME is legacy)
+	const bucket = envProc?.env?.GALLERIES_BUCKET || envProc?.env?.BUCKET_NAME as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 
 	if (!usersTable || !bucket) {
 		logger.error('Missing required configuration', {
 			hasUsersTable: !!usersTable,
-			hasBucket: !!bucket
+			hasBucket: !!bucket,
+			hasGalleriesBucket: !!envProc?.env?.GALLERIES_BUCKET,
+			hasBucketName: !!envProc?.env?.BUCKET_NAME
 		});
 		return {
 			statusCode: 500,
@@ -159,7 +164,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Preserve email before deletion for final confirmation email
-		const userEmail = user.contactEmail || user.email || `deleted_user_${userId}@deleted.example.com`;
+		// Try to get email from users table first, then from Cognito as fallback
+		let userEmail = user.contactEmail || user.email;
+		
+		// If email not in users table, try to get it from Cognito before we delete the user
+		if (!userEmail && userPoolId) {
+			try {
+				const cognitoUser = await cognito.send(new AdminGetUserCommand({
+					UserPoolId: userPoolId,
+					Username: userId
+				}));
+				const emailAttr = cognitoUser.UserAttributes?.find((attr: any) => attr.Name === 'email');
+				if (emailAttr?.Value) {
+					userEmail = emailAttr.Value;
+					logger.info('Retrieved email from Cognito for deletion confirmation', { userId, email: userEmail });
+				}
+			} catch (cognitoErr: any) {
+				logger.warn('Failed to get email from Cognito (user may already be deleted)', {
+					error: cognitoErr.message,
+					userId
+				});
+			}
+		}
+		
+		// Fallback to placeholder if still no email found
+		if (!userEmail) {
+			userEmail = `deleted_user_${userId}@deleted.example.com`;
+		}
 
 		// 2. Process galleries: Delete galleries without delivered orders, preserve galleries with delivered orders
 		let galleriesDeleted = 0;
@@ -305,9 +336,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 3. Delete S3 originals/previews/thumbs for preserved galleries only (NOT finals, NOT gallery records)
+		// 3. Delete S3 originals/previews/thumbs and corresponding ImagesTable entries for preserved galleries only (NOT finals, NOT gallery records)
 		// Note: Galleries without delivered orders were already fully deleted in step 2
 		let totalS3Deleted = 0;
+		let totalImageMetadataDeleted = 0;
+		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 		if (galleriesTable && bucket && galleriesPreserved > 0) {
 			try {
 				let lastEvaluatedKey: any = undefined;
@@ -351,14 +384,89 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 								});
 							}
 						}
+
+						// Delete image metadata entries for original images (NOT final images - those are needed for delivered orders)
+						if (imagesTable) {
+							try {
+								let imageMetadataLastKey: any = undefined;
+								let galleryImageMetadataDeleted = 0;
+								
+								do {
+									// Query all images for this gallery
+									const imagesQuery = await ddb.send(new QueryCommand({
+										TableName: imagesTable,
+										KeyConditionExpression: 'galleryId = :g',
+										ExpressionAttributeValues: { ':g': galleryId },
+										Limit: 1000
+									}));
+
+									const imageRecords = imagesQuery.Items || [];
+									
+									// Filter to only original images (imageKey starts with "original#")
+									// Final images (imageKey starts with "final#") are preserved for delivered orders
+									const originalImageRecords = imageRecords.filter((record: any) => 
+										record.imageKey && record.imageKey.startsWith('original#')
+									);
+
+									if (originalImageRecords.length > 0) {
+										// Delete in batches of 25 (DynamoDB transaction limit)
+										for (let i = 0; i < originalImageRecords.length; i += 25) {
+											const batch = originalImageRecords.slice(i, i + 25);
+											const transactItems = batch.map((record: any) => ({
+												Delete: {
+													TableName: imagesTable,
+													Key: { galleryId, imageKey: record.imageKey }
+												}
+											}));
+
+											try {
+												await ddb.send(new TransactWriteCommand({
+													TransactItems: transactItems
+												}));
+												galleryImageMetadataDeleted += batch.length;
+											} catch (transactErr: any) {
+												logger.warn('Failed to delete image metadata batch from DynamoDB', {
+													error: transactErr.message,
+													galleryId,
+													batchIndex: i
+												});
+												// Continue with other batches even if one fails
+											}
+										}
+									}
+
+									imageMetadataLastKey = imagesQuery.LastEvaluatedKey;
+								} while (imageMetadataLastKey);
+
+								if (galleryImageMetadataDeleted > 0) {
+									totalImageMetadataDeleted += galleryImageMetadataDeleted;
+									logger.info('Deleted image metadata for preserved gallery', {
+										galleryId,
+										userId,
+										deletedCount: galleryImageMetadataDeleted
+									});
+								}
+							} catch (imageMetadataErr: any) {
+								logger.warn('Failed to delete image metadata for preserved gallery', {
+									error: imageMetadataErr.message,
+									galleryId,
+									userId
+								});
+								// Continue with other galleries even if image metadata deletion fails
+							}
+						}
 					}
 
 					lastEvaluatedKey = galleriesQuery.LastEvaluatedKey;
 				} while (lastEvaluatedKey);
 
-				logger.info('Deleted S3 objects for preserved galleries', { userId, totalS3Deleted });
+				logger.info('Deleted S3 objects and image metadata for preserved galleries', { 
+					userId, 
+					totalS3Deleted,
+					totalImageMetadataDeleted
+				});
 			} catch (s3Err: any) {
-				logger.error('Failed to delete S3 objects', {
+				logger.error('Failed to delete S3 objects or image metadata', {
 					error: s3Err.message,
 					userId
 				});
@@ -366,9 +474,52 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 4. Note: Clients are NOT deleted - they are separate entities (end users who view galleries)
-		// Clients need to continue accessing their galleries even after photographer account deletion
-		// Galleries remain active and accessible to clients via gallery links
+		// 4. Delete clients (photographer's client contact information - photographer-specific data)
+		// Note: Client gallery access uses gallery.clientEmail and gallery.clientPasswordHash, not the Clients table
+		// Deleting clients only removes the photographer's contact management data, not gallery access
+		let clientsDeleted = 0;
+		if (clientsTable) {
+			try {
+				let lastEvaluatedKey: any = undefined;
+				do {
+					const clientsQuery = await ddb.send(new QueryCommand({
+						TableName: clientsTable,
+						IndexName: 'ownerId-index',
+						KeyConditionExpression: 'ownerId = :o',
+						ExpressionAttributeValues: { ':o': userId },
+						Limit: 100
+					}));
+
+					const clients = clientsQuery.Items || [];
+					
+					// Delete clients in batches
+					for (const client of clients) {
+						try {
+							await ddb.send(new DeleteCommand({
+								TableName: clientsTable,
+								Key: { clientId: client.clientId }
+							}));
+							clientsDeleted++;
+						} catch (deleteErr: any) {
+							logger.warn('Failed to delete client', {
+								error: deleteErr.message,
+								clientId: client.clientId
+							});
+						}
+					}
+
+					lastEvaluatedKey = clientsQuery.LastEvaluatedKey;
+				} while (lastEvaluatedKey);
+
+				logger.info('Deleted clients', { userId, clientsDeleted });
+			} catch (clientsErr: any) {
+				logger.error('Failed to delete clients', {
+					error: clientsErr.message,
+					userId
+				});
+				// Continue with deletion even if client deletion fails
+			}
+		}
 		
 		// 5. Delete packages (photographer's pricing packages - photographer-specific configurations)
 		let packagesDeleted = 0;
@@ -573,6 +724,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				});
 				// Continue even if email fails
 			}
+		} else {
+			// Log why email was not sent
+			logger.warn('Skipped sending deletion completion email', {
+				userId,
+				hasSender: !!sender,
+				hasUserEmail: !!userEmail,
+				userEmail: userEmail || 'not set',
+				userEmailIsPlaceholder: userEmail === deletedEmail,
+				deletedEmail,
+				reason: !sender ? 'sender not configured' : (!userEmail ? 'user email not set' : 'user email is placeholder')
+			});
 		}
 
 		// 11. Log full audit trail
@@ -582,6 +744,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleriesPreserved,
 			galleriesUpdated,
 			totalS3Deleted,
+			totalImageMetadataDeleted,
+			clientsDeleted,
 			packagesDeleted,
 			deletionReason: user.deletionReason || 'manual',
 			deletionRequestedAt: user.deletionRequestedAt,
@@ -599,6 +763,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				galleriesPreserved,
 				galleriesUpdated,
 				totalS3Deleted,
+				totalImageMetadataDeleted,
+				clientsDeleted,
 				packagesDeleted,
 				note: 'Galleries with delivered orders preserved, galleries without delivered orders deleted'
 			})

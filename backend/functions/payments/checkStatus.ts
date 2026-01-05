@@ -4,6 +4,7 @@ const Stripe = require('stripe');
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { getTransaction } from '../../lib/src/transactions';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -26,7 +27,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const sessionId = event?.queryStringParameters?.session_id;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
 	const paymentsTable = envProc?.env?.PAYMENTS_TABLE as string;
 
 	// Security: Validate session_id format
@@ -66,8 +66,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Also check transaction status if we can get session metadata
-		if (stripeSecretKey && !isProcessed) {
+		if (!isProcessed) {
 			try {
+				const stripeSecretKey = await getStripeSecretKey();
 				const stripe = new Stripe(stripeSecretKey);
 				const session = await stripe.checkout.sessions.retrieve(sessionId);
 				const transactionId = session.metadata?.transactionId;

@@ -1,4 +1,4 @@
-import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand, GetScheduleCommand } from '@aws-sdk/client-scheduler';
+import { SchedulerClient, CreateScheduleCommand, DeleteScheduleCommand, GetScheduleCommand, UpdateScheduleCommand } from '@aws-sdk/client-scheduler';
 
 const scheduler = new SchedulerClient({});
 
@@ -105,21 +105,103 @@ export async function cancelExpirySchedule(scheduleName: string): Promise<boolea
 }
 
 /**
+ * Updates an existing EventBridge schedule for gallery expiration
+ * @param galleryId - Gallery ID
+ * @param expiresAt - ISO timestamp when gallery expires
+ * @param deletionLambdaArn - ARN of the Lambda function to invoke
+ * @param scheduleRoleArn - IAM role ARN for EventBridge Scheduler to invoke Lambda
+ * @param dlqArn - Optional Dead Letter Queue ARN for failed schedule executions
+ * @returns The schedule name
+ */
+export async function updateExpirySchedule(
+	galleryId: string,
+	expiresAt: string,
+	deletionLambdaArn: string,
+	scheduleRoleArn: string,
+	dlqArn?: string
+): Promise<string> {
+	const scheduleName = getScheduleName(galleryId);
+	const expiresAtDate = new Date(expiresAt);
+	
+	// EventBridge Scheduler requires at least 1 minute in the future
+	const now = new Date();
+	const minScheduleTime = new Date(now.getTime() + 60 * 1000); // 1 minute from now
+	
+	// If expiry is in the past or less than 1 minute away, schedule for immediate execution (1 minute from now)
+	const scheduleTime = expiresAtDate <= minScheduleTime ? minScheduleTime : expiresAtDate;
+	
+	// EventBridge Scheduler at() expression format: at(yyyy-mm-ddThh:mm:ss)
+	const year = scheduleTime.getUTCFullYear();
+	const month = String(scheduleTime.getUTCMonth() + 1).padStart(2, '0');
+	const day = String(scheduleTime.getUTCDate()).padStart(2, '0');
+	const hours = String(scheduleTime.getUTCHours()).padStart(2, '0');
+	const minutes = String(scheduleTime.getUTCMinutes()).padStart(2, '0');
+	const seconds = String(scheduleTime.getUTCSeconds()).padStart(2, '0');
+	const scheduleExpression = `at(${year}-${month}-${day}T${hours}:${minutes}:${seconds})`;
+	
+	try {
+		const scheduleConfig: any = {
+			Name: scheduleName,
+			ScheduleExpression: scheduleExpression,
+			Target: {
+				Arn: deletionLambdaArn,
+				RoleArn: scheduleRoleArn,
+				Input: JSON.stringify({
+					galleryId
+				})
+			},
+			FlexibleTimeWindow: {
+				Mode: 'OFF' // Exact timing
+			},
+			Description: `Gallery expiration schedule for ${galleryId}`,
+			State: 'ENABLED'
+		};
+		
+		// Add Dead Letter Queue configuration if provided
+		if (dlqArn) {
+			scheduleConfig.DeadLetterConfig = {
+				Arn: dlqArn
+			};
+		}
+		
+		await scheduler.send(new UpdateScheduleCommand(scheduleConfig));
+		
+		return scheduleName;
+	} catch (error: any) {
+		// If schedule doesn't exist, create it instead
+		if (error.name === 'ResourceNotFoundException') {
+			return createExpirySchedule(galleryId, expiresAt, deletionLambdaArn, scheduleRoleArn, dlqArn);
+		}
+		throw error;
+	}
+}
+
+/**
+ * Gets schedule details including state and execution time
+ * @param scheduleName - Schedule name to check
+ * @returns Schedule details or null if not found
+ */
+export async function getSchedule(scheduleName: string): Promise<any | null> {
+	try {
+		const result = await scheduler.send(new GetScheduleCommand({
+			Name: scheduleName
+		}));
+		return result;
+	} catch (error: any) {
+		if (error.name === 'ResourceNotFoundException') {
+			return null;
+		}
+		throw error;
+	}
+}
+
+/**
  * Checks if a schedule exists
  * @param scheduleName - Schedule name to check
  * @returns True if schedule exists, false otherwise
  */
 export async function scheduleExists(scheduleName: string): Promise<boolean> {
-	try {
-		await scheduler.send(new GetScheduleCommand({
-			Name: scheduleName
-		}));
-		return true;
-	} catch (error: any) {
-		if (error.name === 'ResourceNotFoundException') {
-			return false;
-		}
-		throw error;
-	}
+	const schedule = await getSchedule(scheduleName);
+	return schedule !== null;
 }
 

@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -113,6 +113,39 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			TableName: usersTable,
 			Item: updateData
 		}));
+
+		// Clear inactivity reminder flags on login so user can receive reminders again if they become inactive
+		// This allows the reminders to be sent again if user becomes inactive in the future
+		// Use separate UpdateCommand to remove the fields (PutCommand above preserves other fields)
+		const fieldsToClear: string[] = [];
+		if (existingUser.inactivityReminderSentAt) {
+			fieldsToClear.push('inactivityReminderSentAt');
+		}
+		if (existingUser.inactivityFinalWarningSentAt) {
+			fieldsToClear.push('inactivityFinalWarningSentAt');
+		}
+		
+		if (fieldsToClear.length > 0) {
+			try {
+				// Remove fields unconditionally (safe - REMOVE is idempotent)
+				await ddb.send(new UpdateCommand({
+					TableName: usersTable,
+					Key: { userId },
+					UpdateExpression: `REMOVE ${fieldsToClear.join(', ')}`
+				}));
+				logger.debug('Cleared inactivity reminder flags on login', { 
+					userId, 
+					fieldsCleared: fieldsToClear 
+				});
+			} catch (updateErr: any) {
+				// Ignore if update fails - not critical
+				logger.debug('Could not clear inactivity reminder flags', { 
+					userId,
+					fields: fieldsToClear,
+					error: updateErr.message 
+				});
+			}
+		}
 
 		logger.info('Updated lastLoginAt', { userId, lastLoginAt: now });
 

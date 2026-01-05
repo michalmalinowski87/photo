@@ -6,6 +6,8 @@ import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTrans
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { recalculateStorageInternal } from './recalculateBytesUsed';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -134,12 +136,25 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	try {
 		const envProc = (globalThis as any).process;
+		const stage = envProc?.env?.STAGE || 'dev';
 		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 		const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 		const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
-		const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-		const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+		const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
 		// Always use wallet if available (no need for useWallet parameter)
+
+		// Get Stripe secret key from SSM
+		let stripeSecretKey: string;
+		try {
+			stripeSecretKey = await getStripeSecretKey();
+		} catch (error: any) {
+			logger.error('Failed to load Stripe secret key', { error: error.message });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Stripe not configured', message: error.message })
+			};
+		}
 
 		logger.info('Environment variables loaded', {
 			hasGalleriesTable: !!galleriesTable,
@@ -160,14 +175,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		if (!stripeSecretKey || stripeSecretKey.trim() === '' || stripeSecretKey.includes('...')) {
-			logger.error('Missing or invalid STRIPE_SECRET_KEY environment variable', {
-				hasEnvProc: !!envProc,
-				hasEnv: !!envProc?.env,
+			logger.error('Missing or invalid Stripe secret key', {
 				hasStripeKey: !!stripeSecretKey,
 				stripeKeyLength: stripeSecretKey?.length || 0,
 				stripeKeyPrefix: stripeSecretKey?.substring(0, 10) || 'N/A',
-				envKeys: envProc?.env ? Object.keys(envProc.env).filter(k => k.includes('STRIPE') || k.includes('stripe')) : [],
-				allEnvKeys: envProc?.env ? Object.keys(envProc.env).slice(0, 10) : [] // First 10 keys for debugging
 			});
 			return {
 				statusCode: 500,
@@ -1352,7 +1363,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		try {
 			const stripe = new Stripe(stripeSecretKey);
-		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		// ALWAYS use redirectUrl from request body if provided (this is the primary method)
 		// Fallback to default only if redirectUrl is not provided
 		let finalRedirectUrl = redirectUrl;

@@ -9,6 +9,7 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getJWTFromEvent } from '../../lib/src/jwt';
 import { createSelectionApprovedEmail } from '../../lib/src/email';
 import { createHash } from 'crypto';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});

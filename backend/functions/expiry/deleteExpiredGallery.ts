@@ -7,6 +7,7 @@ const { SESClient } = require('@aws-sdk/client-ses');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { CognitoIdentityProviderClient } = require('@aws-sdk/client-cognito-identity-provider');
 import { deleteGallery } from '../../lib/src/gallery-deletion';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -25,7 +26,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 	
 	if (!galleriesTable || !bucket) {
 		logger.error('Missing required environment variables', {

@@ -7,11 +7,13 @@ import { userDeletionRoutes } from './routes/userDeletion';
 
 const app = express();
 
+import { getCorsOrigins } from '../../lib/src/cors-config';
+
 // OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
 // This middleware only sets CORS headers for actual API responses (GET, POST, etc.)
-app.use((req: Request, res: Response, next) => {
-	// Get allowed origins from environment variable
-	const corsOrigins = process.env.CORS_ORIGINS;
+app.use(async (req: Request, res: Response, next) => {
+	// Get allowed origins from SSM Parameter Store with fallback to environment variable
+	const corsOrigins = await getCorsOrigins();
 	const stage = process.env.STAGE || 'dev';
 	
 	let allowedOrigin = '*';
@@ -25,7 +27,7 @@ app.use((req: Request, res: Response, next) => {
 		if (allowedOrigins.includes(origin)) {
 			allowedOrigin = origin;
 		} else if (allowedOrigins.length === 1 && allowedOrigins[0] === '*') {
-			// Explicit wildcard in env var
+			// Explicit wildcard in config
 			allowedOrigin = '*';
 		} else {
 			// Origin not in allowed list - don't set CORS header (browser will block)

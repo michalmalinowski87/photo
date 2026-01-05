@@ -11,14 +11,18 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
 const ses = new SESClient({});
 
+import { getSenderEmail } from '../../lib/src/email-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
+	const sender = await getSenderEmail();
 	
 	if (!galleriesTable || !ordersTable || !bucket) {
 		return {

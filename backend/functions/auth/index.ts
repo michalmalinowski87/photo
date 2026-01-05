@@ -3,6 +3,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { createServerlessHandler } from '../api/serverless';
 import { requireAuth } from '../api/middleware/auth';
 import { sanitizeErrorMessage } from '../../lib/src/error-utils';
+import { getCorsOrigins } from '../../lib/src/cors-config';
 
 import { authRoutes } from '../api/routes/auth';
 import { publicAuthRoutes } from '../api/routes/public-auth';
@@ -11,9 +12,9 @@ const app = express();
 
 // OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
 // This middleware only sets CORS headers for actual API responses (GET, POST, etc.)
-app.use((req: Request, res: Response, next) => {
-	// Get allowed origins from environment variable
-	const corsOrigins = process.env.CORS_ORIGINS;
+app.use(async (req: Request, res: Response, next) => {
+	// Get allowed origins from SSM Parameter Store with fallback to environment variable
+	const corsOrigins = await getCorsOrigins();
 	const stage = process.env.STAGE || 'dev';
 	
 	let allowedOrigin = '*';
@@ -27,7 +28,7 @@ app.use((req: Request, res: Response, next) => {
 		if (allowedOrigins.includes(origin)) {
 			allowedOrigin = origin;
 		} else if (allowedOrigins.length === 1 && allowedOrigins[0] === '*') {
-			// Explicit wildcard in env var
+			// Explicit wildcard in config
 			allowedOrigin = '*';
 		} else if (stage === 'dev' || stage === 'development') {
 			// Allow all in development if origin doesn't match
@@ -38,7 +39,7 @@ app.use((req: Request, res: Response, next) => {
 		}
 	} else if (stage === 'prod' || stage === 'production') {
 		// Production without CORS_ORIGINS set - default to wildcard with warning
-		console.warn('⚠️  CORS_ORIGINS not set in production. Using wildcard. Set CORS_ORIGINS env var for security.');
+		console.warn('⚠️  CORS_ORIGINS not set in production. Using wildcard. Set CORS_ORIGINS in SSM for security.');
 	}
 	
 	res.setHeader('Access-Control-Allow-Origin', allowedOrigin);

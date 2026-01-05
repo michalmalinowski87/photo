@@ -30,6 +30,7 @@
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.932.0",
     "@aws-sdk/client-cloudwatch": "^3.932.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.932.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.932.0",
     "@aws-sdk/client-dynamodb": "^3.670.0",
     "@aws-sdk/client-lambda": "^3.932.0",
@@ -37,6 +38,7 @@
     "@aws-sdk/client-scheduler": "^3.932.0",
     "@aws-sdk/client-ses": "^3.932.0",
     "@aws-sdk/client-sqs": "^3.932.0",
+    "@aws-sdk/client-sts": "^3.932.0",
     "@aws-sdk/lib-dynamodb": "^3.670.0",
     "@aws-sdk/s3-request-presigner": "^3.670.0",
     "archiver": "^7.0.1",

@@ -3,6 +3,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -23,11 +25,11 @@ async function getWalletBalance(userId: string, walletsTable: string): Promise<n
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const transactionId = event?.pathParameters?.id;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
 
 	if (!transactionId) {
 		return {
@@ -82,16 +84,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Create Stripe checkout for remaining amount
-		if (!stripeSecretKey || stripeAmountCents <= 0) {
+		if (stripeAmountCents <= 0) {
 			return {
 				statusCode: 400,
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ error: 'Stripe not configured or no amount to charge' })
+				body: JSON.stringify({ error: 'No amount to charge' })
+			};
+		}
+
+		let stripeSecretKey: string;
+		try {
+			stripeSecretKey = await getStripeSecretKey();
+		} catch (error: any) {
+			logger.error('Failed to load Stripe secret key', { error: error.message });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Stripe not configured', message: error.message })
 			};
 		}
 
 		const stripe = new Stripe(stripeSecretKey);
-		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		const redirectUrl = transaction.galleryId 
 			? `${dashboardUrl}/galleries?payment=success&gallery=${transaction.galleryId}`
 			: `${dashboardUrl}/wallet?payment=success`;

@@ -2,6 +2,8 @@ import { lambdaLogger } from '../../../packages/logger/src';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 import { generatePaymentPageHTML } from './payment-page-template';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 
 const getSecurityHeaders = () => ({
 	'Content-Type': 'text/html; charset=utf-8',
@@ -15,17 +17,19 @@ const getSecurityHeaders = () => ({
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const sessionId = event?.queryStringParameters?.session_id;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
 	
 	// Default to root dashboard if no valid session
 	let redirectUrl = `${dashboardUrl}/`;
 
 	// Get redirectUrl from Stripe session metadata
-	if (sessionId && stripeSecretKey) {
+	if (sessionId) {
 		try {
+			const stripeSecretKey = await getStripeSecretKey();
 			const stripe = new Stripe(stripeSecretKey);
 			const session = await stripe.checkout.sessions.retrieve(sessionId);
 			if (session.metadata?.redirectUrl) {

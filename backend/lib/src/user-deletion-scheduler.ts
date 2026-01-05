@@ -47,31 +47,32 @@ export async function createUserDeletionSchedule(
 	const seconds = String(scheduleTime.getUTCSeconds()).padStart(2, '0');
 	const scheduleExpression = `at(${year}-${month}-${day}T${hours}:${minutes}:${seconds})`;
 	
-	try {
-		const scheduleConfig: any = {
-			Name: scheduleName,
-			ScheduleExpression: scheduleExpression,
-			Target: {
-				Arn: deletionLambdaArn,
-				RoleArn: scheduleRoleArn,
-				Input: JSON.stringify({
-					userId
-				})
-			},
-			FlexibleTimeWindow: {
-				Mode: 'OFF' // Exact timing
-			},
-			Description: `User deletion schedule for ${userId}`,
-			State: 'ENABLED'
+	// Build schedule configuration (defined outside try block so it's accessible in catch)
+	const scheduleConfig: any = {
+		Name: scheduleName,
+		ScheduleExpression: scheduleExpression,
+		Target: {
+			Arn: deletionLambdaArn,
+			RoleArn: scheduleRoleArn,
+			Input: JSON.stringify({
+				userId
+			})
+		},
+		FlexibleTimeWindow: {
+			Mode: 'OFF' // Exact timing
+		},
+		Description: `User deletion schedule for ${userId}`,
+		State: 'ENABLED'
+	};
+	
+	// Add Dead Letter Queue configuration if provided
+	if (dlqArn) {
+		scheduleConfig.DeadLetterConfig = {
+			Arn: dlqArn
 		};
-		
-		// Add Dead Letter Queue configuration if provided
-		if (dlqArn) {
-			scheduleConfig.DeadLetterConfig = {
-				Arn: dlqArn
-			};
-		}
-		
+	}
+	
+	try {
 		await scheduler.send(new CreateScheduleCommand(scheduleConfig));
 		
 		return scheduleName;

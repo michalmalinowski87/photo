@@ -283,7 +283,7 @@ router.post('/resend-verification-code', async (req: Request, res: Response) => 
 	}
 
 	try {
-		// Use public ResendConfirmationCode API - works for UNCONFIRMED users
+		// Use public ResendConfirmationCode API - now works with AutoVerifiedAttributes enabled
 		await cognito.send(new ResendConfirmationCodeCommand({
 			ClientId: clientId,
 			Username: normalizedEmail

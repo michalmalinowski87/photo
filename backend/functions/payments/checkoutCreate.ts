@@ -1,14 +1,25 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
 export const handler = lambdaLogger(async (event: any) => {
 	const envProc = (globalThis as any).process;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const stripeWebhookSecret = envProc?.env?.STRIPE_WEBHOOK_SECRET as string;
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+	const stage = envProc?.env?.STAGE || 'dev';
+	
+	let stripeSecretKey: string;
+	try {
+		stripeSecretKey = await getStripeSecretKey();
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Stripe not configured', message: error.message })
+		};
+	}
 	
 	if (!stripeSecretKey) {
 		return {
@@ -17,6 +28,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			body: JSON.stringify({ error: 'Stripe not configured' })
 		};
 	}
+	
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
 
 	const requester = getUserIdFromEvent(event);
 	if (!requester) {
@@ -45,7 +58,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		const galleryId = body?.galleryId || '';
 		
 		// Get dashboard URL for fallback redirects (only used if redirectUrl is not provided)
-		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		
 		// ALWAYS use redirectUrl from request if provided (this is the primary method)
 		// Fallback to default only if redirectUrl is not provided

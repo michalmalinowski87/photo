@@ -5,6 +5,8 @@ const Stripe = require('stripe');
 import { generatePaymentPageHTML } from './payment-page-template';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 
 const getSecurityHeaders = () => ({
 	'Content-Type': 'text/html; charset=utf-8',
@@ -69,8 +71,9 @@ const cancelTransaction = async (
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	const stage = envProc?.env?.STAGE || 'dev';
+	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	
 	const sessionId = event?.queryStringParameters?.session_id;
@@ -81,8 +84,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	let redirectUrl = `${dashboardUrl}/`;
 
 	// Try to get redirectUrl from Stripe session metadata (primary method)
-	if (sessionId && stripeSecretKey) {
+	if (sessionId) {
 		try {
+			const stripeSecretKey = await getStripeSecretKey();
 			const stripe = new Stripe(stripeSecretKey);
 			const session = await stripe.checkout.sessions.retrieve(sessionId);
 			

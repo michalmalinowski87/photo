@@ -7,9 +7,14 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { pbkdf2Sync } from 'crypto';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3 = new S3Client({});
+// Configure S3Client with explicit region to ensure presigned URLs work correctly
+// Presigned URLs require the client region to match the bucket region
+const s3 = new S3Client({
+	region: process.env.AWS_REGION || 'eu-west-1' // Default to eu-west-1 if AWS_REGION not set
+});
 const ses = new SESClient({});
 
 function verifyPassword(password: string, hash?: string, salt?: string, iter?: number) {
@@ -18,13 +23,15 @@ function verifyPassword(password: string, hash?: string, salt?: string, iter?: n
 	return calc === hash;
 }
 
+import { getSenderEmail } from '../../lib/src/email-config';
+
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 	
 	if (!galleriesTable || !bucket) {
 		return {
@@ -147,14 +154,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const s3Key = key.includes('/') 
 				? `galleries/${galleryId}/final/${key}` 
 				: `galleries/${galleryId}/originals/${key}`;
-			const url = await getSignedUrl(
+			let url = await getSignedUrl(
 				s3,
 				new GetObjectCommand({
 					Bucket: bucket,
 					Key: s3Key
+					// Note: ChecksumMode is omitted entirely - AWS SDK may still add it by default
+					// We'll manually remove it from the URL if present
 				}),
 				{ expiresIn: 86400 }
 			);
+			
+			// Manually remove checksum mode parameter if present
+			// AWS SDK v3 may add x-amz-checksum-mode=ENABLED by default, which causes 403 errors
+			// if objects don't have checksums. Removing it ensures compatibility.
+			if (url && url.includes('x-amz-checksum-mode')) {
+				url = url.replace(/[&?]x-amz-checksum-mode=[^&]*/g, '');
+				url = url.replace(/[&?]{2,}/g, (match) => match[0]);
+				url = url.replace(/\?&/, '?');
+				url = url.replace(/&$/, '');
+			}
+			
 			return {
 				filename: key,
 				url,

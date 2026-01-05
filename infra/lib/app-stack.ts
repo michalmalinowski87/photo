@@ -8,7 +8,7 @@ import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
 import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import { Runtime, LayerVersion, Code, StartingPosition } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, LayerVersion, Code, StartingPosition, CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
@@ -219,6 +219,10 @@ export class AppStack extends Stack {
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true },
+			autoVerify: { email: true }, // REQUIRED: AutoVerifiedAttributes must include email for ResendConfirmationCode to work
+			// According to AWS docs: "Amazon Cognito sends confirmation codes to the user attribute 
+			// in the AutoVerifiedAttributes property of your user pool"
+			// This doesn't auto-verify the email - it tells Cognito to send verification codes TO the email
 			// Customize email verification templates (for signup) - removes "new" from message
 			userVerificationEmailSubject: 'Verify your account',
 			userVerificationEmailBody: 'The verification code to your account is {####}'
@@ -227,6 +231,9 @@ export class AppStack extends Stack {
 		// Customize email templates using CfnUserPool for full control
 		// Cognito uses VerificationMessageTemplate for code-based verification (both signup and password reset)
 		const cfnUserPool = userPool.node.defaultChild as CfnUserPool;
+		// Explicitly set AutoVerifiedAttributes to ensure ResendConfirmationCode works
+		// This is critical - without this, ResendConfirmationCode will fail with "Auto verification not turned on"
+		cfnUserPool.addPropertyOverride('AutoVerifiedAttributes', ['email']);
 		// Override verification email template - this affects both signup verification and password reset
 		// Removes "new" from the default message
 		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailSubject', 'Verify your account');
@@ -429,6 +436,7 @@ export class AppStack extends Stack {
 			ORDERS_TABLE: orders.tableName,
 			TRANSACTIONS_TABLE: transactions.tableName,
 			IMAGES_TABLE: images.tableName
+			// Note: INACTIVITY_SCANNER_FN_NAME is added via addEnvironment() after inactivityScannerFn is created
 		};
 
 		// Downloads zip - helper function invoked by API Lambda and other functions
@@ -733,6 +741,7 @@ export class AppStack extends Stack {
 			]
 		}));
 
+
 		// Single API Lambda function - handles all HTTP endpoints via Express router (except auth)
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
@@ -835,6 +844,72 @@ export class AppStack extends Stack {
 			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('AuthPublicIntegration', authFn)
 			// No authorizer - public endpoints
+		});
+		// User deletion endpoints - handled by API Lambda (require authentication)
+		// These routes must be defined BEFORE the /auth/{proxy+} catch-all to take precedence
+		// OPTIONS routes for CORS preflight (must be public, no authorizer)
+		httpApi.addRoutes({
+			path: '/auth/request-deletion',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('UserDeletionRequestOptionsIntegration', apiFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		httpApi.addRoutes({
+			path: '/auth/cancel-deletion',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('UserDeletionCancelOptionsIntegration', apiFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		httpApi.addRoutes({
+			path: '/auth/deletion-status',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('UserDeletionStatusOptionsIntegration', apiFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		httpApi.addRoutes({
+			path: '/auth/undo-deletion/{token}',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('UserDeletionUndoOptionsIntegration', apiFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		// Actual endpoints with authentication
+		httpApi.addRoutes({
+			path: '/auth/request-deletion',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('UserDeletionRequestIntegration', apiFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/auth/cancel-deletion',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('UserDeletionCancelIntegration', apiFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/auth/deletion-status',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('UserDeletionStatusIntegration', apiFn),
+			authorizer
+		});
+		httpApi.addRoutes({
+			path: '/auth/undo-deletion/{token}',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('UserDeletionUndoIntegration', apiFn)
+			// No authorizer - public endpoint accessed via token
+		});
+		// Dev endpoints - handled by API Lambda (require authentication)
+		// These routes must be defined BEFORE the /auth/{proxy+} catch-all to take precedence
+		httpApi.addRoutes({
+			path: '/auth/dev/trigger-inactivity-scanner',
+			methods: [HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('DevTriggerInactivityScannerOptionsIntegration', apiFn)
+			// No authorizer - OPTIONS requests must be public for CORS to work
+		});
+		httpApi.addRoutes({
+			path: '/auth/dev/trigger-inactivity-scanner',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('DevTriggerInactivityScannerIntegration', apiFn),
+			authorizer
 		});
 		// OPTIONS for protected auth endpoints - must be public for CORS preflight
 		httpApi.addRoutes({
@@ -1206,6 +1281,10 @@ export class AppStack extends Stack {
 		expiryFn.addEnvironment('GALLERY_EXPIRY_DELETION_LAMBDA_ARN', galleryExpiryDeletionFn.functionArn);
 		expiryFn.addEnvironment('GALLERY_EXPIRY_SCHEDULE_ROLE_ARN', schedulerRole.roleArn);
 		expiryFn.addEnvironment('GALLERY_EXPIRY_DLQ_ARN', galleryExpiryDLQ.queueArn);
+		// paymentsWebhookFn also needs these variables (webhook.ts reads them when processing checkout.session.completed)
+		paymentsWebhookFn.addEnvironment('GALLERY_EXPIRY_DELETION_LAMBDA_ARN', galleryExpiryDeletionFn.functionArn);
+		paymentsWebhookFn.addEnvironment('GALLERY_EXPIRY_SCHEDULE_ROLE_ARN', schedulerRole.roleArn);
+		paymentsWebhookFn.addEnvironment('GALLERY_EXPIRY_DLQ_ARN', galleryExpiryDLQ.queueArn);
 		
 		// CloudWatch alarms for gallery expiry deletion
 		const expiryDeletionErrorAlarm = new Alarm(this, 'GalleryExpiryDeletionErrorAlarm', {
@@ -1287,6 +1366,7 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(performUserDeletionFn);
 		orders.grantReadWriteData(performUserDeletionFn);
 		packages.grantReadWriteData(performUserDeletionFn);
+		clients.grantReadWriteData(performUserDeletionFn);
 		images.grantReadWriteData(performUserDeletionFn);
 		wallet.grantReadWriteData(performUserDeletionFn);
 		walletLedger.grantReadWriteData(performUserDeletionFn);
@@ -1301,9 +1381,15 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 		// Grant EventBridge Scheduler permission to delete schedules
+		// User deletion schedules
 		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
 			actions: ['scheduler:DeleteSchedule'],
 			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		// Gallery expiry schedules (needed when deleting galleries during user deletion)
+		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
+			actions: ['scheduler:DeleteSchedule'],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/gallery-expiry-*`]
 		}));
 		performUserDeletionFn.addToRolePolicy(ssmPolicy);
 
@@ -1341,6 +1427,7 @@ export class AppStack extends Stack {
 			environment: {
 				...envVars,
 				USER_DELETION_LAMBDA_ARN: performUserDeletionFn.functionArn,
+				USER_DELETION_FN_NAME: performUserDeletionFn.functionName,
 				USER_DELETION_SCHEDULE_ROLE_ARN: userDeletionSchedulerRole.roleArn,
 				USER_DELETION_DLQ_ARN: userDeletionDLQ.queueArn
 			}
@@ -1368,6 +1455,11 @@ export class AppStack extends Stack {
 			resources: [userDeletionSchedulerRole.roleArn]
 		}));
 		inactivityScannerFn.addToRolePolicy(ssmPolicy);
+		envVars['INACTIVITY_SCANNER_FN_NAME'] = inactivityScannerFn.functionName;
+		// Update API Lambda environment with inactivity scanner function name (for dev endpoints)
+		// This must be done after inactivityScannerFn is created
+		// Using addEnvironment() to add the environment variable
+		apiFn.addEnvironment('INACTIVITY_SCANNER_FN_NAME', inactivityScannerFn.functionName);
 
 		// EventBridge Rule for InactivityScanner - runs daily at 2 AM UTC
 		// Using Schedule.expression() with raw cron string to avoid CDK's automatic weekDay default
@@ -1436,8 +1528,28 @@ export class AppStack extends Stack {
 			actions: ['iam:PassRole'],
 			resources: [userDeletionSchedulerRole.roleArn]
 		}));
+		// Grant auth Lambda scheduler permissions for dev endpoints (trigger-deletion, etc.)
+		// These endpoints are handled by authFn but need to create user deletion schedules
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'scheduler:CreateSchedule',
+				'scheduler:DeleteSchedule',
+				'scheduler:GetSchedule',
+				'scheduler:UpdateSchedule'
+			],
+			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
+		}));
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: ['iam:PassRole'],
+			resources: [userDeletionSchedulerRole.roleArn]
+		}));
 		// Grant API Lambda permission to invoke PerformUserDeletion Lambda (for dev endpoints)
 		performUserDeletionFn.grantInvoke(apiFn);
+		// Update API Lambda environment with user deletion function name (for dev endpoints)
+		apiFn.addEnvironment('USER_DELETION_FN_NAME', performUserDeletionFn.functionName);
+		apiFn.addEnvironment('USER_DELETION_LAMBDA_ARN', performUserDeletionFn.functionArn);
+		apiFn.addEnvironment('USER_DELETION_SCHEDULE_ROLE_ARN', userDeletionSchedulerRole.roleArn);
+		apiFn.addEnvironment('USER_DELETION_DLQ_ARN', userDeletionDLQ.queueArn);
 
 		// Create SSM Parameters for user deletion configuration
 		// These are read at runtime by Lambda functions
@@ -1457,6 +1569,14 @@ export class AppStack extends Stack {
 			parameterName: `${ssmParameterPrefix}/UserDeletionDlqArn`,
 			stringValue: userDeletionDLQ.queueArn,
 			description: 'Dead Letter Queue ARN for failed user deletion schedule executions'
+		});
+
+		// Create SSM Parameter for inactivity scanner function name (for dev endpoints)
+		// Using SSM instead of environment variable because addEnvironment() isn't working reliably
+		const inactivityScannerFnNameParam = new StringParameter(this, 'InactivityScannerFnNameParam', {
+			parameterName: `${ssmParameterPrefix}/InactivityScannerFnName`,
+			stringValue: inactivityScannerFn.functionName,
+			description: 'Function name of InactivityScanner Lambda (for dev endpoints)'
 		});
 
 		// CloudWatch alarms for user deletion
@@ -1589,7 +1709,10 @@ export class AppStack extends Stack {
 		// Update API Lambda environment with delete-related variables (added after apiFn was created)
 		apiFn.addEnvironment('DELETE_BATCH_FN_NAME', deleteBatchFn.functionName);
 		apiFn.addEnvironment('DELETE_QUEUE_URL', deleteQueue.queueUrl);
-
+		// Note: INACTIVITY_SCANNER_FN_NAME is added earlier, right after inactivityScannerFn is created
+		// Grant API Lambda permission to invoke InactivityScanner Lambda (for dev endpoints)
+		inactivityScannerFn.grantInvoke(apiFn);
+		
 		// CloudFront distribution for previews/* (use OAC for bucket access)
 		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
 		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)
@@ -1626,14 +1749,42 @@ export class AppStack extends Stack {
 			priceClass: PriceClass.PRICE_CLASS_100,
 			comment: `PhotoCloud previews ${props.stage}`
 		});
-		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy
-		// No manual policy needed - CDK handles it automatically
+		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy for CloudFront
+		// However, we need to ensure Lambda functions can still generate presigned URLs
+		// Presigned URLs use temporary STS credentials (ASIA...) from the Lambda role
+		// When accessed from browsers, S3 validates the signature AND checks bucket policy
+		// The bucket policy must allow the Lambda role principal for presigned URLs to work
+		// IMPORTANT: Presigned URLs signed with temporary credentials need the role ARN in bucket policy
+		// We add this AFTER CloudFront OAC setup to ensure both CloudFront and presigned URLs work
+		// Note: Both GetObject (for reading) and PutObject (for uploading) are needed for presigned URLs
+		galleriesBucket.addToResourcePolicy(new PolicyStatement({
+			sid: 'AllowLambdaPresignedUrls',
+			effect: 'Allow',
+			principals: [apiFn.role!],
+			actions: ['s3:GetObject', 's3:PutObject'],
+			resources: [`${galleriesBucket.bucketArn}/*`]
+			// No conditions needed - presigned URLs are accessed from browsers/clients
+			// The role ARN principal allows temporary credentials from that role to access objects
+		}));
 		// Add CloudFront domain and distribution ID to env vars after distribution is created
 		envVars.CLOUDFRONT_DOMAIN = dist.distributionDomainName;
 		envVars.CLOUDFRONT_DISTRIBUTION_ID = dist.distributionId;
 		// Update API Lambda environment with CloudFront domain and distribution ID
 		apiFn.addEnvironment('CLOUDFRONT_DOMAIN', dist.distributionDomainName);
 		apiFn.addEnvironment('CLOUDFRONT_DISTRIBUTION_ID', dist.distributionId);
+		
+		// Store CloudFront domain in SSM Parameter Store (Lambda functions read from SSM)
+		const cloudfrontDomainParam = new StringParameter(this, 'CloudFrontDomainParam', {
+			parameterName: `${ssmParameterPrefix}/CloudFrontDomain`,
+			stringValue: dist.distributionDomainName,
+			description: 'CloudFront distribution domain name for image CDN URLs'
+		});
+		
+		const cloudfrontDistributionIdParam = new StringParameter(this, 'CloudFrontDistributionIdParam', {
+			parameterName: `${ssmParameterPrefix}/CloudFrontDistributionId`,
+			stringValue: dist.distributionId,
+			description: 'CloudFront distribution ID for cache invalidation'
+		});
 
 		// CloudFront invalidation permissions (must be added after distribution is created)
 		apiFn.addToRolePolicy(new PolicyStatement({

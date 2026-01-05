@@ -4,6 +4,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createPasswordResetEmail } from '../../lib/src/email';
+import { getSenderEmail } from '../../lib/src/email-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 // Use require to avoid type resolution requirement during lint without installed types
@@ -20,8 +22,9 @@ function hashPassword(password: string) {
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const table = envProc?.env?.GALLERIES_TABLE as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 	if (!table) return { statusCode: 500, body: 'Missing table' };
 	const id = event?.pathParameters?.id;
 	if (!id) return { statusCode: 400, body: 'missing id' };
@@ -47,7 +50,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	const secrets = hashPassword(passwordPlain);
-	const apiUrl = envProc?.env?.PUBLIC_GALLERY_URL as string || '';
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
 	const galleryLink = apiUrl ? `${apiUrl}/gallery/${id}` : `https://your-frontend/gallery/${id}`;
 	
 	await ddb.send(new UpdateCommand({

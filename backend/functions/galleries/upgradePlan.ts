@@ -6,6 +6,8 @@ import { getPaidTransactionForGallery, createTransaction, updateTransactionStatu
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -25,12 +27,12 @@ async function getWalletBalance(userId: string, walletsTable: string): Promise<n
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
-	const apiUrl = envProc?.env?.PUBLIC_API_URL as string || '';
+	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
 
 	if (!galleriesTable || !transactionsTable) {
 		return {
@@ -355,7 +357,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Create Stripe checkout session if needed
 	let checkoutUrl: string | undefined;
-	if (stripeAmountCents > 0 && stripeSecretKey && apiUrl) {
+	if (stripeAmountCents > 0 && apiUrl) {
+		let stripeSecretKey: string;
+		try {
+			stripeSecretKey = await getStripeSecretKey();
+		} catch (error: any) {
+			logger.error('Failed to load Stripe secret key', { error: error.message });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Stripe not configured', message: error.message })
+			};
+		}
+		
 		const Stripe = require('stripe');
 		const stripe = new Stripe(stripeSecretKey);
 
@@ -386,7 +400,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
-		const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 		const successUrl = apiUrl 
 			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
 			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;

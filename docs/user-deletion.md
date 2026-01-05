@@ -726,16 +726,30 @@ To avoid this, the Lambda function is created without the Cognito invoke permiss
 
 #### Configuration Methods
 
-**Method 1: AWS Console (Recommended)**
+**Method 1: AWS Console**
 
-1. Navigate to AWS Cognito Console
-2. Select your User Pool (e.g., `PhotoHub-dev-PhotographersUserPool`)
-3. Go to **User pool properties** → **Lambda triggers**
-4. Scroll to **Post authentication** trigger
-5. Select the Lambda function: `PhotoHub-dev-PostAuthenticationFn` (or use the ARN from stack outputs)
-6. Click **Save changes**
+**Based on current AWS Console UI structure:**
 
-**Method 2: AWS CLI**
+1. Navigate to AWS Cognito Console: https://console.aws.amazon.com/cognito/
+2. Click **User pools** in the left sidebar
+3. Click on your User Pool (e.g., `PhotographersUserPool8CFAD7E2-ZEWHODIIODLN`)
+4. In the left sidebar, look under **Authentication** section
+5. Click on **Extensions** (Lambda triggers are typically under Extensions)
+6. You should see a list of Lambda triggers including:
+   - Post authentication
+7. Find **Post authentication** in the list
+8. Click **Edit** or select the dropdown next to it
+9. Choose your Lambda function: `PhotoHub-dev-PostAuthenticationFn` (or paste the ARN from stack outputs)
+10. Click **Save changes**
+
+**If Extensions doesn't show Lambda triggers:**
+- Try looking under **Settings** → Some console versions have Lambda triggers there
+- Or use **Method 2 (AWS CLI)** below - it's more reliable and works regardless of UI changes
+
+**⚠️ Recommended: Use AWS CLI Instead**
+The AWS Console UI changes frequently and Lambda triggers can be hard to find. **Method 2 (AWS CLI)** below is more reliable and faster.
+
+**Method 2: AWS CLI (Recommended if Console UI is unclear)**
 
 ```bash
 # Get the Lambda ARN from stack outputs
@@ -751,10 +765,29 @@ USER_POOL_ID=$(aws cloudformation describe-stacks \
   --output text)
 
 # Configure the trigger
+# ⚠️ IMPORTANT: Always include --auto-verified-attributes to prevent resetting email verification!
+# Without this, ResendConfirmationCode will fail with "Auto verification not turned on"
 aws cognito-idp update-user-pool \
   --user-pool-id "$USER_POOL_ID" \
-  --lambda-config "PostAuthentication=$LAMBDA_ARN"
+  --lambda-config "PostAuthentication=$LAMBDA_ARN" \
+  --auto-verified-attributes email
 ```
+
+**Quick One-Liner (Easiest - Copies values automatically):**
+
+```bash
+# Configure Post Authentication trigger in one command (automatically gets values from stack)
+# ⚠️ IMPORTANT: Always include --auto-verified-attributes to prevent resetting email verification!
+aws cognito-idp update-user-pool \
+  --user-pool-id $(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
+  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
+  --auto-verified-attributes email
+```
+
+This one-liner automatically:
+1. Gets the User Pool ID from your stack outputs
+2. Gets the Lambda ARN from your stack outputs  
+3. Configures the Post Authentication trigger
 
 **Method 3: Using CDK Outputs**
 
@@ -798,6 +831,11 @@ After configuration, test the trigger:
 
 #### Troubleshooting
 
+**Can't find Lambda triggers in Console:**
+- AWS Console UI changes frequently - try different tabs: **Sign-in experience**, **App integration**, or look for **Lambda triggers** in the left sidebar
+- Use AWS CLI method instead (Method 2) - it's more reliable and works regardless of UI changes
+- You can also use AWS CloudShell in the console to run CLI commands directly
+
 **Trigger not working:**
 - Verify Lambda ARN is correct in User Pool configuration
 - AWS automatically grants Cognito permission to invoke the Lambda when you configure the trigger
@@ -807,10 +845,24 @@ After configuration, test the trigger:
 
 **Permission errors:**
 - AWS Cognito automatically grants the Lambda invoke permission when you configure the trigger via Console or CLI
-- If you see permission errors, reconfigure the trigger via AWS Console or CLI - this will re-grant the permission
+- If you see permission errors, reconfigure the trigger via AWS CLI (Method 2) - this will re-grant the permission
 - Verify the Lambda function exists and is in the same region as the User Pool
+- Check Lambda function's resource policy: `aws lambda get-policy --function-name PhotoHub-dev-PostAuthenticationFn`
 
 **Circular dependency during deployment:**
 - If you see circular dependency errors, ensure you're NOT modifying the User Pool in CDK after it's been created
 - Use manual configuration instead (as documented above)
+
+**Quick CLI Setup (Recommended):**
+
+If you can't find the Lambda triggers in the console, use this one-liner:
+
+```bash
+# Configure Post Authentication trigger in one command
+# ⚠️ IMPORTANT: Always include --auto-verified-attributes to prevent resetting email verification!
+aws cognito-idp update-user-pool \
+  --user-pool-id $(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
+  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
+  --auto-verified-attributes email
+```
 

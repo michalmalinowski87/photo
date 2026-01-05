@@ -7,7 +7,8 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aw
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { createUserDeletionSchedule, cancelUserDeletionSchedule } from '../../../lib/src/user-deletion-scheduler';
 import { createDeletionRequestEmail, createDeletionCancelledEmail } from '../../../lib/src/email';
-import { getConfigValueFromSsm } from '../../../lib/src/ssm-config';
+import { getConfigValueFromSsm, getConfigWithEnvFallback } from '../../../lib/src/ssm-config';
+import { getSenderEmail } from '../../../lib/src/email-config';
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -166,8 +167,9 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 router.post('/cancel-deletion', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const usersTable = envProc?.env?.USERS_TABLE as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 
 	if (!usersTable) {
 		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
@@ -320,9 +322,11 @@ router.get('/deletion-status', async (req: Request, res: Response) => {
 router.get('/undo-deletion/:token', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const usersTable = envProc?.env?.USERS_TABLE as string;
-	const sender = envProc?.env?.SENDER_EMAIL as string;
-	const dashboardUrl = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	const sender = await getSenderEmail();
+	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
+		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
 
 	if (!usersTable) {
 		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });

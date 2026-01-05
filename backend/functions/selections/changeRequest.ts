@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from 
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getJWTFromEvent } from '../../lib/src/jwt';
 import { createChangeRequestEmail } from '../../lib/src/email';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -78,7 +79,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 
 	// Notify photographer
-	const sender = envProc?.env?.SENDER_EMAIL as string;
+	const sender = await getSenderEmail();
 	const notify = gallery.ownerEmail;
 	if (sender && notify) {
 		const emailTemplate = createChangeRequestEmail(galleryId, clientId || 'client');

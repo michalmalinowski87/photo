@@ -197,15 +197,69 @@ export function createDeletionCompletedEmail(userEmail: string): EmailTemplate {
 	};
 }
 
-export function createInactivityReminderEmail(userEmail: string, daysUntilDeletion: number): EmailTemplate {
+export function createInactivityReminderEmail(userEmail: string, daysUntilDeletion: number, loginUrl: string, senderEmail: string): EmailTemplate {
+	const companyName = 'PhotoCloud';
+	const supportEmail = senderEmail;
+	const websiteUrl = loginUrl.split('/auth')[0] || 'https://photocloud.com';
+	
 	return {
 		subject: 'Twoje konto jest nieaktywne',
-		text: `Witaj,\n\nZauważyliśmy, że Twoje konto nie było używane od 11 miesięcy.\n\nJeśli nie zalogujesz się w ciągu najbliższych ${daysUntilDeletion} dni, Twoje konto zostanie automatycznie usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).\n\nAby zachować konto, po prostu zaloguj się do systemu.`,
-		html: `<h2>Twoje konto jest nieaktywne</h2><p>Witaj,</p><p>Zauważyliśmy, że Twoje konto nie było używane od 11 miesięcy.</p><div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-weight: bold;">Jeśli nie zalogujesz się w ciągu najbliższych <strong>${daysUntilDeletion}</strong> dni, Twoje konto zostanie automatycznie usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).</p></div><p>Aby zachować konto, po prostu zaloguj się do systemu.</p>`
+		text: `Drogi Użytkowniku / Droga Użytkowniczko,
+
+Zauważyliśmy, że Twoje konto nie było używane od około 11 miesięcy.
+
+Zgodnie z naszą polityką ochrony danych (RODO/GDPR) konta, które pozostają nieaktywne przez dłuższy czas, są automatycznie usuwane. Nie chcielibyśmy jednak stracić kontaktu z Tobą!
+
+Aby zachować konto i wszystkie Twoje dane, wystarczy, że zalogujesz się w ciągu najbliższych ${daysUntilDeletion} dni.
+Zaloguj się teraz: ${loginUrl}
+
+Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy przy logowaniu, nasz zespół wsparcia jest do Twojej dyspozycji.
+
+Dziękujemy, że jesteś z nami i mamy nadzieję wkrótce Cię zobaczyć!
+
+Pozdrawiamy serdecznie,
+Zespół ${companyName}
+${supportEmail}
+${websiteUrl}`,
+		html: `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<h2 style="color: #2c3e50; margin-top: 0;">Drogi Użytkowniku / Droga Użytkowniczko,</h2>
+	
+	<p>Zauważyliśmy, że Twoje konto nie było używane od około <strong>11 miesięcy</strong>.</p>
+	
+	<p>Zgodnie z naszą polityką ochrony danych (RODO/GDPR) konta, które pozostają nieaktywne przez dłuższy czas, są automatycznie usuwane. <strong>Nie chcielibyśmy jednak stracić kontaktu z Tobą!</strong></p>
+	
+	<div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 16px; margin: 24px 0; border-radius: 4px;">
+		<p style="margin: 0; font-weight: 600; color: #2c3e50;">Aby zachować konto i wszystkie Twoje dane, wystarczy, że zalogujesz się w ciągu najbliższych <strong style="color: #e74c3c;">${daysUntilDeletion} dni</strong>.</p>
+	</div>
+	
+	<div style="text-align: center; margin: 32px 0;">
+		<a href="${loginUrl}" style="display: inline-block; background-color: #3498db; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">Zaloguj się teraz</a>
+	</div>
+	
+	<p>Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy przy logowaniu, nasz zespół wsparcia jest do Twojej dyspozycji.</p>
+	
+	<p>Dziękujemy, że jesteś z nami i mamy nadzieję wkrótce Cię zobaczyć!</p>
+	
+	<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+		<p style="margin: 8px 0; color: #7f8c8d;">Pozdrawiamy serdecznie,<br>
+		<strong style="color: #2c3e50;">Zespół ${companyName}</strong></p>
+		<p style="margin: 4px 0; font-size: 14px; color: #7f8c8d;">
+			<a href="mailto:${supportEmail}" style="color: #3498db; text-decoration: none;">${supportEmail}</a><br>
+			<a href="${websiteUrl}" style="color: #3498db; text-decoration: none;">${websiteUrl}</a>
+		</p>
+	</div>
+</body>
+</html>`
 	};
 }
 
-export function createInactivityFinalWarningEmail(userEmail: string, deletionDate: string): EmailTemplate {
+export function createInactivityFinalWarningEmail(userEmail: string, deletionDate: string, loginUrl: string, senderEmail: string): EmailTemplate {
 	const deletionDateFormatted = new Date(deletionDate).toLocaleDateString('pl-PL', {
 		day: 'numeric',
 		month: 'long',
@@ -213,11 +267,67 @@ export function createInactivityFinalWarningEmail(userEmail: string, deletionDat
 		hour: '2-digit',
 		minute: '2-digit'
 	});
+	const companyName = 'PhotoCloud';
+	const supportEmail = senderEmail;
+	const websiteUrl = loginUrl.split('/auth')[0] || 'https://photocloud.com';
 
 	return {
 		subject: '🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte',
-		text: `Witaj,\n\nTo jest ostatnie ostrzeżenie przed usunięciem Twojego konta.\n\nTwoje konto nie było używane od 12 miesięcy i zostanie automatycznie usunięte: ${deletionDateFormatted}\n\nJeśli chcesz zachować konto, zaloguj się TERAZ. Po zalogowaniu usunięcie zostanie automatycznie anulowane.\n\nJeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).`,
-		html: `<h2>🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte</h2><p>Witaj,</p><p>To jest ostatnie ostrzeżenie przed usunięciem Twojego konta.</p><div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin: 16px 0;"><p style="margin: 0; font-weight: bold; color: #721c24;">Twoje konto nie było używane od 12 miesięcy i zostanie automatycznie usunięte: <strong>${deletionDateFormatted}</strong></p></div><p>Jeśli chcesz zachować konto, <strong>zaloguj się TERAZ</strong>. Po zalogowaniu usunięcie zostanie automatycznie anulowane.</p><p>Jeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką przechowywania danych (RODO/GDPR).</p>`
+		text: `Drogi Użytkowniku / Droga Użytkowniczko,
+
+To jest ostatnie ostrzeżenie przed usunięciem Twojego konta.
+
+Twoje konto nie było używane od 12 miesięcy i zostanie automatycznie usunięte: ${deletionDateFormatted}
+
+Jeśli chcesz zachować konto i wszystkie Twoje dane, zaloguj się TERAZ. Po zalogowaniu usunięcie zostanie automatycznie anulowane.
+Zaloguj się teraz: ${loginUrl}
+
+Jeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką ochrony danych (RODO/GDPR).
+
+Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy, nasz zespół wsparcia jest do Twojej dyspozycji.
+
+Pozdrawiamy serdecznie,
+Zespół ${companyName}
+${supportEmail}
+${websiteUrl}`,
+		html: `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<h2 style="color: #e74c3c; margin-top: 0;">🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte</h2>
+	
+	<p><strong>Drogi Użytkowniku / Droga Użytkowniczko,</strong></p>
+	
+	<p>To jest ostatnie ostrzeżenie przed usunięciem Twojego konta.</p>
+	
+	<div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 16px; margin: 24px 0; border-radius: 4px;">
+		<p style="margin: 0; font-weight: 600; color: #721c24;">Twoje konto nie było używane od <strong>12 miesięcy</strong> i zostanie automatycznie usunięte:</p>
+		<p style="margin: 8px 0 0 0; font-size: 18px; font-weight: bold; color: #721c24;">${deletionDateFormatted}</p>
+	</div>
+	
+	<p>Jeśli chcesz zachować konto i wszystkie Twoje dane, <strong>zaloguj się TERAZ</strong>. Po zalogowaniu usunięcie zostanie automatycznie anulowane.</p>
+	
+	<div style="text-align: center; margin: 32px 0;">
+		<a href="${loginUrl}" style="display: inline-block; background-color: #e74c3c; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">Zaloguj się TERAZ</a>
+	</div>
+	
+	<p style="color: #721c24; font-weight: 600;">Jeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką ochrony danych (RODO/GDPR).</p>
+	
+	<p>Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy, nasz zespół wsparcia jest do Twojej dyspozycji.</p>
+	
+	<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+		<p style="margin: 8px 0; color: #7f8c8d;">Pozdrawiamy serdecznie,<br>
+		<strong style="color: #2c3e50;">Zespół ${companyName}</strong></p>
+		<p style="margin: 4px 0; font-size: 14px; color: #7f8c8d;">
+			<a href="mailto:${supportEmail}" style="color: #3498db; text-decoration: none;">${supportEmail}</a><br>
+			<a href="${websiteUrl}" style="color: #3498db; text-decoration: none;">${websiteUrl}</a>
+		</p>
+	</div>
+</body>
+</html>`
 	};
 }
 

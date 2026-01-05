@@ -6,6 +6,7 @@ const Stripe = require('stripe');
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { PRICING_PLANS } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
+import { getStripeSecretKey } from '../../lib/src/stripe-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -474,7 +475,6 @@ async function creditWallet(userId: string, amountCents: number, txnId: string, 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
-	const stripeSecretKey = envProc?.env?.STRIPE_SECRET_KEY as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
 	const paymentsTable = envProc?.env?.PAYMENTS_TABLE as string;
@@ -508,6 +508,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			hasDetail: !!e?.detail
 		}))
 	});
+
+	// Get Stripe secret key from SSM
+	let stripeSecretKey: string;
+	try {
+		stripeSecretKey = await getStripeSecretKey();
+	} catch (error: any) {
+		logger.error('Failed to load Stripe secret key', { error: error.message });
+		throw new Error('Missing required configuration: Stripe secret key');
+	}
 
 	// Validate configuration before processing
 	if (!stripeSecretKey || !walletsTable || !ledgerTable) {

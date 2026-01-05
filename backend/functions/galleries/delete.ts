@@ -8,6 +8,7 @@ const { SESClient } = require('@aws-sdk/client-ses');
 const { CognitoIdentityProviderClient } = require('@aws-sdk/client-cognito-identity-provider');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { deleteGallery } from '../../lib/src/gallery-deletion';
+import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -59,7 +60,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	try {
 		const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
-		const sender = envProc?.env?.SENDER_EMAIL as string;
+		const sender = await getSenderEmail();
 		const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 		const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 

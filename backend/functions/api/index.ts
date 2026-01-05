@@ -26,14 +26,18 @@ import * as selectionsChangeRequest from '../../functions/selections/changeReque
 import * as ordersListFinalImages from '../../functions/orders/listFinalImages';
 import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip';
 import { dashboardRoutes } from './routes/dashboard';
+import { userDeletionRoutes } from './routes/userDeletion';
+import { authRoutes } from './routes/auth';
 
 const app = express();
 
+import { getCorsOrigins } from '../../lib/src/cors-config';
+
 // OPTIONS preflight requests are handled automatically by API Gateway's built-in CORS
 // This middleware only sets CORS headers for actual API responses (GET, POST, etc.)
-app.use((req: Request, res: Response, next) => {
-	// Get allowed origins from environment variable
-	const corsOrigins = process.env.CORS_ORIGINS;
+app.use(async (req: Request, res: Response, next) => {
+	// Get allowed origins from SSM Parameter Store with fallback to environment variable
+	const corsOrigins = await getCorsOrigins();
 	const stage = process.env.STAGE || 'dev';
 	
 	let allowedOrigin = '*';
@@ -47,7 +51,7 @@ app.use((req: Request, res: Response, next) => {
 		if (allowedOrigins.includes(origin)) {
 			allowedOrigin = origin;
 		} else if (allowedOrigins.length === 1 && allowedOrigins[0] === '*') {
-			// Explicit wildcard in env var
+			// Explicit wildcard in config
 			allowedOrigin = '*';
 		} else if (stage === 'dev' || stage === 'development') {
 			// Allow all in development if origin doesn't match
@@ -58,7 +62,7 @@ app.use((req: Request, res: Response, next) => {
 		}
 	} else if (stage === 'prod' || stage === 'production') {
 		// Production without CORS_ORIGINS set - default to wildcard with warning
-		console.warn('⚠️  CORS_ORIGINS not set in production. Using wildcard. Set CORS_ORIGINS env var for security.');
+		console.warn('⚠️  CORS_ORIGINS not set in production. Using wildcard. Set CORS_ORIGINS in SSM for security.');
 	}
 	
 	res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -94,7 +98,11 @@ app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFi
 app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 
 // API Gateway validates tokens before requests reach Lambda, but we also check in middleware for extra safety
-// Auth routes are handled by separate auth Lambda function
+// Auth routes - some handled by separate auth Lambda function, some (like dev endpoints) handled here
+// User deletion routes (require authentication)
+app.use('/auth', requireAuth, userDeletionRoutes);
+// Auth routes including dev endpoints (require authentication)
+app.use('/auth', requireAuth, authRoutes);
 app.use('/galleries', requireAuth, galleriesRoutes);
 app.use('/clients', requireAuth, clientsRoutes);
 app.use('/packages', requireAuth, packagesRoutes);
