@@ -94,8 +94,8 @@ export const ConfirmDialog = ({
                 <div
                   className={`w-5 h-5 rounded border-2 transition-all duration-200 flex items-center justify-center ${
                     suppressChecked
-                      ? "bg-brand-600 border-brand-600 dark:bg-photographer-accent dark:border-photographer-accent"
-                      : `bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-brand-500 dark:group-hover:border-photographer-accent"}`
+                      ? "bg-photographer-accent border-photographer-accent dark:bg-photographer-accent dark:border-photographer-accent"
+                      : `bg-white border-photographer-border dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-photographer-accent dark:group-hover:border-photographer-accent"}`
                   }`}
                 >
                   {suppressChecked && (

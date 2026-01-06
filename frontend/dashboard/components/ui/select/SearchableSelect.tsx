@@ -202,10 +202,10 @@ export const SearchableSelect = ({
                   }
                 }}
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
               </div>
             )}
-            <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-200" />
+            <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform duration-200" />
           </div>
         </button>
       ) : (

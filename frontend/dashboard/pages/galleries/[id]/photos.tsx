@@ -1418,8 +1418,8 @@ export default function GalleryPhotos() {
                     isNonDeletable
                       ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
                       : isSelected
-                        ? "bg-brand-600 border-brand-600 dark:bg-photographer-accent dark:border-photographer-accent"
-                        : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
+                        ? "bg-photographer-accent border-photographer-accent dark:bg-photographer-accent dark:border-photographer-accent"
+                        : "bg-white/90 border-photographer-border dark:bg-gray-800/90 dark:border-gray-600"
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1948,10 +1948,10 @@ export default function GalleryPhotos() {
               return (
                 <div
                   key={orderId}
-                  className="bg-photographer-elevated border border-gray-500 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
+                  className="bg-white border border-photographer-border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
-                    className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
+                    className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors ${
                       isExpanded ? "rounded-t-lg" : "rounded-lg"
                     }`}
                   >
@@ -1999,7 +1999,7 @@ export default function GalleryPhotos() {
                       >
                         <ChevronDown
                           size={18}
-                          className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                          className={`text-gray-600 dark:text-gray-400 transition-transform flex-shrink-0 ${
                             isExpanded ? "transform rotate-180" : ""
                           }`}
                         />
@@ -2007,7 +2007,7 @@ export default function GalleryPhotos() {
                     </div>
                   </div>
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-2 rounded-b-lg">
+                    <div className="px-4 pb-4 pt-2 rounded-b-lg bg-white dark:bg-gray-800">
                       <OrderImagesGrid
                         images={orderImages}
                         renderImageItem={renderImageItem}
@@ -2025,9 +2025,9 @@ export default function GalleryPhotos() {
             })}
 
             {/* Unselected Section - Always show header */}
-            <div className="bg-photographer-elevated border border-gray-500 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white border border-photographer-border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
               <div
-                className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
+                className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors ${
                   expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"
                 }`}
               >
@@ -2067,7 +2067,7 @@ export default function GalleryPhotos() {
                   >
                     <ChevronDown
                       size={18}
-                      className={`text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0 ${
+                      className={`text-gray-600 dark:text-gray-400 transition-transform flex-shrink-0 ${
                         expandedSection === "unselected" ? "transform rotate-180" : ""
                       }`}
                     />
@@ -2075,7 +2075,7 @@ export default function GalleryPhotos() {
                 </div>
               </div>
               {expandedSection === "unselected" && (
-                <div className="px-4 pb-4 pt-2 rounded-b-lg">
+                <div className="px-4 pb-4 pt-2 rounded-b-lg bg-white dark:bg-gray-800">
                   {(imagesLoading || imagesFetching) && unselectedImages.length === 0 ? (
                     <GalleryLoading text="Ładowanie niewybranych zdjęć..." />
                   ) : unselectedImages.length > 0 ? (

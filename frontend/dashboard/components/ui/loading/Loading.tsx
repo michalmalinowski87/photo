@@ -19,7 +19,7 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 
   const spinner = (
     <div className={`${spinnerSize} relative`}>
-      <div className="absolute inset-0 border-4 border-gray-400 dark:border-gray-700 rounded-full"></div>
+      <div className="absolute inset-0 border-4 border-gray-500 dark:border-gray-700 rounded-full"></div>
       <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
     </div>
   );
@@ -65,7 +65,7 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
       </div>
 
       {/* Welcoming message */}
-      <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">
+      <p className="text-lg text-gray-600 dark:text-gray-400 font-medium">
         {text ?? defaultMessage}
       </p>
 
@@ -114,11 +114,11 @@ export const GalleryLoading = ({ text = "Ładowanie..." }: { text?: string }) =>
     <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
       <div className="flex flex-col items-center justify-center gap-4">
         {/* PhotoHub text with subtle fade animation */}
-        <h1 className="text-4xl font-bold text-gray-400 dark:text-gray-600 animate-fade-in-out">
+        <h1 className="text-4xl font-bold text-gray-500 dark:text-gray-600 animate-fade-in-out">
           PhotoHub
         </h1>
         {/* Loading text */}
-        <p className="text-base text-gray-500 dark:text-gray-400 font-medium">{text}</p>
+        <p className="text-base text-gray-600 dark:text-gray-400 font-medium">{text}</p>
       </div>
     </div>
   );
@@ -152,7 +152,7 @@ export const ContentViewLoading = ({ text, logo }: { text?: string; logo?: React
         </div>
 
         {/* Welcoming message */}
-        <p className="text-base text-gray-500 dark:text-gray-400 font-medium">
+        <p className="text-base text-gray-600 dark:text-gray-400 font-medium">
           {text ?? defaultMessage}
         </p>
 

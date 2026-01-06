@@ -178,7 +178,7 @@ export const ClientSendSuccessPopup = ({
                 checked={dontShowAgain}
                 onChange={(e) => void handleDontShowAgain(e.target.checked)}
                 disabled={isSavingPreference}
-                className="w-4 h-4 text-blue-600 border-gray-400 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                className="w-4 h-4 text-photographer-accent border-photographer-border rounded focus:ring-photographer-accent dark:border-gray-600 dark:bg-gray-700"
               />
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 Nie pokazuj tego komunikatu ponownie
