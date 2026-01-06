@@ -75,13 +75,13 @@ export const SuggestedPlanSection = ({
   }, [selectedPlanKey, selectedDuration, suggestedStorage, selectionEnabled]);
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border-2 border-blue-300 dark:border-blue-500/30 rounded-lg px-6 pt-6 pb-4 mb-4">
+    <div className="bg-gradient-to-r from-photographer-elevated to-photographer-lightBeige dark:from-photographer-accent/10 dark:to-photographer-accent/10 border-2 border-photographer-darkBeige dark:border-photographer-accent/30 rounded-lg px-6 pt-6 pb-4 mb-4">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             Zaproponowany plan
           </h3>
-          <p className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-3">
+          <p className="text-lg font-semibold text-photographer-accent dark:text-photographer-accentLight mb-3">
             {suggestedStorage}
           </p>
 
@@ -138,8 +138,8 @@ export const SuggestedPlanSection = ({
                     isDisabled
                       ? "opacity-50 cursor-not-allowed outline-2 outline-gray-300 dark:outline-gray-600 outline bg-photographer-elevated dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                       : isSelected
-                        ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                        : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"
+                        ? "outline-2 outline-photographer-accent/60 outline bg-photographer-accentLight/50 dark:bg-photographer-accentDark/20 text-photographer-accentDark dark:text-gray-300"
+                        : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-photographer-darkBeige dark:hover:outline-photographer-accent"
                   }`}
                 >
                   <div className="text-sm">
@@ -172,7 +172,7 @@ export const SuggestedPlanSection = ({
 
               return (
                 <>
-                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  <p className="text-3xl font-bold text-photographer-accent dark:text-photographer-accentLight">
                     {formatPrice(upgradePrice)}
                   </p>
                   {!selectionEnabled && mode !== "limitExceeded" && (
@@ -188,13 +188,13 @@ export const SuggestedPlanSection = ({
       {selectedPlan && (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-500/30">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-photographer-border dark:border-photographer-accent/30">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Limit oryginałów</p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {formatBytes(selectedPlan.storageLimitBytes)}
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-500/30">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-photographer-border dark:border-photographer-accent/30">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Limit finalnych</p>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {formatBytes(selectedPlan.storageLimitBytes)}

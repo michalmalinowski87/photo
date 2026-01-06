@@ -92,7 +92,7 @@ export const PlanSelectionGrid = ({
                 isDisabled
                   ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-600"
                   : isSelected
-                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                    ? "bg-photographer-accentLight/60 dark:bg-photographer-accentDark/30 text-photographer-accentDark dark:text-gray-300 shadow-sm border border-photographer-darkBeige/50 dark:border-photographer-accent/40"
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               }`}
             >
@@ -157,14 +157,14 @@ export const PlanSelectionGrid = ({
                   isDisabled
                     ? "opacity-50 cursor-not-allowed border-gray-400 dark:border-gray-600 bg-photographer-background dark:bg-gray-900"
                     : isSelected
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md cursor-pointer"
-                      : "border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+                      ? "border-photographer-accent/60 bg-photographer-elevated dark:bg-photographer-accentDark/20 shadow-md cursor-pointer"
+                      : "border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-photographer-darkBeige dark:hover:border-photographer-accent cursor-pointer"
                 }`}
               >
                 {/* Suggested Badge */}
                 {isSuggested && (
                   <div className="absolute top-3 right-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-photographer-accentLight dark:bg-photographer-accentDark/40 text-xs font-semibold text-photographer-accentDark/80 dark:text-photographer-accentLight">
                       <CheckCircle2 size={12} />
                       Sugerowany
                     </span>
@@ -174,7 +174,7 @@ export const PlanSelectionGrid = ({
                 {/* Selected Checkmark */}
                 {isSelected && !isSuggested && (
                   <div className="absolute top-3 right-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-photographer-accent flex items-center justify-center">
                       <Check className="w-4 h-4 text-white" strokeWidth={2} />
                     </div>
                   </div>

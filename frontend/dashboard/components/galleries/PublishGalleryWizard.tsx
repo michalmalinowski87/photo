@@ -529,10 +529,10 @@ export const PublishGalleryWizard = ({
           <div className="flex items-start justify-center p-8 min-h-full">
             <div className="w-full max-w-6xl mx-auto space-y-6">
               {/* Wallet Balance Section Skeleton */}
-              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4 h-[205.33px] animate-fade-in-out"></div>
+              <div className="bg-photographer-elevated dark:bg-photographer-accent/10 border border-gray-400 dark:border-gray-700 rounded-lg p-4 h-[205.33px] animate-fade-in-out"></div>
 
               {/* Suggested Plan Section Skeleton */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border-2 border-blue-300 dark:border-blue-500/30 rounded-lg px-6 pt-6 pb-4 mb-4 h-[279.33px] animate-fade-in-out"></div>
+              <div className="bg-gradient-to-r from-photographer-elevated to-photographer-lightBeige dark:from-photographer-accent/10 dark:to-photographer-accent/10 border-2 border-photographer-darkBeige dark:border-photographer-accent/30 rounded-lg px-6 pt-6 pb-4 mb-4 h-[279.33px] animate-fade-in-out"></div>
 
               {/* Plan Selection Grid Skeleton */}
               <div className="mb-4 h-[360px] animate-fade-in-out">
@@ -571,7 +571,7 @@ export const PublishGalleryWizard = ({
               ) : null}
 
               {/* Wallet Balance Section */}
-              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-4">
+              <div className="bg-photographer-elevated dark:bg-photographer-accent/10 border border-gray-400 dark:border-gray-700 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Saldo portfela</p>
@@ -612,7 +612,7 @@ export const PublishGalleryWizard = ({
                         ))}
                       </div>
                     </div>
-                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                    <p className="text-sm text-photographer-accent dark:text-photographer-accentLight">
                       Doładowanie portfela jest tańsze niż płatność przez Stripe (brak opłat
                       przetwarzania).
                     </p>

@@ -2,7 +2,7 @@ import React, { ReactNode, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  content: string;
+  content: string | undefined;
   children: ReactNode;
   side?: "top" | "bottom" | "left" | "right";
   align?: "center" | "start" | "end";
@@ -18,6 +18,10 @@ export const Tooltip = ({
   maxWidth,
   fullWidth = false,
 }: TooltipProps) => {
+  // Don't render tooltip if content is empty or undefined
+  if (!content || content.trim() === "") {
+    return <>{children}</>;
+  }
   const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -100,33 +104,33 @@ export const Tooltip = ({
   const getArrowClasses = () => {
     if (side === "top") {
       if (align === "start") {
-        return "top-full left-4 -mt-0.5 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800";
+        return "top-full left-4 -mt-0.5 border-4 border-transparent border-t-gray-700 dark:border-t-gray-800";
       } else if (align === "end") {
-        return "top-full right-4 -mt-0.5 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800";
+        return "top-full right-4 -mt-0.5 border-4 border-transparent border-t-gray-700 dark:border-t-gray-800";
       }
-      return "top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800";
+      return "top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-gray-700 dark:border-t-gray-800";
     } else if (side === "bottom") {
       if (align === "start") {
-        return "bottom-full left-4 -mb-0.5 border-4 border-transparent border-b-gray-900 dark:border-b-gray-800";
+        return "bottom-full left-4 -mb-0.5 border-4 border-transparent border-b-gray-700 dark:border-b-gray-800";
       } else if (align === "end") {
-        return "bottom-full right-4 -mb-0.5 border-4 border-transparent border-b-gray-900 dark:border-b-gray-800";
+        return "bottom-full right-4 -mb-0.5 border-4 border-transparent border-b-gray-700 dark:border-b-gray-800";
       }
-      return "bottom-full left-1/2 -translate-x-1/2 -mb-0.5 border-4 border-transparent border-b-gray-900 dark:border-b-gray-800";
+      return "bottom-full left-1/2 -translate-x-1/2 -mb-0.5 border-4 border-transparent border-b-gray-700 dark:border-b-gray-800";
     } else if (side === "left") {
       if (align === "start") {
-        return "left-full top-4 -ml-0.5 border-4 border-transparent border-l-gray-900 dark:border-l-gray-800";
+        return "left-full top-4 -ml-0.5 border-4 border-transparent border-l-gray-700 dark:border-l-gray-800";
       } else if (align === "end") {
-        return "left-full bottom-4 -ml-0.5 border-4 border-transparent border-l-gray-900 dark:border-l-gray-800";
+        return "left-full bottom-4 -ml-0.5 border-4 border-transparent border-l-gray-700 dark:border-l-gray-800";
       }
-      return "left-full top-1/2 -translate-y-1/2 -ml-0.5 border-4 border-transparent border-l-gray-900 dark:border-l-gray-800";
+      return "left-full top-1/2 -translate-y-1/2 -ml-0.5 border-4 border-transparent border-l-gray-700 dark:border-l-gray-800";
     } else {
       // right
       if (align === "start") {
-        return "right-full top-4 -mr-0.5 border-4 border-transparent border-r-gray-900 dark:border-r-gray-800";
+        return "right-full top-4 -mr-0.5 border-4 border-transparent border-r-gray-700 dark:border-r-gray-800";
       } else if (align === "end") {
-        return "right-full bottom-4 -mr-0.5 border-4 border-transparent border-r-gray-900 dark:border-r-gray-800";
+        return "right-full bottom-4 -mr-0.5 border-4 border-transparent border-r-gray-700 dark:border-r-gray-800";
       }
-      return "right-full top-1/2 -translate-y-1/2 -mr-0.5 border-4 border-transparent border-r-gray-900 dark:border-r-gray-800";
+      return "right-full top-1/2 -translate-y-1/2 -mr-0.5 border-4 border-transparent border-r-gray-700 dark:border-r-gray-800";
     }
   };
 
@@ -135,7 +139,7 @@ export const Tooltip = ({
   const tooltipContent = isHovered && mounted && (
     <div
       ref={tooltipRef}
-      className={`fixed ${maxWidth ?? "w-auto"} min-w-max px-3 py-1.5 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg z-[100] pointer-events-none ${maxWidth ? "" : "whitespace-nowrap"}`}
+      className={`fixed ${maxWidth ?? "w-auto"} min-w-max px-3 py-1.5 bg-gray-700 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg z-[100] pointer-events-none ${maxWidth ? "" : "whitespace-nowrap"}`}
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,

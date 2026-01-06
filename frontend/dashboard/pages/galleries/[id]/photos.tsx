@@ -1948,7 +1948,7 @@ export default function GalleryPhotos() {
               return (
                 <div
                   key={orderId}
-                  className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
+                  className="bg-photographer-elevated border border-gray-500 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
                     className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
@@ -2025,7 +2025,7 @@ export default function GalleryPhotos() {
             })}
 
             {/* Unselected Section - Always show header */}
-            <div className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+            <div className="bg-photographer-elevated border border-gray-500 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
               <div
                 className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
                   expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"
