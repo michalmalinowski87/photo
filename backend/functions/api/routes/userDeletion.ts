@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { getUserIdFromEvent } from '../../../lib/src/auth';
 import { reqToEvent } from './helpers';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { createUserDeletionSchedule, cancelUserDeletionSchedule } from '../../../lib/src/user-deletion-scheduler';
 import { createDeletionRequestEmail, createDeletionCancelledEmail } from '../../../lib/src/email';
@@ -107,6 +107,7 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 		const undoToken = randomBytes(32).toString('hex');
 
 		// Update user status - preserve all existing data, only change status
+		// IMPORTANT: Email should NOT be nullified here - only during actual deletion in performUserDeletion
 		const updateData: any = {
 			...user, // Preserve all existing fields
 			userId,
@@ -117,6 +118,16 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 			undoToken,
 			updatedAt: new Date().toISOString()
 		};
+
+		// Explicitly ensure email fields are preserved - never nullify during request phase
+		// Email will only be nullified during actual deletion in performUserDeletion.ts (line 646-653)
+		// If email exists in user object, preserve it; if it doesn't exist, don't add it
+		if ('email' in user) {
+			updateData.email = user.email; // Preserve email value (even if null, but don't set to null if it wasn't null)
+		}
+		if ('contactEmail' in user) {
+			updateData.contactEmail = user.contactEmail;
+		}
 
 		await ddb.send(new PutCommand({
 			TableName: usersTable,
@@ -234,31 +245,18 @@ router.post('/cancel-deletion', async (req: Request, res: Response) => {
 			// Continue even if schedule cancellation fails
 		}
 
-		// Restore user status
-		const updateData: any = {
-			userId,
-			status: 'active',
-			updatedAt: new Date().toISOString()
-		};
-
-		// Clear deletion fields
-		delete updateData.deletionScheduledAt;
-		delete updateData.deletionReason;
-		delete updateData.deletionRequestedAt;
-		delete updateData.undoToken;
-
-		// Preserve existing fields
-		if (user.createdAt) updateData.createdAt = user.createdAt;
-		if (user.businessName) updateData.businessName = user.businessName;
-		if (user.contactEmail) updateData.contactEmail = user.contactEmail;
-		if (user.phone) updateData.phone = user.phone;
-		if (user.address) updateData.address = user.address;
-		if (user.nip) updateData.nip = user.nip;
-		if (user.lastLoginAt) updateData.lastLoginAt = user.lastLoginAt;
-
-		await ddb.send(new PutCommand({
+		// Update user status - user was never deleted, only status changed, so just update status and clear deletion fields
+		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
-			Item: updateData
+			Key: { userId },
+			UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt REMOVE deletionScheduledAt, deletionReason, deletionRequestedAt, undoToken',
+			ExpressionAttributeNames: {
+				'#status': 'status'
+			},
+			ExpressionAttributeValues: {
+				':status': 'active',
+				':updatedAt': new Date().toISOString()
+			}
 		}));
 
 		// Send cancellation email
@@ -409,31 +407,18 @@ publicUndoDeletionRouter.get('/undo-deletion/:token', async (req: Request, res: 
 			// Continue even if schedule cancellation fails
 		}
 
-		// Restore user status
-		const updateData: any = {
-			userId,
-			status: 'active',
-			updatedAt: new Date().toISOString()
-		};
-
-		// Clear deletion fields
-		delete updateData.deletionScheduledAt;
-		delete updateData.deletionReason;
-		delete updateData.deletionRequestedAt;
-		delete updateData.undoToken;
-
-		// Preserve existing fields
-		if (user.createdAt) updateData.createdAt = user.createdAt;
-		if (user.businessName) updateData.businessName = user.businessName;
-		if (user.contactEmail) updateData.contactEmail = user.contactEmail;
-		if (user.phone) updateData.phone = user.phone;
-		if (user.address) updateData.address = user.address;
-		if (user.nip) updateData.nip = user.nip;
-		if (user.lastLoginAt) updateData.lastLoginAt = user.lastLoginAt;
-
-		await ddb.send(new PutCommand({
+		// Update user status - user was never deleted, only status changed, so just update status and clear deletion fields
+		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
-			Item: updateData
+			Key: { userId },
+			UpdateExpression: 'SET #status = :status, updatedAt = :updatedAt REMOVE deletionScheduledAt, deletionReason, deletionRequestedAt, undoToken',
+			ExpressionAttributeNames: {
+				'#status': 'status'
+			},
+			ExpressionAttributeValues: {
+				':status': 'active',
+				':updatedAt': new Date().toISOString()
+			}
 		}));
 
 		// Send cancellation email

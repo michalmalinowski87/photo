@@ -95,81 +95,95 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		}
 	}
 
+	// Use UpdateCommand to only update provided fields - prevents data loss
+	// Check if user exists to determine if we need to set createdAt
 	let existingData: any = {};
 	try {
 		const getResult = await ddb.send(new GetCommand({
 			TableName: usersTable,
-			Key: { userId }
+			Key: { userId },
+			ProjectionExpression: 'createdAt'
 		}));
 		existingData = getResult.Item || {};
 	} catch (err) {
-		logger?.info('User record not found, creating new', { userId });
+		logger?.info('User record not found, will set createdAt', { userId });
 	}
 
-	const updateData: any = {
-		userId,
-		updatedAt: new Date().toISOString()
+	// Build update expression dynamically based on what fields are provided
+	const updateExpressions: string[] = [];
+	const expressionAttributeValues: Record<string, any> = {
+		':updatedAt': new Date().toISOString()
 	};
+	updateExpressions.push('updatedAt = :updatedAt');
+
+	// Set createdAt only if user doesn't exist yet
+	if (!existingData.createdAt) {
+		updateExpressions.push('createdAt = :updatedAt');
+	}
 
 	if (businessName !== undefined) {
-		updateData.businessName = String(businessName).trim() || '';
-	} else if (existingData.businessName !== undefined) {
-		updateData.businessName = existingData.businessName;
+		updateExpressions.push('businessName = :businessName');
+		expressionAttributeValues[':businessName'] = String(businessName).trim() || '';
 	}
 
 	if (email !== undefined) {
-		updateData.contactEmail = email !== null && email !== '' ? email.trim().toLowerCase() : '';
-	} else if (existingData.contactEmail !== undefined) {
-		updateData.contactEmail = existingData.contactEmail;
+		updateExpressions.push('contactEmail = :contactEmail');
+		expressionAttributeValues[':contactEmail'] = email !== null && email !== '' ? email.trim().toLowerCase() : '';
 	}
 
 	if (phone !== undefined) {
-		updateData.phone = String(phone).trim() || '';
-	} else if (existingData.phone !== undefined) {
-		updateData.phone = existingData.phone;
+		updateExpressions.push('phone = :phone');
+		expressionAttributeValues[':phone'] = String(phone).trim() || '';
 	}
 
 	if (address !== undefined) {
-		updateData.address = String(address).trim() || '';
-	} else if (existingData.address !== undefined) {
-		updateData.address = existingData.address;
+		updateExpressions.push('address = :address');
+		expressionAttributeValues[':address'] = String(address).trim() || '';
 	}
 
 	if (nip !== undefined) {
-		updateData.nip = String(nip).trim() || '';
-	} else if (existingData.nip !== undefined) {
-		updateData.nip = existingData.nip;
+		updateExpressions.push('nip = :nip');
+		expressionAttributeValues[':nip'] = String(nip).trim() || '';
 	}
 
 	if (welcomePopupShown !== undefined) {
-		updateData.welcomePopupShown = Boolean(welcomePopupShown);
-	} else if (existingData.welcomePopupShown !== undefined) {
-		updateData.welcomePopupShown = existingData.welcomePopupShown;
+		updateExpressions.push('welcomePopupShown = :welcomePopupShown');
+		expressionAttributeValues[':welcomePopupShown'] = Boolean(welcomePopupShown);
+		logger?.debug('Updating welcomePopupShown', { 
+			userId, 
+			welcomePopupShown, 
+			convertedValue: Boolean(welcomePopupShown) 
+		});
 	}
 
 	if (tutorialNextStepsDisabled !== undefined) {
-		updateData.tutorialNextStepsDisabled = Boolean(tutorialNextStepsDisabled);
-	} else if (existingData.tutorialNextStepsDisabled !== undefined) {
-		updateData.tutorialNextStepsDisabled = existingData.tutorialNextStepsDisabled;
+		updateExpressions.push('tutorialNextStepsDisabled = :tutorialNextStepsDisabled');
+		expressionAttributeValues[':tutorialNextStepsDisabled'] = Boolean(tutorialNextStepsDisabled);
 	}
 
 	if (tutorialClientSendDisabled !== undefined) {
-		updateData.tutorialClientSendDisabled = Boolean(tutorialClientSendDisabled);
-	} else if (existingData.tutorialClientSendDisabled !== undefined) {
-		updateData.tutorialClientSendDisabled = existingData.tutorialClientSendDisabled;
+		updateExpressions.push('tutorialClientSendDisabled = :tutorialClientSendDisabled');
+		expressionAttributeValues[':tutorialClientSendDisabled'] = Boolean(tutorialClientSendDisabled);
 	}
 
-	if (!existingData.createdAt) {
-		updateData.createdAt = updateData.updatedAt;
-	}
+	const updateExpression = `SET ${updateExpressions.join(', ')}`;
 
 	try {
-		await ddb.send(new PutCommand({
+		logger?.debug('Updating business info', { 
+			userId, 
+			updateExpression, 
+			expressionAttributeValues,
+			fieldsToUpdate: Object.keys(req.body).filter(key => req.body[key] !== undefined)
+		});
+
+		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
-			Item: updateData
+			Key: { userId },
+			UpdateExpression: updateExpression,
+			ExpressionAttributeValues: expressionAttributeValues
 		}));
 
-		logger?.info('Business info updated successfully', { userId });
+		logger?.info('Business info updated successfully', { userId, updatedFields: updateExpressions });
 		return res.json({ message: 'Business information updated successfully' });
 	} catch (error: any) {
 		logger?.error('Update business info failed', {

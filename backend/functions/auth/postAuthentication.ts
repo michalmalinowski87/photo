@@ -47,6 +47,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			return event;
 		}
 
+		// Extract email from Cognito user attributes
+		const emailFromCognito = event.request?.userAttributes?.email || event.request?.userAttributes?.['email'] || '';
+
 		const now = new Date().toISOString();
 
 		// Get existing user data to preserve fields
@@ -61,29 +64,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			logger.info('User record not found, will create new', { userId });
 		}
 
-		// Update lastLoginAt (preserve other fields)
+		// Preserve ALL existing fields first, then update only what needs to change
+		// This prevents any data loss - we only update lastLoginAt, updatedAt, and email if needed
 		const updateData: any = {
+			...existingUser, // Preserve ALL existing fields
 			userId,
 			lastLoginAt: now,
 			updatedAt: now
 		};
 
-		// Preserve existing fields
-		if (existingUser.createdAt) {
-			updateData.createdAt = existingUser.createdAt;
-		} else {
+		// Set createdAt for new users
+		if (!existingUser.createdAt) {
 			updateData.createdAt = now;
 		}
 
-		// Preserve other fields if they exist
-		if (existingUser.businessName !== undefined) updateData.businessName = existingUser.businessName;
-		if (existingUser.contactEmail !== undefined) updateData.contactEmail = existingUser.contactEmail;
-		if (existingUser.phone !== undefined) updateData.phone = existingUser.phone;
-		if (existingUser.address !== undefined) updateData.address = existingUser.address;
-		if (existingUser.nip !== undefined) updateData.nip = existingUser.nip;
-		if (existingUser.status !== undefined) updateData.status = existingUser.status;
-		if (existingUser.deletionScheduledAt !== undefined) updateData.deletionScheduledAt = existingUser.deletionScheduledAt;
-		if (existingUser.deletionReason !== undefined) updateData.deletionReason = existingUser.deletionReason;
+		// Extract and store email from Cognito if not already set in DynamoDB
+		// For new users, set email from Cognito attributes
+		// For existing users, preserve existing email but update if Cognito has a different one
+		if (emailFromCognito) {
+			// If user doesn't have email in DynamoDB, or if Cognito email is different, update it
+			if (!existingUser.email || existingUser.email !== emailFromCognito) {
+				updateData.email = emailFromCognito.toLowerCase().trim();
+				// Also set contactEmail if it's not set
+				if (!existingUser.contactEmail) {
+					updateData.contactEmail = emailFromCognito.toLowerCase().trim();
+				}
+			}
+		}
 
 		// If user was pending deletion, cancel it on login
 		if (existingUser.status === 'pendingDeletion' && existingUser.deletionReason === 'inactivity') {
