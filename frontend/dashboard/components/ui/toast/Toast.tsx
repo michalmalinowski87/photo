@@ -40,7 +40,7 @@ const Toast = ({ variant, title, message, onClose, duration = 2000 }: ToastProps
 
   return (
     <div
-      className={`max-w-md w-full transform transition-all duration-300 ease-out shadow-2xl ${
+      className={`max-w-md w-full transform transition-all duration-300 ease-out ${
         isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
       }`}
       style={{
@@ -48,9 +48,13 @@ const Toast = ({ variant, title, message, onClose, duration = 2000 }: ToastProps
         position: "relative",
         minWidth: "320px",
         minHeight: "80px",
+        isolation: "isolate",
+        backgroundColor: "transparent",
       }}
     >
-      <Alert variant={variant} title={title} message={message} />
+      <div className="relative z-10">
+        <Alert variant={variant} title={title} message={message} />
+      </div>
     </div>
   );
 };

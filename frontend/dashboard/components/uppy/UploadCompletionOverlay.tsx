@@ -57,11 +57,11 @@ export const UploadCompletionOverlay = ({
         <div className="px-10 pt-10 pb-6">
           <div className="flex items-start justify-between gap-6 mb-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="flex-shrink-0 w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <div className="flex-shrink-0 w-14 h-14 rounded-full bg-photographer-elevated dark:bg-photographer-accentDark/30 flex items-center justify-center">
                 {isFinalizing ? (
                   <Loader2 size={28} className="text-photographer-accent dark:text-photographer-accent animate-spin" />
                 ) : (
-                  <CheckCircle2 size={28} className="text-green-600 dark:text-green-400" />
+                  <CheckCircle2 size={28} className="text-photographer-accent dark:text-photographer-accentLight" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -79,7 +79,7 @@ export const UploadCompletionOverlay = ({
                   </div>
                 )}
                 {!isFinalizing && (
-                  <p className="text-sm font-medium text-green-600 dark:text-green-400 mt-1">
+                  <p className="text-sm font-medium text-photographer-accentDark dark:text-photographer-accentLight mt-1">
                     Gotowe
                   </p>
                 )}
@@ -157,7 +157,7 @@ export const UploadCompletionOverlay = ({
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   Przesłane pomyślnie
                 </span>
-                <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                <span className="text-sm font-semibold text-photographer-accentDark dark:text-photographer-accentLight">
                   {stats.successfulCount} / {stats.totalFiles}
                 </span>
               </div>

@@ -14,7 +14,7 @@ export const UploadProgressBar = ({
       <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2">
         <div
           className={`h-2 rounded-full transition-all duration-300 ${
-            isUploadComplete ? "bg-blue-500" : "bg-photographer-accent"
+            isUploadComplete ? "bg-photographer-accentDark" : "bg-photographer-accent"
           }`}
           style={{ width: `${overallProgress}%` }}
         />

@@ -383,7 +383,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           className={`mt-4 p-3 rounded ${
             message.includes("Error")
               ? "bg-error-50 dark:bg-error-500/15 text-error-600 dark:text-error-400"
-              : "bg-success-50 dark:bg-success-500/15 text-success-600 dark:text-success-400"
+              : "bg-photographer-elevated dark:bg-success-500/15 text-photographer-accentDark dark:text-success-400"
           }`}
         >
           {message}

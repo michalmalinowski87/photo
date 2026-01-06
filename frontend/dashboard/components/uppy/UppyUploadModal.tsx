@@ -682,7 +682,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                   </div>
                                 )}
                                 {status === "completed" && (
-                                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                                  <div className="absolute top-2 right-2 bg-photographer-accent text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
                                     <Check size={16} />
                                   </div>
                                 )}
@@ -822,9 +822,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                   <div className="flex items-center gap-2">
                     <CheckCircle2
                       size={20}
-                      className="text-green-600 dark:text-green-400 flex-shrink-0"
+                      className="text-photographer-accent dark:text-photographer-accentLight flex-shrink-0"
                     />
-                    <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    <p className="text-sm font-medium text-photographer-accentDark dark:text-photographer-accentLight">
                       {uploadResult.failed > 0
                         ? uploadResult.successful > 0
                           ? `Przesłano ${uploadResult.successful} z ${uploadResult.successful + uploadResult.failed} ${config.type === "finals" ? "zdjęć finalnych" : "zdjęć"}. ${uploadResult.failed} nie powiodło się.`

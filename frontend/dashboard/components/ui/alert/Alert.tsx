@@ -23,21 +23,21 @@ const Alert = ({
   const variantClasses = {
     success: {
       container:
-        "border-success-600 bg-success-50 dark:border-success-500/30 dark:bg-success-500/15",
-      icon: "text-success-700 dark:text-success-500",
+        "border-photographer-darkBeige bg-photographer-elevated dark:border-success-500/30 dark:bg-success-500/50",
+      icon: "text-photographer-accentDark dark:text-success-500",
     },
     error: {
-      container: "border-error-600 bg-error-50 dark:border-error-500/30 dark:bg-error-500/15",
+      container: "border-error-600 bg-error-50 dark:border-error-500/30 dark:bg-error-500/50",
       icon: "text-error-700 dark:text-error-500",
     },
     warning: {
       container:
-        "border-warning-600 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-500/15",
+        "border-warning-600 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-500/50",
       icon: "text-warning-700 dark:text-warning-500",
     },
     info: {
       container:
-        "border-blue-light-600 bg-blue-light-50 dark:border-blue-light-500/30 dark:bg-blue-light-500/15",
+        "border-blue-light-600 bg-blue-light-50 dark:border-blue-light-500/30 dark:bg-blue-light-500/50",
       icon: "text-blue-light-700 dark:text-blue-light-500",
     },
   };
@@ -51,8 +51,8 @@ const Alert = ({
   };
 
   return (
-    <div className={`rounded-xl border p-4 ${variantClasses[variant].container}`}>
-      <div className="flex items-start gap-3">
+    <div className={`rounded-xl border p-4 ${variantClasses[variant].container} backdrop-blur-0 relative z-10`}>
+      <div className="flex items-start gap-3 relative z-10">
         <div className={`-mt-0.5 flex-shrink-0 ${variantClasses[variant].icon}`}>
           {icons[variant]}
         </div>

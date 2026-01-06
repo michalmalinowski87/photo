@@ -36,7 +36,7 @@ export const ToastContainer = () => {
   return createPortal(
     <div
       data-toast-container
-      className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-photographer-surface border border-photographer-border dark:bg-gray-dark"
+      className="flex flex-col gap-2 pointer-events-none toast-container"
       style={
         {
           position: "fixed",
@@ -52,7 +52,7 @@ export const ToastContainer = () => {
       {toasts.map((toast: ToastMessage) => (
         <div
           key={toast.id}
-          className="pointer-events-auto rounded-xl overflow-hidden"
+          className="pointer-events-auto"
           style={
             {
               position: "relative",

@@ -26,7 +26,7 @@ export const UploadProgressHeader = ({
     <div className="px-4 py-3 border-b border-gray-400 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         {allComplete ? (
-          <Check className="w-5 h-5 text-green-500 flex-shrink-0" strokeWidth={2} />
+          <Check className="w-5 h-5 text-photographer-accent flex-shrink-0" strokeWidth={2} />
         ) : (
           <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
             <div className="w-4 h-4 border-2 border-photographer-accent border-t-transparent rounded-full animate-spin" />
