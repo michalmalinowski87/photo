@@ -6,7 +6,8 @@ export function useRequestDeletion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (email: string) => api.auth.requestDeletion(email),
+    mutationFn: ({ confirmationPhrase }: { confirmationPhrase: string }) => 
+      api.auth.requestDeletion(confirmationPhrase),
     onSuccess: () => {
       // Invalidate deletion status to refetch
       queryClient.invalidateQueries({ queryKey: queryKeys.auth.deletionStatus() });

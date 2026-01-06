@@ -26,7 +26,7 @@ import * as selectionsChangeRequest from '../../functions/selections/changeReque
 import * as ordersListFinalImages from '../../functions/orders/listFinalImages';
 import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip';
 import { dashboardRoutes } from './routes/dashboard';
-import { userDeletionRoutes } from './routes/userDeletion';
+import { userDeletionRoutes, undoDeletionPublicRoutes } from './routes/userDeletion';
 import { authRoutes } from './routes/auth';
 
 const app = express();
@@ -96,6 +96,9 @@ app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.hand
 app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
 app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
+
+// Public undo deletion route (no auth required - uses token in URL)
+app.use('/auth', undoDeletionPublicRoutes);
 
 // API Gateway validates tokens before requests reach Lambda, but we also check in middleware for extra safety
 // Auth routes - some handled by separate auth Lambda function, some (like dev endpoints) handled here

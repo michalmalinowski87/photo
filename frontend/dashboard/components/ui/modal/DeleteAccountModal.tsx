@@ -8,8 +8,7 @@ import { Modal } from "./index";
 interface DeleteAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (email: string) => void;
-  userEmail: string;
+  onConfirm: (confirmationPhrase: string) => void;
   loading?: boolean;
 }
 
@@ -17,11 +16,9 @@ export const DeleteAccountModal = ({
   isOpen,
   onClose,
   onConfirm,
-  userEmail,
   loading = false,
 }: DeleteAccountModalProps) => {
   const [confirmationPhrase, setConfirmationPhrase] = useState("");
-  const [email, setEmail] = useState(userEmail);
   const [understoodChecked, setUnderstoodChecked] = useState(false);
 
   const handleClose = () => {
@@ -29,7 +26,6 @@ export const DeleteAccountModal = ({
       return;
     }
     setConfirmationPhrase("");
-    setEmail(userEmail);
     setUnderstoodChecked(false);
     onClose();
   };
@@ -44,13 +40,12 @@ export const DeleteAccountModal = ({
     if (!understoodChecked) {
       return;
     }
-    onConfirm(email);
+    onConfirm(confirmationPhrase.trim());
   };
 
   const canConfirm =
     confirmationPhrase.trim() === "Potwierdzam" &&
     understoodChecked &&
-    email.trim() !== "" &&
     !loading;
 
   return (
@@ -80,23 +75,6 @@ export const DeleteAccountModal = ({
             <li>Dane finansowe (saldo portfela, transakcje i faktury) zostaną zachowane zgodnie z wymogami prawnymi</li>
             <li>Masz 3 dni na anulowanie tej operacji</li>
           </ul>
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Email
-          </label>
-          <Input
-            type="email"
-            placeholder="email@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-            required
-          />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Na ten adres zostanie wysłany link do anulowania usunięcia konta
-          </p>
         </div>
 
         <div className="mb-6">

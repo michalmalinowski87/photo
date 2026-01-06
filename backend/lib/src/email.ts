@@ -189,11 +189,105 @@ export function createDeletionCancelledEmail(userEmail: string): EmailTemplate {
 	};
 }
 
-export function createDeletionCompletedEmail(userEmail: string): EmailTemplate {
+export function createDeletionCompletedEmail(userEmail: string, deletionReason?: string): EmailTemplate {
+	// Use different template for inactivity-based deletion
+	if (deletionReason === 'inactivity') {
+		return createInactivityDeletionCompletedEmail(userEmail);
+	}
+	
+	// Manual deletion template - friendly and personal
 	return {
 		subject: 'Twoje konto zostało usunięte',
-		text: `Witaj,\n\nTwoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.\n\nWszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.\n\nDziękujemy za korzystanie z naszych usług.`,
-		html: `<h2>Twoje konto zostało usunięte</h2><p>Witaj,</p><p>Twoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.</p><p>Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.</p><p>Dziękujemy za korzystanie z naszych usług.</p>`
+		text: `Drogi Użytkowniku / Droga Użytkowniczko,
+
+Twoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.
+
+Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.
+
+Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałeś/wybrałaś nasze usługi. Było nam niezmiernie miło mieć Cię w naszej społeczności.
+
+Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz.
+
+Z wyrazami szacunku,
+Zespół PhotoCloud`,
+		html: `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<h2 style="color: #2c3e50; margin-top: 0;">Drogi Użytkowniku / Droga Użytkowniczko,</h2>
+	
+	<p>Twoje konto zostało pomyślnie usunięte zgodnie z Twoją prośbą.</p>
+	
+	<div style="background: #f8f9fa; border-left: 4px solid #6c757d; padding: 16px; margin: 24px 0; border-radius: 4px;">
+		<p style="margin: 0; color: #495057;">Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.</p>
+	</div>
+	
+	<div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 20px; margin: 32px 0; border-radius: 4px;">
+		<p style="margin: 0; font-size: 16px; color: #2e7d32;">
+			<strong>Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałeś/wybrałaś nasze usługi.</strong> Było nam niezmiernie miło mieć Cię w naszej społeczności.
+		</p>
+	</div>
+	
+	<p style="font-size: 16px; color: #495057; font-style: italic;">Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz.</p>
+	
+	<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+		<p style="margin: 8px 0; color: #7f8c8d;">Z wyrazami szacunku,<br>
+		<strong style="color: #2c3e50;">Zespół PhotoCloud</strong></p>
+	</div>
+</body>
+</html>`
+	};
+}
+
+export function createInactivityDeletionCompletedEmail(userEmail: string): EmailTemplate {
+	return {
+		subject: 'Twoje konto zostało usunięte z powodu nieaktywności',
+		text: `Drogi Użytkowniku / Droga Użytkowniczko,
+
+Z przykrością informujemy, że Twoje konto zostało automatycznie usunięte z powodu długotrwałej nieaktywności (ponad 12 miesięcy).
+
+Zgodnie z naszą polityką ochrony danych (RODO/GDPR) konta, które pozostają nieaktywne przez dłuższy czas, są automatycznie usuwane. Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.
+
+Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałeś/wybrałaś nasze usługi. Było nam niezmiernie miło mieć Cię w naszej społeczności.
+
+Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz. Jeśli w przyszłości będziesz chciał/chciała ponownie skorzystać z naszych usług, będziemy bardzo szczęśliwi, mogąc Cię powitać z powrotem.
+
+Z wyrazami szacunku,
+Zespół PhotoCloud`,
+		html: `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<h2 style="color: #2c3e50; margin-top: 0;">Drogi Użytkowniku / Droga Użytkowniczko,</h2>
+	
+	<p>Z przykrością informujemy, że Twoje konto zostało automatycznie usunięte z powodu długotrwałej nieaktywności (ponad 12 miesięcy).</p>
+	
+	<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; margin: 24px 0; border-radius: 4px;">
+		<p style="margin: 0; color: #856404;">
+			Zgodnie z naszą polityką ochrony danych (RODO/GDPR) konta, które pozostają nieaktywne przez dłuższy czas, są automatycznie usuwane. Wszystkie dane osobowe zostały usunięte z naszego systemu. Dane finansowe zostały zachowane zgodnie z wymogami prawnymi.
+		</p>
+	</div>
+	
+	<div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 20px; margin: 32px 0; border-radius: 4px;">
+		<p style="margin: 0; font-size: 16px; color: #2e7d32;">
+			<strong>Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałeś/wybrałaś nasze usługi.</strong> Było nam niezmiernie miło mieć Cię w naszej społeczności.
+		</p>
+	</div>
+	
+	<p style="font-size: 16px; color: #495057; font-style: italic;">Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz. Jeśli w przyszłości będziesz chciał/chciała ponownie skorzystać z naszych usług, będziemy bardzo szczęśliwi, mogąc Cię powitać z powrotem.</p>
+	
+	<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+		<p style="margin: 8px 0; color: #7f8c8d;">Z wyrazami szacunku,<br>
+		<strong style="color: #2c3e50;">Zespół PhotoCloud</strong></p>
+	</div>
+</body>
+</html>`
 	};
 }
 

@@ -91,7 +91,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		...user,
 		status: 'pendingDeletion',
 		deletionScheduledAt,
-		deletionReason: 'manual',
+		deletionReason: 'inactivity',
 		deletionRequestedAt: new Date().toISOString(),
 		updatedAt: new Date().toISOString()
 	};

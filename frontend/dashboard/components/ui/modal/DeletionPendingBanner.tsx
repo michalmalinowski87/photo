@@ -76,7 +76,7 @@ export const DeletionPendingBanner = ({
             </Button>
           </div>
           <p className="mt-3 text-xs text-red-700 dark:text-red-400">
-            Po anulowaniu zostaniesz wylogowany i będziesz mógł zalogować się ponownie z pełnym dostępem do konta.
+            Po anulowaniu Twoje konto pozostanie aktywne i będziesz mógł z niego normalnie korzystać.
           </p>
         </div>
       </div>

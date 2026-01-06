@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
-import { CognitoIdentityProviderClient, AdminDeleteUserCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, AdminDeleteUserCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { cancelUserDeletionSchedule } from '../../lib/src/user-deletion-scheduler';
 import { createDeletionCompletedEmail } from '../../lib/src/email';
@@ -703,7 +703,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// 10. Send final confirmation email (to preserved email)
 		if (sender && userEmail && userEmail !== deletedEmail) {
 			try {
-				const emailTemplate = createDeletionCompletedEmail(userEmail);
+				const deletionReason = user.deletionReason || 'manual';
+				const emailTemplate = createDeletionCompletedEmail(userEmail, deletionReason);
 				await ses.send(new SendEmailCommand({
 					Source: sender,
 					Destination: { ToAddresses: [userEmail] },
@@ -715,7 +716,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						}
 					}
 				}));
-				logger.info('Sent deletion completion email', { userId, email: userEmail });
+				logger.info('Sent deletion completion email', { userId, email: userEmail, deletionReason });
 			} catch (emailErr: any) {
 				logger.error('Failed to send deletion completion email', {
 					error: emailErr.message,

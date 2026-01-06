@@ -33,6 +33,7 @@ const AUTH_ROUTES = [
   "/sign-up",
   "/verify-email",
   "/auth/auth-callback",
+  "/auth/undo-deletion/[token]",
   "/forgot-password",
   "/verify-reset-code",
   "/reset-password",
@@ -111,7 +112,9 @@ function AppContent({ Component, pageProps }: AppProps) {
   useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
 
   // Check if current route is an auth route
-  const isAuthRoute = router.pathname ? AUTH_ROUTES.includes(router.pathname) : false;
+  const isAuthRoute = router.pathname
+    ? AUTH_ROUTES.includes(router.pathname) || router.pathname.startsWith("/auth/undo-deletion/")
+    : false;
 
   // Check if current route is a gallery route (needs special layout)
   // Exclude filter routes from being treated as gallery routes

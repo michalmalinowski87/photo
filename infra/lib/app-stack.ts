@@ -1377,7 +1377,7 @@ export class AppStack extends Stack {
 			resources: ['*']
 		}));
 		performUserDeletionFn.addToRolePolicy(new PolicyStatement({
-			actions: ['cognito-idp:AdminDeleteUser'],
+			actions: ['cognito-idp:AdminDeleteUser', 'cognito-idp:AdminGetUser'],
 			resources: [userPool.userPoolArn]
 		}));
 		// Grant EventBridge Scheduler permission to delete schedules

@@ -2033,16 +2033,16 @@ class ApiService {
     /**
      * Request account deletion
      */
-    requestDeletion: async (email: string): Promise<{
+    requestDeletion: async (confirmationPhrase: string): Promise<{
       deletionScheduledAt: string;
       status: string;
     }> => {
-      if (!email) {
-        throw new Error("Email is required");
+      if (!confirmationPhrase) {
+        throw new Error("Confirmation phrase is required");
       }
       return await this._request("/auth/request-deletion", {
         method: "POST",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ confirmationPhrase }),
       });
     },
 
@@ -2052,6 +2052,18 @@ class ApiService {
     cancelDeletion: async (): Promise<void> => {
       return await this._request("/auth/cancel-deletion", {
         method: "POST",
+      });
+    },
+
+    /**
+     * Undo deletion using token from email link
+     */
+    undoDeletion: async (token: string): Promise<void> => {
+      if (!token) {
+        throw new Error("Token is required");
+      }
+      return await this._request(`/auth/undo-deletion/${token}`, {
+        method: "GET",
       });
     },
 

@@ -21,9 +21,10 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 	const stage = envProc?.env?.STAGE as string || 'dev';
 	
 	// Read configuration from SSM Parameter Store (allows runtime changes without redeployment)
-	const [sender, dashboardUrl, deletionLambdaArn, scheduleRoleArn, dlqArn] = await Promise.all([
+	const [sender, dashboardUrl, apiUrl, deletionLambdaArn, scheduleRoleArn, dlqArn] = await Promise.all([
 		getConfigValueFromSsm(stage, 'SenderEmail'),
 		getConfigValueFromSsm(stage, 'PublicDashboardUrl'),
+		getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL'),
 		getConfigValueFromSsm(stage, 'UserDeletionLambdaArn'),
 		getConfigValueFromSsm(stage, 'UserDeletionScheduleRoleArn'),
 		getConfigValueFromSsm(stage, 'UserDeletionDlqArn')
@@ -32,6 +33,7 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 	// Fallback to env vars for backward compatibility during migration
 	const finalSender = sender || envProc?.env?.SENDER_EMAIL as string;
 	const finalDashboardUrl = dashboardUrl || envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	const finalApiUrl = apiUrl || envProc?.env?.PUBLIC_API_URL || envProc?.env?.API_URL || '';
 
 	if (!usersTable) {
 		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
@@ -43,17 +45,23 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const { email, confirmationPhrase } = req.body;
-
-	if (!email) {
-		return res.status(400).json({ error: 'Email is required' });
-	}
+	const { confirmationPhrase } = req.body;
 
 	if (confirmationPhrase !== 'Potwierdzam') {
-		return res.status(400).json({ error: 'Invalid confirmation phrase. Please type "Potwierdzam" to confirm.' });
+		return res.status(400).json({ error: 'Invalid confirmation phrase. Please type Potwierdzam to confirm.' });
 	}
 
 	try {
+		// Get email from JWT claims
+		const claims = event?.requestContext?.authorizer?.jwt?.claims || {};
+		const emailFromToken = claims.email || '';
+
+		logger?.debug('Extracting email for deletion request', {
+			userId,
+			hasEmailInClaims: !!claims.email,
+			emailFromToken: emailFromToken || 'not found'
+		});
+
 		// Get current user data
 		const userResult = await ddb.send(new GetCommand({
 			TableName: usersTable,
@@ -71,14 +79,36 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 			return res.status(400).json({ error: 'Deletion already scheduled', deletionScheduledAt: user.deletionScheduledAt });
 		}
 
+		// Use contactEmail from user record, fallback to email from token
+		const email = user.contactEmail || emailFromToken || user.email || '';
+		
+		logger?.debug('Email resolution for deletion', {
+			userId,
+			contactEmail: user.contactEmail || 'not set',
+			emailFromToken: emailFromToken || 'not found',
+			userEmail: user.email || 'not set',
+			resolvedEmail: email || 'NOT FOUND'
+		});
+
+		if (!email) {
+			logger?.warn('Email not found for user deletion request', {
+				userId,
+				hasContactEmail: !!user.contactEmail,
+				hasEmailFromToken: !!emailFromToken,
+				hasUserEmail: !!user.email
+			});
+			return res.status(400).json({ error: 'Email not found. Please ensure your account has a valid email address.' });
+		}
+
 		// Calculate deletion date (3 days from now)
 		const deletionScheduledAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
 		// Generate secure undo token
 		const undoToken = randomBytes(32).toString('hex');
 
-		// Update user status
+		// Update user status - preserve all existing data, only change status
 		const updateData: any = {
+			...user, // Preserve all existing fields
 			userId,
 			status: 'pendingDeletion',
 			deletionScheduledAt,
@@ -87,14 +117,6 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 			undoToken,
 			updatedAt: new Date().toISOString()
 		};
-
-		// Preserve existing fields
-		if (user.createdAt) updateData.createdAt = user.createdAt;
-		if (user.businessName) updateData.businessName = user.businessName;
-		if (user.contactEmail) updateData.contactEmail = user.contactEmail;
-		if (user.phone) updateData.phone = user.phone;
-		if (user.address) updateData.address = user.address;
-		if (user.nip) updateData.nip = user.nip;
 
 		await ddb.send(new PutCommand({
 			TableName: usersTable,
@@ -124,6 +146,7 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 
 		// Send confirmation email with undo link
 		if (finalSender) {
+			// Use frontend dashboard URL for undo deletion link (nicer URL, frontend handles the flow)
 			const undoLink = `${finalDashboardUrl}/auth/undo-deletion/${undoToken}`;
 			const emailTemplate = createDeletionRequestEmail(email, undoLink, deletionScheduledAt);
 			
@@ -319,7 +342,9 @@ router.get('/deletion-status', async (req: Request, res: Response) => {
 	}
 });
 
-router.get('/undo-deletion/:token', async (req: Request, res: Response) => {
+// Public undo deletion route (no auth required - uses token in URL)
+const publicUndoDeletionRouter = Router();
+publicUndoDeletionRouter.get('/undo-deletion/:token', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
 	const stage = envProc?.env?.STAGE || 'dev';
@@ -477,4 +502,5 @@ router.get('/undo-deletion/:token', async (req: Request, res: Response) => {
 });
 
 export { router as userDeletionRoutes };
+export { publicUndoDeletionRouter as undoDeletionPublicRoutes };
 
