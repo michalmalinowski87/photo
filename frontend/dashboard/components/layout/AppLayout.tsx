@@ -135,14 +135,14 @@ const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
     <>
       {/* Global loading overlay that persists across navigation during gallery creation */}
       {galleryCreationLoading && <FullPageLoading text="Tworzenie galerii..." />}
-      <div className="min-h-screen xl:flex bg-gray-50 dark:bg-gray-dark">
+      <div className="min-h-screen xl:flex bg-photographer-background dark:bg-gray-dark">
         <WelcomePopupWrapper onCreateGallery={onCreateGallery ?? handleCreateGallery} />
         <div>
           <AppSidebar />
           <Backdrop />
         </div>
         <div
-          className={`flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[377px] ${
+          className={`flex-1 transition-all duration-300 ease-in-out bg-photographer-background dark:bg-gray-dark lg:ml-[377px] ${
             isMobileOpen ? "ml-0" : ""
           }`}
         >

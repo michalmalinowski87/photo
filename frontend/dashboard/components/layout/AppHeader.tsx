@@ -37,11 +37,11 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
   }, []);
 
   return (
-    <header className="top-0 flex w-full bg-white border-gray-400 dark:border-gray-800 dark:bg-gray-900 lg:border-b">
+    <header className="top-0 flex w-full bg-white border-photographer-border dark:border-gray-800 dark:bg-gray-900 lg:border-b">
       <div className="flex flex-col items-center justify-between grow lg:flex-row lg:px-8">
-        <div className="flex items-center justify-between w-full gap-2 px-4 py-4 border-b border-gray-400 dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-6">
+        <div className="flex items-center justify-between w-full gap-2 px-4 py-4 border-b border-photographer-border dark:border-gray-800 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-6">
           <button
-            className="block w-12 h-12 text-gray-500 lg:hidden dark:text-gray-400"
+            className="block w-12 h-12 text-photographer-mutedText lg:hidden dark:text-gray-400"
             onClick={toggleMobileSidebar}
           >
             {isMobileOpen ? (
@@ -52,12 +52,12 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
           </button>
 
           <Link href="/" className="lg:hidden">
-            <span className="text-xl font-bold text-brand-500">PhotoCloud</span>
+            <span className="text-xl font-bold text-photographer-accent dark:text-white">PhotoCloud</span>
           </Link>
 
           <button
             onClick={toggleApplicationMenu}
-            className="flex items-center justify-center w-12 h-12 text-gray-700 rounded-lg z-99999 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
+            className="flex items-center justify-center w-12 h-12 text-photographer-text rounded-lg z-99999 hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
           >
             <MoreVertical size={30} />
           </button>
@@ -74,10 +74,10 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
                     ref={inputRef}
                     type="text"
                     placeholder="Szukaj lub wpisz komendę..."
-                    className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-400 bg-transparent py-2.5 pl-12 pr-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:bg-white/[0.03] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800 xl:w-[430px]"
+                    className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-400 bg-transparent py-2.5 pl-12 pr-14 text-sm text-photographer-text shadow-theme-xs placeholder:text-photographer-mutedText focus:border-photographer-accent focus:outline-hidden focus:ring-3 focus:ring-photographer-accent/10 dark:border-gray-800 dark:bg-gray-900 dark:bg-white/[0.03] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-photographer-accent xl:w-[430px]"
                   />
 
-                  <button className="absolute right-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-gray-400 bg-gray-50 px-[7px] py-[4.5px] text-xs -tracking-[0.2px] text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400">
+                  <button className="absolute right-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-gray-400 bg-photographer-background px-[7px] py-[4.5px] text-xs -tracking-[0.2px] text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400">
                     <span> ⌘ </span>
                     <span> K </span>
                   </button>
@@ -94,14 +94,14 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
           <div className="flex items-center gap-2 2xsm:gap-3">
             <a
               href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"}
-              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-400 rounded-full hover:text-dark-900 h-14 w-14 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="relative flex items-center justify-center text-photographer-mutedText transition-colors bg-photographer-surface border border-photographer-border rounded-full hover:text-photographer-heading h-14 w-14 hover:bg-photographer-elevated hover:text-photographer-text dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Strona główna"
             >
               <Globe size={26} />
             </a>
             <Link
               href="/wallet"
-              className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-400 rounded-full hover:text-dark-900 h-14 w-14 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="relative flex items-center justify-center text-photographer-mutedText transition-colors bg-photographer-surface border border-photographer-border rounded-full hover:text-photographer-heading h-14 w-14 hover:bg-photographer-elevated hover:text-photographer-text dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Portfel"
             >
               <Wallet size={26} />

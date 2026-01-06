@@ -37,10 +37,10 @@ export const StorageDisplay = ({
         {isLoading && <span className="ml-2 text-xs text-gray-400">(aktualizowanie...)</span>}
       </div>
       {limitBytes !== undefined && (
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+        <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2 mb-1">
           <div
             className={`h-2 rounded-full transition-all ${
-              isError ? "bg-error-500" : isWarning ? "bg-warning-500" : "bg-brand-500"
+              isError ? "bg-error-500" : isWarning ? "bg-warning-500" : "bg-photographer-accent"
             }`}
             style={{
               width: `${Math.min(usagePercentage, 100)}%`,

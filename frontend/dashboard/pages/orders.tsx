@@ -293,7 +293,7 @@ export default function Orders() {
 
       {/* Configuration - Only show if not auto-configured */}
       {(!process.env.NEXT_PUBLIC_API_URL || !idToken) && (
-        <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <div className="mb-4 p-4 bg-photographer-elevated dark:bg-gray-800 rounded-lg">
           <div className="mb-2">
             <label>API URL </label>
             <input
@@ -349,7 +349,7 @@ export default function Orders() {
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center p-5 text-gray-500 dark:text-gray-400">
+                <td colSpan={7} className="text-center p-5 text-photographer-mutedText dark:text-gray-400">
                   No orders found
                 </td>
               </tr>
@@ -381,7 +381,7 @@ export default function Orders() {
                     {o.paymentStatus === "UNPAID" && (
                       <button
                         onClick={() => markAsPaid(o.orderId)}
-                        className="mr-2 px-2 py-1 text-xs bg-brand-500 dark:bg-brand-500 text-white border-none rounded cursor-pointer"
+                        className="mr-2 px-2 py-1 text-xs bg-photographer-accent dark:bg-photographer-accent text-white border-none rounded cursor-pointer"
                       >
                         Mark as Paid
                       </button>
@@ -390,7 +390,7 @@ export default function Orders() {
                     {o.paymentStatus === "UNPAID" && (
                       <button
                         onClick={() => markAsPartiallyPaid(o.orderId)}
-                        className="mr-2 px-2 py-1 text-xs bg-gray-500 dark:bg-gray-500 text-white border-none rounded cursor-pointer"
+                        className="mr-2 px-2 py-1 text-xs bg-photographer-accent dark:bg-photographer-accent text-white border-none rounded cursor-pointer"
                       >
                         Mark Deposit Paid
                       </button>
@@ -409,7 +409,7 @@ export default function Orders() {
                       o.deliveryStatus !== "DELIVERED" && (
                         <button
                           onClick={() => markAsRefunded(o.orderId)}
-                          className="mr-2 px-2 py-1 text-xs bg-warning-500 dark:bg-warning-500 text-gray-900 dark:text-white border-none rounded cursor-pointer"
+                          className="mr-2 px-2 py-1 text-xs bg-warning-500 dark:bg-warning-500 text-photographer-heading dark:text-white border-none rounded cursor-pointer"
                         >
                           Mark as Refunded
                         </button>
@@ -459,7 +459,7 @@ export default function Orders() {
                               uploadingFinalOrderId === o.orderId ||
                               uploadFinalPhotosMutation.isPending
                             }
-                            className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-gray-500 dark:bg-gray-500 cursor-pointer"}`}
+                            className={`px-2 py-1 text-xs text-white border-none rounded ${uploadingFinalOrderId === o.orderId ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed" : "bg-photographer-accent dark:bg-photographer-accent cursor-pointer"}`}
                           >
                             {uploadingFinalOrderId === o.orderId
                               ? "Uploading..."

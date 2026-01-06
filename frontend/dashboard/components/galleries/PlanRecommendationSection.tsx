@@ -38,7 +38,7 @@ export const PlanRecommendationSection = ({
   const currentUploadedBytes = uploadedSizeBytes ?? 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-400 dark:border-gray-700">
+    <div className="bg-photographer-background dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-400 dark:border-gray-700">
       <div className="flex items-start justify-between mb-5">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -85,7 +85,7 @@ export const PlanRecommendationSection = ({
                 {(["1m", "3m", "12m"] as Duration[]).map((duration) => (
                   <div
                     key={duration}
-                    className="px-3 py-1.5 rounded-md border-2 border-gray-400 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-sm"
+                    className="px-3 py-1.5 rounded-md border-2 border-gray-400 dark:border-gray-700 bg-photographer-elevated dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-sm"
                   >
                     {duration === "1m"
                       ? "1 miesiąc"
@@ -180,7 +180,7 @@ export const PlanRecommendationSection = ({
               {planRecommendation.usagePercentage.toFixed(1)}%
             </span>
           </div>
-          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-photographer-muted dark:bg-gray-700 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 planRecommendation.isNearCapacity

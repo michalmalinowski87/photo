@@ -72,15 +72,15 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
       {/* Subtle loading indicator */}
       <div className="flex items-center gap-2 mt-2">
         <div
-          className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+          className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
           style={{ animationDelay: "0s" }}
         ></div>
         <div
-          className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+          className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
           style={{ animationDelay: "0.2s" }}
         ></div>
         <div
-          className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+          className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
           style={{ animationDelay: "0.4s" }}
         ></div>
       </div>
@@ -159,15 +159,15 @@ export const ContentViewLoading = ({ text, logo }: { text?: string; logo?: React
         {/* Subtle loading indicator */}
         <div className="flex items-center gap-2 mt-2">
           <div
-            className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+            className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
             style={{ animationDelay: "0s" }}
           ></div>
           <div
-            className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+            className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
             style={{ animationDelay: "0.2s" }}
           ></div>
           <div
-            className="w-2 h-2 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+            className="w-2 h-2 bg-brand-500 dark:bg-photographer-accent rounded-full animate-pulse"
             style={{ animationDelay: "0.4s" }}
           ></div>
         </div>

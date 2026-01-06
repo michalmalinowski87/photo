@@ -230,7 +230,7 @@ export default function Packages() {
           </h1>
           <button
             onClick={() => setShowForm(false)}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-photographer-elevated hover:bg-photographer-muted dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
             aria-label="Anuluj"
           >
             <X size={20} />
@@ -384,7 +384,7 @@ export default function Packages() {
           <button
             ref={sortButtonRef}
             onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-photographer-background dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
           >
             <ArrowUpDown size={16} />
             <span>{getSortLabel()}</span>
@@ -406,8 +406,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "name"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -419,8 +419,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "price"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Cena pakietu {sortBy === "price" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -432,8 +432,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "pricePerExtraPhoto"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Cena za zdjęcie{" "}
@@ -446,8 +446,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "date"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -463,8 +463,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "asc"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Rosnąco ↑
@@ -476,8 +476,8 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "desc"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Malejąco ↓
@@ -489,7 +489,7 @@ export default function Packages() {
         {/* Add Package Button */}
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
+          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-photographer-surface dark:bg-gray-800 border border-photographer-border dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-photographer-elevated dark:hover:bg-gray-700 transition-colors text-sm font-normal text-photographer-heading hover:text-photographer-accentHover dark:text-gray-400 dark:hover:text-gray-300 whitespace-nowrap"
         >
           <Plus size={16} />
           <span>Dodaj pakiet</span>
@@ -548,23 +548,23 @@ export default function Packages() {
             }}
           >
             <Table className="w-full relative">
-              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
-                <TableRow className="bg-gray-100 dark:bg-gray-900">
+              <TableHeader className="sticky top-0 z-10 bg-photographer-darkBeige dark:bg-gray-900">
+                <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Nazwa
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Zdjęcia w pakiecie
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 w-[1%]"
                   >
                     <div className="flex flex-col leading-tight">
                       <span className="whitespace-nowrap">Cena za</span>
@@ -573,19 +573,19 @@ export default function Packages() {
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Cena pakietu
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -599,8 +599,8 @@ export default function Packages() {
                       key={pkg.packageId}
                       className={`h-[120px] ${
                         isEvenRow
-                          ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                          : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                          ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
+                          : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                       }`}
                     >
                       <TableCell className="px-3 py-5 text-base font-medium text-gray-900 dark:text-white align-middle">
@@ -615,7 +615,7 @@ export default function Packages() {
                       <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
                         {formatPrice(pkg.price)}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
                         {pkg.createdAt ? new Date(pkg.createdAt).toLocaleDateString("pl-PL") : "-"}
                       </TableCell>
                       <TableCell className="px-3 py-5 align-middle text-center">

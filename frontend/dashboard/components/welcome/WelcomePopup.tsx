@@ -42,7 +42,7 @@ export const WelcomePopup = ({
         </div>
 
         {/* Welcome Bonus Section - More Exciting */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-brand-100/50 to-brand-50 dark:from-brand-900/30 dark:via-brand-800/20 dark:to-brand-900/30 rounded-xl md:rounded-2xl p-4 md:p-6 mb-5 md:mb-6 border-2 border-brand-200/50 dark:border-brand-700/50 shadow-lg">
+        <div className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-brand-100/50 to-brand-50 dark:from-photographer-accent/20 dark:via-photographer-accent/15 dark:to-photographer-accent/20 rounded-xl md:rounded-2xl p-4 md:p-6 mb-5 md:mb-6 border-2 border-brand-200/50 dark:border-photographer-accent/30 shadow-lg">
           {/* Decorative elements */}
           <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-brand-400/10 rounded-full -mr-12 -mt-12 md:-mr-16 md:-mt-16"></div>
           <div className="absolute bottom-0 left-0 w-20 h-20 md:w-24 md:h-24 bg-brand-500/10 rounded-full -ml-10 -mb-10 md:-ml-12 md:-mb-12"></div>
@@ -59,14 +59,14 @@ export const WelcomePopup = ({
               </h3>
               <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 mb-3 leading-relaxed">
                 W podziękowaniu za zaufanie, jakie nam okazujesz, przygotowaliśmy dla Ciebie{" "}
-                <span className="inline-flex items-center gap-1 font-bold text-xl md:text-2xl text-brand-600 dark:text-brand-400 px-2 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-brand-200/50 dark:border-brand-700/50">
+                <span className="inline-flex items-center gap-1 font-bold text-xl md:text-2xl text-brand-600 dark:text-photographer-accent px-2 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-brand-200/50 dark:border-photographer-accent/30">
                   {formatPrice(welcomeBonusCents)}
                 </span>{" "}
                 bonusu powitalnego!
               </p>
-              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg md:rounded-xl p-3 md:p-4 border border-brand-200/50 dark:border-brand-700/50">
+              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg md:rounded-xl p-3 md:p-4 border border-brand-200/50 dark:border-photographer-accent/30">
                 <p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                  <span className="font-semibold text-brand-700 dark:text-brand-300">
+                  <span className="font-semibold text-brand-700 dark:text-photographer-accent">
                     To wystarczy na plan 1GB - 3 miesiące!
                   </span>{" "}
                   Możesz od razu rozpocząć pracę i utworzyć swoją pierwszą galerię bez dodatkowych
@@ -88,7 +88,7 @@ export const WelcomePopup = ({
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
           </div>
           <div className="space-y-2 md:space-y-2.5">
-            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
               <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 1
               </div>
@@ -103,7 +103,7 @@ export const WelcomePopup = ({
               </div>
             </div>
 
-            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
               <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 2
               </div>
@@ -118,7 +118,7 @@ export const WelcomePopup = ({
               </div>
             </div>
 
-            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
               <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 3
               </div>
@@ -133,7 +133,7 @@ export const WelcomePopup = ({
               </div>
             </div>
 
-            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
               <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 4
               </div>

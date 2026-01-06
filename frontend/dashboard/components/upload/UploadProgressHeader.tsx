@@ -29,7 +29,7 @@ export const UploadProgressHeader = ({
           <Check className="w-5 h-5 text-green-500 flex-shrink-0" strokeWidth={2} />
         ) : (
           <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-            <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-photographer-accent border-t-transparent rounded-full animate-spin" />
           </div>
         )}
         <div className="min-w-0">

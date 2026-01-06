@@ -100,7 +100,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={disabled}
-      className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+      className="px-6 py-2.5 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
     >
       {disabled ? "Przetwarzanie..." : "Utwórz galerię"}
     </button>
@@ -677,17 +677,17 @@ const CreateGalleryWizard = ({
   return (
     <>
       {/* Loading overlay is handled globally by AppLayout - no need for local overlay */}
-      <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-dark overflow-hidden relative">
+      <div className="w-full h-full flex flex-col bg-photographer-background dark:bg-gray-dark overflow-hidden relative">
         {/* Close button - top right of main container */}
         <button
           onClick={onClose}
-          className="absolute top-[10px] right-[10px] z-10 w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] flex items-center justify-center"
+          className="absolute top-[10px] right-[10px] z-10 w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-photographer-elevated dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] flex items-center justify-center"
           title="Zamknij"
         >
           <X className="w-5 h-5" strokeWidth={2} />
         </button>
         {/* Modern Step Indicator - Bigger for better visibility */}
-        <div className="px-6 py-6 md:py-8 bg-gray-50 dark:bg-gray-dark flex-shrink-0">
+        <div className="px-6 py-6 md:py-8 bg-photographer-background dark:bg-gray-dark flex-shrink-0">
           <div className="flex items-center justify-between max-w-4xl mx-auto">
             {[
               { num: 1, label: "Typ" },
@@ -705,10 +705,10 @@ const CreateGalleryWizard = ({
                     <div
                       className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-sm md:text-base font-semibold transition-all duration-300 ${
                         isActive
-                          ? "bg-brand-500 text-white scale-110"
+                          ? "bg-photographer-accent text-white scale-110"
                           : isCompleted
-                            ? "bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400"
-                            : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                            ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                            : "bg-photographer-border dark:bg-gray-700 text-photographer-mutedText dark:text-gray-400"
                       }`}
                     >
                       {isCompleted ? (
@@ -720,10 +720,10 @@ const CreateGalleryWizard = ({
                     <span
                       className={`mt-3 text-xs md:text-sm font-medium transition-colors ${
                         isActive
-                          ? "text-brand-600 dark:text-brand-400"
+                          ? "text-photographer-accent dark:text-photographer-accent"
                           : isCompleted
-                            ? "text-gray-600 dark:text-gray-400"
-                            : "text-gray-400 dark:text-gray-500"
+                            ? "text-photographer-text dark:text-gray-400"
+                            : "text-photographer-mutedText dark:text-gray-500"
                       }`}
                     >
                       {step.label}
@@ -733,8 +733,8 @@ const CreateGalleryWizard = ({
                     <div
                       className={`flex-1 h-1 mx-3 -mt-7 transition-all duration-300 ${
                         isCompleted
-                          ? "bg-brand-300 dark:bg-brand-500"
-                          : "bg-gray-200 dark:bg-gray-700"
+                          ? "bg-photographer-accentLight dark:bg-photographer-accent"
+                          : "bg-photographer-muted dark:bg-gray-700"
                       }`}
                     />
                   )}
@@ -745,7 +745,7 @@ const CreateGalleryWizard = ({
         </div>
 
         {/* Content - Full height with Typeform-style spacing */}
-        <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50 dark:bg-gray-dark">
+        <div className="flex-1 overflow-y-auto min-h-0 bg-photographer-background dark:bg-gray-dark">
           <div className="min-h-full flex flex-col">
             {/* Step Content - Better space utilization */}
             <div className="flex-1 flex px-6 md:px-8 lg:px-12 relative">
@@ -758,7 +758,7 @@ const CreateGalleryWizard = ({
         </div>
 
         {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
-        <div className="flex items-center justify-between gap-4 px-6 py-6 bg-gray-50 dark:bg-gray-dark flex-shrink-0 h-24">
+        <div className="flex items-center justify-between gap-4 px-6 py-6 bg-photographer-background dark:bg-gray-dark flex-shrink-0 h-24">
           {currentStep > 1 && (
             <button
               onClick={handleBack}
@@ -772,7 +772,7 @@ const CreateGalleryWizard = ({
             <button
               onClick={onClose}
               disabled={loading}
-              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-photographer-elevated dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Anuluj
             </button>
@@ -825,7 +825,7 @@ const CreateGalleryWizard = ({
                 <button
                   onClick={handleNext}
                   disabled={loading}
-                  className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-2.5 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {loading ? (
                     "Przetwarzanie..."

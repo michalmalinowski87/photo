@@ -50,7 +50,7 @@ export default function PaymentConfirmationModal({
         </h2>
 
         <div className="space-y-4 mb-6">
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="p-4 bg-photographer-background dark:bg-gray-800 rounded-lg">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               {isStripeOnly ? "Kwota do zapłaty (z opłatami):" : "Całkowita kwota do zapłaty:"}
             </div>

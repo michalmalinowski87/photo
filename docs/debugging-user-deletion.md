@@ -260,3 +260,4 @@ If deletion still doesn't work after checking all the above:
 4. Verify Lambda function exists and has correct permissions
 5. Check IAM roles for both trigger and deletion Lambdas
 
+

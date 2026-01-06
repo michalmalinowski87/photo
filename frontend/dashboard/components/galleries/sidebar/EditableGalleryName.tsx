@@ -55,7 +55,7 @@ export const EditableGalleryName = ({
           onChange={(e) => setEditingValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={handleInputBlur}
-          className="flex-1 text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-0 border-b-2 border-gray-400 dark:border-gray-500 focus:outline-none focus:border-brand-500 dark:focus:border-brand-400 px-0 py-1"
+          className="flex-1 text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-0 border-b-2 border-gray-400 dark:border-gray-500 focus:outline-none focus:border-brand-500 dark:focus:border-photographer-accent px-0 py-1"
           autoFocus
           disabled={isSaving}
           maxLength={100}
@@ -89,7 +89,7 @@ export const EditableGalleryName = ({
     <div className="flex items-center gap-2 w-full">
       <button
         onClick={onNameClick}
-        className="flex-1 text-left text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+        className="flex-1 text-left text-lg font-semibold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-photographer-accent transition-colors"
       >
         {displayName}
       </button>

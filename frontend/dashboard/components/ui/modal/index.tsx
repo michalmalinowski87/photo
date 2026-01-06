@@ -78,7 +78,7 @@ export const Modal = ({
     ? "w-full h-full"
     : isAuthPage
       ? "relative w-full mx-4 rounded-3xl shadow-xl"
-      : "relative w-full mx-4 rounded-3xl bg-white dark:bg-gray-900 shadow-xl";
+      : "relative w-full mx-4 rounded-3xl bg-photographer-surface dark:bg-gray-900 shadow-xl";
 
   // If className is provided, use it; otherwise default to max-w-2xl
   // If className includes height (h-), add flex flex-col and overflow-hidden for proper layout
@@ -93,7 +93,7 @@ export const Modal = ({
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[1000] p-6">
       {!isFullscreen && (
         <div
-          className="fixed inset-0 h-full w-full bg-white/30 dark:bg-black/50 backdrop-blur-sm z-[999]"
+          className="fixed inset-0 h-full w-full bg-black/30 dark:bg-black/50 backdrop-blur-sm z-[999]"
           onClick={closeOnClickOutside ? onClose : undefined}
         ></div>
       )}
@@ -109,7 +109,7 @@ export const Modal = ({
             className={`absolute right-2 top-2 z-999 flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:right-3 sm:top-3 sm:h-9 sm:w-9 ${
               isAuthPage
                 ? "bg-[#1a1a1a] text-[#f0e0ca]/70 hover:bg-[#2d2d2d] hover:text-[#f0e0ca]"
-                : "bg-[#f0e0ca]/80 text-[#4a4a4a] hover:bg-[#f0e0ca] hover:text-[#1a1a1a] dark:bg-[#1a1a1a] dark:text-[#f0e0ca]/70 dark:hover:bg-[#2d2d2d] dark:hover:text-[#f0e0ca]"
+                : "bg-photographer-elevated text-photographer-mutedText hover:bg-photographer-muted hover:text-photographer-heading dark:bg-[#1a1a1a] dark:text-[#f0e0ca]/70 dark:hover:bg-[#2d2d2d] dark:hover:text-[#f0e0ca]"
             }`}
           >
             <X size={24} />

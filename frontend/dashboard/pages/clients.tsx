@@ -213,12 +213,12 @@ export default function Clients() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-photographer-heading dark:text-white">
             {editingClient ? "Edytuj klienta" : "Dodaj klienta"}
           </h1>
           <button
             onClick={() => setShowForm(false)}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-photographer-elevated hover:bg-photographer-muted dark:bg-gray-700 dark:hover:bg-gray-600 text-photographer-text dark:text-gray-300 transition-colors"
             aria-label="Anuluj"
           >
             <X size={20} />
@@ -227,10 +227,10 @@ export default function Clients() {
 
         {queryError && <div>{formatApiError(queryError)}</div>}
 
-        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-6 bg-photographer-surface border border-photographer-border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                 Email *
               </label>
               <Input
@@ -247,16 +247,16 @@ export default function Clients() {
                   type="checkbox"
                   checked={formData.isCompany}
                   onChange={(e) => setFormData({ ...formData, isCompany: e.target.checked })}
-                  className="w-4 h-4 text-brand-500 rounded"
+                  className="w-4 h-4 text-photographer-accent rounded"
                 />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Firma</span>
+                <span className="text-sm font-medium text-photographer-text dark:text-gray-300">Firma</span>
               </label>
             </div>
 
             {formData.isCompany ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                     Nazwa firmy *
                   </label>
                   <Input
@@ -267,7 +267,7 @@ export default function Clients() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                     NIP *
                   </label>
                   <Input
@@ -281,7 +281,7 @@ export default function Clients() {
             ) : (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                     Imię *
                   </label>
                   <Input
@@ -292,7 +292,7 @@ export default function Clients() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                     Nazwisko *
                   </label>
                   <Input
@@ -306,7 +306,7 @@ export default function Clients() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-photographer-text dark:text-gray-300 mb-2">
                 Telefon
               </label>
               <Input
@@ -344,7 +344,7 @@ export default function Clients() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 flex-wrap">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Klienci</h1>
+        <h1 className="text-3xl font-bold text-photographer-heading dark:text-white">Klienci</h1>
         {/* Search Input - spans from title to sort dropdown */}
         {((!loading && clients.length > 0) || searchQuery) && (
           <div className="relative flex-1 min-w-[200px]">
@@ -375,7 +375,7 @@ export default function Clients() {
           <button
             ref={sortButtonRef}
             onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-photographer-surface dark:bg-gray-800 border border-photographer-border dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-photographer-elevated dark:hover:bg-gray-700 transition-colors text-sm text-photographer-text dark:text-gray-300 whitespace-nowrap"
           >
             <ArrowUpDown size={16} />
             <span>{getSortLabel()}</span>
@@ -384,10 +384,10 @@ export default function Clients() {
             isOpen={sortDropdownOpen}
             onClose={() => setSortDropdownOpen(false)}
             triggerRef={sortButtonRef}
-            className="w-56 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-400 dark:border-gray-700"
+            className="w-56 bg-photographer-surface dark:bg-gray-900 shadow-xl rounded-lg border border-photographer-border dark:border-gray-700"
           >
             <div className="p-2">
-              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="px-3 py-2 text-xs font-semibold text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                 Sortuj według
               </div>
               <DropdownItem
@@ -397,8 +397,8 @@ export default function Clients() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "name"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-photographer-text dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -410,14 +410,14 @@ export default function Clients() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "date"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-photographer-text dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
               </DropdownItem>
-              <div className="border-t border-gray-400 dark:border-gray-700 my-1" />
-              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="border-t border-photographer-border dark:border-gray-700 my-1" />
+              <div className="px-3 py-2 text-xs font-semibold text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                 Kolejność
               </div>
               <DropdownItem
@@ -427,8 +427,8 @@ export default function Clients() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "asc"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-photographer-text dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Rosnąco ↑
@@ -440,8 +440,8 @@ export default function Clients() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "desc"
-                    ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    : "text-photographer-text dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
                 Malejąco ↓
@@ -453,7 +453,7 @@ export default function Clients() {
         {/* Add Client Button */}
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
+          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-photographer-surface dark:bg-gray-800 border border-photographer-border dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-photographer-elevated dark:hover:bg-gray-700 transition-colors text-sm font-normal text-photographer-heading hover:text-photographer-accentHover dark:text-gray-400 dark:hover:text-gray-300 whitespace-nowrap"
         >
           <Plus size={16} />
           <span>Dodaj klienta</span>
@@ -464,7 +464,7 @@ export default function Clients() {
 
       {clients.length === 0 ? (
         searchQuery ? (
-          <div className="pt-32 pb-8 text-center text-gray-500 dark:text-gray-400 text-xl">
+          <div className="pt-32 pb-8 text-center text-photographer-mutedText dark:text-gray-400 text-xl">
             Brak wyników wyszukiwania.
           </div>
         ) : (
@@ -518,35 +518,35 @@ export default function Clients() {
             }}
           >
             <Table className="w-full relative">
-              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
-                <TableRow className="bg-gray-100 dark:bg-gray-900">
+              <TableHeader className="sticky top-0 z-10 bg-photographer-darkBeige dark:bg-gray-900">
+                <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Email
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Imię i nazwisko / Firma
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Telefon
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -560,14 +560,14 @@ export default function Clients() {
                       key={client.clientId}
                       className={`h-[120px] ${
                         isEvenRow
-                          ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                          : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                          ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
+                          : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                       }`}
                     >
-                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                      <TableCell className="px-3 py-5 text-base text-photographer-heading dark:text-white align-middle">
                         {client.email}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
+                      <TableCell className="px-3 py-5 text-base text-photographer-heading dark:text-white align-middle">
                         {client.isCompany ? (
                           <div>
                             <div className="font-medium">
@@ -581,10 +581,10 @@ export default function Clients() {
                           `${typeof client.firstName === "string" ? client.firstName : ""} ${typeof client.lastName === "string" ? client.lastName : ""}`
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                      <TableCell className="px-3 py-5 text-base text-photographer-heading dark:text-white align-middle text-center">
                         {client.phone ?? "-"}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                      <TableCell className="px-3 py-5 text-base text-photographer-heading dark:text-white align-middle text-center">
                         {client.createdAt
                           ? new Date(String(client.createdAt)).toLocaleDateString("pl-PL")
                           : "-"}

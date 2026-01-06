@@ -191,7 +191,7 @@ export const SearchableSelect = ({
             {value && !disabled && (
               <div
                 onClick={handleClear}
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                className="p-1 rounded hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 aria-label="Wyczyść"
                 role="button"
                 tabIndex={0}
@@ -242,7 +242,7 @@ export const SearchableSelect = ({
                   setSearchQuery("");
                   inputRef.current?.focus();
                 }}
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                className="p-1 rounded hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 aria-label="Wyczyść"
                 role="button"
                 tabIndex={0}
@@ -296,12 +296,12 @@ export const SearchableSelect = ({
                         border-b border-gray-400 dark:border-gray-700 last:border-b-0
                         ${
                           isSelected
-                            ? "text-brand-600 dark:text-brand-400 bg-brand-50/30 dark:bg-brand-500/5"
+                            ? "text-brand-600 dark:text-photographer-accent bg-brand-50/30 dark:bg-photographer-accent/5"
                             : "text-gray-900 dark:text-white"
                         }
                         ${
                           isHighlighted && !isSelected
-                            ? "bg-gray-50 dark:bg-gray-700/30"
+                            ? "bg-photographer-background dark:bg-gray-700/30"
                             : "bg-transparent"
                         }
                       `}
@@ -322,7 +322,7 @@ export const SearchableSelect = ({
                           )}
                         </div>
                         {isSelected && (
-                          <Check className="w-5 h-5 text-brand-500 dark:text-brand-400 flex-shrink-0" />
+                          <Check className="w-5 h-5 text-brand-500 dark:text-photographer-accent flex-shrink-0" />
                         )}
                       </div>
                     </li>

@@ -214,13 +214,13 @@ export const CoverPhotoUpload = () => {
       <div
         className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors ${
           isLoading || !gallery
-            ? "border-gray-400 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
+            ? "border-gray-400 dark:border-gray-700 bg-photographer-background dark:bg-gray-800 cursor-default"
             : `cursor-pointer ${
                 isDragging
-                  ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
+                  ? "border-brand-500 bg-brand-50 dark:bg-photographer-accent/10 dark:border-photographer-accent"
                   : hasCloudFrontUrl || shouldShowLoadingState
                     ? "border-gray-400 dark:border-gray-700"
-                    : "border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                    : "border-gray-400 dark:border-gray-600 dark:bg-gray-800"
               }`
         }`}
         onDrop={isLoading || !gallery ? undefined : handleDrop}

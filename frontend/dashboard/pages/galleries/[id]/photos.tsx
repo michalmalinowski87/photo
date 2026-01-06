@@ -1386,7 +1386,7 @@ export default function GalleryPhotos() {
             isDeleting
               ? "opacity-60"
               : isSelected && isSelectionMode
-                ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
+                ? "border-brand-500 ring-2 ring-brand-200 dark:ring-photographer-accent/30 dark:border-photographer-accent"
                 : isNonDeletable && isSelectionMode
                   ? "opacity-60 border-gray-400 dark:border-gray-600"
                   : "border-gray-400"
@@ -1418,7 +1418,7 @@ export default function GalleryPhotos() {
                     isNonDeletable
                       ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
                       : isSelected
-                        ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                        ? "bg-brand-600 border-brand-600 dark:bg-photographer-accent dark:border-photographer-accent"
                         : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
                   }`}
                   onClick={(e) => {
@@ -1449,7 +1449,7 @@ export default function GalleryPhotos() {
             )}
 
             {isProcessing ? (
-              <div className="w-full h-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg">
+              <div className="w-full h-full bg-photographer-elevated dark:bg-gray-800 flex items-center justify-center rounded-lg">
                 <div className="text-center space-y-2">
                   <Loading size="sm" />
                   <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
@@ -1816,7 +1816,7 @@ export default function GalleryPhotos() {
             <>
               <button
                 onClick={() => openModal("photos-upload-modal")}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <Plus size={20} />
                 Prześlij zdjęcia
@@ -1824,7 +1824,7 @@ export default function GalleryPhotos() {
               {totalGalleryImageCount > 0 && (
                 <button
                   onClick={toggleSelectionMode}
-                  className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-photographer-muted text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                 >
                   <Square size={20} />
                   Wybierz zdjęcia
@@ -1835,7 +1835,7 @@ export default function GalleryPhotos() {
           {isSelectionMode && (
             <>
               <span
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center"
+                className="px-4 py-2 bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center"
                 style={{ width: "165.81px" }}
               >
                 <CheckSquare size={20} />
@@ -1846,7 +1846,7 @@ export default function GalleryPhotos() {
                   toggleSelectionMode();
                   clearSelection();
                 }}
-                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 justify-center"
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-photographer-muted text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 justify-center"
                 style={{ width: "171.9px" }}
               >
                 <X size={20} />
@@ -1951,7 +1951,7 @@ export default function GalleryPhotos() {
                   className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
-                    className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                    className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
                       isExpanded ? "rounded-t-lg" : "rounded-lg"
                     }`}
                   >
@@ -1994,7 +1994,7 @@ export default function GalleryPhotos() {
                       </button>
                       <button
                         onClick={() => toggleSection(sectionId)}
-                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                        className="p-1.5 hover:bg-photographer-muted dark:hover:bg-gray-700 rounded transition-colors"
                         aria-label={isExpanded ? "Zwiń sekcję" : "Rozwiń sekcję"}
                       >
                         <ChevronDown
@@ -2027,7 +2027,7 @@ export default function GalleryPhotos() {
             {/* Unselected Section - Always show header */}
             <div className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
               <div
-                className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+                className={`w-full px-5 py-3 bg-photographer-background dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors ${
                   expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"
                 }`}
               >
@@ -2062,7 +2062,7 @@ export default function GalleryPhotos() {
                   )}
                   <button
                     onClick={() => toggleSection("unselected")}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                    className="p-1.5 hover:bg-photographer-muted dark:hover:bg-gray-700 rounded transition-colors"
                     aria-label={expandedSection === "unselected" ? "Zwiń sekcję" : "Rozwiń sekcję"}
                   >
                     <ChevronDown

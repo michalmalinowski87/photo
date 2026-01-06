@@ -36,7 +36,7 @@ export const ToastContainer = () => {
   return createPortal(
     <div
       data-toast-container
-      className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-dark"
+      className="flex flex-col gap-2 pointer-events-none toast-container rounded-xl overflow-hidden bg-photographer-surface border border-photographer-border dark:bg-gray-dark"
       style={
         {
           position: "fixed",

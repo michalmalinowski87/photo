@@ -275,7 +275,7 @@ export function OriginalsTab({
               return (
                 <div
                   key={imgKey ?? idx}
-                  className="relative group border border-gray-400 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 rounded-lg overflow-hidden transition-all"
+                  className="relative group border border-gray-400 dark:border-gray-700 hover:border-photographer-accent dark:hover:border-brand-400 rounded-lg overflow-hidden transition-all"
                 >
                   <div className="aspect-square relative">
                     <LazyRetryableImage

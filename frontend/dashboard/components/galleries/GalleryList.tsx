@@ -125,7 +125,7 @@ const CoverPhotoCell = ({ coverPhotoUrl }: { coverPhotoUrl: string | null | unde
 
   if (!coverPhotoUrl || imageError) {
     return (
-      <div className="flex items-center justify-center w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg">
+      <div className="flex items-center justify-center w-24 h-24 bg-photographer-elevated dark:bg-gray-700 rounded-lg">
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <Image className="w-12 h-12 text-gray-400" aria-hidden="true" />
       </div>
@@ -523,47 +523,47 @@ const GalleryList = ({
             }}
           >
             <Table className="w-full relative">
-              <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-900">
-                <TableRow className="bg-gray-100 dark:bg-gray-900">
+              <TableHeader className="sticky top-0 z-10 bg-photographer-darkBeige dark:bg-gray-900">
+                <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 w-[120px]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 w-[120px]"
                   >
                     Okładka
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
+                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
                   >
                     Nazwa galerii
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Plan
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Status
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Zlecenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Utworzono
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -589,8 +589,8 @@ const GalleryList = ({
                       key={gallery.galleryId}
                       className={`h-[120px] ${
                         isEvenRow
-                          ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                          : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                          ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
+                          : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                       }`}
                     >
                       <TableCell className="px-3 py-5 align-middle text-center w-[120px]">
@@ -599,7 +599,7 @@ const GalleryList = ({
                       <TableCell className="px-3 py-5 align-middle min-w-[400px]">
                         <Link
                           href={`/galleries/${String(gallery.galleryId)}`}
-                          className="font-medium text-base text-brand-500 hover:text-brand-600 block max-w-full"
+                          className="font-medium text-base text-photographer-heading hover:text-photographer-accent dark:text-white dark:hover:text-photographer-accent block max-w-full"
                           onClick={() => {
                             // Store current page as referrer when navigating to gallery
                             if (typeof window !== "undefined") {
@@ -678,7 +678,7 @@ const GalleryList = ({
                       <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
                         {(gallery.orderCount ?? 0) as number}
                       </TableCell>
-                      <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle text-center">
+                      <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle text-center">
                         {gallery.createdAt
                           ? new Date(gallery.createdAt).toLocaleDateString("pl-PL")
                           : "-"}
@@ -696,7 +696,7 @@ const GalleryList = ({
                                 // Close all menus first, then open this one if it wasn't open
                                 setOpenActionMenu(isCurrentlyOpen ? null : gallery.galleryId);
                               }}
-                              className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
+                              className="flex items-center justify-center w-8 h-8 text-gray-500 rounded hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-gray-800 dropdown-toggle"
                               aria-label="Akcje"
                             >
                               <Menu size={16} />
@@ -738,7 +738,7 @@ const GalleryList = ({
                                             }
                                           }}
                                           disabled={!hasPhotos}
-                                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                                         >
                                           <Rocket size={16} />
                                           Opublikuj
@@ -758,7 +758,7 @@ const GalleryList = ({
                                       sessionStorage.setItem(referrerKey, window.location.pathname);
                                     }
                                   }}
-                                  className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
+                                  className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 ${
                                     gallery.isPaid ? "first:rounded-t-xl" : ""
                                   }`}
                                 >
@@ -810,7 +810,7 @@ const GalleryList = ({
                                         }
                                       }}
                                       disabled={!hasPhotos}
-                                      className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors mr-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-brand-500"
+                                      className="flex items-center justify-center w-8 h-8 text-brand-500 hover:text-brand-600 dark:text-photographer-accent dark:hover:text-photographer-accentHover rounded hover:bg-brand-50 dark:hover:bg-photographer-accent/20 transition-colors mr-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-brand-500"
                                       aria-label="Opublikuj"
                                     >
                                       <Rocket className="w-5 h-5" />
@@ -829,7 +829,7 @@ const GalleryList = ({
                                     sessionStorage.setItem(referrerKey, window.location.pathname);
                                   }
                                 }}
-                                className="flex items-center justify-center w-8 h-8 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors mr-0.5"
+                                className="flex items-center justify-center w-8 h-8 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors mr-0.5"
                                 aria-label="Szczegóły"
                               >
                                 <Eye className="w-5 h-5" />

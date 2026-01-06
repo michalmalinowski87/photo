@@ -185,7 +185,7 @@ export function ZipDownloadButton({
               if (progressPercent === undefined || isNaN(progressPercent)) return null;
 
               return (
-                <div className="w-full mt-1 h-1.5 bg-gray-200 rounded-full overflow-hidden dark:bg-gray-700">
+                <div className="w-full mt-1 h-1.5 bg-photographer-muted rounded-full overflow-hidden dark:bg-gray-700">
                   <div
                     className="h-full bg-success-500 transition-all duration-300 dark:bg-success-600"
                     style={{ width: `${progressPercent}%` }}

@@ -136,7 +136,7 @@ export const SuggestedPlanSection = ({
                   disabled={isDisabled}
                   className={`px-4 py-2 rounded-lg transition-all font-medium ${
                     isDisabled
-                      ? "opacity-50 cursor-not-allowed outline-2 outline-gray-300 dark:outline-gray-600 outline bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                      ? "opacity-50 cursor-not-allowed outline-2 outline-gray-300 dark:outline-gray-600 outline bg-photographer-elevated dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                       : isSelected
                         ? "outline-2 outline-blue-500 outline bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                         : "outline-2 outline-gray-300 dark:outline-gray-600 outline bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:outline-blue-300 dark:hover:outline-blue-600"

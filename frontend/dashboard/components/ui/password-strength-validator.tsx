@@ -168,7 +168,7 @@ export const PasswordStrengthValidator: React.FC<PasswordStrengthValidatorProps>
         {/* Progress Bar Container */}
         <div className="relative">
           {/* Background Track */}
-          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden relative">
+          <div className="h-2 bg-photographer-muted dark:bg-gray-700 rounded-full overflow-hidden relative">
             {/* Strength Fill */}
             <div
               className={cn(

@@ -33,10 +33,10 @@ const GalleryLayout = ({ children }: GalleryLayoutProps) => {
     isOnGalleryRoute && (hasGallery || galleryLoading || Boolean(galleryId));
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-dark">
+    <div className="min-h-screen bg-photographer-background dark:bg-gray-dark">
       <div className="flex">
         <div>{shouldShowSidebar && <GallerySidebar />}</div>
-        <div className="flex-1 transition-all duration-300 ease-in-out bg-gray-50 dark:bg-gray-dark lg:ml-[494px]">
+        <div className="flex-1 transition-all duration-300 ease-in-out bg-photographer-background dark:bg-gray-dark lg:ml-[494px]">
           <GalleryHeader />
           <div className="p-4">{children}</div>
         </div>

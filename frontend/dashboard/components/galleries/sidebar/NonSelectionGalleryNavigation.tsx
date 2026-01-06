@@ -68,8 +68,8 @@ export const NonSelectionGalleryNavigation = ({
           onClick={handlePhotosClick}
           className={`flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium transition-colors ${
             isOnOrderPage && !router.asPath.includes("/settings")
-              ? "bg-brand-50 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400"
-              : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+              ? "bg-photographer-accentLight/50 text-photographer-accentDark font-semibold dark:bg-photographer-accent/20 dark:text-photographer-accent"
+              : "text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
           <ImageIcon size={26} />

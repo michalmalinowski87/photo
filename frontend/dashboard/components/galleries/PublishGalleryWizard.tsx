@@ -508,7 +508,7 @@ export const PublishGalleryWizard = ({
         <button
           onClick={onClose}
           disabled={isProcessing || pricingLoading}
-          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           aria-label="Zamknij"
         >
           <X className="w-6 h-6" strokeWidth={2} />
@@ -536,11 +536,11 @@ export const PublishGalleryWizard = ({
 
               {/* Plan Selection Grid Skeleton */}
               <div className="mb-4 h-[360px] animate-fade-in-out">
-                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-4"></div>
-                <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <div className="h-6 bg-photographer-muted dark:bg-gray-700 rounded w-48 mb-4"></div>
+                <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-photographer-elevated dark:bg-gray-800 rounded-lg">
                   <div className="flex-1 h-10 bg-white dark:bg-gray-700 rounded-md"></div>
-                  <div className="flex-1 h-10 bg-gray-200 dark:bg-gray-600 rounded-md"></div>
-                  <div className="flex-1 h-10 bg-gray-200 dark:bg-gray-600 rounded-md"></div>
+                  <div className="flex-1 h-10 bg-photographer-muted dark:bg-gray-600 rounded-md"></div>
+                  <div className="flex-1 h-10 bg-photographer-muted dark:bg-gray-600 rounded-md"></div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {[1, 2, 3].map((i) => (
@@ -730,15 +730,15 @@ export const PublishGalleryWizard = ({
           <div className="flex flex-col items-center justify-center gap-4">
             <div className="flex items-center gap-2">
               <div
-                className="w-3 h-3 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+                className="w-3 h-3 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
                 style={{ animationDelay: "0s" }}
               ></div>
               <div
-                className="w-3 h-3 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+                className="w-3 h-3 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
                 style={{ animationDelay: "0.2s" }}
               ></div>
               <div
-                className="w-3 h-3 bg-brand-500 dark:bg-brand-400 rounded-full animate-pulse"
+                className="w-3 h-3 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
                 style={{ animationDelay: "0.4s" }}
               ></div>
             </div>

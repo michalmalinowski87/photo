@@ -207,35 +207,35 @@ export default function Wallet() {
             <div className="w-full">
               <div className="h-[530px] overflow-y-auto">
                 <Table className="w-full">
-                  <TableHeader className="sticky top-0 z-10">
-                    <TableRow className="bg-gray-50 dark:bg-gray-900">
+                  <TableHeader className="sticky top-0 z-10 bg-photographer-darkBeige dark:bg-gray-900">
+                    <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                       <TableCell
                         isHeader
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                        className="px-4 py-3 text-left text-xs font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                       >
                         Data
                       </TableCell>
                       <TableCell
                         isHeader
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                        className="px-4 py-3 text-left text-xs font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                       >
                         Typ
                       </TableCell>
                       <TableCell
                         isHeader
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                        className="px-4 py-3 text-left text-xs font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                       >
                         Status
                       </TableCell>
                       <TableCell
                         isHeader
-                        className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                        className="px-4 py-3 text-right text-xs font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                       >
                         Kwota
                       </TableCell>
                       <TableCell
                         isHeader
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                        className="px-4 py-3 text-left text-xs font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                       >
                         Metoda płatności
                       </TableCell>
@@ -251,9 +251,9 @@ export default function Wallet() {
                       return (
                         <TableRow
                           key={tx.transactionId ?? tx.txnId}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                          className="hover:bg-photographer-background dark:hover:bg-gray-800"
                         >
-                          <TableCell className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          <TableCell className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                             {tx.createdAt
                               ? new Date(tx.createdAt).toLocaleDateString("pl-PL", {
                                   year: "numeric",

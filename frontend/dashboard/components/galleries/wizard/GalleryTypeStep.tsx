@@ -28,14 +28,14 @@ export const GalleryTypeStep = ({
           onClick={() => onSelectionEnabledChange(true)}
           className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isFirstSelected
-              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
+              ? "border-photographer-accent bg-photographer-accentLight/50 dark:bg-photographer-accent/10 shadow-lg scale-105"
               : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
         >
           <div className="flex flex-col items-center space-y-4">
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                isFirstSelected ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
+                isFirstSelected ? "bg-photographer-accent" : "bg-photographer-muted dark:bg-gray-700"
               }`}
             >
               <CheckCircle2 className="w-10 h-10 text-white" strokeWidth={2} />
@@ -44,7 +44,7 @@ export const GalleryTypeStep = ({
               <div
                 className={`text-xl font-semibold mb-2 ${
                   isFirstSelected
-                    ? "text-brand-600 dark:text-brand-400"
+                    ? "text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-900 dark:text-white"
                 }`}
               >
@@ -57,7 +57,7 @@ export const GalleryTypeStep = ({
           </div>
           {isFirstSelected && (
             <div className="absolute top-4 right-4">
-              <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-photographer-accent flex items-center justify-center">
                 <Check size={16} className="text-white" />
               </div>
             </div>
@@ -67,14 +67,14 @@ export const GalleryTypeStep = ({
           onClick={() => onSelectionEnabledChange(false)}
           className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isSecondSelected
-              ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
+              ? "border-photographer-accent bg-photographer-accentLight/50 dark:bg-photographer-accent/10 shadow-lg scale-105"
               : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
         >
           <div className="flex flex-col items-center space-y-4">
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                isSecondSelected ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"
+                isSecondSelected ? "bg-photographer-accent" : "bg-photographer-muted dark:bg-gray-700"
               }`}
             >
               <ImageIcon className="w-10 h-10 text-white" strokeWidth={2} />
@@ -83,7 +83,7 @@ export const GalleryTypeStep = ({
               <div
                 className={`text-xl font-semibold mb-2 ${
                   isSecondSelected
-                    ? "text-brand-600 dark:text-brand-400"
+                    ? "text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-900 dark:text-white"
                 }`}
               >
@@ -96,7 +96,7 @@ export const GalleryTypeStep = ({
           </div>
           {isSecondSelected && (
             <div className="absolute top-4 right-4">
-              <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-photographer-accent flex items-center justify-center">
                 <Check size={16} className="text-white" />
               </div>
             </div>

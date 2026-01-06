@@ -318,7 +318,7 @@ export function FinalsTab({
             {canUpload && (
               <button
                 onClick={onUploadClick}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <Plus size={20} />
                 Prześlij zdjęcia finalne
@@ -327,7 +327,7 @@ export function FinalsTab({
             {images.length > 0 && orderDeliveryStatus !== "DELIVERED" && (
               <button
                 onClick={toggleSelectionMode}
-                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-photographer-muted text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               >
                 <Square size={20} />
                 Wybierz zdjęcia
@@ -338,7 +338,7 @@ export function FinalsTab({
         {isSelectionMode && (
           <>
             <span
-              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center"
+              className="px-4 py-2 bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2 justify-center"
               style={{ width: "165.81px" }}
             >
               <CheckSquare size={20} />
@@ -349,7 +349,7 @@ export function FinalsTab({
                 toggleSelectionMode();
                 clearSelection();
               }}
-              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 justify-center"
+              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-photographer-muted text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 justify-center"
               style={{ width: "171.9px" }}
             >
               <X size={20} />
@@ -472,8 +472,8 @@ export function FinalsTab({
                     isDeleting
                       ? "opacity-60"
                       : isSelected && isSelectionMode
-                        ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
-                        : "border-gray-400 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
+                        ? "border-photographer-accent ring-2 ring-photographer-accentLight dark:ring-photographer-accent/30"
+                        : "border-gray-400 dark:border-gray-700 hover:border-photographer-accent dark:hover:border-photographer-accent"
                   }`}
                   onMouseDown={(e) => {
                     // Prevent browser text/element selection when in selection mode
@@ -494,7 +494,7 @@ export function FinalsTab({
                         <div
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
                             isSelected
-                              ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
+                              ? "bg-photographer-accentHover border-photographer-accentHover dark:bg-photographer-accent dark:border-photographer-accent"
                               : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
                           }`}
                           onClick={(e) => {

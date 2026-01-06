@@ -129,7 +129,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
       color = "text-orange-600 dark:text-orange-400";
     } else {
       // Otherwise: primary-blue (brand color)
-      color = "text-brand-600 dark:text-brand-400";
+      color = "text-photographer-accent dark:text-photographer-accent";
     }
 
     return { date: expiryDate, formatted, color };
@@ -138,9 +138,9 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
   const expiryInfo = getExpiryInfo();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-400 dark:border-gray-700 h-full flex flex-col">
+    <div className="bg-photographer-surface dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-photographer-border dark:border-gray-700 h-full flex flex-col">
       {/* Cover Photo Section */}
-      <div className="relative h-56 bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
+      <div className="relative h-56 bg-photographer-muted dark:bg-gray-700 overflow-hidden flex-shrink-0">
         {coverPhotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -154,9 +154,9 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+            <div className="w-24 h-24 rounded-full bg-photographer-border dark:bg-gray-600 flex items-center justify-center">
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <Image className="w-12 h-12 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+              <Image className="w-12 h-12 text-photographer-mutedText dark:text-gray-500" aria-hidden="true" />
             </div>
           </div>
         )}
@@ -172,16 +172,16 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
               e.stopPropagation();
               setOpenActionMenu(!openActionMenu);
             }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-sm transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-photographer-surface/90 dark:bg-gray-800/90 hover:bg-photographer-surface dark:hover:bg-gray-800 backdrop-blur-sm transition-colors"
             aria-label="More options"
           >
-            <MoreVertical size={16} className="text-gray-600 dark:text-gray-300" />
+            <MoreVertical size={16} className="text-photographer-text dark:text-gray-300" />
           </button>
           <Dropdown
             isOpen={openActionMenu}
             onClose={() => setOpenActionMenu(false)}
             triggerRef={buttonRef.current ? { current: buttonRef.current } : undefined}
-            className="w-48 bg-white dark:bg-gray-900 shadow-xl"
+            className="w-48 bg-photographer-surface dark:bg-gray-900 shadow-xl"
           >
             {!gallery.isPaid && (
               <Tooltip
@@ -198,7 +198,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
                       }
                     }}
                     disabled={!hasPhotos}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     <Rocket size={16} />
                     Opublikuj
@@ -217,7 +217,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
                     sessionStorage.setItem(referrerKey, window.location.pathname);
                   }
                 }}
-                className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${
+                className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 ${
                   gallery.isPaid ? "first:rounded-t-xl" : ""
                 }`}
               >
@@ -249,7 +249,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
             <Tooltip content={fullName} side="top" align="start">
               <Link
                 href={`/galleries/${gallery.galleryId}`}
-                className="block font-semibold text-base text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors line-clamp-2"
+                className="block font-semibold text-base text-photographer-heading dark:text-white hover:text-photographer-accent dark:hover:text-photographer-accent transition-colors line-clamp-2"
                 onClick={() => {
                   if (typeof window !== "undefined") {
                     const referrerKey = `gallery_referrer_${gallery.galleryId}`;
@@ -264,7 +264,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
           ) : (
             <Link
               href={`/galleries/${gallery.galleryId}`}
-              className="block font-semibold text-base text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors line-clamp-2"
+              className="block font-semibold text-base text-photographer-heading dark:text-white hover:text-photographer-accent dark:hover:text-photographer-accent transition-colors line-clamp-2"
               onClick={() => {
                 if (typeof window !== "undefined") {
                   const referrerKey = `gallery_referrer_${gallery.galleryId}`;
@@ -327,7 +327,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
                   e.stopPropagation();
                   onPublish?.(gallery.galleryId);
                 }}
-                className="p-2 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 text-brand-500 dark:text-brand-400 transition-colors"
+                className="p-2 rounded-lg hover:bg-photographer-accentLight/50 dark:hover:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent transition-colors"
                 aria-label="Opublikuj"
               >
                 <Rocket size={18} />

@@ -190,7 +190,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           <button
             onClick={() => loadGallery()}
             disabled={loading}
-            className={`px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-400 dark:border-gray-600 rounded cursor-pointer text-sm ${
+            className={`px-4 py-2 bg-photographer-elevated dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-400 dark:border-gray-600 rounded cursor-pointer text-sm ${
               loading ? "cursor-not-allowed opacity-50" : ""
             }`}
             title="Refresh gallery data"
@@ -199,12 +199,12 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           </button>
           {/* View Mode Toggle - Only show if there are delivered/preparing_delivery orders */}
           {hasDeliveredOrders && (
-            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <div className="flex gap-1 bg-photographer-elevated dark:bg-gray-800 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode("processed")}
                 className={`px-4 py-2 border-none rounded cursor-pointer text-sm ${
                   viewMode === "processed"
-                    ? "bg-brand-600 dark:bg-brand-500 text-white font-bold"
+                    ? "bg-brand-600 dark:bg-photographer-accent text-white font-bold"
                     : "bg-transparent text-gray-500 dark:text-gray-400 font-normal"
                 }`}
               >
@@ -214,7 +214,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
                 onClick={() => setViewMode("purchase")}
                 className={`px-4 py-2 border-none rounded cursor-pointer text-sm ${
                   viewMode === "purchase"
-                    ? "bg-brand-600 dark:bg-brand-500 text-white font-bold"
+                    ? "bg-brand-600 dark:bg-photographer-accent text-white font-bold"
                     : "bg-transparent text-gray-500 dark:text-gray-400 font-normal"
                 }`}
               >
@@ -224,7 +224,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           )}
           <button
             onClick={() => router.push("/galleries")}
-            className="px-4 py-2 bg-gray-500 dark:bg-gray-500 text-white border-none rounded cursor-pointer text-sm"
+            className="px-4 py-2 bg-photographer-accent dark:bg-photographer-accent text-white border-none rounded cursor-pointer text-sm"
           >
             Back to Galleries
           </button>

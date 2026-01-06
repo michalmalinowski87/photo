@@ -23,7 +23,7 @@ export default function NotificationDropdown() {
   return (
     <div className="relative">
       <button
-        className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-400 rounded-full dropdown-toggle hover:text-gray-700 h-11 w-11 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+        className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-400 rounded-full dropdown-toggle hover:text-gray-700 h-11 w-11 hover:bg-photographer-elevated dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
         onClick={handleClick}
       >
         <span
@@ -52,7 +52,7 @@ export default function NotificationDropdown() {
         <ul className="flex flex-col h-auto overflow-y-auto">
           {/* Placeholder - will be populated with real notifications */}
           <li>
-            <div className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5">
+            <div className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-photographer-elevated dark:border-gray-800 dark:hover:bg-white/5">
               <span className="block text-theme-sm text-gray-500 dark:text-gray-400">
                 Brak nowych powiadomień
               </span>
@@ -61,7 +61,7 @@ export default function NotificationDropdown() {
         </ul>
         <Link
           href="/"
-          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-400 rounded-lg hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-400 rounded-lg hover:bg-photographer-elevated dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
         >
           Zobacz wszystkie powiadomienia
         </Link>

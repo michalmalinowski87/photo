@@ -764,41 +764,41 @@ export default function GalleryDetail() {
           ) : (
             <div className="w-full">
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-100 dark:bg-gray-900">
+                <TableHeader className="bg-photographer-darkBeige dark:bg-gray-900">
+                  <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Numer
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Status dostawy
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Status płatności
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Kwota
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Data utworzenia
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Akcje
                     </TableCell>
@@ -812,8 +812,8 @@ export default function GalleryDetail() {
                         key={order.orderId}
                         className={`h-[120px] ${
                           isEvenRow
-                            ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                            : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                            ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
+                            : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                         }`}
                       >
                         <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
@@ -834,7 +834,7 @@ export default function GalleryDetail() {
                             typeof order.totalCents === "number" ? order.totalCents : null
                           )}
                         </TableCell>
-                        <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                           {order.createdAt
                             ? new Date(
                                 order.createdAt as string | number | Date

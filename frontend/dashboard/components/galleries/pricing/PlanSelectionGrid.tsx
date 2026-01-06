@@ -48,7 +48,7 @@ export const PlanSelectionGrid = ({
       </h3>
 
       {/* Duration Toggle */}
-      <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-photographer-elevated dark:bg-gray-800 rounded-lg">
         {(["1m", "3m", "12m"] as Duration[]).map((duration) => {
           const isSelected = selectedDuration === duration;
 
@@ -155,7 +155,7 @@ export const PlanSelectionGrid = ({
                 }}
                 className={`relative rounded-lg border-2 p-5 transition-all ${
                   isDisabled
-                    ? "opacity-50 cursor-not-allowed border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-900"
+                    ? "opacity-50 cursor-not-allowed border-gray-400 dark:border-gray-600 bg-photographer-background dark:bg-gray-900"
                     : isSelected
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md cursor-pointer"
                       : "border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"

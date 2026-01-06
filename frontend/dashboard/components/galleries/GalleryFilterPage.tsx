@@ -194,7 +194,7 @@ export default function GalleryFilterPage({
               <button
                 ref={sortButtonRef}
                 onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-                className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+                className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-photographer-background dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
               >
                 <ArrowUpDown size={16} />
                 <span>{getSortLabel()}</span>
@@ -216,8 +216,8 @@ export default function GalleryFilterPage({
                     }}
                     className={`px-3 py-2 text-sm ${
                       sortBy === "name"
-                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                     }`}
                   >
                     Nazwa {sortBy === "name" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -229,8 +229,8 @@ export default function GalleryFilterPage({
                     }}
                     className={`px-3 py-2 text-sm ${
                       sortBy === "date"
-                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                     }`}
                   >
                     Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -242,8 +242,8 @@ export default function GalleryFilterPage({
                     }}
                     className={`px-3 py-2 text-sm ${
                       sortBy === "expiration"
-                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                     }`}
                   >
                     Data wygaśnięcia {sortBy === "expiration" && (sortOrder === "asc" ? "↑" : "↓")}
@@ -259,8 +259,8 @@ export default function GalleryFilterPage({
                     }}
                     className={`px-3 py-2 text-sm ${
                       sortOrder === "asc"
-                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                     }`}
                   >
                     Rosnąco ↑
@@ -272,8 +272,8 @@ export default function GalleryFilterPage({
                     }}
                     className={`px-3 py-2 text-sm ${
                       sortOrder === "desc"
-                        ? "bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                     }`}
                   >
                     Malejąco ↓
@@ -283,12 +283,12 @@ export default function GalleryFilterPage({
             </div>
 
             {/* View Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 h-11">
+            <div className="flex items-center gap-2 bg-photographer-elevated dark:bg-gray-800 rounded-lg p-1 h-11">
               <button
                 onClick={() => setViewMode("cards")}
                 className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
                   viewMode === "cards"
-                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    ? "bg-white dark:bg-gray-700 text-photographer-accent dark:text-photographer-accent shadow-sm"
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                 }`}
                 aria-label="Widok kart"
@@ -299,7 +299,7 @@ export default function GalleryFilterPage({
                 onClick={() => setViewMode("list")}
                 className={`h-11 w-11 rounded-md transition-colors flex items-center justify-center ${
                   viewMode === "list"
-                    ? "bg-white dark:bg-gray-700 text-brand-600 dark:text-brand-400 shadow-sm"
+                    ? "bg-white dark:bg-gray-700 text-photographer-accent dark:text-photographer-accent shadow-sm"
                     : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                 }`}
                 aria-label="Widok listy"

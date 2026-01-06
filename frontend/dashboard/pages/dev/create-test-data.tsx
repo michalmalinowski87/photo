@@ -213,7 +213,7 @@ export default function CreateTestData() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-photographer-background dark:bg-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -257,7 +257,7 @@ export default function CreateTestData() {
                       {progress.current}/{progress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(progress.current / progress.total) * 100}%` }}
@@ -297,7 +297,7 @@ export default function CreateTestData() {
                       {progress.current}/{progress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-green-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(progress.current / progress.total) * 100}%` }}

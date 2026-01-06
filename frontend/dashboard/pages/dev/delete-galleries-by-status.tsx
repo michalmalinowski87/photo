@@ -183,7 +183,7 @@ export default function DeleteGalleriesByStatus() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-photographer-background dark:bg-gray-900 p-8">
       <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
           Usuń galerie według statusu
@@ -261,7 +261,7 @@ export default function DeleteGalleriesByStatus() {
                   {deleteProgress.current}/{deleteProgress.total}
                 </span>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+              <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2.5">
                 <div
                   className="bg-red-600 h-2.5 rounded-full transition-all duration-300"
                   style={{

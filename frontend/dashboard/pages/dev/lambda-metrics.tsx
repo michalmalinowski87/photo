@@ -111,7 +111,7 @@ export default function LambdaMetrics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-photographer-background dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-purple-600 dark:text-purple-400 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Ładowanie metryk Lambda...</p>
@@ -121,7 +121,7 @@ export default function LambdaMetrics() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-photographer-background dark:bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -170,33 +170,33 @@ export default function LambdaMetrics() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <thead className="bg-photographer-darkBeige dark:bg-gray-900">
+                  <tr className="bg-photographer-darkBeige dark:bg-gray-900">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Funkcja
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Przydzielona
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Max użyta
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Średnia użyta
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Wykorzystanie
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Czas wykonania
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Wywołania
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Błędy
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-photographer-mutedText dark:text-gray-400 uppercase tracking-wider">
                       Rekomendacja
                     </th>
                   </tr>
@@ -205,7 +205,7 @@ export default function LambdaMetrics() {
                   {metrics.map((metric) => (
                     <tr
                       key={metric.functionName}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      className="hover:bg-photographer-background dark:hover:bg-gray-700/50"
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
@@ -231,7 +231,7 @@ export default function LambdaMetrics() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-[100px]">
+                          <div className="flex-1 bg-photographer-muted dark:bg-gray-700 rounded-full h-2 max-w-[100px]">
                             <div
                               className={`h-2 rounded-full ${
                                 metric.memoryUtilizationPercent < 50

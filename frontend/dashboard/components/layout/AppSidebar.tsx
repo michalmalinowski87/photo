@@ -168,7 +168,7 @@ const AppSidebar = () => {
                   <ChevronDown
                     className={`w-6 h-6 transition-transform duration-200 ${
                       openSubmenu?.type === "main" && openSubmenu?.index === index
-                        ? "rotate-180 text-brand-500"
+                        ? "rotate-180 text-photographer-accent"
                         : ""
                     }`}
                   />
@@ -244,14 +244,14 @@ const AppSidebar = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-400 
+      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-photographer-heading h-screen transition-all duration-300 ease-in-out z-50 border-r border-photographer-border dark:border-gray-800 
         w-[377px]
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}
     >
       <div className="py-10 flex justify-start">
         <Link href="/">
-          <span className="text-2xl font-bold text-brand-500">PhotoCloud</span>
+          <span className="text-2xl font-bold text-photographer-accent dark:text-white">PhotoCloud</span>
         </Link>
       </div>
       <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
@@ -277,7 +277,7 @@ const AppSidebar = () => {
           </Link>
           <Link
             href="/login"
-            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
+            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-photographer-text rounded-lg hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-white/5"
             onClick={async (e) => {
               e.preventDefault();
               if (typeof window !== "undefined") {

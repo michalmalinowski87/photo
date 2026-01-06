@@ -59,7 +59,7 @@ export const DenyChangeRequestModal = ({
             placeholder="Podaj powód odrzucenia prośby o zmiany. To pomoże klientowi zrozumieć decyzję..."
             rows={4}
             disabled={loading}
-            className="w-full px-4 py-2 text-sm border border-gray-400 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 text-sm border border-gray-400 rounded-lg focus:ring-2 focus:ring-photographer-accent focus:border-photographer-accent dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Powód zostanie dołączony do wiadomości e-mail wysłanej do klienta
@@ -71,7 +71,7 @@ export const DenyChangeRequestModal = ({
             variant="outline"
             onClick={handleClose}
             disabled={loading}
-            className="text-gray-700 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-white/5 border-gray-400 dark:border-gray-700"
+            className="text-gray-700 hover:text-gray-900 hover:bg-photographer-background dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-white/5 border-gray-400 dark:border-gray-700"
           >
             Anuluj
           </Button>

@@ -291,7 +291,7 @@ export default function DeleteAllData() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+    <div className="min-h-screen bg-photographer-background dark:bg-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -336,7 +336,7 @@ export default function DeleteAllData() {
               {hasNextPackagesPage && !isLoadingPackages && (
                 <button
                   onClick={handleLoadAllPackages}
-                  className="mb-4 px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="mb-4 px-3 py-1 text-sm bg-photographer-elevated dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-photographer-muted dark:hover:bg-gray-600 transition-colors"
                 >
                   Załaduj wszystkie pakiety
                 </button>
@@ -349,7 +349,7 @@ export default function DeleteAllData() {
                       {deleteProgress.current}/{deleteProgress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-red-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
@@ -389,7 +389,7 @@ export default function DeleteAllData() {
                       {deleteProgress.current}/{deleteProgress.total}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-red-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}

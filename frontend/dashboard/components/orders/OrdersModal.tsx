@@ -166,47 +166,47 @@ export const OrdersModal = ({
           <>
             <div className="w-full mb-4">
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-100 dark:bg-gray-900">
+                <TableHeader className="bg-photographer-darkBeige dark:bg-gray-900">
+                  <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Galeria
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Zlecenie
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Status dostawy
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Status płatności
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Kwota
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Data utworzenia
                     </TableCell>
                     <TableCell
                       isHeader
-                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"
+                      className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                     >
                       Akcje
                     </TableCell>
@@ -220,14 +220,14 @@ export const OrdersModal = ({
                         key={`${order.galleryId}-${order.orderId}`}
                         className={`h-[120px] ${
                           isEvenRow
-                            ? "bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/90"
-                            : "bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/40"
+                            ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
+                            : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                         }`}
                       >
                         <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                           <Link
                             href={`/galleries/${order.galleryId}`}
-                            className="text-brand-500 hover:text-brand-600"
+                            className="text-photographer-accent hover:text-photographer-accentHover"
                             onClick={() => {
                               onClose();
                               if (typeof window !== "undefined") {
@@ -242,7 +242,7 @@ export const OrdersModal = ({
                         <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                           <Link
                             href={`/galleries/${order.galleryId}/orders/${order.orderId}`}
-                            className="text-brand-500 hover:text-brand-600"
+                            className="text-photographer-accent hover:text-photographer-accentHover"
                             onClick={onClose}
                           >
                             #{formatOrderDisplay(order)}
@@ -257,7 +257,7 @@ export const OrdersModal = ({
                         <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                           {formatPrice(order.totalCents)}
                         </TableCell>
-                        <TableCell className="px-3 py-5 text-base text-gray-500 dark:text-gray-400 align-middle">
+                        <TableCell className="px-3 py-5 text-base text-gray-900 dark:text-white align-middle">
                           {order.createdAt
                             ? new Date(order.createdAt).toLocaleDateString("pl-PL")
                             : "-"}

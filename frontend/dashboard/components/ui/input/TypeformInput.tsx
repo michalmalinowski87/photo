@@ -137,7 +137,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
           maxLength={maxLength}
           {...(autoComplete === "off" ? { "data-1p-ignore": "true" } : {})}
           className={`
-            w-full bg-transparent
+            w-full bg-white dark:bg-gray-900
             border-0 border-b-2
             pb-2 pt-6
             px-0

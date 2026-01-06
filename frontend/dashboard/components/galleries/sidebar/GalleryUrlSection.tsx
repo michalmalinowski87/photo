@@ -219,13 +219,26 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
       </Button>
 
       {/* Publish Gallery Button - Show when not paid, disabled if no photos */}
-      {shouldShowPublishButton && (
-        <Tooltip
-          content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
-          side="top"
-          align="center"
-          fullWidth
-        >
+      {shouldShowPublishButton &&
+        (!hasPhotos ? (
+          <Tooltip
+            content="Najpierw prześlij zdjęcia"
+            side="top"
+            align="center"
+            fullWidth
+          >
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handlePublishClick}
+              disabled={!hasPhotos}
+              className="w-full mt-2.5"
+              startIcon={<Plus size={20} />}
+            >
+              Opublikuj galerię
+            </Button>
+          </Tooltip>
+        ) : (
           <Button
             variant="primary"
             size="md"
@@ -236,8 +249,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
           >
             Opublikuj galerię
           </Button>
-        </Tooltip>
-      )}
+        ))}
 
       {/* Share Button - Show when published and ready to send */}
       {shouldShowShareButton && (

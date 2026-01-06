@@ -87,7 +87,7 @@ export const ClientSendSuccessPopup = ({
             </h2>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800 transition-colors"
               aria-label="Zamknij"
             >
               <X className="w-5 h-5" strokeWidth={2} />
@@ -171,7 +171,7 @@ export const ClientSendSuccessPopup = ({
           </div>
 
           {/* Don't show again checkbox */}
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
+          <div className="p-4 bg-photographer-background dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

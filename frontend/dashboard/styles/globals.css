@@ -23,7 +23,7 @@
     transform: scale(0.98);
   }
   body {
-    @apply relative font-normal font-outfit bg-gray-50 dark:bg-gray-dark;
+    @apply relative font-normal font-outfit bg-photographer-background dark:bg-gray-dark;
   }
 }
 
@@ -33,11 +33,11 @@
   }
 
   .menu-item-active {
-    @apply bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400;
+    @apply bg-photographer-accentLight/50 text-photographer-accentDark font-semibold dark:bg-photographer-accent/[0.12] dark:text-photographer-accent;
   }
 
   .menu-item-inactive {
-    @apply text-gray-700 hover:bg-gray-100 group-hover:text-gray-700 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-300;
+    @apply text-photographer-text hover:bg-photographer-elevated group-hover:text-photographer-heading dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-300;
   }
 
   .menu-item-icon-size svg {
@@ -45,11 +45,11 @@
   }
 
   .menu-item-icon-active {
-    @apply text-brand-500 dark:text-brand-400;
+    @apply text-photographer-accent dark:text-photographer-accent;
   }
 
   .menu-item-icon-inactive {
-    @apply text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-300;
+    @apply text-photographer-mutedText group-hover:text-photographer-text dark:text-gray-400 dark:group-hover:text-gray-300;
   }
 
   .menu-item-text {
@@ -61,23 +61,23 @@
   }
 
   .menu-dropdown-item-active {
-    @apply bg-brand-50 text-brand-500 dark:bg-brand-500/[0.12] dark:text-brand-400;
+    @apply bg-photographer-accentLight/50 text-photographer-accentDark font-semibold dark:bg-photographer-accent/[0.12] dark:text-photographer-accent;
   }
 
   .menu-dropdown-item-inactive {
-    @apply text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5;
+    @apply text-photographer-text hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5;
   }
 
   .menu-dropdown-badge {
-    @apply block rounded-full px-2.5 py-0.5 text-xs font-medium uppercase text-brand-500 dark:text-brand-400;
+    @apply block rounded-full px-2.5 py-0.5 text-xs font-medium uppercase text-brand-500 dark:text-photographer-accent;
   }
 
   .menu-dropdown-badge-active {
-    @apply bg-brand-100 dark:bg-brand-500/20;
+    @apply bg-brand-100 dark:bg-photographer-accent/20;
   }
 
   .menu-dropdown-badge-inactive {
-    @apply bg-brand-50 group-hover:bg-brand-100 dark:bg-brand-500/15 dark:group-hover:bg-brand-500/20;
+    @apply bg-brand-50 group-hover:bg-brand-100 dark:bg-photographer-accent/15 dark:group-hover:bg-photographer-accent/20;
   }
 
   .no-scrollbar {
@@ -90,31 +90,31 @@
   }
 
   .shadow-theme-xs {
-    box-shadow: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+    box-shadow: 0px 1px 2px 0px rgba(30, 26, 23, 0.05);
   }
 
   .shadow-theme-sm {
     box-shadow:
-      0px 1px 3px 0px rgba(16, 24, 40, 0.1),
-      0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+      0px 1px 3px 0px rgba(30, 26, 23, 0.1),
+      0px 1px 2px 0px rgba(30, 26, 23, 0.06);
   }
 
   .shadow-theme-md {
     box-shadow:
-      0px 4px 8px -2px rgba(16, 24, 40, 0.1),
-      0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+      0px 4px 8px -2px rgba(30, 26, 23, 0.1),
+      0px 2px 4px -2px rgba(30, 26, 23, 0.06);
   }
 
   .shadow-theme-lg {
     box-shadow:
-      0px 12px 16px -4px rgba(16, 24, 40, 0.08),
-      0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+      0px 12px 16px -4px rgba(30, 26, 23, 0.08),
+      0px 4px 6px -2px rgba(30, 26, 23, 0.03);
   }
 
   .shadow-theme-xl {
     box-shadow:
-      0px 20px 24px -4px rgba(16, 24, 40, 0.08),
-      0px 8px 8px -4px rgba(16, 24, 40, 0.03);
+      0px 20px 24px -4px rgba(30, 26, 23, 0.08),
+      0px 8px 8px -4px rgba(30, 26, 23, 0.03);
   }
 
   @keyframes slide-in {
@@ -147,7 +147,7 @@
   @apply opacity-100;
 }
 .tableCheckbox:checked ~ span {
-  @apply border-brand-500 bg-brand-500;
+  @apply border-photographer-accent bg-photographer-accent;
 }
 
 /* Toast z-index override - ensure toasts always appear above everything */

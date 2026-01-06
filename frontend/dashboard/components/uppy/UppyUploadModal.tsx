@@ -574,7 +574,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
                     isDragging
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                      : "border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                      : "border-gray-400 dark:border-gray-600 bg-white dark:bg-gray-800"
                   } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   onClick={() => {
                     if (!uploading && !uploadComplete) {
@@ -655,7 +655,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
-                                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                                  <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
                                     <ImageIcon
                                       className="w-12 h-12 text-gray-400"
                                       strokeWidth={2}
@@ -792,7 +792,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                           {progressPercentage}%
                         </div>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-photographer-muted dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                         <div
                           className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${progressPercentage}%` }}

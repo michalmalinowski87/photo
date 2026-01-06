@@ -59,7 +59,7 @@ export const UploadCompletionOverlay = ({
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div className="flex-shrink-0 w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                 {isFinalizing ? (
-                  <Loader2 size={28} className="text-brand-500 dark:text-brand-400 animate-spin" />
+                  <Loader2 size={28} className="text-photographer-accent dark:text-photographer-accent animate-spin" />
                 ) : (
                   <CheckCircle2 size={28} className="text-green-600 dark:text-green-400" />
                 )}
@@ -71,8 +71,8 @@ export const UploadCompletionOverlay = ({
                 {isFinalizing && (
                   <div className="flex items-center gap-2 mt-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-brand-500 rounded-full animate-pulse" />
-                      <p className="text-sm font-medium text-brand-600 dark:text-brand-400">
+                      <div className="w-2 h-2 bg-photographer-accent rounded-full animate-pulse" />
+                      <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accent">
                         Przetwarzanie metadanych i przygotowywanie zdjęć...
                       </p>
                     </div>
@@ -105,9 +105,9 @@ export const UploadCompletionOverlay = ({
         {/* Processing indicator bar when finalizing */}
         {isFinalizing && (
           <div className="px-10 pb-4">
-            <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-photographer-muted dark:bg-gray-700 rounded-full overflow-hidden">
               <div
-                className="h-full bg-brand-500 rounded-full animate-pulse"
+                className="h-full bg-photographer-accent rounded-full animate-pulse"
                 style={{ width: "100%" }}
               />
             </div>
@@ -120,7 +120,7 @@ export const UploadCompletionOverlay = ({
             {/* Primary Stats - Larger, more prominent */}
             <div className="grid grid-cols-2 gap-5">
               {/* Number of Photos */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
+              <div className="bg-photographer-background dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
                   Liczba zdjęć
                 </div>
@@ -130,7 +130,7 @@ export const UploadCompletionOverlay = ({
               </div>
 
               {/* Total Size */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
+              <div className="bg-photographer-background dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
                   Łączny rozmiar
                 </div>

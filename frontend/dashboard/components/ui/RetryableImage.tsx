@@ -147,12 +147,12 @@ export const RetryableImage = ({
   return (
     <div className="relative w-full h-full">
       {isLoading && (
-        <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
+        <div className="absolute inset-0 bg-photographer-elevated dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
           <div className="text-xs text-gray-500 dark:text-gray-400">Ładowanie obrazu...</div>
         </div>
       )}
       {hasError && (
-        <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
+        <div className="absolute inset-0 bg-photographer-elevated dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
           <div className="text-xs text-gray-500 dark:text-gray-400">Błąd ładowania</div>
         </div>
       )}

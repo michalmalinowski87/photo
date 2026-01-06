@@ -76,7 +76,7 @@ export function OrderInfoCard({
                     const formatted = formatCurrencyInput(e.target.value);
                     onAmountChange(formatted);
                   }}
-                  className="text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-0 border-b-2 border-gray-400 dark:border-gray-500 focus:outline-none focus:border-brand-500 dark:focus:border-brand-400 px-0 py-0 max-w-[150px]"
+                  className="text-lg font-semibold text-gray-900 dark:text-white bg-transparent border-0 border-b-2 border-gray-400 dark:border-gray-500 focus:outline-none focus:border-brand-500 dark:focus:border-photographer-accent px-0 py-0 max-w-[150px]"
                   autoFocus
                   disabled={savingAmount}
                 />

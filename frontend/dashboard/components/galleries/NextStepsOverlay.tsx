@@ -732,7 +732,7 @@ export const NextStepsOverlay = () => {
           }}
           className={`w-full flex items-center ${
             isExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
-          } border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 active:bg-gray-100/50 dark:active:bg-gray-800/50`}
+          } border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-photographer-background/50 dark:hover:bg-gray-800/30 active:bg-photographer-elevated/50 dark:active:bg-gray-800/50`}
           aria-label={isExpanded ? "Zwiń" : "Rozwiń"}
         >
           {isExpanded ? (
@@ -808,20 +808,20 @@ export const NextStepsOverlay = () => {
                   } rounded-xl text-left transition-all duration-200 ${
                     isExpanded
                       ? step.completed
-                        ? "bg-gradient-to-br from-success-50 to-success-25 dark:from-success-950/30 dark:to-success-900/20 cursor-default shadow-sm"
+                        ? "bg-gradient-to-br from-photographer-accentLight/60 to-photographer-accentLight/40 dark:from-success-950/30 dark:to-success-900/20 cursor-default shadow-sm"
                         : isDisabled
-                          ? "bg-gray-50/50 dark:bg-gray-800/30 opacity-60 cursor-not-allowed"
-                          : "bg-gray-50/80 dark:bg-gray-800/40 hover:bg-gray-100/80 dark:hover:bg-gray-700/50 hover:shadow-theme-sm cursor-pointer active:scale-[0.98]"
-                      : "hover:bg-gray-50/50 dark:hover:bg-gray-800/30 cursor-pointer"
+                          ? "bg-photographer-background/50 dark:bg-gray-800/30 opacity-60 cursor-not-allowed"
+                          : "bg-photographer-elevated dark:bg-gray-800/50 border border-photographer-border/50 dark:border-gray-700/50 hover:bg-photographer-muted/60 dark:hover:bg-gray-700/60 hover:shadow-theme-sm cursor-pointer active:scale-[0.98]"
+                      : "hover:bg-photographer-background/50 dark:hover:bg-gray-800/30 cursor-pointer"
                   }`}
                 >
                   {/* Status indicator with refined styling */}
                   <div
                     className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
                       step.completed
-                        ? "bg-gradient-to-br from-success-500 to-success-600 dark:from-success-500 dark:to-success-600 text-white shadow-lg shadow-success-500/25 scale-100"
-                        : "bg-gray-200 dark:bg-gray-700 border-2 border-gray-400/50 dark:border-gray-600/50"
-                    } ${!step.completed && !isDisabled ? "group-hover:border-brand-400 dark:group-hover:border-brand-500 group-hover:bg-gray-100 dark:group-hover:bg-gray-600" : ""}`}
+                        ? "bg-gradient-to-br from-photographer-accentDark to-photographer-accentHover dark:from-success-600 dark:to-success-700 text-white shadow-lg shadow-photographer-accentDark/25 scale-100"
+                        : "bg-photographer-muted dark:bg-gray-700 border-2 border-gray-400/50 dark:border-gray-600/50"
+                    } ${!step.completed && !isDisabled ? "group-hover:border-photographer-accent dark:group-hover:border-photographer-accent group-hover:bg-photographer-elevated dark:group-hover:bg-gray-600" : ""}`}
                   >
                     {step.completed ? (
                       <Check className="w-5 h-5" strokeWidth={3} />
@@ -830,7 +830,7 @@ export const NextStepsOverlay = () => {
                         className={`w-2.5 h-2.5 rounded-full transition-colors ${
                           isDisabled
                             ? "bg-gray-400 dark:bg-gray-500"
-                            : "bg-gray-400 dark:bg-gray-500 group-hover:bg-brand-500"
+                            : "bg-gray-400 dark:bg-gray-500 group-hover:bg-photographer-accent"
                         }`}
                       />
                     )}
@@ -849,7 +849,7 @@ export const NextStepsOverlay = () => {
                     <span
                       className={`text-[14px] font-medium tracking-[-0.01em] whitespace-nowrap block ${
                         step.completed
-                          ? "text-success-700 dark:text-success-400"
+                          ? "text-photographer-accentDark dark:text-success-400"
                           : isDisabled
                             ? "text-gray-500 dark:text-gray-500"
                             : "text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-gray-100"

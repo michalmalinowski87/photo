@@ -2,7 +2,6 @@ import { Plus, Check, X, Save, ArrowLeft } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
 import { generatePassword } from "../../../lib/password";
-import Button from "../../ui/button/Button";
 import TypeformInput from "../../ui/input/TypeformInput";
 import SearchableSelect from "../../ui/select/SearchableSelect";
 
@@ -319,16 +318,16 @@ export const ClientStep = ({
                   }
                 />
                 <div className="absolute right-0 bottom-[34px]">
-                  <Button
+                  <button
                     type="button"
                     onClick={() => {
                       const newPassword = generatePassword();
                       onDataChange({ clientPassword: newPassword });
                     }}
-                    className="bg-white text-gray-700 dark:text-green-400 ring-1 ring-inset ring-gray-400 dark:ring-0 dark:bg-transparent hover:bg-gray-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 shadow-sm dark:shadow-none font-medium"
+                    className="text-photographer-accent dark:text-photographer-accentLight hover:text-photographer-accentLight dark:hover:text-photographer-accent transition-colors text-lg font-medium cursor-pointer"
                   >
                     Generuj hasło
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>
@@ -353,7 +352,7 @@ export const ClientStep = ({
               }}
               className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
             >
-              <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
                 <Plus className="w-10 h-10 text-white" strokeWidth={2} />
               </div>
               <div className="text-center">
@@ -433,16 +432,16 @@ export const ClientStep = ({
                     }
                   />
                   <div className="absolute right-0 bottom-[34px]">
-                    <Button
+                    <button
                       type="button"
                       onClick={() => {
                         const newPassword = generatePassword();
                         onDataChange({ clientPassword: newPassword });
                       }}
-                      className="bg-white text-gray-700 dark:text-green-400 ring-1 ring-inset ring-gray-400 dark:ring-0 dark:bg-transparent hover:bg-gray-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 shadow-sm dark:shadow-none font-medium"
+                      className="text-photographer-accent dark:text-photographer-accentLight hover:text-photographer-accentLight dark:hover:text-photographer-accent transition-colors text-lg font-medium cursor-pointer"
                     >
                       Generuj hasło
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -566,7 +565,7 @@ export const ClientStep = ({
                   onClick={() => onDataChange({ isVatRegistered: !isVatRegistered })}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer
                     border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800
-                    hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700
+                    hover:border-gray-400 dark:hover:border-gray-600 hover:bg-photographer-background dark:hover:bg-gray-700
                     active:scale-[0.98]"
                 >
                   {isVatRegistered ? (
