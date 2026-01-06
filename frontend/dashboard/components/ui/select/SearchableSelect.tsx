@@ -172,8 +172,8 @@ export const SearchableSelect = ({
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-text"}
             ${
               error
-                ? "border-red-500 text-red-600 dark:text-red-400"
-                : "border-gray-400 dark:border-gray-600 text-gray-900 dark:text-white focus:border-gray-400 dark:focus:border-gray-500"
+                ? "border-error-500 text-error-600 dark:text-error-400"
+                : "border-photographer-border dark:border-gray-600 text-photographer-text dark:text-white focus:border-photographer-accent dark:focus:border-photographer-accent"
             }
           `}
           aria-haspopup="listbox"
@@ -181,8 +181,8 @@ export const SearchableSelect = ({
           aria-label={placeholder}
         >
           <span
-            className={`truncate flex-1 ${
-              !selectedOption ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"
+            className={`truncate flex-1 font-medium ${
+              !selectedOption ? "text-photographer-mutedText dark:text-gray-500" : "text-photographer-text dark:text-white"
             }`}
           >
             {selectedOption ? selectedOption.label : placeholder}
@@ -202,10 +202,10 @@ export const SearchableSelect = ({
                   }
                 }}
               >
-                <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <X className="w-4 h-4 text-photographer-mutedText dark:text-gray-400" />
               </div>
             )}
-            <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform duration-200" />
+            <ChevronDown className="w-4 h-4 text-photographer-mutedText dark:text-gray-400 transition-transform duration-200" />
           </div>
         </button>
       ) : (
@@ -228,10 +228,10 @@ export const SearchableSelect = ({
               ${disabled ? "opacity-50 cursor-not-allowed" : ""}
               ${
                 error
-                  ? "border-red-500 text-red-600 dark:text-red-400"
-                  : "border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white"
+                  ? "border-error-500 text-error-600 dark:text-error-400"
+                  : "border-photographer-border dark:border-gray-500 text-photographer-text dark:text-white focus:border-photographer-accent dark:focus:border-photographer-accent"
               }
-              placeholder:text-gray-400 dark:placeholder:text-gray-500
+              placeholder:text-photographer-mutedText dark:placeholder:text-gray-500
             `}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -255,17 +255,17 @@ export const SearchableSelect = ({
                   }
                 }}
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-photographer-mutedText dark:text-gray-400" />
               </div>
             )}
-            <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-200 rotate-180" />
+            <ChevronDown className="w-4 h-4 text-photographer-mutedText dark:text-gray-400 transition-transform duration-200 rotate-180" />
           </div>
         </div>
       )}
 
       {/* Dropdown - Flows naturally from input, minimal design */}
       {isOpen && (
-        <div className="absolute z-50 w-full top-full left-0 mt-0 bg-white dark:bg-gray-800 shadow-lg">
+        <div className="absolute z-50 w-full top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-photographer-border dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
           {/* Options List */}
           <div className="relative">
             <ul
@@ -293,16 +293,16 @@ export const SearchableSelect = ({
                       onMouseLeave={() => setHighlightedIndex(-1)}
                       className={`
                         px-4 py-4 cursor-pointer transition-colors
-                        border-b border-gray-400 dark:border-gray-700 last:border-b-0
+                        border-b border-photographer-border dark:border-gray-700 last:border-b-0
                         ${
                           isSelected
-                            ? "text-brand-600 dark:text-photographer-accent bg-brand-50/30 dark:bg-photographer-accent/5"
-                            : "text-gray-900 dark:text-white"
+                            ? "text-photographer-accentDark dark:text-photographer-accent bg-photographer-elevated dark:bg-photographer-accent/10"
+                            : "text-photographer-text dark:text-white"
                         }
                         ${
                           isHighlighted && !isSelected
-                            ? "bg-photographer-background dark:bg-gray-700/30"
-                            : "bg-transparent"
+                            ? "bg-photographer-elevated dark:bg-gray-700/30"
+                            : "bg-white dark:bg-gray-800"
                         }
                       `}
                     >
@@ -322,7 +322,7 @@ export const SearchableSelect = ({
                           )}
                         </div>
                         {isSelected && (
-                          <Check className="w-5 h-5 text-brand-500 dark:text-photographer-accent flex-shrink-0" />
+                          <Check className="w-5 h-5 text-photographer-accent dark:text-photographer-accentLight flex-shrink-0" />
                         )}
                       </div>
                     </li>

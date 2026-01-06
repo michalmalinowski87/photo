@@ -136,10 +136,10 @@ export const PackageStep = ({
     return (
       <div className="w-full mt-[200px]">
         <div className="mb-8 md:mb-12">
-          <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+          <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
             Ustaw pakiet cenowy *
           </div>
-          <p className="text-base text-gray-500 dark:text-gray-400 italic">
+          <p className="text-base text-photographer-mutedText dark:text-gray-400 italic">
             Wybierz istniejący pakiet lub stwórz nowy
           </p>
         </div>
@@ -214,16 +214,16 @@ export const PackageStep = ({
                 initialPaymentAmountCents: 0,
               });
             }}
-            className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
+            className="relative p-10 md:p-12 rounded-2xl border-2 border-photographer-border dark:border-gray-700 bg-photographer-elevated dark:bg-gray-800/30 hover:border-photographer-darkBeige dark:hover:border-gray-600 hover:bg-photographer-muted dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-90 hover:opacity-100"
           >
-            <div className="w-20 h-20 rounded-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full bg-photographer-accent dark:bg-photographer-accentDark flex items-center justify-center">
               <Plus className="w-10 h-10 text-white" strokeWidth={2} />
             </div>
             <div className="text-center">
-              <div className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+              <div className="text-xl font-semibold mb-2 text-photographer-heading dark:text-white">
                 Dodaj nowy pakiet
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-photographer-mutedText dark:text-gray-400">
                 Utwórz nowy pakiet cenowy
               </div>
             </div>

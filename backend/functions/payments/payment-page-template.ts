@@ -37,20 +37,22 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		apiUrl
 	} = options;
 
-	// Dashboard dark theme colors
-	const successColor = '#12b76a'; // success-500
-	const brandColor = '#465fff'; // brand-500
-	// Dark theme grays
-	const grayDark = '#1a2231'; // gray-dark (main background)
-	const gray800 = '#1d2939'; // gray-800 (card background)
-	const gray700 = '#344054'; // gray-700 (borders)
-	const gray500 = '#667085'; // gray-500 (muted text)
-	const gray300 = '#d0d5dd'; // gray-300 (text)
-	const gray100 = '#f2f4f7'; // gray-100 (light text)
+	// Dashboard light theme colors (default theme)
+	const successColor = '#8B6F57'; // photographer-accent (brown/beige for success)
+	const brandColor = '#8B6F57'; // photographer-accent (brown/beige instead of blue)
+	// Light theme colors
+	const background = '#FFFAF5'; // photographer-background (main background)
+	const surface = '#FFFFFF'; // photographer-surface (card background)
+	const elevated = '#F6EFE7'; // photographer-elevated (elevated surfaces)
+	const border = '#E3D3C4'; // photographer-border (borders)
+	const text = '#2D241F'; // photographer-text (main text)
+	const mutedText = '#5A4D42'; // photographer-mutedText (muted text)
+	const accent = '#8B6F57'; // photographer-accent (accent color)
+	const accentDark = '#554334'; // photographer-accentDark (darker accent)
 	
-	// For cancel pages, use brand blue (neutral) instead of error red
-	const statusColor = isSuccess ? successColor : brandColor;
-	const warningBgLight = '#b54708'; // warning-700 (for icon background)
+	// For cancel pages, use accent color (neutral brown/beige) instead of error red
+	const statusColor = isSuccess ? successColor : accent;
+	const warningBgLight = '#D9A672'; // photographer-warning (for icon background)
 	
 	// Generate CSP nonce for inline script (random string)
 	const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -78,8 +80,8 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		
 		body {
 			font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-			background: ${grayDark};
-			color: ${gray100};
+			background: ${background};
+			color: ${text};
 			min-height: 100vh;
 			display: flex;
 			align-items: center;
@@ -88,10 +90,10 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		}
 		
 		.container {
-			background: ${gray800};
+			background: ${surface};
 			border-radius: 12px;
-			box-shadow: 0px 4px 8px -2px rgba(0, 0, 0, 0.3), 0px 2px 4px -2px rgba(0, 0, 0, 0.2);
-			border: 1px solid ${gray700};
+			box-shadow: 0px 4px 8px -2px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.06);
+			border: 1px solid ${border};
 			padding: 48px;
 			max-width: 500px;
 			width: 100%;
@@ -101,7 +103,7 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		.logo {
 			font-size: 32px;
 			font-weight: 700;
-			color: ${brandColor};
+			color: ${accent};
 			margin: 0 auto 24px;
 			letter-spacing: -0.5px;
 		}
@@ -120,24 +122,24 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		h1 {
 			font-size: 28px;
 			font-weight: 600;
-			color: ${gray100};
+			color: ${text};
 			margin-bottom: 12px;
 			line-height: 1.2;
 		}
 		
 		.message {
 			font-size: 16px;
-			color: ${gray300};
+			color: ${mutedText};
 			margin-bottom: 32px;
 			line-height: 1.6;
 		}
 		
 		.status-container {
-			background: ${grayDark};
+			background: ${elevated};
 			border-radius: 8px;
 			padding: 24px;
 			margin-bottom: 32px;
-			border: 1px solid ${gray700};
+			border: 1px solid ${border};
 		}
 		
 		.status-item {
@@ -146,7 +148,7 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 			justify-content: flex-start;
 			padding: 12px 0;
 			font-size: 14px;
-			color: ${gray300};
+			color: ${text};
 		}
 		
 		.status-icon {
@@ -170,14 +172,14 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		}
 		
 		.status-icon.pending {
-			background: ${gray500};
+			background: ${mutedText};
 			animation: pulse 1.5s ease-in-out infinite;
 		}
 		
 		.status-icon.pending .spinner {
 			width: 12px;
 			height: 12px;
-			border: 2px solid ${gray700};
+			border: 2px solid ${border};
 			border-top-color: ${statusColor};
 			border-radius: 50%;
 			animation: spin 0.8s linear infinite;
@@ -209,7 +211,7 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		
 		.redirect-message {
 			font-size: 14px;
-			color: ${gray300};
+			color: ${mutedText};
 			margin-top: 24px;
 			line-height: 1.6;
 			max-width: 100%;
@@ -217,20 +219,20 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		}
 		
 		.link {
-			color: ${brandColor};
+			color: ${accent};
 			text-decoration: none;
 			font-weight: 500;
 		}
 		
 		.link:hover {
-			color: ${brandColor};
+			color: ${accentDark};
 			text-decoration: underline;
 			opacity: 0.8;
 		}
 		
 		.redirect-button {
 			display: none;
-			background: ${brandColor};
+			background: ${accent};
 			color: white;
 			border: none;
 			border-radius: 8px;
@@ -240,11 +242,12 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 			cursor: pointer;
 			margin-top: 24px;
 			font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-			transition: opacity 0.2s, transform 0.2s;
+			transition: opacity 0.2s, transform 0.2s, background 0.2s;
 		}
 		
 		.redirect-button:hover {
 			opacity: 0.9;
+			background: ${accentDark};
 			transform: translateY(-1px);
 		}
 		

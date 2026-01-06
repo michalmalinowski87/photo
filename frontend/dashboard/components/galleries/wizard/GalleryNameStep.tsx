@@ -16,10 +16,10 @@ export const GalleryNameStep = ({
   return (
     <div className="w-full mt-[200px]">
       <div className="mb-8 md:mb-12">
-        <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
+        <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
           Jaką nazwę ma mieć galeria? *
         </div>
-        <p className="text-base text-gray-500 dark:text-gray-400 italic">
+        <p className="text-base text-photographer-mutedText dark:text-gray-400 italic">
           To pomoże Ci łatwo ją znaleźć później
         </p>
       </div>

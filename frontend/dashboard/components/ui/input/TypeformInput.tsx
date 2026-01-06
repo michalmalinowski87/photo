@@ -105,8 +105,8 @@ const TypeformInput: FC<TypeformInputProps> = ({
             origin-left
             ${
               isLabelFloating
-                ? "top-0 text-sm scale-90 -translate-y-0 text-gray-500 dark:text-gray-400"
-                : "top-6 text-lg scale-100 translate-y-0 text-gray-400 dark:text-gray-500"
+                ? "top-0 text-sm scale-90 -translate-y-0 text-photographer-mutedText dark:text-gray-400"
+                : "top-6 text-lg scale-100 translate-y-0 text-photographer-mutedText dark:text-gray-500"
             }
             ${error ? "text-error-500 dark:text-error-400" : ""}
             ${disabled ? "opacity-50" : ""}
@@ -137,12 +137,12 @@ const TypeformInput: FC<TypeformInputProps> = ({
           maxLength={maxLength}
           {...(autoComplete === "off" ? { "data-1p-ignore": "true" } : {})}
           className={`
-            w-full bg-white dark:bg-gray-900
+            w-full bg-transparent dark:bg-gray-900
             border-0 border-b-2
             pb-2 pt-6
             px-0
-            text-lg
-            text-gray-900 dark:text-white
+            text-lg font-medium
+            text-photographer-text dark:text-white
             placeholder:text-transparent
             focus:outline-none focus:ring-0
             transition-colors duration-200
@@ -150,7 +150,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
             ${
               error
                 ? "border-error-500 dark:border-error-400 focus:border-error-500 dark:focus:border-error-400"
-                : "border-gray-400 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-300"
+                : "border-photographer-border dark:border-gray-600 focus:border-photographer-accent dark:focus:border-photographer-accent"
             }
             ${inputClassName}
             ${className}
@@ -161,7 +161,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
         {!error && (
           <div
             className={`
-              absolute bottom-0 left-0 h-0.5 bg-gray-900 dark:bg-gray-300
+              absolute bottom-0 left-0 h-0.5 bg-photographer-accent dark:bg-photographer-accentLight
               transition-all duration-300 ease-in-out
               ${isFocused ? "w-full opacity-100" : "w-0 opacity-0"}
             `}
@@ -174,7 +174,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
         {errorMessage ? (
           <p className="text-sm text-error-500 dark:text-error-400">{errorMessage}</p>
         ) : hint ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>
+          <p className="text-xs text-photographer-mutedText dark:text-gray-400">{hint}</p>
         ) : null}
       </div>
     </div>

@@ -32,9 +32,9 @@ export const StripeRedirectOverlay = ({ isVisible, checkoutUrl }: StripeRedirect
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full mx-4 p-8">
         <div className="text-center">
           <div className="mb-6">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-photographer-elevated dark:bg-photographer-accentDark/30 flex items-center justify-center">
               <Loader2
-                className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin"
+                className="w-8 h-8 text-photographer-accent dark:text-photographer-accentLight animate-spin"
                 strokeWidth={2}
               />
             </div>
