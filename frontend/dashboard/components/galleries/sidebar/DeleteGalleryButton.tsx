@@ -59,7 +59,7 @@ export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryBut
     <>
       {isRedirecting && <FullPageLoading text="Usuwanie galerii..." />}
 
-      <div className="mt-auto p-3 border-t border-gray-400 dark:border-gray-800">
+      <div className="mt-auto p-3">
         <Button
           size="md"
           variant="outline"
