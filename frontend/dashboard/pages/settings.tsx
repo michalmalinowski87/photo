@@ -159,13 +159,13 @@ export default function Settings() {
       {loading ? (
         <>
           {/* Email logowania Skeleton */}
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[93.33px] animate-fade-in-out"></div>
+          <div className="p-4 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[93.33px] animate-fade-in-out"></div>
 
           {/* Zmiana hasła Skeleton */}
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[349.33px] animate-fade-in-out"></div>
+          <div className="p-4 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[349.33px] animate-fade-in-out"></div>
 
           {/* Informacje kontaktowe Skeleton */}
-          <div className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-96 animate-fade-in-out"></div>
+          <div className="p-4 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-96 animate-fade-in-out"></div>
         </>
       ) : deletionStatus?.status === "pendingDeletion" ? (
         // Show only undo deletion banner when pending deletion
@@ -177,7 +177,7 @@ export default function Settings() {
         />
       ) : (
         <>
-          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <div className="space-y-1" style={{ minHeight: "60px" }}>
               <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
                 Email logowania
@@ -188,7 +188,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
               Zmiana hasła
             </h2>
@@ -256,7 +256,7 @@ export default function Settings() {
             </form>
           </div>
 
-          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
               Informacje kontaktowe
             </h2>
@@ -360,7 +360,7 @@ export default function Settings() {
           </div>
 
           {/* Delete Account Section */}
-          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
               Usuń konto
             </h2>

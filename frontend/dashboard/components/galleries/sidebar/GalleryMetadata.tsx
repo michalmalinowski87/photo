@@ -63,7 +63,7 @@ export const GalleryMetadata = ({ shouldHideSecondaryElements }: GalleryMetadata
     : "-";
 
   return (
-    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+    <div className="py-3 border-b border-gray-400 dark:border-gray-800">
       <div className="flex items-start gap-4">
         <div className="flex-1">
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Utworzono:</div>

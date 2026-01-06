@@ -473,7 +473,7 @@ export function FinalsTab({
                       ? "opacity-60"
                       : isSelected && isSelectionMode
                         ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
-                        : "border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
+                        : "border-gray-400 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400"
                   }`}
                   onMouseDown={(e) => {
                     // Prevent browser text/element selection when in selection mode
@@ -495,7 +495,7 @@ export function FinalsTab({
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
                             isSelected
                               ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                              : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                              : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
                           }`}
                           onClick={(e) => {
                             e.stopPropagation();

@@ -19,7 +19,7 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 
   const spinner = (
     <div className={`${spinnerSize} relative`}>
-      <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+      <div className="absolute inset-0 border-4 border-gray-400 dark:border-gray-700 rounded-full"></div>
       <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
     </div>
   );

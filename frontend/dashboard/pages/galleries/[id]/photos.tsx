@@ -1388,8 +1388,8 @@ export default function GalleryPhotos() {
               : isSelected && isSelectionMode
                 ? "border-brand-500 ring-2 ring-brand-200 dark:ring-brand-800"
                 : isNonDeletable && isSelectionMode
-                  ? "opacity-60 border-gray-300 dark:border-gray-600"
-                  : "border-gray-200"
+                  ? "opacity-60 border-gray-400 dark:border-gray-600"
+                  : "border-gray-400"
           } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""}`}
           onMouseDown={(e) => {
             // Prevent browser text/element selection when in selection mode
@@ -1419,7 +1419,7 @@ export default function GalleryPhotos() {
                       ? "bg-gray-300 border-gray-400 dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed opacity-60"
                       : isSelected
                         ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                        : "bg-white/90 border-gray-300 dark:bg-gray-800/90 dark:border-gray-600"
+                        : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1948,7 +1948,7 @@ export default function GalleryPhotos() {
               return (
                 <div
                   key={orderId}
-                  className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
+                  className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
                     className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
@@ -2025,7 +2025,7 @@ export default function GalleryPhotos() {
             })}
 
             {/* Unselected Section - Always show header */}
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
               <div
                 className={`w-full px-5 py-3 bg-gray-50 dark:bg-gray-900 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
                   expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"

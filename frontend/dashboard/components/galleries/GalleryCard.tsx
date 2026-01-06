@@ -138,7 +138,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
   const expiryInfo = getExpiryInfo();
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-200 dark:border-gray-700 h-full flex flex-col">
+    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-400 dark:border-gray-700 h-full flex flex-col">
       {/* Cover Photo Section */}
       <div className="relative h-56 bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
         {coverPhotoUrl ? (
@@ -303,7 +303,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
         </div>
 
         {/* Action Icons Row - Fixed at bottom */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700 mt-auto">
+        <div className="flex items-center justify-between pt-2 border-t border-gray-400 dark:border-gray-700 mt-auto">
           <div className="flex items-center gap-4">
             <Tooltip content="Liczba zleceń">
               <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">

@@ -86,7 +86,7 @@ export const ZipDownloadProgress = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 min-w-[320px] max-w-[400px]">
+    <div className="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-lg p-4 min-w-[320px] max-w-[400px]">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">{getStatusIcon()}</div>
         <div className="flex-1 min-w-0">

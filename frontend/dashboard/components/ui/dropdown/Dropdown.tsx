@@ -148,7 +148,7 @@ export const Dropdown = ({
   const dropdownContent = (
     <div
       ref={dropdownRef}
-      className={`fixed z-[100000] rounded-xl border border-gray-200 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-900 overflow-hidden ${className}`}
+      className={`fixed z-[100000] rounded-xl border border-gray-400 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-900 overflow-hidden ${className}`}
       style={{
         ...(position.top !== undefined ? { top: `${position.top}px` } : {}),
         ...(position.bottom !== undefined ? { bottom: `${position.bottom}px` } : {}),

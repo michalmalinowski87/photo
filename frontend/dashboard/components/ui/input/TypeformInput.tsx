@@ -150,7 +150,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
             ${
               error
                 ? "border-error-500 dark:border-error-400 focus:border-error-500 dark:focus:border-error-400"
-                : "border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-300"
+                : "border-gray-400 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-300"
             }
             ${inputClassName}
             ${className}

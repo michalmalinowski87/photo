@@ -172,7 +172,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     orderDeliveryStatus !== "DELIVERED";
 
   return (
-    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+    <div className="py-3 border-b border-gray-400 dark:border-gray-800">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Adres www galerii:</div>
       <a
         href={displayGalleryUrl}

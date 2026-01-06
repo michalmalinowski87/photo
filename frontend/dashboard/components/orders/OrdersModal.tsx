@@ -326,7 +326,7 @@ export const OrdersModal = ({
 
             {/* Pagination */}
             {(hasPreviousPage || hasNextPage) && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-400 dark:border-gray-700">
                 <Button
                   variant="outline"
                   size="sm"

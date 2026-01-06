@@ -204,7 +204,7 @@ export default function DeleteGalleriesByStatus() {
                 setDeleteProgress({ current: 0, total: 0, message: "" });
               }}
               disabled={isDeleting || isLoading}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-400 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">-- Wybierz status --</option>
               {GALLERY_STATUSES.map((status) => (

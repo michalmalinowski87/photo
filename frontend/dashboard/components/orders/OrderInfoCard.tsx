@@ -60,7 +60,7 @@ export function OrderInfoCard({
   const selectedKeysCount = selectedKeys.length;
   const selectionEnabled = gallery?.selectionEnabled !== false;
   return (
-    <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+    <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
       <div className="flex justify-between items-start">
         <div>
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">

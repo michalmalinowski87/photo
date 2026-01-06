@@ -52,7 +52,7 @@ export const UploadCompletionOverlay = ({
 
   const overlayContent = (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mx-4 border border-gray-200 dark:border-gray-800">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mx-4 border border-gray-400 dark:border-gray-800">
         {/* Header with prominent button placement */}
         <div className="px-10 pt-10 pb-6">
           <div className="flex items-start justify-between gap-6 mb-4">
@@ -120,7 +120,7 @@ export const UploadCompletionOverlay = ({
             {/* Primary Stats - Larger, more prominent */}
             <div className="grid grid-cols-2 gap-5">
               {/* Number of Photos */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
                   Liczba zdjęć
                 </div>
@@ -130,7 +130,7 @@ export const UploadCompletionOverlay = ({
               </div>
 
               {/* Total Size */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-400 dark:border-gray-700">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
                   Łączny rozmiar
                 </div>
@@ -141,7 +141,7 @@ export const UploadCompletionOverlay = ({
             </div>
 
             {/* Secondary Stats - Compact list */}
-            <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="space-y-3 pt-3 border-t border-gray-400 dark:border-gray-700">
               {/* Time Elapsed */}
               <div className="flex items-center justify-between py-2.5">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">

@@ -325,7 +325,7 @@ export const ClientStep = ({
                       const newPassword = generatePassword();
                       onDataChange({ clientPassword: newPassword });
                     }}
-                    className="text-gray-700 dark:text-green-400 dark:bg-transparent dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border border-green-200 dark:border-0 shadow-sm dark:shadow-none font-medium"
+                    className="bg-white text-gray-700 dark:text-green-400 ring-1 ring-inset ring-gray-400 dark:ring-0 dark:bg-transparent hover:bg-gray-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 shadow-sm dark:shadow-none font-medium"
                   >
                     Generuj hasło
                   </Button>
@@ -351,7 +351,7 @@ export const ClientStep = ({
                   clientPassword: "",
                 });
               }}
-              className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
+              className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/30 dark:bg-gray-800/30 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-70 hover:opacity-100"
             >
               <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                 <Plus className="w-10 h-10 text-white" strokeWidth={2} />
@@ -439,7 +439,7 @@ export const ClientStep = ({
                         const newPassword = generatePassword();
                         onDataChange({ clientPassword: newPassword });
                       }}
-                      className="text-gray-700 dark:text-green-400 dark:bg-transparent dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border border-green-200 dark:border-0 shadow-sm dark:shadow-none font-medium"
+                      className="bg-white text-gray-700 dark:text-green-400 ring-1 ring-inset ring-gray-400 dark:ring-0 dark:bg-transparent hover:bg-gray-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 shadow-sm dark:shadow-none font-medium"
                     >
                       Generuj hasło
                     </Button>
@@ -565,8 +565,8 @@ export const ClientStep = ({
                   type="button"
                   onClick={() => onDataChange({ isVatRegistered: !isVatRegistered })}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer
-                    border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800
-                    hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700
+                    border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800
+                    hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700
                     active:scale-[0.98]"
                 >
                   {isVatRegistered ? (

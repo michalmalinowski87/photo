@@ -101,9 +101,9 @@ export default function GallerySidebar() {
   };
 
   return (
-    <aside className="fixed flex flex-col top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 w-[494px]">
+    <aside className="fixed flex flex-col top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-400 w-[494px]">
       {/* Back Button */}
-      <div className="h-[72px] border-b border-gray-200 dark:border-gray-800 flex items-center">
+      <div className="h-[72px] border-b border-gray-400 dark:border-gray-800 flex items-center">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-300 transition-colors"
@@ -115,7 +115,7 @@ export default function GallerySidebar() {
 
       {/* Gallery Info */}
       {!shouldShowLoading && effectiveGallery ? (
-        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="py-4 border-b border-gray-400 dark:border-gray-800">
           <EditableGalleryName
             galleryId={effectiveGallery.galleryId}
             galleryName={
@@ -127,7 +127,7 @@ export default function GallerySidebar() {
           />
         </div>
       ) : shouldShowLoading ? (
-        <div className="py-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="py-4 border-b border-gray-400 dark:border-gray-800">
           <div className="text-lg font-semibold text-gray-400 dark:text-gray-600">Ładowanie...</div>
         </div>
       ) : null}

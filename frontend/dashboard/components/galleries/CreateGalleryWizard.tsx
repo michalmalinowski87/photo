@@ -681,7 +681,7 @@ const CreateGalleryWizard = ({
         {/* Close button - top right of main container */}
         <button
           onClick={onClose}
-          className="absolute top-[10px] right-[10px] z-10 w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] flex items-center justify-center"
+          className="absolute top-[10px] right-[10px] z-10 w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] flex items-center justify-center"
           title="Zamknij"
         >
           <X className="w-5 h-5" strokeWidth={2} />
@@ -772,7 +772,7 @@ const CreateGalleryWizard = ({
             <button
               onClick={onClose}
               disabled={loading}
-              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Anuluj
             </button>

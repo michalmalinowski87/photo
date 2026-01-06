@@ -220,7 +220,7 @@ export function GallerySettingsForm({
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="text-center py-8">
             <div className="text-gray-500 dark:text-gray-400">
               {galleryLoading ? "Ładowanie danych galerii..." : "Sprawdzanie statusu galerii..."}
@@ -269,7 +269,7 @@ export function GallerySettingsForm({
       <div className="space-y-4">
         <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
-        <div className="p-8 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-8 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="p-4 bg-blue-light-50 border border-blue-light-500 rounded-lg dark:bg-blue-light-500/15 dark:border-blue-light-500/30 mb-4">
             <div className="flex items-center gap-3 mb-2">
               <Info
@@ -337,7 +337,7 @@ export function GallerySettingsForm({
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+              <div className="border-t border-gray-400 dark:border-gray-700 pt-3">
                 <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
                   Pakiet cenowy
                 </h3>
@@ -423,7 +423,7 @@ export function GallerySettingsForm({
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
-      <div className="p-8 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+      <div className="p-8 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
         <div className="space-y-3">
           <div>
             <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -485,7 +485,7 @@ export function GallerySettingsForm({
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+          <div className="border-t border-gray-400 dark:border-gray-700 pt-3">
             <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
               Pakiet cenowy
             </h3>

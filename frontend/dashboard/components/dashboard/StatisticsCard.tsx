@@ -7,7 +7,7 @@ interface StatisticsCardProps {
 
 export const StatisticsCard = ({ title, value }: StatisticsCardProps) => {
   return (
-    <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 flex flex-col">
+    <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 flex flex-col">
       <div className="h-12 mb-4 text-md font-medium text-gray-600 dark:text-gray-400 leading-tight flex items-start">
         {title}
       </div>

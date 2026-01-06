@@ -239,7 +239,7 @@ export default function Packages() {
 
         {queryError && <div>{formatApiError(queryError)}</div>}
 
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -384,7 +384,7 @@ export default function Packages() {
           <button
             ref={sortButtonRef}
             onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
           >
             <ArrowUpDown size={16} />
             <span>{getSortLabel()}</span>
@@ -393,7 +393,7 @@ export default function Packages() {
             isOpen={sortDropdownOpen}
             onClose={() => setSortDropdownOpen(false)}
             triggerRef={sortButtonRef}
-            className="w-64 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700"
+            className="w-64 bg-white dark:bg-gray-900 shadow-xl rounded-lg border border-gray-400 dark:border-gray-700"
           >
             <div className="p-2">
               <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -452,7 +452,7 @@ export default function Packages() {
               >
                 Data {sortBy === "date" && (sortOrder === "asc" ? "↑" : "↓")}
               </DropdownItem>
-              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              <div className="border-t border-gray-400 dark:border-gray-700 my-1" />
               <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Kolejność
               </div>
@@ -489,7 +489,7 @@ export default function Packages() {
         {/* Add Package Button */}
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
+          className="flex items-center gap-2 px-4 py-2.5 h-11 bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg shadow-theme-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-normal text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 whitespace-nowrap"
         >
           <Plus size={16} />
           <span>Dodaj pakiet</span>

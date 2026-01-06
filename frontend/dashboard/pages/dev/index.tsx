@@ -139,7 +139,7 @@ export default function DevMenu() {
                     <Link
                       key={tool.path}
                       href={tool.path}
-                      className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 group"
+                      className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-400 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 group"
                     >
                       <div className="flex items-start gap-4">
                         <div

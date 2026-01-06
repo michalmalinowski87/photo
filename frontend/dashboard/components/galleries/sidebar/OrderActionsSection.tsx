@@ -199,7 +199,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   const displayOrderNumber = formatOrderDisplay(order);
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+    <div className="mt-3 pt-3 border-t border-gray-400 dark:border-gray-800">
       <div className="px-3 mb-3">
         <div className="text-base font-medium text-gray-900 dark:text-white">
           Zlecenie #{displayOrderNumber}

@@ -209,18 +209,18 @@ export const CoverPhotoUpload = () => {
   };
 
   return (
-    <div className="py-3 border-b border-gray-200 dark:border-gray-800">
+    <div className="py-3 border-b border-gray-400 dark:border-gray-800">
       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Okładka galerii</div>
       <div
         className={`relative w-full h-48 rounded-lg border-2 border-dashed transition-colors ${
           isLoading || !gallery
-            ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
+            ? "border-gray-400 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-default"
             : `cursor-pointer ${
                 isDragging
                   ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10"
                   : hasCloudFrontUrl || shouldShowLoadingState
-                    ? "border-gray-200 dark:border-gray-700"
-                    : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                    ? "border-gray-400 dark:border-gray-700"
+                    : "border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
               }`
         }`}
         onDrop={isLoading || !gallery ? undefined : handleDrop}

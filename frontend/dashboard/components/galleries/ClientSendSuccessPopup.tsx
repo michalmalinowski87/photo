@@ -80,7 +80,7 @@ export const ClientSendSuccessPopup = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-400 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               Link został wysłany do klienta! 🎉
@@ -171,14 +171,14 @@ export const ClientSendSuccessPopup = ({
           </div>
 
           {/* Don't show again checkbox */}
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={dontShowAgain}
                 onChange={(e) => void handleDontShowAgain(e.target.checked)}
                 disabled={isSavingPreference}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                className="w-4 h-4 text-blue-600 border-gray-400 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
               />
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 Nie pokazuj tego komunikatu ponownie
@@ -188,7 +188,7 @@ export const ClientSendSuccessPopup = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+        <div className="p-6 border-t border-gray-400 dark:border-gray-700 flex justify-end">
           <Button variant="primary" onClick={onClose}>
             Rozumiem
           </Button>

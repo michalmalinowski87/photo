@@ -152,7 +152,7 @@ export const WelcomePopup = ({
       </div>
 
       {/* Actions - Fixed at bottom */}
-      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-b-3xl p-3 md:p-4 pt-3 md:pt-4">
+      <div className="flex-shrink-0 border-t border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-b-3xl p-3 md:p-4 pt-3 md:pt-4">
         <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
           <Button
             variant="primary"

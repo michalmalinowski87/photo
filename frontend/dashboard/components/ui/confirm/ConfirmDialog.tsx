@@ -79,7 +79,7 @@ export const ConfirmDialog = ({
         )}
 
         {suppressKey && (
-          <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-400 dark:border-gray-700">
             <label
               className={`flex items-start ${loading ? "cursor-not-allowed opacity-60" : "cursor-pointer group"}`}
             >
@@ -95,7 +95,7 @@ export const ConfirmDialog = ({
                   className={`w-5 h-5 rounded border-2 transition-all duration-200 flex items-center justify-center ${
                     suppressChecked
                       ? "bg-brand-600 border-brand-600 dark:bg-brand-500 dark:border-brand-500"
-                      : `bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-brand-500 dark:group-hover:border-brand-400"}`
+                      : `bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-brand-500 dark:group-hover:border-brand-400"}`
                   }`}
                 >
                   {suppressChecked && (

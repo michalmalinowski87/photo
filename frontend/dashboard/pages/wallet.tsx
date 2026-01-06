@@ -157,9 +157,9 @@ export default function Wallet() {
       )}
 
       {loading ? (
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[325.33px] animate-fade-in-out"></div>
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[325.33px] animate-fade-in-out"></div>
       ) : (
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Saldo portfela</div>
@@ -182,9 +182,9 @@ export default function Wallet() {
       )}
 
       {transactionsLoading ? (
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[724px] animate-fade-in-out"></div>
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 h-[724px] animate-fade-in-out"></div>
       ) : (
-        <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Historia transakcji
@@ -307,7 +307,7 @@ export default function Wallet() {
           )}
 
           {transactions.length > 0 && (
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-400 dark:border-gray-700">
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Strona {currentPage}
                 {transactions.length === 10 && hasMore && " (więcej dostępne)"}

@@ -574,7 +574,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
                     isDragging
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                      : "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                      : "border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
                   } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   onClick={() => {
                     if (!uploading && !uploadComplete) {
@@ -645,7 +645,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
                         return (
                           <div className="p-2 h-full">
-                            <div className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden h-full">
+                            <div className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full">
                               <div className="aspect-square relative">
                                 {thumbnail ? (
                                   // eslint-disable-next-line @next/next/no-img-element
@@ -763,7 +763,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 px-6 py-4 flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <div className="flex flex-col gap-4 px-6 py-4 flex-shrink-0 border-t border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-900">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
                 {uploading ? (

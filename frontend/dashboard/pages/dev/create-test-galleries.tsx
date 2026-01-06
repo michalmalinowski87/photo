@@ -192,7 +192,7 @@ export default function CreateTestGalleries() {
               value={count}
               onChange={(e) => setCount(parseInt(e.target.value, 10) || 100)}
               disabled={isCreating}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2 border border-gray-400 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 

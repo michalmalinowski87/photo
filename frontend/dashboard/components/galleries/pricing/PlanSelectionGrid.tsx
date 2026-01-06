@@ -155,10 +155,10 @@ export const PlanSelectionGrid = ({
                 }}
                 className={`relative rounded-lg border-2 p-5 transition-all ${
                   isDisabled
-                    ? "opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900"
+                    ? "opacity-50 cursor-not-allowed border-gray-400 dark:border-gray-600 bg-gray-50 dark:bg-gray-900"
                     : isSelected
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md cursor-pointer"
-                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
+                      : "border-gray-400 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 cursor-pointer"
                 }`}
               >
                 {/* Suggested Badge */}

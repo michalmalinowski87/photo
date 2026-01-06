@@ -190,7 +190,7 @@ function OwnerGalleryView({ token, galleryId }: OwnerGalleryViewProps) {
           <button
             onClick={() => loadGallery()}
             disabled={loading}
-            className={`px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded cursor-pointer text-sm ${
+            className={`px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-400 dark:border-gray-600 rounded cursor-pointer text-sm ${
               loading ? "cursor-not-allowed opacity-50" : ""
             }`}
             title="Refresh gallery data"

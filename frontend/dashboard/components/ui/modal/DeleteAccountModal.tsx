@@ -109,7 +109,7 @@ export const DeleteAccountModal = ({
                 className={`w-5 h-5 rounded border-2 transition-all duration-200 flex items-center justify-center ${
                   understoodChecked
                     ? "bg-red-600 border-red-600 dark:bg-red-500 dark:border-red-500"
-                    : `bg-white border-gray-300 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-red-500 dark:group-hover:border-red-400"}`
+                    : `bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-600${loading ? "" : " group-hover:border-red-500 dark:group-hover:border-red-400"}`
                 }`}
               >
                 {understoodChecked && (

@@ -23,7 +23,7 @@ export const UploadProgressHeader = ({
   onDismiss,
 }: UploadProgressHeaderProps) => {
   return (
-    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+    <div className="px-4 py-3 border-b border-gray-400 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         {allComplete ? (
           <Check className="w-5 h-5 text-green-500 flex-shrink-0" strokeWidth={2} />

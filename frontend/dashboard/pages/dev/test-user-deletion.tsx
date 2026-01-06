@@ -94,7 +94,7 @@ export default function TestUserDeletion() {
 
         {/* Current Status */}
         {deletionStatus && (
-          <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Status usuwania konta
             </h2>
@@ -118,7 +118,7 @@ export default function TestUserDeletion() {
         )}
 
         {/* Set Last Login */}
-        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             1. Symuluj nieaktywność
           </h2>
@@ -179,7 +179,7 @@ export default function TestUserDeletion() {
         </div>
 
         {/* Trigger Deletion */}
-        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             2. Wyzwól usunięcie konta
           </h2>
@@ -206,7 +206,7 @@ export default function TestUserDeletion() {
         </div>
 
         {/* Trigger Inactivity Scanner */}
-        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             3. Wyzwól skaner nieaktywności
           </h2>

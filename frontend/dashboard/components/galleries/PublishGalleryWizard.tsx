@@ -491,10 +491,10 @@ export const PublishGalleryWizard = ({
 
   const wizardContent = !isOpen ? null : (
     <div
-      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-100px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden relative`}
+      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-100px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-400 dark:border-gray-700 overflow-hidden relative`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">
             {mode === "limitExceeded" ? "Zwiększ limit galerii" : "Opublikuj galerię"}
@@ -546,7 +546,7 @@ export const PublishGalleryWizard = ({
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="rounded-lg border-2 border-gray-200 dark:border-gray-700 p-5 h-[248px] animate-fade-in-out"
+                      className="rounded-lg border-2 border-gray-400 dark:border-gray-700 p-5 h-[248px] animate-fade-in-out"
                     ></div>
                   ))}
                 </div>
@@ -693,7 +693,7 @@ export const PublishGalleryWizard = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-400 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
         <Button
           variant="outline"
           onClick={onClose}

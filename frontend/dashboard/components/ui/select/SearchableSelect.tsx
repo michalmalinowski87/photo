@@ -173,7 +173,7 @@ export const SearchableSelect = ({
             ${
               error
                 ? "border-red-500 text-red-600 dark:text-red-400"
-                : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-gray-400 dark:focus:border-gray-500"
+                : "border-gray-400 dark:border-gray-600 text-gray-900 dark:text-white focus:border-gray-400 dark:focus:border-gray-500"
             }
           `}
           aria-haspopup="listbox"
@@ -293,7 +293,7 @@ export const SearchableSelect = ({
                       onMouseLeave={() => setHighlightedIndex(-1)}
                       className={`
                         px-4 py-4 cursor-pointer transition-colors
-                        border-b border-gray-200 dark:border-gray-700 last:border-b-0
+                        border-b border-gray-400 dark:border-gray-700 last:border-b-0
                         ${
                           isSelected
                             ? "text-brand-600 dark:text-brand-400 bg-brand-50/30 dark:bg-brand-500/5"

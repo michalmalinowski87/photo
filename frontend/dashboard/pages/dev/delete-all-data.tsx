@@ -318,7 +318,7 @@ export default function DeleteAllData() {
         </div>
 
         {/* Packages Section */}
-        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-400 dark:border-gray-700">
           <div className="flex items-start gap-4 mb-4">
             <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
               <PackageIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -370,7 +370,7 @@ export default function DeleteAllData() {
         </div>
 
         {/* Clients Section */}
-        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-400 dark:border-gray-700">
           <div className="flex items-start gap-4 mb-4">
             <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
               <Users className="w-6 h-6 text-green-600 dark:text-green-400" />

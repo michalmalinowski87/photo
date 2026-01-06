@@ -29,7 +29,7 @@ export const GalleryTypeStep = ({
           className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isFirstSelected
               ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
-              : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+              : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
         >
           <div className="flex flex-col items-center space-y-4">
@@ -68,7 +68,7 @@ export const GalleryTypeStep = ({
           className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 active:scale-[0.98] ${
             isSecondSelected
               ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-lg scale-105"
-              : "border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+              : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
         >
           <div className="flex flex-col items-center space-y-4">

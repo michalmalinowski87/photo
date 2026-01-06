@@ -724,7 +724,7 @@ export const NextStepsOverlay = () => {
       data-expanded={isExpanded}
     >
       {/* Main container with refined shadows and backdrop */}
-      <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-theme-xl overflow-hidden transition-all duration-300 hover:shadow-theme-lg">
+      <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-400/80 dark:border-gray-700/80 rounded-2xl shadow-theme-xl overflow-hidden transition-all duration-300 hover:shadow-theme-lg">
         {/* Header with refined typography and spacing */}
         <button
           onClick={() => {
@@ -820,7 +820,7 @@ export const NextStepsOverlay = () => {
                     className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
                       step.completed
                         ? "bg-gradient-to-br from-success-500 to-success-600 dark:from-success-500 dark:to-success-600 text-white shadow-lg shadow-success-500/25 scale-100"
-                        : "bg-gray-200 dark:bg-gray-700 border-2 border-gray-300/50 dark:border-gray-600/50"
+                        : "bg-gray-200 dark:bg-gray-700 border-2 border-gray-400/50 dark:border-gray-600/50"
                     } ${!step.completed && !isDisabled ? "group-hover:border-brand-400 dark:group-hover:border-brand-500 group-hover:bg-gray-100 dark:group-hover:bg-gray-600" : ""}`}
                   >
                     {step.completed ? (

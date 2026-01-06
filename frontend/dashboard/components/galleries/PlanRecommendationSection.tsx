@@ -38,7 +38,7 @@ export const PlanRecommendationSection = ({
   const currentUploadedBytes = uploadedSizeBytes ?? 0;
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
+    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 mb-6 border border-gray-400 dark:border-gray-700">
       <div className="flex items-start justify-between mb-5">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -85,7 +85,7 @@ export const PlanRecommendationSection = ({
                 {(["1m", "3m", "12m"] as Duration[]).map((duration) => (
                   <div
                     key={duration}
-                    className="px-3 py-1.5 rounded-md border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-sm"
+                    className="px-3 py-1.5 rounded-md border-2 border-gray-400 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 text-sm"
                   >
                     {duration === "1m"
                       ? "1 miesiąc"
@@ -135,7 +135,7 @@ export const PlanRecommendationSection = ({
 
       {/* Storage Usage and Limits */}
       {planRecommendation && (
-        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-400 dark:border-gray-700">
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               Wykorzystane miejsce
@@ -165,7 +165,7 @@ export const PlanRecommendationSection = ({
 
       {/* Usage Indicator */}
       {planRecommendation?.usagePercentage !== undefined && (
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="mt-4 pt-4 border-t border-gray-400 dark:border-gray-700">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Wykorzystanie pojemności
