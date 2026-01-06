@@ -61,26 +61,27 @@ export const DeletionPendingBanner = ({
               Konsekwencje usunięcia konta:
             </p>
             <ul className="text-sm text-red-800 dark:text-red-300 list-disc list-inside space-y-1">
-              <li>Twoje konto, profil, galerie, zdjęcia, klienci i pakiety zostaną trwale usunięte</li>
+              <li>
+                Twoje konto, profil, galerie, zdjęcia, klienci i pakiety zostaną trwale usunięte
+              </li>
               <li>Galerie klientów będą zachowane do momentu ich wygaśnięcia</li>
-              <li>Dane finansowe (saldo portfela, transakcje i faktury) zostaną zachowane zgodnie z wymogami prawnymi</li>
+              <li>
+                Dane finansowe (saldo portfela, transakcje i faktury) zostaną zachowane zgodnie z
+                wymogami prawnymi
+              </li>
             </ul>
           </div>
           <div className="flex gap-3">
-            <Button
-              variant="danger"
-              onClick={onUndo}
-              disabled={loading}
-            >
+            <Button variant="danger" onClick={onUndo} disabled={loading}>
               {loading ? "Anulowanie..." : "Anuluj usunięcie konta"}
             </Button>
           </div>
           <p className="mt-3 text-xs text-red-700 dark:text-red-400">
-            Po anulowaniu Twoje konto pozostanie aktywne i będziesz mógł z niego normalnie korzystać.
+            Po anulowaniu Twoje konto pozostanie aktywne i będziesz mógł z niego normalnie
+            korzystać.
           </p>
         </div>
       </div>
     </div>
   );
 };
-

@@ -77,7 +77,6 @@ export const useUnifiedStore = create<UnifiedStore>()(
                   state.setNextStepsOverlayExpanded(nextStepsOverlayExpanded);
                 }
               } catch (err) {
-                
                 state.setTheme("light");
               }
             } else {

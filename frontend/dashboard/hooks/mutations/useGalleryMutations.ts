@@ -947,7 +947,6 @@ export function useUploadCoverPhoto() {
             return { success: true, coverPhotoUrl: fetchedUrl };
           }
         } catch (pollErr) {
-          
           // Continue polling on error
         }
       }

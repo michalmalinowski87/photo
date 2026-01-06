@@ -226,7 +226,6 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
     } catch (error) {
       // Don't fail the upload if thumbnail upload fails
       // eslint-disable-next-line no-console
-      
     }
   }
 

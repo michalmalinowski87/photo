@@ -139,7 +139,6 @@ export default function SignUp() {
           }
         } catch (checkError) {
           // If check fails, fall through to show error message
-          
         }
         // Fallback error message if check fails
         setError("Użytkownik o tym adresie email już istnieje");

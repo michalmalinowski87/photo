@@ -122,7 +122,6 @@ export const PublishGalleryWizard = ({
           // If no orders found, just close the wizard
           onClose();
         } catch (err) {
-          
           onClose();
         }
       } else {

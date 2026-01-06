@@ -94,7 +94,6 @@ export function FinalsTab({
       toggleSelectionMode();
     } catch (error) {
       // Error handling should be done by parent
-      
     } finally {
       setIsBulkDeleting(false);
     }

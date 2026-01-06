@@ -1,7 +1,7 @@
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
 
 import Button from "../../../components/ui/button/Button";
 import { Loading } from "../../../components/ui/loading/Loading";
@@ -84,20 +84,25 @@ export default function UndoDeletion() {
         setStatus("error");
         // Extract user-friendly error message
         let errorMessage = "";
-        
+
         if (err?.body?.error) {
           const backendError = err.body.error;
           if (backendError.includes("Invalid or expired token")) {
-            errorMessage = "Link jest nieprawidłowy lub wygasł. Sprawdź, czy używasz najnowszego linku z emaila.";
+            errorMessage =
+              "Link jest nieprawidłowy lub wygasł. Sprawdź, czy używasz najnowszego linku z emaila.";
           } else if (backendError.includes("already been processed")) {
             errorMessage = "Usunięcie konta zostało już przetworzone i nie może być anulowane.";
           } else if (!backendError.includes("Nie udało się anulować usunięcia konta")) {
             errorMessage = backendError;
           }
-        } else if (err?.message && !err.message.includes("refresh token") && !err.message.includes("Nie udało się anulować usunięcia konta")) {
+        } else if (
+          err?.message &&
+          !err.message.includes("refresh token") &&
+          !err.message.includes("Nie udało się anulować usunięcia konta")
+        ) {
           errorMessage = err.message;
         }
-        
+
         setError(errorMessage);
       }
     };
@@ -113,9 +118,7 @@ export default function UndoDeletion() {
     <div className="flex flex-col items-center max-w-sm mx-auto h-dvh overflow-hidden justify-center px-4 -mt-16">
       <div className="flex items-center w-full py-8 border-b border-border/80 mb-8">
         <Link href="/login" className="flex items-center gap-x-2">
-          <span className="text-2xl font-bold text-brand-500">
-            PhotoCloud
-          </span>
+          <span className="text-2xl font-bold text-brand-500">PhotoCloud</span>
         </Link>
       </div>
 
@@ -126,7 +129,9 @@ export default function UndoDeletion() {
               <div className="mb-8">
                 <Loading size="lg" />
               </div>
-              <h2 className="text-2xl font-semibold mb-3 text-foreground">Przetwarzanie żądania...</h2>
+              <h2 className="text-2xl font-semibold mb-3 text-foreground">
+                Przetwarzanie żądania...
+              </h2>
               <p className="text-sm text-muted-foreground text-center leading-relaxed">
                 Anulowanie usunięcia konta w toku. Proszę czekać.
               </p>
@@ -167,7 +172,9 @@ export default function UndoDeletion() {
         {status === "success" && (
           <div className="w-full max-w-[352px] mt-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-sm text-green-400 dark:text-green-300 text-center">
-              Przekierowanie do strony logowania za <span className="font-semibold">{countdown}</span> sekund{countdown !== 1 ? "y" : "ę"}...
+              Przekierowanie do strony logowania za{" "}
+              <span className="font-semibold">{countdown}</span> sekund{countdown !== 1 ? "y" : "ę"}
+              ...
             </div>
             <Button variant="primary" onClick={handleGoToLogin} className="w-full">
               Przejdź do logowania
@@ -189,4 +196,3 @@ export default function UndoDeletion() {
     </div>
   );
 }
-

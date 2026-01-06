@@ -129,7 +129,11 @@ export default function Settings() {
     try {
       await requestDeletionMutation.mutateAsync({ confirmationPhrase });
       setShowDeleteModal(false);
-      showToast("success", "Sukces", "Prośba o usunięcie konta została wysłana. Sprawdź email. Możesz anulować usunięcie w ustawieniach.");
+      showToast(
+        "success",
+        "Sukces",
+        "Prośba o usunięcie konta została wysłana. Sprawdź email. Możesz anulować usunięcie w ustawieniach."
+      );
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
     }
@@ -138,7 +142,11 @@ export default function Settings() {
   const handleCancelDeletion = async (): Promise<void> => {
     try {
       await cancelDeletionMutation.mutateAsync();
-      showToast("success", "Sukces", "Usunięcie konta zostało anulowane. Twoje konto pozostaje aktywne.");
+      showToast(
+        "success",
+        "Sukces",
+        "Usunięcie konta zostało anulowane. Twoje konto pozostaje aktywne."
+      );
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
     }
@@ -359,10 +367,7 @@ export default function Settings() {
             <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
               Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale usunięte.
             </p>
-            <Button
-              variant="danger"
-              onClick={() => setShowDeleteModal(true)}
-            >
+            <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
               Usuń konto
             </Button>
           </div>

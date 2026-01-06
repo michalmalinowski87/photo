@@ -13,7 +13,6 @@ function Error({ statusCode, err }: ErrorProps) {
   React.useEffect(() => {
     // Log the error to an error reporting service
     if (err) {
-      
     }
   }, [err]);
 

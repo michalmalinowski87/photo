@@ -86,7 +86,6 @@ export default function DeleteGalleriesByStatus() {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     } catch (error) {
-      
       showToast("error", "Błąd", "Nie udało się załadować wszystkich galerii");
     } finally {
       setIsLoading(false);
@@ -177,7 +176,6 @@ export default function DeleteGalleriesByStatus() {
         }, 2000);
       }
     } catch (error) {
-      
       showToast("error", "Błąd", `Nie udało się usunąć galerii: ${String(error)}`);
     } finally {
       setIsDeleting(false);

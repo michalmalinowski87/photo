@@ -496,7 +496,6 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
           );
           return isValid;
         } catch (error) {
-
           // Check if this is a limit exceeded error (400) - if so, validateStorageLimits should have handled it
           const apiError = error as { status?: number; body?: unknown };
           if (apiError.status === 400) {

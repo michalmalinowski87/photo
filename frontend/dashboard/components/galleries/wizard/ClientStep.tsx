@@ -325,7 +325,7 @@ export const ClientStep = ({
                       const newPassword = generatePassword();
                       onDataChange({ clientPassword: newPassword });
                     }}
-                    className="text-green-600 dark:text-green-400 bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border-0 shadow-none"
+                    className="text-gray-700 dark:text-green-400 dark:bg-transparent dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border border-green-200 dark:border-0 shadow-sm dark:shadow-none font-medium"
                   >
                     Generuj hasło
                   </Button>
@@ -439,7 +439,7 @@ export const ClientStep = ({
                         const newPassword = generatePassword();
                         onDataChange({ clientPassword: newPassword });
                       }}
-                      className="text-green-600 dark:text-green-400 bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border-0 shadow-none"
+                      className="text-gray-700 dark:text-green-400 dark:bg-transparent dark:hover:bg-green-900/20 whitespace-nowrap h-9 text-sm px-3 border border-green-200 dark:border-0 shadow-sm dark:shadow-none font-medium"
                     >
                       Generuj hasło
                     </Button>

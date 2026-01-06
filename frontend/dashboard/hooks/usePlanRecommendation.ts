@@ -141,7 +141,6 @@ export function usePlanRecommendation({
         }
       } catch (error) {
         if (currentRequest === requestCounter) {
-          
           setPlanRecommendation(null);
           setUploadedSizeBytes(0);
         }
@@ -235,7 +234,6 @@ export function usePlanRecommendation({
         if (isCancelled) {
           return;
         }
-        
       } finally {
         if (!isCancelled) {
           setIsLoadingPlanRecommendation(false);
@@ -312,7 +310,6 @@ export function usePlanRecommendation({
           setUploadedSizeBytes(0);
         }
       } catch (error: unknown) {
-        
         setPlanRecommendation(null);
         setUploadedSizeBytes(0);
       } finally {

@@ -666,23 +666,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                   <div className="absolute inset-0 z-10">
                                     <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
-                                    <button
-                                      onClick={() => {
-                                        pauseResumeFile(freshFile.id);
-                                      }}
-                                      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 p-3 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all shadow-lg"
-                                      type="button"
-                                    >
-                                      <Tooltip
-                                        content={status === "paused" ? "Wznów" : "Wstrzymaj"}
-                                      >
-                                        {status === "paused" ? (
-                                          <Play className="w-8 h-8 text-white" />
-                                        ) : (
-                                          <Pause className="w-8 h-8 text-white" />
-                                        )}
-                                      </Tooltip>
-                                    </button>
                                     <div className="absolute bottom-6 left-0 right-0 text-center z-10">
                                       <p className="text-white text-xs font-bold drop-shadow-lg">
                                         {Math.round(progress)}%

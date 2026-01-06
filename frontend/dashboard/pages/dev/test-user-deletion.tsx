@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "../../context/AuthProvider";
-import { useToast } from "../../hooks/useToast";
-import api from "../../lib/api-service";
-import { formatApiError } from "../../lib/api-service";
+
 import Button from "../../components/ui/button/Button";
 import Input from "../../components/ui/input/InputField";
+import { useAuth } from "../../context/AuthProvider";
 import { useDeletionStatus } from "../../hooks/queries/useAuth";
+import { useToast } from "../../hooks/useToast";
+import api, { formatApiError } from "../../lib/api-service";
 
 export default function TestUserDeletion() {
   const { user } = useAuth();
@@ -35,9 +35,7 @@ export default function TestUserDeletion() {
 
     setLoading((prev) => ({ ...prev, setLastLogin: true }));
     try {
-      const lastLoginValue = useDate
-        ? lastLoginDate
-        : parseInt(lastLoginMonthsAgo, 10);
+      const lastLoginValue = useDate ? lastLoginDate : parseInt(lastLoginMonthsAgo, 10);
 
       await api.auth.devSetLastLogin(user.userId, lastLoginValue);
       showToast("success", "Sukces", "Data ostatniego logowania została ustawiona");
@@ -174,11 +172,7 @@ export default function TestUserDeletion() {
               )}
             </div>
 
-            <Button
-              variant="primary"
-              onClick={handleSetLastLogin}
-              disabled={loading.setLastLogin}
-            >
+            <Button variant="primary" onClick={handleSetLastLogin} disabled={loading.setLastLogin}>
               {loading.setLastLogin ? "Ustawianie..." : "Ustaw datę ostatniego logowania"}
             </Button>
           </div>
@@ -217,7 +211,8 @@ export default function TestUserDeletion() {
             3. Wyzwól skaner nieaktywności
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Ręcznie wyzwól skaner nieaktywności, który sprawdzi wszystkich użytkowników i wyśle powiadomienia
+            Ręcznie wyzwól skaner nieaktywności, który sprawdzi wszystkich użytkowników i wyśle
+            powiadomienia
           </p>
 
           <Button
@@ -236,21 +231,18 @@ export default function TestUserDeletion() {
           </p>
           <ul className="text-sm text-yellow-700 dark:text-yellow-300 mt-2 list-disc list-inside space-y-1">
             <li>
-              Ustaw lastLoginAt na 12 miesięcy temu, a następnie wyzwól skaner nieaktywności - powinien zaplanować usunięcie za 30 dni
+              Ustaw lastLoginAt na 12 miesięcy temu, a następnie wyzwól skaner nieaktywności -
+              powinien zaplanować usunięcie za 30 dni
             </li>
             <li>
-              Ustaw lastLoginAt na 11 miesięcy temu, a następnie wyzwól skaner - powinien wysłać przypomnienie
+              Ustaw lastLoginAt na 11 miesięcy temu, a następnie wyzwól skaner - powinien wysłać
+              przypomnienie
             </li>
-            <li>
-              Użyj "Usuń natychmiast" aby przetestować pełny proces usuwania bez czekania
-            </li>
-            <li>
-              Sprawdź status usuwania w ustawieniach konta po wyzwoleniu usunięcia
-            </li>
+            <li>Użyj "Usuń natychmiast" aby przetestować pełny proces usuwania bez czekania</li>
+            <li>Sprawdź status usuwania w ustawieniach konta po wyzwoleniu usunięcia</li>
           </ul>
         </div>
       </div>
     </div>
   );
 }
-

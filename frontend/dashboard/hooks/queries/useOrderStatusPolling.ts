@@ -127,7 +127,6 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
 
         return response;
       } catch (pollError: unknown) {
-        
         throw pollError instanceof Error ? pollError : new Error(String(pollError));
       } finally {
         isPollingRef.current = false;

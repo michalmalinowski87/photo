@@ -139,7 +139,6 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
         }
       } catch (_err) {
         // Error fetching wallet/transactions - don't show popup
-        
       } finally {
         setChecking(false);
         if (!hasCheckedOnce) {
@@ -149,7 +148,17 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
     };
 
     void checkWelcomeBonus();
-  }, [businessInfo?.welcomePopupShown, isLoadingBusinessInfo, walletTransactionsData, refetchBalance, refetchTransactions, isMounted, hasBeenClosed, hasCheckedOnce, showPopup]);
+  }, [
+    businessInfo?.welcomePopupShown,
+    isLoadingBusinessInfo,
+    walletTransactionsData,
+    refetchBalance,
+    refetchTransactions,
+    isMounted,
+    hasBeenClosed,
+    hasCheckedOnce,
+    showPopup,
+  ]);
 
   const handleClose = async () => {
     setShowPopup(false);
@@ -160,14 +169,19 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
       await updateBusinessInfoMutation.mutateAsync({ welcomePopupShown: true });
     } catch (_err) {
       // Log error but don't block - settings update is not critical
-      
     }
   };
 
   // Don't render anything on server or while checking or if popup shouldn't be shown
   // Also check welcomePopupShown flag as final safeguard
   // Wait for businessInfo to load to prevent flicker
-  if (!isMounted || isLoadingBusinessInfo || checking || !showPopup || businessInfo?.welcomePopupShown === true) {
+  if (
+    !isMounted ||
+    isLoadingBusinessInfo ||
+    checking ||
+    !showPopup ||
+    businessInfo?.welcomePopupShown === true
+  ) {
     return null;
   }
 

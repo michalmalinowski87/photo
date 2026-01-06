@@ -7,7 +7,9 @@ import type { Order } from "../types";
  * @param order - The order object to format
  * @returns A string representation of the order number for display
  */
-export function formatOrderDisplay(order: Order | { orderId?: string; orderNumber?: string | number }): string {
+export function formatOrderDisplay(
+  order: Order | { orderId?: string; orderNumber?: string | number }
+): string {
   // Prefer orderNumber if available
   if (order.orderNumber !== undefined && order.orderNumber !== null) {
     return String(order.orderNumber);
@@ -21,4 +23,3 @@ export function formatOrderDisplay(order: Order | { orderId?: string; orderNumbe
   // Final fallback
   return "";
 }
-

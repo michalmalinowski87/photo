@@ -103,7 +103,6 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         // React Query will automatically refetch order due to invalidation
       } catch (err) {
         // Error is handled by mutation
-        
       }
     },
     [galleryIdStr, orderIdStr, denyChangeRequestMutation, closeDenyModal]

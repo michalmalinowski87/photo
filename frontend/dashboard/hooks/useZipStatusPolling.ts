@@ -71,7 +71,6 @@ export function useZipStatusPolling({
 
         return result;
       } catch (pollError: unknown) {
-        
         throw pollError instanceof Error ? pollError : new Error(String(pollError));
       } finally {
         isPollingRef.current = false;

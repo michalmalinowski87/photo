@@ -66,10 +66,10 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   // Use mutation loading states instead of local state
   const sendFinalsLoading = sendFinalsToClientMutation.isPending;
   const markPaidLoading = markOrderPaidMutation.isPending;
-  
+
   // Track last known paid state to prevent flicker during refetches
   const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
-  
+
   // Update ref when gallery data changes (but not during refetches)
   useEffect(() => {
     if (!isFetching && gallery) {
@@ -182,7 +182,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   const effectiveIsPaid =
     isFetching && lastKnownIsPaidRef.current !== undefined
       ? lastKnownIsPaidRef.current
-      : gallery?.isPaid ?? false;
+      : (gallery?.isPaid ?? false);
   const isPaid = effectiveIsPaid;
 
   // For non-selection galleries, show publish button when status is AWAITING_FINAL_PHOTOS and gallery is not paid

@@ -2033,7 +2033,9 @@ class ApiService {
     /**
      * Request account deletion
      */
-    requestDeletion: async (confirmationPhrase: string): Promise<{
+    requestDeletion: async (
+      confirmationPhrase: string
+    ): Promise<{
       deletionScheduledAt: string;
       status: string;
     }> => {
@@ -2081,7 +2083,10 @@ class ApiService {
     /**
      * Dev: Set user's lastLoginAt (simulate inactivity)
      */
-    devSetLastLogin: async (userId: string, lastLoginAt: string | number): Promise<{
+    devSetLastLogin: async (
+      userId: string,
+      lastLoginAt: string | number
+    ): Promise<{
       userId: string;
       lastLoginAt: string;
       message: string;

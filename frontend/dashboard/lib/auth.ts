@@ -905,7 +905,6 @@ export function invalidateSession(keepRefreshToken: boolean = false): void {
  */
 export function triggerSessionExpired(): void {
   if (typeof window === "undefined") {
-    
     return;
   }
 
@@ -1000,7 +999,6 @@ export async function redirectToCognito(returnUrl: string | null = null): Promis
 
   // Ensure we're in browser environment
   if (typeof window === "undefined") {
-    
     return;
   }
 
@@ -1008,7 +1006,6 @@ export async function redirectToCognito(returnUrl: string | null = null): Promis
   const redirectUri = `${window.location.origin}/auth/auth-callback`;
 
   if (!redirectUri || redirectUri.trim() === "") {
-    
     return;
   }
 

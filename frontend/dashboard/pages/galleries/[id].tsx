@@ -195,7 +195,6 @@ async function pollGalleryPaymentStatus(
         setTimeout(poll, pollInterval);
       }
     } catch (error) {
-      
       // On error, just reload once and stop polling
       if (reloadGallery) {
         await reloadGallery();
@@ -319,7 +318,7 @@ export default function GalleryDetail() {
 
       // For other errors, show toast
       // eslint-disable-next-line no-console
-      
+
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
     }
   };
@@ -505,7 +504,6 @@ export default function GalleryDetail() {
               setIsRedirectingToOrder(false);
             }
           } catch (err) {
-            
             setIsRedirectingToOrder(false);
           }
         };

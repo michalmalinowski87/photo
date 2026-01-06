@@ -34,10 +34,10 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   const { showToast } = useToast();
 
   const [urlCopied, setUrlCopied] = useState(false);
-  
+
   // Track last known paid state to prevent flicker during refetches
   const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
-  
+
   // Update ref when gallery data changes (but not during refetches)
   useEffect(() => {
     if (!isFetching && gallery) {
@@ -87,7 +87,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   const effectiveIsPaid =
     isFetching && lastKnownIsPaidRef.current !== undefined
       ? lastKnownIsPaidRef.current
-      : gallery?.isPaid ?? false;
+      : (gallery?.isPaid ?? false);
   const isPaid = effectiveIsPaid;
 
   // For selective galleries: check original photos

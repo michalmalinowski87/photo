@@ -6,7 +6,7 @@ export function useRequestDeletion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ confirmationPhrase }: { confirmationPhrase: string }) => 
+    mutationFn: ({ confirmationPhrase }: { confirmationPhrase: string }) =>
       api.auth.requestDeletion(confirmationPhrase),
     onSuccess: () => {
       // Invalidate deletion status to refetch
@@ -26,4 +26,3 @@ export function useCancelDeletion() {
     },
   });
 }
-
