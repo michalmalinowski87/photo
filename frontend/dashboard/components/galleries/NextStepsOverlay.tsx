@@ -728,7 +728,9 @@ export const NextStepsOverlay = () => {
         {/* Header with refined typography and spacing */}
         <button
           onClick={() => {
-            setNextStepsOverlayExpanded(!isExpanded);
+            // Use the current state value directly from the store to avoid stale closures
+            const currentExpanded = nextStepsOverlayExpanded;
+            setNextStepsOverlayExpanded(!currentExpanded);
           }}
           className={`w-full flex items-center ${
             isExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
@@ -738,7 +740,7 @@ export const NextStepsOverlay = () => {
           {isExpanded ? (
             <>
               <h3
-                className="text-[16px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-50"
+                className="text-[16px] font-semibold tracking-[-0.01em] text-photographer-heading dark:text-gray-50"
                 style={{
                   transition: "opacity 200ms ease-out",
                   opacity: isExpanded && widthReached13rem ? 1 : 0,
@@ -843,7 +845,7 @@ export const NextStepsOverlay = () => {
                     }`}
                     style={{
                       transition: "opacity 200ms ease-out",
-                      transitionDelay: isExpanded ? "450ms" : "0ms",
+                      transitionDelay: isExpanded && step.id === "publish" ? "0ms" : isExpanded ? "450ms" : "0ms",
                     }}
                   >
                     <span
@@ -862,13 +864,30 @@ export const NextStepsOverlay = () => {
               );
 
               // Wrap with tooltip when collapsed or when disabled publish step
-              if (!isExpanded || (step.id === "publish" && isDisabled && !hasPhotos)) {
+              // Only wrap publish step in tooltip when collapsed OR when disabled (not when expanded and enabled)
+              // When expanded and publish step is enabled, don't wrap in Tooltip to avoid rendering delays
+              if (!isExpanded) {
                 return (
                   <Tooltip
                     key={step.id}
                     content={tooltipContent}
                     side="top"
-                    align={!isExpanded ? "end" : "center"}
+                    align="end"
+                    fullWidth={true}
+                  >
+                    {stepButton}
+                  </Tooltip>
+                );
+              }
+              
+              // When expanded, only wrap disabled publish step in Tooltip
+              if (isExpanded && step.id === "publish" && isDisabled && !hasPhotos) {
+                return (
+                  <Tooltip
+                    key={step.id}
+                    content={tooltipContent}
+                    side="top"
+                    align="center"
                     fullWidth={true}
                   >
                     {stepButton}

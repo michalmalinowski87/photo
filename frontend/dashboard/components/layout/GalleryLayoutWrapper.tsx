@@ -75,6 +75,28 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     }
   }, [publishWizardOpen, publishFlowGalleryId, gallery, closePublishFlow]);
 
+  // Close publish flow if gallery doesn't exist or doesn't match (e.g., gallery was deleted)
+  useEffect(() => {
+    if (publishWizardOpen && publishFlowGalleryId) {
+      // If we're on a gallery page but the gallery ID doesn't match, close the flow
+      if (galleryIdStr && publishFlowGalleryId !== galleryIdStr) {
+        closePublishFlow();
+        return;
+      }
+
+      // If we have a load error for the gallery we're trying to publish, close the flow
+      if (loadError && galleryIdStr === publishFlowGalleryId) {
+        closePublishFlow();
+        return;
+      }
+
+      // If gallery failed to load and we're not loading anymore, close the flow
+      if (!loading && !gallery && galleryIdStr === publishFlowGalleryId) {
+        closePublishFlow();
+      }
+    }
+  }, [publishWizardOpen, publishFlowGalleryId, galleryIdStr, gallery, loadError, loading, closePublishFlow]);
+
   // SIMPLIFIED RULE: Only clear gallery/order when navigating AWAY from gallery routes
   // Examples of when to clear: /dashboard, /wallet, /settings (global), /clients
   // Examples of when NOT to clear:

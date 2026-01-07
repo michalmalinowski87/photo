@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 import { useDeleteGallery } from "../../../hooks/mutations/useGalleryMutations";
 import { useNavigation } from "../../../hooks/useNavigation";
+import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
 import Button from "../../ui/button/Button";
@@ -17,6 +18,7 @@ interface DeleteGalleryButtonProps {
 export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryButtonProps) => {
   const { replace } = useNavigation();
   const { showToast } = useToast();
+  const { closePublishFlow } = usePublishFlow();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -40,6 +42,9 @@ export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryBut
 
     try {
       await deleteGalleryMutation.mutateAsync(galleryId);
+
+      // Close publish flow if it's open for this gallery
+      closePublishFlow();
 
       // Navigate with explicit cleanup (navigation utility handles additional cleanup)
       // React Query cache will be invalidated automatically by the mutation
