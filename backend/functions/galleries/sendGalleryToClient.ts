@@ -136,12 +136,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Send invitation or reminder email based on whether orders exist
 	const emailType = hasExistingOrders ? 'Gallery Reminder' : 'Gallery Invitation';
+	const emailTemplate = hasExistingOrders 
+		? createGalleryReminderEmail(galleryId, galleryName, clientEmail, galleryLink)
+		: createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
 	
 	try {
-		const emailTemplate = hasExistingOrders 
-			? createGalleryReminderEmail(galleryId, galleryName, clientEmail, galleryLink)
-			: createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
-		
 		logger.info(`Sending SES email - ${emailType}`, {
 			from: sender,
 			to: clientEmail,
@@ -173,10 +172,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	} catch (err: any) {
 		const errorCode = err.code || err.name;
 		const errorMessage = err.message || 'Unknown error';
-		const isQuotaError = errorCode === 'Throttling' || 
-			errorCode === 'MessageRejected' ||
-			errorMessage.toLowerCase().includes('quota') ||
-			errorMessage.toLowerCase().includes('daily message quota');
+		// Distinguish between throttling (send rate limit) and daily quota
+		const isThrottlingError = errorCode === 'Throttling';
+		const isDailyQuotaError = errorCode === 'MessageRejected' ||
+			errorMessage.toLowerCase().includes('daily message quota') ||
+			errorMessage.toLowerCase().includes('daily sending quota');
 		
 		logger.error(`SES send failed - ${emailType} Email`, {
 			error: {
@@ -185,15 +185,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				code: errorCode,
 				statusCode: err.$metadata?.httpStatusCode,
 				requestId: err.$metadata?.requestId,
-				isQuotaError,
+				isThrottlingError,
+				isDailyQuotaError,
 				stack: err.stack
 			},
 			galleryId,
 			clientEmail
 		});
 		
-		// For quota errors, provide a more helpful message
-		if (isQuotaError) {
+		// For daily quota errors, return 429 with helpful message
+		if (isDailyQuotaError) {
 			return {
 				statusCode: 429, // Too Many Requests
 				headers: { 'content-type': 'application/json' },
@@ -206,15 +207,74 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 		
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, 
-				message: errorMessage 
-			})
-		};
+		// For throttling errors (send rate limit), retry with exponential backoff
+		if (isThrottlingError) {
+			// Retry up to 3 times with exponential backoff: 1s, 2s, 4s
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+				logger.info(`Retrying ${emailType} email send after throttling`, {
+					attempt: attempt + 1,
+					delayMs,
+					galleryId
+				});
+				
+				await new Promise(resolve => setTimeout(resolve, delayMs));
+				
+				try {
+					const retryResult = await ses.send(new SendEmailCommand({
+						Source: sender,
+						Destination: { ToAddresses: [clientEmail] },
+						Message: {
+							Subject: { Data: emailTemplate.subject },
+							Body: {
+								Text: { Data: emailTemplate.text },
+								Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+							}
+						}
+					}));
+					
+					logger.info(`SES email sent successfully after retry - ${emailType}`, {
+						messageId: retryResult.MessageId,
+						requestId: retryResult.$metadata?.requestId,
+						attempt: attempt + 1,
+						galleryId
+					});
+					
+					// Success - break out of retry loop
+					break;
+				} catch (retryErr: any) {
+					if (attempt === 2) {
+						// Final attempt failed - return error
+						return {
+							statusCode: 429,
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({ 
+								error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`,
+								message: 'Email sending rate limit exceeded. Please try again in a few seconds.',
+								rateLimited: true,
+								originalError: retryErr.message || errorMessage
+							})
+						};
+					}
+					// Continue to next retry attempt
+				}
+			}
+		} else {
+			// Other errors - return 500
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, 
+					message: errorMessage 
+				})
+			};
+		}
 	}
+
+	// Add delay between emails to avoid SES send rate throttling
+	// SES sandbox typically allows 1 email per second, so wait 1.5 seconds to be safe
+	await new Promise(resolve => setTimeout(resolve, 1500));
 
 	// Send password email (separate function call for future flexibility - e.g., SMS)
 	// Always send password email regardless of whether it's invitation or reminder
@@ -262,15 +322,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				code: errorCode,
 				statusCode: err.$metadata?.httpStatusCode,
 				requestId: err.$metadata?.requestId,
-				isQuotaError,
+				isThrottlingError: errorCode === 'Throttling',
+				isDailyQuotaError: errorCode === 'MessageRejected' ||
+					errorMessage.toLowerCase().includes('daily message quota') ||
+					errorMessage.toLowerCase().includes('daily sending quota'),
 				stack: err.stack
 			},
 			galleryId,
 			clientEmail
 		});
 		
-		// For quota errors, provide a more helpful message
-		if (isQuotaError) {
+		// Distinguish between throttling (send rate limit) and daily quota
+		const isThrottlingError = errorCode === 'Throttling';
+		const isDailyQuotaError = errorCode === 'MessageRejected' ||
+			errorMessage.toLowerCase().includes('daily message quota') ||
+			errorMessage.toLowerCase().includes('daily sending quota');
+		
+		// For daily quota errors, return 429 with helpful message
+		if (isDailyQuotaError) {
 			return {
 				statusCode: 429, // Too Many Requests
 				headers: { 'content-type': 'application/json' },
@@ -283,14 +352,69 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 		
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: 'Failed to send password email', 
-				message: errorMessage 
-			})
-		};
+		// For throttling errors (send rate limit), retry with exponential backoff
+		if (isThrottlingError) {
+			// Retry up to 3 times with exponential backoff: 1s, 2s, 4s
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+				logger.info('Retrying password email send after throttling', {
+					attempt: attempt + 1,
+					delayMs,
+					galleryId
+				});
+				
+				await new Promise(resolve => setTimeout(resolve, delayMs));
+				
+				try {
+					const retryResult = await ses.send(new SendEmailCommand({
+						Source: sender,
+						Destination: { ToAddresses: [clientEmail] },
+						Message: {
+							Subject: { Data: passwordTemplate.subject },
+							Body: {
+								Text: { Data: passwordTemplate.text },
+								Html: passwordTemplate.html ? { Data: passwordTemplate.html } : undefined
+							}
+						}
+					}));
+					
+					logger.info('SES email sent successfully after retry - Gallery Password', {
+						messageId: retryResult.MessageId,
+						requestId: retryResult.$metadata?.requestId,
+						attempt: attempt + 1,
+						galleryId
+					});
+					
+					// Success - break out of retry loop
+					break;
+				} catch (retryErr: any) {
+					if (attempt === 2) {
+						// Final attempt failed - return error
+						return {
+							statusCode: 429,
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({ 
+								error: 'Failed to send password email',
+								message: 'Email sending rate limit exceeded. Please try again in a few seconds.',
+								rateLimited: true,
+								originalError: retryErr.message || errorMessage
+							})
+						};
+					}
+					// Continue to next retry attempt
+				}
+			}
+		} else {
+			// Other errors - return 500
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Failed to send password email', 
+					message: errorMessage 
+				})
+			};
+		}
 	}
 
 	// Create order with CLIENT_SELECTING status ONLY if no orders exist at all (initial invitation)

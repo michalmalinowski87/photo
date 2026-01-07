@@ -458,12 +458,48 @@ export function useDeleteGallery() {
   });
 }
 
+// Track in-flight mutations per galleryId to prevent concurrent calls
+// Map galleryId to the promise so we can return the same promise for concurrent calls
+const sendingGalleryPromises = new Map<string, Promise<{ isReminder?: boolean }>>();
+
 export function useSendGalleryToClient() {
   const queryClient = useQueryClient();
   const { resetTimer } = useOrderStatusPolling();
 
   return useMutation({
-    mutationFn: (galleryId: string) => api.galleries.sendToClient(galleryId),
+    mutationFn: async (galleryId: string) => {
+      // Atomic check-and-set: check if promise exists, if not create and store synchronously
+      let promise = sendingGalleryPromises.get(galleryId);
+      
+      if (!promise) {
+        // Create promise synchronously and store it immediately (before any await)
+        // This ensures that concurrent calls will see the stored promise
+        promise = (async () => {
+          try {
+            return await api.galleries.sendToClient(galleryId);
+          } finally {
+            // Always remove from map after completion (success or error)
+            sendingGalleryPromises.delete(galleryId);
+          }
+        })();
+        
+        // Store the promise immediately (synchronously) before any async operations
+        sendingGalleryPromises.set(galleryId, promise);
+      }
+
+      // Return the promise (either existing or newly created)
+      return promise;
+    },
+    // Don't retry on 429 (Too Many Requests) - rate limiting errors should not be retried
+    retry: (failureCount, error) => {
+      // Check if error is a 429 status code
+      const errorWithStatus = error as { status?: number };
+      if (errorWithStatus?.status === 429) {
+        return false; // Don't retry 429 errors
+      }
+      // For other errors, use default retry behavior (1 retry)
+      return failureCount < 1;
+    },
     onSuccess: (_, galleryId) => {
       // Reset polling timer after successful mutation (sending gallery can create orders or change status)
       resetTimer();

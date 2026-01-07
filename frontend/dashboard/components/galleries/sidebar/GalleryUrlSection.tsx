@@ -1,6 +1,6 @@
 import { Plus, Share2, Copy, ExternalLink } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
 
 import { useSendGalleryToClient } from "../../../hooks/mutations/useGalleryMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
@@ -37,6 +37,9 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Track last known paid state to prevent flicker during refetches
   const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
+
+  // Track if send link request is in flight to prevent concurrent calls
+  const isSendingRef = useRef(false);
 
   // Update ref when gallery data changes (but not during refetches)
   useEffect(() => {
@@ -118,10 +121,14 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     }
   };
 
-  const handleSendLink = async () => {
-    if (!galleryIdStr || sendLinkLoading) {
+  const handleSendLink = useCallback(async () => {
+    // Atomic check-and-set: if already sending, return immediately
+    if (!galleryIdStr || isSendingRef.current || sendLinkLoading || sendGalleryLinkToClientMutation.isPending) {
       return;
     }
+
+    // Set flag immediately to prevent race conditions (atomic operation)
+    isSendingRef.current = true;
 
     try {
       const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
@@ -134,9 +141,16 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
           : "Link do galerii został wysłany do klienta"
       );
     } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
+      // Only show error if it's not the "already in progress" error
+      const errorMessage = formatApiError(err);
+      if (!errorMessage.includes("already in progress")) {
+        showToast("error", "Błąd", errorMessage);
+      }
+    } finally {
+      // Reset flag after request completes (success or error)
+      isSendingRef.current = false;
     }
-  };
+  }, [galleryIdStr, sendLinkLoading, sendGalleryLinkToClientMutation, showToast]);
 
   const handlePublishClick = () => {
     if (!galleryIdStr) {

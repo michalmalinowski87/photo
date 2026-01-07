@@ -692,15 +692,17 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                   </div>
                                 )}
                                 {status !== "uploading" && !uploadComplete && (
-                                  <button
-                                    onClick={() => handleRemoveFile(freshFile.id)}
-                                    className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
-                                    type="button"
-                                  >
+                                  <div className="absolute top-2 right-2 z-20">
                                     <Tooltip content="Usuń">
-                                      <X size={16} />
+                                      <button
+                                        onClick={() => handleRemoveFile(freshFile.id)}
+                                        className="p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
+                                        type="button"
+                                      >
+                                        <X size={16} />
+                                      </button>
                                     </Tooltip>
-                                  </button>
+                                  </div>
                                 )}
                               </div>
                               <div className="p-2">

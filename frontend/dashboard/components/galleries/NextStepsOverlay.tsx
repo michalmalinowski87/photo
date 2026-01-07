@@ -33,6 +33,8 @@ export const NextStepsOverlay = () => {
   const { showToast } = useToast();
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Track if send link request is in flight to prevent concurrent calls
+  const isSendingRef = useRef(false);
   const overlayContext = useBottomRightOverlay();
   // Extract functions directly to avoid dependency issues
   const { setNextStepsVisible: setOverlayVisible, setNextStepsExpanded: setOverlayExpanded } =
@@ -681,16 +683,29 @@ export const NextStepsOverlay = () => {
     }
   };
 
-  const handleSendClick = async () => {
-    if (gallery?.galleryId && isPaid) {
-      try {
-        await sendGalleryLinkToClientMutation.mutateAsync(gallery.galleryId);
-        showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
-      } catch (_err) {
+  const handleSendClick = useCallback(async () => {
+    // Atomic check-and-set: if already sending, return immediately
+    if (!gallery?.galleryId || !isPaid || isSendingRef.current || sendGalleryLinkToClientMutation.isPending) {
+      return;
+    }
+
+    // Set flag immediately to prevent race conditions (atomic operation)
+    isSendingRef.current = true;
+
+    try {
+      await sendGalleryLinkToClientMutation.mutateAsync(gallery.galleryId);
+      showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
+    } catch (err) {
+      // Only show error if it's not the "already in progress" error
+      const errorMessage = err instanceof Error ? err.message : "Nie udało się wysłać linku do galerii";
+      if (!errorMessage.includes("already in progress")) {
         showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");
       }
+    } finally {
+      // Reset flag after request completes (success or error)
+      isSendingRef.current = false;
     }
-  };
+  }, [gallery?.galleryId, isPaid, sendGalleryLinkToClientMutation, showToast]);
 
   // Dead simple visibility logic
   // Don't show overlay if gallery is loading/fetching or not available yet (prevents flicker from stale cache)

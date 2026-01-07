@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
 import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
@@ -264,6 +264,9 @@ export default function GalleryDetail() {
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [denyOrderId, setDenyOrderId] = useState<string | null>(null);
   const [isRedirectingToOrder, setIsRedirectingToOrder] = useState<boolean>(false);
+
+  // Track if send link request is in flight to prevent concurrent calls
+  const isSendingRef = useRef(false);
 
   // Mutations
   const payGalleryMutation = usePayGallery();
@@ -613,10 +616,14 @@ export default function GalleryDetail() {
     }
   };
 
-  const handleSendLink = async (): Promise<void> => {
-    if (!galleryId) {
+  const handleSendLink = useCallback(async (): Promise<void> => {
+    // Atomic check-and-set: if already sending, return immediately
+    if (!galleryId || isSendingRef.current || sendGalleryToClientMutation.isPending) {
       return;
     }
+
+    // Set flag immediately to prevent race conditions (atomic operation)
+    isSendingRef.current = true;
 
     // Check if this is a reminder (has existing orders) or initial invitation
     const isReminder = orders && orders.length > 0;
@@ -637,9 +644,16 @@ export default function GalleryDetail() {
       // Reload orders (only creates order if no orders exist)
       await loadOrders();
     } catch (err) {
-      showToast("error", "Błąd", formatApiError(err));
+      // Only show error if it's not the "already in progress" error
+      const errorMessage = formatApiError(err);
+      if (!errorMessage.includes("already in progress")) {
+        showToast("error", "Błąd", errorMessage);
+      }
+    } finally {
+      // Reset flag after request completes (success or error)
+      isSendingRef.current = false;
     }
-  };
+  }, [galleryId, orders, sendGalleryToClientMutation, showToast, loadOrders]);
 
   type BadgeColor = "primary" | "success" | "error" | "warning" | "info" | "light" | "dark";
 
