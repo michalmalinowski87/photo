@@ -261,3 +261,4 @@ If deletion still doesn't work after checking all the above:
 5. Check IAM roles for both trigger and deletion Lambdas
 
 
+
