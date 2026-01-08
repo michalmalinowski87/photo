@@ -97,14 +97,14 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
               className="relative flex items-center justify-center text-photographer-mutedText transition-colors bg-photographer-surface border border-photographer-border rounded-full hover:text-photographer-heading h-14 w-14 hover:bg-photographer-elevated hover:text-photographer-text dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Strona główna"
             >
-              <Globe size={26} />
+              <Globe size={20} />
             </a>
             <Link
               href="/wallet"
               className="relative flex items-center justify-center text-photographer-mutedText transition-colors bg-photographer-surface border border-photographer-border rounded-full hover:text-photographer-heading h-14 w-14 hover:bg-photographer-elevated hover:text-photographer-text dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Portfel"
             >
-              <Wallet size={26} />
+              <Wallet size={20} />
             </Link>
             <ThemeToggleButton />
             {/* Notifications - hidden until notification system is implemented */}

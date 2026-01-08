@@ -70,6 +70,46 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   );
   const finalImagesCount = finalImages.length;
 
+  // Move all hooks before any conditional returns to comply with Rules of Hooks
+  const handleSendLink = useCallback(async () => {
+    // Atomic check-and-set: if already sending, return immediately
+    if (!galleryIdStr || isSendingRef.current || sendLinkLoading || sendGalleryLinkToClientMutation.isPending) {
+      return;
+    }
+
+    // Set flag immediately to prevent race conditions (atomic operation)
+    isSendingRef.current = true;
+
+    try {
+      const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
+
+      showToast(
+        "success",
+        "Sukces",
+        result.isReminder
+          ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
+          : "Link do galerii został wysłany do klienta"
+      );
+    } catch (err) {
+      // Only show error if it's not the "already in progress" error
+      const errorMessage = formatApiError(err);
+      if (!errorMessage.includes("already in progress")) {
+        showToast("error", "Błąd", errorMessage);
+      }
+    } finally {
+      // Reset flag after request completes (success or error)
+      isSendingRef.current = false;
+    }
+  }, [galleryIdStr, sendLinkLoading, sendGalleryLinkToClientMutation, showToast]);
+
+  const handlePublishClick = useCallback(() => {
+    if (!galleryIdStr) {
+      return;
+    }
+    // Use centralized publish flow action
+    startPublishFlow(galleryIdStr);
+  }, [galleryIdStr, startPublishFlow]);
+
   // Early return: don't render if gallery doesn't exist or should hide
   // Check gallery FIRST to prevent any computation or rendering with stale data
   // This is critical to prevent flash of stale cache data after gallery deletion
@@ -119,45 +159,6 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
         setUrlCopied(false);
       }, 2500);
     }
-  };
-
-  const handleSendLink = useCallback(async () => {
-    // Atomic check-and-set: if already sending, return immediately
-    if (!galleryIdStr || isSendingRef.current || sendLinkLoading || sendGalleryLinkToClientMutation.isPending) {
-      return;
-    }
-
-    // Set flag immediately to prevent race conditions (atomic operation)
-    isSendingRef.current = true;
-
-    try {
-      const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
-
-      showToast(
-        "success",
-        "Sukces",
-        result.isReminder
-          ? "Przypomnienie z linkiem do galerii zostało wysłane do klienta"
-          : "Link do galerii został wysłany do klienta"
-      );
-    } catch (err) {
-      // Only show error if it's not the "already in progress" error
-      const errorMessage = formatApiError(err);
-      if (!errorMessage.includes("already in progress")) {
-        showToast("error", "Błąd", errorMessage);
-      }
-    } finally {
-      // Reset flag after request completes (success or error)
-      isSendingRef.current = false;
-    }
-  }, [galleryIdStr, sendLinkLoading, sendGalleryLinkToClientMutation, showToast]);
-
-  const handlePublishClick = () => {
-    if (!galleryIdStr) {
-      return;
-    }
-    // Use centralized publish flow action
-    startPublishFlow(galleryIdStr);
   };
 
   // Check if gallery has a CLIENT_SELECTING order
@@ -214,7 +215,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
           ) : null
         }
       >
-        <span className="relative inline-flex items-center h-5 min-w-[80px]">
+        <span className="relative inline-flex items-center h-5 min-w-[60px]">
           <span
             className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
               urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"

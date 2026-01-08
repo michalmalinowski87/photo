@@ -500,7 +500,7 @@ const GalleryList = ({
 
               // Use same item-based prefetching as cards view for consistency
               // Calculate how many items are remaining based on scroll position
-              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const estimatedItemHeight = 72; // Height of each table row (h-[72px] - scaled to 75% then reduced by 20%)
               const totalItemsRendered = galleries.length;
 
               // Calculate which item index is currently at the bottom of viewport
@@ -527,43 +527,43 @@ const GalleryList = ({
                 <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 w-[120px]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 w-[90px]"
                   >
                     Okładka
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 min-w-[400px]"
+                    className="px-3 py-3 h-[51px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 min-w-[300px]"
                   >
                     Nazwa galerii
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Plan
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Status
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Zlecenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Utworzono
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -587,16 +587,16 @@ const GalleryList = ({
                   return (
                     <TableRow
                       key={gallery.galleryId}
-                      className={`h-[120px] ${
+                      className={`h-[72px] ${
                         isEvenRow
                           ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
                           : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"
                       }`}
                     >
-                      <TableCell className="px-3 py-5 align-middle text-center w-[120px]">
+                      <TableCell className="px-3 py-5 align-middle text-center w-[90px]">
                         <CoverPhotoCell coverPhotoUrl={coverPhotoUrl} />
                       </TableCell>
-                      <TableCell className="px-3 py-5 align-middle min-w-[400px]">
+                      <TableCell className="px-3 py-5 align-middle min-w-[300px]">
                         <Link
                           href={`/galleries/${String(gallery.galleryId)}`}
                           className="font-medium text-base text-photographer-heading hover:text-photographer-accent dark:text-white dark:hover:text-photographer-accent block max-w-full"

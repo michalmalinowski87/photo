@@ -87,7 +87,7 @@ const Input: FC<InputProps> = ({
 
       {/* Reserved space for error messages or hints to prevent layout shifts */}
       {!hideErrorSpace && (
-        <div className="min-h-[20px] mt-1.5">
+        <div className="min-h-[15px] mt-1.5">
           {errorMessage ? (
             <p className="text-xs text-error-500 opacity-70">{errorMessage}</p>
           ) : hint ? (

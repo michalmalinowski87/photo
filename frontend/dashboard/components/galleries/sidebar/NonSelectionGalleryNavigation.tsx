@@ -72,7 +72,7 @@ export const NonSelectionGalleryNavigation = ({
               : "text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <ImageIcon size={26} />
+          <ImageIcon size={20} />
           <span>Zdjęcia</span>
         </Link>
       </li>

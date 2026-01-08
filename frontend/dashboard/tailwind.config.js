@@ -8,9 +8,9 @@ module.exports = {
         outfit: ["Outfit", "sans-serif"],
       },
       fontSize: {
-        "theme-xs": ["12px", { lineHeight: "18px" }],
-        "theme-sm": ["14px", { lineHeight: "20px" }],
-        "theme-xl": ["20px", { lineHeight: "30px" }],
+        "theme-xs": ["9px", { lineHeight: "13.5px" }], // Scaled to 75% (12px * 0.75)
+        "theme-sm": ["10.5px", { lineHeight: "15px" }], // Scaled to 75% (14px * 0.75)
+        "theme-xl": ["15px", { lineHeight: "22.5px" }], // Scaled to 75% (20px * 0.75)
       },
       colors: {
         brand: {

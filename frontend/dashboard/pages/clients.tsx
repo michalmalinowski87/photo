@@ -347,7 +347,7 @@ export default function Clients() {
         <h1 className="text-3xl font-bold text-photographer-heading dark:text-white">Klienci</h1>
         {/* Search Input - spans from title to sort dropdown */}
         {((!loading && clients.length > 0) || searchQuery) && (
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[150px]">
             <Input
               type="text"
               placeholder="Szukaj (email, imię, nazwisko, firma, NIP, telefon)..."
@@ -495,7 +495,7 @@ export default function Clients() {
 
               // Use same item-based prefetching as galleries for consistency
               // Calculate how many items are remaining based on scroll position
-              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const estimatedItemHeight = 72; // Height of each table row (h-[72px] - scaled to 75% then reduced by 20%)
               const totalItemsRendered = clients.length;
 
               // Calculate which item index is currently at the bottom of viewport
@@ -522,31 +522,31 @@ export default function Clients() {
                 <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[51px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Email
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[51px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Imię i nazwisko / Firma
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Telefon
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -558,7 +558,7 @@ export default function Clients() {
                   return (
                     <TableRow
                       key={client.clientId}
-                      className={`h-[120px] ${
+                      className={`h-[72px] ${
                         isEvenRow
                           ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
                           : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"

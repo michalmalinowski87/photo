@@ -14,7 +14,7 @@ export const GalleryTypeStep = ({
   const isSecondSelected = selectionEnabled === false;
 
   return (
-    <div className="w-full mt-[200px]">
+    <div className="w-full mt-[150px]">
       <div className="mb-8 md:mb-12">
         <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
           Wybierz typ galerii *

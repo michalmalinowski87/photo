@@ -33,7 +33,7 @@ export const GallerySettingsLink = ({
             : "text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5"
         }`}
       >
-        <Settings size={26} />
+        <Settings size={20} />
         <span>Ustawienia</span>
       </Link>
     </li>

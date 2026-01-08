@@ -147,7 +147,7 @@ export default function Wallet() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Portfel</h1>
 
       {error && (

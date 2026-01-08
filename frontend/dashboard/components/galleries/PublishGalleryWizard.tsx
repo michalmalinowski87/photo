@@ -491,7 +491,7 @@ export const PublishGalleryWizard = ({
 
   const wizardContent = !isOpen ? null : (
     <div
-      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-100px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-400 dark:border-gray-700 overflow-hidden relative`}
+      className={`${renderAsModal ? "w-full max-w-7xl h-[calc(100vh-2rem)]" : "w-full max-h-[calc(100vh-75px)]"} flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-400 dark:border-gray-700 overflow-hidden relative`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-400 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 flex-shrink-0">
@@ -529,13 +529,13 @@ export const PublishGalleryWizard = ({
           <div className="flex items-start justify-center p-8 min-h-full">
             <div className="w-full max-w-6xl mx-auto space-y-6">
               {/* Wallet Balance Section Skeleton */}
-              <div className="bg-photographer-elevated dark:bg-photographer-accent/10 border border-gray-400 dark:border-gray-700 rounded-lg p-4 h-[205.33px] animate-fade-in-out"></div>
+              <div className="bg-photographer-elevated dark:bg-photographer-accent/10 border border-gray-400 dark:border-gray-700 rounded-lg p-4 h-[154px] animate-fade-in-out"></div>
 
               {/* Suggested Plan Section Skeleton */}
-              <div className="bg-gradient-to-r from-photographer-elevated to-photographer-lightBeige dark:from-photographer-accent/10 dark:to-photographer-accent/10 border-2 border-photographer-darkBeige dark:border-photographer-accent/30 rounded-lg px-6 pt-6 pb-4 mb-4 h-[279.33px] animate-fade-in-out"></div>
+              <div className="bg-gradient-to-r from-photographer-elevated to-photographer-lightBeige dark:from-photographer-accent/10 dark:to-photographer-accent/10 border-2 border-photographer-darkBeige dark:border-photographer-accent/30 rounded-lg px-6 pt-6 pb-4 mb-4 h-[210px] animate-fade-in-out"></div>
 
               {/* Plan Selection Grid Skeleton */}
-              <div className="mb-4 h-[360px] animate-fade-in-out">
+              <div className="mb-4 h-[270px] animate-fade-in-out">
                 <div className="h-6 bg-photographer-muted dark:bg-gray-700 rounded w-48 mb-4"></div>
                 <div className="flex items-center justify-center gap-2 mb-6 p-1 bg-photographer-elevated dark:bg-gray-800 rounded-lg">
                   <div className="flex-1 h-10 bg-white dark:bg-gray-700 rounded-md"></div>
@@ -546,7 +546,7 @@ export const PublishGalleryWizard = ({
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="rounded-lg border-2 border-gray-400 dark:border-gray-700 p-5 h-[248px] animate-fade-in-out"
+                      className="rounded-lg border-2 border-gray-400 dark:border-gray-700 p-5 h-[186px] animate-fade-in-out"
                     ></div>
                   ))}
                 </div>

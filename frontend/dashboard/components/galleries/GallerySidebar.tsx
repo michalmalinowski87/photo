@@ -74,9 +74,9 @@ export default function GallerySidebar() {
     };
   }, []);
 
-  // Hide secondary elements when viewport height is below threshold (1100px)
+  // Hide secondary elements when viewport height is below threshold (800px)
   // This ensures navigation menu remains accessible
-  const shouldHideSecondaryElements = viewportHeight < 1100;
+  const shouldHideSecondaryElements = viewportHeight < 800;
 
   const setGalleryCreationFlowActive = useUnifiedStore(
     (state) => state.setGalleryCreationFlowActive
@@ -101,14 +101,14 @@ export default function GallerySidebar() {
   };
 
   return (
-    <aside className="fixed flex flex-col top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-400 w-[494px]">
+    <aside className="fixed flex flex-col top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-400 w-[371px]">
       {/* Back Button */}
-      <div className="h-[72px] border-b border-gray-400 dark:border-gray-800 flex items-center">
+      <div className="h-[54px] border-b border-gray-400 dark:border-gray-800 flex items-center">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-gray-700 dark:text-white dark:hover:text-gray-300 transition-colors"
         >
-          <ChevronLeft size={26} />
+          <ChevronLeft size={20} />
           Powrót
         </button>
       </div>

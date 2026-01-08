@@ -67,7 +67,7 @@ export const SelectionGalleryNavigation = ({ galleryId }: SelectionGalleryNaviga
               : "text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <FileText size={26} className="flex-shrink-0" />
+          <FileText size={20} className="flex-shrink-0" />
           <span className="flex-shrink-0 whitespace-nowrap">Zlecenia</span>
           {orderStatusIndicator && (
             <span className="ml-auto flex-shrink-0">{orderStatusIndicator}</span>
@@ -85,7 +85,7 @@ export const SelectionGalleryNavigation = ({ galleryId }: SelectionGalleryNaviga
               : "text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-white/5"
           }`}
         >
-          <ImageIcon size={26} />
+          <ImageIcon size={20} />
           <span>Zdjęcia</span>
         </button>
       </li>

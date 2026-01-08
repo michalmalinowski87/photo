@@ -354,7 +354,7 @@ export default function Packages() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pakiety</h1>
 
         {/* Search Input - spans from title to sort dropdown */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-[150px]">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
             <Search size={18} className="text-gray-400 dark:text-gray-500" />
           </div>
@@ -525,7 +525,7 @@ export default function Packages() {
 
               // Use same item-based prefetching as galleries for consistency
               // Calculate how many items are remaining based on scroll position
-              const estimatedItemHeight = 120; // Height of each table row (h-[120px])
+              const estimatedItemHeight = 72; // Height of each table row (h-[72px] - scaled to 75% then reduced by 20%)
               const totalItemsRendered = packages.length;
 
               // Calculate which item index is currently at the bottom of viewport
@@ -552,13 +552,13 @@ export default function Packages() {
                 <TableRow className="bg-photographer-darkBeige dark:bg-gray-900">
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
+                    className="px-3 py-3 h-[51px] text-left text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400"
                   >
                     Nazwa
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Zdjęcia w pakiecie
                   </TableCell>
@@ -573,19 +573,19 @@ export default function Packages() {
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Cena pakietu
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Data utworzenia
                   </TableCell>
                   <TableCell
                     isHeader
-                    className="px-3 py-3 h-[68px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
+                    className="px-3 py-3 h-[51px] text-center text-sm font-medium text-photographer-mutedText uppercase tracking-wider dark:text-gray-400 whitespace-nowrap w-[1%]"
                   >
                     Akcje
                   </TableCell>
@@ -597,7 +597,7 @@ export default function Packages() {
                   return (
                     <TableRow
                       key={pkg.packageId}
-                      className={`h-[120px] ${
+                      className={`h-[72px] ${
                         isEvenRow
                           ? "bg-photographer-lightBeige dark:bg-gray-800/50 hover:bg-photographer-muted dark:hover:bg-gray-800/90"
                           : "bg-photographer-muted dark:bg-gray-900/40 hover:bg-photographer-darkBeige dark:hover:bg-gray-800/40"

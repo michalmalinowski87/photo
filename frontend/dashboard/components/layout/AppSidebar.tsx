@@ -30,13 +30,13 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
-    icon: <LayoutDashboard size={26} />,
+    icon: <LayoutDashboard size={20} />,
     name: "Panel główny",
     path: "/",
   },
   {
     // eslint-disable-next-line jsx-a11y/alt-text
-    icon: <Image size={26} aria-hidden="true" />,
+    icon: <Image size={20} aria-hidden="true" />,
     name: "Galerie",
     subItems: [
       { name: "Wersje robocze", path: "/galleries/robocze" },
@@ -48,28 +48,28 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <Users size={26} />,
+    icon: <Users size={20} />,
     name: "Klienci",
     path: "/clients",
   },
   {
     name: "Pakiety",
-    icon: <Package size={26} />,
+    icon: <Package size={20} />,
     path: "/packages",
   },
   {
     name: "Portfel",
-    icon: <Wallet size={26} />,
+    icon: <Wallet size={20} />,
     path: "/wallet",
   },
   {
     name: "Ustawienia",
-    icon: <Settings size={26} />,
+    icon: <Settings size={20} />,
     path: "/settings",
   },
   {
     name: "Strona główna",
-    icon: <Globe size={26} />,
+    icon: <Globe size={20} />,
     path: process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002",
     external: true,
   },
@@ -245,7 +245,7 @@ const AppSidebar = () => {
   return (
     <aside
       className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-7 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-photographer-heading h-screen transition-all duration-300 ease-in-out z-50 border-r border-photographer-border dark:border-gray-800 
-        w-[377px]
+        w-[283px]
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}
     >
@@ -272,7 +272,7 @@ const AppSidebar = () => {
                 : "text-gray-700 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-purple-900/10"
             }`}
           >
-            <FlaskConical size={26} />
+            <FlaskConical size={20} />
             <span>Dev Menu</span>
           </Link>
           <Link
@@ -294,7 +294,7 @@ const AppSidebar = () => {
               }
             }}
           >
-            <LogOut size={26} />
+            <LogOut size={20} />
             <span>Wyloguj</span>
           </Link>
         </div>

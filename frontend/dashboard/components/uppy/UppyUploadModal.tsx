@@ -839,7 +839,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
               <div className="flex gap-3 flex-shrink-0">
                 {uploadComplete ? (
-                  <Button variant="primary" onClick={handleClose} className="min-w-[120px]">
+                  <Button variant="primary" onClick={handleClose} className="min-w-[90px]">
                     Zamknij
                   </Button>
                 ) : (

@@ -134,7 +134,7 @@ export const PackageStep = ({
   // Selector mode - step2-style layout
   if (!isFormMode) {
     return (
-      <div className="w-full mt-[200px]">
+      <div className="w-full mt-[150px]">
         <div className="mb-8 md:mb-12">
           <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
             Ustaw pakiet cenowy *
@@ -235,7 +235,7 @@ export const PackageStep = ({
 
   // Form mode - package form with reordered fields
   return (
-    <div className="w-full space-y-8 mt-[200px]">
+    <div className="w-full space-y-8 mt-[150px]">
       <div className="mb-8 md:mb-12">
         <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
           Ustaw pakiet cenowy *
@@ -404,7 +404,7 @@ export const PackageStep = ({
                   )}
                 </button>
                 {!canSavePackage && (
-                  <div className="absolute bottom-full right-0 mb-2 w-80 max-w-[calc(100vw-2rem)] p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                  <div className="absolute bottom-full right-0 mb-2 w-60 max-w-[calc(100vw-2rem)] p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
                     Wypełnij wszystkie wymagane pola
                     <div className="absolute top-full right-8 -mt-1 border-4 border-transparent border-t-gray-900 dark:border-t-gray-800"></div>
                   </div>

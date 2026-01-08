@@ -14,7 +14,7 @@ export const GalleryNameStep = ({
   error,
 }: GalleryNameStepProps) => {
   return (
-    <div className="w-full mt-[200px]">
+    <div className="w-full mt-[150px]">
       <div className="mb-8 md:mb-12">
         <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
           Jaką nazwę ma mieć galeria? *

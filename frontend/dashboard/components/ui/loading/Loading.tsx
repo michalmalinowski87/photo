@@ -111,7 +111,7 @@ export const InlineLoading = ({ text }: { text?: string }) => {
 // Use this for gallery image loading states (originals, user selected, finals)
 export const GalleryLoading = ({ text = "Ładowanie..." }: { text?: string }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] py-16">
+    <div className="flex flex-col items-center justify-center min-h-[300px] py-16">
       <div className="flex flex-col items-center justify-center gap-4">
         {/* PhotoHub text with subtle fade animation */}
         <h1 className="text-4xl font-bold text-gray-500 dark:text-gray-600 animate-fade-in-out">

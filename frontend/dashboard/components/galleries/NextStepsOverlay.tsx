@@ -728,7 +728,7 @@ export const NextStepsOverlay = () => {
   return (
     <div
       ref={overlayRef}
-      className={`fixed bottom-4 right-4 z-40 max-w-[calc(100vw-2rem)] ${
+      className={`fixed bottom-4 right-4 z-[60] max-w-[calc(100vw-2rem)] ${
         shouldShow ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
       style={{
@@ -755,7 +755,7 @@ export const NextStepsOverlay = () => {
           {isExpanded ? (
             <>
               <h3
-                className="text-[16px] font-semibold tracking-[-0.01em] text-photographer-heading dark:text-gray-50"
+                className="text-base font-semibold tracking-[-0.01em] text-photographer-heading dark:text-gray-50"
                 style={{
                   transition: "opacity 200ms ease-out",
                   opacity: isExpanded && widthReached13rem ? 1 : 0,
@@ -864,7 +864,7 @@ export const NextStepsOverlay = () => {
                     }}
                   >
                     <span
-                      className={`text-[14px] font-medium tracking-[-0.01em] whitespace-nowrap block ${
+                      className={`text-sm font-medium tracking-[-0.01em] whitespace-nowrap block ${
                         step.completed
                           ? "text-photographer-accentDark dark:text-success-400"
                           : isDisabled
@@ -915,10 +915,10 @@ export const NextStepsOverlay = () => {
           </div>
 
           {/* Footer with refined styling - Always reserves space for text */}
-          <div className="relative px-5 py-3.5 border-t border-gray-100 dark:border-gray-800/50 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-900/30 h-[52px] flex items-center justify-center">
+          <div className="relative px-5 py-3.5 border-t border-gray-100 dark:border-gray-800/50 bg-gradient-to-b from-transparent to-gray-50/30 dark:to-gray-900/30 h-[39px] flex items-center justify-center">
             {/* Invisible spacer to maintain height when collapsed */}
             <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-              <span className="text-[12px] text-transparent text-center py-1.5">
+              <span className="text-theme-xs text-transparent text-center py-1.5">
                 Zamknij i nie pokazuj tego ponownie
               </span>
             </div>
@@ -930,7 +930,7 @@ export const NextStepsOverlay = () => {
                   void handleDontShowAgain();
                 }
               }}
-              className={`relative w-full text-[12px] font-medium text-center py-1.5 select-none ${
+              className={`relative w-full text-theme-xs font-medium text-center py-1.5 select-none ${
                 isSavingPreference || !isExpanded
                   ? "opacity-40 cursor-not-allowed text-gray-400 dark:text-gray-500"
                   : "cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"

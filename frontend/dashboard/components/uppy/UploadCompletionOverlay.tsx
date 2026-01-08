@@ -90,7 +90,7 @@ export const UploadCompletionOverlay = ({
               <Button
                 variant="primary"
                 onClick={onClose}
-                className="min-w-[140px] px-6 py-4 text-base font-semibold shadow-lg"
+                className="min-w-[105px] px-6 py-4 text-base font-semibold shadow-lg"
                 disabled={isFinalizing}
                 startIcon={
                   isFinalizing ? <Loader2 size={18} className="animate-spin" /> : undefined

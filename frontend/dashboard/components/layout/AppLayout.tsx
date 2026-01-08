@@ -142,13 +142,13 @@ const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
           <Backdrop />
         </div>
         <div
-          className={`flex-1 transition-all duration-300 ease-in-out bg-photographer-background dark:bg-gray-dark lg:ml-[377px] ${
+          className={`flex-1 transition-all duration-300 ease-in-out bg-photographer-background dark:bg-gray-dark lg:ml-[283px] ${
             isMobileOpen ? "ml-0" : ""
           }`}
         >
           <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
           <div
-            className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-80px)]`}
+            className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-60px)]`}
           >
             {wizardOpen ? (
               <CreateGalleryWizard
