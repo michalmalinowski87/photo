@@ -8,19 +8,19 @@
    PRICING SECTION
    ============================================ */
 .pricing-fourteen {
-  padding: 100px 0;
+  padding-bottom: 100px;
   background-color: var(--light-3); /* photographer-background */
 }
 
 @media only screen and (min-width: 768px) and (max-width: 991px) {
   .pricing-fourteen {
-    padding: 80px 0;
+    padding-bottom: 80px;
   }
 }
 
 @media (max-width: 767px) {
   .pricing-fourteen {
-    padding: 60px 0;
+    padding-bottom: 60px;
   }
 }
 

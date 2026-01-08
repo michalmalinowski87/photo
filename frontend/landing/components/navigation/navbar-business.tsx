@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function NavbarBusiness() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSticky, setIsSticky] = useState(false);
+  const [activeLink, setActiveLink] = useState<string | null>(null);
+  const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
   const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
 
@@ -44,9 +48,70 @@ export default function NavbarBusiness() {
     }
   }, [isSidebarOpen]);
 
+  useEffect(() => {
+    // Handle sticky navbar
+    const handleScroll = () => {
+      const headerNavbar = document.querySelector('.navbar-area');
+      if (headerNavbar) {
+        const sticky = headerNavbar.getBoundingClientRect().top;
+        setIsSticky(window.pageYOffset > sticky);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Check initial state
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Handle active link based on scroll position
+    const handleScrollActive = () => {
+      const scrollPos = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+      const sections = document.querySelectorAll('.page-scroll');
+      
+      let currentActive: string | null = null;
+      
+      for (let i = 0; i < sections.length; i++) {
+        const currLink = sections[i] as HTMLElement;
+        const val = currLink.getAttribute('href');
+        
+        // Skip external links and non-hash links
+        if (!val || val === '#' || val === 'javascript:void(0)' || val.startsWith('http://') || val.startsWith('https://') || !val.startsWith('#')) {
+          continue;
+        }
+        
+        const refElement = document.querySelector(val);
+        if (!refElement) {
+          continue;
+        }
+        
+        const scrollTopMinus = scrollPos + 73;
+        const elementTop = (refElement as HTMLElement).offsetTop;
+        const elementHeight = (refElement as HTMLElement).offsetHeight;
+        
+        if (elementTop <= scrollTopMinus && (elementTop + elementHeight > scrollTopMinus)) {
+          currentActive = val;
+          break;
+        }
+      }
+      
+      setActiveLink(currentActive);
+    };
+
+    window.addEventListener('scroll', handleScrollActive);
+    handleScrollActive(); // Check initial state
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollActive);
+    };
+  }, []);
+
   return (
     <>
-      <section className="navbar-area navbar-nine">
+      <section className={`navbar-area navbar-nine ${isSticky ? 'sticky' : ''}`}>
         <div className="container">
           <div className="row">
             <div className="col-lg-12">
@@ -74,17 +139,26 @@ export default function NavbarBusiness() {
                 <div className={`collapse navbar-collapse sub-menu-bar ${isMenuOpen ? 'show' : ''}`} id="navbarNine">
                   <ul className="navbar-nav me-auto">
                     <li className="nav-item">
-                      <Link className="page-scroll active" href={`${dashboardUrl}/sign-up`}>
+                      <Link 
+                        className={`page-scroll ${(!activeLink && pathname === '/') ? 'active' : ''}`} 
+                        href={`${dashboardUrl}/sign-up`}
+                      >
                         Start
                       </Link>
                     </li>
                     <li className="nav-item">
-                      <Link className="page-scroll" href="#services">
+                      <Link 
+                        className={`page-scroll ${activeLink === '#services' ? 'active' : ''}`} 
+                        href="#services"
+                      >
                         Funkcje
                       </Link>
                     </li>
                     <li className="nav-item">
-                      <Link className="page-scroll" href="#pricing">
+                      <Link 
+                        className={`page-scroll ${activeLink === '#pricing' ? 'active' : ''}`} 
+                        href="#pricing"
+                      >
                         Cennik
                       </Link>
                     </li>
