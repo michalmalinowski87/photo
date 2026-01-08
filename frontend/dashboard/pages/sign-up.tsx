@@ -11,6 +11,7 @@ import {
   PasswordStrengthResult,
   PasswordStrengthValidator,
 } from "../components/ui/password-strength-validator";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 
 interface CognitoError extends Error {
@@ -106,10 +107,12 @@ export default function SignUp() {
       void router.push(
         `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
       );
+      // Keep loading true - overlay will stay until redirect completes
     } catch (err) {
       const error = err as CognitoError & { minutesUntilReset?: number };
       // Handle rate limit errors
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
+        setLoading(false); // Hide overlay on error so user can see the error message
         // Use the friendly message from backend, or provide a fallback
         setError(
           error.message ||
@@ -126,12 +129,14 @@ export default function SignUp() {
 
           if (verificationStatus === "verified") {
             // User exists and is verified - redirect to login
+            // Keep loading true - overlay will stay until redirect completes
             void router.push(
               `/login?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
             );
             return;
           } else if (verificationStatus === "unverified") {
             // User exists but email is not verified - restart verification flow
+            // Keep loading true - overlay will stay until redirect completes
             void router.push(
               `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
             );
@@ -140,22 +145,26 @@ export default function SignUp() {
         } catch (checkError) {
           // If check fails, fall through to show error message
         }
+        setLoading(false); // Hide overlay on error so user can see the error message
         // Fallback error message if check fails
         setError("Użytkownik o tym adresie email już istnieje");
-      } else if (error.code === "InvalidPasswordException") {
-        setError("Hasło nie spełnia wymagań bezpieczeństwa");
-      } else if (error.message) {
-        setError(error.message);
       } else {
-        setError("Nie udało się utworzyć konta. Spróbuj ponownie.");
+        setLoading(false); // Hide overlay on error so user can see the error message
+        if (error.code === "InvalidPasswordException") {
+          setError("Hasło nie spełnia wymagań bezpieczeństwa");
+        } else if (error.message) {
+          setError(error.message);
+        } else {
+          setError("Nie udało się utworzyć konta. Spróbuj ponownie.");
+        }
       }
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
+    <>
+      {loading && <FullPageLoading text="Tworzymy Twoje konto..." />}
+      <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
       <div className="flex items-center w-full py-8 border-b border-border/80">
         <Link href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"} className="flex items-center gap-x-2">
           <span className="text-xl font-bold" style={{ color: "#465fff" }}>
@@ -287,5 +296,6 @@ export default function SignUp() {
         </p>
       </div>
     </div>
+    </>
   );
 }
