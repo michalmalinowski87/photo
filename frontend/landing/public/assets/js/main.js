@@ -23,6 +23,10 @@
 	function onScroll(event) {
 		var sections = document.querySelectorAll('.page-scroll');
 		var scrollPos = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+		
+		// Get navbar height dynamically
+		var navbar = document.querySelector('.navbar-area');
+		var headerOffset = navbar ? navbar.offsetHeight - 20 : 83; // navbar height + small padding
 
 		for (var i = 0; i < sections.length; i++) {
 			var currLink = sections[i];
@@ -34,7 +38,7 @@
 			if (!refElement) {
 				continue;
 			}
-			var scrollTopMinus = scrollPos + 73;
+			var scrollTopMinus = scrollPos + headerOffset;
 			if (refElement.offsetTop <= scrollTopMinus && (refElement.offsetTop + refElement.offsetHeight > scrollTopMinus)) {
 				var firstActive = document.querySelector('.page-scroll.active');
 				if (firstActive) {
@@ -52,6 +56,15 @@
     // for menu scroll 
     var pageLink = document.querySelectorAll('.page-scroll');
 
+    // Function to get navbar height dynamically
+    function getNavbarHeight() {
+        var navbar = document.querySelector('.navbar-area');
+        if (navbar) {
+            return navbar.offsetHeight;
+        }
+        return 73; // fallback
+    }
+
     pageLink.forEach(elem => {
         elem.addEventListener('click', e => {
             var href = elem.getAttribute('href');
@@ -62,13 +75,29 @@
             e.preventDefault();
             var targetElement = document.querySelector(href);
             if (targetElement) {
-                var headerOffset = 73;
-                var elementPosition = targetElement.getBoundingClientRect().top;
-                var offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                // Get navbar height - always use current height
+                var navbar = document.querySelector('.navbar-area');
+                var navbarHeight = navbar ? navbar.offsetHeight : 73;
+                
+                // Get the element's position from top of document
+                var rect = targetElement.getBoundingClientRect();
+                var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                var elementTop = rect.top + scrollTop;
+                
+                // Calculate scroll position
+                // We want the element to appear navbarHeight + spacing pixels from top
+                // Adjust offset: subtract less to scroll higher (show content higher on screen)
+                var spacing = 20; // Visual spacing below navbar
+                var scrollPosition = elementTop - navbarHeight - spacing - 60; // Reduced from 100 to 60 for 20-40px higher
+                
+                console.log('Scrolling to:', href, 'Navbar height:', navbarHeight, 'Element top:', elementTop, 'Scroll to:', scrollPosition);
 
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth'
+                // Use requestAnimationFrame for smoother scroll
+                requestAnimationFrame(function() {
+                    window.scrollTo({
+                        top: Math.max(0, scrollPosition),
+                        behavior: 'smooth'
+                    });
                 });
             }
         });

@@ -72,6 +72,10 @@ export default function NavbarBusiness() {
       const scrollPos = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
       const sections = document.querySelectorAll('.page-scroll');
       
+      // Get navbar height dynamically
+      const navbar = document.querySelector('.navbar-area');
+      const headerOffset = navbar ? (navbar as HTMLElement).offsetHeight - 20 : 83; // navbar height + small padding
+      
       let currentActive: string | null = null;
       
       for (let i = 0; i < sections.length; i++) {
@@ -88,7 +92,7 @@ export default function NavbarBusiness() {
           continue;
         }
         
-        const scrollTopMinus = scrollPos + 73;
+        const scrollTopMinus = scrollPos + headerOffset;
         const elementTop = (refElement as HTMLElement).offsetTop;
         const elementHeight = (refElement as HTMLElement).offsetHeight;
         

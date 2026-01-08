@@ -140,7 +140,7 @@ export default function HomePage() {
       </section>
 
       {/* Key Missions Section */}
-      <section id="key-missions" className="services-area services-eight">
+      <section id="services" className="services-area services-eight">
         <div className="section-title-five">
           <div className="container">
             <div className="row">
