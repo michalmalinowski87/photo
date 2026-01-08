@@ -5,6 +5,9 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { PLANS } from '@/utils/constants/pricing';
 
+// Note: revalidate cannot be exported from client components
+// ISR is handled at the layout level for this route group
+
 type Duration = '1m' | '3m' | '12m';
 
 export default function HomePage() {
@@ -40,7 +43,10 @@ export default function HomePage() {
                   alt="PhotoCloud Dashboard Preview"
                   width={800}
                   height={600}
+                  priority
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   className="w-full"
+                  style={{ height: 'auto' }}
                 />
               </div>
             </div>
@@ -59,7 +65,9 @@ export default function HomePage() {
                   alt="about"
                   width={500}
                   height={600}
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   className="w-full"
+                  style={{ height: 'auto' }}
                 />
               </div>
             </div>

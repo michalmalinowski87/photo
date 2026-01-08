@@ -1,5 +1,3 @@
-"use client";
-
 import Link from 'next/link';
 
 export default function FooterBusiness() {
@@ -31,13 +29,13 @@ export default function FooterBusiness() {
                   <h5>Rozwiązania</h5>
                   <ul>
                     <li>
-                      <Link href="#about">O nas</Link>
+                      <Link href="/#about">O nas</Link>
                     </li>
                     <li>
-                      <Link href="#services">Funkcje</Link>
+                      <Link href="/#services">Funkcje</Link>
                     </li>
                     <li>
-                      <Link href="#pricing">Cennik</Link>
+                      <Link href="/#pricing">Cennik</Link>
                     </li>
                   </ul>
                 </div>
@@ -55,7 +53,7 @@ export default function FooterBusiness() {
                   </ul>
                 </div>
               </div>
-              <div className="col-lg-4 col-md-6 col-12">
+              <div className="col-lg-4 col-md-6 col-12" style={{ display: 'none' }}>
                 <div className="footer-widget newsletter">
                   <h5>Subskrybuj</h5>
                   <p>

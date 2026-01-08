@@ -11,6 +11,9 @@ import MagicBadge from "@/components/ui/magic-badge";
 import { Mail, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+// ISR: Revalidate every hour (3600 seconds)
+export const revalidate = 3600;
+
 const faqCategories = [
   {
     id: "getting-started",

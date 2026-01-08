@@ -7,6 +7,9 @@ import {
 } from "@/components/ui/accordion";
 import MagicBadge from "@/components/ui/magic-badge";
 
+// ISR: Revalidate every hour (3600 seconds)
+export const revalidate = 3600;
+
 const FAQ = [
   {
     id: "1",

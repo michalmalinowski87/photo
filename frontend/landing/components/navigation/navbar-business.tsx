@@ -165,7 +165,7 @@ export default function NavbarBusiness() {
                     <li className="nav-item">
                       <Link 
                         className={`page-scroll ${mounted && activeLink === '#services' ? 'active' : ''}`} 
-                        href="#services"
+                        href="/#services"
                       >
                         Funkcje
                       </Link>
@@ -173,7 +173,7 @@ export default function NavbarBusiness() {
                     <li className="nav-item">
                       <Link 
                         className={`page-scroll ${mounted && activeLink === '#pricing' ? 'active' : ''}`} 
-                        href="#pricing"
+                        href="/#pricing"
                       >
                         Cennik
                       </Link>
@@ -258,12 +258,12 @@ export default function NavbarBusiness() {
                 </Link>
               </li>
               <li>
-                <Link href="#services" onClick={() => setIsSidebarOpen(false)}>
+                <Link href="/#services" onClick={() => setIsSidebarOpen(false)}>
                   Funkcje
                 </Link>
               </li>
               <li>
-                <Link href="#pricing" onClick={() => setIsSidebarOpen(false)}>
+                <Link href="/#pricing" onClick={() => setIsSidebarOpen(false)}>
                   Cennik
                 </Link>
               </li>
