@@ -1,7 +1,6 @@
 import React from "react";
 import { Providers } from "@/components";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthTokenListener } from "@/components/auth-token-listener";
 // Business-template CSS is loaded in <head> - globals.css only has minimal overrides
 import "@/styles/globals.css";
 import { cn, generateMetadata, inter } from "@/utils";
@@ -20,11 +19,37 @@ export default function RootLayout({
   return (
     <html lang="pl" className="scrollbar">
       <head>
+        {/* Critical CSS - load immediately */}
         <link rel="stylesheet" href="/assets/css/bootstrap.min.css" />
-        <link rel="stylesheet" href="/assets/css/lineicons.css" />
-        <link rel="stylesheet" href="/assets/css/tiny-slider.css" />
-        <link rel="stylesheet" href="/assets/css/glightbox.min.css" />
         <link rel="stylesheet" href="/assets/css/style.css" />
+        {/* Non-critical CSS - load asynchronously */}
+        <link rel="preload" href="/assets/css/lineicons.css" as="style" />
+        <link rel="preload" href="/assets/css/tiny-slider.css" as="style" />
+        <link rel="preload" href="/assets/css/glightbox.min.css" as="style" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function loadCSS(href) {
+                  var link = document.createElement('link');
+                  link.rel = 'stylesheet';
+                  link.href = href;
+                  document.head.appendChild(link);
+                }
+                window.addEventListener('load', function() {
+                  loadCSS('/assets/css/lineicons.css');
+                  loadCSS('/assets/css/tiny-slider.css');
+                  loadCSS('/assets/css/glightbox.min.css');
+                });
+              })();
+            `,
+          }}
+        />
+        <noscript>
+          <link rel="stylesheet" href="/assets/css/lineicons.css" />
+          <link rel="stylesheet" href="/assets/css/tiny-slider.css" />
+          <link rel="stylesheet" href="/assets/css/glightbox.min.css" />
+        </noscript>
         <style dangerouslySetInnerHTML={{
           __html: `
             /* Ensure business-template styles take precedence */
@@ -53,15 +78,15 @@ export default function RootLayout({
       >
         <WebPCompatibilityCheck>
           <Providers>
-            <AuthTokenListener />
             <Toaster richColors theme="dark" position="top-right" />
             {children}
           </Providers>
         </WebPCompatibilityCheck>
-        <script src="/assets/js/bootstrap.bundle.min.js" async></script>
-        <script src="/assets/js/glightbox.min.js" async></script>
-        <script src="/assets/js/main.js" async></script>
-        <script src="/assets/js/tiny-slider.js" async></script>
+        {/* Defer non-critical scripts to improve initial load */}
+        <script src="/assets/js/bootstrap.bundle.min.js" defer></script>
+        <script src="/assets/js/glightbox.min.js" defer></script>
+        <script src="/assets/js/main.js" defer></script>
+        <script src="/assets/js/tiny-slider.js" defer></script>
       </body>
     </html>
   );

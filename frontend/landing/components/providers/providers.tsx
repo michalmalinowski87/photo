@@ -1,29 +1,15 @@
 "use client";
 
-import React, { useState } from 'react'
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from 'react';
 
 interface Props {
   children: React.ReactNode;
 }
 
+// React Query is not used in landing pages (auth pages use direct API calls)
+// This saves ~50KB+ bundle size on marketing pages
 const Providers = ({ children }: Props) => {
-  // Create QueryClient instance once using useState with lazy initializer
-  // This ensures it's only created once per component instance and works correctly with SSR
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000, // 1 minute
-        gcTime: 5 * 60 * 1000, // 5 minutes
-      },
-    },
-  }));
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  )
+  return <>{children}</>;
 };
 
 export default Providers

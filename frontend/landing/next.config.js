@@ -3,10 +3,37 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Next.js 15: Bundle external packages for Pages Router for faster startup times
-  experimental: {
-    bundlePagesRouterDependencies: true,
+  
+  // Optimize images
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
   },
+
+  // Enable compression
+  compress: true,
+
+  // SWC minification is enabled by default in Next.js 15
+
+  // Optimize bundle size
+  experimental: {
+    optimizePackageImports: [
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-label',
+      '@radix-ui/react-navigation-menu',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      'lucide-react',
+      'framer-motion',
+    ],
+  },
+
   webpack: (config, { isServer, webpack }) => {
     // Resolve modules from local node_modules first (important for nohoisted packages like @swc)
     // Then fall back to root node_modules for other packages

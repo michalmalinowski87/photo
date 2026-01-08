@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/use-auth";
 const MobileNavbar = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const { isAuthenticated, isLoading } = useAuth();
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
 
   const handleClose = () => {
     setIsOpen(false);

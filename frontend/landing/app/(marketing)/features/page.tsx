@@ -86,7 +86,7 @@ export default function FeaturesPage() {
             Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoCloud.
           </p>
           <Button asChild size="lg">
-            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
+            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}>
               Rozpocznij za darmo
             </Link>
           </Button>

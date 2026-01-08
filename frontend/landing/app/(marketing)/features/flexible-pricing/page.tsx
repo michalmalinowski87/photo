@@ -20,7 +20,7 @@ const FlexiblePricingPage = () => {
             </p>
             <div className="flex items-center justify-center gap-x-4 mt-8">
               <Button size="sm" asChild>
-                <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
+                <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}>
                   Rozpocznij za darmo
                 </Link>
               </Button>
@@ -52,7 +52,7 @@ const FlexiblePricingPage = () => {
               </p>
               <div className="mt-6">
                 <Button asChild>
-                  <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`} className="flex items-center">
+                  <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`} className="flex items-center">
                     Rozpocznij za darmo
                     <ArrowRightIcon className="w-4 h-4 ml-2" />
                   </Link>

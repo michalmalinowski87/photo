@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 const Navbar = () => {
   const [scroll, setScroll] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
 
   const handleScroll = () => {
     if (window.scrollY > 8) {
