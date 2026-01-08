@@ -18,7 +18,7 @@ export default function ConfirmEmailPage() {
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+    const clientId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
 
     if (userPoolId && clientId) {
       initAuth(userPoolId, clientId);
@@ -96,7 +96,7 @@ export default function ConfirmEmailPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-light-3 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: 'var(--light-3)' }}>
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-block mb-6">
@@ -104,16 +104,16 @@ export default function ConfirmEmailPage() {
               PhotoCloud
             </span>
           </Link>
-          <h2 className="text-3xl font-bold text-black">Potwierdź email</h2>
-          <p className="mt-2 text-sm text-dark-3">
-            Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres <strong>{email}</strong>
+          <h2 className="text-3xl font-bold" style={{ color: 'var(--black)' }}>Potwierdź email</h2>
+          <p className="mt-2 text-sm" style={{ color: 'var(--dark-3)' }}>
+            Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres <strong style={{ color: 'var(--dark-2)' }}>{email}</strong>
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-3">
+        <div className="rounded-lg shadow-lg p-8 border" style={{ backgroundColor: 'var(--white)', borderColor: 'var(--gray-3)' }}>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="code" className="block text-sm font-medium text-dark-2 mb-2">
+              <label htmlFor="code" className="block text-sm font-medium mb-2" style={{ color: 'var(--dark-2)' }}>
                 Kod weryfikacyjny
               </label>
               <input
@@ -123,9 +123,21 @@ export default function ConfirmEmailPage() {
                 required
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-3 rounded-lg placeholder-dark-3 text-dark-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center text-2xl tracking-widest"
+                className="appearance-none relative block w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all text-center text-2xl tracking-widest"
+                style={{
+                  borderColor: 'var(--gray-3)',
+                  color: 'var(--dark-2)',
+                }}
                 placeholder="000000"
                 maxLength={6}
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'var(--primary)';
+                  e.target.style.boxShadow = '0 0 0 2px rgba(139, 111, 87, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'var(--gray-3)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
 
@@ -133,7 +145,20 @@ export default function ConfirmEmailPage() {
               <button
                 type="submit"
                 disabled={isLoading || code.length !== 6}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                style={{
+                  backgroundColor: isLoading || code.length !== 6 ? 'var(--gray-4)' : 'var(--primary)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading && code.length === 6) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary-dark)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading && code.length === 6) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary)';
+                  }
+                }}
               >
                 {isLoading ? 'Potwierdzanie...' : 'Potwierdź email'}
               </button>
@@ -144,7 +169,8 @@ export default function ConfirmEmailPage() {
                 type="button"
                 onClick={handleResendCode}
                 disabled={resending || resendCooldown > 0}
-                className="text-sm font-medium text-primary hover:text-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ color: 'var(--primary)' }}
               >
                 {resending
                   ? 'Wysyłanie...'
@@ -157,13 +183,14 @@ export default function ConfirmEmailPage() {
         </div>
 
         <div className="text-center">
-          <p className="text-sm text-dark-3">
+          <p className="text-sm" style={{ color: 'var(--dark-3)' }}>
             Nie otrzymałeś kodu? Sprawdź folder spam lub{' '}
             <button
               type="button"
               onClick={handleResendCode}
               disabled={resending || resendCooldown > 0}
-              className="font-medium text-primary hover:text-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+              className="font-medium hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ color: 'var(--primary)' }}
             >
               wyślij ponownie
             </button>
@@ -173,4 +200,3 @@ export default function ConfirmEmailPage() {
     </div>
   );
 }
-

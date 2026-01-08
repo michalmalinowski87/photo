@@ -74,7 +74,7 @@ export default function NavbarBusiness() {
                 <div className={`collapse navbar-collapse sub-menu-bar ${isMenuOpen ? 'show' : ''}`} id="navbarNine">
                   <ul className="navbar-nav me-auto">
                     <li className="nav-item">
-                      <Link className="page-scroll active" href="#hero-area">
+                      <Link className="page-scroll active" href={`${dashboardUrl}/sign-up`}>
                         Start
                       </Link>
                     </li>
@@ -88,11 +88,6 @@ export default function NavbarBusiness() {
                         Cennik
                       </Link>
                     </li>
-                    <li className="nav-item">
-                      <Link className="page-scroll" href="#contact">
-                        Kontakt
-                      </Link>
-                    </li>
                     {!isLoading && isAuthenticated && (
                       <li className="nav-item">
                         <Link className="page-scroll" href={`${dashboardUrl}/`}>
@@ -101,6 +96,17 @@ export default function NavbarBusiness() {
                       </li>
                     )}
                   </ul>
+                  
+                  {/* Right side: Login link */}
+                  {!isLoading && !isAuthenticated && (
+                    <ul className="navbar-nav ms-auto d-none d-lg-flex">
+                      <li className="nav-item">
+                        <Link className="page-scroll" href={`${dashboardUrl}/login`}>
+                          Logowanie
+                        </Link>
+                      </li>
+                    </ul>
+                  )}
                 </div>
 
                 <div className="navbar-btn d-none d-lg-inline-block">
@@ -150,7 +156,7 @@ export default function NavbarBusiness() {
             <h5 className="menu-title">Szybkie Linki</h5>
             <ul>
               <li>
-                <Link href="#hero-area" onClick={() => setIsSidebarOpen(false)}>
+                <Link href={`${dashboardUrl}/sign-up`} onClick={() => setIsSidebarOpen(false)}>
                   Start
                 </Link>
               </li>
@@ -164,15 +170,16 @@ export default function NavbarBusiness() {
                   Cennik
                 </Link>
               </li>
-              <li>
-                <Link href="#contact" onClick={() => setIsSidebarOpen(false)}>
-                  Kontakt
-                </Link>
-              </li>
-              {!isLoading && isAuthenticated && (
+              {!isLoading && isAuthenticated ? (
                 <li>
                   <Link href={`${dashboardUrl}/`} onClick={() => setIsSidebarOpen(false)}>
                     Dashboard
+                  </Link>
+                </li>
+              ) : (
+                <li>
+                  <Link href={`${dashboardUrl}/login`} onClick={() => setIsSidebarOpen(false)}>
+                    Logowanie
                   </Link>
                 </li>
               )}

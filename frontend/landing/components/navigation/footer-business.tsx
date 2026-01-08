@@ -44,7 +44,6 @@ export default function FooterBusiness() {
                     <li><Link href="#pricing">Cennik</Link></li>
                     <li><Link href="/resources/help">Pomoc</Link></li>
                     <li><Link href="/resources/help">FAQ</Link></li>
-                    <li><Link href="#contact">Kontakt</Link></li>
                   </ul>
                 </div>
               </div>

@@ -16,7 +16,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-    const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+    const clientId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
 
     if (userPoolId && clientId) {
       initAuth(userPoolId, clientId);
@@ -29,7 +29,7 @@ export default function LoginPage() {
 
     try {
       const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
-      const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+      const clientId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
 
       if (!userPoolId || !clientId) {
         throw new Error('Auth configuration missing');
@@ -70,7 +70,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-light-3 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: 'var(--light-3)' }}>
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-block mb-6">
@@ -78,19 +78,19 @@ export default function LoginPage() {
               PhotoCloud
             </span>
           </Link>
-          <h2 className="text-3xl font-bold text-black">Zaloguj się</h2>
-          <p className="mt-2 text-sm text-dark-3">
+          <h2 className="text-3xl font-bold" style={{ color: 'var(--black)' }}>Zaloguj się</h2>
+          <p className="mt-2 text-sm" style={{ color: 'var(--dark-3)' }}>
             Lub{' '}
-            <Link href="/auth/signup" className="font-medium text-primary hover:text-primary-dark">
+            <Link href="/auth/signup" className="font-medium hover:opacity-80 transition-opacity" style={{ color: 'var(--primary)' }}>
               utwórz nowe konto
             </Link>
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-3">
+        <div className="rounded-lg shadow-lg p-8 border" style={{ backgroundColor: 'var(--white)', borderColor: 'var(--gray-3)' }}>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-dark-2 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: 'var(--dark-2)' }}>
                 Email
               </label>
               <input
@@ -101,13 +101,25 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-3 rounded-lg placeholder-dark-3 text-dark-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="appearance-none relative block w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                style={{
+                  borderColor: 'var(--gray-3)',
+                  color: 'var(--dark-2)',
+                }}
                 placeholder="twoj@email.pl"
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'var(--primary)';
+                  e.target.style.boxShadow = '0 0 0 2px rgba(139, 111, 87, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'var(--gray-3)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-dark-2 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: 'var(--dark-2)' }}>
                 Hasło
               </label>
               <input
@@ -118,8 +130,20 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-3 rounded-lg placeholder-dark-3 text-dark-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="appearance-none relative block w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                style={{
+                  borderColor: 'var(--gray-3)',
+                  color: 'var(--dark-2)',
+                }}
                 placeholder="••••••••"
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'var(--primary)';
+                  e.target.style.boxShadow = '0 0 0 2px rgba(139, 111, 87, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'var(--gray-3)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
 
@@ -129,9 +153,13 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-primary focus:ring-primary border-gray-3 rounded"
+                  className="h-4 w-4 rounded border transition-all focus:ring-2"
+                  style={{
+                    borderColor: 'var(--gray-3)',
+                    accentColor: 'var(--primary)',
+                  }}
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-dark-3">
+                <label htmlFor="remember-me" className="ml-2 block text-sm" style={{ color: 'var(--dark-3)' }}>
                   Zapamiętaj mnie
                 </label>
               </div>
@@ -139,7 +167,8 @@ export default function LoginPage() {
               <div className="text-sm">
                 <Link
                   href="/auth/reset-password"
-                  className="font-medium text-primary hover:text-primary-dark"
+                  className="font-medium hover:opacity-80 transition-opacity"
+                  style={{ color: 'var(--primary)' }}
                 >
                   Zapomniałeś hasła?
                 </Link>
@@ -150,7 +179,20 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                style={{
+                  backgroundColor: isLoading ? 'var(--gray-4)' : 'var(--primary)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary-dark)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary)';
+                  }
+                }}
               >
                 {isLoading ? 'Logowanie...' : 'Zaloguj się'}
               </button>
@@ -158,10 +200,10 @@ export default function LoginPage() {
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-3"></div>
+                <div className="w-full border-t" style={{ borderColor: 'var(--gray-3)' }}></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-dark-3">Lub</span>
+                <span className="px-2" style={{ backgroundColor: 'var(--white)', color: 'var(--dark-3)' }}>Lub</span>
               </div>
             </div>
 
@@ -169,7 +211,18 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleCognitoLogin}
-                className="w-full flex justify-center py-3 px-4 border border-primary text-sm font-medium rounded-lg text-primary bg-white hover:bg-light-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                className="w-full flex justify-center py-3 px-4 border text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all"
+                style={{
+                  borderColor: 'var(--primary)',
+                  color: 'var(--primary)',
+                  backgroundColor: 'var(--white)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--light-1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--white)';
+                }}
               >
                 Zaloguj się przez Cognito Hosted UI
               </button>
@@ -180,4 +233,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

@@ -2,58 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Auth-specific styles - landing page theme for authentication pages */
-/* ALWAYS dark mode - dashboard theme should NEVER affect auth pages */
+/* Auth-specific styles - landing page light theme for authentication pages */
+/* Matches the landing page's brown/beige color scheme */
 @layer base {
-  /* Force dark mode for auth pages - override everything */
+  /* Force light theme for auth pages - override everything */
   html:has(.auth-layout),
   html .auth-layout,
   .auth-layout {
-    --foreground: 0 0% 98% !important;
-    --background: 0 0% 3.9% !important;
+    /* Landing page color scheme */
+    --foreground: 30 26 23; /* var(--black) #1E1A17 */
+    --background: 255 250 245; /* var(--light-3) #FFFAF5 */
 
-    --card: 0 0% 3.9% !important;
-    --card-foreground: 0 0% 98% !important;
+    --card: 255 255 255; /* var(--white) */
+    --card-foreground: 30 26 23; /* var(--black) */
 
-    --popover: 0 0% 3.9% !important;
-    --popover-foreground: 0 0% 98% !important;
+    --popover: 255 255 255; /* var(--white) */
+    --popover-foreground: 30 26 23; /* var(--black) */
 
-    --primary: 0 0% 98% !important;
-    --primary-foreground: 0 0% 9% !important;
+    --primary: 139 111 87; /* var(--primary) #8B6F57 */
+    --primary-foreground: 255 255 255; /* var(--white) */
 
-    /* Theme colors - matching landing page */
-    --theme-primary: 108, 39, 157 !important;
-    --theme-secondary: 0, 135, 255 !important;
+    --secondary: 240 228 215; /* var(--gray-4) */
+    --secondary-foreground: 30 26 23; /* var(--black) */
 
-    --secondary: 0 0% 14.9% !important;
-    --secondary-foreground: 0 0% 98% !important;
+    --muted: 240 228 215; /* var(--gray-4) */
+    --muted-foreground: 90 77 66; /* var(--dark-3) */
 
-    --muted: 0 0% 14.9% !important;
-    --muted-foreground: 0 0% 63.9% !important;
+    --accent: 139 111 87; /* var(--primary) */
+    --accent-foreground: 255 255 255; /* var(--white) */
 
-    --accent: 0 0% 14.9% !important;
-    --accent-foreground: 0 0% 98% !important;
+    --destructive: 201 103 90; /* var(--error) #C9675A */
+    --destructive-foreground: 255 255 255; /* var(--white) */
 
-    --destructive: 0 62.8% 30.6% !important;
-    --destructive-foreground: 0 0% 98% !important;
+    --border: 227 211 196; /* var(--gray-3) #E3D3C4 */
+    --input: 255 255 255; /* var(--white) */
+    --ring: 139 111 87; /* var(--primary) */
 
-    --border: 0 0% 14.9% !important;
-    --input: 0 0% 14.9% !important;
-    --ring: 0 0% 83.1% !important;
-
-    --radius: 0.5rem !important;
+    --radius: 0.5rem;
   }
 
-  /* Force dark background and text colors */
+  /* Force light background and dark text colors */
   html:has(.auth-layout) body,
   .auth-layout {
-    background-color: hsl(0 0% 3.9%) !important;
-    color: hsl(0 0% 98%) !important;
+    background-color: #FFFAF5 !important; /* var(--light-3) */
+    color: #2D241F !important; /* var(--dark-2) */
   }
 }
 
 ::selection {
-  background-color: rgba(168, 85, 247, 0.2);
+  background-color: rgba(139, 111, 87, 0.2); /* var(--primary) with opacity */
   color: hsl(var(--foreground));
 }
 
@@ -64,11 +61,11 @@ body {
 
 ::-webkit-scrollbar {
   width: 6px;
-  scrollbar-color: #262626;
+  scrollbar-color: #E3D3C4; /* var(--gray-3) */
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #262626;
+  background-color: #E3D3C4; /* var(--gray-3) */
   border-radius: 3px;
 }
 
@@ -79,50 +76,93 @@ body {
 .gradient {
   background: conic-gradient(
     from 230.29deg at 51.63% 52.16%,
-    rgba(var(--theme-secondary), 1) 0deg,
-    rgba(var(--theme-secondary), 0.9) 67.5deg,
-    rgba(var(--theme-primary), 0.8) 198.75deg,
-    rgba(var(--theme-secondary), 0.7) 251.25deg,
-    rgba(var(--theme-secondary), 0.85) 301.88deg,
-    rgba(var(--theme-primary), 0.95) 360deg
+    rgba(139, 111, 87, 1) 0deg, /* var(--primary) */
+    rgba(139, 111, 87, 0.9) 67.5deg,
+    rgba(122, 95, 74, 0.8) 198.75deg, /* var(--primary-dark) */
+    rgba(139, 111, 87, 0.7) 251.25deg,
+    rgba(139, 111, 87, 0.85) 301.88deg,
+    rgba(122, 95, 74, 0.95) 360deg
   );
 }
 
 .not-found {
-  box-shadow: rgba(150, 18, 226, 0.3) 5px 5px;
+  box-shadow: rgba(139, 111, 87, 0.3) 5px 5px; /* var(--primary) */
 }
 
-/* Auth-specific styles - FORCE dark mode, override ALL dashboard styles */
+/* Auth-specific styles - FORCE light theme, override ALL dashboard styles */
 .auth-layout,
 html:has(.auth-layout),
 html:has(.auth-layout) body {
   font-family: "Inter", sans-serif !important;
-  background-color: hsl(0 0% 3.9%) !important;
-  color: hsl(0 0% 98%) !important;
+  background-color: #FFFAF5 !important; /* var(--light-3) */
+  color: #2D241F !important; /* var(--dark-2) */
 }
 
 /* Override globals.css body styles for auth pages */
 html:has(.auth-layout) body {
-  background-color: hsl(0 0% 3.9%) !important;
-  color: hsl(0 0% 98%) !important;
+  background-color: #FFFAF5 !important; /* var(--light-3) */
+  color: #2D241F !important; /* var(--dark-2) */
 }
 
-/* Force all text elements to be light colored */
+/* Force all text elements to use dark colors */
 .auth-layout,
 .auth-layout * {
-  color: hsl(0 0% 98%) !important;
+  color: #2D241F !important; /* var(--dark-2) */
 }
 
-/* Force input fields to have dark background */
+/* Dark buttons should have white text - override the general rule */
+.auth-layout button[class*="bg-photographer-accent"],
+.auth-layout button[class*="bg-primary"],
+.auth-layout button[class*="bg-brand"],
+.auth-layout button[class*="text-white"],
+.auth-layout button[style*="background-color"][style*="#8B6F57"],
+.auth-layout button[style*="background-color"][style*="#7A5F4A"],
+.auth-layout button[style*="background-color"][style*="rgb(139, 111, 87)"],
+.auth-layout button[style*="background-color"][style*="rgb(122, 95, 74)"],
+.auth-layout button[style*="background-color"][style*="hsl(139"],
+.auth-layout .btn-primary,
+.auth-layout button.variant-primary {
+  color: #FFFFFF !important; /* white text on dark buttons */
+}
+
+/* Specifically target primary variant buttons */
+.auth-layout button.bg-photographer-accent,
+.auth-layout button.bg-photographer-accentHover {
+  color: #FFFFFF !important;
+}
+
+/* Force input fields to have light background */
 .auth-layout input,
 .auth-layout textarea,
 .auth-layout select {
-  background-color: hsl(0 0% 14.9%) !important;
-  color: hsl(0 0% 98%) !important;
-  border-color: hsl(0 0% 14.9%) !important;
+  background-color: #FFFFFF !important; /* var(--white) */
+  color: #2D241F !important; /* var(--dark-2) */
+  border-color: #E3D3C4 !important; /* var(--gray-3) */
 }
 
-/* Force labels to be light */
+/* Force labels to be dark */
 .auth-layout label {
-  color: hsl(0 0% 98%) !important;
+  color: #2D241F !important; /* var(--dark-2) */
+}
+
+/* PhotoCloud brand styling - larger with less padding/margin */
+.auth-layout a span.text-xl,
+.auth-layout a span[style*="#465fff"],
+.auth-layout a span[style*="color"] {
+  font-size: 2rem !important; /* Larger than text-xl (1.25rem) - equivalent to text-4xl */
+  font-weight: 700 !important;
+  color: #8B6F57 !important; /* var(--primary) brown */
+  line-height: 1.2 !important;
+}
+
+/* Reduce padding on PhotoCloud container */
+.auth-layout .flex.items-center.w-full.border-b {
+  padding-top: 0.5rem !important; /* py-8 (2rem) -> py-2 (0.5rem) */
+  padding-bottom: 0.5rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Reduce gap in PhotoCloud link */
+.auth-layout a.flex.items-center.gap-x-2 {
+  gap: 0.25rem !important; /* gap-x-2 (0.5rem) -> smaller */
 }

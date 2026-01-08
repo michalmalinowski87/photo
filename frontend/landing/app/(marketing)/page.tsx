@@ -28,18 +28,6 @@ export default function HomePage() {
                   <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn">
                     Rozpocznij za darmo
                   </Link>
-                  <a
-                    href="#"
-                    className="glightbox video-button"
-                    data-glightbox="type: video"
-                    data-glightbox-source="youtube"
-                    data-glightbox-href="#"
-                  >
-                    <span className="btn icon-btn rounded-full">
-                      <i className="lni lni-play"></i>
-                    </span>
-                    <span className="text">Zobacz Wprowadzenie</span>
-                  </a>
                 </div>
               </div>
             </div>

@@ -27,7 +27,7 @@
 		for (var i = 0; i < sections.length; i++) {
 			var currLink = sections[i];
 			var val = currLink.getAttribute('href');
-			if (!val || val === '#' || val === 'javascript:void(0)') {
+			if (!val || val === '#' || val === 'javascript:void(0)' || val.startsWith('http://') || val.startsWith('https://') || !val.startsWith('#')) {
 				continue;
 			}
 			var refElement = document.querySelector(val);
@@ -54,11 +54,12 @@
 
     pageLink.forEach(elem => {
         elem.addEventListener('click', e => {
-            e.preventDefault();
             var href = elem.getAttribute('href');
-            if (!href || href === '#' || href === 'javascript:void(0)') {
+            if (!href || href === '#' || href === 'javascript:void(0)' || href.startsWith('http://') || href.startsWith('https://') || !href.startsWith('#')) {
+                // Allow default behavior for external URLs and non-hash links
                 return;
             }
+            e.preventDefault();
             var targetElement = document.querySelector(href);
             if (targetElement) {
                 var headerOffset = 73;
