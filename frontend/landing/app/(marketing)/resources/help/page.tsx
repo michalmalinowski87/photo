@@ -14,7 +14,7 @@ import Link from "next/link";
 const faqCategories = [
   {
     id: "getting-started",
-    title: "Rozpoczęcie",
+    title: "Najczęstsze pytania",
     color: "var(--primary)",
     items: [
       {
@@ -93,29 +93,42 @@ const gettingStartedSteps = [
 const HelpPage = () => {
   return (
     <>
-    <MaxWidthWrapper className="py-20">
-      <AnimationContainer delay={0.1}>
-        <div className="flex flex-col items-center justify-center py-10 max-w-lg mx-auto">
-          <MagicBadge title="Pomoc" />
-          <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold font-heading text-center mt-6 !leading-tight text-foreground">
-            Centrum pomocy
-          </h1>
-          <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
-            Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PhotoCloud.
-          </p>
+      {/* Hero Section */}
+      <section id="help-hero" className="help-hero-area">
+        <div className="container">
+          <AnimationContainer delay={0.1}>
+            <div className="flex flex-col items-center justify-center max-w-lg mx-auto">
+              <MagicBadge title="Pomoc" />
+              <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold font-heading text-center mt-6 !leading-tight text-foreground">
+                Centrum pomocy
+              </h1>
+              <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
+                Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PhotoCloud.
+              </p>
+            </div>
+          </AnimationContainer>
         </div>
-      </AnimationContainer>
+      </section>
 
-      <AnimationContainer delay={0.2}>
-        <div className="mt-20 px-4 md:px-0">
-          <div className="section-title-five">
-            <h6>FAQ</h6>
-            <h2 className="fw-bold">Najczęściej zadawane pytania</h2>
-            <p>
-              Masz pytania? Przygotowaliśmy odpowiedzi na najważniejsze zagadnienia, aby rozwiać wątpliwości i pokazać, jak proste jest korzystanie z PhotoCloud.
-            </p>
-          </div>
+      {/* FAQ Section */}
+      <section id="faq" className="faq-area">
+        <div className="section-title-five">
           <div className="container">
+            <div className="row">
+              <div className="col-12">
+                <div className="content">
+                  <h6>FAQ</h6>
+                  <h2 className="fw-bold">Najczęściej zadawane pytania</h2>
+                  <p>
+                    Masz pytania? Przygotowaliśmy odpowiedzi na najważniejsze zagadnienia, aby rozwiać wątpliwości i pokazać, jak proste jest korzystanie z PhotoCloud.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="container">
+          <AnimationContainer delay={0.2}>
             <div className="row justify-content-center">
               <div className="col-lg-10">
                 <div className="faq-categories-wrapper">
@@ -143,20 +156,29 @@ const HelpPage = () => {
                 </div>
               </div>
             </div>
+          </AnimationContainer>
+        </div>
+      </section>
+
+      {/* Getting Started Section */}
+      <section id="getting-started" className="getting-started-area">
+        <div className="section-title-five">
+          <div className="container">
+            <div className="row">
+              <div className="col-12">
+                <div className="content">
+                  <h6>Przewodnik</h6>
+                  <h2 className="fw-bold">Jak rozpocząć?</h2>
+                  <p>
+                    Wykonaj te 6 prostych kroków, aby rozpocząć korzystanie z PhotoCloud i udostępniać zdjęcia klientom w profesjonalny sposób.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </AnimationContainer>
-
-      <AnimationContainer delay={0.3}>
-        <div className="mt-20 px-4 md:px-0">
-          <div className="section-title-five">
-            <h6>Przewodnik</h6>
-            <h2 className="fw-bold">Jak rozpocząć?</h2>
-            <p>
-              Wykonaj te 6 prostych kroków, aby rozpocząć korzystanie z PhotoCloud i udostępniać zdjęcia klientom w profesjonalny sposób.
-            </p>
-          </div>
-          <div className="container">
+        <div className="container">
+          <AnimationContainer delay={0.3}>
             <div className="row justify-content-center">
               <div className="col-lg-10">
                 <div className="row">
@@ -174,12 +196,12 @@ const HelpPage = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </AnimationContainer>
         </div>
-      </AnimationContainer>
+      </section>
 
       {/* CTA Section */}
-      <section id="call-action" className="call-action mt-20">
+      <section id="call-action" className="call-action">
         <div className="container">
           <div className="row justify-content-center">
             <div className="col-xxl-6 col-xl-7 col-lg-8 col-md-9">
@@ -204,7 +226,6 @@ const HelpPage = () => {
           </div>
         </div>
       </section>
-    </MaxWidthWrapper>
     </>
   )
 };

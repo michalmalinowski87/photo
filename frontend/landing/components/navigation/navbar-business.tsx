@@ -10,9 +10,15 @@ export default function NavbarBusiness() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const [activeLink, setActiveLink] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
   const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+
+  // Track when component has mounted to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Close sidebar when clicking overlay
@@ -49,6 +55,9 @@ export default function NavbarBusiness() {
   }, [isSidebarOpen]);
 
   useEffect(() => {
+    // Only run scroll handlers after component has mounted to avoid hydration mismatch
+    if (!mounted) return;
+
     // Handle sticky navbar
     const handleScroll = () => {
       const headerNavbar = document.querySelector('.navbar-area');
@@ -64,9 +73,12 @@ export default function NavbarBusiness() {
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
+    // Only run scroll handlers after component has mounted to avoid hydration mismatch
+    if (!mounted) return;
+
     // Handle active link based on scroll position
     const handleScrollActive = () => {
       const scrollPos = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
@@ -111,11 +123,11 @@ export default function NavbarBusiness() {
     return () => {
       window.removeEventListener('scroll', handleScrollActive);
     };
-  }, []);
+  }, [mounted]);
 
   return (
     <>
-      <section className={`navbar-area navbar-nine ${isSticky ? 'sticky' : ''}`}>
+      <section className={`navbar-area navbar-nine ${mounted && isSticky ? 'sticky' : ''}`}>
         <div className="container">
           <div className="row">
             <div className="col-lg-12">
@@ -144,7 +156,7 @@ export default function NavbarBusiness() {
                   <ul className="navbar-nav me-auto">
                     <li className="nav-item">
                       <Link 
-                        className={`page-scroll ${(!activeLink && pathname === '/') ? 'active' : ''}`} 
+                        className={`page-scroll ${mounted && (!activeLink && pathname === '/') ? 'active' : ''}`} 
                         href={`${dashboardUrl}/sign-up`}
                       >
                         Start
@@ -152,7 +164,7 @@ export default function NavbarBusiness() {
                     </li>
                     <li className="nav-item">
                       <Link 
-                        className={`page-scroll ${activeLink === '#services' ? 'active' : ''}`} 
+                        className={`page-scroll ${mounted && activeLink === '#services' ? 'active' : ''}`} 
                         href="#services"
                       >
                         Funkcje
@@ -160,28 +172,35 @@ export default function NavbarBusiness() {
                     </li>
                     <li className="nav-item">
                       <Link 
-                        className={`page-scroll ${activeLink === '#pricing' ? 'active' : ''}`} 
+                        className={`page-scroll ${mounted && activeLink === '#pricing' ? 'active' : ''}`} 
                         href="#pricing"
                       >
                         Cennik
                       </Link>
                     </li>
-                    {!isLoading && isAuthenticated && (
-                      <li className="nav-item">
-                        <Link className="page-scroll" href={`${dashboardUrl}/`}>
-                          Dashboard
-                        </Link>
-                      </li>
-                    )}
+                    <li className="nav-item">
+                      <Link 
+                        className={`page-scroll ${mounted && pathname === '/resources/help' ? 'active' : ''}`} 
+                        href="/resources/help"
+                      >
+                        FAQ
+                      </Link>
+                    </li>
                   </ul>
                   
-                  {/* Right side: Login link */}
-                  {!isLoading && !isAuthenticated && (
+                  {/* Right side: Dashboard when logged in, Login when not */}
+                  {!isLoading && (
                     <ul className="navbar-nav ms-auto d-none d-lg-flex">
                       <li className="nav-item">
-                        <Link className="page-scroll" href={`${dashboardUrl}/login`}>
-                          Logowanie
-                        </Link>
+                        {isAuthenticated ? (
+                          <Link className="page-scroll" href={`${dashboardUrl}/`}>
+                            Dashboard
+                          </Link>
+                        ) : (
+                          <Link className="page-scroll" href={`${dashboardUrl}/login`}>
+                            Logowanie
+                          </Link>
+                        )}
                       </li>
                     </ul>
                   )}
@@ -246,6 +265,11 @@ export default function NavbarBusiness() {
               <li>
                 <Link href="#pricing" onClick={() => setIsSidebarOpen(false)}>
                   Cennik
+                </Link>
+              </li>
+              <li>
+                <Link href="/resources/help" onClick={() => setIsSidebarOpen(false)}>
+                  FAQ
                 </Link>
               </li>
               {!isLoading && isAuthenticated ? (

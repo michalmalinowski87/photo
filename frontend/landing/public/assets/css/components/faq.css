@@ -99,11 +99,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  transition: none !important;
+  cursor: pointer;
 }
 
 .faq-category-trigger:hover {
   color: var(--white) !important;
   opacity: 0.95;
+}
+
+.faq-category-item[data-state="open"] .faq-category-trigger svg {
+  transform: rotate(180deg);
 }
 
 .faq-category-item[data-state="open"] .faq-category-trigger {
@@ -115,9 +121,10 @@
   color: var(--white) !important;
   opacity: 0.7;
   flex-shrink: 0;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
   width: 16px;
   height: 16px;
+  transform-origin: center;
 }
 
 .faq-category-item[data-state="open"] .faq-category-trigger svg {
@@ -135,44 +142,62 @@
   font-weight: 400 !important;
 }
 
+/* Override Radix UI default transitions for faster animation */
+.faq-category-item [data-radix-accordion-content] {
+  transition: none !important;
+}
+
+.faq-category-item [data-radix-accordion-content] > div {
+  transition: none !important;
+}
+
 /* ============================================
-   ACCORDION CONTENT ANIMATION
+   ACCORDION CONTENT ANIMATION - Optimized for speed
    ============================================ */
 @keyframes accordion-down {
   from {
     height: 0;
-    opacity: 0;
   }
   to {
     height: var(--radix-accordion-content-height);
-    opacity: 1;
   }
 }
 
 @keyframes accordion-up {
   from {
     height: var(--radix-accordion-content-height);
-    opacity: 1;
   }
   to {
     height: 0;
-    opacity: 0;
   }
 }
 
-.faq-category-item [data-state="open"] [data-radix-accordion-content],
-.faq-category-item [data-state="open"] .faq-category-content-text {
-  animation: accordion-down 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.faq-category-item [data-radix-accordion-content] {
+  animation-duration: 0.15s !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-.faq-category-item [data-state="closed"] [data-radix-accordion-content],
-.faq-category-item [data-state="closed"] .faq-category-content-text {
-  animation: accordion-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.faq-category-item [data-state="open"] [data-radix-accordion-content] {
+  animation-name: accordion-down !important;
+}
+
+.faq-category-item [data-state="closed"] [data-radix-accordion-content] {
+  animation-name: accordion-up !important;
 }
 
 /* ============================================
    GETTING STARTED CARDS - Modern Borderless Design
    ============================================ */
+.getting-started-area .row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.getting-started-area .row > [class*="col-"] {
+  display: flex;
+  flex-direction: column;
+}
+
 .getting-started-card {
   border: none !important;
   border-radius: 16px !important;
@@ -180,9 +205,23 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1) !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   height: 100%;
+  min-height: 280px; /* Fixed minimum height for all cards */
   padding: 32px !important;
   display: flex;
   flex-direction: column;
+}
+
+@media only screen and (min-width: 992px) {
+  .getting-started-card {
+    min-height: 300px; /* Taller on larger screens */
+  }
+}
+
+@media (max-width: 767px) {
+  .getting-started-card {
+    min-height: 260px; /* Shorter on mobile */
+    padding: 24px !important;
+  }
 }
 
 .getting-started-card * {
@@ -215,12 +254,14 @@
   color: var(--dark-1);
   margin-bottom: 12px;
   line-height: 1.4;
+  flex-shrink: 0; /* Prevent title from shrinking */
 }
 
 .getting-started-card p {
   font-size: 0.9375rem;
   color: var(--dark-3);
-  line-height: 1.6;
+  line-height: 1.65; /* Consistent line-height for uniform appearance */
   margin: 0;
-  flex-grow: 1;
+  flex: 1; /* Fill available space */
 }
+

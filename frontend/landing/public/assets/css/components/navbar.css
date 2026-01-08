@@ -103,10 +103,16 @@
 /* ============================================
    NAVBAR NAV
    ============================================ */
+@media only screen and (min-width: 992px) and (max-width: 1199px) {
+  .navbar-area.navbar-nine .navbar .navbar-nav {
+    margin-left: 50px;
+  }
+}
+
 @media only screen and (min-width: 1200px) and (max-width: 1399px),
   only screen and (min-width: 1400px) {
   .navbar-area.navbar-nine .navbar .navbar-nav {
-    margin-left: 80px;
+    margin-left: 60px;
   }
 }
 
