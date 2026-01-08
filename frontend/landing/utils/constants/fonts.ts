@@ -33,3 +33,13 @@ export const inter = Inter({
   variable: "--font-inter",
 });
 
+// LineIcons is an icon font - we'll optimize its loading via CSS import in layout
+// The font file will be loaded efficiently by Next.js when CSS references it
+// Note: Icon fonts require CSS classes, so we keep the CSS import but optimize loading
+export const lineIcons = localFont({
+  src: "../../public/assets/fonts/LineIcons.woff2",
+  variable: "--font-lineicons",
+  display: "swap",
+  preload: false, // Icon fonts are loaded on-demand via CSS classes
+});
+

@@ -30,9 +30,8 @@ const BlurImage = ({ src, alt, className, ...props }: Props) => {
     return (
         <Image
             {...props}
-            src={src}
+            src={url}
             alt={alt}
-            unoptimized
             onLoad={handleLoad}
             className={cn(isLoading ? "filter blur-sm" : "blur-0", className)}
         />

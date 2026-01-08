@@ -6,9 +6,9 @@ import { RefObject, useEffect, useId, useState } from "react";
 
 export interface AnimatedBeamProps {
     className?: string;
-    containerRef: RefObject<HTMLElement>; // Container ref
-    fromRef: RefObject<HTMLElement>;
-    toRef: RefObject<HTMLElement>;
+    containerRef: RefObject<HTMLElement | null>; // Container ref
+    fromRef: RefObject<HTMLElement | null>;
+    toRef: RefObject<HTMLElement | null>;
     curvature?: number;
     reverse?: boolean;
     pathColor?: string;
@@ -33,7 +33,6 @@ export const AnimatedBeam = ({
     reverse = false, // Include the reverse prop
     duration = Math.random() * 3 + 4,
     delay = 0,
-}: AnimatedBeamProps) => {
     pathColor = "gray",
     pathWidth = 2,
     pathOpacity = 0.2,
@@ -43,7 +42,7 @@ export const AnimatedBeam = ({
     startYOffset = 0,
     endXOffset = 0,
     endYOffset = 0,
-}) => {
+}: AnimatedBeamProps) => {
     const id = useId();
     const [pathD, setPathD] = useState("");
     const [svgDimensions, setSvgDimensions] = useState({ width: 0, height: 0 });

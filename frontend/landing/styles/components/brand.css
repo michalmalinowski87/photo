@@ -1,0 +1,54 @@
+/**
+ * Brand/Client Logos Component Styles
+ * 
+ * Styles for brand area and client logos.
+ */
+
+/* ============================================
+   BRAND AREA
+   ============================================ */
+.brand-area {
+  padding: 100px 0;
+  background: var(--light-3); /* photographer-background */
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .brand-area {
+    padding: 80px 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .brand-area {
+    padding: 60px 0;
+  }
+}
+
+.brand-area .clients-logos {
+  text-align: center;
+  display: inline-block;
+  margin-top: 20px;
+}
+
+.brand-area .clients-logos .single-image {
+  display: inline-block;
+  margin: 13px 10px;
+  background-color: var(--white);
+  line-height: 100px;
+  padding: 8px 25px;
+  border-radius: var(--radius-md);
+  transition: var(--transition-slow);
+  border: 1px solid var(--gray-3);
+}
+
+.brand-area .clients-logos .single-image:hover {
+  box-shadow: 0px 10px 30px rgba(16, 24, 40, 0.05);
+  transform: translateY(-5px);
+}
+
+.brand-area .clients-logos img {
+  max-width: 170px;
+  transition: var(--transition-slow);
+  cursor: pointer;
+}
+

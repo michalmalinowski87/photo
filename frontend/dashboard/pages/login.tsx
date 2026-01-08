@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
 import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 import { useAuth } from "../context/AuthProvider";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
@@ -172,21 +173,25 @@ export default function Login() {
       }
 
       void router.push(returnUrl);
+      // Keep loading true - overlay will stay until redirect completes
     } catch (err) {
       const error = err as CognitoError;
       // Handle Cognito errors
       if (error.code === "NotAuthorizedException" || error.code === "UserNotFoundException") {
+        setLoading(false); // Hide overlay on error so user can see the error message
         setError("Nieprawidłowy email lub hasło");
       } else if (error.code === "UserNotConfirmedException") {
         setError("Konto nie zostało zweryfikowane. Sprawdź email z kodem weryfikacyjnym.");
+        // Keep loading true - overlay will stay until redirect completes
         void router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-      } else if (error.message) {
-        setError(error.message);
       } else {
-        setError("Nie udało się zalogować. Spróbuj ponownie.");
+        setLoading(false); // Hide overlay on error so user can see the error message
+        if (error.message) {
+          setError(error.message);
+        } else {
+          setError("Nie udało się zalogować. Spróbuj ponownie.");
+        }
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -206,10 +211,11 @@ export default function Login() {
 
   return (
     <>
+      {loading && <FullPageLoading text="Logujemy Cię..." />}
       <MobileWarningModal isOpen={showMobileWarning} onClose={() => setShowMobileWarning(false)} />
       <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
         <div className="flex items-center w-full py-8 border-b border-border/80">
-          <Link href="/galleries" className="flex items-center gap-x-2">
+          <Link href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"} className="flex items-center gap-x-2">
             <span className="text-xl font-bold" style={{ color: "#465fff" }}>
               PhotoCloud
             </span>

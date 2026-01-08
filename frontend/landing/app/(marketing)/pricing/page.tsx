@@ -7,6 +7,9 @@ import {
 } from "@/components/ui/accordion";
 import MagicBadge from "@/components/ui/magic-badge";
 
+// ISR: Revalidate every hour (3600 seconds)
+export const revalidate = 3600;
+
 const FAQ = [
   {
     id: "1",
@@ -60,24 +63,37 @@ const PricingPage = () => {
       </AnimationContainer>
 
       <AnimationContainer delay={0.3}>
-        <div className="mt-20 w-full">
-          <div className="flex flex-col items-center justify-center w-full pt-12">
-            <h2 className="mt-6 text-2xl font-semibold text-center lg:text-3xl xl:text-4xl text-foreground">
-              Najczęściej zadawane pytania
-            </h2>
-            <p className="max-w-lg mt-6 text-center text-muted-foreground">
+        <div className="mt-20 w-full px-4 md:px-0">
+          <div className="section-title-five">
+            <h6>FAQ</h6>
+            <h2 className="fw-bold">Najczęściej zadawane pytania</h2>
+            <p>
               Oto niektóre z najczęściej zadawanych pytań. Jeśli masz pytanie, na które nie ma tutaj odpowiedzi, skontaktuj się z nami.
             </p>
           </div>
-          <div className="max-w-3xl mx-auto w-full mt-20">
-            <Accordion type="single" collapsible>
-              {FAQ.map((faq) => (
-                <AccordionItem key={faq.id} value={faq.id}>
-                  <AccordionTrigger className="text-foreground">{faq.question}</AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">{faq.answer}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+          <div className="container">
+            <div className="row justify-content-center">
+              <div className="col-lg-10">
+                <div className="faq-accordion-wrapper">
+                  <Accordion type="single" collapsible className="w-full">
+                    <div className="row">
+                      {FAQ.map((faq) => (
+                        <div key={faq.id} className="col-lg-6 mb-4">
+                          <AccordionItem value={faq.id} className="faq-accordion-item h-full">
+                            <AccordionTrigger className="text-left">
+                              {faq.question}
+                            </AccordionTrigger>
+                            <AccordionContent className="accordion-content">
+                              {faq.answer}
+                            </AccordionContent>
+                          </AccordionItem>
+                        </div>
+                      ))}
+                    </div>
+                  </Accordion>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </AnimationContainer>

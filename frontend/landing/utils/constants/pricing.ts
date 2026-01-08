@@ -35,12 +35,11 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
       variant: "default",
     }
   },
@@ -57,12 +56,11 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
       variant: "primary",
     }
   },
@@ -79,12 +77,11 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`,
+      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
       variant: "default",
     }
   }

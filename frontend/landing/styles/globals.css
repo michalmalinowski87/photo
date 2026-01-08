@@ -1,117 +1,46 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --foreground: 0 0% 98%;
-    --background: 0 0% 3.9%;
-
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-
-    --radius: 0.5rem;
-
-    /* Theme colors - easily changeable (primary/secondary, not tied to specific colors) */
-    --theme-primary: 108, 39, 157;
-    /* --theme-primary: 101, 255, 200; */
-    --theme-secondary: 0, 135, 255;
-  }
-
-  .dark {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-
-    --tertiary: 0 0% 90%;
-    --tertiary-foreground: 0 0% 9%;
-
-    --subtle: 240 6% 90%;
-    --subtle-foreground: 0 0% 9%;
-
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-  }
-}
-
-::selection {
-  background-color: rgba(168, 85, 247, 0.2);
-  color: hsl(var(--foreground));
-}
+/* Business Template Styles - minimal overrides only */
+/* Main styles come from /assets/css/style.css */
 
 html, body {
-  font-family: "Inter", sans-serif !important;
+  font-family: "Inter", sans-serif;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  scrollbar-color: #262626;
+/* Footer Social Media Icons Styling */
+.footer-social {
+  margin-top: 20px;
 }
 
-::-webkit-scrollbar-thumb {
-  background-color: #262626;
-  border-radius: 3px;
+.footer-social-list {
+  display: flex;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-wrap: wrap;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0);
+.footer-social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 111, 87, 0.3);
+  background-color: rgba(139, 111, 87, 0.05);
+  color: var(--primary-dark, #7A5F4A);
+  text-decoration: none;
+  transition: all 0.3s ease;
 }
 
-.gradient {
-  background: conic-gradient(
-    from 230.29deg at 51.63% 52.16%,
-    rgba(var(--theme-secondary), 1) 0deg,
-    rgba(var(--theme-secondary), 0.9) 67.5deg,
-    rgba(var(--theme-primary), 0.8) 198.75deg,
-    rgba(var(--theme-secondary), 0.7) 251.25deg,
-    rgba(var(--theme-secondary), 0.85) 301.88deg,
-    rgba(var(--theme-primary), 0.95) 360deg
-  );
+.footer-social-link:hover {
+  background-color: var(--primary, #8B6F57);
+  border-color: var(--primary, #8B6F57);
+  color: #fff;
+  transform: translateY(-2px);
 }
 
-.not-found {
-  box-shadow: rgba(150, 18, 226, 0.3) 5px 5px;
+.footer-social-link i {
+  font-size: 18px;
+  line-height: 1;
 }

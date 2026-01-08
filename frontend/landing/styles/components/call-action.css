@@ -1,0 +1,75 @@
+/**
+ * Call to Action Component Styles
+ * 
+ * Styles for CTA sections.
+ */
+
+/* ============================================
+   CALL ACTION FOUR
+   ============================================ */
+.call-action {
+  z-index: 2;
+  padding-bottom: 100px;
+  padding-top: 100px;
+  background: linear-gradient(45deg, var(--primary), var(--primary-dark));
+  position: relative;
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .call-action {
+    padding-bottom: 80px;
+  }
+}
+
+@media (max-width: 767px) {
+  .call-action {
+    padding-bottom: 60px;
+  }
+}
+
+.call-action:before {
+  position: absolute;
+  content: "";
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  background-image: url("/assets/images/call-action/overlay.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: top;
+  z-index: -1;
+}
+
+.call-action .inner-content {
+  text-align: center;
+}
+
+.call-action .inner-content h2 {
+  font-weight: 700;
+  margin-bottom: 30px;
+  color: var(--white);
+}
+
+.call-action .inner-content p {
+  color: var(--white);
+}
+
+.call-action .inner-content .light-rounded-buttons {
+  margin-top: 45px;
+  display: block;
+}
+
+.call-action .inner-content .light-rounded-buttons .primary-btn-outline {
+  border-color: var(--white);
+  color: var(--white);
+  background: transparent;
+}
+
+.call-action .inner-content .light-rounded-buttons .primary-btn-outline:hover,
+.call-action .inner-content .light-rounded-buttons .primary-btn-outline:focus {
+  background: var(--white);
+  color: var(--primary);
+  border-color: var(--white);
+}
+

@@ -5,6 +5,8 @@ import AnimationContainer from "./global/animation-container";
 // navigation
 import Navbar from "./navigation/navbar";
 import Footer from "./navigation/footer";
+import NavbarBusiness from "./navigation/navbar-business";
+import FooterBusiness from "./navigation/footer-business";
 
 // providers
 import Providers from "./providers/providers";
@@ -18,6 +20,8 @@ export {
   AnimationContainer,
   Navbar,
   Footer,
+  NavbarBusiness,
+  FooterBusiness,
   Providers,
   PricingCards,
 };

@@ -1,0 +1,34 @@
+/**
+ * Scroll to Top Component Styles
+ * 
+ * Styles for scroll to top button.
+ */
+
+/* ============================================
+   SCROLL TOP BUTTON
+   ============================================ */
+.scroll-top {
+  width: 45px;
+  height: 45px;
+  line-height: 45px;
+  background: var(--primary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 14px;
+  color: #fff !important;
+  border-radius: 5px;
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 9;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.scroll-top:hover {
+  box-shadow: 0 1rem 3rem rgba(16, 24, 40, 0.08) !important;
+  transform: translate3d(0, -5px, 0);
+  background-color: var(--primary-dark);
+}
+

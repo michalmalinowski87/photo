@@ -1,9 +1,20 @@
+import { Metadata } from "next";
 import { AnimationContainer, MaxWidthWrapper } from "@/components";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import MagicBadge from "@/components/ui/magic-badge";
 import { Lock, DollarSign, Settings, Users } from "lucide-react";
+import { generateMetadata as baseGenerateMetadata } from '@/utils/functions/metadata';
+
+// ISR: Revalidate every hour (3600 seconds)
+export const revalidate = 3600;
+
+// Page-specific metadata
+export const metadata: Metadata = baseGenerateMetadata({
+  title: "Funkcje - PhotoCloud",
+  description: "Odkryj wszystkie narzędzia PhotoCloud, które pomogą Ci profesjonalnie zarządzać zdjęciami i klientami. Od galerii chronionych hasłem po elastyczne ceny.",
+});
 
 const featuresList = [
   {
@@ -86,7 +97,7 @@ export default function FeaturesPage() {
             Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoCloud.
           </p>
           <Button asChild size="lg">
-            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
+            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}>
               Rozpocznij za darmo
             </Link>
           </Button>

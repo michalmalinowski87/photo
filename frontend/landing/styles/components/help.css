@@ -1,0 +1,80 @@
+/**
+ * Help Page Component Styles
+ * 
+ * Styles for help page sections with proper scroll-margin-top for sticky navbar.
+ */
+
+/* ============================================
+   HELP HERO AREA
+   ============================================ */
+.help-hero-area {
+  padding-top: 130px;
+  padding-bottom: 80px;
+  scroll-margin-top: 140px;
+  background-color: var(--light-3);
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .help-hero-area {
+    padding-top: 120px;
+    padding-bottom: 100px;
+  }
+}
+
+@media (max-width: 767px) {
+  .help-hero-area {
+    padding-top: 100px;
+    padding-bottom: 80px;
+    scroll-margin-top: 120px;
+  }
+}
+
+/* ============================================
+   FAQ AREA
+   ============================================ */
+.faq-area {
+  padding-top: 40px;
+  padding-bottom: 120px;
+  scroll-margin-top: 140px;
+  background-color: var(--white);
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .faq-area {
+    padding-top: 100px;
+    padding-bottom: 100px;
+  }
+}
+
+@media (max-width: 767px) {
+  .faq-area {
+    padding-top: 80px;
+    padding-bottom: 80px;
+    scroll-margin-top: 120px;
+  }
+}
+
+/* ============================================
+   GETTING STARTED AREA
+   ============================================ */
+.getting-started-area {
+  padding-top: 120px;
+  padding-bottom: 120px;
+  scroll-margin-top: 140px;
+  background-color: var(--light-3);
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .getting-started-area {
+    padding-top: 100px;
+    padding-bottom: 100px;
+  }
+}
+
+@media (max-width: 767px) {
+  .getting-started-area {
+    padding-top: 80px;
+    padding-bottom: 80px;
+    scroll-margin-top: 120px;
+  }
+}
