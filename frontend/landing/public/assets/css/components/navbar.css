@@ -34,6 +34,11 @@
   transition: var(--transition-base);
   top: 0;
   width: 100%;
+  /* iOS-style frosted glass effect */
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  background-color: rgba(139, 111, 87, 0.72) !important; /* var(--primary) with opacity */
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.1);
 }
 
 @media only screen and (min-width: 768px) and (max-width: 991px),
