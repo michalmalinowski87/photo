@@ -215,7 +215,7 @@ export default function HomePage() {
           {/* Duration Selector */}
           <div className="row justify-content-center mb-5">
             <div className="col-lg-8 col-md-10 col-12">
-              <div className="d-flex gap-3 justify-content-center flex-wrap" style={{ marginBottom: '40px' }}>
+              <div className="duration-selector">
                 {(['1m', '3m', '12m'] as Duration[]).map((duration) => {
                   const isSelected = selectedDuration === duration;
                   return (
@@ -223,17 +223,7 @@ export default function HomePage() {
                       key={duration}
                       onClick={() => setSelectedDuration(duration)}
                       type="button"
-                      className={`btn ${isSelected ? 'primary-btn' : 'primary-btn-outline'}`}
-                      style={{
-                        minWidth: '140px',
-                        padding: '12px 24px',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        borderRadius: '4px',
-                        transition: 'all 0.3s ease',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}
+                      className={`btn duration-btn ${isSelected ? 'primary-btn' : 'primary-btn-outline'}`}
                     >
                       {duration === '1m' ? '1 MIESIĄC' : duration === '3m' ? '3 MIESIĄCE' : '12 MIESIĘCY'}
                     </button>
@@ -255,33 +245,16 @@ export default function HomePage() {
                     <div className="table-head">
                       <h6 className="title">{plan.name}</h6>
                       <div className="price">
-                        <h2
-                          className="amount"
-                          style={{
-                            fontSize: "50px",
-                            fontWeight: 700,
-                            lineHeight: "1",
-                            marginTop: "30px",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          <span>
-                            {price}
-                          </span>
-                          <span
-                            style={{ color: "var(--dark-3)" }}
-                          >
-                            {" "}
-                            PLN
-                          </span>
+                        <h2 className="amount">
+                          <span>{price}</span>
+                          <span className="currency"> PLN</span>
                         </h2>
                       </div>
                     </div>
                     <div className="light-rounded-buttons">
                       <Link
                         href={`${dashboardUrl}/sign-up`}
-                        className={`btn ${isMiddle ? "primary-btn" : "primary-btn-outline"}`}
-                        style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}
+                        className={`btn pricing-btn ${isMiddle ? "primary-btn" : "primary-btn-outline"}`}
                       >
                         {index === 0 ? "Rozpocznij za darmo" : "Wybierz plan"}
                       </Link>

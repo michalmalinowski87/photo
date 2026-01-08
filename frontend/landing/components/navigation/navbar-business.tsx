@@ -52,7 +52,7 @@ export default function NavbarBusiness() {
             <div className="col-lg-12">
               <nav className="navbar navbar-expand-lg">
                 <Link className="navbar-brand" href="/">
-                  <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--white)' }}>
+                  <span className="brand-text-white">
                     PhotoCloud
                   </span>
                 </Link>
@@ -138,7 +138,7 @@ export default function NavbarBusiness() {
         <div className="sidebar-content">
           <div className="sidebar-logo">
             <Link href="/">
-              <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--black)' }}>
+              <span className="brand-text-black">
                 PhotoCloud
               </span>
             </Link>

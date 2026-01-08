@@ -13,7 +13,7 @@ export default function FooterBusiness() {
                 <div className="footer-widget f-about">
                   <div className="logo">
                     <Link href="/">
-                      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--black)' }}>
+                      <span className="brand-text-black">
                         PhotoCloud
                       </span>
                     </Link>

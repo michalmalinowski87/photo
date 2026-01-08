@@ -100,7 +100,7 @@ export default function ConfirmEmailPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-block mb-6">
-            <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
+            <span className="brand-text-primary">
               PhotoCloud
             </span>
           </Link>

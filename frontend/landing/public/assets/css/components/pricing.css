@@ -1,0 +1,138 @@
+/**
+ * Pricing Component Styles
+ * 
+ * Styles for pricing cards, duration selectors, and pricing displays.
+ */
+
+/* ============================================
+   PRICING SECTION
+   ============================================ */
+.pricing-fourteen {
+  padding: 100px 0;
+  background-color: var(--light-3); /* photographer-background */
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .pricing-fourteen {
+    padding: 80px 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .pricing-fourteen {
+    padding: 60px 0;
+  }
+}
+
+/* ============================================
+   PRICING CARD
+   ============================================ */
+.pricing-style-fourteen {
+  border: 1px solid var(--gray-3); /* photographer-border */
+  border-radius: 10px;
+  margin-top: 30px;
+  background-color: var(--white); /* photographer-surface */
+  transition: var(--transition-slow);
+  padding: 50px 35px;
+  text-align: center;
+  z-index: 0;
+}
+
+.pricing-style-fourteen:hover {
+  box-shadow: var(--shadow-4);
+}
+
+.pricing-style-fourteen.middle {
+  box-shadow: var(--shadow-4);
+}
+
+.pricing-style-fourteen.middle .title {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--white);
+}
+
+/* ============================================
+   PRICING TITLE
+   ============================================ */
+.pricing-style-fourteen .title {
+  font-weight: 500;
+  margin-bottom: 10px;
+  color: var(--primary);
+  padding: 8px 20px;
+  border: 2px solid var(--primary);
+  display: inline-block;
+  border-radius: var(--radius-full);
+  font-size: 16px;
+}
+
+.pricing-style-fourteen .table-head p {
+  color: var(--dark-3);
+}
+
+/* ============================================
+   PRICING AMOUNT
+   ============================================ */
+.pricing-style-fourteen .amount {
+  font-weight: 600;
+  display: inline-block;
+  position: relative;
+  padding-left: 15px;
+  font-size: 55px;
+  line-height: 1;
+  margin-top: 30px;
+  margin-bottom: 10px;
+}
+
+.pricing-style-fourteen .currency {
+  font-weight: 600;
+  color: var(--dark-3);
+  font-size: 32px;
+}
+
+.pricing-style-fourteen .duration {
+  display: inline-block;
+  font-size: 18px;
+  color: var(--dark-3);
+  font-weight: 400;
+}
+
+/* ============================================
+   PRICING BUTTONS
+   ============================================ */
+.pricing-style-fourteen .light-rounded-buttons {
+  margin: 0;
+  margin-top: 30px;
+  margin-bottom: 40px;
+}
+
+/* ============================================
+   PRICING FEATURES LIST
+   ============================================ */
+.pricing-style-fourteen .table-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pricing-style-fourteen .table-list li {
+  position: relative;
+  margin-bottom: 10px;
+  color: var(--dark-3);
+  text-align: left;
+}
+
+.pricing-style-fourteen .table-list li:last-child {
+  margin: 0;
+}
+
+.pricing-style-fourteen .table-list li i {
+  color: var(--primary);
+  font-size: 16px;
+  padding-right: 8px;
+}
+
+.pricing-style-fourteen .table-list li i.deactive {
+  color: var(--dark-3);
+}
+

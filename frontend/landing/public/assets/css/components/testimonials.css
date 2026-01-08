@@ -1,0 +1,95 @@
+/**
+ * Testimonials Component Styles
+ * 
+ * Styles for testimonials section and cards.
+ */
+
+/* ============================================
+   TESTIMONIALS GRID
+   ============================================ */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  margin-top: 20px;
+}
+
+@media only screen and (min-width: 768px) and (max-width: 991px) {
+  .testimonials-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 25px;
+  }
+}
+
+@media (max-width: 767px) {
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+.testimonial-card {
+  background-color: var(--gray-4); /* photographer-muted - dark beige background */
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 40px 35px;
+  transition: var(--transition-base);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  text-align: center;
+  position: relative;
+}
+
+.testimonial-card:hover {
+  box-shadow: var(--shadow-3);
+  transform: translateY(-3px);
+}
+
+.testimonial-quote {
+  font-size: 72px;
+  font-weight: 700;
+  color: var(--dark-2); /* photographer-text */
+  line-height: 1;
+  margin-bottom: 20px;
+  font-family: var(--font-family);
+  opacity: 0.3;
+}
+
+.testimonial-text {
+  color: var(--dark-2); /* photographer-text */
+  font-size: 16px;
+  line-height: 1.7;
+  margin: 0 0 30px 0;
+  flex: 1;
+  font-family: var(--font-family);
+  font-weight: 400;
+}
+
+.testimonial-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: auto;
+}
+
+.testimonial-info {
+  text-align: center;
+}
+
+.testimonial-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--black); /* photographer-heading */
+  margin: 0 0 5px 0;
+  font-family: var(--font-family);
+}
+
+.testimonial-role {
+  font-size: 14px;
+  color: var(--dark-3); /* photographer-mutedText */
+  margin: 0;
+  font-weight: 400;
+  font-family: var(--font-family);
+}
+

@@ -1,0 +1,51 @@
+/**
+ * Base Styles
+ * 
+ * Reset styles, base element styles, and common utilities.
+ */
+
+/* ============================================
+   RESET & BASE ELEMENTS
+   ============================================ */
+img {
+  max-width: 100%;
+}
+
+a {
+  display: inline-block;
+}
+
+a,
+button,
+a:hover,
+a:focus,
+input:focus,
+textarea:focus,
+button:focus {
+  text-decoration: none;
+  outline: none;
+}
+
+ul,
+ol {
+  margin: 0px;
+  padding: 0px;
+  list-style-type: none;
+}
+
+/* ============================================
+   CONTAINER UTILITIES
+   ============================================ */
+.bg_cover {
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+}
+
+@media (max-width: 767px) {
+  .container {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
