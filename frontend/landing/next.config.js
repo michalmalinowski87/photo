@@ -15,7 +15,7 @@ const nextConfig = {
   // Enable compression
   compress: true,
 
-  // SWC minification is enabled by default in Next.js 15
+  // SWC minification is enabled by default in Next.js 16
 
   // Optimize bundle size
   experimental: {
@@ -33,6 +33,9 @@ const nextConfig = {
       'framer-motion',
     ],
   },
+
+  // Use webpack instead of Turbopack (required for monorepo module resolution)
+  turbopack: {},
 
   webpack: (config, { isServer, webpack }) => {
     // Resolve modules from local node_modules first (important for nohoisted packages like @swc)

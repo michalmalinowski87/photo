@@ -8,8 +8,8 @@
     "start": "next start"
   },
   "resolutions": {
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.1.2",
@@ -44,9 +44,9 @@
     "input-otp": "^1.2.4",
     "lucide-react": "^0.468.0",
     "mini-svg-data-uri": "^1.4.4",
-    "next": "^15.5.7",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "sonner": "^1.4.41",
     "tailwind-merge": "^2.5.5",
     "tailwind-scrollbar-hide": "^1.1.7",
@@ -59,7 +59,7 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.18.0",
-    "eslint-config-next": "^15.5.7",
+    "eslint-config-next": "^16.1.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"
