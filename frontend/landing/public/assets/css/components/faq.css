@@ -1,0 +1,226 @@
+/**
+ * FAQ Component Styles
+ * 
+ * Categorized FAQ sections with solid colored backgrounds - matching reference design.
+ */
+
+/* ============================================
+   FAQ CATEGORIES WRAPPER
+   ============================================ */
+.faq-categories-wrapper {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (max-width: 767px) {
+  .faq-categories-wrapper {
+    gap: 20px;
+    margin-top: 30px;
+  }
+}
+
+/* ============================================
+   FAQ CATEGORY BLOCK - Solid Color Background
+   ============================================ */
+.faq-category-block {
+  border-radius: 12px;
+  padding: 40px;
+  background: var(--primary);
+  box-shadow: none;
+}
+
+@media (max-width: 767px) {
+  .faq-category-block {
+    padding: 28px 24px;
+  }
+}
+
+/* ============================================
+   FAQ CATEGORY TITLE - White Text
+   ============================================ */
+.faq-category-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 24px;
+  font-family: var(--font-heading);
+}
+
+@media (max-width: 767px) {
+  .faq-category-title {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+  }
+}
+
+/* ============================================
+   FAQ CATEGORY CONTENT
+   ============================================ */
+.faq-category-content {
+  background: transparent;
+}
+
+/* ============================================
+   FAQ CATEGORY ITEM - Direct on Colored Background
+   ============================================ */
+.faq-category-item {
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.faq-category-item:last-child {
+  border-bottom: none !important;
+}
+
+.faq-category-item * {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ============================================
+   FAQ CATEGORY TRIGGER - White Text
+   ============================================ */
+.faq-category-trigger {
+  padding: 20px 0 !important;
+  color: var(--white) !important;
+  font-weight: 400 !important;
+  font-size: 1rem !important;
+  line-height: 1.6 !important;
+  text-align: left !important;
+  background: transparent !important;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.faq-category-trigger:hover {
+  color: var(--white) !important;
+  opacity: 0.95;
+}
+
+.faq-category-item[data-state="open"] .faq-category-trigger {
+  color: var(--white) !important;
+  font-weight: 500 !important;
+}
+
+.faq-category-trigger svg {
+  color: var(--white) !important;
+  opacity: 0.7;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  width: 16px;
+  height: 16px;
+}
+
+.faq-category-item[data-state="open"] .faq-category-trigger svg {
+  opacity: 1;
+}
+
+/* ============================================
+   FAQ CATEGORY CONTENT TEXT - White Text
+   ============================================ */
+.faq-category-content-text {
+  padding: 0 0 20px 0 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.7 !important;
+  font-weight: 400 !important;
+}
+
+/* ============================================
+   ACCORDION CONTENT ANIMATION
+   ============================================ */
+@keyframes accordion-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+.faq-category-item [data-state="open"] [data-radix-accordion-content],
+.faq-category-item [data-state="open"] .faq-category-content-text {
+  animation: accordion-down 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-category-item [data-state="closed"] [data-radix-accordion-content],
+.faq-category-item [data-state="closed"] .faq-category-content-text {
+  animation: accordion-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   GETTING STARTED CARDS - Modern Borderless Design
+   ============================================ */
+.getting-started-card {
+  border: none !important;
+  border-radius: 16px !important;
+  background: var(--white) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  height: 100%;
+  padding: 32px !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.getting-started-card * {
+  border: none !important;
+}
+
+.getting-started-card:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+  transform: translateY(-4px);
+}
+
+.getting-started-card .step-number {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(139, 111, 87, 0.12) 0%, rgba(139, 111, 87, 0.06) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.getting-started-card h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--dark-1);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.getting-started-card p {
+  font-size: 0.9375rem;
+  color: var(--dark-3);
+  line-height: 1.6;
+  margin: 0;
+  flex-grow: 1;
+}

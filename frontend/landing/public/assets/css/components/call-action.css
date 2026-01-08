@@ -63,5 +63,13 @@
 .call-action .inner-content .light-rounded-buttons .primary-btn-outline {
   border-color: var(--white);
   color: var(--white);
+  background: transparent;
+}
+
+.call-action .inner-content .light-rounded-buttons .primary-btn-outline:hover,
+.call-action .inner-content .light-rounded-buttons .primary-btn-outline:focus {
+  background: var(--white);
+  color: var(--primary);
+  border-color: var(--white);
 }
 

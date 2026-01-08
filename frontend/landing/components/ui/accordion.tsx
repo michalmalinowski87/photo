@@ -12,7 +12,7 @@ function AccordionItem({ ref, className, ...props }: React.ComponentPropsWithout
   return (
     <AccordionPrimitive.Item
       ref={ref}
-      className={cn("border-b border-border w-full", className)}
+      className={cn("w-full", className)}
       {...props}
     />
   )
@@ -25,13 +25,13 @@ function AccordionTrigger({ ref, className, children, ...props }: React.Componen
       <AccordionPrimitive.Trigger
         ref={ref}
         className={cn(
-          "flex flex-1 w-full items-center justify-between py-4 font-medium transition-all text-muted-foreground hover:text-foreground [&[data-state=open]>svg]:rotate-180",
+          "flex flex-1 w-full items-center justify-between py-4 font-medium transition-all text-muted-foreground hover:text-foreground [&[data-state=open]>svg]:rotate-180 [&[data-state=open]]:text-foreground",
           className
         )}
         {...props}
       >
         {children}
-        <ChevronDown className="h-4 w-4 shrink- transition-transform duration-200" />
+        <ChevronDown className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground" />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )
