@@ -49,7 +49,7 @@ export default function HomePage() {
       </section>
 
       {/* About Section */}
-      <section className="about-area about-five">
+      <section id="about" className="about-area about-five">
         <div className="container">
           <div className="row align-items-center">
             <div className="col-lg-6 col-12">
@@ -312,11 +312,15 @@ export default function HomePage() {
           <div className="row justify-content-center">
             <div className="col-xxl-6 col-xl-7 col-lg-8 col-md-9">
               <div className="inner-content">
-                <h2>Rozpocznij darmowy okres próbny już dziś</h2>
+                <h2>Wypróbuj PhotoCloud – nic nie ryzykujesz</h2>
                 <p>
-                  Doświadcz udostępniania zdjęć, które naprawdę działa dla Ciebie. Oszczędzaj czas,
-                  usprawniaj przepływ pracy i zachwycaj klientów profesjonalnym podejściem, które
-                  wyróżnia Cię na rynku.
+                  Pierwsza galeria 1 GB na 3 miesiące jest całkowicie za darmo, bez karty i bez
+                  abonamentu. To nasz sposób na podziękowanie za 15 minut twojego czasu na spróbowanie
+                  naszej platformy.
+                  <br />
+                  <br />
+                  Nic nie tracisz, a możesz zyskać narzędzie, bez którego nie wyobrażasz sobie
+                  dalszej pracy.
                 </p>
                 <div className="light-rounded-buttons">
                   <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn-outline">

@@ -13,13 +13,13 @@ export default function FooterBusiness() {
                 <div className="footer-widget f-about">
                   <div className="logo">
                     <Link href="/">
-                      <span className="brand-text-black">
-                        PhotoCloud
-                      </span>
+                      <span className="brand-text-black">PhotoCloud</span>
                     </Link>
                   </div>
                   <p>
-                    PhotoCloud to innowacyjna platforma dla fotografów, która ułatwia udostępnianie, organizowanie i sprzedaż zdjęć klientom. Nasze narzędzia wspierają Twój rozwój i pomagają budować silne relacje z klientami.
+                    PhotoCloud – proofing, który wreszcie pracuje dla Ciebie. Szybkie, bezpieczne
+                    galerie, automatyczne notyfikacje i zero comiesięcznych opłat. Płacisz tylko za
+                    to, co naprawdę wykorzystujesz.
                   </p>
                   <p className="copyright-text">
                     <span>© 2026 PhotoCloud.</span> Wszelkie prawa zastrzeżone.
@@ -30,10 +30,15 @@ export default function FooterBusiness() {
                 <div className="footer-widget f-link">
                   <h5>Rozwiązania</h5>
                   <ul>
-                    <li><Link href="#services">Funkcje</Link></li>
-                    <li><Link href="#pricing">Galerie Klientów</Link></li>
-                    <li><Link href="#pricing">Sprzedaż Zdjęć</Link></li>
-                    <li><Link href="#services">Bezpieczeństwo</Link></li>
+                    <li>
+                      <Link href="#about">O nas</Link>
+                    </li>
+                    <li>
+                      <Link href="#services">Funkcje</Link>
+                    </li>
+                    <li>
+                      <Link href="#pricing">Cennik</Link>
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -41,16 +46,22 @@ export default function FooterBusiness() {
                 <div className="footer-widget f-link">
                   <h5>Wsparcie</h5>
                   <ul>
-                    <li><Link href="#pricing">Cennik</Link></li>
-                    <li><Link href="/resources/help">Pomoc</Link></li>
-                    <li><Link href="/resources/help">FAQ</Link></li>
+                    <li>
+                      <Link href="/resources/help">Pomoc</Link>
+                    </li>
+                    <li>
+                      <Link href="/resources/help">FAQ</Link>
+                    </li>
                   </ul>
                 </div>
               </div>
               <div className="col-lg-4 col-md-6 col-12">
                 <div className="footer-widget newsletter">
                   <h5>Subskrybuj</h5>
-                  <p>Subskrybuj nasz newsletter, aby otrzymywać najnowsze aktualizacje i oferty specjalne.</p>
+                  <p>
+                    Subskrybuj nasz newsletter, aby otrzymywać najnowsze aktualizacje i oferty
+                    specjalne.
+                  </p>
                   <form action="#" method="get" target="_blank" className="newsletter-form">
                     <input name="EMAIL" placeholder="Twój adres e-mail" required type="email" />
                     <div className="button">

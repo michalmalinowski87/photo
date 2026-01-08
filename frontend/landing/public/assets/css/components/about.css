@@ -11,6 +11,7 @@
   background-color: var(--light-3); /* photographer-background */
   padding-bottom: 90px;
   padding-top: 120px;
+  scroll-margin-top: 140px; /* Account for sticky navbar + extra spacing when scrolling to this section */
 }
 
 @media only screen and (min-width: 768px) and (max-width: 991px) {
