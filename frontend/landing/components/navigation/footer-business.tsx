@@ -53,6 +53,35 @@ export default function FooterBusiness() {
                   </ul>
                 </div>
               </div>
+              <div className="col-lg-4 col-md-6 col-12">
+                <div className="footer-widget">
+                  <h5>Obserwuj Nas</h5>
+                  <div className="footer-social">
+                    <ul className="footer-social-list">
+                      <li>
+                        <a href="javascript:void(0)" className="footer-social-link" aria-label="Facebook">
+                          <i className="lni lni-facebook-filled"></i>
+                        </a>
+                      </li>
+                      <li>
+                        <a href="javascript:void(0)" className="footer-social-link" aria-label="Twitter">
+                          <i className="lni lni-twitter-original"></i>
+                        </a>
+                      </li>
+                      <li>
+                        <a href="javascript:void(0)" className="footer-social-link" aria-label="LinkedIn">
+                          <i className="lni lni-linkedin-original"></i>
+                        </a>
+                      </li>
+                      <li>
+                        <a href="javascript:void(0)" className="footer-social-link" aria-label="YouTube">
+                          <i className="lni lni-youtube"></i>
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
               <div className="col-lg-4 col-md-6 col-12" style={{ display: 'none' }}>
                 <div className="footer-widget newsletter">
                   <h5>Subskrybuj</h5>

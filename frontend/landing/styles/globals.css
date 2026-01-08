@@ -4,3 +4,43 @@
 html, body {
   font-family: "Inter", sans-serif;
 }
+
+/* Footer Social Media Icons Styling */
+.footer-social {
+  margin-top: 20px;
+}
+
+.footer-social-list {
+  display: flex;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.footer-social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 111, 87, 0.3);
+  background-color: rgba(139, 111, 87, 0.05);
+  color: var(--primary-dark, #7A5F4A);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.footer-social-link:hover {
+  background-color: var(--primary, #8B6F57);
+  border-color: var(--primary, #8B6F57);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.footer-social-link i {
+  font-size: 18px;
+  line-height: 1;
+}

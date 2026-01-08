@@ -131,10 +131,9 @@ export default function HomePage() {
                         PhotoCloud narodził się z potrzeby – z frustracji związanej z przestarzałymi
                         i skomplikowanymi metodami udostępniania zdjęć. Grupa fotografów z ponad
                         15-letnim doświadczeniem w branży połączyła siły z deweloperami, aby
-                        stworzyć platformę, która odpowiada na realne problemy branży. Od naszych
-                        skromnych początków, poprzez intensywny rozwój i liczne testy z udziałem
-                        beta-użytkowników, zawsze kierowaliśmy się jedną zasadą: prostota i
-                        funkcjonalność. Dziś, PhotoCloud to dojrzałe narzędzie, które stale
+                        stworzyć platformę, która odpowiada na realne problemy branży. Od początku
+                        kierowała nami jedna zasada: prostota i funkcjonalność.
+                        Dziś, PhotoCloud to dojrzałe narzędzie, które stale
                         ewoluuje, dzięki ciągłemu słuchaniu potrzeb naszych użytkowników i adaptacji
                         do dynamicznie zmieniającego się rynku.
                       </p>
