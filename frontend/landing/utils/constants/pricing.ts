@@ -35,7 +35,6 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
@@ -57,7 +56,6 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {
@@ -79,7 +77,6 @@ export const PLANS = [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
       { text: "Wybór zdjęć przez klienta", tooltip: undefined },
       { text: "Wsparcie techniczne", tooltip: undefined },
-      { text: "Bezpieczne przechowywanie", tooltip: undefined },
       { text: "Szybkie ładowanie zdjęć", tooltip: undefined },
     ],
     btn: {

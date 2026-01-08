@@ -1,266 +1,405 @@
-import { AnimationContainer, MaxWidthWrapper, PricingCards } from "@/components";
-import { BentoCard, BentoGrid, CARDS } from "@/components/ui/bento-grid";
-import { BorderBeam } from "@/components/ui/border-beam";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { LampContainer } from "@/components/ui/lamp";
-import MagicBadge from "@/components/ui/magic-badge";
-import MagicCard from "@/components/ui/magic-card";
-import { COMPANIES, PROCESS, REVIEWS } from "@/utils";
-import { ArrowRightIcon, CreditCardIcon, StarIcon } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+"use client";
 
-const HomePage = async () => {
+import Link from 'next/link';
+import Image from 'next/image';
+import { useState } from 'react';
+import { PLANS } from '@/utils/constants/pricing';
+
+type Duration = '1m' | '3m' | '12m';
+
+export default function HomePage() {
+  const [activeTab, setActiveTab] = useState('who');
+  const [selectedDuration, setSelectedDuration] = useState<Duration>('1m');
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+
   return (
-    <div className="overflow-x-hidden scrollbar-hide size-full">
+    <>
       {/* Hero Section */}
-      <MaxWidthWrapper>
-        <div className="flex flex-col items-center justify-center w-full text-center bg-gradient-to-t from-background">
-          <AnimationContainer className="flex flex-col items-center justify-center w-full text-center">
-            <h1 className="text-foreground text-center py-6 text-5xl font-medium tracking-normal text-balance sm:text-6xl md:text-7xl lg:text-8xl !leading-[1.15] w-full font-heading">
-              Prosty sposób na udostępnianie{" "}
-              <span className="text-transparent bg-gradient-to-r from-theme-secondary to-theme-primary bg-clip-text inline-block">
-                zdjęć klientom
-              </span>
-            </h1>
-            <p className="mb-12 text-lg tracking-tight text-muted-foreground md:text-xl text-balance">
-              PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom.
-              <br className="hidden md:block" />
-              <span className="hidden md:block">Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.</span>
-            </p>
-            <div className="flex items-center justify-center whitespace-nowrap gap-4 z-50">
-              <Button asChild className="bg-theme-primary hover:bg-theme-primary/90 text-white">
-                <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`}>
-                  Rozpocznij za darmo
-                </Link>
-              </Button>
-            </div>
-          </AnimationContainer>
-
-          <AnimationContainer delay={0.2} className="relative pt-20 pb-20 md:py-32 px-2 bg-transparent w-full">
-            <div className="absolute md:top-[10%] left-1/2 gradient w-3/4 -translate-x-1/2 h-1/4 md:h-1/3 inset-0 blur-[5rem] animate-image-glow"></div>
-            <div className="-m-2 rounded-xl p-2 ring-1 ring-inset ring-foreground/20 lg:-m-4 lg:rounded-2xl bg-opacity-50 backdrop-blur-3xl">
-              <BorderBeam
-                size={250}
-                duration={12}
-                delay={9}
-              />
-              <div className="rounded-md lg:rounded-xl bg-foreground/10 ring-1 ring-border p-20 flex items-center justify-center min-h-[400px]">
-                <p className="text-muted-foreground text-center">Dashboard Preview</p>
-              </div>
-              <div className="absolute -bottom-4 inset-x-0 w-full h-1/2 bg-gradient-to-t from-background z-40"></div>
-              <div className="absolute bottom-0 md:-bottom-8 inset-x-0 w-full h-1/4 bg-gradient-to-t from-background z-50"></div>
-            </div>
-          </AnimationContainer>
-        </div>
-      </MaxWidthWrapper>
-
-      {/* Features Section */}
-      <MaxWidthWrapper className="pt-10">
-        <AnimationContainer delay={0.1}>
-          <div className="flex flex-col w-full items-center lg:items-center justify-center py-8">
-            <MagicBadge title="Funkcje" />
-            <h2 className="text-center lg:text-center text-3xl md:text-5xl !leading-[1.1] font-medium font-heading text-foreground mt-6">
-              Co oferujemy
-            </h2>
-            <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              PhotoCloud to potężne narzędzie do zarządzania galeriami, które pomaga udostępniać i organizować wszystkie Twoje zdjęcia w jednym miejscu.
-            </p>
-          </div>
-        </AnimationContainer>
-        <AnimationContainer delay={0.2}>
-          <BentoGrid className="py-8">
-            {CARDS.map((feature, idx) => (
-              <BentoCard key={idx} {...feature} />
-            ))}
-          </BentoGrid>
-        </AnimationContainer>
-      </MaxWidthWrapper>
-
-      {/* Process Section */}
-      <MaxWidthWrapper className="py-10">
-        <AnimationContainer delay={0.1}>
-          <div className="flex flex-col items-center lg:items-center justify-center w-full py-8 max-w-xl mx-auto">
-            <MagicBadge title="Proces" />
-            <h2 className="text-center lg:text-center text-3xl md:text-5xl !leading-[1.1] font-medium font-heading text-foreground mt-6">
-              Proste udostępnianie w 3 krokach
-            </h2>
-            <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              Wykonaj te proste kroki, aby zoptymalizować, zorganizować i udostępnić swoje zdjęcia z łatwością.
-            </p>
-          </div>
-        </AnimationContainer>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 w-full py-8 gap-4 md:gap-8">
-          {PROCESS.map((process, id) => (
-            <AnimationContainer delay={0.2 * id} key={id}>
-              <MagicCard className="group md:py-8">
-                <div className="flex flex-col items-start justify-center w-full h-full">
-                  <process.icon strokeWidth={1.5} className="w-10 h-10 text-foreground flex-shrink-0" />
-                  <div className="flex flex-col relative items-start w-full flex-1 min-h-0">
-                    <span className="absolute -top-6 right-0 border-2 border-border text-foreground font-medium text-2xl rounded-full w-12 h-12 flex items-center justify-center pt-0.5">
-                      {id + 1}
+      <section id="hero-area" className="header-area header-eight">
+        <div className="container">
+          <div className="row align-items-center">
+            <div className="col-lg-6 col-md-12 col-12">
+              <div className="header-content">
+                <h1>Prosty sposób na udostępnianie zdjęć klientom</h1>
+                <p>
+                  PhotoCloud to proste i opłacalne narzędzie do zarządzania galeriami, które pomaga udostępniać i organizować wszystkie Twoje zdjęcia w jednym miejscu. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.
+                </p>
+                <div className="button">
+                  <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn">
+                    Rozpocznij za darmo
+                  </Link>
+                  <a
+                    href="#"
+                    className="glightbox video-button"
+                    data-glightbox="type: video"
+                    data-glightbox-source="youtube"
+                    data-glightbox-href="#"
+                  >
+                    <span className="btn icon-btn rounded-full">
+                      <i className="lni lni-play"></i>
                     </span>
-                    <h3 className="text-base mt-6 font-medium text-foreground line-clamp-2">
-                      {process.title}
-                    </h3>
-                    <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                      {process.description}
-                    </p>
+                    <span className="text">Zobacz Wprowadzenie</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-6 col-md-12 col-12">
+              <div className="header-image">
+                <Image
+                  src="/assets/images/header/hero-image.jpg"
+                  alt="PhotoCloud Dashboard Preview"
+                  width={800}
+                  height={600}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section className="about-area about-five">
+        <div className="container">
+          <div className="row align-items-center">
+            <div className="col-lg-6 col-12">
+              <div className="about-image-five">
+                <svg className="shape" width="106" height="134" viewBox="0 0 106 134" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* SVG dots pattern - simplified version */}
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <circle key={i} cx={1.66654 + (i % 2) * 14.66676} cy={1.66679 + Math.floor(i / 2) * 14.66671} r="1.66667" fill="#DADADA" />
+                  ))}
+                </svg>
+                <Image
+                  src="/assets/images/about/about-img1.jpg"
+                  alt="about"
+                  width={500}
+                  height={600}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="col-lg-6 col-12">
+              <div className="about-five-content">
+                <h6 className="small-title text-lg">O NAS</h6>
+                <h2 className="main-title fw-bold">Twoje zdjęcia, Twoje zasady. Upraszczamy udostępnianie.</h2>
+                <div className="about-five-tab">
+                  <nav>
+                    <div className="nav nav-tabs" id="nav-tab" role="tablist">
+                      <button
+                        className={`nav-link ${activeTab === 'who' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('who')}
+                        type="button"
+                      >
+                        Kim Jesteśmy
+                      </button>
+                      <button
+                        className={`nav-link ${activeTab === 'vision' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('vision')}
+                        type="button"
+                      >
+                        Nasza Wizja
+                      </button>
+                      <button
+                        className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('history')}
+                        type="button"
+                      >
+                        Nasza Historia
+                      </button>
+                    </div>
+                  </nav>
+                  <div className="tab-content" id="nav-tabContent">
+                    <div className={`tab-pane fade ${activeTab === 'who' ? 'show active' : ''}`}>
+                      <p>PhotoCloud to platforma stworzona z myślą o profesjonalnych fotografach. Rozumiemy wyzwania związane z udostępnianiem i zarządzaniem zdjęciami dla klientów. Nasza misja to dostarczenie intuicyjnego, bezpiecznego i efektywnego rozwiązania, które pozwala skupić się na tym, co najważniejsze – tworzeniu niesamowitych zdjęć. Jesteśmy zespołem pasjonatów technologii i fotografii, dążącym do ciągłego doskonalenia narzędzi, które wspierają Twoją pracę.</p>
+                    </div>
+                    <div className={`tab-pane fade ${activeTab === 'vision' ? 'show active' : ''}`}>
+                      <p>Naszą wizją jest stworzenie wiodącej platformy, która rewolucjonizuje sposób, w jaki fotografowie współpracują z klientami. Chcemy, aby udostępnianie zdjęć było przyjemnością, a zarządzanie galeriami – dziecinnie proste. Dążymy do tego, by PhotoCloud był synonimem innowacyjności, niezawodności i pełnej kontroli dla każdego fotografa, niezależnie od skali jego działalności. Nasz cel to nie tylko dostarczanie narzędzi, ale budowanie społeczności i wspieranie rozwoju branży fotograficznej.</p>
+                    </div>
+                    <div className={`tab-pane fade ${activeTab === 'history' ? 'show active' : ''}`}>
+                      <p>PhotoCloud narodził się z potrzeby – z frustracji związanej z przestarzałymi i skomplikowanymi metodami udostępniania zdjęć. Grupa doświadczonych fotografów i deweloperów połączyła siły, aby stworzyć platformę, która odpowiada na realne problemy branży. Od naszych skromnych początków, poprzez intensywny rozwój i liczne testy z udziałem beta-użytkowników, zawsze kierowaliśmy się jedną zasadą: prostota i funkcjonalność. Dziś, PhotoCloud to dojrzałe narzędzie, które stale ewoluuje, dzięki ciągłemu słuchaniu potrzeb naszych użytkowników i adaptacji do dynamicznie zmieniającego się rynku.</p>
+                    </div>
                   </div>
                 </div>
-              </MagicCard>
-            </AnimationContainer>
-          ))}
-        </div>
-      </MaxWidthWrapper>
-
-      {/* Pricing Section */}
-      <MaxWidthWrapper className="py-10">
-        <AnimationContainer delay={0.1}>
-          <div className="flex flex-col items-center lg:items-center justify-center w-full py-8 max-w-xl mx-auto">
-            <MagicBadge title="Prosty cennik" />
-            <h2 className="text-center lg:text-center text-3xl md:text-5xl !leading-[1.1] font-medium font-heading text-foreground mt-6">
-              Wybierz plan, który działa dla Ciebie
-            </h2>
-            <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              Prosty, przejrzysty cennik bez abonamentu – płacisz tylko za galerię i łatwo wliczasz koszt w pakiet dla klienta. Szanujemy Twój czas.
-            </p>
-          </div>
-        </AnimationContainer>
-        <AnimationContainer delay={0.2}>
-          <PricingCards />
-        </AnimationContainer>
-      </MaxWidthWrapper>
-
-      {/* Reviews Section */}
-      <MaxWidthWrapper className="py-10">
-        <AnimationContainer delay={0.1}>
-          <div className="flex flex-col items-center lg:items-center justify-center w-full py-8 max-w-xl mx-auto">
-            <MagicBadge title="Nasi klienci" />
-            <h2 className="text-center lg:text-center text-3xl md:text-5xl !leading-[1.1] font-medium font-heading text-foreground mt-6">
-              Co mówią nasi użytkownicy
-            </h2>
-            <p className="mt-4 text-center lg:text-center text-lg text-muted-foreground max-w-lg">
-              Oto co niektórzy z naszych użytkowników mówią o PhotoCloud.
-            </p>
-          </div>
-        </AnimationContainer>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 place-items-start gap-4 md:gap-8 py-10">
-          <div className="flex flex-col items-start h-min gap-6">
-            {REVIEWS.slice(0, 2).map((review, index) => (
-              <AnimationContainer delay={0.2 * index} key={index}>
-                <MagicCard key={index} className="md:p-0">
-                  <Card className="flex flex-col w-full border-none h-min">
-                    <CardHeader className="space-y-0">
-                      <CardTitle className="text-lg font-medium text-foreground">
-                        {review.name}
-                      </CardTitle>
-                      <CardDescription>
-                        {review.username}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[100px] pb-4 flex items-start">
-                      <p className="text-muted-foreground line-clamp-4">
-                        {review.review}
-                      </p>
-                    </CardContent>
-                    <CardFooter className="w-full space-x-1 mt-auto">
-                      {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
-                      ))}
-                    </CardFooter>
-                  </Card>
-                </MagicCard>
-              </AnimationContainer>
-            ))}
-          </div>
-          <div className="flex flex-col items-start h-min gap-6">
-            {REVIEWS.slice(2, 4).map((review, index) => (
-              <AnimationContainer delay={0.2 * index} key={index}>
-                <MagicCard key={index} className="md:p-0">
-                  <Card className="flex flex-col w-full border-none h-min">
-                    <CardHeader className="space-y-0">
-                      <CardTitle className="text-lg font-medium text-foreground">
-                        {review.name}
-                      </CardTitle>
-                      <CardDescription>
-                        {review.username}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[100px] pb-4 flex items-start">
-                      <p className="text-muted-foreground line-clamp-4">
-                        {review.review}
-                      </p>
-                    </CardContent>
-                    <CardFooter className="w-full space-x-1 mt-auto">
-                      {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
-                      ))}
-                    </CardFooter>
-                  </Card>
-                </MagicCard>
-              </AnimationContainer>
-            ))}
-          </div>
-          <div className="flex flex-col items-start h-min gap-6">
-            {REVIEWS.slice(4, 6).map((review, index) => (
-              <AnimationContainer delay={0.2 * index} key={index}>
-                <MagicCard key={index} className="md:p-0">
-                  <Card className="flex flex-col w-full border-none h-min">
-                    <CardHeader className="space-y-0">
-                      <CardTitle className="text-lg font-medium text-foreground">
-                        {review.name}
-                      </CardTitle>
-                      <CardDescription>
-                        {review.username}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-[100px] pb-4 flex items-start">
-                      <p className="text-muted-foreground line-clamp-4">
-                        {review.review}
-                      </p>
-                    </CardContent>
-                    <CardFooter className="w-full space-x-1 mt-auto">
-                      {Array.from({ length: review.rating }, (_, i) => (
-                        <StarIcon key={i} className="w-4 h-4 text-yellow-500" />
-                      ))}
-                    </CardFooter>
-                  </Card>
-                </MagicCard>
-              </AnimationContainer>
-            ))}
-          </div>
-        </div>
-      </MaxWidthWrapper>
-
-      {/* CTA Section */}
-      <MaxWidthWrapper className="mt-20 max-w-[100vw] overflow-x-hidden scrollbar-hide">
-        <AnimationContainer delay={0.1}>
-          <LampContainer>
-            <div className="flex flex-col items-center justify-center relative w-full text-center">
-              <h2 className="bg-gradient-to-b from-neutral-200 to-neutral-400 py-4 bg-clip-text text-center text-4xl md:text-7xl !leading-[1.15] font-medium font-heading tracking-tight text-transparent mt-8">
-                Wejdź w przyszłość udostępniania zdjęć
-              </h2>
-              <p className="text-muted-foreground mt-6 max-w-md mx-auto">
-                Doświadcz nowoczesnego rozwiązania, które zmienia sposób, w jaki udostępniasz zdjęcia. Podnieś swój profesjonalizm dzięki naszej platformie.
-              </p>
-              <div className="mt-6">
-                <Button asChild>
-                  <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000'}/sign-up`} className="flex items-center">
-                    Rozpocznij za darmo
-                    <ArrowRightIcon className="w-4 h-4 ml-2" />
-                  </Link>
-                </Button>
               </div>
             </div>
-          </LampContainer>
-        </AnimationContainer>
-      </MaxWidthWrapper>
+          </div>
+        </div>
+      </section>
 
-    </div>
-  )
-};
+      {/* Services Section */}
+      <section id="services" className="services-area services-eight">
+        <div className="section-title-five">
+          <div className="container">
+            <div className="row">
+              <div className="col-12">
+                <div className="content">
+                  <h6>NASZE USŁUGI</h6>
+                  <h2 className="fw-bold">Oferujemy rozwiązania, które ułatwią Twoją pracę</h2>
+                  <p>
+                    PhotoCloud to kompleksowe narzędzie zaprojektowane, aby usprawnić każdy aspekt udostępniania i zarządzania zdjęciami dla klientów.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="container">
+          <div className="row">
+            {[
+              {
+                icon: 'lni-gallery',
+                title: 'Zarządzanie Galeriami',
+                description: 'Twórz piękne, spersonalizowane galerie zdjęć dla swoich klientów. Łatwo organizuj i prezentuj swoją pracę w profesjonalny sposób.'
+              },
+              {
+                icon: 'lni-users',
+                title: 'Wybór Klienta',
+                description: 'Pozwól klientom wybierać ulubione zdjęcia bezpośrednio w galerii. Uprość proces selekcji i przyspiesz realizację zamówień.'
+              },
+              {
+                icon: 'lni-lock',
+                title: 'Ochrona Hasłem',
+                description: 'Zapewnij bezpieczeństwo swoim zdjęciom dzięki ochronie galerii hasłem. Kontroluj dostęp i dbaj o prywatność klientów.'
+              },
+              {
+                icon: 'lni-image',
+                title: 'Optymalizacja Obrazów',
+                description: 'Automatyczna optymalizacja zdjęć dla szybkiego ładowania i doskonałej jakości, bez kompromisów. Zadbaj o wrażenia swoich klientów.'
+              },
+              {
+                icon: 'lni-wallet',
+                title: 'Elastyczne Ceny',
+                description: 'Prosty i przejrzysty cennik bez abonamentu – płacisz tylko za galerię i łatwo wliczasz koszt w pakiet dla klienta. Szanujemy Twój czas.'
+              },
+              {
+                icon: 'lni-headphone-alt',
+                title: 'Wsparcie 24/7',
+                description: 'Nasze wsparcie techniczne jest dostępne 24 godziny na dobę, 7 dni w tygodniu, aby pomóc Ci w każdej sytuacji. Twoja satysfakcja jest naszym priorytetem.'
+              }
+            ].map((service, index) => (
+              <div key={index} className="col-lg-4 col-md-6">
+                <div className="single-services">
+                  <div className="service-icon">
+                    <i className={`lni ${service.icon}`}></i>
+                  </div>
+                  <div className="service-content">
+                    <h4>{service.title}</h4>
+                    <p>{service.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-export default HomePage
+      {/* Pricing Section */}
+      <section id="pricing" className="pricing-area pricing-fourteen">
+        <div className="section-title-five">
+          <div className="container">
+            <div className="row">
+              <div className="col-12">
+                <div className="content">
+                  <h6>PROSTY CENNIK</h6>
+                  <h2 className="fw-bold">Wybierz plan, który działa dla Ciebie</h2>
+                  <p>
+                    Oferujemy elastyczne plany cenowe, które dostosowują się do Twoich potrzeb. Płacisz tylko za to, czego używasz, bez ukrytych opłat i długoterminowych zobowiązań.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="container">
+          {/* Duration Selector */}
+          <div className="row justify-content-center mb-5">
+            <div className="col-lg-8 col-md-10 col-12">
+              <div className="d-flex gap-3 justify-content-center flex-wrap" style={{ marginBottom: '40px' }}>
+                {(['1m', '3m', '12m'] as Duration[]).map((duration) => {
+                  const isSelected = selectedDuration === duration;
+                  return (
+                    <button
+                      key={duration}
+                      onClick={() => setSelectedDuration(duration)}
+                      type="button"
+                      className={`btn ${isSelected ? 'primary-btn' : 'primary-btn-outline'}`}
+                      style={{
+                        minWidth: '140px',
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        borderRadius: '4px',
+                        transition: 'all 0.3s ease',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {duration === '1m' ? '1 MIESIĄC' : duration === '3m' ? '3 MIESIĄCE' : '12 MIESIĘCY'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
+          {/* Pricing Cards */}
+          <div className="row">
+            {PLANS.map((plan, index) => {
+              const price = plan.price[selectedDuration];
+              const isMiddle = index === 1; // 3GB plan is middle/recommended
+
+              return (
+                <div key={index} className="col-lg-4 col-md-6 col-12">
+                  <div className={`pricing-style-fourteen ${isMiddle ? "middle" : ""}`}>
+                    <div className="table-head">
+                      <h6 className="title">{plan.name}</h6>
+                      <div className="price">
+                        <h2
+                          className="amount"
+                          style={{
+                            fontSize: "50px",
+                            fontWeight: 700,
+                            lineHeight: "1",
+                            marginTop: "30px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <span>
+                            {price}
+                          </span>
+                          <span
+                            style={{ color: "var(--dark-3)" }}
+                          >
+                            {" "}
+                            PLN
+                          </span>
+                        </h2>
+                      </div>
+                    </div>
+                    <div className="light-rounded-buttons">
+                      <Link
+                        href={`${dashboardUrl}/sign-up`}
+                        className={`btn ${isMiddle ? "primary-btn" : "primary-btn-outline"}`}
+                        style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}
+                      >
+                        {index === 0 ? "Rozpocznij za darmo" : "Wybierz plan"}
+                      </Link>
+                    </div>
+                    <div className="table-content">
+                      <ul className="table-list">
+                        <li>
+                          <i className="lni lni-checkmark-circle"></i>
+                          {plan.photoEstimate.displayText}
+                        </li>
+                        {plan.features.map((feature, idx) => (
+                          <li key={idx}>
+                            <i className="lni lni-checkmark-circle"></i>
+                            {feature.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section id="call-action" className="call-action">
+        <div className="container">
+          <div className="row justify-content-center">
+            <div className="col-xxl-6 col-xl-7 col-lg-8 col-md-9">
+              <div className="inner-content">
+                <h2>Wejdź w przyszłość udostępniania zdjęć</h2>
+                <p>
+                  Doświadcz nowoczesnego rozwiązania, które zmienia sposób, w jaki udostępniasz zdjęcia. Podnieś swój profesjonalizm dzięki naszej platformie.
+                </p>
+                <div className="light-rounded-buttons">
+                  <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn-outline">
+                    Rozpocznij za darmo
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <div id="clients" className="brand-area section">
+        <div className="section-title-five">
+          <div className="container">
+            <div className="row">
+              <div className="col-12">
+                <div className="content">
+                  <h6>Nasi Zadowoleni Klienci</h6>
+                  <h2 className="fw-bold">Kto nam zaufał</h2>
+                  <p>
+                    Jesteśmy dumni z zaufania, jakim obdarzyło nas wielu profesjonalnych fotografów. Przeczytaj opinie tych, którzy już korzystają z PhotoCloud.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="container">
+          <div className="row">
+            <div className="col-12">
+              <div className="testimonials-grid">
+                {[
+                  {
+                    text: 'PhotoCloud zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny!',
+                    name: 'Anna Kowalska',
+                    role: 'Fotograf ślubny'
+                  },
+                  {
+                    text: 'Kocham elastyczny system cenowy. Mogę dostosować ofertę do potrzeb każdego klienta. Gorąco polecam!',
+                    name: 'Marcin Nowak',
+                    role: 'Fotograf portretowy'
+                  },
+                  {
+                    text: 'Ochrona hasłem i łatwy wybór zdjęć przez klientów to ogromna zaleta. Klienci są zachwyceni!',
+                    name: 'Katarzyna Wiśniewska',
+                    role: 'Fotograf rodzinny'
+                  },
+                  {
+                    text: 'Szybkie ładowanie, intuicyjny interfejs i świetne wsparcie. To wszystko czego potrzebuję!',
+                    name: 'Piotr Zieliński',
+                    role: 'Fotograf eventowy'
+                  },
+                  {
+                    text: 'Najlepsza inwestycja w moim biznesie. Klienci doceniają profesjonalizm i wygodę.',
+                    name: 'Magdalena Krawczyk',
+                    role: 'Fotograf produktowy'
+                  },
+                  {
+                    text: 'PhotoCloud to game changer. Oszczędzam czas i pieniądze, a klienci są zadowoleni.',
+                    name: 'Tomasz Lewandowski',
+                    role: 'Fotograf komercyjny'
+                  }
+                ].map((testimonial, index) => (
+                  <div key={index} className="testimonial-card">
+                    <div className="testimonial-quote">&quot;</div>
+                    <p className="testimonial-text">{testimonial.text}</p>
+                    <div className="testimonial-footer">
+                      <div className="testimonial-info">
+                        <h5 className="testimonial-name">{testimonial.name}</h5>
+                        <p className="testimonial-role">{testimonial.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Scroll to Top - handled by component */}
+    </>
+  );
+}
