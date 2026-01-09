@@ -15,16 +15,29 @@ import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
+import dynamic from "next/dynamic";
 import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
-import { NextStepsOverlay } from "../../../components/galleries/NextStepsOverlay";
-import { PublishGalleryWizard } from "../../../components/galleries/PublishGalleryWizard";
 import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
 import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
-import { UppyUploadModal } from "../../../components/uppy/UppyUploadModal";
+
+// Lazy load heavy components to reduce bundle size (~200KB+ savings)
+// Using wrapper files that export as default for proper dynamic() support
+const NextStepsOverlay = dynamic(() => import("../../../components/galleries/NextStepsOverlay.lazy"), {
+  ssr: false,
+});
+
+const PublishGalleryWizard = dynamic(() => import("../../../components/galleries/PublishGalleryWizard.lazy"), {
+  ssr: false,
+});
+
+const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
+  ssr: false,
+  loading: () => <Loading text="Ładowanie modułu przesyłania..." />,
+});
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";

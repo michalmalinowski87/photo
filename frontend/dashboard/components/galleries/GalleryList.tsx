@@ -13,8 +13,18 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { VirtuosoGrid } from "react-virtuoso";
+
+// Lazy load react-virtuoso (59.5 KB) - only loads when cards view is used
+const VirtuosoGrid = dynamic(() => import("./VirtuosoGridWrapper.lazy"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-gray-500">Ładowanie...</div>
+    </div>
+  ),
+});
 
 import { useDeleteGallery } from "../../hooks/mutations/useGalleryMutations";
 import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
@@ -33,7 +43,10 @@ import { InlineLoading } from "../ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../ui/table";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
-import { GalleryCard } from "./GalleryCard";
+// Lazy load GalleryCard (only used in cards view) to reduce initial bundle size
+const GalleryCard = dynamic(() => import("./GalleryCard.lazy"), {
+  ssr: false,
+});
 
 interface GalleryListProps {
   filter?:

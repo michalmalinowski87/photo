@@ -1,11 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { GetServerSideProps } from "next";
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef } from "react";
 
-import { NextStepsOverlay } from "../../components/galleries/NextStepsOverlay";
-import PaymentConfirmationModal from "../../components/galleries/PaymentConfirmationModal";
+// Lazy load heavy components to reduce bundle size
+// Using wrapper file that exports as default for proper dynamic() support
+const NextStepsOverlay = dynamic(() => import("../../components/galleries/NextStepsOverlay.lazy"), {
+  ssr: false,
+});
+
+const PaymentConfirmationModal = dynamic(() => import("../../components/galleries/PaymentConfirmationModal"), {
+  ssr: false,
+});
 import { useGalleryType } from "../../components/hocs/withGalleryType";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";

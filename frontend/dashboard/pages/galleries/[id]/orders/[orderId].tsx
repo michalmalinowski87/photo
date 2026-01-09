@@ -1,10 +1,8 @@
 import type { GetServerSideProps } from "next";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
-import { NextStepsOverlay } from "../../../../components/galleries/NextStepsOverlay";
-import PaymentConfirmationModal from "../../../../components/galleries/PaymentConfirmationModal";
-import { PublishGalleryWizard } from "../../../../components/galleries/PublishGalleryWizard";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
 import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
@@ -14,7 +12,27 @@ import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
 import { OrderTabs } from "../../../../components/orders/OrderTabs";
 import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
-import { UppyUploadModal } from "../../../../components/uppy/UppyUploadModal";
+
+// Lazy load heavy components to reduce bundle size (~200KB+ savings)
+// Using wrapper files that export as default for proper dynamic() support
+const NextStepsOverlay = dynamic(() => import("../../../../components/galleries/NextStepsOverlay.lazy"), {
+  ssr: false,
+});
+
+const PaymentConfirmationModal = dynamic(
+  () => import("../../../../components/galleries/PaymentConfirmationModal"),
+  {
+    ssr: false,
+  }
+);
+
+const PublishGalleryWizard = dynamic(() => import("../../../../components/galleries/PublishGalleryWizard.lazy"), {
+  ssr: false,
+});
+
+const UppyUploadModal = dynamic(() => import("../../../../components/uppy/UppyUploadModal.lazy"), {
+  ssr: false,
+});
 import { usePayGallery } from "../../../../hooks/mutations/useGalleryMutations";
 import {
   useApproveChangeRequest,

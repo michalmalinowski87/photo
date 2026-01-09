@@ -1,13 +1,24 @@
 const path = require("path");
 
+// Bundle analyzer setup
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@photocloud/gallery-components"],
-  // Next.js 15: Bundle external packages for Pages Router for faster startup times
+  // Optimize package imports to reduce bundle size
   experimental: {
-    bundlePagesRouterDependencies: true,
+    optimizePackageImports: [
+      "lucide-react",
+      "@tanstack/react-query",
+      "react-virtuoso",
+    ],
   },
+  // Enable compression for better performance on slow connections
+  compress: true,
   // Fail build on ESLint errors
   eslint: {
     ignoreDuringBuilds: false,
@@ -48,4 +59,5 @@ const nextConfig = {
     return config;
   },
 };
-module.exports = nextConfig;
+
+module.exports = withBundleAnalyzer(nextConfig);

@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { AppProps } from "next/app";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
@@ -13,11 +13,27 @@ import AuthLayout from "../components/auth/AuthLayout";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
 import { ClientOnly } from "../components/ClientOnly";
-import AppLayout from "../components/layout/AppLayout";
-import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+
+// Lazy load heavy components to reduce initial bundle size
+const ReactQueryDevtools = dynamic(
+  () => import("@tanstack/react-query-devtools").then((mod) => mod.ReactQueryDevtools),
+  { ssr: false }
+);
+
+const AppLayout = dynamic(() => import("../components/layout/AppLayout"), {
+  loading: () => <FullPageLoading />,
+});
+
+const GalleryLayoutWrapper = dynamic(() => import("../components/layout/GalleryLayoutWrapper"), {
+  loading: () => <FullPageLoading text="Ładowanie galerii..." />,
+});
+
+// Import these normally - they're named exports and dynamic() was causing issues
 import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
+
+// Import these normally - they're named exports and dynamic() was causing issues
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { AuthProvider, useAuth } from "../context/AuthProvider";
@@ -115,34 +131,6 @@ function AppContent({ Component, pageProps }: AppProps) {
   // Enable global order status polling when authenticated (skip for 404)
   useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
 
-  // Prefetch critical routes on mount for authenticated users to eliminate first-visit delay
-  useEffect(() => {
-    if (is404Page || !isAuthenticated || !router.isReady) {
-      return;
-    }
-
-    // Prefetch critical dashboard routes to preload their JavaScript bundles
-    // This eliminates the first-visit delay when navigating to these pages
-    const criticalRoutes = [
-      "/", // Dashboard home
-      "/clients",
-      "/packages",
-      "/wallet",
-      "/settings",
-      "/galleries/robocze", // Most common gallery filter
-    ];
-
-    // Prefetch routes after a short delay to not block initial render
-    const prefetchTimer = setTimeout(() => {
-      criticalRoutes.forEach((route) => {
-        void router.prefetch(route);
-      });
-    }, 1000); // Wait 1 second after mount to not interfere with initial load
-
-    return () => {
-      clearTimeout(prefetchTimer);
-    };
-  }, [isAuthenticated, router.isReady, router, is404Page]);
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname

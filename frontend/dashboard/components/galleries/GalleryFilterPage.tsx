@@ -56,18 +56,17 @@ export default function GalleryFilterPage({
     }
   }, [filter]);
 
-  // Hide overlay only when query is completely done AND we have data pages
-  // This ensures we wait for the actual fetch, not just cached data
+  // Hide overlay when query is ready AND we have data pages
+  // With refetchOnMount: false, cached data shows immediately (no refetch delay)
+  // Overlay only waits if data is stale and needs refetching
   useEffect(() => {
     const isReady = !loading && !isFetching;
     const hasDataPages = data?.pages !== undefined;
     
     if (isReady && hasDataPages) {
-      // Query is done and we have data - hide overlay after delay
-      const timer = setTimeout(() => {
-        setShowOverlay(false);
-      }, 200);
-      return () => clearTimeout(timer);
+      // Query is done and we have data - hide overlay immediately for instant navigation
+      // No delay needed since cached data is already available
+      setShowOverlay(false);
     } else {
       // Still loading/fetching or no data yet - keep overlay visible
       setShowOverlay(true);
