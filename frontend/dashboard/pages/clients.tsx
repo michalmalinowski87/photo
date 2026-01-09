@@ -352,7 +352,7 @@ export default function Clients() {
               placeholder="Szukaj (email, imię, nazwisko, firma, NIP, telefon)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full h-11 ${searchQuery ? "pr-10" : ""}`}
+              className={`w-full ${searchQuery ? "pr-10" : ""}`}
               hideErrorSpace={true}
               autoComplete="off"
               autoFocus={false}

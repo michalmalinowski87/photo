@@ -48,7 +48,7 @@ const Input: FC<InputProps> = ({
   autoFocus,
   hideErrorSpace = false,
 }) => {
-  let inputClasses = ` h-11 w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-theme-xs placeholder:text-photographer-mutedText focus:outline-hidden focus:ring-3  dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 ${className}`;
+  let inputClasses = ` w-full rounded-lg border appearance-none px-4 py-1.5 text-sm shadow-theme-xs placeholder:text-photographer-mutedText focus:outline-hidden focus:ring-3  dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 ${className}`;
 
   if (disabled) {
     inputClasses += ` text-photographer-mutedText border-photographer-border opacity-40 bg-photographer-elevated cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 opacity-40`;
@@ -79,7 +79,7 @@ const Input: FC<InputProps> = ({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         className={inputClasses}
-        style={{ minHeight: "44px" }}
+        style={{ height: "33px", minHeight: "33px" }}
         {...(autoComplete === "off" || !autoComplete
           ? { "data-1p-ignore": "true", "data-lpignore": "true" }
           : {})}

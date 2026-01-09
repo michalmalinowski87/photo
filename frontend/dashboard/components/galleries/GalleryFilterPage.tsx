@@ -171,7 +171,7 @@ export default function GalleryFilterPage({
                 placeholder="Szukaj (nazwa, data, email klienta)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`pl-9 ${searchQuery ? "pr-10" : "pr-4"} h-11`}
+                className={`pl-9 ${searchQuery ? "pr-10" : "pr-4"}`}
                 hideErrorSpace={true}
                 autoComplete="off"
                 autoFocus={false}

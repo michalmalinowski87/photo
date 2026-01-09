@@ -74,7 +74,8 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
                     ref={inputRef}
                     type="text"
                     placeholder="Szukaj lub wpisz komendę..."
-                    className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-400 bg-transparent py-2.5 pl-12 pr-14 text-sm text-photographer-text shadow-theme-xs placeholder:text-photographer-mutedText focus:border-photographer-accent focus:outline-hidden focus:ring-3 focus:ring-photographer-accent/10 dark:border-gray-800 dark:bg-gray-900 dark:bg-white/[0.03] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-photographer-accent xl:w-[430px]"
+                    className="dark:bg-dark-900 w-full rounded-lg border border-gray-400 bg-transparent py-1.5 pl-12 pr-14 text-sm text-photographer-text shadow-theme-xs placeholder:text-photographer-mutedText focus:border-photographer-accent focus:outline-hidden focus:ring-3 focus:ring-photographer-accent/10 dark:border-gray-800 dark:bg-gray-900 dark:bg-white/[0.03] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-photographer-accent xl:w-[430px]"
+                    style={{ height: "33px", minHeight: "33px" }}
                   />
 
                   <button className="absolute right-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-gray-400 bg-photographer-background px-[7px] py-[4.5px] text-xs -tracking-[0.2px] text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400">
