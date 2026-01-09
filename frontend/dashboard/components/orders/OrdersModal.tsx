@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Eye } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/router";
 import { useState } from "react";
 
 import {
@@ -11,6 +11,7 @@ import api from "../../lib/api-service";
 import { formatPrice } from "../../lib/format-price";
 import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { queryKeys } from "../../lib/react-query";
+import { useUnifiedStore } from "../../store/unifiedStore";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
 import { Loading } from "../ui/loading/Loading";
@@ -46,6 +47,7 @@ export const OrdersModal = ({
   title,
   excludeDeliveryStatus,
 }: OrdersModalProps) => {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const itemsPerPage = 20;
   const [denyModalOpen, setDenyModalOpen] = useState(false);
@@ -304,17 +306,21 @@ export const OrdersModal = ({
                                 </Button>
                               </>
                             )}
-                            <Link href={`/galleries/${order.galleryId}/orders/${order.orderId}`}>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={onClose}
-                                className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
-                              >
-                                <Eye className="w-4 h-4 hidden max-[1350px]:block" />
-                                <span className="max-[1350px]:hidden">Szczegóły</span>
-                              </Button>
-                            </Link>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                onClose();
+                                if (order.galleryId && order.orderId) {
+                                  useUnifiedStore.getState().setNavigationLoading(true);
+                                  void router.push(`/galleries/${order.galleryId}/orders/${order.orderId}`);
+                                }
+                              }}
+                              className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
+                            >
+                              <Eye className="w-4 h-4 hidden max-[1350px]:block" />
+                              <span className="max-[1350px]:hidden">Szczegóły</span>
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>

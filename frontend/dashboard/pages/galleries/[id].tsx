@@ -877,11 +877,18 @@ export default function GalleryDetail() {
                                 </Button>
                               </>
                             )}
-                            <Link href={`/galleries/${galleryIdStr}/orders/${order.orderId}`}>
-                              <Button size="sm" variant="outline">
-                                Szczegóły
-                              </Button>
-                            </Link>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                if (galleryIdStr && order.orderId) {
+                                  useUnifiedStore.getState().setNavigationLoading(true);
+                                  void router.push(`/galleries/${galleryIdStr}/orders/${order.orderId}`);
+                                }
+                              }}
+                            >
+                              Szczegóły
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>

@@ -5,6 +5,7 @@ import React, { useState } from "react";
 
 import { formatPrice } from "../../lib/format-price";
 import { formatOrderDisplay } from "../../lib/orderDisplay";
+import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Order } from "../../types";
 import Badge from "../ui/badge/Badge";
 import Button from "../ui/button/Button";
@@ -254,16 +255,18 @@ export const ActiveOrdersTable = ({
                             )}
                           </>
                         )}
-                        <Link href={`/galleries/${galleryId}/orders/${orderId}`}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
-                          >
-                            <Eye className="w-4 h-4 hidden max-[1350px]:block" />
-                            <span className="max-[1350px]:hidden">Szczegóły</span>
-                          </Button>
-                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            useUnifiedStore.getState().setNavigationLoading(true);
+                            void router.push(`/galleries/${galleryId}/orders/${orderId}`);
+                          }}
+                          className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"
+                        >
+                          <Eye className="w-4 h-4 hidden max-[1350px]:block" />
+                          <span className="max-[1350px]:hidden">Szczegóły</span>
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

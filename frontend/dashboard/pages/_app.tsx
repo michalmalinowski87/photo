@@ -16,6 +16,7 @@ import { ClientOnly } from "../components/ClientOnly";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
 import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
@@ -26,6 +27,7 @@ import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
 import { makeQueryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
+import { useUnifiedStore } from "../store/unifiedStore";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = [
@@ -104,6 +106,8 @@ function AppContent({ Component, pageProps }: AppProps) {
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
+  const navigationLoading = useUnifiedStore((state) => state.navigationLoading);
+  const setNavigationLoading = useUnifiedStore((state) => state.setNavigationLoading);
 
   // Skip hooks for 404 page during SSG (React 19/Next.js 15 compatibility)
   const is404Page = router.pathname === "/404";
@@ -212,13 +216,22 @@ function AppContent({ Component, pageProps }: AppProps) {
     // Also handle route changes
     const handleRouteChangeComplete = () => {
       restoreThemeAndClearSessionExpired();
+      // Clear navigation loading on any route change (in case user navigates away)
+      setNavigationLoading(false);
+    };
+
+    const handleRouteChangeError = () => {
+      // Clear navigation loading on navigation error
+      setNavigationLoading(false);
     };
 
     router.events.on("routeChangeComplete", handleRouteChangeComplete);
+    router.events.on("routeChangeError", handleRouteChangeError);
     return () => {
       router.events.off("routeChangeComplete", handleRouteChangeComplete);
+      router.events.off("routeChangeError", handleRouteChangeError);
     };
-  }, [router.isReady, router.pathname, router.events, setSessionExpired, is404Page]);
+  }, [router.isReady, router.pathname, router.events, setSessionExpired, setNavigationLoading, is404Page]);
 
   // Register Service Worker for Golden Retriever (skip for 404 during SSG)
   useEffect(() => {
@@ -264,6 +277,8 @@ function AppContent({ Component, pageProps }: AppProps) {
 
   return (
     <>
+      {/* Navigation loading overlay - shows when navigating to order pages */}
+      {navigationLoading && <FullPageLoading text="Ładowanie zlecenia..." />}
       {/* Mobile warning modal for authenticated dashboard pages */}
       {!isAuthRoute && (
         <MobileWarningModal

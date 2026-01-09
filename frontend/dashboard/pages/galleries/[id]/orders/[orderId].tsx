@@ -38,6 +38,8 @@ import type { GalleryImage } from "../../../../types";
 
 // Order type is imported from types/index.ts
 
+// Order type is imported from types/index.ts
+
 interface PaymentDetails {
   totalAmountCents: number;
   walletAmountCents: number;
@@ -67,6 +69,7 @@ export default function OrderDetail() {
   const setGalleryCreationFlowActive = useUnifiedStore(
     (state) => state.setGalleryCreationFlowActive
   );
+  const setNavigationLoading = useUnifiedStore((state) => state.setNavigationLoading);
 
   // Get gallery and order from React Query
   const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
@@ -109,6 +112,20 @@ export default function OrderDetail() {
     router.isReady,
     setGalleryCreationFlowActive,
   ]);
+
+  // Clear navigation loading when order page is fully ready
+  useEffect(() => {
+    // Check if page is fully ready:
+    // - Gallery is loaded
+    // - Order is loaded (not loading)
+    // - Router is ready
+    const isPageReady = !!gallery && !!order && !orderLoading && router.isReady;
+
+    if (isPageReady) {
+      // Clear navigation loading overlay
+      setNavigationLoading(false);
+    }
+  }, [gallery, order, orderLoading, router.isReady, setNavigationLoading]);
 
   // Use infinite scroll for originals (client selected images)
   const {

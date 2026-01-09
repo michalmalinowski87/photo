@@ -15,6 +15,9 @@ export interface UISlice {
   galleryCreationFlowActive: boolean;
   galleryCreationTargetId: string | null;
   setGalleryCreationFlowActive: (active: boolean, galleryId?: string) => void;
+  // Navigation loading state (for order page navigation)
+  navigationLoading: boolean;
+  setNavigationLoading: (loading: boolean) => void;
 }
 
 export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]], [], UISlice> = (
@@ -23,6 +26,7 @@ export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]],
   tablePreferences: {},
   galleryCreationFlowActive: false,
   galleryCreationTargetId: null,
+  navigationLoading: false,
 
   setTablePreferences: (tableId: string, preferences: TablePreferences) => {
     set(
@@ -61,5 +65,9 @@ export const createUISlice: StateCreator<UISlice, [["zustand/devtools", never]],
       undefined,
       `ui/setGalleryCreationFlowActive/${active ? (galleryId ?? "true") : "false"}`
     );
+  },
+
+  setNavigationLoading: (loading: boolean) => {
+    set({ navigationLoading: loading }, undefined, `ui/setNavigationLoading/${loading}`);
   },
 });

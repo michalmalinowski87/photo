@@ -1941,6 +1941,7 @@ export default function GalleryPhotos() {
               const handleGoToOrder = (e: React.MouseEvent) => {
                 e.stopPropagation();
                 if (galleryIdStr && orderId) {
+                  useUnifiedStore.getState().setNavigationLoading(true);
                   void router.push(`/galleries/${galleryIdStr}/orders/${orderId}`);
                 }
               };
@@ -1951,14 +1952,12 @@ export default function GalleryPhotos() {
                   className="bg-white border border-photographer-border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden"
                 >
                   <div
-                    className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors ${
+                    onClick={() => toggleSection(sectionId)}
+                    className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors cursor-pointer ${
                       isExpanded ? "rounded-t-lg" : "rounded-lg"
                     }`}
                   >
-                    <button
-                      onClick={() => toggleSection(sectionId)}
-                      className="flex-1 text-left flex items-center gap-4 flex-wrap"
-                    >
+                    <div className="flex-1 text-left flex items-center gap-4 flex-wrap">
                       <div className="text-lg font-semibold text-gray-900 dark:text-white">
                         Zlecenie #{orderDisplayNumber}
                       </div>
@@ -1983,17 +1982,16 @@ export default function GalleryPhotos() {
                             ? "zdjęcia"
                             : "zdjęć"}
                       </div>
-                    </button>
+                    </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={handleGoToOrder}
-                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1.5 transition-colors"
                       >
                         <span>Przejdź do zlecenia</span>
                         <Link size={16} />
                       </button>
-                      <button
-                        onClick={() => toggleSection(sectionId)}
+                      <div
                         className="p-1.5 hover:bg-photographer-muted dark:hover:bg-gray-700 rounded transition-colors"
                         aria-label={isExpanded ? "Zwiń sekcję" : "Rozwiń sekcję"}
                       >
@@ -2003,7 +2001,7 @@ export default function GalleryPhotos() {
                             isExpanded ? "transform rotate-180" : ""
                           }`}
                         />
-                      </button>
+                      </div>
                     </div>
                   </div>
                   {isExpanded && (
@@ -2027,14 +2025,12 @@ export default function GalleryPhotos() {
             {/* Unselected Section - Always show header */}
             <div className="bg-white border border-photographer-border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
               <div
-                className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors ${
+                onClick={() => toggleSection("unselected")}
+                className={`w-full px-5 py-3 bg-photographer-elevated dark:bg-gray-900 flex items-center justify-between hover:bg-photographer-muted dark:hover:bg-gray-800 transition-colors cursor-pointer ${
                   expandedSection === "unselected" ? "rounded-t-lg" : "rounded-lg"
                 }`}
               >
-                <button
-                  onClick={() => toggleSection("unselected")}
-                  className="flex-1 text-left flex items-center gap-4"
-                >
+                <div className="flex-1 text-left flex items-center gap-4">
                   <div className="text-lg font-semibold text-gray-900 dark:text-white">
                     Niewybrane
                   </div>
@@ -2046,12 +2042,15 @@ export default function GalleryPhotos() {
                         ? "zdjęcia"
                         : "zdjęć"}
                   </div>
-                </button>
+                </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {unselectedImages.length > 0 && (
                     <>
                       <button
-                        onClick={handleDeleteAllUnselectedClick}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAllUnselectedClick();
+                        }}
                         disabled={isBulkDeleting}
                         className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -2060,8 +2059,7 @@ export default function GalleryPhotos() {
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => toggleSection("unselected")}
+                  <div
                     className="p-1.5 hover:bg-photographer-muted dark:hover:bg-gray-700 rounded transition-colors"
                     aria-label={expandedSection === "unselected" ? "Zwiń sekcję" : "Rozwiń sekcję"}
                   >
@@ -2071,7 +2069,7 @@ export default function GalleryPhotos() {
                         expandedSection === "unselected" ? "transform rotate-180" : ""
                       }`}
                     />
-                  </button>
+                  </div>
                 </div>
               </div>
               {expandedSection === "unselected" && (
