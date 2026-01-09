@@ -400,15 +400,16 @@ const GalleryList = ({
     }
   };
 
+  // Determine if this is initial load (no data yet)
+  const isInitialLoad = loading && galleries.length === 0 && (!data || !data.pages || data.pages.length === 0);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
       {queryError && (
         <div className="text-red-600 dark:text-red-400">{formatApiError(queryError)}</div>
       )}
 
-      {loading ? (
-        <InlineLoading text="Ładowanie galerii..." />
-      ) : galleries.length === 0 ? (
+      {!isInitialLoad && galleries.length === 0 ? (
         <EmptyState {...getEmptyStateConfig()} />
       ) : viewMode === "cards" ? (
         // Cards View with Infinite Scroll - Ultra Smooth with Early Preloading

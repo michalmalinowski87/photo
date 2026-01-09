@@ -6,7 +6,7 @@ import { usePageLogger } from "../../hooks/usePageLogger";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import Input from "../ui/input/InputField";
-import { FullPageLoading } from "../ui/loading/Loading";
+import { ContentAreaLoadingOverlay } from "../ui/loading/Loading";
 
 import GalleryList from "./GalleryList";
 
@@ -81,8 +81,8 @@ export default function GalleryFilterPage({
     // Store state is managed separately
   }, []);
 
-  // Don't show FullPageLoading if wizard should open from URL (prevents layout issues)
-  const showFullPageLoading =
+  // Show content area overlay if loading and haven't initially loaded yet
+  const showContentAreaOverlay =
     loading && !hasInitiallyLoaded && !publishWizardOpen && !shouldOpenWizardFromUrl;
 
   // View mode state - shared with GalleryList
@@ -157,12 +157,10 @@ export default function GalleryFilterPage({
   };
 
   return (
-    <>
-      {showFullPageLoading && <FullPageLoading text={loadingText} />}
-      <div className="space-y-6">
-        {!publishWizardOpen && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
+    <div className="space-y-6">
+      {!publishWizardOpen && (
+        <div className="flex items-center gap-4 flex-wrap">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
             {/* Search Input - spans from title to sort dropdown */}
             <div className="relative flex-1 min-w-[200px]">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
@@ -309,16 +307,18 @@ export default function GalleryFilterPage({
             </div>
           </div>
         )}
-        <GalleryList
-          filter={filter}
-          onWizardOpenChange={handleWizardOpenChange}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          search={debouncedSearchQuery}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-        />
-      </div>
-    </>
+        <div className="relative" style={{ minHeight: showContentAreaOverlay ? "calc(100vh - 200px)" : undefined }}>
+          {showContentAreaOverlay && <ContentAreaLoadingOverlay text={loadingText} />}
+          <GalleryList
+            filter={filter}
+            onWizardOpenChange={handleWizardOpenChange}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            search={debouncedSearchQuery}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+          />
+        </div>
+    </div>
   );
 }

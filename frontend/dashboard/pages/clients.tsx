@@ -8,7 +8,7 @@ import { Dropdown } from "../components/ui/dropdown/Dropdown";
 import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
-import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
+import { ContentAreaLoadingOverlay, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
 import {
@@ -337,9 +337,8 @@ export default function Clients() {
     );
   }
 
-  if (loading && !data) {
-    return <ContentViewLoading text="Ładowanie klientów..." />;
-  }
+  // Determine if this is initial load (no data yet)
+  const isInitialLoad = loading && clients.length === 0 && (!data || !data.pages || data.pages.length === 0);
 
   return (
     <div className="space-y-6">
@@ -462,7 +461,7 @@ export default function Clients() {
 
       {queryError && <div>{formatApiError(queryError)}</div>}
 
-      {clients.length === 0 ? (
+      {!isInitialLoad && clients.length === 0 ? (
         searchQuery ? (
           <div className="pt-32 pb-8 text-center text-photographer-mutedText dark:text-gray-400 text-xl">
             Brak wyników wyszukiwania.
@@ -480,7 +479,8 @@ export default function Clients() {
           />
         )
       ) : (
-        <div className="w-full relative">
+        <div className="w-full relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
+          {isInitialLoad && <ContentAreaLoadingOverlay text="Ładowanie klientów..." />}
           <div
             className="w-full overflow-auto table-scrollbar"
             style={{

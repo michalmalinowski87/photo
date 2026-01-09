@@ -175,3 +175,49 @@ export const ContentViewLoading = ({ text, logo }: { text?: string; logo?: React
     </div>
   );
 };
+
+// Content area overlay loading component - shows an overlay in the main content area only
+// Use this for list loading states where you want to show an overlay over the list container
+// The overlay covers only the content area (where the list will appear), not the header/search controls
+export const ContentAreaLoadingOverlay = ({ text }: { text?: string }) => {
+  const welcomingMessages = [
+    "Przygotowujemy wszystko dla Ciebie...",
+    "Już prawie gotowe...",
+    "Wszystko będzie gotowe za chwilę...",
+    "Pracujemy nad tym...",
+  ];
+
+  const defaultMessage = welcomingMessages[0];
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-50">
+      <div className="flex flex-col items-center justify-center gap-6 opacity-60">
+        {/* PhotoHub text with fade animation */}
+        <h1 className="text-4xl font-bold text-gray-900 dark:text-white animate-fade-in-out">
+          PhotoHub
+        </h1>
+
+        {/* Welcoming message */}
+        <p className="text-base text-gray-600 dark:text-gray-400 font-medium">
+          {text ?? defaultMessage}
+        </p>
+
+        {/* Subtle loading indicator */}
+        <div className="flex items-center gap-2 mt-2">
+          <div
+            className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+            style={{ animationDelay: "0s" }}
+          ></div>
+          <div
+            className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+            style={{ animationDelay: "0.2s" }}
+          ></div>
+          <div
+            className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+            style={{ animationDelay: "0.4s" }}
+          ></div>
+        </div>
+      </div>
+    </div>
+  );
+};

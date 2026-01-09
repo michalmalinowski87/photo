@@ -8,7 +8,7 @@ import { Dropdown } from "../components/ui/dropdown/Dropdown";
 import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
 import Input from "../components/ui/input/InputField";
-import { ContentViewLoading, InlineLoading } from "../components/ui/loading/Loading";
+import { ContentAreaLoadingOverlay, InlineLoading } from "../components/ui/loading/Loading";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../components/ui/table";
 import { Tooltip } from "../components/ui/tooltip/Tooltip";
 import {
@@ -342,11 +342,8 @@ export default function Packages() {
     );
   }
 
-  const initialLoad = loading && packages.length === 0;
-
-  if (initialLoad) {
-    return <ContentViewLoading text="Ładowanie pakietów..." />;
-  }
+  // Determine if this is initial load (no data yet)
+  const isInitialLoad = loading && packages.length === 0 && (!data || !data.pages || data.pages.length === 0);
 
   return (
     <div className="space-y-6">
@@ -498,7 +495,7 @@ export default function Packages() {
 
       {queryError && <div>{formatApiError(queryError)}</div>}
 
-      {packages.length === 0 ? (
+      {!isInitialLoad && packages.length === 0 ? (
         <EmptyState
           icon={<Package size={64} />}
           title="Brak pakietów"
@@ -510,7 +507,8 @@ export default function Packages() {
           }}
         />
       ) : (
-        <div className="w-full relative">
+        <div className="w-full relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
+          {isInitialLoad && <ContentAreaLoadingOverlay text="Ładowanie pakietów..." />}
           <div
             className="w-full overflow-auto"
             style={{
