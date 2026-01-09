@@ -12,8 +12,8 @@ import {
   Rocket,
   Eye,
 } from "lucide-react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 
 // Lazy load react-virtuoso (59.5 KB) - only loads when cards view is used

@@ -1,9 +1,8 @@
 import { LayoutDashboard, List as ListIcon, Search, ArrowUpDown, X } from "lucide-react";
-import { useRouter } from "next/router";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
-import { usePageLogger } from "../../hooks/usePageLogger";
 import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
+import { usePageLogger } from "../../hooks/usePageLogger";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import Input from "../ui/input/InputField";
@@ -33,7 +32,6 @@ export default function GalleryFilterPage({
   loadingText = "Ładowanie galerii...",
 }: GalleryFilterPageProps) {
   usePageLogger({ pageName: `GalleryFilterPage-${filter}`, logRouteChanges: false });
-  const router = useRouter();
   const [publishWizardOpen, setPublishWizardOpen] = useState<boolean>(false);
   const [showOverlay, setShowOverlay] = useState<boolean>(true);
   const prevFilterRef = useRef<string>(filter);

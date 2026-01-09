@@ -9,7 +9,6 @@ import {
 } from "../../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useOrder, useOrderFinalImages } from "../../../hooks/queries/useOrders";
-import { useDownloadUtils } from "../../../hooks/useDownloadUtils";
 import { useModal } from "../../../hooks/useModal";
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { formatOrderDisplay } from "../../../lib/orderDisplay";
@@ -54,8 +53,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   const markOrderPaidMutation = useMarkOrderPaid();
   const sendFinalsToClientMutation = useSendFinalLink();
 
-  // Download utilities
-  const { downloadFinals, downloadZip } = useDownloadUtils();
+  // Download utilities (not used directly - ZipDownloadButton handles downloads)
 
   // Modal hooks
   const { openModal: openDenyModal } = useModal("deny-change");
@@ -73,7 +71,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
   // Update ref when gallery data changes (but not during refetches)
   useEffect(() => {
     if (!isFetching && gallery) {
-      lastKnownIsPaidRef.current = gallery.isPaid ?? false;
+      lastKnownIsPaidRef.current = typeof gallery.isPaid === "boolean" ? gallery.isPaid : false;
     }
   }, [gallery, isFetching]);
 
@@ -127,13 +125,6 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
     }
   }, [galleryIdStr, orderId, markOrderPaidMutation]);
 
-  const handleDownloadFinals = useCallback(() => {
-    if (!galleryIdStr) {
-      return;
-    }
-    downloadFinals(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId, downloadFinals]);
-
   const handleSendFinalsToClientClick = useCallback(() => {
     setShowSendFinalsDialog(true);
   }, []);
@@ -153,13 +144,6 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
       // Error handling is done in the mutation
     }
   }, [galleryIdStr, orderId, sendFinalsToClientMutation]);
-
-  const handleDownloadZip = useCallback(() => {
-    if (!galleryIdStr) {
-      return;
-    }
-    downloadZip(galleryIdStr, orderId);
-  }, [galleryIdStr, orderId, downloadZip]);
 
   const { startPublishFlow } = usePublishFlow();
 

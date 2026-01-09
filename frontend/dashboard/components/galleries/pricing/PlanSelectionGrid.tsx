@@ -56,7 +56,7 @@ export const PlanSelectionGrid = ({
           const isShorterDuration =
             mode === "limitExceeded" && currentPlanKey
               ? (() => {
-                  const currentPlan = getPlan(currentPlanKey);
+                  const currentPlan = getPlan(currentPlanKey as PlanKey);
                   if (currentPlan) {
                     // Use expiryDays for comparison (more reliable than duration string)
                     const durationDays: Record<Duration, number> = {

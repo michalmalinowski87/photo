@@ -1,18 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { GetServerSideProps } from "next";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef } from "react";
 
-// Lazy load heavy components to reduce bundle size
-// Using wrapper file that exports as default for proper dynamic() support
-const NextStepsOverlay = dynamic(() => import("../../components/galleries/NextStepsOverlay.lazy"), {
-  ssr: false,
-});
 
-const PaymentConfirmationModal = dynamic(() => import("../../components/galleries/PaymentConfirmationModal"), {
-  ssr: false,
-});
+// Lazy load heavy components to reduce bundle size
+// Using dynamicWithLoading to track bundle loading state for delayed overlay
+const NextStepsOverlay = dynamicWithLoading(
+  () => import("../../components/galleries/NextStepsOverlay.lazy"),
+  {
+    ssr: false,
+  }
+);
+
+const PaymentConfirmationModal = dynamicWithLoading(
+  () => import("../../components/galleries/PaymentConfirmationModal"),
+  {
+    ssr: false,
+  }
+);
 import { useGalleryType } from "../../components/hocs/withGalleryType";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";
@@ -27,10 +33,12 @@ import {
 } from "../../hooks/mutations/useOrderMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders } from "../../hooks/queries/useOrders";
+import { DelayedLoadingOverlay } from "../../hooks/useDelayedLoadingOverlay";
 import { useGalleryCreationLoading } from "../../hooks/useGalleryCreationLoading";
 import { usePageLogger } from "../../hooks/usePageLogger";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
+import { useBundleLoading, dynamicWithLoading } from "../../lib/dynamicWithLoading";
 import { formatPrice } from "../../lib/format-price";
 import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { useUnifiedStore } from "../../store/unifiedStore";
@@ -759,10 +767,32 @@ export default function GalleryDetail() {
     // If orders failed to load or are empty, fall through to show empty state
   }
 
+  // Track combined loading state for delayed overlay
+  // Show overlay if any async operation OR bundle loading is taking longer than frustration point
+  const isAnyMutationPending =
+    approveChangeRequestMutation.isPending ||
+    denyChangeRequestMutation.isPending ||
+    payGalleryMutation.isPending ||
+    sendGalleryToClientMutation.isPending;
+  
+  // Track when JavaScript bundles are being loaded (for lazy-loaded components)
+  const isBundleLoading = useBundleLoading();
+  
+  // Combined loading state: mutations OR bundle loading
+  const isAnyLoading = isAnyMutationPending || isBundleLoading;
+
   return (
     <>
       {/* Next Steps Overlay */}
       <NextStepsOverlay />
+
+      {/* Delayed loading overlay - shows after frustration point (400ms) for slow networks */}
+      {/* Handles both mutations (API calls) and bundle loading (JavaScript downloads) */}
+      <DelayedLoadingOverlay
+        isLoading={isAnyLoading}
+        message={isBundleLoading ? "Ładowanie modułów..." : "Przetwarzanie..."}
+        delay={400}
+      />
 
       {/* Main Content - Orders */}
       <div>

@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { AppProps } from "next/app";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 // Import both CSS files - Next.js will handle them correctly
 // Auth CSS is loaded for auth routes, dashboard CSS for dashboard routes
@@ -25,9 +25,13 @@ const AppLayout = dynamic(() => import("../components/layout/AppLayout"), {
   loading: () => <FullPageLoading />,
 });
 
-const GalleryLayoutWrapper = dynamic(() => import("../components/layout/GalleryLayoutWrapper"), {
-  loading: () => <FullPageLoading text="Ładowanie galerii..." />,
-});
+// Use dynamicWithLoading to track bundle loading for gallery layout wrapper
+const GalleryLayoutWrapper = dynamicWithLoading(
+  () => import("../components/layout/GalleryLayoutWrapper"),
+  {
+    loading: () => <FullPageLoading text="Ładowanie galerii..." />,
+  }
+);
 
 // Import these normally - they're named exports and dynamic() was causing issues
 import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
@@ -38,9 +42,11 @@ import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadC
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
 import { AuthProvider, useAuth } from "../context/AuthProvider";
 import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
+import { DelayedLoadingOverlay } from "../hooks/useDelayedLoadingOverlay";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
+import { useBundleLoading, dynamicWithLoading, setNavigationLoadingState } from "../lib/dynamicWithLoading";
 import { makeQueryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
 import { useUnifiedStore } from "../store/unifiedStore";
@@ -124,6 +130,14 @@ function AppContent({ Component, pageProps }: AppProps) {
   const isMobile = useIsMobile();
   const navigationLoading = useUnifiedStore((state) => state.navigationLoading);
   const setNavigationLoading = useUnifiedStore((state) => state.setNavigationLoading);
+  
+  // Track gallery navigation loading (for delayed overlay)
+  // Use ref to persist state across renders and avoid clearing too early
+  const isGalleryNavigatingRef = useRef(false);
+  const [isGalleryNavigating, setIsGalleryNavigating] = useState(false);
+  
+  // Track bundle loading state
+  const isBundleLoading = useBundleLoading();
 
   // Skip hooks for 404 page during SSG (React 19/Next.js 15 compatibility)
   const is404Page = router.pathname === "/404";
@@ -230,11 +244,33 @@ function AppContent({ Component, pageProps }: AppProps) {
       restoreThemeAndClearSessionExpired();
     }
 
+    // Track all navigation start
+    const handleRouteChangeStart = (url: string) => {
+      // Set navigation state immediately for all route changes
+      isGalleryNavigatingRef.current = true;
+      setIsGalleryNavigating(true);
+      // Also set navigation loading state in bundle tracker
+      // This ensures bundle loading is tracked even if bundles are prefetched
+      setNavigationLoadingState(true);
+    };
+
     // Also handle route changes
     const handleRouteChangeComplete = () => {
       restoreThemeAndClearSessionExpired();
       // Clear navigation loading on any route change (in case user navigates away)
       setNavigationLoading(false);
+      // Don't clear gallery navigating immediately - wait longer to ensure overlay has time to show
+      // Wait at least delay (400ms) + buffer (300ms) = 700ms to ensure overlay can appear
+      // This is important because routeChangeComplete might fire before bundles finish loading
+      setTimeout(() => {
+        isGalleryNavigatingRef.current = false;
+        setIsGalleryNavigating(false);
+      }, 700);
+      // Clear navigation loading state in bundle tracker
+      // Use a delay to allow bundle loading components to mount and track their state
+      setTimeout(() => {
+        setNavigationLoadingState(false);
+      }, 200);
       // Restore scroll position after navigation completes (if scroll was disabled)
       // Use requestAnimationFrame to ensure DOM is ready
       requestAnimationFrame(() => {
@@ -245,13 +281,48 @@ function AppContent({ Component, pageProps }: AppProps) {
     const handleRouteChangeError = () => {
       // Clear navigation loading on navigation error
       setNavigationLoading(false);
+      isGalleryNavigatingRef.current = false;
+      setIsGalleryNavigating(false);
+      setNavigationLoadingState(false);
     };
 
+    router.events.on("routeChangeStart", handleRouteChangeStart);
     router.events.on("routeChangeComplete", handleRouteChangeComplete);
     router.events.on("routeChangeError", handleRouteChangeError);
+    
+    // Also intercept clicks on all internal links to set state immediately
+    // This ensures overlay shows even before routeChangeStart fires
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a[href^="/"]') as HTMLAnchorElement;
+      
+      if (link && link.href) {
+        try {
+          const url = new URL(link.href);
+          // Only handle internal links (same origin)
+          if (url.origin === window.location.origin) {
+            // Set navigation state immediately on click (before Next.js handles navigation)
+            isGalleryNavigatingRef.current = true;
+            setIsGalleryNavigating(true);
+            setNavigationLoadingState(true);
+          }
+        } catch {
+          // Invalid URL, ignore
+        }
+      }
+    };
+    
+    if (typeof window !== "undefined") {
+      document.addEventListener("click", handleClick, true); // Use capture phase to catch early
+    }
+    
     return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
       router.events.off("routeChangeComplete", handleRouteChangeComplete);
       router.events.off("routeChangeError", handleRouteChangeError);
+      if (typeof window !== "undefined") {
+        document.removeEventListener("click", handleClick, true);
+      }
     };
   }, [
     router.isReady,
@@ -304,10 +375,30 @@ function AppContent({ Component, pageProps }: AppProps) {
     return <Component {...pageProps} />;
   }
 
+  // Combined loading state for all navigation: navigation OR bundle loading
+  // Show overlay when navigating to any route OR when bundles are loading
+  // Use ref value to ensure we don't lose state during rapid navigation
+  const isNavigating = isGalleryNavigatingRef.current || isGalleryNavigating;
+  const isAnyLoading = isNavigating || isBundleLoading;
+
   return (
     <>
       {/* Navigation loading overlay - shows when navigating to order pages */}
       {navigationLoading && <FullPageLoading text="Ładowanie zlecenia..." />}
+      
+      {/* Delayed loading overlay for gallery navigation - shows after frustration point (400ms) */}
+      {/* Handles both navigation and bundle loading for gallery pages */}
+      {/* Render globally so it works when navigating FROM gallery list TO gallery detail */}
+      {/* Always render the component (it handles its own visibility) - must stay mounted to track delay */}
+      {/* Delayed loading overlay for all navigation - shows after frustration point (400ms) */}
+      {/* Handles both navigation and bundle loading for all routes */}
+      {/* Always render the component (it handles its own visibility) - must stay mounted to track delay */}
+      <DelayedLoadingOverlay
+        isLoading={isAnyLoading}
+        message={isBundleLoading ? "Ładowanie modułów..." : "Ładowanie..."}
+        delay={400}
+      />
+      
       {/* Mobile warning modal for authenticated dashboard pages */}
       {!isAuthRoute && (
         <MobileWarningModal

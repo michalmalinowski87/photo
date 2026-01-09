@@ -36,7 +36,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   const [urlCopied, setUrlCopied] = useState(false);
 
   // Track last known paid state to prevent flicker during refetches
-  const lastKnownIsPaidRef = useRef<boolean | undefined>(undefined);
+  const lastKnownIsPaidRef = useRef<boolean>(false);
 
   // Track if send link request is in flight to prevent concurrent calls
   const isSendingRef = useRef(false);
@@ -44,7 +44,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   // Update ref when gallery data changes (but not during refetches)
   useEffect(() => {
     if (!isFetching && gallery) {
-      lastKnownIsPaidRef.current = gallery.isPaid ?? false;
+      lastKnownIsPaidRef.current = typeof gallery.isPaid === "boolean" ? gallery.isPaid : false;
     }
   }, [gallery, isFetching]);
   // Use mutation loading state instead of local state

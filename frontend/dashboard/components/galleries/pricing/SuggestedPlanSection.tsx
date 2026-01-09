@@ -104,7 +104,7 @@ export const SuggestedPlanSection = ({
               const isShorterDuration =
                 mode === "limitExceeded" && currentPlanKey && planKey
                   ? (() => {
-                      const currentPlan = getPlan(currentPlanKey);
+                      const currentPlan = getPlan(currentPlanKey as PlanKey);
                       const plan = getPlan(planKey);
                       if (currentPlan && plan) {
                         // Use expiryDays for comparison (more reliable than duration string)
