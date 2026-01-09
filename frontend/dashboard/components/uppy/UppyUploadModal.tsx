@@ -624,15 +624,15 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                   )}
                   <div
                     style={{
-                      height: "calc(70vh - 200px)",
+                      height: "calc(80vh - 200px)",
                       minHeight: "400px",
-                      maxHeight: "calc(90vh - 300px)",
+                      maxHeight: "calc(90vh - 200px)",
                     }}
                   >
                     <VirtuosoGrid
                       totalCount={files.length}
                       data={files}
-                      overscan={200}
+                      overscan={1200}
                       itemContent={(index) => {
                         const file = files[index];
                         if (!file) return null;
@@ -644,7 +644,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                         const thumbnail = getThumbnail(freshFile);
 
                         return (
-                          <div className="p-2 h-full">
+                          <div className="p-1.5 h-full">
                             <div className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full">
                               <div className="aspect-square relative">
                                 {thumbnail ? (
@@ -653,6 +653,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                     src={thumbnail}
                                     alt={freshFile.name ?? "Image"}
                                     className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
                                   />
                                 ) : (
                                   <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
@@ -747,8 +749,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                               style={{
                                 ...style,
                                 display: "grid",
-                                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-                                gap: "1rem",
+                                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                                gap: "0.75rem",
                               }}
                             >
                               {children}

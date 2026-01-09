@@ -53,6 +53,11 @@ export const handler = lambdaLogger(async (event: any) => {
 		expressionAttributeValues[':name'] = body.galleryName.trim();
 	}
 	
+	if (body.clientEmail !== undefined && typeof body.clientEmail === 'string') {
+		setExpressions.push('clientEmail = :clientEmail');
+		expressionAttributeValues[':clientEmail'] = body.clientEmail.trim();
+	}
+	
 	if (body.plan !== undefined && typeof body.plan === 'string') {
 		setExpressions.push('#plan = :plan');
 		expressionAttributeNames['#plan'] = 'plan';

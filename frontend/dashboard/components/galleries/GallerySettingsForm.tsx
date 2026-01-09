@@ -73,6 +73,14 @@ export function GallerySettingsForm({
   });
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{
+    galleryName?: string;
+    clientEmail?: string;
+    packageName?: string;
+    includedCount?: string;
+    extraPriceCents?: string;
+    packagePriceCents?: string;
+  }>({});
 
   // Gallery data comes from GalleryContext - initialize form when gallery loads
   useEffect(() => {
@@ -99,8 +107,95 @@ export function GallerySettingsForm({
     }
   }, [gallery]);
 
+  // Validation function
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    // Gallery name validation
+    const trimmedGalleryName = settingsForm.galleryName.trim();
+    if (!trimmedGalleryName || trimmedGalleryName.length === 0) {
+      newErrors.galleryName = "Nazwa galerii jest wymagana";
+    } else if (trimmedGalleryName.length > 100) {
+      newErrors.galleryName = "Nazwa galerii nie może przekraczać 100 znaków";
+    }
+
+    // Client email validation
+    const trimmedEmail = settingsForm.clientEmail.trim();
+    if (!trimmedEmail || trimmedEmail.length === 0) {
+      newErrors.clientEmail = "Email logowania jest wymagany";
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        newErrors.clientEmail = "Podaj prawidłowy adres email";
+      }
+    }
+
+    // Package validation
+    const trimmedPackageName = settingsForm.packageName?.trim() ?? "";
+    if (!trimmedPackageName || trimmedPackageName.length === 0) {
+      newErrors.packageName = "Nazwa pakietu jest wymagana";
+    }
+
+    if (settingsForm.includedCount < 0) {
+      newErrors.includedCount = "Liczba zdjęć nie może być ujemna";
+    }
+
+    if (settingsForm.extraPriceCents < 0) {
+      newErrors.extraPriceCents = "Cena za dodatkowe zdjęcie nie może być ujemna";
+    }
+
+    if (settingsForm.packagePriceCents < 0) {
+      newErrors.packagePriceCents = "Cena pakietu nie może być ujemna";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Check if form is currently valid (without setting errors)
+  const isFormValid = (): boolean => {
+    const trimmedGalleryName = settingsForm.galleryName.trim();
+    if (!trimmedGalleryName || trimmedGalleryName.length === 0 || trimmedGalleryName.length > 100) {
+      return false;
+    }
+
+    const trimmedEmail = settingsForm.clientEmail.trim();
+    if (!trimmedEmail || trimmedEmail.length === 0) {
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return false;
+    }
+
+    const trimmedPackageName = settingsForm.packageName?.trim() ?? "";
+    if (!trimmedPackageName || trimmedPackageName.length === 0) {
+      return false;
+    }
+
+    if (settingsForm.includedCount < 0) {
+      return false;
+    }
+
+    if (settingsForm.extraPriceCents < 0) {
+      return false;
+    }
+
+    if (settingsForm.packagePriceCents < 0) {
+      return false;
+    }
+
+    return true;
+  };
+
   const handleUpdateSettings = async (): Promise<void> => {
     if (!galleryId) {
+      return;
+    }
+
+    // Validate form before submitting
+    if (!validateForm()) {
+      showToast("error", "Błąd", "Proszę poprawić błędy w formularzu");
       return;
     }
 
@@ -109,6 +204,11 @@ export function GallerySettingsForm({
       const currentGalleryName =
         typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
       const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
+
+      const currentClientEmail =
+        typeof gallery?.clientEmail === "string" ? gallery.clientEmail : "";
+      const clientEmailChanged =
+        settingsForm.clientEmail.trim() !== currentClientEmail.trim();
 
       const passwordChanged = Boolean(settingsForm.clientPassword && settingsForm.clientEmail);
 
@@ -128,15 +228,11 @@ export function GallerySettingsForm({
 
       // If only gallery name changed, use the optimistic-only mutation (no refetch)
       // If other fields changed too, use the full mutation (with refetch for consistency)
-      const onlyNameChanged = galleryNameChanged && !passwordChanged && !pkgChanged;
+      const onlyNameChanged = galleryNameChanged && !clientEmailChanged && !passwordChanged && !pkgChanged;
 
       // Update gallery name if changed
       if (galleryNameChanged) {
         const trimmedName = settingsForm.galleryName.trim();
-        if (trimmedName.length > 100) {
-          showToast("error", "Błąd", "Nazwa galerii nie może przekraczać 100 znaków");
-          return;
-        }
 
         if (onlyNameChanged) {
           // Use optimistic-only mutation for name-only updates (no refetch)
@@ -153,6 +249,16 @@ export function GallerySettingsForm({
             },
           });
         }
+      }
+
+      // Update client email if changed (without password)
+      if (clientEmailChanged && !passwordChanged) {
+        await updateGalleryMutation.mutateAsync({
+          galleryId,
+          data: {
+            clientEmail: settingsForm.clientEmail.trim(),
+          },
+        });
       }
 
       // Update client password if provided (requires clientEmail)
@@ -186,7 +292,7 @@ export function GallerySettingsForm({
       }
 
       // Only show success if at least one change was made
-      if (galleryNameChanged || passwordChanged || pkgChanged) {
+      if (galleryNameChanged || clientEmailChanged || passwordChanged || pkgChanged) {
         showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
       }
       // React Query mutations will automatically invalidate and refetch gallery data
@@ -238,16 +344,24 @@ export function GallerySettingsForm({
         return;
       }
 
+      // Validate gallery name
+      const trimmedName = settingsForm.galleryName.trim();
+      if (!trimmedName || trimmedName.length === 0) {
+        setErrors({ galleryName: "Nazwa galerii jest wymagana" });
+        showToast("error", "Błąd", "Nazwa galerii jest wymagana");
+        return;
+      }
+      if (trimmedName.length > 100) {
+        setErrors({ galleryName: "Nazwa galerii nie może przekraczać 100 znaków" });
+        showToast("error", "Błąd", "Nazwa galerii nie może przekraczać 100 znaków");
+        return;
+      }
+
       try {
         const currentGalleryName =
           typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
         const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
         if (galleryNameChanged) {
-          const trimmedName = settingsForm.galleryName.trim();
-          if (trimmedName.length > 100) {
-            showToast("error", "Błąd", "Nazwa galerii nie może przekraczać 100 znaków");
-            return;
-          }
           await updateGalleryNameMutation.mutateAsync({
             galleryId,
             galleryName: trimmedName,
@@ -260,8 +374,8 @@ export function GallerySettingsForm({
     };
 
     const canSaveGalleryName = (() => {
-      const isValid =
-        settingsForm.galleryName.trim().length > 0 && settingsForm.galleryName.trim().length <= 100;
+      const trimmedName = settingsForm.galleryName.trim();
+      const isValid = trimmedName.length > 0 && trimmedName.length <= 100;
       return isValid;
     })();
 
@@ -287,10 +401,10 @@ export function GallerySettingsForm({
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div>
               <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Nazwa galerii
+                Nazwa galerii <span className="text-red-500">*</span>
               </label>
               <Input
                 type="text"
@@ -300,13 +414,20 @@ export function GallerySettingsForm({
                   const value = e.target.value;
                   if (value.length <= 100) {
                     setSettingsForm({ ...settingsForm, galleryName: value });
+                    // Clear error when user starts typing
+                    if (errors.galleryName) {
+                      setErrors({ ...errors, galleryName: undefined });
+                    }
                   }
                 }}
                 maxLength={100}
+                required
+                error={!!errors.galleryName}
+                errorMessage={errors.galleryName}
               />
             </div>
 
-            <div className="space-y-3 opacity-60">
+            <div className="space-y-2 opacity-60">
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Email logowania
@@ -342,7 +463,7 @@ export function GallerySettingsForm({
                   Pakiet cenowy
                 </h3>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Nazwa pakietu
@@ -424,10 +545,10 @@ export function GallerySettingsForm({
       <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
       <div className="p-8 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div>
             <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Nazwa galerii
+              Nazwa galerii <span className="text-red-500">*</span>
             </label>
             <Input
               type="text"
@@ -437,22 +558,38 @@ export function GallerySettingsForm({
                 const value = e.target.value;
                 if (value.length <= 100) {
                   setSettingsForm({ ...settingsForm, galleryName: value });
+                  // Clear error when user starts typing
+                  if (errors.galleryName) {
+                    setErrors({ ...errors, galleryName: undefined });
+                  }
                 }
               }}
               maxLength={100}
+              required
+              error={!!errors.galleryName}
+              errorMessage={errors.galleryName}
             />
           </div>
 
           <div>
             <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Email logowania
+              Email logowania <span className="text-red-500">*</span>
             </label>
             <Input
               type="email"
               placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
               value={galleryLoading ? "" : (settingsForm.clientEmail ?? "")}
-              onChange={(e) => setSettingsForm({ ...settingsForm, clientEmail: e.target.value })}
+              onChange={(e) => {
+                setSettingsForm({ ...settingsForm, clientEmail: e.target.value });
+                // Clear error when user starts typing
+                if (errors.clientEmail) {
+                  setErrors({ ...errors, clientEmail: undefined });
+                }
+              }}
               disabled={galleryLoading}
+              required
+              error={!!errors.clientEmail}
+              errorMessage={errors.clientEmail}
             />
           </div>
 
@@ -490,42 +627,57 @@ export function GallerySettingsForm({
               Pakiet cenowy
             </h3>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nazwa pakietu
+                  Nazwa pakietu <span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="text"
                   placeholder="Nazwa pakietu"
                   value={settingsForm.packageName}
-                  onChange={(e) =>
-                    setSettingsForm({ ...settingsForm, packageName: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setSettingsForm({ ...settingsForm, packageName: e.target.value });
+                    // Clear error when user starts typing
+                    if (errors.packageName) {
+                      setErrors({ ...errors, packageName: undefined });
+                    }
+                  }}
+                  required
+                  error={!!errors.packageName}
+                  errorMessage={errors.packageName}
                 />
               </div>
 
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Liczba zdjęć w pakiecie
+                  Liczba zdjęć w pakiecie <span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="number"
                   placeholder="0"
                   value={settingsForm.includedCount}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const value = Number.parseInt(e.target.value, 10) || 0;
                     setSettingsForm({
                       ...settingsForm,
-                      includedCount: Number.parseInt(e.target.value, 10) || 0,
-                    })
-                  }
+                      includedCount: value,
+                    });
+                    // Clear error when user starts typing
+                    if (errors.includedCount) {
+                      setErrors({ ...errors, includedCount: undefined });
+                    }
+                  }}
                   min="0"
+                  required
+                  error={!!errors.includedCount}
+                  errorMessage={errors.includedCount}
                 />
               </div>
 
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena za dodatkowe zdjęcie (PLN)
+                  Cena za dodatkowe zdjęcie (PLN) <span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="text"
@@ -534,10 +686,15 @@ export function GallerySettingsForm({
                   onChange={(e) => {
                     const formatted = formatCurrencyInput(e.target.value);
                     setExtraPriceInput(formatted);
+                    const cents = plnToCents(formatted);
                     setSettingsForm({
                       ...settingsForm,
-                      extraPriceCents: plnToCents(formatted),
+                      extraPriceCents: cents,
                     });
+                    // Clear error when user starts typing
+                    if (errors.extraPriceCents) {
+                      setErrors({ ...errors, extraPriceCents: undefined });
+                    }
                   }}
                   onBlur={() => {
                     // Clear input state on blur if empty, let it use cents value
@@ -545,12 +702,15 @@ export function GallerySettingsForm({
                       setExtraPriceInput(null);
                     }
                   }}
+                  required
+                  error={!!errors.extraPriceCents}
+                  errorMessage={errors.extraPriceCents}
                 />
               </div>
 
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena pakietu (PLN)
+                  Cena pakietu (PLN) <span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="text"
@@ -559,10 +719,15 @@ export function GallerySettingsForm({
                   onChange={(e) => {
                     const formatted = formatCurrencyInput(e.target.value);
                     setPackagePriceInput(formatted);
+                    const cents = plnToCents(formatted);
                     setSettingsForm({
                       ...settingsForm,
-                      packagePriceCents: plnToCents(formatted),
+                      packagePriceCents: cents,
                     });
+                    // Clear error when user starts typing
+                    if (errors.packagePriceCents) {
+                      setErrors({ ...errors, packagePriceCents: undefined });
+                    }
                   }}
                   onBlur={() => {
                     // Clear input state on blur if empty, let it use cents value
@@ -570,6 +735,9 @@ export function GallerySettingsForm({
                       setPackagePriceInput(null);
                     }
                   }}
+                  required
+                  error={!!errors.packagePriceCents}
+                  errorMessage={errors.packagePriceCents}
                 />
               </div>
             </div>
@@ -585,7 +753,7 @@ export function GallerySettingsForm({
           <Button
             variant="primary"
             onClick={handleUpdateSettings}
-            disabled={saving}
+            disabled={saving || !isFormValid()}
             startIcon={<Save size={20} />}
           >
             {saving ? "Zapisywanie..." : "Zapisz"}

@@ -236,21 +236,21 @@ export const PlanSelectionGrid = ({
                   <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <CheckCircle2
                       size={16}
-                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                      className="text-photographer-accent dark:text-photographer-accentLight flex-shrink-0"
                     />
                     <span>Galeria chroniona hasłem</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <CheckCircle2
                       size={16}
-                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                      className="text-photographer-accent dark:text-photographer-accentLight flex-shrink-0"
                     />
                     <span>Wybór zdjęć przez klienta</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <CheckCircle2
                       size={16}
-                      className="text-green-500 dark:text-green-400 flex-shrink-0"
+                      className="text-photographer-accent dark:text-photographer-accentLight flex-shrink-0"
                     />
                     <span>Wsparcie techniczne</span>
                   </div>

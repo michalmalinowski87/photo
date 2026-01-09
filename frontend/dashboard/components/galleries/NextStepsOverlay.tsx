@@ -746,7 +746,7 @@ export const NextStepsOverlay = () => {
   return (
     <div
       ref={overlayRef}
-      className={`fixed bottom-4 right-4 z-[60] max-w-[calc(100vw-2rem)] ${
+      className={`fixed bottom-4 right-4 z-40 max-w-[calc(100vw-2rem)] ${
         shouldShow ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
       style={{
