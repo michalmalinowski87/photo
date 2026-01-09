@@ -94,7 +94,6 @@ export const NextStepsOverlay = () => {
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [optimisticBytesUsed, setOptimisticBytesUsed] = useState<number | null>(null);
-  const [widthReached13rem, setWidthReached13rem] = useState(false);
   const galleryRef = useRef(gallery);
   const isUpdatingCompletionRef = useRef(false); // Track if we're already updating completion status
   const hasInitializedVisibilityRef = useRef(false); // Track if we've initialized visibility on mount
@@ -268,14 +267,6 @@ export const NextStepsOverlay = () => {
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const width = entry.contentRect.width;
-        const widthInRem = width / 16; // Convert px to rem (assuming 16px base)
-
-        // Check if width has reached 13rem (208px)
-        if (widthInRem >= 13) {
-          setWidthReached13rem(true);
-        } else if (!nextStepsOverlayExpanded) {
-          setWidthReached13rem(false);
-        }
 
         if (nextStepsOverlayExpanded) {
           overlayContext.setNextStepsWidth(width);
@@ -311,13 +302,16 @@ export const NextStepsOverlay = () => {
     // Hide overlay during gallery creation to avoid blinking
     const shouldBeVisible = intendedVisible && !galleryCreationLoading;
     const newVisible = Boolean(shouldBeVisible);
+    
+    // Read persisted expanded state directly from store (only on initial mount)
+    // This ensures we respect user's previous preference without causing re-renders
+    const persistedExpanded = useOverlayStore.getState().nextStepsOverlayExpanded;
+    
     // Expand overlay on initial mount if it should be visible (first appearance)
-    // Use persisted state only if we've already initialized, otherwise expand by default
-    const newExpanded = hasInitializedVisibilityRef.current
-      ? Boolean(nextStepsOverlayExpanded)
-      : shouldBeVisible
-        ? true
-        : Boolean(nextStepsOverlayExpanded);
+    // Use persisted state if available, otherwise expand by default
+    const newExpanded = shouldBeVisible
+      ? (persistedExpanded !== undefined ? persistedExpanded : true)
+      : Boolean(persistedExpanded);
 
     // On initial mount, preserve persisted state to prevent flicker on refresh
     // If persisted state says hidden (false), keep it hidden until we have definitive proof it should be visible
@@ -338,6 +332,8 @@ export const NextStepsOverlay = () => {
     }
     if (overlayContext.nextStepsExpanded !== finalExpanded) {
       setOverlayExpanded(finalExpanded);
+      // Also update nextStepsOverlayExpanded to keep states in sync
+      setNextStepsOverlayExpanded(finalExpanded);
     }
 
     hasInitializedVisibilityRef.current = true;
@@ -351,7 +347,7 @@ export const NextStepsOverlay = () => {
     galleryFetching,
     galleryCreationLoading,
     steps.length,
-    nextStepsOverlayExpanded,
+    // REMOVED nextStepsOverlayExpanded from dependencies to prevent effect from re-running on user actions
     setOverlayVisible,
     setOverlayExpanded,
     currentOverlayVisible,
@@ -405,7 +401,7 @@ export const NextStepsOverlay = () => {
       return;
     }
 
-    const { visible: newVisible, expanded: newExpanded } = calculatedVisibility;
+    const { visible: newVisible } = calculatedVisibility;
     const prev = prevVisibilityRef.current;
     const prevGalleryCreationLoading = prevGalleryCreationLoadingRef.current;
 
@@ -417,17 +413,11 @@ export const NextStepsOverlay = () => {
         clearTimeout(pendingUpdateTimeoutRef.current);
         pendingUpdateTimeoutRef.current = null;
       }
-      // Hide overlay immediately if it's visible and mark as dismissed in gallery
+      // Hide overlay temporarily during gallery creation (don't mark as dismissed)
       if (overlayContext.nextStepsVisible && gallery?.galleryId) {
         setOverlayVisible(false);
         prev.visible = false;
-        // Mark overlay as dismissed in gallery data (stored in React Query cache)
-        updateGalleryMutation.mutate({
-          galleryId: gallery.galleryId,
-          data: {
-            nextStepsOverlayDismissed: true,
-          },
-        });
+        // Don't set nextStepsOverlayDismissed during creation - we'll reset it when creation finishes
       }
       prevGalleryCreationLoadingRef.current = galleryCreationLoading;
       return;
@@ -442,6 +432,16 @@ export const NextStepsOverlay = () => {
       // Clear any existing pending update
       if (pendingUpdateTimeoutRef.current) {
         clearTimeout(pendingUpdateTimeoutRef.current);
+      }
+      // Reset nextStepsOverlayDismissed if it was set during creation (shouldn't persist)
+      // Only reset if gallery is not completed and not actually dismissed by user
+      if (gallery?.galleryId && gallery.nextStepsOverlayDismissed === true && !galleryCompletedSetup) {
+        updateGalleryMutation.mutate({
+          galleryId: gallery.galleryId,
+          data: {
+            nextStepsOverlayDismissed: false,
+          },
+        });
       }
       // When overlay first appears after gallery creation, expand it by default
       const targetExpanded = true; // Always expand on first appearance after creation
@@ -463,6 +463,8 @@ export const NextStepsOverlay = () => {
         }
         if (overlayContext.nextStepsExpanded !== targetExpanded) {
           setOverlayExpanded(targetExpanded);
+          // Also update nextStepsOverlayExpanded to keep states in sync
+          setNextStepsOverlayExpanded(targetExpanded);
           prev.expanded = targetExpanded;
         }
         pendingUpdateTimeoutRef.current = null;
@@ -484,6 +486,7 @@ export const NextStepsOverlay = () => {
     }
 
     // Normal update logic - only when not suppressing
+    // Only manage visibility here - expansion is user-controlled and should not be auto-updated
 
     // Only update visibility if:
     // 1. We're not respecting persisted hidden state, OR
@@ -493,18 +496,10 @@ export const NextStepsOverlay = () => {
     const visibilityChanged =
       overlayContext.nextStepsVisible !== effectiveNewVisible &&
       prev.visible !== effectiveNewVisible;
-    const expandedChanged =
-      overlayContext.nextStepsExpanded !== newExpanded && prev.expanded !== newExpanded;
 
-    if (visibilityChanged || expandedChanged) {
-      if (visibilityChanged) {
-        setOverlayVisible(effectiveNewVisible);
-        prev.visible = effectiveNewVisible;
-      }
-      if (expandedChanged) {
-        setOverlayExpanded(newExpanded);
-        prev.expanded = newExpanded;
-      }
+    if (visibilityChanged) {
+      setOverlayVisible(effectiveNewVisible);
+      prev.visible = effectiveNewVisible;
     }
 
     prevGalleryCreationLoadingRef.current = galleryCreationLoading;
@@ -527,7 +522,28 @@ export const NextStepsOverlay = () => {
     setOptimisticBytesUsed(null);
     // Reset initialization flag when gallery changes to re-initialize visibility
     hasInitializedVisibilityRef.current = false;
-  }, [gallery?.galleryId]);
+    
+    // Reset nextStepsOverlayDismissed if it was incorrectly set (e.g., from previous bug)
+    // Only reset if gallery is not completed and flag is set
+    if (
+      gallery?.galleryId &&
+      gallery.nextStepsOverlayDismissed === true &&
+      gallery.nextStepsCompleted !== true &&
+      !galleryLoading &&
+      !galleryCreationLoading
+    ) {
+      // Check if steps are actually incomplete before resetting
+      const hasIncompleteSteps = steps.some((step) => step.completed === false);
+      if (hasIncompleteSteps) {
+        updateGalleryMutation.mutate({
+          galleryId: gallery.galleryId,
+          data: {
+            nextStepsOverlayDismissed: false,
+          },
+        });
+      }
+    }
+  }, [gallery?.galleryId, gallery?.nextStepsOverlayDismissed, gallery?.nextStepsCompleted, galleryLoading, galleryCreationLoading, steps, updateGalleryMutation]);
 
   // Auto-hide and mark as completed if all steps are completed (must be before early return)
   // Hide after 3 seconds when all steps are done (not immediately), then mark as completed permanently in database
@@ -546,6 +562,8 @@ export const NextStepsOverlay = () => {
       // First collapse if expanded
       if (nextStepsOverlayExpanded) {
         setNextStepsOverlayExpanded(false);
+        // Also update overlayContext to keep states in sync
+        setOverlayExpanded(false);
       }
 
       // Then hide completely and mark as completed in database after 3 seconds
@@ -743,36 +761,48 @@ export const NextStepsOverlay = () => {
         {/* Header with refined typography and spacing */}
         <button
           onClick={() => {
-            // Use the current state value directly from the store to avoid stale closures
-            const currentExpanded = nextStepsOverlayExpanded;
-            setNextStepsOverlayExpanded(!currentExpanded);
+            // Use the current state value from context to avoid stale closures
+            const currentExpanded = overlayContext?.nextStepsExpanded ?? nextStepsOverlayExpanded;
+            const newExpanded = !currentExpanded;
+            // Update both states to keep them in sync
+            setOverlayExpanded(newExpanded);
+            setNextStepsOverlayExpanded(newExpanded);
           }}
-          className={`w-full flex items-center ${
+          className={`relative w-full flex items-center ${
             isExpanded ? "justify-between px-5 py-5" : "justify-center py-5"
           } border-b border-gray-100 dark:border-gray-800/50 transition-all duration-200 hover:bg-photographer-background/50 dark:hover:bg-gray-800/30 active:bg-photographer-elevated/50 dark:active:bg-gray-800/50`}
           aria-label={isExpanded ? "Zwiń" : "Rozwiń"}
         >
+          {/* Invisible spacer to maintain layout and prevent jumping */}
+          <div className="absolute inset-0 flex items-center justify-between px-5" aria-hidden="true">
+            <span className="text-base font-semibold tracking-[-0.01em] text-transparent whitespace-nowrap">
+              Ukończ konfigurację
+            </span>
+            <div className="w-[18px] flex-shrink-0" />
+          </div>
+          {/* Visible title that fades in when expanding */}
+          <h3
+            className="relative text-base font-semibold tracking-[-0.01em] text-photographer-accentDark dark:text-photographer-accent whitespace-nowrap"
+            style={{
+              transition: "opacity 200ms ease-out",
+              transitionDelay: isExpanded ? "200ms" : "0ms",
+              opacity: isExpanded ? 1 : 0,
+              pointerEvents: isExpanded ? "auto" : "none",
+            }}
+          >
+            Ukończ konfigurację
+          </h3>
+          {/* Chevron icons */}
           {isExpanded ? (
-            <>
-              <h3
-                className="text-base font-semibold tracking-[-0.01em] text-photographer-heading dark:text-gray-50"
-                style={{
-                  transition: "opacity 200ms ease-out",
-                  opacity: isExpanded && widthReached13rem ? 1 : 0,
-                }}
-              >
-                Ukończ konfigurację
-              </h3>
-              <ChevronRight
-                size={18}
-                className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400 flex-shrink-0"
-                strokeWidth={2.5}
-              />
-            </>
+            <ChevronRight
+              size={18}
+              className="relative text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400 flex-shrink-0"
+              strokeWidth={2.5}
+            />
           ) : (
             <ChevronLeft
               size={24}
-              className="text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400"
+              className="relative text-gray-400 dark:text-gray-500 transition-transform duration-200 hover:text-gray-600 dark:hover:text-gray-400 flex-shrink-0"
               strokeWidth={2.5}
             />
           )}
@@ -937,7 +967,7 @@ export const NextStepsOverlay = () => {
               }`}
               style={{
                 transition: "opacity 200ms ease-out",
-                transitionDelay: isExpanded ? "600ms" : "0ms",
+                transitionDelay: isExpanded ? "200ms" : "0ms",
                 opacity: isExpanded ? 1 : 0,
                 pointerEvents: isExpanded && !isSavingPreference ? "auto" : "none",
                 background: "transparent",
