@@ -39,6 +39,7 @@ interface PackageStepProps {
   onPackagePriceInputChange: (value: string | null) => void;
   onPaymentAmountInputChange: (value: string | null) => void;
   fieldErrors?: {
+    selectedPackageId?: string;
     packageName?: string;
     includedCount?: string;
     extraPriceCents?: string;
@@ -186,8 +187,14 @@ export const PackageStep = ({
                   }
                 }}
                 emptyMessage="Nie znaleziono pakietów"
+                error={!!fieldErrors.selectedPackageId}
                 className="[&_button]:text-2xl [&_button]:pb-3 [&_input]:text-2xl [&_input]:pb-3 [&_button]:pt-2 [&_input]:pt-2"
               />
+              {fieldErrors.selectedPackageId && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {fieldErrors.selectedPackageId}
+                </p>
+              )}
             </div>
           )}
 

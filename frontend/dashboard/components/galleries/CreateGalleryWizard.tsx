@@ -26,11 +26,13 @@ interface CreateGalleryWizardProps {
 
 interface FieldErrors {
   galleryName?: string;
+  selectedPackageId?: string;
   packageName?: string;
   includedCount?: string;
   extraPriceCents?: string;
   packagePriceCents?: string;
   initialPaymentAmountCents?: string;
+  selectedClientId?: string;
   clientEmail?: string;
   clientPassword?: string;
   firstName?: string;
@@ -271,7 +273,23 @@ const CreateGalleryWizard = ({
         }
         break;
       case 3:
-        // Validate all required fields (package name is optional)
+        // Check if package is selected OR manual form data exists
+        const hasManualPackageData =
+          (data.packageName && data.packageName.trim() !== "") ||
+          (data.includedCount > 0) ||
+          (data.packagePriceCents > 0);
+
+        if (!data.selectedPackageId && !hasManualPackageData) {
+          errors.selectedPackageId = "Wybierz pakiet lub wprowadź dane pakietu ręcznie";
+          isValid = false;
+        }
+
+        // If package is selected, no need to validate form fields
+        if (data.selectedPackageId) {
+          break;
+        }
+
+        // Validate all required fields for manual entry (package name is optional)
         if (
           data.includedCount === undefined ||
           data.includedCount === null ||
@@ -303,6 +321,19 @@ const CreateGalleryWizard = ({
         // but NOT required for saving client (passwords aren't saved with client data)
         if (!data.clientPassword.trim()) {
           errors.clientPassword = "Hasło jest wymagane";
+          isValid = false;
+        }
+
+        // Check if client is selected OR manual form data exists
+        const hasManualClientData =
+          (data.clientEmail && data.clientEmail.trim() !== "") ||
+          (data.firstName && data.firstName.trim() !== "") ||
+          (data.lastName && data.lastName.trim() !== "") ||
+          (data.companyName && data.companyName.trim() !== "") ||
+          (data.nip && data.nip.trim() !== "");
+
+        if (!data.selectedClientId && !hasManualClientData) {
+          errors.selectedClientId = "Wybierz klienta lub wprowadź dane klienta ręcznie";
           isValid = false;
         }
 
@@ -573,6 +604,7 @@ const CreateGalleryWizard = ({
             onPackagePriceInputChange={setPackagePriceInput}
             onPaymentAmountInputChange={setPaymentAmountInput}
             fieldErrors={{
+              selectedPackageId: fieldErrors.selectedPackageId,
               packageName: fieldErrors.packageName,
               includedCount: fieldErrors.includedCount,
               extraPriceCents: fieldErrors.extraPriceCents,
@@ -631,6 +663,7 @@ const CreateGalleryWizard = ({
               setFieldErrors(newErrors);
             }}
             fieldErrors={{
+              selectedClientId: fieldErrors.selectedClientId,
               clientEmail: fieldErrors.clientEmail,
               clientPassword: fieldErrors.clientPassword,
               firstName: fieldErrors.firstName,

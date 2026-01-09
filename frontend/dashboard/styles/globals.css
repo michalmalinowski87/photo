@@ -254,10 +254,10 @@ html.dark input[type="text"].bg-transparent:-webkit-autofill:active {
   @apply border-photographer-accent bg-photographer-accent;
 }
 
-/* Toast z-index override - ensure toasts always appear above everything */
+/* Toast z-index override - ensure toasts appear above most content but below full-page overlays */
 [data-toast-container],
 .toast-container {
-  z-index: 2147483647 !important;
+  z-index: 10000 !important;
   position: fixed !important;
   border-radius: 0.75rem !important; /* rounded-xl to match toast alerts */
   overflow: hidden !important; /* Ensure rounded corners are respected */
@@ -286,7 +286,7 @@ html.dark input[type="text"].bg-transparent:-webkit-autofill:active {
 /* Only apply when html doesn't have .dark class */
 html:not(.dark) [data-toast-container] .bg-photographer-elevated,
 html:not(.dark) .toast-container .bg-photographer-elevated {
-  background-color: rgb(246 239 231) !important; /* photographer-elevated with full opacity */
+  background-color: rgb(220 210 195) !important; /* Darker beige for better visibility */
 }
 
 /* Dark mode toast backgrounds - use solid dark base with colored overlay */

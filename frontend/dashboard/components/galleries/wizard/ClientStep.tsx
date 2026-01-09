@@ -44,6 +44,7 @@ interface ClientStepProps {
     companyName?: string;
   }) => void;
   fieldErrors?: {
+    selectedClientId?: string;
     clientEmail?: string;
     clientPassword?: string;
     firstName?: string;
@@ -304,8 +305,14 @@ export const ClientStep = ({
                   }
                 }}
                 emptyMessage="Nie znaleziono klientów"
+                error={!!fieldErrors.selectedClientId}
                 className="[&_button]:text-2xl [&_button]:pb-3 [&_input]:text-2xl [&_input]:pb-3 [&_button]:pt-2 [&_input]:pt-2"
               />
+              {fieldErrors.selectedClientId && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {fieldErrors.selectedClientId}
+                </p>
+              )}
             </div>
           )}
 

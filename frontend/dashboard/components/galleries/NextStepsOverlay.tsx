@@ -97,6 +97,7 @@ export const NextStepsOverlay = () => {
   const galleryRef = useRef(gallery);
   const isUpdatingCompletionRef = useRef(false); // Track if we're already updating completion status
   const hasInitializedVisibilityRef = useRef(false); // Track if we've initialized visibility on mount
+  const prevGalleryCreationLoadingRef = useRef<boolean | null>(null); // Track previous gallery creation loading state
 
   // Keep ref in sync with gallery prop
   useEffect(() => {
@@ -307,11 +308,18 @@ export const NextStepsOverlay = () => {
     // This ensures we respect user's previous preference without causing re-renders
     const persistedExpanded = useOverlayStore.getState().nextStepsOverlayExpanded;
     
+    // If we just finished creating a gallery, always expand regardless of persisted state
+    // Check if galleryCreationLoading just transitioned from true to false
+    const justFinishedCreating = prevGalleryCreationLoadingRef.current === true && galleryCreationLoading === false;
+    
     // Expand overlay on initial mount if it should be visible (first appearance)
-    // Use persisted state if available, otherwise expand by default
+    // If gallery was just created, always expand. Otherwise use persisted state if available, otherwise expand by default
     const newExpanded = shouldBeVisible
-      ? (persistedExpanded !== undefined ? persistedExpanded : true)
+      ? (justFinishedCreating ? true : (persistedExpanded !== undefined ? persistedExpanded : true))
       : Boolean(persistedExpanded);
+    
+    // Update ref to track gallery creation loading state for next render
+    prevGalleryCreationLoadingRef.current = galleryCreationLoading;
 
     // On initial mount, preserve persisted state to prevent flicker on refresh
     // If persisted state says hidden (false), keep it hidden until we have definitive proof it should be visible
@@ -391,7 +399,6 @@ export const NextStepsOverlay = () => {
     visible: null as boolean | null,
     expanded: null as boolean | null,
   });
-  const prevGalleryCreationLoadingRef = useRef<boolean | null>(null);
   const suppressUpdatesRef = useRef<boolean>(false);
   const pendingUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Track if we should suppress updates until fresh data arrives (when persisted state was false)

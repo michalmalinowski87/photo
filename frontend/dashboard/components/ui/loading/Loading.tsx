@@ -88,7 +88,10 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
   );
 
   const loadingOverlay = (
-    <div className="fixed inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-[9999]">
+    <div 
+      className="fixed inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm"
+      style={{ zIndex: 2147483647 }}
+    >
       {content}
     </div>
   );
