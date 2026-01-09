@@ -146,6 +146,78 @@
   }
 }
 
+/* Override browser autofill background colors - must be outside @layer to work properly */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: rgb(30 26 23) !important; /* photographer-text */
+  box-shadow: 0 0 0 1000px white inset !important;
+  background-color: white !important;
+  color: rgb(30 26 23) !important; /* Ensure text color matches */
+  transition: background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s !important;
+}
+
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus,
+html.dark input:-webkit-autofill:active,
+html.dark textarea:-webkit-autofill,
+html.dark textarea:-webkit-autofill:hover,
+html.dark textarea:-webkit-autofill:focus,
+html.dark textarea:-webkit-autofill:active,
+html.dark select:-webkit-autofill,
+html.dark select:-webkit-autofill:hover,
+html.dark select:-webkit-autofill:focus,
+html.dark select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(17 24 39) inset !important; /* gray-900 */
+  -webkit-text-fill-color: rgb(255 255 255) !important;
+  box-shadow: 0 0 0 1000px rgb(17 24 39) inset !important;
+  background-color: rgb(17 24 39) !important;
+  color: rgb(255 255 255) !important; /* Ensure text color matches */
+  transition: background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s !important;
+}
+
+/* Special handling for transparent background inputs (TypeformInput, SearchableSelect) */
+input.bg-transparent:-webkit-autofill,
+input.bg-transparent:-webkit-autofill:hover,
+input.bg-transparent:-webkit-autofill:focus,
+input.bg-transparent:-webkit-autofill:active,
+input[type="text"].bg-transparent:-webkit-autofill,
+input[type="text"].bg-transparent:-webkit-autofill:hover,
+input[type="text"].bg-transparent:-webkit-autofill:focus,
+input[type="text"].bg-transparent:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: rgb(30 26 23) !important; /* photographer-text for light mode */
+  box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+  color: rgb(30 26 23) !important;
+}
+
+html.dark input.bg-transparent:-webkit-autofill,
+html.dark input.bg-transparent:-webkit-autofill:hover,
+html.dark input.bg-transparent:-webkit-autofill:focus,
+html.dark input.bg-transparent:-webkit-autofill:active,
+html.dark input[type="text"].bg-transparent:-webkit-autofill,
+html.dark input[type="text"].bg-transparent:-webkit-autofill:hover,
+html.dark input[type="text"].bg-transparent:-webkit-autofill:focus,
+html.dark input[type="text"].bg-transparent:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: rgb(255 255 255) !important; /* white for dark mode */
+  box-shadow: 0 0 0 1000px transparent inset !important;
+  background-color: transparent !important;
+  color: rgb(255 255 255) !important;
+}
+
 .tableCheckbox:checked ~ span span {
   @apply opacity-100;
 }

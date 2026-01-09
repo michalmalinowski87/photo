@@ -1,4 +1,4 @@
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Save } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../lib/currency";
@@ -221,10 +221,10 @@ export const PackageStep = ({
             </div>
             <div className="text-center">
               <div className="text-xl font-semibold mb-2 text-photographer-heading dark:text-white">
-                Dodaj nowy pakiet
+                Wprowadź dane pakietu ręcznie
               </div>
               <div className="text-sm text-photographer-mutedText dark:text-gray-400">
-                Utwórz nowy pakiet cenowy
+                Wypełnij formularz, aby ustawić pakiet dla tej galerii
               </div>
             </div>
           </button>
@@ -389,17 +389,17 @@ export const PackageStep = ({
                     }
                   }}
                   disabled={!canSavePackage || saving}
-                  className="flex items-center gap-2 text-base text-green-700 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-green-700 dark:disabled:hover:text-green-500"
+                  className="flex items-center gap-2 text-lg text-photographer-accentDark dark:text-green-500 hover:text-photographer-accentDark dark:hover:text-green-400 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-photographer-accentDark dark:disabled:hover:text-green-500"
                 >
                   {saving ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-green-700 dark:border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-photographer-accentDark dark:border-green-500 border-t-transparent rounded-full animate-spin"></div>
                       <span>Zapisywanie...</span>
                     </>
                   ) : (
                     <>
-                      <Plus size={16} />
-                      <span>Dodaj pakiet</span>
+                      <Save size={18} />
+                      <span>Zapisz pakiet</span>
                     </>
                   )}
                 </button>

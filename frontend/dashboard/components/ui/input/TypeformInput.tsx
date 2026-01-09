@@ -136,6 +136,14 @@ const TypeformInput: FC<TypeformInputProps> = ({
           autoFocus={autoFocus}
           maxLength={maxLength}
           {...(autoComplete === "off" ? { "data-1p-ignore": "true" } : {})}
+          style={{
+            WebkitBoxShadow: "0 0 0 1000px transparent inset",
+            WebkitTextFillColor: "inherit",
+            boxShadow: "0 0 0 1000px transparent inset",
+            backgroundColor: "transparent",
+            caretColor: "inherit", // Caret color matches text color
+            transition: "background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s",
+          }}
           className={`
             w-full bg-transparent dark:bg-gray-900
             border-0 border-b-2

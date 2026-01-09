@@ -220,6 +220,14 @@ export const SearchableSelect = ({
             }}
             onKeyDown={handleKeyDown}
             placeholder={searchPlaceholder || placeholder}
+            style={{
+              WebkitBoxShadow: "0 0 0 1000px transparent inset",
+              WebkitTextFillColor: "inherit",
+              boxShadow: "0 0 0 1000px transparent inset",
+              backgroundColor: "transparent",
+              caretColor: "inherit", // Caret color matches text color
+              transition: "background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s",
+            }}
             className={`
               w-full bg-transparent border-0 border-b-2 pb-2 pt-1 px-3
               text-lg font-medium

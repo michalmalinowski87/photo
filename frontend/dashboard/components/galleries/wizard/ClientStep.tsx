@@ -357,10 +357,10 @@ export const ClientStep = ({
               </div>
               <div className="text-center">
                 <div className="text-xl font-semibold mb-2 text-photographer-heading dark:text-white">
-                  Dodaj nowego klienta
+                  Wprowadź dane klienta ręcznie
                 </div>
                 <div className="text-sm text-photographer-mutedText dark:text-gray-400">
-                  Utwórz nowy profil klienta
+                  Wypełnij formularz, aby ustawić klienta dla tej galerii
                 </div>
               </div>
             </button>
@@ -616,10 +616,10 @@ export const ClientStep = ({
                   }
                 }}
                 disabled={(isEditMode ? !canSaveClientInEditMode : isSaveDisabled) || saving}
-                className={`flex items-center gap-2 text-base transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`flex items-center gap-2 text-lg transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed ${
                   isEditMode
                     ? "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:hover:text-blue-600 dark:disabled:hover:text-blue-400"
-                    : "text-green-700 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 disabled:hover:text-green-700 dark:disabled:hover:text-green-500"
+                    : "text-photographer-accentDark dark:text-green-500 hover:text-photographer-accentDark dark:hover:text-green-400 disabled:hover:text-photographer-accentDark dark:disabled:hover:text-green-500"
                 }`}
               >
                 {saving ? (
@@ -628,15 +628,15 @@ export const ClientStep = ({
                       className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${
                         isEditMode
                           ? "border-blue-600 dark:border-blue-400"
-                          : "border-green-700 dark:border-green-500"
+                          : "border-photographer-accentDark dark:border-green-500"
                       }`}
                     ></div>
                     <span>Zapisywanie...</span>
                   </>
                 ) : (
                   <>
-                    {isEditMode ? <Save size={16} /> : <Plus size={16} />}
-                    <span>{isEditMode ? "Zapisz klienta" : "Dodaj klienta"}</span>
+                    <Save size={18} />
+                    <span>{isEditMode ? "Zapisz klienta" : "Zapisz klienta"}</span>
                   </>
                 )}
               </button>

@@ -1,5 +1,6 @@
 import type React from "react";
 import type { FC } from "react";
+import { useTheme } from "../../../hooks/useTheme";
 
 interface InputProps {
   type?: string;
@@ -60,6 +61,9 @@ const Input: FC<InputProps> = ({
     inputClasses += ` bg-white text-photographer-text border-photographer-border focus:border-photographer-accent focus:ring-photographer-accent/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-photographer-accent dark:focus:ring-photographer-accent/20`;
   }
 
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
+
   return (
     <div className="relative">
       <input
@@ -79,7 +83,27 @@ const Input: FC<InputProps> = ({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         className={inputClasses}
-        style={{ height: "33px", minHeight: "33px" }}
+        style={{
+          height: "33px",
+          minHeight: "33px",
+          outline: "none", // Remove browser default focus outline
+          ...(disabled
+            ? {}
+            : {
+                // Set autofill background based on theme
+                WebkitBoxShadow: isDarkMode
+                  ? "0 0 0 1000px rgb(17 24 39) inset"
+                  : "0 0 0 1000px white inset",
+                WebkitTextFillColor: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // photographer-text for light mode
+                boxShadow: isDarkMode
+                  ? "0 0 0 1000px rgb(17 24 39) inset"
+                  : "0 0 0 1000px white inset",
+                backgroundColor: isDarkMode ? "rgb(17 24 39)" : "white",
+                color: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // Ensure text color matches
+                caretColor: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // Caret color matches text color
+                transition: "background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s",
+              }),
+        }}
         {...(autoComplete === "off" || !autoComplete
           ? { "data-1p-ignore": "true", "data-lpignore": "true" }
           : {})}
