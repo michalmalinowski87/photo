@@ -1,8 +1,8 @@
 import { LayoutDashboard, List as ListIcon, Search, ArrowUpDown, X } from "lucide-react";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
-import { useGalleries } from "../../hooks/queries/useGalleries";
 import { usePageLogger } from "../../hooks/usePageLogger";
+import { useInfiniteGalleries } from "../../hooks/useInfiniteGalleries";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import Input from "../ui/input/InputField";
@@ -35,15 +35,29 @@ export default function GalleryFilterPage({
   const [publishWizardOpen, setPublishWizardOpen] = useState<boolean>(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState<boolean>(false);
 
-  // Use React Query to get loading state
-  const { isLoading: loading } = useGalleries(filter);
+  // Use the same infinite query hook as GalleryList to ensure consistent loading state
+  // This prevents flickering when cached data appears before component is ready
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+  } = useInfiniteGalleries({
+    filter,
+    limit: 20,
+  });
 
-  // Track initial load
+  // Track initial load - only mark as loaded when query has fully completed
+  // This ensures overlay stays until we're ready to show either data or empty state
+  // CRITICAL: Wait for both isLoading AND isFetching to be false
+  // This prevents overlay from hiding when cached placeholder data appears
   useEffect(() => {
-    if (!loading && !hasInitiallyLoaded) {
+    // Only mark as loaded when query has fully completed (not loading AND not fetching)
+    // This ensures we wait for actual data, not cached placeholder
+    const isReady = !loading && !isFetching;
+    if (isReady && !hasInitiallyLoaded) {
       setHasInitiallyLoaded(true);
     }
-  }, [loading, hasInitiallyLoaded]);
+  }, [loading, isFetching, hasInitiallyLoaded]);
 
   // Check if URL params indicate wizard should open (prevents showing FullPageLoading)
   const shouldOpenWizardFromUrl = useMemo(() => {
@@ -81,9 +95,16 @@ export default function GalleryFilterPage({
     // Store state is managed separately
   }, []);
 
-  // Show content area overlay if loading and haven't initially loaded yet
+  // Show content area overlay if:
+  // 1. Still loading/fetching OR haven't initially loaded yet
+  // 2. Wizard is not open
+  // This ensures overlay stays visible until query has fully completed
+  // CRITICAL: We hide overlay only when both loading AND fetching are complete
+  // This prevents flicker when cached placeholder data appears before real data loads
   const showContentAreaOverlay =
-    loading && !hasInitiallyLoaded && !publishWizardOpen && !shouldOpenWizardFromUrl;
+    (loading || isFetching || !hasInitiallyLoaded) &&
+    !publishWizardOpen &&
+    !shouldOpenWizardFromUrl;
 
   // View mode state - shared with GalleryList
   const [viewMode, setViewMode] = useState<"list" | "cards">(() => {

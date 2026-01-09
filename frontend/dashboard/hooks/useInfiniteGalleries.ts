@@ -61,8 +61,9 @@ export function useInfiniteGalleries({
     // Use stale data while refetching for instant navigation
     // This shows cached data immediately while fetching fresh data in background
     placeholderData: (previousData) => previousData,
-    // Don't refetch on mount if we have cached data (staleTime handles staleness)
-    refetchOnMount: false,
+    // Always refetch on mount to ensure we have fresh data
+    // This ensures loading states work correctly (isFetching will be true during fetch)
+    refetchOnMount: true,
     ...options,
   });
 }
