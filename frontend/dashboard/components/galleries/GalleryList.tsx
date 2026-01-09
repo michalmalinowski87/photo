@@ -401,10 +401,14 @@ const GalleryList = ({
   };
 
   // Determine if this is initial load (no data yet)
-  const isInitialLoad = loading && galleries.length === 0 && (!data || !data.pages || data.pages.length === 0);
+  const isInitialLoad =
+    loading && galleries.length === 0 && (!data?.pages || data.pages.length === 0);
 
   return (
-    <div className="space-y-4 relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
+    <div
+      className="space-y-4 relative"
+      style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}
+    >
       {queryError && (
         <div className="text-red-600 dark:text-red-400">{formatApiError(queryError)}</div>
       )}

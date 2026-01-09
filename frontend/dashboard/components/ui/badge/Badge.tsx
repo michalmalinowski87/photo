@@ -31,8 +31,10 @@ const Badge = ({
   // Define color styles for variants
   const variants = {
     light: {
-      primary: "bg-brand-50 text-brand-700 dark:bg-photographer-accent/15 dark:text-photographer-accent",
-      success: "bg-photographer-elevated text-photographer-accentDark dark:bg-success-500/15 dark:text-success-500",
+      primary:
+        "bg-brand-50 text-brand-700 dark:bg-photographer-accent/15 dark:text-photographer-accent",
+      success:
+        "bg-photographer-elevated text-photographer-accentDark dark:bg-success-500/15 dark:text-success-500",
       error: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
       warning: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-orange-400",
       info: "bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-500",

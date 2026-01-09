@@ -35,7 +35,9 @@ export const GalleryTypeStep = ({
           <div className="flex flex-col items-center space-y-4">
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                isFirstSelected ? "bg-photographer-accent" : "bg-photographer-muted dark:bg-gray-700"
+                isFirstSelected
+                  ? "bg-photographer-accent"
+                  : "bg-photographer-muted dark:bg-gray-700"
               }`}
             >
               <CheckCircle2 className="w-10 h-10 text-white" strokeWidth={2} />
@@ -74,7 +76,9 @@ export const GalleryTypeStep = ({
           <div className="flex flex-col items-center space-y-4">
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center ${
-                isSecondSelected ? "bg-photographer-accent" : "bg-photographer-muted dark:bg-gray-700"
+                isSecondSelected
+                  ? "bg-photographer-accent"
+                  : "bg-photographer-muted dark:bg-gray-700"
               }`}
             >
               <ImageIcon className="w-10 h-10 text-white" strokeWidth={2} />

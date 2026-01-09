@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type React from "react";
 import type { FC } from "react";
+
 import { useTheme } from "../../../hooks/useTheme";
 
 interface TypeformInputProps {

@@ -281,7 +281,10 @@ export default function Packages() {
               <Input
                 type="text"
                 placeholder="5.00"
-                value={pricePerExtraPhotoInput ?? (formData.pricePerExtraPhoto ? centsToPlnString(formData.pricePerExtraPhoto) : "")}
+                value={
+                  pricePerExtraPhotoInput ??
+                  (formData.pricePerExtraPhoto ? centsToPlnString(formData.pricePerExtraPhoto) : "")
+                }
                 onChange={(e) => {
                   const formatted = formatCurrencyInput(e.target.value);
                   setPricePerExtraPhotoInput(formatted);
@@ -348,7 +351,8 @@ export default function Packages() {
   }
 
   // Determine if this is initial load (no data yet)
-  const isInitialLoad = loading && packages.length === 0 && (!data || !data.pages || data.pages.length === 0);
+  const isInitialLoad =
+    loading && packages.length === 0 && (!data?.pages || data.pages.length === 0);
 
   return (
     <div className="space-y-6">
@@ -408,7 +412,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "name"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -421,7 +425,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "price"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -434,7 +438,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "pricePerExtraPhoto"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -448,7 +452,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortBy === "date"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -465,7 +469,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "asc"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -478,7 +482,7 @@ export default function Packages() {
                 }}
                 className={`px-3 py-2 text-sm ${
                   sortOrder === "desc"
-                        ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
+                    ? "bg-photographer-accentLight/50 dark:bg-photographer-accent/20 text-photographer-accent dark:text-photographer-accent"
                     : "text-gray-700 dark:text-gray-300 hover:bg-photographer-elevated dark:hover:bg-gray-800"
                 }`}
               >
@@ -512,7 +516,10 @@ export default function Packages() {
           }}
         />
       ) : (
-        <div className="w-full relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
+        <div
+          className="w-full relative"
+          style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}
+        >
           {isInitialLoad && <ContentAreaLoadingOverlay text="Ładowanie pakietów..." />}
           <div
             className="w-full overflow-auto"

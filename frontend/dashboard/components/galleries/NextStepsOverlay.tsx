@@ -303,21 +303,26 @@ export const NextStepsOverlay = () => {
     // Hide overlay during gallery creation to avoid blinking
     const shouldBeVisible = intendedVisible && !galleryCreationLoading;
     const newVisible = Boolean(shouldBeVisible);
-    
+
     // Read persisted expanded state directly from store (only on initial mount)
     // This ensures we respect user's previous preference without causing re-renders
     const persistedExpanded = useOverlayStore.getState().nextStepsOverlayExpanded;
-    
+
     // If we just finished creating a gallery, always expand regardless of persisted state
     // Check if galleryCreationLoading just transitioned from true to false
-    const justFinishedCreating = prevGalleryCreationLoadingRef.current === true && galleryCreationLoading === false;
-    
+    const justFinishedCreating =
+      prevGalleryCreationLoadingRef.current === true && galleryCreationLoading === false;
+
     // Expand overlay on initial mount if it should be visible (first appearance)
     // If gallery was just created, always expand. Otherwise use persisted state if available, otherwise expand by default
     const newExpanded = shouldBeVisible
-      ? (justFinishedCreating ? true : (persistedExpanded !== undefined ? persistedExpanded : true))
+      ? justFinishedCreating
+        ? true
+        : persistedExpanded !== undefined
+          ? persistedExpanded
+          : true
       : Boolean(persistedExpanded);
-    
+
     // Update ref to track gallery creation loading state for next render
     prevGalleryCreationLoadingRef.current = galleryCreationLoading;
 
@@ -442,7 +447,11 @@ export const NextStepsOverlay = () => {
       }
       // Reset nextStepsOverlayDismissed if it was set during creation (shouldn't persist)
       // Only reset if gallery is not completed and not actually dismissed by user
-      if (gallery?.galleryId && gallery.nextStepsOverlayDismissed === true && !galleryCompletedSetup) {
+      if (
+        gallery?.galleryId &&
+        gallery.nextStepsOverlayDismissed === true &&
+        !galleryCompletedSetup
+      ) {
         updateGalleryMutation.mutate({
           galleryId: gallery.galleryId,
           data: {
@@ -529,7 +538,7 @@ export const NextStepsOverlay = () => {
     setOptimisticBytesUsed(null);
     // Reset initialization flag when gallery changes to re-initialize visibility
     hasInitializedVisibilityRef.current = false;
-    
+
     // Reset nextStepsOverlayDismissed if it was incorrectly set (e.g., from previous bug)
     // Only reset if gallery is not completed and flag is set
     if (
@@ -550,7 +559,15 @@ export const NextStepsOverlay = () => {
         });
       }
     }
-  }, [gallery?.galleryId, gallery?.nextStepsOverlayDismissed, gallery?.nextStepsCompleted, galleryLoading, galleryCreationLoading, steps, updateGalleryMutation]);
+  }, [
+    gallery?.galleryId,
+    gallery?.nextStepsOverlayDismissed,
+    gallery?.nextStepsCompleted,
+    galleryLoading,
+    galleryCreationLoading,
+    steps,
+    updateGalleryMutation,
+  ]);
 
   // Auto-hide and mark as completed if all steps are completed (must be before early return)
   // Hide after 3 seconds when all steps are done (not immediately), then mark as completed permanently in database
@@ -710,7 +727,12 @@ export const NextStepsOverlay = () => {
 
   const handleSendClick = useCallback(async () => {
     // Atomic check-and-set: if already sending, return immediately
-    if (!gallery?.galleryId || !isPaid || isSendingRef.current || sendGalleryLinkToClientMutation.isPending) {
+    if (
+      !gallery?.galleryId ||
+      !isPaid ||
+      isSendingRef.current ||
+      sendGalleryLinkToClientMutation.isPending
+    ) {
       return;
     }
 
@@ -722,7 +744,8 @@ export const NextStepsOverlay = () => {
       showToast("success", "Sukces", "Link do galerii został wysłany do klienta");
     } catch (err) {
       // Only show error if it's not the "already in progress" error
-      const errorMessage = err instanceof Error ? err.message : "Nie udało się wysłać linku do galerii";
+      const errorMessage =
+        err instanceof Error ? err.message : "Nie udało się wysłać linku do galerii";
       if (!errorMessage.includes("already in progress")) {
         showToast("error", "Błąd", "Nie udało się wysłać linku do galerii");
       }
@@ -781,7 +804,10 @@ export const NextStepsOverlay = () => {
           aria-label={isExpanded ? "Zwiń" : "Rozwiń"}
         >
           {/* Invisible spacer to maintain layout and prevent jumping */}
-          <div className="absolute inset-0 flex items-center justify-between px-5" aria-hidden="true">
+          <div
+            className="absolute inset-0 flex items-center justify-between px-5"
+            aria-hidden="true"
+          >
             <span className="text-base font-semibold tracking-[-0.01em] text-transparent whitespace-nowrap">
               Ukończ konfigurację
             </span>
@@ -897,7 +923,8 @@ export const NextStepsOverlay = () => {
                     }`}
                     style={{
                       transition: "opacity 200ms ease-out",
-                      transitionDelay: isExpanded && step.id === "publish" ? "0ms" : isExpanded ? "450ms" : "0ms",
+                      transitionDelay:
+                        isExpanded && step.id === "publish" ? "0ms" : isExpanded ? "450ms" : "0ms",
                     }}
                   >
                     <span
@@ -931,7 +958,7 @@ export const NextStepsOverlay = () => {
                   </Tooltip>
                 );
               }
-              
+
               // When expanded, only wrap disabled publish step in Tooltip
               if (isExpanded && step.id === "publish" && isDisabled && !hasPhotos) {
                 return (

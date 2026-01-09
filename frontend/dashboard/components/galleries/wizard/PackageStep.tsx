@@ -136,16 +136,23 @@ export const PackageStep = ({
 
   // Show form mode if user has manually entered data (no selectedPackageId but has package data)
   useEffect(() => {
-    const hasManualData = !selectedPackageId && (
-      (packageName && packageName.trim() !== "") ||
-      includedCount > 0 ||
-      extraPriceCents > 0 ||
-      packagePriceCents > 0
-    );
+    const hasManualData =
+      !selectedPackageId &&
+      ((packageName && packageName.trim() !== "") ||
+        includedCount > 0 ||
+        extraPriceCents > 0 ||
+        packagePriceCents > 0);
     if (hasManualData && !isFormMode) {
       setIsFormMode(true);
     }
-  }, [selectedPackageId, packageName, includedCount, extraPriceCents, packagePriceCents, isFormMode]);
+  }, [
+    selectedPackageId,
+    packageName,
+    includedCount,
+    extraPriceCents,
+    packagePriceCents,
+    isFormMode,
+  ]);
 
   // Selector mode - step2-style layout
   if (!isFormMode) {

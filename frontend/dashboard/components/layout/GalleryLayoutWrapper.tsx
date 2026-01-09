@@ -95,7 +95,15 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         closePublishFlow();
       }
     }
-  }, [publishWizardOpen, publishFlowGalleryId, galleryIdStr, gallery, loadError, loading, closePublishFlow]);
+  }, [
+    publishWizardOpen,
+    publishFlowGalleryId,
+    galleryIdStr,
+    gallery,
+    loadError,
+    loading,
+    closePublishFlow,
+  ]);
 
   // SIMPLIFIED RULE: Only clear gallery/order when navigating AWAY from gallery routes
   // Examples of when to clear: /dashboard, /wallet, /settings (global), /clients

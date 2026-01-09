@@ -52,7 +52,9 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
           </button>
 
           <Link href="/" className="lg:hidden">
-            <span className="text-xl font-bold text-photographer-accent dark:text-white">PhotoCloud</span>
+            <span className="text-xl font-bold text-photographer-accent dark:text-white">
+              PhotoCloud
+            </span>
           </Link>
 
           <button

@@ -18,7 +18,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { useSidebar } from "../../hooks/useSidebar";
 
-
 type NavItem = {
   name: string;
   icon: React.ReactNode;
@@ -144,7 +143,7 @@ const AppSidebar = () => {
                 openSubmenu?.type === "main" && openSubmenu?.index === index
                   ? "menu-item-active"
                   : "menu-item-inactive"
-              } cursor-pointer lg:justify-start`}
+              } cursor-pointer lg:justify-start transition active:scale-[0.98]`}
             >
               <span
                 className={`menu-item-icon-size  ${
@@ -177,7 +176,10 @@ const AppSidebar = () => {
           ) : (
             nav.path &&
             (nav.external ? (
-              <a href={nav.path} className="menu-item group menu-item-inactive">
+              <a
+                href={nav.path}
+                className="menu-item group menu-item-inactive transition active:scale-[0.98]"
+              >
                 <span className="menu-item-icon-size menu-item-icon-inactive">{nav.icon}</span>
                 {(isExpanded || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
               </a>
@@ -186,7 +188,7 @@ const AppSidebar = () => {
                 href={nav.path}
                 className={`menu-item group ${
                   isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
-                }`}
+                } transition active:scale-[0.98]`}
               >
                 <span
                   className={`menu-item-icon-size ${
@@ -221,7 +223,7 @@ const AppSidebar = () => {
                         isActive(subItem.path)
                           ? "menu-dropdown-item-active"
                           : "menu-dropdown-item-inactive"
-                      }`}
+                      } transition active:scale-[0.98]`}
                     >
                       <span>{subItem.name}</span>
                       {subItem.name === "Prośba o zmiany" && hasProsbaOZmianyGalleries && (
@@ -249,8 +251,10 @@ const AppSidebar = () => {
         lg:translate-x-0`}
     >
       <div className="py-10 flex justify-start">
-        <Link href="/">
-          <span className="text-2xl font-bold text-photographer-accent dark:text-white">PhotoCloud</span>
+        <Link href="/" className="transition active:scale-[0.98]">
+          <span className="text-2xl font-bold text-photographer-accent dark:text-white">
+            PhotoCloud
+          </span>
         </Link>
       </div>
       <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
@@ -264,7 +268,7 @@ const AppSidebar = () => {
         <div className="mt-auto pb-6 space-y-2">
           <Link
             href="/dev"
-            className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors active:scale-[0.98] ${
               router.pathname?.startsWith("/dev")
                 ? "bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
                 : "text-gray-700 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-purple-900/10"
@@ -275,7 +279,7 @@ const AppSidebar = () => {
           </Link>
           <Link
             href="/login"
-            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-photographer-text rounded-lg hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-white/5"
+            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-photographer-text rounded-lg hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-white/5 transition active:scale-[0.98]"
             onClick={async (e) => {
               e.preventDefault();
               if (typeof window !== "undefined") {

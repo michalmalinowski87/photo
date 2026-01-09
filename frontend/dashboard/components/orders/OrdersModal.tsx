@@ -313,7 +313,9 @@ export const OrdersModal = ({
                                 onClose();
                                 if (order.galleryId && order.orderId) {
                                   useUnifiedStore.getState().setNavigationLoading(true);
-                                  void router.push(`/galleries/${order.galleryId}/orders/${order.orderId}`);
+                                  void router.push(
+                                    `/galleries/${order.galleryId}/orders/${order.orderId}`
+                                  );
                                 }
                               }}
                               className="max-[1350px]:px-0 max-[1350px]:w-auto max-[1350px]:h-auto max-[1350px]:bg-transparent max-[1350px]:border-0 max-[1350px]:ring-0 max-[1350px]:shadow-none hover:max-[1350px]:bg-transparent dark:max-[1350px]:bg-transparent dark:hover:max-[1350px]:bg-transparent"

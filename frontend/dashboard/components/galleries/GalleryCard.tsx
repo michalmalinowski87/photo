@@ -156,7 +156,10 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
           <div className="w-full h-full flex items-center justify-center">
             <div className="w-24 h-24 rounded-full bg-photographer-border dark:bg-gray-600 flex items-center justify-center">
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <Image className="w-12 h-12 text-photographer-mutedText dark:text-gray-500" aria-hidden="true" />
+              <Image
+                className="w-12 h-12 text-photographer-mutedText dark:text-gray-500"
+                aria-hidden="true"
+              />
             </div>
           </div>
         )}

@@ -207,8 +207,7 @@ export function GallerySettingsForm({
 
       const currentClientEmail =
         typeof gallery?.clientEmail === "string" ? gallery.clientEmail : "";
-      const clientEmailChanged =
-        settingsForm.clientEmail.trim() !== currentClientEmail.trim();
+      const clientEmailChanged = settingsForm.clientEmail.trim() !== currentClientEmail.trim();
 
       const passwordChanged = Boolean(settingsForm.clientPassword && settingsForm.clientEmail);
 
@@ -228,7 +227,8 @@ export function GallerySettingsForm({
 
       // If only gallery name changed, use the optimistic-only mutation (no refetch)
       // If other fields changed too, use the full mutation (with refetch for consistency)
-      const onlyNameChanged = galleryNameChanged && !clientEmailChanged && !passwordChanged && !pkgChanged;
+      const onlyNameChanged =
+        galleryNameChanged && !clientEmailChanged && !passwordChanged && !pkgChanged;
 
       // Update gallery name if changed
       if (galleryNameChanged) {

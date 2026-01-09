@@ -254,13 +254,13 @@ export const ClientStep = ({
 
   // Show form mode if user has manually entered data (no selectedClientId but has client data)
   useEffect(() => {
-    const hasManualData = !selectedClientId && (
-      (clientEmail && clientEmail.trim() !== "") ||
-      (firstName && firstName.trim() !== "") ||
-      (lastName && lastName.trim() !== "") ||
-      (companyName && companyName.trim() !== "") ||
-      (nip && nip.trim() !== "")
-    );
+    const hasManualData =
+      !selectedClientId &&
+      ((clientEmail && clientEmail.trim() !== "") ||
+        (firstName && firstName.trim() !== "") ||
+        (lastName && lastName.trim() !== "") ||
+        (companyName && companyName.trim() !== "") ||
+        (nip && nip.trim() !== ""));
     if (hasManualData && !isFormMode) {
       setIsFormMode(true);
     }

@@ -44,8 +44,8 @@
   /* Force light background and dark text colors */
   html:has(.auth-layout) body,
   .auth-layout {
-    background-color: #FFFAF5 !important; /* var(--light-3) */
-    color: #2D241F !important; /* var(--dark-2) */
+    background-color: #fffaf5 !important; /* var(--light-3) */
+    color: #2d241f !important; /* var(--dark-2) */
   }
 }
 
@@ -61,11 +61,11 @@ body {
 
 ::-webkit-scrollbar {
   width: 6px;
-  scrollbar-color: #E3D3C4; /* var(--gray-3) */
+  scrollbar-color: #e3d3c4; /* var(--gray-3) */
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #E3D3C4; /* var(--gray-3) */
+  background-color: #e3d3c4; /* var(--gray-3) */
   border-radius: 3px;
 }
 
@@ -76,10 +76,10 @@ body {
 .gradient {
   background: conic-gradient(
     from 230.29deg at 51.63% 52.16%,
-    rgba(139, 111, 87, 1) 0deg, /* var(--primary) */
-    rgba(139, 111, 87, 0.9) 67.5deg,
-    rgba(122, 95, 74, 0.8) 198.75deg, /* var(--primary-dark) */
-    rgba(139, 111, 87, 0.7) 251.25deg,
+    rgba(139, 111, 87, 1) 0deg,
+    /* var(--primary) */ rgba(139, 111, 87, 0.9) 67.5deg,
+    rgba(122, 95, 74, 0.8) 198.75deg,
+    /* var(--primary-dark) */ rgba(139, 111, 87, 0.7) 251.25deg,
     rgba(139, 111, 87, 0.85) 301.88deg,
     rgba(122, 95, 74, 0.95) 360deg
   );
@@ -94,20 +94,20 @@ body {
 html:has(.auth-layout),
 html:has(.auth-layout) body {
   font-family: "Inter", sans-serif !important;
-  background-color: #FFFAF5 !important; /* var(--light-3) */
-  color: #2D241F !important; /* var(--dark-2) */
+  background-color: #fffaf5 !important; /* var(--light-3) */
+  color: #2d241f !important; /* var(--dark-2) */
 }
 
 /* Override globals.css body styles for auth pages */
 html:has(.auth-layout) body {
-  background-color: #FFFAF5 !important; /* var(--light-3) */
-  color: #2D241F !important; /* var(--dark-2) */
+  background-color: #fffaf5 !important; /* var(--light-3) */
+  color: #2d241f !important; /* var(--dark-2) */
 }
 
 /* Force all text elements to use dark colors */
 .auth-layout,
 .auth-layout * {
-  color: #2D241F !important; /* var(--dark-2) */
+  color: #2d241f !important; /* var(--dark-2) */
 }
 
 /* Dark buttons should have white text - override the general rule */
@@ -122,27 +122,27 @@ html:has(.auth-layout) body {
 .auth-layout button[style*="background-color"][style*="hsl(139"],
 .auth-layout .btn-primary,
 .auth-layout button.variant-primary {
-  color: #FFFFFF !important; /* white text on dark buttons */
+  color: #ffffff !important; /* white text on dark buttons */
 }
 
 /* Specifically target primary variant buttons */
 .auth-layout button.bg-photographer-accent,
 .auth-layout button.bg-photographer-accentHover {
-  color: #FFFFFF !important;
+  color: #ffffff !important;
 }
 
 /* Force input fields to have light background */
 .auth-layout input,
 .auth-layout textarea,
 .auth-layout select {
-  background-color: #FFFFFF !important; /* var(--white) */
-  color: #2D241F !important; /* var(--dark-2) */
-  border-color: #E3D3C4 !important; /* var(--gray-3) */
+  background-color: #ffffff !important; /* var(--white) */
+  color: #2d241f !important; /* var(--dark-2) */
+  border-color: #e3d3c4 !important; /* var(--gray-3) */
 }
 
 /* Force labels to be dark */
 .auth-layout label {
-  color: #2D241F !important; /* var(--dark-2) */
+  color: #2d241f !important; /* var(--dark-2) */
 }
 
 /* PhotoCloud brand styling - larger with less padding/margin */
@@ -151,7 +151,7 @@ html:has(.auth-layout) body {
 .auth-layout a span[style*="color"] {
   font-size: 2rem !important; /* Larger than text-xl (1.25rem) - equivalent to text-4xl */
   font-weight: 700 !important;
-  color: #8B6F57 !important; /* var(--primary) brown */
+  color: #8b6f57 !important; /* var(--primary) brown */
   line-height: 1.2 !important;
 }
 

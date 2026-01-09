@@ -51,7 +51,9 @@ const Alert = ({
   };
 
   return (
-    <div className={`rounded-xl border p-4 ${variantClasses[variant].container} backdrop-blur-0 relative z-10`}>
+    <div
+      className={`rounded-xl border p-4 ${variantClasses[variant].container} backdrop-blur-0 relative z-10`}
+    >
       <div className="flex items-start gap-3 relative z-10">
         <div className={`-mt-0.5 flex-shrink-0 ${variantClasses[variant].icon}`}>
           {icons[variant]}

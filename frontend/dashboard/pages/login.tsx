@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
-import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { useAuth } from "../context/AuthProvider";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { initAuth, signIn, getCurrentUser } from "../lib/auth";
@@ -215,7 +215,10 @@ export default function Login() {
       <MobileWarningModal isOpen={showMobileWarning} onClose={() => setShowMobileWarning(false)} />
       <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
         <div className="flex items-center w-full py-8 border-b border-border/80">
-          <Link href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"} className="flex items-center gap-x-2">
+          <Link
+            href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"}
+            className="flex items-center gap-x-2"
+          >
             <span className="text-xl font-bold" style={{ color: "#465fff" }}>
               PhotoCloud
             </span>

@@ -276,8 +276,8 @@ const CreateGalleryWizard = ({
         // Check if package is selected OR manual form data exists
         const hasManualPackageData =
           (data.packageName && data.packageName.trim() !== "") ||
-          (data.includedCount > 0) ||
-          (data.packagePriceCents > 0);
+          data.includedCount > 0 ||
+          data.packagePriceCents > 0;
 
         if (!data.selectedPackageId && !hasManualPackageData) {
           errors.selectedPackageId = "Wybierz pakiet lub wprowadź dane pakietu ręcznie";
@@ -299,7 +299,11 @@ const CreateGalleryWizard = ({
           isValid = false;
         }
         // extraPriceCents is optional - only validate it's not negative if provided
-        if (data.extraPriceCents !== undefined && data.extraPriceCents !== null && data.extraPriceCents < 0) {
+        if (
+          data.extraPriceCents !== undefined &&
+          data.extraPriceCents !== null &&
+          data.extraPriceCents < 0
+        ) {
           errors.extraPriceCents = "Cena za dodatkowe zdjęcie nie może być ujemna";
           isValid = false;
         }

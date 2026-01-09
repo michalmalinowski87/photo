@@ -26,7 +26,9 @@ export function EmptyState({
       <div className="w-full max-w-2xl py-26 px-20 flex flex-col items-center justify-center space-y-10">
         <div className="text-photographer-mutedText dark:text-gray-500 scale-[1.43]">{icon}</div>
         <div className="text-center space-y-5">
-          <h3 className="text-[1.95rem] font-medium text-photographer-heading dark:text-white">{title}</h3>
+          <h3 className="text-[1.95rem] font-medium text-photographer-heading dark:text-white">
+            {title}
+          </h3>
           <p className="text-[1.3rem] text-photographer-mutedText dark:text-gray-400 leading-relaxed max-w-xl">
             {description}
           </p>

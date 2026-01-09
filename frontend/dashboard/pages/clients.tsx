@@ -249,7 +249,9 @@ export default function Clients() {
                   onChange={(e) => setFormData({ ...formData, isCompany: e.target.checked })}
                   className="w-4 h-4 text-photographer-accent rounded"
                 />
-                <span className="text-sm font-medium text-photographer-text dark:text-gray-300">Firma</span>
+                <span className="text-sm font-medium text-photographer-text dark:text-gray-300">
+                  Firma
+                </span>
               </label>
             </div>
 
@@ -338,7 +340,8 @@ export default function Clients() {
   }
 
   // Determine if this is initial load (no data yet)
-  const isInitialLoad = loading && clients.length === 0 && (!data || !data.pages || data.pages.length === 0);
+  const isInitialLoad =
+    loading && clients.length === 0 && (!data?.pages || data.pages.length === 0);
 
   return (
     <div className="space-y-6">
@@ -479,7 +482,10 @@ export default function Clients() {
           />
         )
       ) : (
-        <div className="w-full relative" style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}>
+        <div
+          className="w-full relative"
+          style={{ minHeight: isInitialLoad ? "calc(100vh - 200px)" : undefined }}
+        >
           {isInitialLoad && <ContentAreaLoadingOverlay text="Ładowanie klientów..." />}
           <div
             className="w-full overflow-auto table-scrollbar"

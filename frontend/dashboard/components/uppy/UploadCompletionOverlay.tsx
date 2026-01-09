@@ -59,9 +59,15 @@ export const UploadCompletionOverlay = ({
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div className="flex-shrink-0 w-14 h-14 rounded-full bg-photographer-elevated dark:bg-photographer-accentDark/30 flex items-center justify-center">
                 {isFinalizing ? (
-                  <Loader2 size={28} className="text-photographer-accent dark:text-photographer-accent animate-spin" />
+                  <Loader2
+                    size={28}
+                    className="text-photographer-accent dark:text-photographer-accent animate-spin"
+                  />
                 ) : (
-                  <CheckCircle2 size={28} className="text-photographer-accent dark:text-photographer-accentLight" />
+                  <CheckCircle2
+                    size={28}
+                    className="text-photographer-accent dark:text-photographer-accentLight"
+                  />
                 )}
               </div>
               <div className="flex-1 min-w-0">

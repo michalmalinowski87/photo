@@ -470,7 +470,7 @@ export function useSendGalleryToClient() {
     mutationFn: async (galleryId: string) => {
       // Atomic check-and-set: check if promise exists, if not create and store synchronously
       let promise = sendingGalleryPromises.get(galleryId);
-      
+
       if (!promise) {
         // Create promise synchronously and store it immediately (before any await)
         // This ensures that concurrent calls will see the stored promise
@@ -482,7 +482,7 @@ export function useSendGalleryToClient() {
             sendingGalleryPromises.delete(galleryId);
           }
         })();
-        
+
         // Store the promise immediately (synchronously) before any async operations
         sendingGalleryPromises.set(galleryId, promise);
       }

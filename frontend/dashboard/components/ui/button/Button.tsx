@@ -31,7 +31,8 @@ const Button = ({
 
   // Variant Classes
   const variantClasses = {
-    primary: "bg-photographer-accent text-white hover:bg-photographer-accentHover disabled:bg-photographer-accentLight",
+    primary:
+      "bg-photographer-accent text-white hover:bg-photographer-accentHover disabled:bg-photographer-accentLight",
     outline:
       "bg-photographer-surface text-photographer-heading border border-photographer-accent hover:bg-photographer-accentLight/20 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 dark:hover:bg-white/[0.03] dark:hover:text-gray-300",
     secondary:

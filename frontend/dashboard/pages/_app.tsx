@@ -15,8 +15,8 @@ import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredMod
 import { ClientOnly } from "../components/ClientOnly";
 import AppLayout from "../components/layout/AppLayout";
 import GalleryLayoutWrapper from "../components/layout/GalleryLayoutWrapper";
-import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { ToastContainer } from "../components/ui/toast/ToastContainer";
 import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
 import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
@@ -231,7 +231,14 @@ function AppContent({ Component, pageProps }: AppProps) {
       router.events.off("routeChangeComplete", handleRouteChangeComplete);
       router.events.off("routeChangeError", handleRouteChangeError);
     };
-  }, [router.isReady, router.pathname, router.events, setSessionExpired, setNavigationLoading, is404Page]);
+  }, [
+    router.isReady,
+    router.pathname,
+    router.events,
+    setSessionExpired,
+    setNavigationLoading,
+    is404Page,
+  ]);
 
   // Register Service Worker for Golden Retriever (skip for 404 during SSG)
   useEffect(() => {

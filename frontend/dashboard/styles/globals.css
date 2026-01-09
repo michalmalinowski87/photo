@@ -193,7 +193,9 @@ select:-webkit-autofill:active {
   box-shadow: 0 0 0 1000px white inset !important;
   background-color: white !important;
   color: rgb(30 26 23) !important; /* Ensure text color matches */
-  transition: background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s !important;
+  transition:
+    background-color 5000s ease-in-out 0s,
+    color 5000s ease-in-out 0s !important;
 }
 
 html.dark input:-webkit-autofill,
@@ -213,7 +215,9 @@ html.dark select:-webkit-autofill:active {
   box-shadow: 0 0 0 1000px rgb(17 24 39) inset !important;
   background-color: rgb(17 24 39) !important;
   color: rgb(255 255 255) !important; /* Ensure text color matches */
-  transition: background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s !important;
+  transition:
+    background-color 5000s ease-in-out 0s,
+    color 5000s ease-in-out 0s !important;
 }
 
 /* Special handling for transparent background inputs (TypeformInput, SearchableSelect) */
@@ -293,19 +297,16 @@ html:not(.dark) .toast-container .bg-photographer-elevated {
 .dark [data-toast-container] .dark\:bg-success-500\/50,
 .dark .toast-container .dark\:bg-success-500\/50 {
   background-color: rgb(26, 34, 49) !important; /* Solid dark base (gray-dark) */
-  box-shadow: inset 0 0 0 1px rgba(18, 183, 106, 0.3), inset 0 0 100px rgba(18, 183, 106, 0.15) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(18, 183, 106, 0.3),
+    inset 0 0 100px rgba(18, 183, 106, 0.15) !important;
 }
 
 [data-toast-container] .dark\:bg-success-500\/15,
 .toast-container .dark\:bg-success-500\/15,
 .dark [data-toast-container] .dark\:bg-success-500\/30,
 .dark .toast-container .dark\:bg-success-500\/30 {
-  background-color: rgba(
-    18,
-    183,
-    106,
-    0.3
-  ) !important; /* success-500 with 30% opacity */
+  background-color: rgba(18, 183, 106, 0.3) !important; /* success-500 with 30% opacity */
 }
 
 [data-toast-container] .bg-error-50,
@@ -315,18 +316,15 @@ html:not(.dark) .toast-container .bg-photographer-elevated {
 
 [data-toast-container] .dark\:bg-error-500\/15,
 .toast-container .dark\:bg-error-500\/15 {
-  background-color: rgba(
-    240,
-    68,
-    56,
-    0.3
-  ) !important; /* error-500 with 30% opacity */
+  background-color: rgba(240, 68, 56, 0.3) !important; /* error-500 with 30% opacity */
 }
 
 .dark [data-toast-container] .dark\:bg-error-500\/50,
 .dark .toast-container .dark\:bg-error-500\/50 {
   background-color: rgb(26, 34, 49) !important; /* Solid dark base */
-  box-shadow: inset 0 0 0 1px rgba(240, 68, 56, 0.3), inset 0 0 100px rgba(240, 68, 56, 0.15) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(240, 68, 56, 0.3),
+    inset 0 0 100px rgba(240, 68, 56, 0.15) !important;
 }
 
 [data-toast-container] .bg-warning-50,
@@ -336,18 +334,15 @@ html:not(.dark) .toast-container .bg-photographer-elevated {
 
 [data-toast-container] .dark\:bg-warning-500\/15,
 .toast-container .dark\:bg-warning-500\/15 {
-  background-color: rgba(
-    247,
-    144,
-    9,
-    0.3
-  ) !important; /* warning-500 with 30% opacity */
+  background-color: rgba(247, 144, 9, 0.3) !important; /* warning-500 with 30% opacity */
 }
 
 .dark [data-toast-container] .dark\:bg-warning-500\/50,
 .dark .toast-container .dark\:bg-warning-500\/50 {
   background-color: rgb(26, 34, 49) !important; /* Solid dark base */
-  box-shadow: inset 0 0 0 1px rgba(247, 144, 9, 0.3), inset 0 0 100px rgba(247, 144, 9, 0.15) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(247, 144, 9, 0.3),
+    inset 0 0 100px rgba(247, 144, 9, 0.15) !important;
 }
 
 [data-toast-container] .bg-blue-light-50,
@@ -357,18 +352,15 @@ html:not(.dark) .toast-container .bg-photographer-elevated {
 
 [data-toast-container] .dark\:bg-blue-light-500\/15,
 .toast-container .dark\:bg-blue-light-500\/15 {
-  background-color: rgba(
-    11,
-    165,
-    236,
-    0.3
-  ) !important; /* blue-light-500 with 30% opacity */
+  background-color: rgba(11, 165, 236, 0.3) !important; /* blue-light-500 with 30% opacity */
 }
 
 .dark [data-toast-container] .dark\:bg-blue-light-500\/50,
 .dark .toast-container .dark\:bg-blue-light-500\/50 {
   background-color: rgb(26, 34, 49) !important; /* Solid dark base */
-  box-shadow: inset 0 0 0 1px rgba(11, 165, 236, 0.3), inset 0 0 100px rgba(11, 165, 236, 0.15) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(11, 165, 236, 0.3),
+    inset 0 0 100px rgba(11, 165, 236, 0.15) !important;
 }
 
 /* Remove border from toast Alerts */

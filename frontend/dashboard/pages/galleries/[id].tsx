@@ -883,7 +883,9 @@ export default function GalleryDetail() {
                               onClick={() => {
                                 if (galleryIdStr && order.orderId) {
                                   useUnifiedStore.getState().setNavigationLoading(true);
-                                  void router.push(`/galleries/${galleryIdStr}/orders/${order.orderId}`);
+                                  void router.push(
+                                    `/galleries/${galleryIdStr}/orders/${order.orderId}`
+                                  );
                                 }
                               }}
                             >

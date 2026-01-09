@@ -5,13 +5,13 @@ import React, { useState, useEffect, useRef } from "react";
 import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { FullPageLoading } from "../components/ui/loading/Loading";
 import {
   PasswordInputWithStrength,
   PasswordInputWithToggle,
   PasswordStrengthResult,
   PasswordStrengthValidator,
 } from "../components/ui/password-strength-validator";
-import { FullPageLoading } from "../components/ui/loading/Loading";
 import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 
 interface CognitoError extends Error {
@@ -165,137 +165,140 @@ export default function SignUp() {
     <>
       {loading && <FullPageLoading text="Tworzymy Twoje konto..." />}
       <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"} className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
-            PhotoCloud
-          </span>
-        </Link>
-      </div>
+        <div className="flex items-center w-full py-8 border-b border-border/80">
+          <Link
+            href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"}
+            className="flex items-center gap-x-2"
+          >
+            <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+              PhotoCloud
+            </span>
+          </Link>
+        </div>
 
-      <div className="flex flex-col w-full mt-8 relative">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Zarejestruj się</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
-        </p>
+        <div className="flex flex-col w-full mt-8 relative">
+          <h2 className="text-2xl font-semibold mb-2 text-foreground">Zarejestruj się</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
+          </p>
 
-        {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSignUp} className="w-full space-y-4 relative">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="twoj@email.com"
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="space-y-2 relative">
-            <Label htmlFor="password">Hasło</Label>
-            <PasswordInputWithStrength
-              ref={passwordInputRef}
-              id="password"
-              password={password}
-              onPasswordChange={(value) => {
-                setPassword(value);
-                setError(""); // Clear error when user types
-              }}
-              onStrengthChange={setPasswordStrength}
-              placeholder="Wprowadź hasło"
-              required
-              autoComplete="new-password"
-              minLength={8}
-            />
-
+          <form onSubmit={handleSignUp} className="w-full space-y-4 relative">
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
-              <PasswordInputWithToggle
-                id="confirmPassword"
-                value={confirmPassword}
-                onValueChange={(value) => {
-                  setConfirmPassword(value);
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="twoj@email.com"
+                required
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2 relative">
+              <Label htmlFor="password">Hasło</Label>
+              <PasswordInputWithStrength
+                ref={passwordInputRef}
+                id="password"
+                password={password}
+                onPasswordChange={(value) => {
+                  setPassword(value);
                   setError(""); // Clear error when user types
                 }}
-                placeholder="Powtórz hasło"
+                onStrengthChange={setPasswordStrength}
+                placeholder="Wprowadź hasło"
                 required
                 autoComplete="new-password"
+                minLength={8}
               />
-              {confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-red-500 mt-1">Hasła nie są identyczne</p>
-              )}
-              {confirmPassword && password === confirmPassword && password.length > 0 && (
-                <p className="text-xs text-green-500 mt-1">Hasła są identyczne</p>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
+                <PasswordInputWithToggle
+                  id="confirmPassword"
+                  value={confirmPassword}
+                  onValueChange={(value) => {
+                    setConfirmPassword(value);
+                    setError(""); // Clear error when user types
+                  }}
+                  placeholder="Powtórz hasło"
+                  required
+                  autoComplete="new-password"
+                />
+                {confirmPassword && password !== confirmPassword && (
+                  <p className="text-xs text-red-500 mt-1">Hasła nie są identyczne</p>
+                )}
+                {confirmPassword && password === confirmPassword && password.length > 0 && (
+                  <p className="text-xs text-green-500 mt-1">Hasła są identyczne</p>
+                )}
+              </div>
+
+              {/* Password Strength Validator - Fixed Positioned Side Card */}
+              {password && passwordStrength && validatorPosition && (
+                <div
+                  className="fixed w-72 z-50 hidden md:block pointer-events-auto"
+                  style={{
+                    top: `${validatorPosition.top}px`,
+                    left: `${validatorPosition.left}px`,
+                    maxHeight: "calc(100vh - 2rem)",
+                  }}
+                >
+                  <div className="rounded-lg border border-border bg-card p-4 shadow-lg max-h-full overflow-y-auto">
+                    <PasswordStrengthValidator
+                      password={password}
+                      minLength={8}
+                      onStrengthChange={setPasswordStrength}
+                      showToggle={false}
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Password Strength Validator - Fixed Positioned Side Card */}
-            {password && passwordStrength && validatorPosition && (
-              <div
-                className="fixed w-72 z-50 hidden md:block pointer-events-auto"
-                style={{
-                  top: `${validatorPosition.top}px`,
-                  left: `${validatorPosition.left}px`,
-                  maxHeight: "calc(100vh - 2rem)",
-                }}
-              >
-                <div className="rounded-lg border border-border bg-card p-4 shadow-lg max-h-full overflow-y-auto">
-                  <PasswordStrengthValidator
-                    password={password}
-                    minLength={8}
-                    onStrengthChange={setPasswordStrength}
-                    showToggle={false}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full"
+              disabled={loading || !passwordStrength?.meetsMinimum}
+            >
+              {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}
+            </Button>
+          </form>
 
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full"
-            disabled={loading || !passwordStrength?.meetsMinimum}
-          >
-            {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}
-          </Button>
-        </form>
+          <p className="text-xs text-muted-foreground mt-4 text-center">
+            Po rejestracji otrzymasz email z kodem weryfikacyjnym
+          </p>
+        </div>
 
-        <p className="text-xs text-muted-foreground mt-4 text-center">
-          Po rejestracji otrzymasz email z kodem weryfikacyjnym
-        </p>
+        <div className="flex flex-col items-start w-full mt-8">
+          <p className="text-sm text-muted-foreground">
+            Rejestrując się, akceptujesz nasze{" "}
+            <Link href="/terms" className="text-primary font-bold">
+              Warunki korzystania{" "}
+            </Link>
+            i{" "}
+            <Link href="/privacy" className="text-primary font-bold">
+              Politykę prywatności
+            </Link>
+          </p>
+        </div>
+
+        <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
+          <p className="text-sm text-muted-foreground">
+            Masz już konto?{" "}
+            <Link href="/login" className="text-primary font-bold">
+              Zaloguj się
+            </Link>
+          </p>
+        </div>
       </div>
-
-      <div className="flex flex-col items-start w-full mt-8">
-        <p className="text-sm text-muted-foreground">
-          Rejestrując się, akceptujesz nasze{" "}
-          <Link href="/terms" className="text-primary font-bold">
-            Warunki korzystania{" "}
-          </Link>
-          i{" "}
-          <Link href="/privacy" className="text-primary font-bold">
-            Politykę prywatności
-          </Link>
-        </p>
-      </div>
-
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
-          Masz już konto?{" "}
-          <Link href="/login" className="text-primary font-bold">
-            Zaloguj się
-          </Link>
-        </p>
-      </div>
-    </div>
     </>
   );
 }

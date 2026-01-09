@@ -73,7 +73,12 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   // Move all hooks before any conditional returns to comply with Rules of Hooks
   const handleSendLink = useCallback(async () => {
     // Atomic check-and-set: if already sending, return immediately
-    if (!galleryIdStr || isSendingRef.current || sendLinkLoading || sendGalleryLinkToClientMutation.isPending) {
+    if (
+      !galleryIdStr ||
+      isSendingRef.current ||
+      sendLinkLoading ||
+      sendGalleryLinkToClientMutation.isPending
+    ) {
       return;
     }
 
@@ -236,12 +241,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
       {/* Publish Gallery Button - Show when not paid, disabled if no photos */}
       {shouldShowPublishButton &&
         (!hasPhotos ? (
-          <Tooltip
-            content="Najpierw prześlij zdjęcia"
-            side="top"
-            align="center"
-            fullWidth
-          >
+          <Tooltip content="Najpierw prześlij zdjęcia" side="top" align="center" fullWidth>
             <Button
               variant="primary"
               size="md"

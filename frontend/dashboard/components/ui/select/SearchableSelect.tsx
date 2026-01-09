@@ -182,7 +182,9 @@ export const SearchableSelect = ({
         >
           <span
             className={`truncate flex-1 font-medium ${
-              !selectedOption ? "text-photographer-mutedText dark:text-gray-500" : "text-photographer-text dark:text-white"
+              !selectedOption
+                ? "text-photographer-mutedText dark:text-gray-500"
+                : "text-photographer-text dark:text-white"
             }`}
           >
             {selectedOption ? selectedOption.label : placeholder}
