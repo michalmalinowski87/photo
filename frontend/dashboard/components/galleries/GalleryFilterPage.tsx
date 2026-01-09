@@ -1,4 +1,5 @@
 import { LayoutDashboard, List as ListIcon, Search, ArrowUpDown, X } from "lucide-react";
+import { useRouter } from "next/router";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 
 import { usePageLogger } from "../../hooks/usePageLogger";
@@ -32,11 +33,12 @@ export default function GalleryFilterPage({
   loadingText = "Ładowanie galerii...",
 }: GalleryFilterPageProps) {
   usePageLogger({ pageName: `GalleryFilterPage-${filter}`, logRouteChanges: false });
+  const router = useRouter();
   const [publishWizardOpen, setPublishWizardOpen] = useState<boolean>(false);
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState<boolean>(false);
+  const [showOverlay, setShowOverlay] = useState<boolean>(true);
+  const prevFilterRef = useRef<string>(filter);
 
   // Use the same infinite query hook as GalleryList to ensure consistent loading state
-  // This prevents flickering when cached data appears before component is ready
   const {
     data,
     isLoading: loading,
@@ -46,18 +48,31 @@ export default function GalleryFilterPage({
     limit: 20,
   });
 
-  // Track initial load - only mark as loaded when query has fully completed
-  // This ensures overlay stays until we're ready to show either data or empty state
-  // CRITICAL: Wait for both isLoading AND isFetching to be false
-  // This prevents overlay from hiding when cached placeholder data appears
+  // Track filter changes - when filter changes, show overlay and wait for new data
   useEffect(() => {
-    // Only mark as loaded when query has fully completed (not loading AND not fetching)
-    // This ensures we wait for actual data, not cached placeholder
-    const isReady = !loading && !isFetching;
-    if (isReady && !hasInitiallyLoaded) {
-      setHasInitiallyLoaded(true);
+    if (prevFilterRef.current !== filter) {
+      setShowOverlay(true);
+      prevFilterRef.current = filter;
     }
-  }, [loading, isFetching, hasInitiallyLoaded]);
+  }, [filter]);
+
+  // Hide overlay only when query is completely done AND we have data pages
+  // This ensures we wait for the actual fetch, not just cached data
+  useEffect(() => {
+    const isReady = !loading && !isFetching;
+    const hasDataPages = data?.pages !== undefined;
+    
+    if (isReady && hasDataPages) {
+      // Query is done and we have data - hide overlay after delay
+      const timer = setTimeout(() => {
+        setShowOverlay(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    } else {
+      // Still loading/fetching or no data yet - keep overlay visible
+      setShowOverlay(true);
+    }
+  }, [loading, isFetching, data]);
 
   // Check if URL params indicate wizard should open (prevents showing FullPageLoading)
   const shouldOpenWizardFromUrl = useMemo(() => {
@@ -95,14 +110,10 @@ export default function GalleryFilterPage({
     // Store state is managed separately
   }, []);
 
-  // Show content area overlay if:
-  // 1. Still loading/fetching OR haven't initially loaded yet
-  // 2. Wizard is not open
-  // This ensures overlay stays visible until query has fully completed
-  // CRITICAL: We hide overlay only when both loading AND fetching are complete
-  // This prevents flicker when cached placeholder data appears before real data loads
+  // Show content area overlay based on stable state
+  // This prevents flicker by using a single source of truth
   const showContentAreaOverlay =
-    (loading || isFetching || !hasInitiallyLoaded) &&
+    showOverlay &&
     !publishWizardOpen &&
     !shouldOpenWizardFromUrl;
 
@@ -341,6 +352,7 @@ export default function GalleryFilterPage({
           search={debouncedSearchQuery}
           sortBy={sortBy}
           sortOrder={sortOrder}
+          hideContent={showContentAreaOverlay}
         />
       </div>
     </div>

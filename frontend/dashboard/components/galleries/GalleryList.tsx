@@ -50,6 +50,7 @@ interface GalleryListProps {
   search?: string;
   sortBy?: "name" | "date" | "expiration";
   sortOrder?: "asc" | "desc";
+  hideContent?: boolean; // When true, hides table header and empty state to prevent flash during navigation
 }
 
 // Helper function to format plan display (e.g., "1GB-12m" -> "1GB 12m")
@@ -154,6 +155,7 @@ const GalleryList = ({
   search,
   sortBy,
   sortOrder,
+  hideContent = false,
 }: GalleryListProps) => {
   const { logDataLoad, logDataLoaded, logDataError } = usePageLogger({
     pageName: `GalleryList-${filter}`,
@@ -184,6 +186,7 @@ const GalleryList = ({
   const {
     data,
     isLoading: loading,
+    isFetching,
     error: queryError,
     fetchNextPage,
     hasNextPage,
@@ -401,8 +404,43 @@ const GalleryList = ({
   };
 
   // Determine if this is initial load (no data yet)
+  const dataPages = data && typeof data === 'object' && 'pages' in data ? data.pages : undefined;
   const isInitialLoad =
-    loading && galleries.length === 0 && (!data?.pages || data.pages.length === 0);
+    loading && galleries.length === 0 && (!dataPages || dataPages.length === 0);
+
+  // Hide content when overlay is showing (during navigation)
+  // CRITICAL: Also check if we should show empty state BEFORE allowing table to render
+  // This prevents table header from flashing before empty state
+  const shouldShowEmptyState = !isInitialLoad && galleries.length === 0;
+  const isStillLoading = loading || isFetching;
+  const hasDataPages = Array.isArray(dataPages) && dataPages.length > 0;
+  
+  // Hide content if:
+  // 1. Parent says to hide (overlay showing)
+  // 2. Still loading/fetching AND we don't have data pages yet
+  // 3. We should show empty state AND still loading (prevents table header flash during transition)
+  if (hideContent || (isStillLoading && !hasDataPages) || (shouldShowEmptyState && isStillLoading)) {
+    return (
+      <div
+        className="space-y-4 relative"
+        style={{ minHeight: "calc(100vh - 200px)" }}
+      >
+        {/* Content hidden - overlay will show instead */}
+      </div>
+    );
+  }
+  
+  // If we should show empty state and NOT loading, render it directly
+  if (shouldShowEmptyState && !isStillLoading) {
+    return (
+      <div
+        className="space-y-4 relative"
+        style={{ minHeight: "calc(100vh - 200px)" }}
+      >
+        <EmptyState {...getEmptyStateConfig()} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -413,9 +451,7 @@ const GalleryList = ({
         <div className="text-red-600 dark:text-red-400">{formatApiError(queryError)}</div>
       )}
 
-      {!isInitialLoad && galleries.length === 0 ? (
-        <EmptyState {...getEmptyStateConfig()} />
-      ) : viewMode === "cards" ? (
+      {viewMode === "cards" ? (
         // Cards View with Infinite Scroll - Ultra Smooth with Early Preloading
         <div className="w-full" style={{ height: "calc(100vh - 200px)", minHeight: "900px" }}>
           <VirtuosoGrid
