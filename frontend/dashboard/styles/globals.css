@@ -28,6 +28,35 @@
   body {
     @apply relative font-normal font-outfit bg-photographer-background dark:bg-gray-dark;
   }
+
+  /* Hide all placeholders globally */
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  input::-webkit-input-placeholder,
+  textarea::-webkit-input-placeholder,
+  select::-webkit-input-placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  input::-moz-placeholder,
+  textarea::-moz-placeholder,
+  select::-moz-placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  input:-ms-input-placeholder,
+  textarea:-ms-input-placeholder,
+  select:-ms-input-placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
 }
 
 @layer components {

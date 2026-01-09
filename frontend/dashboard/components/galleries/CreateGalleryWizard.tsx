@@ -280,12 +280,9 @@ const CreateGalleryWizard = ({
           errors.includedCount = "Liczba zdjęć w pakiecie jest wymagana";
           isValid = false;
         }
-        if (
-          data.extraPriceCents === undefined ||
-          data.extraPriceCents === null ||
-          data.extraPriceCents <= 0
-        ) {
-          errors.extraPriceCents = "Cena za dodatkowe zdjęcie jest wymagana";
+        // extraPriceCents is optional - only validate it's not negative if provided
+        if (data.extraPriceCents !== undefined && data.extraPriceCents !== null && data.extraPriceCents < 0) {
+          errors.extraPriceCents = "Cena za dodatkowe zdjęcie nie może być ujemna";
           isValid = false;
         }
         if (

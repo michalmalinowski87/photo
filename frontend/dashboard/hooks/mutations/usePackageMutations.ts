@@ -5,7 +5,7 @@ import { queryKeys } from "../../lib/react-query";
 interface PackageFormData {
   name: string;
   includedPhotos: number;
-  pricePerExtraPhoto: number;
+  pricePerExtraPhoto?: number; // Optional
   price: number;
 }
 

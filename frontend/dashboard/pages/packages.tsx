@@ -35,7 +35,7 @@ interface PricingPackage {
 interface PackageFormData {
   name: string;
   includedPhotos: number;
-  pricePerExtraPhoto: number;
+  pricePerExtraPhoto?: number; // Optional
   price: number;
 }
 
@@ -146,7 +146,7 @@ export default function Packages() {
   const [formData, setFormData] = useState<PackageFormData>({
     name: "",
     includedPhotos: 0,
-    pricePerExtraPhoto: 0,
+    pricePerExtraPhoto: undefined, // Optional, start as undefined
     price: 0,
   });
   const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export default function Packages() {
     setFormData({
       name: "",
       includedPhotos: 0,
-      pricePerExtraPhoto: 0,
+      pricePerExtraPhoto: undefined, // Optional, start as undefined
       price: 0,
     });
     setPricePerExtraPhotoInput(null);
@@ -170,7 +170,7 @@ export default function Packages() {
     setFormData({
       name: pkg.name ?? "",
       includedPhotos: pkg.includedPhotos ?? 0,
-      pricePerExtraPhoto: pkg.pricePerExtraPhoto ?? 0,
+      pricePerExtraPhoto: pkg.pricePerExtraPhoto ?? undefined, // Optional
       price: pkg.price ?? 0,
     });
     setPricePerExtraPhotoInput(null);
@@ -243,7 +243,7 @@ export default function Packages() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Nazwa pakietu *
+                Nazwa pakietu
               </label>
               <Input
                 type="text"
@@ -276,23 +276,28 @@ export default function Packages() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Cena za dodatkowe zdjęcie (PLN) *
+                Cena za dodatkowe zdjęcie (PLN)
               </label>
               <Input
                 type="text"
                 placeholder="5.00"
-                value={pricePerExtraPhotoInput ?? centsToPlnString(formData.pricePerExtraPhoto)}
+                value={pricePerExtraPhotoInput ?? (formData.pricePerExtraPhoto ? centsToPlnString(formData.pricePerExtraPhoto) : "")}
                 onChange={(e) => {
                   const formatted = formatCurrencyInput(e.target.value);
                   setPricePerExtraPhotoInput(formatted);
+                  const cents = plnToCents(formatted);
                   setFormData({
                     ...formData,
-                    pricePerExtraPhoto: plnToCents(formatted),
+                    pricePerExtraPhoto: cents > 0 ? cents : undefined, // Only set if > 0, otherwise undefined
                   });
                 }}
                 onBlur={() => {
                   if (!pricePerExtraPhotoInput || pricePerExtraPhotoInput === "") {
                     setPricePerExtraPhotoInput(null);
+                    setFormData({
+                      ...formData,
+                      pricePerExtraPhoto: undefined, // Clear to undefined when empty
+                    });
                   }
                 }}
               />

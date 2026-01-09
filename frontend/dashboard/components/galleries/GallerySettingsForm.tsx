@@ -630,7 +630,7 @@ export function GallerySettingsForm({
             <div className="space-y-2">
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nazwa pakietu <span className="text-red-500">*</span>
+                  Nazwa pakietu
                 </label>
                 <Input
                   type="text"
@@ -677,7 +677,7 @@ export function GallerySettingsForm({
 
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena za dodatkowe zdjęcie (PLN) <span className="text-red-500">*</span>
+                  Cena za dodatkowe zdjęcie (PLN)
                 </label>
                 <Input
                   type="text"

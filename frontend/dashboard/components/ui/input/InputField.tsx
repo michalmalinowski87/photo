@@ -49,7 +49,7 @@ const Input: FC<InputProps> = ({
   autoFocus,
   hideErrorSpace = false,
 }) => {
-  let inputClasses = ` w-full rounded-lg border appearance-none px-4 py-1.5 text-sm shadow-theme-xs placeholder:text-photographer-mutedText focus:outline-hidden focus:ring-3  dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 ${className}`;
+  let inputClasses = ` w-full rounded-lg border appearance-none px-4 py-1.5 text-sm shadow-theme-xs focus:outline-hidden focus:ring-3  dark:bg-gray-900 dark:text-white/90 ${className}`;
 
   if (disabled) {
     inputClasses += ` text-photographer-mutedText border-photographer-border opacity-40 bg-photographer-elevated cursor-not-allowed dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700 opacity-40`;
@@ -70,7 +70,7 @@ const Input: FC<InputProps> = ({
         type={type}
         id={id}
         name={name}
-        placeholder={placeholder}
+        placeholder=""
         value={value ?? ""}
         onChange={onChange}
         onBlur={onBlur}

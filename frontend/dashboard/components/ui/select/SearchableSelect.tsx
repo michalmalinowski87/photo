@@ -219,7 +219,7 @@ export const SearchableSelect = ({
               setHighlightedIndex(-1);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={searchPlaceholder || placeholder}
+            placeholder=""
             style={{
               WebkitBoxShadow: "0 0 0 1000px transparent inset",
               WebkitTextFillColor: "inherit",
@@ -239,7 +239,6 @@ export const SearchableSelect = ({
                   ? "border-error-500 text-error-600 dark:text-error-400"
                   : "border-photographer-border dark:border-gray-500 text-photographer-text dark:text-white focus:border-photographer-accent dark:focus:border-photographer-accent"
               }
-              placeholder:text-photographer-mutedText dark:placeholder:text-gray-500
             `}
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">

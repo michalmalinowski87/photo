@@ -18,7 +18,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { useSidebar } from "../../hooks/useSidebar";
 
-import SidebarWidget from "./SidebarWidget";
 
 type NavItem = {
   name: string;
@@ -260,7 +259,6 @@ const AppSidebar = () => {
             <div>{renderMenuItems(navItems)}</div>
           </div>
         </nav>
-        {(isExpanded || isMobileOpen) && <SidebarWidget />}
       </div>
       {(isExpanded || isMobileOpen) && (
         <div className="mt-auto pb-6 space-y-2">

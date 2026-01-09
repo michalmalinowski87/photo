@@ -103,14 +103,16 @@ export const PackageStep = ({
   }, [packageName, includedCount, extraPriceCents, packagePriceCents, existingPackages]);
 
   const canSavePackage = useMemo(() => {
-    // Check all required fields (name is optional)
-    if (includedCount === undefined || includedCount === null) {
+    // Check all required fields (name and extraPriceCents are optional)
+    // Validation must match CreateGalleryWizard validateStep for consistency
+    if (includedCount === undefined || includedCount === null || includedCount <= 0) {
       return false;
     }
-    if (packagePriceCents === undefined || packagePriceCents === null) {
+    if (packagePriceCents === undefined || packagePriceCents === null || packagePriceCents <= 0) {
       return false;
     }
-    if (extraPriceCents === undefined || extraPriceCents === null) {
+    // extraPriceCents is optional - only validate it's not negative if provided
+    if (extraPriceCents !== undefined && extraPriceCents !== null && extraPriceCents < 0) {
       return false;
     }
     // Enable if values are different from existing packages (not a duplicate)
@@ -130,6 +132,19 @@ export const PackageStep = ({
       setIsFormMode(true);
     }
   }, [existingPackages.length, isFormMode]);
+
+  // Show form mode if user has manually entered data (no selectedPackageId but has package data)
+  useEffect(() => {
+    const hasManualData = !selectedPackageId && (
+      (packageName && packageName.trim() !== "") ||
+      includedCount > 0 ||
+      extraPriceCents > 0 ||
+      packagePriceCents > 0
+    );
+    if (hasManualData && !isFormMode) {
+      setIsFormMode(true);
+    }
+  }, [selectedPackageId, packageName, includedCount, extraPriceCents, packagePriceCents, isFormMode]);
 
   // Selector mode - step2-style layout
   if (!isFormMode) {
@@ -248,7 +263,22 @@ export const PackageStep = ({
       {existingPackages.length > 0 && (
         <div className="mb-4">
           <button
-            onClick={() => setIsFormMode(false)}
+            onClick={() => {
+              setIsFormMode(false);
+              // Clear manual entry data when going back to selection
+              onDataChange({
+                selectedPackageId: undefined,
+                packageName: "",
+                includedCount: 0,
+                extraPriceCents: 0,
+                packagePriceCents: 0,
+                initialPaymentAmountCents: 0,
+              });
+              // Clear input states
+              onExtraPriceInputChange(null);
+              onPackagePriceInputChange(null);
+              onPaymentAmountInputChange(null);
+            }}
             className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={16} />
@@ -328,7 +358,7 @@ export const PackageStep = ({
           <div>
             <TypeformInput
               type="text"
-              label="Cena za dodatkowe zdjęcie (PLN) *"
+              label="Cena za dodatkowe zdjęcie (PLN)"
               placeholder="0.00"
               value={extraPriceInput ?? centsToPlnString(extraPriceCents)}
               onChange={(e) => {

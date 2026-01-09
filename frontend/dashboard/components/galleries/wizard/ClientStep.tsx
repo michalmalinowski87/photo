@@ -251,6 +251,20 @@ export const ClientStep = ({
     }
   }, [existingClients.length, isFormMode]);
 
+  // Show form mode if user has manually entered data (no selectedClientId but has client data)
+  useEffect(() => {
+    const hasManualData = !selectedClientId && (
+      (clientEmail && clientEmail.trim() !== "") ||
+      (firstName && firstName.trim() !== "") ||
+      (lastName && lastName.trim() !== "") ||
+      (companyName && companyName.trim() !== "") ||
+      (nip && nip.trim() !== "")
+    );
+    if (hasManualData && !isFormMode) {
+      setIsFormMode(true);
+    }
+  }, [selectedClientId, clientEmail, firstName, lastName, companyName, nip, isFormMode]);
+
   // Selector mode - step2-style layout
   if (!isFormMode) {
     return (
@@ -385,7 +399,22 @@ export const ClientStep = ({
       {existingClients.length > 0 && (
         <div className="mb-4">
           <button
-            onClick={() => setIsFormMode(false)}
+            onClick={() => {
+              setIsFormMode(false);
+              // Clear manual entry data when going back to selection
+              onDataChange({
+                selectedClientId: undefined,
+                clientEmail: "",
+                clientPassword: "",
+                firstName: "",
+                lastName: "",
+                companyName: "",
+                nip: "",
+                phone: "",
+                isCompany: false,
+                isVatRegistered: false,
+              });
+            }}
             className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={16} />

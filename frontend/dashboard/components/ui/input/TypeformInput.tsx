@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type React from "react";
 import type { FC } from "react";
+import { useTheme } from "../../../hooks/useTheme";
 
 interface TypeformInputProps {
   type?: string;
@@ -62,6 +63,8 @@ const TypeformInput: FC<TypeformInputProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasValue = value !== undefined && value !== null && value !== "";
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
 
   // Determine if label should be floating
   const isLabelFloating = isFocused || hasValue;
@@ -71,8 +74,6 @@ const TypeformInput: FC<TypeformInputProps> = ({
 
   // Use label if provided, otherwise use placeholder as the floating label
   const labelText = label ?? placeholder;
-  // When label is provided, use placeholder as the actual placeholder text; otherwise empty
-  const actualPlaceholder = label ? placeholder : "";
 
   // Handle focus events
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -122,7 +123,7 @@ const TypeformInput: FC<TypeformInputProps> = ({
           type={type}
           id={inputId}
           name={name}
-          placeholder={isLabelFloating ? actualPlaceholder : ""}
+          placeholder=""
           value={value ?? ""}
           onChange={onChange}
           onFocus={handleFocus}
@@ -138,10 +139,11 @@ const TypeformInput: FC<TypeformInputProps> = ({
           {...(autoComplete === "off" ? { "data-1p-ignore": "true" } : {})}
           style={{
             WebkitBoxShadow: "0 0 0 1000px transparent inset",
-            WebkitTextFillColor: "inherit",
+            WebkitTextFillColor: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // Explicit colors based on theme
             boxShadow: "0 0 0 1000px transparent inset",
             backgroundColor: "transparent",
-            caretColor: "inherit", // Caret color matches text color
+            color: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // Ensure text color matches
+            caretColor: isDarkMode ? "rgb(255 255 255)" : "rgb(30 26 23)", // Caret color matches text color
             transition: "background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s",
           }}
           className={`
