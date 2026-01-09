@@ -115,6 +115,35 @@ function AppContent({ Component, pageProps }: AppProps) {
   // Enable global order status polling when authenticated (skip for 404)
   useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
 
+  // Prefetch critical routes on mount for authenticated users to eliminate first-visit delay
+  useEffect(() => {
+    if (is404Page || !isAuthenticated || !router.isReady) {
+      return;
+    }
+
+    // Prefetch critical dashboard routes to preload their JavaScript bundles
+    // This eliminates the first-visit delay when navigating to these pages
+    const criticalRoutes = [
+      "/", // Dashboard home
+      "/clients",
+      "/packages",
+      "/wallet",
+      "/settings",
+      "/galleries/robocze", // Most common gallery filter
+    ];
+
+    // Prefetch routes after a short delay to not block initial render
+    const prefetchTimer = setTimeout(() => {
+      criticalRoutes.forEach((route) => {
+        void router.prefetch(route);
+      });
+    }, 1000); // Wait 1 second after mount to not interfere with initial load
+
+    return () => {
+      clearTimeout(prefetchTimer);
+    };
+  }, [isAuthenticated, router.isReady, router, is404Page]);
+
   // Check if current route is an auth route
   const isAuthRoute = router.pathname
     ? AUTH_ROUTES.includes(router.pathname) || router.pathname.startsWith("/auth/undo-deletion/")
@@ -218,6 +247,11 @@ function AppContent({ Component, pageProps }: AppProps) {
       restoreThemeAndClearSessionExpired();
       // Clear navigation loading on any route change (in case user navigates away)
       setNavigationLoading(false);
+      // Restore scroll position after navigation completes (if scroll was disabled)
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+      });
     };
 
     const handleRouteChangeError = () => {

@@ -58,6 +58,11 @@ export function useInfiniteGalleries({
     initialPageParam: null as string | null,
     // Disable retries for infinite queries to prevent infinite loops on errors
     retry: false,
+    // Use stale data while refetching for instant navigation
+    // This shows cached data immediately while fetching fresh data in background
+    placeholderData: (previousData) => previousData,
+    // Don't refetch on mount if we have cached data (staleTime handles staleness)
+    refetchOnMount: false,
     ...options,
   });
 }

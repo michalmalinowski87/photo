@@ -81,8 +81,11 @@ export const navigateWithCleanup = (
   // Clear state explicitly based on where we're going
   clearStateForNavigation(currentUrl, url);
 
-  // Navigate
-  return router.push(url, undefined, options);
+  // Navigate with scroll optimization - disable scroll restoration for faster navigation
+  return router.push(url, undefined, {
+    scroll: false, // Disable scroll restoration for faster navigation
+    ...options, // Allow override if needed
+  });
 };
 
 /**
@@ -99,6 +102,9 @@ export const replaceWithCleanup = (
   // Clear state explicitly based on where we're going
   clearStateForNavigation(currentUrl, url);
 
-  // Navigate
-  return router.replace(url, undefined, options);
+  // Navigate with scroll optimization - disable scroll restoration for faster navigation
+  return router.replace(url, undefined, {
+    scroll: false, // Disable scroll restoration for faster navigation
+    ...options, // Allow override if needed
+  });
 };
