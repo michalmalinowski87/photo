@@ -255,13 +255,19 @@ function AppContent({ Component, pageProps }: AppProps) {
       restoreThemeAndClearSessionExpired();
       // Clear navigation loading on any route change (in case user navigates away)
       setNavigationLoading(false);
-      // Don't clear gallery navigating immediately - wait longer to ensure overlay has time to show
-      // Wait at least delay (400ms) + buffer (300ms) = 700ms to ensure overlay can appear
-      // This is important because routeChangeComplete might fire before bundles finish loading
-      setTimeout(() => {
-        isGalleryNavigatingRef.current = false;
-        setIsGalleryNavigating(false);
-      }, 700);
+      
+      // Clear navigation state quickly to prevent delayed overlay flash on fast navigation
+      // Use a minimal delay (50ms) to allow bundle loading components to mount
+      // If bundles are loading, isBundleLoading will keep the overlay visible
+      // If bundles aren't loading, clearing navigation state quickly prevents overlay from showing
+      // The DelayedLoadingOverlay hook will see isBundleLoading=true and show overlay if bundles are loading
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          isGalleryNavigatingRef.current = false;
+          setIsGalleryNavigating(false);
+        }, 50);
+      });
+      
       // Clear navigation loading state in bundle tracker
       // Use a delay to allow bundle loading components to mount and track their state
       setTimeout(() => {
@@ -402,13 +408,14 @@ function AppContent({ Component, pageProps }: AppProps) {
       {/* Handles both navigation and bundle loading for gallery pages */}
       {/* Render globally so it works when navigating FROM gallery list TO gallery detail */}
       {/* Always render the component (it handles its own visibility) - must stay mounted to track delay */}
-      {/* Delayed loading overlay for all navigation - shows after frustration point (400ms) */}
+      {/* Delayed loading overlay for all navigation - shows after frustration point */}
       {/* Handles both navigation and bundle loading for all routes */}
       {/* Always render the component (it handles its own visibility) - must stay mounted to track delay */}
+      {/* Longer delay in development (1s) to avoid showing overlay on fast dev speeds */}
       <DelayedLoadingOverlay
         isLoading={isAnyLoading}
         message={isBundleLoading ? "Ładowanie modułów..." : "Ładowanie..."}
-        delay={400}
+        delay={process.env.NODE_ENV === "development" ? 1000 : 400}
       />
       
       {/* Mobile warning modal for authenticated dashboard pages */}

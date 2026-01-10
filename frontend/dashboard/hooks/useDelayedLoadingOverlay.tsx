@@ -163,7 +163,7 @@ export function useDelayedLoadingOverlay({
         minShowTimeoutRef.current = null;
       }
     };
-  }, [isLoading, delay, minShowDuration, showOverlay]);
+  }, [isLoading, delay, minShowDuration]);
 
   return showOverlay;
 }

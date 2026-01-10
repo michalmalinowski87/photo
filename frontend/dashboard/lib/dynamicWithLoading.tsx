@@ -31,6 +31,13 @@ export function getNavigationStartTime(): number | null {
 }
 
 /**
+ * Check if any bundles are currently loading (synchronous check)
+ */
+export function areBundlesLoading(): boolean {
+  return loadingBundles.size > 0;
+}
+
+/**
  * Notify all listeners that bundle loading state has changed.
  */
 function notifyListeners() {

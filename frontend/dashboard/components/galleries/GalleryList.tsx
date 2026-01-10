@@ -35,7 +35,6 @@ import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import type { Gallery } from "../../types";
 import Badge from "../ui/badge/Badge";
-import { ConfirmDialog } from "../ui/confirm/ConfirmDialog";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { EmptyState } from "../ui/empty-state/EmptyState";
@@ -45,6 +44,11 @@ import { Tooltip } from "../ui/tooltip/Tooltip";
 
 // Lazy load GalleryCard (only used in cards view) to reduce initial bundle size
 const GalleryCard = dynamic(() => import("./GalleryCard.lazy"), {
+  ssr: false,
+});
+
+// Lazy load ConfirmDialog - only shown when delete confirmation is open
+const ConfirmDialog = dynamic(() => import("../ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
   ssr: false,
 });
 

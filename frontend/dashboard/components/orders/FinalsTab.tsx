@@ -1,9 +1,9 @@
 import { Plus, Trash2, Sparkles, CheckSquare, Square, Check, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState, useCallback, useEffect, useRef } from "react";
 
 import { useImageSelection } from "../../hooks/useImageSelection";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
-import { BulkDeleteConfirmDialog } from "../dialogs/BulkDeleteConfirmDialog";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
@@ -38,6 +38,11 @@ interface FinalsTabProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
 }
+
+// Lazy load BulkDeleteConfirmDialog - only shown when bulk delete confirmation is open
+const BulkDeleteConfirmDialog = dynamic(() => import("../dialogs/BulkDeleteConfirmDialog").then((mod) => ({ default: mod.BulkDeleteConfirmDialog })), {
+  ssr: false,
+});
 
 export function FinalsTab({
   images,

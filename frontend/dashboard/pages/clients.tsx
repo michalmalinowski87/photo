@@ -1,9 +1,9 @@
 import { X, Users, Plus, Pencil, Trash2, ArrowUpDown } from "lucide-react";
 import type { GetServerSideProps } from "next";
+import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, useMemo } from "react";
 
 import Button from "../components/ui/button/Button";
-import { ConfirmDialog } from "../components/ui/confirm/ConfirmDialog";
 import { Dropdown } from "../components/ui/dropdown/Dropdown";
 import { DropdownItem } from "../components/ui/dropdown/DropdownItem";
 import { EmptyState } from "../components/ui/empty-state/EmptyState";
@@ -30,6 +30,11 @@ interface ClientFormData {
   companyName: string;
   nip: string;
 }
+
+// Lazy load ConfirmDialog - only shown when delete confirmation is open
+const ConfirmDialog = dynamic(() => import("../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
+  ssr: false,
+});
 
 // Prevent static generation - this page uses client hooks
 export const getServerSideProps: GetServerSideProps = () => {

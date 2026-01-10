@@ -4,14 +4,8 @@ import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
-import { ChangeRequestBanner } from "../../../../components/orders/ChangeRequestBanner";
-import { DenyChangeRequestModal } from "../../../../components/orders/DenyChangeRequestModal";
-import { FinalsTab } from "../../../../components/orders/FinalsTab";
 import { OrderHeader } from "../../../../components/orders/OrderHeader";
 import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
-import { OrderTabs } from "../../../../components/orders/OrderTabs";
-import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
-import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
 import { usePayGallery } from "../../../../hooks/mutations/useGalleryMutations";
 import {
   useApproveChangeRequest,
@@ -51,6 +45,33 @@ const PublishGalleryWizard = dynamic(() => import("../../../../components/galler
 });
 
 const UppyUploadModal = dynamic(() => import("../../../../components/uppy/UppyUploadModal.lazy"), {
+  ssr: false,
+});
+
+// Lazy load conditionally rendered tab components to reduce initial bundle size
+const OrderTabs = dynamic(() => import("../../../../components/orders/OrderTabs").then((mod) => ({ default: mod.OrderTabs })), {
+  ssr: false,
+});
+
+const OriginalsTab = dynamic(() => import("../../../../components/orders/OriginalsTab").then((mod) => ({ default: mod.OriginalsTab })), {
+  ssr: false,
+});
+
+const FinalsTab = dynamic(() => import("../../../../components/orders/FinalsTab").then((mod) => ({ default: mod.FinalsTab })), {
+  ssr: false,
+});
+
+// Lazy load conditionally rendered modals and banners
+const DenyChangeRequestModal = dynamic(() => import("../../../../components/orders/DenyChangeRequestModal").then((mod) => ({ default: mod.DenyChangeRequestModal })), {
+  ssr: false,
+});
+
+const ChangeRequestBanner = dynamic(() => import("../../../../components/orders/ChangeRequestBanner").then((mod) => ({ default: mod.ChangeRequestBanner })), {
+  ssr: false,
+});
+
+// Lazy load ConfirmDialog - only shown when delete/upgrade modals are open
+const ConfirmDialog = dynamic(() => import("../../../../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
   ssr: false,
 });
 

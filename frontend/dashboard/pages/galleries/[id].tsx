@@ -785,12 +785,13 @@ export default function GalleryDetail() {
       {/* Next Steps Overlay */}
       <NextStepsOverlay />
 
-      {/* Delayed loading overlay - shows after frustration point (400ms) for slow networks */}
+      {/* Delayed loading overlay - shows after frustration point for slow networks */}
       {/* Handles both mutations (API calls) and bundle loading (JavaScript downloads) */}
+      {/* Longer delay in development (1s) to avoid showing overlay on fast dev speeds */}
       <DelayedLoadingOverlay
         isLoading={isAnyLoading}
         message={isBundleLoading ? "Ładowanie modułów..." : "Przetwarzanie..."}
-        delay={400}
+        delay={process.env.NODE_ENV === "development" ? 1000 : 400}
       />
 
       {/* Main Content - Orders */}

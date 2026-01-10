@@ -16,10 +16,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
-import { BulkDeleteConfirmDialog } from "../../../components/dialogs/BulkDeleteConfirmDialog";
 import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
-import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
@@ -53,6 +51,15 @@ const PublishGalleryWizard = dynamic(() => import("../../../components/galleries
 const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
   ssr: false,
   loading: () => <Loading text="Ładowanie modułu przesyłania..." />,
+});
+
+// Lazy load conditionally rendered dialogs - only shown when modals are open
+const ConfirmDialog = dynamic(() => import("../../../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
+  ssr: false,
+});
+
+const BulkDeleteConfirmDialog = dynamic(() => import("../../../components/dialogs/BulkDeleteConfirmDialog").then((mod) => ({ default: mod.BulkDeleteConfirmDialog })), {
+  ssr: false,
 });
 
 interface ApiImage {

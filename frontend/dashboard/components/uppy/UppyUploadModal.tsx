@@ -11,8 +11,8 @@ import {
   CheckCircle2,
   Trash2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import React, { useEffect, useRef, useState } from "react";
-import { VirtuosoGrid } from "react-virtuoso";
 
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
 import { type TypedUppyFile } from "../../lib/uppy-config";
@@ -21,6 +21,11 @@ import { Modal } from "../ui/modal";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
+
+// Lazy load react-virtuoso (~60KB) - only needed when files are present
+const VirtuosoGrid = dynamic(() => import("react-virtuoso").then((mod) => ({ default: mod.VirtuosoGrid })), {
+  ssr: false,
+});
 
 interface UppyUploadModalProps {
   isOpen: boolean;
