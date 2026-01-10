@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Construct } from 'constructs';
 import { Stack, StackProps, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
-import { Bucket, BlockPublicAccess, HttpMethods, EventType, CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { Bucket, BlockPublicAccess, HttpMethods, EventType, CfnBucket, ObjectOwnership } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { AttributeType, BillingMode, Table, CfnTable, StreamViewType } from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
@@ -36,7 +36,10 @@ export class AppStack extends Stack {
 		const galleriesBucket = new Bucket(this, 'GalleriesBucket', {
 			blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
 			autoDeleteObjects: false,
-			removalPolicy: RemovalPolicy.RETAIN
+			removalPolicy: RemovalPolicy.RETAIN,
+			// Explicitly set object ownership to BUCKET_OWNER_ENFORCED for OAC compatibility
+			// This ensures ACLs are disabled and bucket owner has full control
+			objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED
 		});
 		
 		// CORS origins from context or environment, fallback to wildcard for dev
@@ -807,6 +810,7 @@ export class AppStack extends Stack {
 		apiFn.addToRolePolicy(new PolicyStatement({
 			actions: [
 				'cloudwatch:GetMetricStatistics',
+				'cloudwatch:GetMetricData',
 				'lambda:ListFunctions'
 			],
 			resources: ['*']
@@ -1714,7 +1718,8 @@ export class AppStack extends Stack {
 		inactivityScannerFn.grantInvoke(apiFn);
 		
 		// CloudFront distribution for previews/* (use OAC for bucket access)
-		// Use S3BucketOrigin.withOriginAccessControl() which automatically creates OAC
+		// S3BucketOrigin.withOriginAccessControl() automatically creates OAC and bucket policy
+		// We explicitly add bucket policy as well to ensure it's correctly configured
 		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)
 		
 		// Create custom cache policy that includes query strings in cache key
@@ -1736,6 +1741,8 @@ export class AppStack extends Stack {
 			cookieBehavior: CacheCookieBehavior.none()
 		});
 		
+		// Create CloudFront distribution with OAC
+		// S3BucketOrigin.withOriginAccessControl() automatically creates OAC and sets up bucket policy
 		const dist = new Distribution(this, 'PreviewsDistribution', {
 			defaultBehavior: {
 				origin: S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
@@ -1749,8 +1756,27 @@ export class AppStack extends Stack {
 			priceClass: PriceClass.PRICE_CLASS_100,
 			comment: `PhotoCloud previews ${props.stage}`
 		});
-		// S3BucketOrigin.withOriginAccessControl() automatically sets up the bucket policy for CloudFront
-		// However, we need to ensure Lambda functions can still generate presigned URLs
+		
+		// Explicitly add bucket policy for CloudFront OAC access to ensure it works correctly
+		// This is a backup in case the automatic bucket policy setup from withOriginAccessControl() fails
+		// OAC uses CloudFront service principal with distribution ARN condition
+		// Note: We add this AFTER distribution creation to ensure we have the distribution ARN
+		// The bucket policy format matches AWS documentation for OAC:
+		// https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
+		galleriesBucket.addToResourcePolicy(new PolicyStatement({
+			sid: 'AllowCloudFrontOACAccess',
+			effect: 'Allow',
+			principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
+			actions: ['s3:GetObject'],
+			resources: [`${galleriesBucket.bucketArn}/*`],
+			conditions: {
+				StringEquals: {
+					'AWS:SourceArn': dist.distributionArn
+				}
+			}
+		}));
+		
+		// Ensure Lambda functions can still generate presigned URLs
 		// Presigned URLs use temporary STS credentials (ASIA...) from the Lambda role
 		// When accessed from browsers, S3 validates the signature AND checks bucket policy
 		// The bucket policy must allow the Lambda role principal for presigned URLs to work

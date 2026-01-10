@@ -20,7 +20,7 @@ import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
-import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
+import { Loading, GalleryLoading, FullPageLoading } from "../../../components/ui/loading/Loading";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
@@ -50,7 +50,7 @@ const PublishGalleryWizard = dynamic(() => import("../../../components/galleries
 
 const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
   ssr: false,
-  loading: () => <Loading text="Ładowanie modułu przesyłania..." />,
+  loading: () => <FullPageLoading text="Ładowanie modułu przesyłania..." />,
 });
 
 // Lazy load conditionally rendered dialogs - only shown when modals are open

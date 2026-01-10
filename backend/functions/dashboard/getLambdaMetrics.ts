@@ -84,92 +84,126 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			try {
 				// Use GetMetricData for better reliability (recommended by AWS)
 				// This API is more reliable and handles larger time ranges better
-				const metricDataCmd = new GetMetricDataCommand({
-					MetricDataQueries: [
-						{
-							Id: 'maxMemory',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'MaxMemoryUsed',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Maximum'
+				// Handle pagination for GetMetricData (can return partial results)
+				const metricDataQueries = [
+					{
+						Id: 'maxMemory',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'MaxMemoryUsed',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
+							Period: period,
+							Stat: 'Maximum'
 						},
-						{
-							Id: 'avgMemory',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'MaxMemoryUsed',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Average'
+						ReturnData: true
+					},
+					{
+						Id: 'avgMemory',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'MaxMemoryUsed',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
+							Period: period,
+							Stat: 'Average'
 						},
-						{
-							Id: 'duration',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'Duration',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Average'
+						ReturnData: true
+					},
+					{
+						Id: 'duration',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'Duration',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
+							Period: period,
+							Stat: 'Average'
 						},
-						{
-							Id: 'maxDuration',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'Duration',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Maximum'
+						ReturnData: true
+					},
+					{
+						Id: 'maxDuration',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'Duration',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
+							Period: period,
+							Stat: 'Maximum'
 						},
-						{
-							Id: 'invocations',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'Invocations',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Sum'
+						ReturnData: true
+					},
+					{
+						Id: 'invocations',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'Invocations',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
+							Period: period,
+							Stat: 'Sum'
 						},
-						{
-							Id: 'errors',
-							MetricStat: {
-								Metric: {
-									Namespace: 'AWS/Lambda',
-									MetricName: 'Errors',
-									Dimensions: [{ Name: 'FunctionName', Value: functionName }]
-								},
-								Period: period,
-								Stat: 'Sum'
+						ReturnData: true
+					},
+					{
+						Id: 'errors',
+						MetricStat: {
+							Metric: {
+								Namespace: 'AWS/Lambda',
+								MetricName: 'Errors',
+								Dimensions: [{ Name: 'FunctionName', Value: functionName }]
 							},
-							ReturnData: true
-						}
-					],
-					StartTime: startTime,
-					EndTime: endTime
-				});
+							Period: period,
+							Stat: 'Sum'
+						},
+						ReturnData: true
+					}
+				];
 
-				const metricData = await cloudwatch.send(metricDataCmd);
+				// Collect all metric data results (handle pagination)
+				const allMetricDataResults: any[] = [];
+				let nextToken: string | undefined;
+				
+				do {
+					const metricDataCmd = new GetMetricDataCommand({
+						MetricDataQueries: metricDataQueries,
+						StartTime: startTime,
+						EndTime: endTime,
+						NextToken: nextToken
+					});
+
+					const metricData = await cloudwatch.send(metricDataCmd);
+					
+					if (metricData.MetricDataResults) {
+						allMetricDataResults.push(...metricData.MetricDataResults);
+					}
+					
+					nextToken = metricData.NextToken;
+				} while (nextToken);
+
+				// Merge results by Id (in case of pagination, we need to combine values)
+				const mergedResults = new Map<string, any>();
+				for (const result of allMetricDataResults) {
+					const existing = mergedResults.get(result.Id || '');
+					if (existing) {
+						// Merge values and timestamps
+						existing.Values = [...(existing.Values || []), ...(result.Values || [])];
+						existing.Timestamps = [...(existing.Timestamps || []), ...(result.Timestamps || [])];
+						existing.StatusCode = result.StatusCode || existing.StatusCode;
+					} else {
+						mergedResults.set(result.Id || '', result);
+					}
+				}
+
+				const metricData = {
+					MetricDataResults: Array.from(mergedResults.values())
+				};
 
 				// Extract metric results
 				const maxMemoryResult = metricData.MetricDataResults?.find(r => r.Id === 'maxMemory');
@@ -181,39 +215,54 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 				// Extract values from GetMetricData format
 				// Values are in bytes for MaxMemoryUsed, milliseconds for Duration
-				const maxMemoryValues = maxMemoryResult?.Values || [];
-				const avgMemoryValues = avgMemoryResult?.Values || [];
-				const durationValues = durationResult?.Values || [];
-				const maxDurationValues = maxDurationResult?.Values || [];
-				const invocationsValues = invocationsResult?.Values || [];
-				const errorsValues = errorsResult?.Values || [];
+				// Filter out null/undefined values and convert to numbers
+				const filterValidValues = (values: (number | undefined)[] | undefined): number[] => {
+					if (!values || values.length === 0) return [];
+					return values
+						.filter((v): v is number => v !== null && v !== undefined && !isNaN(Number(v)))
+						.map(v => Number(v));
+				};
+
+				const maxMemoryValues = filterValidValues(maxMemoryResult?.Values);
+				const avgMemoryValues = filterValidValues(avgMemoryResult?.Values);
+				const durationValues = filterValidValues(durationResult?.Values);
+				const maxDurationValues = filterValidValues(maxDurationResult?.Values);
+				const invocationsValues = filterValidValues(invocationsResult?.Values);
+				const errorsValues = filterValidValues(errorsResult?.Values);
 
 				// Calculate metrics
 				const maxMemoryUsedMB = maxMemoryValues.length > 0
-					? Math.max(...maxMemoryValues.map(v => Number(v) || 0)) / (1024 * 1024)
+					? Math.max(...maxMemoryValues) / (1024 * 1024)
 					: 0;
 
 				const avgMemoryUsedMB = avgMemoryValues.length > 0
-					? avgMemoryValues.reduce((sum, v) => sum + (Number(v) || 0), 0) / avgMemoryValues.length / (1024 * 1024)
+					? avgMemoryValues.reduce((sum, v) => sum + v, 0) / avgMemoryValues.length / (1024 * 1024)
 					: 0;
 
 				const avgDurationMs = durationValues.length > 0
-					? durationValues.reduce((sum, v) => sum + (Number(v) || 0), 0) / durationValues.length
+					? durationValues.reduce((sum, v) => sum + v, 0) / durationValues.length
 					: 0;
 
 				const maxDurationMs = maxDurationValues.length > 0
-					? Math.max(...maxDurationValues.map(v => Number(v) || 0))
+					? Math.max(...maxDurationValues)
 					: 0;
 
-				const invocations = invocationsValues.reduce((sum, v) => sum + (Number(v) || 0), 0);
-				const errors = errorsValues.reduce((sum, v) => sum + (Number(v) || 0), 0);
+				const invocations = invocationsValues.reduce((sum, v) => sum + v, 0);
+				const errors = errorsValues.reduce((sum, v) => sum + v, 0);
 
 				// Log for debugging if we have invocations but no memory data
 				if (invocations > 0 && maxMemoryUsedMB === 0) {
 					logger?.debug(`Function ${functionName}: ${invocations} invocations but no memory data`, {
 						functionName,
 						invocations,
-						status: maxMemoryResult?.StatusCode || 'Unknown'
+						maxMemoryStatus: maxMemoryResult?.StatusCode || 'Unknown',
+						maxMemoryValuesCount: maxMemoryValues.length,
+						avgMemoryValuesCount: avgMemoryValues.length,
+						maxMemoryResult: maxMemoryResult ? {
+							statusCode: maxMemoryResult.StatusCode,
+							valuesLength: maxMemoryResult.Values?.length || 0,
+							label: maxMemoryResult.Label
+						} : null
 					});
 				}
 
