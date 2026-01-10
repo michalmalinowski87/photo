@@ -4,6 +4,7 @@ import type { UppyFile } from "@uppy/core";
 import ThumbnailGenerator from "@uppy/thumbnail-generator";
 
 import api from "./api-service";
+import { NoUpscaleThumbnailPlugin } from "./uppy-no-upscale-thumbnail-plugin";
 import { ThumbnailUploadPlugin } from "./uppy-thumbnail-upload-plugin";
 
 export type UploadType = "originals" | "finals";
@@ -526,20 +527,28 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     // Restriction failed event handler
   });
 
+  // Add plugin to prevent compression of small images in thumbnails FIRST
+  // This must run BEFORE ThumbnailGenerator to prevent it from processing small images
+  // ThumbnailGenerator compresses all images at quality 80, which degrades small images
+  // This plugin sets preview early for small images and makes it non-writable
+  // @ts-expect-error - NoUpscaleThumbnailPlugin is a custom plugin not in Uppy types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
+  uppy.use(NoUpscaleThumbnailPlugin as any, {});
+
   // Add Thumbnail Generator for client-side previews
   // Generate high-quality thumbnails optimized for display size
   // Strategy:
   // - Use 300px as base size to match display size (grid uses minmax(200px, 1fr))
-  // - This prevents upscaling blur and ensures consistent quality
   // - Large images will be downscaled to 300px (fast, excellent quality)
+  // - Small images are handled by NoUpscaleThumbnailPlugin (no compression)
   // - Note: ThumbnailGenerator uses quality 80 (hardcoded) for WebP
   // - Quality 80 WebP at 300x300 is excellent for thumbnails and saves bandwidth
   // Performance optimizations:
-  // - 300px size matches display size (no upscaling = better quality)
+  // - 300px size matches display size
   // - WebP format is optimized for web (smaller files, faster loading)
   // - Don't wait for thumbnails before upload (non-blocking, better UX)
   uppy.use(ThumbnailGenerator, {
-    thumbnailWidth: 300, // 300px - matches display size, prevents upscaling blur
+    thumbnailWidth: 300, // 300px - matches display size
     thumbnailHeight: 300, // 300px - maintains aspect ratio, excellent quality
     thumbnailType: "image/webp", // WebP format - optimized for web, smaller files
     waitForThumbnailsBeforeUpload: false, // Non-blocking - upload can proceed immediately
