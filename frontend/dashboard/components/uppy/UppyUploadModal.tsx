@@ -680,8 +680,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         // If we've already cached a blob URL and should use original, stick with it
         const shouldUseOriginal =
           dimensions &&
-          (dimensions.width < 150 ||
-            dimensions.height < 150 ||
+          (dimensions.width < 120 ||
+            dimensions.height < 120 ||
             (fileSizeKB < 500 &&
               dimensions.width < 1000 &&
               dimensions.height < 1000 &&
@@ -886,8 +886,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                     <VirtuosoGrid
                       totalCount={files.length}
                       data={files}
-                      overscan={200}
-                      increaseViewportBy={100}
+                      overscan={100}
+                      increaseViewportBy={50}
                       itemContent={(index) => {
                         const file = files[index];
                         if (!file) return null;
@@ -899,9 +899,12 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                         const thumbnail = getThumbnail(freshFile);
 
                         return (
-                          <div className="p-1.5 h-full">
-                            <div className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full">
-                              <div className="aspect-square relative">
+                          <div className="p-1.5 h-full" style={{ contain: "layout style paint" }}>
+                            <div
+                              className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full"
+                              style={{ willChange: "transform" }}
+                            >
+                              <div className="aspect-square relative" style={{ contain: "layout" }}>
                                 {thumbnail ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -910,10 +913,14 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                     decoding="async"
+                                    fetchPriority="low"
                                     style={{
                                       willChange: "transform",
                                       contentVisibility: "auto",
                                       transform: "translateZ(0)",
+                                      imageRendering: "crisp-edges",
+                                      backfaceVisibility: "hidden",
+                                      WebkitBackfaceVisibility: "hidden",
                                     }}
                                   />
                                 ) : (
@@ -1013,6 +1020,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                 gap: "0.75rem",
                                 willChange: "transform",
                                 transform: "translateZ(0)",
+                                contain: "layout style paint",
                               }}
                             >
                               {children}

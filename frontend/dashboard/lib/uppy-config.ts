@@ -539,8 +539,8 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   // - WebP format is optimized for web (smaller files, faster loading)
   // - Don't wait for thumbnails before upload (non-blocking, better UX)
   uppy.use(ThumbnailGenerator, {
-    thumbnailWidth: 150, // 150px - faster generation, still excellent quality for thumbnails
-    thumbnailHeight: 150, // 150px - maintains aspect ratio, faster than 200px
+    thumbnailWidth: 120, // 120px - optimized for speed, still good quality for thumbnails
+    thumbnailHeight: 120, // 120px - maintains aspect ratio, faster generation
     thumbnailType: "image/webp", // WebP format - optimized for web, smaller files
     waitForThumbnailsBeforeUpload: false, // Non-blocking - upload can proceed immediately
   });
