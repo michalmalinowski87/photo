@@ -59,7 +59,7 @@ export function useDelayedLoadingOverlay({
   isLoading,
   delay = 400,
   minShowDuration = 200,
-}: Omit<UseDelayedLoadingOverlayOptions, 'message'>): boolean {
+}: Omit<UseDelayedLoadingOverlayOptions, "message">): boolean {
   const [showOverlay, setShowOverlay] = useState(false);
   const delayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const minShowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -67,7 +67,6 @@ export function useDelayedLoadingOverlay({
   const loadingStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-
     if (isLoading) {
       // Track when loading started
       if (!loadingStartedAtRef.current) {
@@ -79,7 +78,7 @@ export function useDelayedLoadingOverlay({
       if (delayTimeoutRef.current) {
         clearTimeout(delayTimeoutRef.current);
       }
-      
+
       delayTimeoutRef.current = setTimeout(() => {
         // Show overlay - the delay has elapsed, so user has waited long enough
         setShowOverlay(true);
@@ -91,7 +90,7 @@ export function useDelayedLoadingOverlay({
       const loadingDuration = loadingStartedAtRef.current
         ? Date.now() - loadingStartedAtRef.current
         : 0;
-      
+
       // If loading took longer than delay, overlay should be shown (or about to show)
       if (loadingDuration >= delay || showOverlay) {
         // Hide overlay with minimum show duration
@@ -202,4 +201,3 @@ export function DelayedLoadingOverlay({
 
   return <FullPageLoading text={message} />;
 }
-

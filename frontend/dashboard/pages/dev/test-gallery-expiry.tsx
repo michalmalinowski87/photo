@@ -141,7 +141,7 @@ export default function TestGalleryExpiry() {
       const ordersResponse = await api.orders.getByGallery(gallery.galleryId);
       const orders: Order[] = Array.isArray(ordersResponse)
         ? ordersResponse
-        : ordersResponse.items ?? [];
+        : (ordersResponse.items ?? []);
       const order = orders[0];
 
       if (!order?.orderId) {

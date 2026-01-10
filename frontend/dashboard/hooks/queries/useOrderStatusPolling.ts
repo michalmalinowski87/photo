@@ -348,9 +348,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         // Add user-selected ZIP status if provided
         if (zipStatusUserSelected !== undefined) {
           newOrder.zipGenerating = zipStatusUserSelected.isGenerating;
-          newOrder.zipGeneratingSince = zipStatusUserSelected.isGenerating
-            ? Date.now()
-            : undefined;
+          newOrder.zipGeneratingSince = zipStatusUserSelected.isGenerating ? Date.now() : undefined;
           // Store ready flag from backend - this is the source of truth!
           newOrder.zipReady = zipStatusUserSelected.ready ?? false;
           if (zipStatusUserSelected.progress) {
@@ -361,9 +359,7 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
         // Add final ZIP status if provided
         if (zipStatusFinal !== undefined) {
           newOrder.finalZipGenerating = zipStatusFinal.isGenerating;
-          newOrder.finalZipGeneratingSince = zipStatusFinal.isGenerating
-            ? Date.now()
-            : undefined;
+          newOrder.finalZipGeneratingSince = zipStatusFinal.isGenerating ? Date.now() : undefined;
           // Store ready flag from backend - this is the source of truth!
           newOrder.finalZipReady = zipStatusFinal.ready ?? false;
           if (zipStatusFinal.progress) {

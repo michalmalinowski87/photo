@@ -2,4 +2,3 @@
 import { UppyUploadModal } from "./UppyUploadModal";
 
 export default UppyUploadModal;
-

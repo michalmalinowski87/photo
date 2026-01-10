@@ -297,7 +297,7 @@ export default function GalleryDetail() {
   // Check if we're coming from gallery creation - show loading overlay until fully loaded
   // Move hooks before conditional return to avoid React Hooks rules violation
   const galleryCreationLoading = useGalleryCreationLoading();
-  
+
   // Track when JavaScript bundles are being loaded (for lazy-loaded components)
   // Move hook before conditional return to avoid React Hooks rules violation
   const isBundleLoading = useBundleLoading();
@@ -776,7 +776,7 @@ export default function GalleryDetail() {
     denyChangeRequestMutation.isPending ||
     payGalleryMutation.isPending ||
     sendGalleryToClientMutation.isPending;
-  
+
   // Combined loading state: mutations OR bundle loading
   const isAnyLoading = isAnyMutationPending || isBundleLoading;
 

@@ -40,9 +40,15 @@ interface FinalsTabProps {
 }
 
 // Lazy load BulkDeleteConfirmDialog - only shown when bulk delete confirmation is open
-const BulkDeleteConfirmDialog = dynamic(() => import("../dialogs/BulkDeleteConfirmDialog").then((mod) => ({ default: mod.BulkDeleteConfirmDialog })), {
-  ssr: false,
-});
+const BulkDeleteConfirmDialog = dynamic(
+  () =>
+    import("../dialogs/BulkDeleteConfirmDialog").then((mod) => ({
+      default: mod.BulkDeleteConfirmDialog,
+    })),
+  {
+    ssr: false,
+  }
+);
 
 export function FinalsTab({
   images,

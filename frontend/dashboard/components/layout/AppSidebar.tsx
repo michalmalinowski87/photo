@@ -81,14 +81,20 @@ const AppSidebar = () => {
     type: "main";
     index: number;
   } | null>(null);
-  
+
   // Check if there are galleries with "Prosba o zmiany" status
   // Only fetch when "Galerie" submenu is opened to avoid blocking navigation
   const shouldFetchProsba = openSubmenu?.type === "main" && openSubmenu?.index === 1; // Index 1 is "Galerie"
-  const { data: prosbaOZmianyGalleries = [] } = useGalleries("prosba-o-zmiany", undefined, undefined, undefined, {
-    enabled: shouldFetchProsba, // Only fetch when "Galerie" submenu is opened
-    staleTime: 5 * 60 * 1000, // 5 minutes - data doesn't change often
-  });
+  const { data: prosbaOZmianyGalleries = [] } = useGalleries(
+    "prosba-o-zmiany",
+    undefined,
+    undefined,
+    undefined,
+    {
+      enabled: shouldFetchProsba, // Only fetch when "Galerie" submenu is opened
+      staleTime: 5 * 60 * 1000, // 5 minutes - data doesn't change often
+    }
+  );
   const hasProsbaOZmianyGalleries = prosbaOZmianyGalleries.length > 0;
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -110,7 +116,7 @@ const AppSidebar = () => {
     const timeoutId = setTimeout(() => {
       // Collect all routes to prefetch
       const routesToPrefetch: string[] = [];
-      
+
       navItems.forEach((nav) => {
         if (nav.path && !nav.external) {
           routesToPrefetch.push(nav.path);
@@ -129,17 +135,20 @@ const AppSidebar = () => {
       // To test prefetching, run: npm run build && npm run start
       routesToPrefetch.forEach((path) => {
         // eslint-disable-next-line no-console
-        console.warn('[Sidebar Prefetch] Prefetching route:', path);
+        console.warn("[Sidebar Prefetch] Prefetching route:", path);
         // router.prefetch() will prefetch the route bundle
         // In production, this triggers network requests for JS bundles
         // In development, Next.js disables prefetching to show latest changes
-        void router.prefetch(path).then(() => {
-          // eslint-disable-next-line no-console
-          console.warn('[Sidebar Prefetch] Successfully prefetched:', path);
-        }).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('[Sidebar Prefetch] Failed to prefetch:', path, err);
-        });
+        void router
+          .prefetch(path)
+          .then(() => {
+            // eslint-disable-next-line no-console
+            console.warn("[Sidebar Prefetch] Successfully prefetched:", path);
+          })
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error("[Sidebar Prefetch] Failed to prefetch:", path, err);
+          });
       });
     }, 1000); // Delay to not block initial render
 

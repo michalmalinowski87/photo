@@ -37,7 +37,11 @@ export function useZipStatusPolling({
   enabled = true,
 }: UseZipStatusPollingOptions) {
   const queryClient = useQueryClient();
-  const { interval: adaptiveInterval, shouldPollImmediately, updateLastPollTime } = useAdaptivePolling();
+  const {
+    interval: adaptiveInterval,
+    shouldPollImmediately,
+    updateLastPollTime,
+  } = useAdaptivePolling();
   const shouldPoll = adaptiveInterval !== null;
 
   // Calculate interval for React Query (15s when should poll, false otherwise)

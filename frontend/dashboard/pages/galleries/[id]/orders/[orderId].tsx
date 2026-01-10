@@ -29,9 +29,12 @@ import type { GalleryImage } from "../../../../types";
 
 // Lazy load heavy components to reduce bundle size (~200KB+ savings)
 // Using wrapper files that export as default for proper dynamic() support
-const NextStepsOverlay = dynamic(() => import("../../../../components/galleries/NextStepsOverlay.lazy"), {
-  ssr: false,
-});
+const NextStepsOverlay = dynamic(
+  () => import("../../../../components/galleries/NextStepsOverlay.lazy"),
+  {
+    ssr: false,
+  }
+);
 
 const PaymentConfirmationModal = dynamic(
   () => import("../../../../components/galleries/PaymentConfirmationModal"),
@@ -40,40 +43,75 @@ const PaymentConfirmationModal = dynamic(
   }
 );
 
-const PublishGalleryWizard = dynamic(() => import("../../../../components/galleries/PublishGalleryWizard.lazy"), {
-  ssr: false,
-});
+const PublishGalleryWizard = dynamic(
+  () => import("../../../../components/galleries/PublishGalleryWizard.lazy"),
+  {
+    ssr: false,
+  }
+);
 
 const UppyUploadModal = dynamic(() => import("../../../../components/uppy/UppyUploadModal.lazy"), {
   ssr: false,
 });
 
 // Lazy load conditionally rendered tab components to reduce initial bundle size
-const OrderTabs = dynamic(() => import("../../../../components/orders/OrderTabs").then((mod) => ({ default: mod.OrderTabs })), {
-  ssr: false,
-});
+const OrderTabs = dynamic(
+  () =>
+    import("../../../../components/orders/OrderTabs").then((mod) => ({ default: mod.OrderTabs })),
+  {
+    ssr: false,
+  }
+);
 
-const OriginalsTab = dynamic(() => import("../../../../components/orders/OriginalsTab").then((mod) => ({ default: mod.OriginalsTab })), {
-  ssr: false,
-});
+const OriginalsTab = dynamic(
+  () =>
+    import("../../../../components/orders/OriginalsTab").then((mod) => ({
+      default: mod.OriginalsTab,
+    })),
+  {
+    ssr: false,
+  }
+);
 
-const FinalsTab = dynamic(() => import("../../../../components/orders/FinalsTab").then((mod) => ({ default: mod.FinalsTab })), {
-  ssr: false,
-});
+const FinalsTab = dynamic(
+  () =>
+    import("../../../../components/orders/FinalsTab").then((mod) => ({ default: mod.FinalsTab })),
+  {
+    ssr: false,
+  }
+);
 
 // Lazy load conditionally rendered modals and banners
-const DenyChangeRequestModal = dynamic(() => import("../../../../components/orders/DenyChangeRequestModal").then((mod) => ({ default: mod.DenyChangeRequestModal })), {
-  ssr: false,
-});
+const DenyChangeRequestModal = dynamic(
+  () =>
+    import("../../../../components/orders/DenyChangeRequestModal").then((mod) => ({
+      default: mod.DenyChangeRequestModal,
+    })),
+  {
+    ssr: false,
+  }
+);
 
-const ChangeRequestBanner = dynamic(() => import("../../../../components/orders/ChangeRequestBanner").then((mod) => ({ default: mod.ChangeRequestBanner })), {
-  ssr: false,
-});
+const ChangeRequestBanner = dynamic(
+  () =>
+    import("../../../../components/orders/ChangeRequestBanner").then((mod) => ({
+      default: mod.ChangeRequestBanner,
+    })),
+  {
+    ssr: false,
+  }
+);
 
 // Lazy load ConfirmDialog - only shown when delete/upgrade modals are open
-const ConfirmDialog = dynamic(() => import("../../../../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
-  ssr: false,
-});
+const ConfirmDialog = dynamic(
+  () =>
+    import("../../../../components/ui/confirm/ConfirmDialog").then((mod) => ({
+      default: mod.ConfirmDialog,
+    })),
+  {
+    ssr: false,
+  }
+);
 
 interface PaymentDetails {
   totalAmountCents: number;

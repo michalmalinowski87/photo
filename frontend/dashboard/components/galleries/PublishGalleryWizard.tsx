@@ -272,12 +272,7 @@ export const PublishGalleryWizard = ({
       return gallery.selectionEnabled !== false;
     }
     return pricingData?.selectionEnabled !== false;
-  }, [
-    mode,
-    limitExceededData,
-    gallery?.selectionEnabled,
-    pricingData?.selectionEnabled,
-  ]);
+  }, [mode, limitExceededData, gallery?.selectionEnabled, pricingData?.selectionEnabled]);
 
   // Get selected plan details
   const selectedPlan = useMemo(() => {

@@ -33,7 +33,9 @@ export function useUpdateClient() {
       api.clients.update(clientId, data),
     onSuccess: (_, variables) => {
       // Invalidate specific client detail
-      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(variables.clientId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.clients.detail(variables.clientId),
+      });
       // Invalidate all client lists to refetch
       void queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
     },

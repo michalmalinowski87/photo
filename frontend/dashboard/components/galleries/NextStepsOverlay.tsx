@@ -318,7 +318,7 @@ export const NextStepsOverlay = () => {
     const newExpanded = shouldBeVisible
       ? justFinishedCreating
         ? true
-        : persistedExpanded ?? true
+        : (persistedExpanded ?? true)
       : Boolean(persistedExpanded);
 
     // Update ref to track gallery creation loading state for next render

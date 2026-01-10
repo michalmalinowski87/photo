@@ -2,11 +2,14 @@ import { Bell, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { useTheme } from "../../hooks/useTheme";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifying, setNotifying] = useState(true);
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
 
   function toggleDropdown() {
     setIsOpen(!isOpen);
@@ -23,7 +26,11 @@ export default function NotificationDropdown() {
   return (
     <div className="relative">
       <button
-        className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-400 rounded-full dropdown-toggle hover:text-gray-700 h-11 w-11 hover:bg-photographer-elevated dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+        className={`relative flex items-center justify-center transition-colors rounded-full dropdown-toggle h-11 w-11 ${
+          isDarkMode
+            ? "text-gray-400 bg-gray-900 border border-gray-800 hover:bg-gray-800 hover:text-white"
+            : "text-gray-700 bg-white border border-gray-600 hover:text-gray-900 hover:bg-photographer-elevated"
+        }`}
         onClick={handleClick}
       >
         <span
@@ -38,7 +45,9 @@ export default function NotificationDropdown() {
       <Dropdown
         isOpen={isOpen}
         onClose={closeDropdown}
-        className="absolute -right-[240px] mt-[17px] flex h-[480px] w-[350px] flex-col rounded-2xl border border-gray-400 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[361px] lg:right-0"
+        className={`absolute -right-[240px] mt-[17px] flex h-[480px] w-[350px] flex-col rounded-2xl p-3 shadow-theme-lg sm:w-[361px] lg:right-0 ${
+          isDarkMode ? "border border-gray-800 bg-gray-dark" : "border border-gray-600 bg-white"
+        }`}
       >
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-700">
           <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Powiadomienia</h5>
@@ -61,7 +70,11 @@ export default function NotificationDropdown() {
         </ul>
         <Link
           href="/"
-          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-400 rounded-lg hover:bg-photographer-elevated dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+          className={`block px-4 py-2 mt-3 text-sm font-medium text-center rounded-lg ${
+            isDarkMode
+              ? "text-gray-400 bg-gray-800 border border-gray-700 hover:bg-gray-700"
+              : "text-gray-800 bg-white border border-gray-600 hover:bg-photographer-elevated"
+          }`}
         >
           Zobacz wszystkie powiadomienia
         </Link>

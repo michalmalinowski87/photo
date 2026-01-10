@@ -32,7 +32,6 @@ interface LambdaMemoryMetric {
   recommendation: string;
 }
 
-
 export default function LambdaMetrics() {
   const { showToast } = useToast();
   const [metrics, setMetrics] = useState<LambdaMemoryMetric[]>([]);

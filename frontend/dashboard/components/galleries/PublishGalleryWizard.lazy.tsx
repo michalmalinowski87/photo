@@ -2,4 +2,3 @@
 import { PublishGalleryWizard } from "./PublishGalleryWizard";
 
 export default PublishGalleryWizard;
-

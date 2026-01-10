@@ -40,9 +40,15 @@ interface PackageFormData {
 }
 
 // Lazy load ConfirmDialog - only shown when delete confirmation is open
-const ConfirmDialog = dynamic(() => import("../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
-  ssr: false,
-});
+const ConfirmDialog = dynamic(
+  () =>
+    import("../components/ui/confirm/ConfirmDialog").then((mod) => ({
+      default: mod.ConfirmDialog,
+    })),
+  {
+    ssr: false,
+  }
+);
 
 // Prevent static generation - this page uses client hooks
 export const getServerSideProps: GetServerSideProps = () => {
@@ -357,7 +363,12 @@ export default function Packages() {
 
   // Determine if this is initial load (no data yet)
   const isInitialLoad =
-    loading && packages.length === 0 && (!data || !('pages' in data) || !(data as { pages: unknown[] }).pages || (data as { pages: unknown[] }).pages.length === 0);
+    loading &&
+    packages.length === 0 &&
+    (!data ||
+      !("pages" in data) ||
+      !(data as { pages: unknown[] }).pages ||
+      (data as { pages: unknown[] }).pages.length === 0);
 
   return (
     <div className="space-y-6">

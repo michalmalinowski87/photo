@@ -80,7 +80,7 @@ export function useCreateGallery() {
       // This handles edge cases where queries might not match the predicate exactly
       void queryClient.invalidateQueries({
         queryKey: queryKeys.galleries.lists(),
-        refetchType: 'active', // Refetch active queries immediately
+        refetchType: "active", // Refetch active queries immediately
       });
     },
   });

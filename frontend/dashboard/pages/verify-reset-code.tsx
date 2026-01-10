@@ -166,12 +166,7 @@ export default function VerifyResetCode() {
             />
           </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full"
-            disabled={code.length !== 6}
-          >
+          <Button type="submit" variant="primary" className="w-full" disabled={code.length !== 6}>
             Kontynuuj
           </Button>
         </form>

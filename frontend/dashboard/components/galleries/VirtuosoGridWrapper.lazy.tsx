@@ -2,4 +2,3 @@
 import { VirtuosoGrid } from "react-virtuoso";
 
 export default VirtuosoGrid;
-

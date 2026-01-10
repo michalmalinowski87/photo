@@ -48,9 +48,12 @@ const GalleryCard = dynamic(() => import("./GalleryCard.lazy"), {
 });
 
 // Lazy load ConfirmDialog - only shown when delete confirmation is open
-const ConfirmDialog = dynamic(() => import("../ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
-  ssr: false,
-});
+const ConfirmDialog = dynamic(
+  () => import("../ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })),
+  {
+    ssr: false,
+  }
+);
 
 interface GalleryListProps {
   filter?:
@@ -421,9 +424,8 @@ const GalleryList = ({
   };
 
   // Determine if this is initial load (no data yet)
-  const dataPages = data && typeof data === 'object' && 'pages' in data ? data.pages : undefined;
-  const isInitialLoad =
-    loading && galleries.length === 0 && (!dataPages || dataPages.length === 0);
+  const dataPages = data && typeof data === "object" && "pages" in data ? data.pages : undefined;
+  const isInitialLoad = loading && galleries.length === 0 && (!dataPages || dataPages.length === 0);
 
   // Hide content when overlay is showing (during navigation)
   // CRITICAL: Also check if we should show empty state BEFORE allowing table to render
@@ -431,29 +433,27 @@ const GalleryList = ({
   const shouldShowEmptyState = !isInitialLoad && galleries.length === 0;
   const isStillLoading = loading || isFetching;
   const hasDataPages = Array.isArray(dataPages) && dataPages.length > 0;
-  
+
   // Hide content if:
   // 1. Parent says to hide (overlay showing)
   // 2. Still loading/fetching AND we don't have data pages yet
   // 3. We should show empty state AND still loading (prevents table header flash during transition)
-  if (hideContent || (isStillLoading && !hasDataPages) || (shouldShowEmptyState && isStillLoading)) {
+  if (
+    hideContent ||
+    (isStillLoading && !hasDataPages) ||
+    (shouldShowEmptyState && isStillLoading)
+  ) {
     return (
-      <div
-        className="space-y-4 relative"
-        style={{ minHeight: "calc(100vh - 200px)" }}
-      >
+      <div className="space-y-4 relative" style={{ minHeight: "calc(100vh - 200px)" }}>
         {/* Content hidden - overlay will show instead */}
       </div>
     );
   }
-  
+
   // If we should show empty state and NOT loading, render it directly
   if (shouldShowEmptyState && !isStillLoading) {
     return (
-      <div
-        className="space-y-4 relative"
-        style={{ minHeight: "calc(100vh - 200px)" }}
-      >
+      <div className="space-y-4 relative" style={{ minHeight: "calc(100vh - 200px)" }}>
         <EmptyState {...getEmptyStateConfig()} />
       </div>
     );

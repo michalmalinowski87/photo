@@ -11,11 +11,7 @@ const nextConfig = {
   transpilePackages: ["@photocloud/gallery-components"],
   // Optimize package imports to reduce bundle size
   experimental: {
-    optimizePackageImports: [
-      "lucide-react",
-      "@tanstack/react-query",
-      "react-virtuoso",
-    ],
+    optimizePackageImports: ["lucide-react", "@tanstack/react-query", "react-virtuoso"],
   },
   // Enable compression for better performance on slow connections
   compress: true,

@@ -24,7 +24,11 @@ import { DelayedLoadingOverlay } from "../hooks/useDelayedLoadingOverlay";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useUploadRecovery } from "../hooks/useUploadRecovery";
 import { initDevTools } from "../lib/dev-tools";
-import { useBundleLoading, dynamicWithLoading, setNavigationLoadingState } from "../lib/dynamicWithLoading";
+import {
+  useBundleLoading,
+  dynamicWithLoading,
+  setNavigationLoadingState,
+} from "../lib/dynamicWithLoading";
 import { makeQueryClient } from "../lib/react-query";
 import { useAuthStore, useThemeStore } from "../store";
 import { useUnifiedStore } from "../store/unifiedStore";
@@ -126,12 +130,12 @@ function AppContent({ Component, pageProps }: AppProps) {
   const isMobile = useIsMobile();
   const navigationLoading = useUnifiedStore((state) => state.navigationLoading);
   const setNavigationLoading = useUnifiedStore((state) => state.setNavigationLoading);
-  
+
   // Track gallery navigation loading (for delayed overlay)
   // Use ref to persist state across renders and avoid clearing too early
   const isGalleryNavigatingRef = useRef(false);
   const [isGalleryNavigating, setIsGalleryNavigating] = useState(false);
-  
+
   // Track bundle loading state
   const isBundleLoading = useBundleLoading();
 
@@ -140,7 +144,6 @@ function AppContent({ Component, pageProps }: AppProps) {
 
   // Enable global order status polling when authenticated (skip for 404)
   useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
-
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname
@@ -255,7 +258,7 @@ function AppContent({ Component, pageProps }: AppProps) {
       restoreThemeAndClearSessionExpired();
       // Clear navigation loading on any route change (in case user navigates away)
       setNavigationLoading(false);
-      
+
       // Clear navigation state quickly to prevent delayed overlay flash on fast navigation
       // Use a minimal delay (50ms) to allow bundle loading components to mount
       // If bundles are loading, isBundleLoading will keep the overlay visible
@@ -267,7 +270,7 @@ function AppContent({ Component, pageProps }: AppProps) {
           setIsGalleryNavigating(false);
         }, 50);
       });
-      
+
       // Clear navigation loading state in bundle tracker
       // Use a delay to allow bundle loading components to mount and track their state
       setTimeout(() => {
@@ -291,12 +294,12 @@ function AppContent({ Component, pageProps }: AppProps) {
     router.events.on("routeChangeStart", handleRouteChangeStart);
     router.events.on("routeChangeComplete", handleRouteChangeComplete);
     router.events.on("routeChangeError", handleRouteChangeError);
-    
+
     // Note: Next.js Link components with prefetch={true} automatically prefetch
     // when links are visible in the viewport (using Intersection Observer).
     // This is more efficient than manual prefetching on hover.
     // All Link components should have prefetch={true} set.
-    
+
     // Also intercept clicks on all internal links to set state immediately
     // This ensures overlay shows even before routeChangeStart fires
     const handleClick = (e: MouseEvent) => {
@@ -305,15 +308,15 @@ function AppContent({ Component, pageProps }: AppProps) {
       if (!target) {
         return;
       }
-      
+
       // Get the element - if target is not an Element, get parentElement
       const element = target instanceof Element ? target : (target as Node).parentElement;
-      if (!element || typeof element.closest !== 'function') {
+      if (!element || typeof element.closest !== "function") {
         return;
       }
-      
+
       const link = element.closest('a[href^="/"]');
-      
+
       if (link && link instanceof HTMLAnchorElement && link.href) {
         try {
           const url = new URL(link.href);
@@ -329,11 +332,11 @@ function AppContent({ Component, pageProps }: AppProps) {
         }
       }
     };
-    
+
     if (typeof window !== "undefined") {
       document.addEventListener("click", handleClick, true); // Use capture phase to catch early
     }
-    
+
     return () => {
       router.events.off("routeChangeStart", handleRouteChangeStart);
       router.events.off("routeChangeComplete", handleRouteChangeComplete);
@@ -403,7 +406,7 @@ function AppContent({ Component, pageProps }: AppProps) {
     <>
       {/* Navigation loading overlay - shows when navigating to order pages */}
       {navigationLoading && <FullPageLoading text="Ładowanie zlecenia..." />}
-      
+
       {/* Delayed loading overlay for gallery navigation - shows after frustration point (400ms) */}
       {/* Handles both navigation and bundle loading for gallery pages */}
       {/* Render globally so it works when navigating FROM gallery list TO gallery detail */}
@@ -419,7 +422,7 @@ function AppContent({ Component, pageProps }: AppProps) {
         delay={process.env.NODE_ENV === "development" ? 2000 : 1000}
         minShowDuration={500}
       />
-      
+
       {/* Mobile warning modal for authenticated dashboard pages */}
       {!isAuthRoute && (
         <MobileWarningModal

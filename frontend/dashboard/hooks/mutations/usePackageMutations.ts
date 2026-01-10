@@ -30,7 +30,9 @@ export function useUpdatePackage() {
       api.packages.update(packageId, data),
     onSuccess: (_, variables) => {
       // Invalidate specific package detail
-      void queryClient.invalidateQueries({ queryKey: queryKeys.packages.detail(variables.packageId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.packages.detail(variables.packageId),
+      });
       // Invalidate all package lists to refetch
       void queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
     },

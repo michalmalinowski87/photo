@@ -40,13 +40,19 @@ import type { Gallery, GalleryImage } from "../../../types";
 
 // Lazy load heavy components to reduce bundle size (~200KB+ savings)
 // Using wrapper files that export as default for proper dynamic() support
-const NextStepsOverlay = dynamic(() => import("../../../components/galleries/NextStepsOverlay.lazy"), {
-  ssr: false,
-});
+const NextStepsOverlay = dynamic(
+  () => import("../../../components/galleries/NextStepsOverlay.lazy"),
+  {
+    ssr: false,
+  }
+);
 
-const PublishGalleryWizard = dynamic(() => import("../../../components/galleries/PublishGalleryWizard.lazy"), {
-  ssr: false,
-});
+const PublishGalleryWizard = dynamic(
+  () => import("../../../components/galleries/PublishGalleryWizard.lazy"),
+  {
+    ssr: false,
+  }
+);
 
 const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
   ssr: false,
@@ -54,13 +60,25 @@ const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploa
 });
 
 // Lazy load conditionally rendered dialogs - only shown when modals are open
-const ConfirmDialog = dynamic(() => import("../../../components/ui/confirm/ConfirmDialog").then((mod) => ({ default: mod.ConfirmDialog })), {
-  ssr: false,
-});
+const ConfirmDialog = dynamic(
+  () =>
+    import("../../../components/ui/confirm/ConfirmDialog").then((mod) => ({
+      default: mod.ConfirmDialog,
+    })),
+  {
+    ssr: false,
+  }
+);
 
-const BulkDeleteConfirmDialog = dynamic(() => import("../../../components/dialogs/BulkDeleteConfirmDialog").then((mod) => ({ default: mod.BulkDeleteConfirmDialog })), {
-  ssr: false,
-});
+const BulkDeleteConfirmDialog = dynamic(
+  () =>
+    import("../../../components/dialogs/BulkDeleteConfirmDialog").then((mod) => ({
+      default: mod.BulkDeleteConfirmDialog,
+    })),
+  {
+    ssr: false,
+  }
+);
 
 interface ApiImage {
   key?: string;
@@ -314,10 +332,7 @@ export default function GalleryPhotos() {
 
   // Fetch statistics only (first page with stats, but we don't need all images)
   // This gives us total counts without loading all images
-  const {
-    data: statsData,
-    isLoading: statsLoading,
-  } = useInfiniteGalleryImages({
+  const { data: statsData, isLoading: statsLoading } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
     limit: 1, // Only need stats, so minimal limit
@@ -717,14 +732,14 @@ export default function GalleryPhotos() {
               void poll();
             }, pollInterval);
           }
-          } catch (_error) {
-            // Stop polling on error
-            isPollingRef.current = false;
-            if (pollTimeoutIdRef.current) {
-              clearTimeout(pollTimeoutIdRef.current);
-              pollTimeoutIdRef.current = null;
-            }
+        } catch (_error) {
+          // Stop polling on error
+          isPollingRef.current = false;
+          if (pollTimeoutIdRef.current) {
+            clearTimeout(pollTimeoutIdRef.current);
+            pollTimeoutIdRef.current = null;
           }
+        }
       };
 
       // Start polling
@@ -1698,12 +1713,12 @@ export default function GalleryPhotos() {
       const cachedUnselectedData = queryClient.getQueryData(unselectedQueryKey);
       if (
         cachedUnselectedData &&
-        typeof cachedUnselectedData === 'object' &&
-        'pages' in cachedUnselectedData &&
+        typeof cachedUnselectedData === "object" &&
+        "pages" in cachedUnselectedData &&
         Array.isArray(cachedUnselectedData.pages) &&
         cachedUnselectedData.pages[0] &&
-        typeof cachedUnselectedData.pages[0] === 'object' &&
-        'stats' in cachedUnselectedData.pages[0]
+        typeof cachedUnselectedData.pages[0] === "object" &&
+        "stats" in cachedUnselectedData.pages[0]
       ) {
         const firstPage = cachedUnselectedData.pages[0] as { stats?: { unselectedCount?: number } };
         if (firstPage.stats?.unselectedCount !== undefined) {

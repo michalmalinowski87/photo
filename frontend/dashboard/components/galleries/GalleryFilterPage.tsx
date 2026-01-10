@@ -60,7 +60,7 @@ export default function GalleryFilterPage({
   useEffect(() => {
     const isReady = !loading && !isFetching;
     const hasDataPages = data?.pages !== undefined;
-    
+
     if (isReady && hasDataPages) {
       // Query is done and we have data - hide overlay immediately for instant navigation
       // No delay needed since cached data is already available
@@ -109,10 +109,7 @@ export default function GalleryFilterPage({
 
   // Show content area overlay based on stable state
   // This prevents flicker by using a single source of truth
-  const showContentAreaOverlay =
-    showOverlay &&
-    !publishWizardOpen &&
-    !shouldOpenWizardFromUrl;
+  const showContentAreaOverlay = showOverlay && !publishWizardOpen && !shouldOpenWizardFromUrl;
 
   // View mode state - shared with GalleryList
   const [viewMode, setViewMode] = useState<"list" | "cards">(() => {

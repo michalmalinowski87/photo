@@ -54,11 +54,13 @@ export function ZipDownloadButton({
   // This allows us to show loader and progress immediately when generation starts
   const orderCache = queryClient.getQueryData<Order>(queryKeys.orders.detail(galleryId, orderId));
   const cacheZipGenerating =
-    type === "final" ? orderCache?.finalZipGenerating ?? false : orderCache?.zipGenerating ?? false;
+    type === "final"
+      ? (orderCache?.finalZipGenerating ?? false)
+      : (orderCache?.zipGenerating ?? false);
   const cacheZipReady =
     type === "final"
-      ? (orderCache as Order & { finalZipReady?: boolean })?.finalZipReady ?? false
-      : (orderCache as Order & { zipReady?: boolean })?.zipReady ?? false;
+      ? ((orderCache as Order & { finalZipReady?: boolean })?.finalZipReady ?? false)
+      : ((orderCache as Order & { zipReady?: boolean })?.zipReady ?? false);
   const cacheProgress = orderCache?.zipProgress as ZipProgress | undefined;
 
   const { generating, ready, progress, zipStatus } = useZipStatusPolling({

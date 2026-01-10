@@ -61,8 +61,13 @@ export default function UndoDeletion() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Request failed" })) as { error?: string };
-          const errorObj = new Error("Request failed") as Error & { body: { error?: string }; status: number };
+          const errorData = (await response.json().catch(() => ({ error: "Request failed" }))) as {
+            error?: string;
+          };
+          const errorObj = new Error("Request failed") as Error & {
+            body: { error?: string };
+            status: number;
+          };
           errorObj.body = errorData;
           errorObj.status = response.status;
           throw errorObj;
@@ -88,7 +93,11 @@ export default function UndoDeletion() {
         // Extract user-friendly error message
         let errorMessage = "";
 
-        const errorWithBody = err as { body?: { error?: string }; message?: string; status?: number } | null;
+        const errorWithBody = err as {
+          body?: { error?: string };
+          message?: string;
+          status?: number;
+        } | null;
         if (errorWithBody?.body?.error) {
           const backendError = errorWithBody.body.error;
           if (backendError.includes("Invalid or expired token")) {

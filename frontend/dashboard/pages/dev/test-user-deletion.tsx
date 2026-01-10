@@ -239,7 +239,9 @@ export default function TestUserDeletion() {
               Ustaw lastLoginAt na 11 miesięcy temu, a następnie wyzwól skaner - powinien wysłać
               przypomnienie
             </li>
-            <li>Użyj &quot;Usuń natychmiast&quot; aby przetestować pełny proces usuwania bez czekania</li>
+            <li>
+              Użyj &quot;Usuń natychmiast&quot; aby przetestować pełny proces usuwania bez czekania
+            </li>
             <li>Sprawdź status usuwania w ustawieniach konta po wyzwoleniu usunięcia</li>
           </ul>
         </div>

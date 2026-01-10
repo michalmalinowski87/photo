@@ -93,7 +93,7 @@ function createLoadingTracker(
       // Loading component is rendered = bundle is loading
       loadingBundles.add(bundleId);
       notifyListeners();
-      
+
       if (process.env.NODE_ENV === "development") {
         // eslint-disable-next-line no-console
         console.warn("[BundleLoading] Bundle loading started:", bundleId);
@@ -151,7 +151,10 @@ export function dynamicWithLoading<P = Record<string, unknown>>(
   // Create loading tracker component
   const loadingTracker = createLoadingTracker(
     bundleId,
-    options?.loading as React.ComponentType | ((props: { isLoading?: boolean }) => React.ReactNode) | undefined
+    options?.loading as
+      | React.ComponentType
+      | ((props: { isLoading?: boolean }) => React.ReactNode)
+      | undefined
   );
 
   // Create the dynamic component with our loading tracker

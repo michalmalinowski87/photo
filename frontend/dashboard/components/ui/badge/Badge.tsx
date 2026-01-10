@@ -1,3 +1,5 @@
+import { useTheme } from "../../../hooks/useTheme";
+
 type BadgeVariant = "light" | "solid";
 type BadgeSize = "sm" | "md";
 type BadgeColor = "primary" | "success" | "error" | "warning" | "info" | "light" | "dark";
@@ -19,6 +21,9 @@ const Badge = ({
   endIcon,
   children,
 }: BadgeProps) => {
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
+
   const baseStyles =
     "inline-flex items-center px-2.5 py-0.5 justify-center gap-1 rounded-full font-medium whitespace-nowrap";
 
@@ -28,18 +33,30 @@ const Badge = ({
     md: "text-sm", // Default padding and font size
   };
 
-  // Define color styles for variants
+  // Define color styles for variants - light theme uses more vibrant colors
   const variants = {
     light: {
-      primary:
-        "bg-brand-50 text-brand-700 dark:bg-photographer-accent/15 dark:text-photographer-accent",
-      success:
-        "bg-photographer-elevated text-photographer-accentDark dark:bg-success-500/15 dark:text-success-500",
-      error: "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500",
-      warning: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-orange-400",
-      info: "bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-500",
-      light: "bg-photographer-elevated text-gray-800 dark:bg-white/5 dark:text-white/80",
-      dark: "bg-photographer-accent text-white dark:bg-white/5 dark:text-white",
+      primary: isDarkMode
+        ? "bg-photographer-accent/15 text-photographer-accent"
+        : "bg-brand-100 text-brand-800 border border-brand-200",
+      success: isDarkMode
+        ? "bg-success-500/15 text-success-500"
+        : "bg-success-100 text-success-800 border border-success-200",
+      error: isDarkMode
+        ? "bg-error-500/15 text-error-500"
+        : "bg-error-100 text-error-800 border border-error-200",
+      warning: isDarkMode
+        ? "bg-warning-500/15 text-orange-400"
+        : "bg-warning-100 text-warning-800 border border-warning-200",
+      info: isDarkMode
+        ? "bg-blue-light-500/15 text-blue-light-500"
+        : "bg-blue-light-100 text-blue-light-800 border border-blue-light-200",
+      light: isDarkMode
+        ? "bg-white/5 text-white/80"
+        : "bg-gray-100 text-gray-900 border border-gray-300",
+      dark: isDarkMode
+        ? "bg-white/5 text-white"
+        : "bg-photographer-accent text-white border border-photographer-accent",
     },
     solid: {
       primary: "bg-brand-500 text-white dark:text-white",

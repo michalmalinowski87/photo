@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { useTheme } from "../../../hooks/useTheme";
 import { Icons } from "../icons";
 
 interface AlertProps {
@@ -19,26 +20,34 @@ const Alert = ({
   linkHref = "#",
   linkText = "Dowiedz się więcej",
 }: AlertProps) => {
-  // Tailwind classes for each variant
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
+
+  // Tailwind classes for each variant - light theme uses more vibrant colors
   const variantClasses = {
     success: {
-      container:
-        "border-photographer-darkBeige bg-photographer-elevated dark:border-success-500/30 dark:bg-success-500/50",
-      icon: "text-photographer-accentDark dark:text-success-500",
+      container: isDarkMode
+        ? "border-success-500/30 bg-success-500/50"
+        : "border-success-500 bg-success-200",
+      icon: isDarkMode ? "text-success-500" : "text-success-700",
     },
     error: {
-      container: "border-error-600 bg-error-50 dark:border-error-500/30 dark:bg-error-500/50",
-      icon: "text-error-700 dark:text-error-500",
+      container: isDarkMode
+        ? "border-error-500/30 bg-error-500/50"
+        : "border-error-300 bg-error-100",
+      icon: isDarkMode ? "text-error-500" : "text-error-700",
     },
     warning: {
-      container:
-        "border-warning-600 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-500/50",
-      icon: "text-warning-700 dark:text-warning-500",
+      container: isDarkMode
+        ? "border-warning-500/30 bg-warning-500/50"
+        : "border-warning-300 bg-warning-100",
+      icon: isDarkMode ? "text-warning-500" : "text-warning-700",
     },
     info: {
-      container:
-        "border-blue-light-600 bg-blue-light-50 dark:border-blue-light-500/30 dark:bg-blue-light-500/50",
-      icon: "text-blue-light-700 dark:text-blue-light-500",
+      container: isDarkMode
+        ? "border-blue-light-500/30 bg-blue-light-500/50"
+        : "border-blue-light-300 bg-blue-light-100",
+      icon: isDarkMode ? "text-blue-light-500" : "text-blue-light-700",
     },
   };
 
@@ -60,14 +69,22 @@ const Alert = ({
         </div>
 
         <div>
-          <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">{title}</h4>
+          <h4
+            className={`mb-1 text-sm font-semibold ${
+              isDarkMode ? "text-white/90" : "text-gray-900"
+            }`}
+          >
+            {title}
+          </h4>
 
-          <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
+          <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>{message}</p>
 
           {showLink && (
             <Link
               href={linkHref}
-              className="inline-block mt-3 text-sm font-medium text-gray-600 underline dark:text-gray-400"
+              className={`inline-block mt-3 text-sm font-medium underline ${
+                isDarkMode ? "text-gray-400" : "text-gray-700"
+              }`}
             >
               {linkText}
             </Link>

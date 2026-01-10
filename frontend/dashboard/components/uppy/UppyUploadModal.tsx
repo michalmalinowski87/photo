@@ -23,9 +23,12 @@ import { Tooltip } from "../ui/tooltip/Tooltip";
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
 
 // Lazy load react-virtuoso (~60KB) - only needed when files are present
-const VirtuosoGrid = dynamic(() => import("react-virtuoso").then((mod) => ({ default: mod.VirtuosoGrid })), {
-  ssr: false,
-});
+const VirtuosoGrid = dynamic(
+  () => import("react-virtuoso").then((mod) => ({ default: mod.VirtuosoGrid })),
+  {
+    ssr: false,
+  }
+);
 
 interface UppyUploadModalProps {
   isOpen: boolean;

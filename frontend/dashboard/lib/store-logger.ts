@@ -47,8 +47,6 @@ class StoreLogger {
     // Console logging removed
   }
 
-
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logAction(category: string, actionName: string, params?: any, result?: any): void {
     if (!this.enabled) {
