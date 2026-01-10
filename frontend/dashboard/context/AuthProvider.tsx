@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
 
+import { getUserIdentitySync, type UserIdentity } from "../hooks/useUserIdentity";
 import { initAuth, getIdToken } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "../lib/token-sharing";
-import { getUserIdentitySync, type UserIdentity } from "../hooks/useUserIdentity";
 import { useAuthStore } from "../store";
 
 interface AuthContextType {
@@ -201,7 +201,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setIsAuthenticated(false);
           }
         }
-      } catch (error) {
+      } catch {
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);

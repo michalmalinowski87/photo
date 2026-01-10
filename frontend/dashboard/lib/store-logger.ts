@@ -47,47 +47,7 @@ class StoreLogger {
     // Console logging removed
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private formatData(data: any): string {
-    if (!data) {
-      return "";
-    }
-    if (typeof data === "string") {
-      return data;
-    }
-    if (typeof data === "number" || typeof data === "boolean") {
-      return String(data);
-    }
 
-    try {
-      // For objects, format more readably
-      if (typeof data === "object" && data !== null) {
-        // If it's a simple object with few keys, show inline
-        const dataObj = data as Record<string, unknown>;
-        const keys = Object.keys(dataObj);
-        if (keys.length <= 3) {
-          return JSON.stringify(dataObj);
-        }
-        // For larger objects, show a summary
-        return JSON.stringify(dataObj, null, 2);
-      }
-      return JSON.stringify(data);
-    } catch {
-      return String(data);
-    }
-  }
-
-  private getCategoryColor(category: string): string {
-    const colors: Record<string, string> = {
-      gallery: "#818cf8", // indigo
-      order: "#10b981", // green
-      user: "#f59e0b", // amber
-      dashboard: "#3b82f6", // blue
-      component: "#8b5cf6", // purple
-      api: "#ef4444", // red
-    };
-    return colors[category.toLowerCase()] || "#6b7280"; // gray
-  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logAction(category: string, actionName: string, params?: any, result?: any): void {

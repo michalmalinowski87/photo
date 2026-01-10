@@ -61,8 +61,11 @@ export default function UndoDeletion() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Request failed" }));
-          throw { body: errorData, status: response.status };
+          const errorData = await response.json().catch(() => ({ error: "Request failed" })) as { error?: string };
+          const errorObj = new Error("Request failed") as Error & { body: { error?: string }; status: number };
+          errorObj.body = errorData;
+          errorObj.status = response.status;
+          throw errorObj;
         }
 
         setStatus("success");
@@ -80,13 +83,14 @@ export default function UndoDeletion() {
         }, 1000);
 
         return () => clearInterval(countdownInterval);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus("error");
         // Extract user-friendly error message
         let errorMessage = "";
 
-        if (err?.body?.error) {
-          const backendError = err.body.error;
+        const errorWithBody = err as { body?: { error?: string }; message?: string; status?: number } | null;
+        if (errorWithBody?.body?.error) {
+          const backendError = errorWithBody.body.error;
           if (backendError.includes("Invalid or expired token")) {
             errorMessage =
               "Link jest nieprawidłowy lub wygasł. Sprawdź, czy używasz najnowszego linku z emaila.";
@@ -96,14 +100,15 @@ export default function UndoDeletion() {
             errorMessage = backendError;
           }
         } else if (
-          err?.message &&
-          !err.message.includes("refresh token") &&
-          !err.message.includes("Nie udało się anulować usunięcia konta")
+          errorWithBody?.message &&
+          !errorWithBody.message.includes("refresh token") &&
+          !errorWithBody.message.includes("Nie udało się anulować usunięcia konta")
         ) {
-          errorMessage = err.message;
+          errorMessage = errorWithBody.message;
         }
 
         setError(errorMessage);
+        return undefined;
       }
     };
 

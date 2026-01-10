@@ -653,6 +653,7 @@ const GalleryList = ({
                       <TableCell className="px-3 py-5 align-middle min-w-[300px]">
                         <Link
                           href={`/galleries/${String(gallery.galleryId)}`}
+                          prefetch={true}
                           className="font-medium text-base text-photographer-heading hover:text-photographer-accent dark:text-white dark:hover:text-photographer-accent block max-w-full"
                           onClick={() => {
                             // Store current page as referrer when navigating to gallery
@@ -660,6 +661,10 @@ const GalleryList = ({
                               const referrerKey = `gallery_referrer_${String(gallery.galleryId)}`;
                               sessionStorage.setItem(referrerKey, window.location.pathname);
                             }
+                          }}
+                          onMouseEnter={() => {
+                            // Prefetch gallery data (Next.js Link handles route bundle prefetching automatically)
+                            prefetchGallery(gallery.galleryId);
                           }}
                           title={galleryName}
                         >
@@ -875,7 +880,11 @@ const GalleryList = ({
                             <Tooltip content="Szczegóły" side="top">
                               <Link
                                 href={`/galleries/${gallery.galleryId}`}
-                                onMouseEnter={() => prefetchGallery(gallery.galleryId)}
+                                prefetch={true}
+                                onMouseEnter={() => {
+                                  // Prefetch gallery data (Next.js Link handles route bundle prefetching automatically)
+                                  prefetchGallery(gallery.galleryId);
+                                }}
                                 onClick={() => {
                                   // Store current page as referrer when navigating to gallery
                                   if (typeof window !== "undefined") {

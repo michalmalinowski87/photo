@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient, UseQueryOptions } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
@@ -60,8 +61,13 @@ export function useOrder(
   const initialData = getInitialData();
 
   return useQuery({
-    queryKey: queryKeys.orders.detail(galleryId!, orderId!),
-    queryFn: () => api.orders.get(galleryId!, orderId!),
+    queryKey: queryKeys.orders.detail(galleryId ?? "", orderId ?? ""),
+    queryFn: () => {
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      return api.orders.get(galleryId, orderId);
+    },
     enabled: !!galleryId && !!orderId,
     // Use data from list cache as initialData for instant display
     initialData,
@@ -71,21 +77,32 @@ export function useOrder(
   });
 }
 
+interface FinalImage {
+  thumbUrl?: string;
+  previewUrl?: string;
+  finalUrl?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+
 export function useOrderFinalImages(
   galleryId: string | undefined,
   orderId: string | undefined,
-  options?: Omit<UseQueryOptions<any[]>, "queryKey" | "queryFn" | "select">
+  options?: Omit<UseQueryOptions<FinalImage[]>, "queryKey" | "queryFn" | "select">
 ) {
   return useQuery({
-    queryKey: queryKeys.orders.finalImages(galleryId!, orderId!),
+    queryKey: queryKeys.orders.finalImages(galleryId ?? "", orderId ?? ""),
     queryFn: async () => {
-      const response = await api.orders.getFinalImages(galleryId!, orderId!);
-      return response.images || [];
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      const response = await api.orders.getFinalImages(galleryId, orderId);
+      return (response.images ?? []) as FinalImage[];
     },
     enabled: !!galleryId && !!orderId,
     // Transform data at query level for better memoization
     select: (data) =>
-      data.map((img: any) => ({
+      data.map((img) => ({
         ...img,
         url: img.thumbUrl ?? img.previewUrl ?? img.finalUrl ?? img.url ?? "",
         finalUrl: img.finalUrl ?? img.url ?? "",
@@ -97,8 +114,13 @@ export function useOrderFinalImages(
 // Order status (lightweight)
 export function useOrderStatus(galleryId: string | undefined, orderId: string | undefined) {
   return useQuery({
-    queryKey: [...queryKeys.orders.detail(galleryId!, orderId!), "status"],
-    queryFn: () => api.orders.getOrderStatus(galleryId!, orderId!),
+    queryKey: [...queryKeys.orders.detail(galleryId ?? "", orderId ?? ""), "status"],
+    queryFn: () => {
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      return api.orders.getOrderStatus(galleryId, orderId);
+    },
     enabled: !!galleryId && !!orderId,
     staleTime: 10 * 1000, // Status changes more frequently
     networkMode: "offlineFirst", // Use cache if offline

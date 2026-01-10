@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:check": "yarn type-check && yarn lint && yarn dev",
+    "dev:watch": "yarn type-check:watch",
     "build": "next build",
     "build:analyze": "ANALYZE=true next build",
     "start": "next start",

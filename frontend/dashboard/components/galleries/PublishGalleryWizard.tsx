@@ -121,7 +121,7 @@ export const PublishGalleryWizard = ({
           }
           // If no orders found, just close the wizard
           onClose();
-        } catch (err) {
+        } catch (_err) {
           onClose();
         }
       } else {
@@ -146,7 +146,7 @@ export const PublishGalleryWizard = ({
     onClose,
     mode,
     selectedDuration,
-    selectedPlanKey: selectedPlanKey || undefined,
+    selectedPlanKey: selectedPlanKey ?? undefined,
   });
 
   // Restore state from initialState prop (set by store from URL params)
@@ -225,7 +225,7 @@ export const PublishGalleryWizard = ({
 
     if (mode === "limitExceeded" && limitExceededData?.uploadedSizeBytes) {
       // Calculate suggested plan based on uploaded size and current duration
-      const durationToUse = currentPlanDuration || "3m"; // Default to 3m if not available
+      const durationToUse = currentPlanDuration ?? "3m"; // Default to 3m if not available
       const suggestedPlanKey = calculateBestPlan(
         limitExceededData.uploadedSizeBytes,
         durationToUse
@@ -261,7 +261,7 @@ export const PublishGalleryWizard = ({
       return calculatePriceWithDiscount(gallery.plan as PlanKey, isSelectionGallery);
     }
     return 0;
-  }, [mode, gallery?.plan, gallery?.selectionEnabled, limitExceededData?.isSelectionGallery]);
+  }, [mode, gallery?.plan, gallery?.selectionEnabled, limitExceededData]);
 
   // Determine selection enabled status for price calculations
   const isSelectionGalleryForPricing = useMemo(() => {
@@ -274,7 +274,7 @@ export const PublishGalleryWizard = ({
     return pricingData?.selectionEnabled !== false;
   }, [
     mode,
-    limitExceededData?.isSelectionGallery,
+    limitExceededData,
     gallery?.selectionEnabled,
     pricingData?.selectionEnabled,
   ]);
@@ -341,7 +341,7 @@ export const PublishGalleryWizard = ({
       // Calculate suggested plan directly from uploaded size to avoid dependency on suggestedStorage
       // which might change and cause re-initialization
       const extractedDuration = extractDurationFromPlanKey(limitExceededData.nextTierPlan);
-      const durationToUse: Duration = currentPlanDuration || extractedDuration || "1m";
+      const durationToUse: Duration = currentPlanDuration ?? extractedDuration ?? "1m";
 
       // Calculate suggested plan based on uploaded size and duration
       const calculatedSuggestedPlanKey = calculateBestPlan(

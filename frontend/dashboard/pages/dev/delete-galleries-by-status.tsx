@@ -85,7 +85,7 @@ export default function DeleteGalleriesByStatus() {
         // Wait a bit for the query to process
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-    } catch (error) {
+    } catch (_error) {
       showToast("error", "Błąd", "Nie udało się załadować wszystkich galerii");
     } finally {
       setIsLoading(false);

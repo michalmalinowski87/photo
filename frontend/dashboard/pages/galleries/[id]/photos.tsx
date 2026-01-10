@@ -23,21 +23,6 @@ import { ConfirmDialog } from "../../../components/ui/confirm/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading } from "../../../components/ui/loading/Loading";
-
-// Lazy load heavy components to reduce bundle size (~200KB+ savings)
-// Using wrapper files that export as default for proper dynamic() support
-const NextStepsOverlay = dynamic(() => import("../../../components/galleries/NextStepsOverlay.lazy"), {
-  ssr: false,
-});
-
-const PublishGalleryWizard = dynamic(() => import("../../../components/galleries/PublishGalleryWizard.lazy"), {
-  ssr: false,
-});
-
-const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
-  ssr: false,
-  loading: () => <Loading text="Ładowanie modułu przesyłania..." />,
-});
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
@@ -54,6 +39,21 @@ import { storeLogger } from "../../../lib/store-logger";
 import { useModalStore } from "../../../store";
 import { useUnifiedStore } from "../../../store/unifiedStore";
 import type { Gallery, GalleryImage } from "../../../types";
+
+// Lazy load heavy components to reduce bundle size (~200KB+ savings)
+// Using wrapper files that export as default for proper dynamic() support
+const NextStepsOverlay = dynamic(() => import("../../../components/galleries/NextStepsOverlay.lazy"), {
+  ssr: false,
+});
+
+const PublishGalleryWizard = dynamic(() => import("../../../components/galleries/PublishGalleryWizard.lazy"), {
+  ssr: false,
+});
+
+const UppyUploadModal = dynamic(() => import("../../../components/uppy/UppyUploadModal.lazy"), {
+  ssr: false,
+  loading: () => <Loading text="Ładowanie modułu przesyłania..." />,
+});
 
 interface ApiImage {
   key?: string;
@@ -310,7 +310,6 @@ export default function GalleryPhotos() {
   const {
     data: statsData,
     isLoading: statsLoading,
-    dataUpdatedAt: statsDataUpdatedAt,
   } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
@@ -487,6 +486,17 @@ export default function GalleryPhotos() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [limitExceededData, setLimitExceededData] = useState<{
+    uploadedSizeBytes: number;
+    originalsLimitBytes: number;
+    excessBytes: number;
+    nextTierPlan?: string;
+    nextTierPriceCents?: number;
+    nextTierLimitBytes?: number;
+    isSelectionGallery?: boolean;
+  } | null>(null);
+  const [limitExceededWizardOpen, setLimitExceededWizardOpen] = useState(false);
+  const [showUpgradeSuccessModal, setShowUpgradeSuccessModal] = useState(false);
 
   // Get modal state from Zustand
   const zustandModalOpen = useModalStore((state) => state.modals["photos-upload-modal"] || false);
@@ -634,7 +644,8 @@ export default function GalleryPhotos() {
     // Handle direct payment success (Stripe payment for upgrade)
     if (paymentSuccess && limitExceededParam && planKeyParam && !isWalletTopUpRedirect) {
       // Create a unique key for this payment success to prevent re-processing
-      const paymentSuccessKey = `${galleryId}-direct-payment-${planKeyParam}`;
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+      const paymentSuccessKey = `${galleryIdStr}-direct-payment-${planKeyParam}`;
 
       // Check if we've already processed this payment success or if polling is already active
       if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey || isPollingRef.current) {
@@ -699,14 +710,14 @@ export default function GalleryPhotos() {
               void poll();
             }, pollInterval);
           }
-        } catch (error) {
-          // Stop polling on error
-          isPollingRef.current = false;
-          if (pollTimeoutIdRef.current) {
-            clearTimeout(pollTimeoutIdRef.current);
-            pollTimeoutIdRef.current = null;
+          } catch (_error) {
+            // Stop polling on error
+            isPollingRef.current = false;
+            if (pollTimeoutIdRef.current) {
+              clearTimeout(pollTimeoutIdRef.current);
+              pollTimeoutIdRef.current = null;
+            }
           }
-        }
       };
 
       // Start polling
@@ -839,17 +850,6 @@ export default function GalleryPhotos() {
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [deleteAllUnselectedOpen, setDeleteAllUnselectedOpen] = useState(false);
   const [unselectedImagesToDelete, setUnselectedImagesToDelete] = useState<string[]>([]);
-  const [limitExceededData, setLimitExceededData] = useState<{
-    uploadedSizeBytes: number;
-    originalsLimitBytes: number;
-    excessBytes: number;
-    nextTierPlan?: string;
-    nextTierPriceCents?: number;
-    nextTierLimitBytes?: number;
-    isSelectionGallery?: boolean;
-  } | null>(null);
-  const [limitExceededWizardOpen, setLimitExceededWizardOpen] = useState(false);
-  const [showUpgradeSuccessModal, setShowUpgradeSuccessModal] = useState(false);
 
   // Restore limitExceededData when wizard should be open but data is missing
   // This handles the case when returning from wallet top-up
@@ -1689,8 +1689,19 @@ export default function GalleryPhotos() {
         true // filterUnselected: true
       );
       const cachedUnselectedData = queryClient.getQueryData(unselectedQueryKey);
-      if (cachedUnselectedData?.pages?.[0]?.stats?.unselectedCount !== undefined) {
-        return Number(cachedUnselectedData.pages[0].stats.unselectedCount);
+      if (
+        cachedUnselectedData &&
+        typeof cachedUnselectedData === 'object' &&
+        'pages' in cachedUnselectedData &&
+        Array.isArray(cachedUnselectedData.pages) &&
+        cachedUnselectedData.pages[0] &&
+        typeof cachedUnselectedData.pages[0] === 'object' &&
+        'stats' in cachedUnselectedData.pages[0]
+      ) {
+        const firstPage = cachedUnselectedData.pages[0] as { stats?: { unselectedCount?: number } };
+        if (firstPage.stats?.unselectedCount !== undefined) {
+          return Number(firstPage.stats.unselectedCount);
+        }
       }
     }
 
@@ -1698,7 +1709,6 @@ export default function GalleryPhotos() {
   }, [
     expandedSection,
     currentSectionQuery.data,
-    currentSectionQuery.dataUpdatedAt,
     sectionImages.length,
     galleryIdForQuery,
     queryClient,
@@ -1715,7 +1725,7 @@ export default function GalleryPhotos() {
       return Number(imageStats.unselectedCount) ?? 0;
     }
     return 0;
-  }, [unselectedCountFromFilteredQuery, imageStats, statsDataUpdatedAt, statsData]);
+  }, [unselectedCountFromFilteredQuery, imageStats]);
 
   // Handler for deleting all unselected images
   const handleDeleteAllUnselectedClick = useCallback(() => {
@@ -2207,8 +2217,8 @@ export default function GalleryPhotos() {
             router.isReady && typeof window !== "undefined"
               ? {
                   duration:
-                    new URLSearchParams(window.location.search).get("duration") || undefined,
-                  planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
+                    new URLSearchParams(window.location.search).get("duration") ?? undefined,
+                  planKey: new URLSearchParams(window.location.search).get("planKey") ?? undefined,
                 }
               : null
           }

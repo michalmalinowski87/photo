@@ -14,6 +14,20 @@ import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { SessionExpiredModalWrapper } from "../components/auth/SessionExpiredModalWrapper";
 import { ClientOnly } from "../components/ClientOnly";
 import { FullPageLoading } from "../components/ui/loading/Loading";
+import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
+import { ToastContainer } from "../components/ui/toast/ToastContainer";
+import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
+import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
+import { AuthProvider, useAuth } from "../context/AuthProvider";
+import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
+import { DelayedLoadingOverlay } from "../hooks/useDelayedLoadingOverlay";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useUploadRecovery } from "../hooks/useUploadRecovery";
+import { initDevTools } from "../lib/dev-tools";
+import { useBundleLoading, dynamicWithLoading, setNavigationLoadingState } from "../lib/dynamicWithLoading";
+import { makeQueryClient } from "../lib/react-query";
+import { useAuthStore, useThemeStore } from "../store";
+import { useUnifiedStore } from "../store/unifiedStore";
 
 // Lazy load heavy components to reduce initial bundle size
 const ReactQueryDevtools = dynamic(
@@ -32,24 +46,6 @@ const GalleryLayoutWrapper = dynamicWithLoading(
     loading: () => <FullPageLoading text="Ładowanie galerii..." />,
   }
 );
-
-// Import these normally - they're named exports and dynamic() was causing issues
-import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
-import { ToastContainer } from "../components/ui/toast/ToastContainer";
-
-// Import these normally - they're named exports and dynamic() was causing issues
-import { ZipDownloadContainer } from "../components/ui/zip-download/ZipDownloadContainer";
-import { UploadRecoveryModal } from "../components/uppy/UploadRecoveryModal";
-import { AuthProvider, useAuth } from "../context/AuthProvider";
-import { useOrderStatusPolling } from "../hooks/queries/useOrderStatusPolling";
-import { DelayedLoadingOverlay } from "../hooks/useDelayedLoadingOverlay";
-import { useIsMobile } from "../hooks/useIsMobile";
-import { useUploadRecovery } from "../hooks/useUploadRecovery";
-import { initDevTools } from "../lib/dev-tools";
-import { useBundleLoading, dynamicWithLoading, setNavigationLoadingState } from "../lib/dynamicWithLoading";
-import { makeQueryClient } from "../lib/react-query";
-import { useAuthStore, useThemeStore } from "../store";
-import { useUnifiedStore } from "../store/unifiedStore";
 
 // Routes that should use the auth layout (login template)
 const AUTH_ROUTES = [
@@ -245,7 +241,7 @@ function AppContent({ Component, pageProps }: AppProps) {
     }
 
     // Track all navigation start
-    const handleRouteChangeStart = (url: string) => {
+    const handleRouteChangeStart = () => {
       // Set navigation state immediately for all route changes
       isGalleryNavigatingRef.current = true;
       setIsGalleryNavigating(true);
@@ -290,13 +286,29 @@ function AppContent({ Component, pageProps }: AppProps) {
     router.events.on("routeChangeComplete", handleRouteChangeComplete);
     router.events.on("routeChangeError", handleRouteChangeError);
     
+    // Note: Next.js Link components with prefetch={true} automatically prefetch
+    // when links are visible in the viewport (using Intersection Observer).
+    // This is more efficient than manual prefetching on hover.
+    // All Link components should have prefetch={true} set.
+    
     // Also intercept clicks on all internal links to set state immediately
     // This ensures overlay shows even before routeChangeStart fires
     const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const link = target.closest('a[href^="/"]') as HTMLAnchorElement;
+      const target = e.target;
+      // e.target might be a text node or other non-Element, so we need to check
+      if (!target) {
+        return;
+      }
       
-      if (link && link.href) {
+      // Get the element - if target is not an Element, get parentElement
+      const element = target instanceof Element ? target : (target as Node).parentElement;
+      if (!element || typeof element.closest !== 'function') {
+        return;
+      }
+      
+      const link = element.closest('a[href^="/"]');
+      
+      if (link && link instanceof HTMLAnchorElement && link.href) {
         try {
           const url = new URL(link.href);
           // Only handle internal links (same origin)

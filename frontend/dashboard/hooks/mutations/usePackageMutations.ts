@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -16,7 +17,7 @@ export function useCreatePackage() {
     mutationFn: (data: PackageFormData) => api.packages.create(data),
     onSuccess: () => {
       // Invalidate all package lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
     },
   });
 }
@@ -29,9 +30,9 @@ export function useUpdatePackage() {
       api.packages.update(packageId, data),
     onSuccess: (_, variables) => {
       // Invalidate specific package detail
-      queryClient.invalidateQueries({ queryKey: queryKeys.packages.detail(variables.packageId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packages.detail(variables.packageId) });
       // Invalidate all package lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
     },
   });
 }
@@ -45,7 +46,7 @@ export function useDeletePackage() {
       // Remove specific package from cache
       queryClient.removeQueries({ queryKey: queryKeys.packages.detail(packageId) });
       // Invalidate all package lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.packages.lists() });
     },
   });
 }

@@ -1,11 +1,10 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useDeleteFinalImage } from "./mutations/useOrderMutations";
 import { formatApiError } from "../lib/api-service";
 import { queryKeys } from "../lib/react-query";
 import type { GalleryImage } from "../types";
-
+import { useDeleteFinalImage } from "./mutations/useOrderMutations";
 import { useToast } from "./useToast";
 
 interface UseFinalImageDeleteOptions {
@@ -25,8 +24,6 @@ export const useFinalImageDelete = ({
   const queryClient = useQueryClient();
   const deleteFinalImageMutation = useDeleteFinalImage();
 
-  const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
-  const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [deletedImageKeys, setDeletedImageKeys] = useState<Set<string>>(new Set());
   const deletingImagesRef = useRef<Set<string>>(new Set());
@@ -86,7 +83,7 @@ export const useFinalImageDelete = ({
 
         // Check if this was the last image by querying cache (after optimistic update)
         // The mutation's onMutate already optimistically removed the image from cache
-        const currentImages = queryClient.getQueryData<any[]>(
+        const currentImages = queryClient.getQueryData<GalleryImage[]>(
           queryKeys.orders.finalImages(galleryIdStr, orderIdStr)
         );
         const wasLastImage = !currentImages || currentImages.length === 0;
@@ -125,7 +122,7 @@ export const useFinalImageDelete = ({
         successToastBatchRef.current += 1;
 
         // If there's already a pending toast, don't reset the timeout, just increment count
-        if (!successToastTimeoutRef.current) {
+        if (successToastTimeoutRef.current === null) {
           // Only set timeout if one doesn't exist
           successToastTimeoutRef.current = setTimeout(() => {
             const count = successToastBatchRef.current;
@@ -154,7 +151,7 @@ export const useFinalImageDelete = ({
         const errorMessage = formatApiError(err);
 
         // If there's already a pending toast, don't reset the timeout, just increment count
-        if (!errorToastTimeoutRef.current) {
+        if (errorToastTimeoutRef.current === null) {
           // Only set timeout if one doesn't exist
           errorToastTimeoutRef.current = setTimeout(() => {
             const count = errorToastBatchRef.current;
@@ -171,15 +168,13 @@ export const useFinalImageDelete = ({
       }
     },
     [
+      deleteFinalImageMutation,
       galleryId,
       orderId,
+      queryClient,
+      showToast,
       setOptimisticFinalsBytes,
       deletingImages,
-      queryClient,
-      galleryIdStr,
-      orderIdStr,
-      showToast,
-      deleteFinalImageMutation,
     ]
   );
 

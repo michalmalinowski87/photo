@@ -1,4 +1,5 @@
 import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
@@ -35,9 +36,9 @@ export function useActiveOrders(
     queryKey: queryKeys.dashboard.activeOrders(params),
     queryFn: async () => {
       const response = await api.orders.list({
-        excludeDeliveryStatus: params?.excludeDeliveryStatus || "DELIVERED",
-        page: params?.page || 1,
-        itemsPerPage: params?.itemsPerPage || 5,
+        excludeDeliveryStatus: params?.excludeDeliveryStatus ?? "DELIVERED",
+        page: params?.page ?? 1,
+        itemsPerPage: params?.itemsPerPage ?? 5,
       });
 
       // Extract orders from paginated response

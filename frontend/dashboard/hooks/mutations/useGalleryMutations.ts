@@ -6,6 +6,39 @@ import { refetchFirstPageOnly } from "../../lib/react-query-helpers";
 import type { Gallery, GalleryImage } from "../../types";
 import { useOrderStatusPolling } from "../queries/useOrderStatusPolling";
 
+interface InfiniteGalleryPage {
+  items: Gallery[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+
+interface InfiniteGalleryData {
+  pages: InfiniteGalleryPage[];
+  pageParams?: (string | null)[];
+}
+
+interface InfiniteImagePage {
+  images: GalleryImage[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  totalCount?: number;
+  stats?: {
+    totalCount?: number;
+    selectedCount?: number;
+    unselectedCount?: number;
+  };
+}
+
+interface InfiniteImageData {
+  pages: InfiniteImagePage[];
+  pageParams?: (string | null)[];
+  stats?: {
+    totalCount?: number;
+    selectedCount?: number;
+    unselectedCount?: number;
+  };
+}
+
 export function useCreateGallery() {
   const queryClient = useQueryClient();
 
@@ -87,16 +120,17 @@ export function useUpdateGallery() {
             old &&
             typeof old === "object" &&
             "pages" in old &&
-            Array.isArray((old as any).pages)
+            Array.isArray((old as InfiniteGalleryData).pages)
           ) {
+            const infiniteData = old as InfiniteGalleryData;
             return {
-              ...old,
-              pages: (old as any).pages.map((page: any) => ({
+              ...infiniteData,
+              pages: infiniteData.pages.map((page) => ({
                 ...page,
                 items:
                   page.items?.map((gallery: Gallery) =>
                     gallery.galleryId === galleryId ? { ...gallery, ...data } : gallery
-                  ) || [],
+                  ) ?? [],
               })),
             };
           }
@@ -242,16 +276,17 @@ export function useUpdateGalleryName() {
             old &&
             typeof old === "object" &&
             "pages" in old &&
-            Array.isArray((old as any).pages)
+            Array.isArray((old as InfiniteGalleryData).pages)
           ) {
+            const infiniteData = old as InfiniteGalleryData;
             return {
-              ...old,
-              pages: (old as any).pages.map((page: any) => ({
+              ...infiniteData,
+              pages: infiniteData.pages.map((page) => ({
                 ...page,
                 items:
                   page.items?.map((gallery: Gallery) =>
                     gallery.galleryId === galleryId ? { ...gallery, galleryName } : gallery
-                  ) || [],
+                  ) ?? [],
               })),
             };
           }
@@ -316,18 +351,19 @@ export function useUpdateGalleryName() {
               old &&
               typeof old === "object" &&
               "pages" in old &&
-              Array.isArray((old as any).pages)
+              Array.isArray((old as InfiniteGalleryData).pages)
             ) {
+              const infiniteData = old as InfiniteGalleryData;
               return {
-                ...old,
-                pages: (old as any).pages.map((page: any) => ({
+                ...infiniteData,
+                pages: infiniteData.pages.map((page) => ({
                   ...page,
                   items:
                     page.items?.map((gallery: Gallery) =>
                       gallery.galleryId === variables.galleryId
                         ? { ...gallery, galleryName: variables.galleryName }
                         : gallery
-                    ) || [],
+                    ) ?? [],
                 })),
               };
             }
@@ -369,7 +405,7 @@ export function useDeleteGallery() {
       });
 
       // Snapshot previous list queries for rollback
-      const previousListQueries = new Map<string, any>();
+      const previousListQueries = new Map<string, Gallery[] | InfiniteGalleryData>();
       queryClient
         .getQueriesData({
           predicate: (query) => {
@@ -382,9 +418,9 @@ export function useDeleteGallery() {
           },
         })
         .forEach(([queryKey, data]) => {
-          if (data) {
+          if (data && (Array.isArray(data) || (typeof data === "object" && "pages" in data))) {
             const key = JSON.stringify(queryKey);
-            previousListQueries.set(key, data);
+            previousListQueries.set(key, data as Gallery[] | InfiniteGalleryData);
           }
         });
 
@@ -410,14 +446,15 @@ export function useDeleteGallery() {
             old &&
             typeof old === "object" &&
             "pages" in old &&
-            Array.isArray((old as any).pages)
+            Array.isArray((old as InfiniteGalleryData).pages)
           ) {
+            const infiniteData = old as InfiniteGalleryData;
             return {
-              ...old,
-              pages: (old as any).pages.map((page: any) => ({
+              ...infiniteData,
+              pages: infiniteData.pages.map((page) => ({
                 ...page,
                 items:
-                  page.items?.filter((gallery: Gallery) => gallery.galleryId !== galleryId) || [],
+                  page.items?.filter((gallery: Gallery) => gallery.galleryId !== galleryId) ?? [],
               })),
             };
           }
@@ -741,11 +778,12 @@ export function useDeleteGalleryImage() {
               old &&
               typeof old === "object" &&
               "pages" in old &&
-              Array.isArray((old as any).pages)
+              Array.isArray((old as InfiniteImageData).pages)
             ) {
               // Calculate total deleted count across all pages for stats update
               let totalDeletedFromQuery = 0;
-              const updatedPages = (old as any).pages.map((page: any) => {
+              const infiniteData = old as InfiniteImageData;
+              const updatedPages = infiniteData.pages.map((page) => {
                 if (!Array.isArray(page.images)) {
                   return page;
                 }
@@ -768,19 +806,19 @@ export function useDeleteGalleryImage() {
                 firstPage.totalCount = Math.max(0, firstPage.totalCount - totalDeletedFromQuery);
               }
               // Update stats in the overall query if it exists at the root level
-              if ((old as any).stats && typeof (old as any).stats.totalCount === "number") {
+              if (infiniteData.stats && typeof infiniteData.stats.totalCount === "number") {
                 return {
-                  ...old,
+                  ...infiniteData,
                   pages: updatedPages,
                   stats: {
-                    ...(old as any).stats,
-                    totalCount: Math.max(0, (old as any).stats.totalCount - totalDeletedFromQuery),
+                    ...infiniteData.stats,
+                    totalCount: Math.max(0, infiniteData.stats.totalCount - totalDeletedFromQuery),
                   },
                 };
               }
 
               return {
-                ...old,
+                ...infiniteData,
                 pages: updatedPages,
               };
             }
@@ -982,7 +1020,7 @@ export function useUploadCoverPhoto() {
             await api.galleries.update(galleryId, { coverPhotoUrl: fetchedUrl });
             return { success: true, coverPhotoUrl: fetchedUrl };
           }
-        } catch (pollErr) {
+        } catch {
           // Continue polling on error
         }
       }

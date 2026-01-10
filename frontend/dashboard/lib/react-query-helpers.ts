@@ -228,7 +228,7 @@ export async function refetchFirstPageOnly(
         },
         refetchType: "none", // Don't refetch, just notify subscribers
       });
-    } catch (error) {
+    } catch (_error) {
       // Log error but don't fail the entire operation
     }
   });
@@ -275,7 +275,7 @@ export async function resetInfiniteQueryAndRefetchFirstPage(
         queryKey,
         refetchType: "active",
       });
-    } catch (error) {
+    } catch (_error) {
       // Log error but don't fail the entire operation
     }
   });

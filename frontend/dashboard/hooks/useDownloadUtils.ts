@@ -1,18 +1,13 @@
 import { useCallback } from "react";
 
+import api, { formatApiError } from "../lib/api-service";
 import { useDownloadStore } from "../store";
-import { formatApiError } from "../lib/api-service";
-import { useDownloadFinalZip, useDownloadZip } from "./mutations/useOrderMutations";
-import api from "../lib/api-service";
 
 /**
  * Hook that provides download utility functions using React Query mutations
  * These functions handle polling, state management, and file downloads
  */
 export function useDownloadUtils() {
-  const downloadFinalZipMutation = useDownloadFinalZip();
-  const downloadZipMutation = useDownloadZip();
-
   const downloadFinals = useCallback(
     (galleryId: string, orderId: string): void => {
       const { addDownload, updateDownload, removeDownload } = useDownloadStore.getState();
@@ -34,7 +29,7 @@ export function useDownloadUtils() {
             fileCount,
             startedAt,
           });
-        } catch (err) {
+        } catch {
           // If we can't get file count, just start without it
           addDownload(downloadId, {
             orderId,
@@ -92,7 +87,7 @@ export function useDownloadUtils() {
         void pollForZip();
       });
     },
-    [downloadFinalZipMutation]
+    []
   );
 
   const downloadZip = useCallback(
@@ -153,7 +148,7 @@ export function useDownloadUtils() {
 
       void pollForZip();
     },
-    [downloadZipMutation]
+    []
   );
 
   return {

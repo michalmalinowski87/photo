@@ -19,7 +19,6 @@ export const ZipDownloadProgress = ({
   galleryId: _galleryId,
   status,
   error,
-  fileCount,
   totalSize,
   startedAt,
   onDismiss,

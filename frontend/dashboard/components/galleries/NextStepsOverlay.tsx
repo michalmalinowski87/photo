@@ -148,7 +148,7 @@ export const NextStepsOverlay = () => {
         businessInfo?.tutorialNextStepsDisabled === true ||
         businessInfo?.tutorialClientSendDisabled === true;
       setTutorialDisabled(disabled ?? false);
-    } catch (error) {
+    } catch (_error) {
       // Default to showing if we can't load preference
       setTutorialDisabled(false);
     }
@@ -318,9 +318,7 @@ export const NextStepsOverlay = () => {
     const newExpanded = shouldBeVisible
       ? justFinishedCreating
         ? true
-        : persistedExpanded !== undefined
-          ? persistedExpanded
-          : true
+        : persistedExpanded ?? true
       : Boolean(persistedExpanded);
 
     // Update ref to track gallery creation loading state for next render
@@ -363,6 +361,7 @@ export const NextStepsOverlay = () => {
     // REMOVED nextStepsOverlayExpanded from dependencies to prevent effect from re-running on user actions
     setOverlayVisible,
     setOverlayExpanded,
+    setNextStepsOverlayExpanded,
     currentOverlayVisible,
   ]);
 
@@ -604,7 +603,7 @@ export const NextStepsOverlay = () => {
 
           // React Query will automatically refetch and update the cache
           // No need for manual optimistic updates
-        } catch (error) {
+        } catch (_error) {
           // Reset flag on error so user can retry
           isUpdatingCompletionRef.current = false;
         }
@@ -621,9 +620,11 @@ export const NextStepsOverlay = () => {
     allCompleted,
     nextStepsOverlayExpanded,
     gallery?.galleryId, // Only depend on galleryId, not entire gallery object
+    gallery?.nextStepsCompleted,
     galleryLoading,
     steps.length,
     setNextStepsOverlayExpanded,
+    setOverlayExpanded,
     galleryCompletedSetup,
     updateGalleryMutation,
   ]);
@@ -661,7 +662,7 @@ export const NextStepsOverlay = () => {
 
       setTutorialDisabled(true);
       showToast("info", "Ukryto", "Ten panel nie będzie już wyświetlany");
-    } catch (error) {
+    } catch (_error) {
       showToast("error", "Błąd", "Nie udało się zapisać preferencji");
     } finally {
       setIsSavingPreference(false);

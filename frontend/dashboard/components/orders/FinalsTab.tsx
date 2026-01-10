@@ -92,7 +92,7 @@ export function FinalsTab({
       setBulkDeleteConfirmOpen(false);
       clearSelection();
       toggleSelectionMode();
-    } catch (error) {
+    } catch (_error) {
       // Error handling should be done by parent
     } finally {
       setIsBulkDeleting(false);

@@ -16,7 +16,9 @@ import { shareTokensWithOtherDomains } from "../lib/token-sharing";
 export const dynamic = "force-dynamic";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
+  name: string;
 }
 
 export default function Login() {

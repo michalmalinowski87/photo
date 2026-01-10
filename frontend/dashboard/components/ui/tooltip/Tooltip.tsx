@@ -18,10 +18,7 @@ export const Tooltip = ({
   maxWidth,
   fullWidth = false,
 }: TooltipProps) => {
-  // Don't render tooltip if content is empty or undefined
-  if (!content || content.trim() === "") {
-    return <>{children}</>;
-  }
+  // Hooks must be called unconditionally - move before early return
   const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -133,6 +130,11 @@ export const Tooltip = ({
       return "right-full top-1/2 -translate-y-1/2 -mr-0.5 border-4 border-transparent border-r-gray-700 dark:border-r-gray-800";
     }
   };
+
+  // Don't render tooltip if content is empty or undefined
+  if (!content || content.trim() === "") {
+    return <>{children}</>;
+  }
 
   const wrapperClass = fullWidth ? "group relative block w-full" : "group relative inline-block";
 

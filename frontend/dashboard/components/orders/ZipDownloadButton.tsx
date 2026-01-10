@@ -8,6 +8,26 @@ import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
 import Button from "../ui/button/Button";
 
+interface ZipProgress {
+  processed: number;
+  total: number;
+  percent: number;
+  status?: string;
+  message?: string;
+  error?: string;
+}
+
+interface ZipStatus {
+  status: "ready" | "generating" | "not_started" | "error";
+  generating: boolean;
+  ready: boolean;
+  zipExists: boolean;
+  zipSize?: number;
+  elapsedSeconds?: number;
+  progress?: ZipProgress;
+  error?: string;
+}
+
 interface ZipDownloadButtonProps {
   galleryId: string;
   orderId: string;
@@ -34,12 +54,12 @@ export function ZipDownloadButton({
   // This allows us to show loader and progress immediately when generation starts
   const orderCache = queryClient.getQueryData<Order>(queryKeys.orders.detail(galleryId, orderId));
   const cacheZipGenerating =
-    type === "final" ? orderCache?.finalZipGenerating || false : orderCache?.zipGenerating || false;
+    type === "final" ? orderCache?.finalZipGenerating ?? false : orderCache?.zipGenerating ?? false;
   const cacheZipReady =
     type === "final"
-      ? (orderCache as any)?.finalZipReady || false
-      : (orderCache as any)?.zipReady || false;
-  const cacheProgress = orderCache?.zipProgress as any;
+      ? (orderCache as Order & { finalZipReady?: boolean })?.finalZipReady ?? false
+      : (orderCache as Order & { zipReady?: boolean })?.zipReady ?? false;
+  const cacheProgress = orderCache?.zipProgress as ZipProgress | undefined;
 
   const { generating, ready, progress, zipStatus } = useZipStatusPolling({
     galleryId,
@@ -49,7 +69,7 @@ export function ZipDownloadButton({
   });
 
   // Use progress from polling if available, otherwise fall back to cache
-  const effectiveProgress = progress || cacheProgress;
+  const effectiveProgress: ZipProgress | undefined = progress ?? cacheProgress;
 
   const downloadZipMutation = useDownloadZip();
   const downloadFinalZipMutation = useDownloadFinalZip();
@@ -65,12 +85,12 @@ export function ZipDownloadButton({
   // Use cache flag if ZIP status polling hasn't fetched yet
   // This ensures we show loader immediately when generation starts (from dashboard status poll)
   // Backend sets isGenerating flag, so we trust it - no guessing!
-  const isGenerating = generating || cacheZipGenerating;
+  const isGenerating = generating ?? cacheZipGenerating;
 
   // Use ready flag from ZIP status polling (authoritative source)
   // Fall back to cache ready flag if ZIP status poll hasn't run yet
   // Backend sets ready=true when ZIP exists in S3, so we trust it - no guessing!
-  const effectiveReady = ready || cacheZipReady;
+  const effectiveReady = ready ?? cacheZipReady;
 
   // Determine button state
   // Button should always be visible when order is in the right state, but disabled until ZIP is ready
@@ -118,12 +138,12 @@ export function ZipDownloadButton({
     // If generating but no progress data yet, just show button with loader (no status info)
   } else if (downloadZipMutation.isPending || downloadFinalZipMutation.isPending) {
     buttonText = `Pobieranie ${zipTypeLabel}...`;
-  } else if ((zipStatus as any)?.status === "error" || (progress as any)?.error) {
+  } else if ((zipStatus as ZipStatus | undefined)?.status === "error" || effectiveProgress?.error) {
     // ZIP generation failed - show error (only if we have error data)
     buttonText = `Błąd generowania ${zipTypeLabel}`;
-    const errorProgress = (progress as any) || (zipStatus as any)?.progress;
+    const errorProgress = effectiveProgress ?? (zipStatus as ZipStatus | undefined)?.progress;
     statusInfo =
-      errorProgress?.error || errorProgress?.message || "Wystąpił błąd podczas generowania ZIP";
+      errorProgress?.error ?? errorProgress?.message ?? "Wystąpił błąd podczas generowania ZIP";
   } else if (effectiveReady) {
     // ZIP is ready
     buttonText = `Pobierz ${zipTypeLabel}`;

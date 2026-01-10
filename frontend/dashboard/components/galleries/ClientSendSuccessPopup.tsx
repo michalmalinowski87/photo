@@ -41,7 +41,7 @@ export const ClientSendSuccessPopup = ({
         if (disabled) {
           onClose();
         }
-      } catch (error) {
+      } catch (_error) {
         // Default to showing if we can't load preference
         setTutorialDisabled(false);
       }
@@ -63,7 +63,7 @@ export const ClientSendSuccessPopup = ({
         setTutorialDisabled(true);
         showToast("info", "Ukryto", "Ten komunikat nie będzie już wyświetlany");
         onClose();
-      } catch (error) {
+      } catch (_error) {
         showToast("error", "Błąd", "Nie udało się zapisać preferencji");
         setDontShowAgain(false);
       } finally {

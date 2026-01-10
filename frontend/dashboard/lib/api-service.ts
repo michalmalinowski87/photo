@@ -752,7 +752,17 @@ class ApiService {
       }
 
       try {
-        const result = await this._request(`/galleries/${galleryId}/validate-upload-limits`, {
+        const result = await this._request<{
+          withinLimit: boolean;
+          uploadedSizeBytes: number;
+          originalsLimitBytes?: number;
+          finalsLimitBytes?: number;
+          excessBytes?: number;
+          nextTierPlan?: string;
+          nextTierPriceCents?: number;
+          nextTierLimitBytes?: number;
+          isSelectionGallery?: boolean;
+        }>(`/galleries/${galleryId}/validate-upload-limits`, {
           method: "POST",
           body: JSON.stringify({
             uploadSizeBytes: uploadSizeBytes ?? 0,
@@ -2111,7 +2121,7 @@ class ApiService {
     }> => {
       return await this._request(`/auth/dev/trigger-deletion/${userId}`, {
         method: "POST",
-        body: JSON.stringify(options || { immediate: true }),
+        body: JSON.stringify(options ?? { immediate: true }),
       });
     },
 
@@ -2120,7 +2130,7 @@ class ApiService {
      */
     devTriggerInactivityScanner: async (): Promise<{
       message: string;
-      result: any;
+      result: unknown;
     }> => {
       return await this._request("/auth/dev/trigger-inactivity-scanner", {
         method: "POST",

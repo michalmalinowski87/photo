@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { useAdaptivePolling } from "./useAdaptivePolling";
+
 import api from "../lib/api-service";
+import { useAdaptivePolling } from "./useAdaptivePolling";
 
 interface ZipStatus {
   status: "ready" | "generating" | "not_started";
@@ -36,7 +37,8 @@ export function useZipStatusPolling({
   enabled = true,
 }: UseZipStatusPollingOptions) {
   const queryClient = useQueryClient();
-  const { shouldPoll, shouldPollImmediately, updateLastPollTime } = useAdaptivePolling();
+  const { interval: adaptiveInterval, shouldPollImmediately, updateLastPollTime } = useAdaptivePolling();
+  const shouldPoll = adaptiveInterval !== null;
 
   // Calculate interval for React Query (15s when should poll, false otherwise)
   const interval = shouldPoll && enabled ? 15000 : false;

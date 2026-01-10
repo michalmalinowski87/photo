@@ -252,6 +252,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
             <Tooltip content={fullName} side="top" align="start">
               <Link
                 href={`/galleries/${gallery.galleryId}`}
+                prefetch={true}
                 className="block font-semibold text-base text-photographer-heading dark:text-white hover:text-photographer-accent dark:hover:text-photographer-accent transition-colors line-clamp-2"
                 onClick={() => {
                   if (typeof window !== "undefined") {
@@ -259,7 +260,10 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
                     sessionStorage.setItem(referrerKey, window.location.pathname);
                   }
                 }}
-                onMouseEnter={() => onPrefetch?.(gallery.galleryId)}
+                onMouseEnter={() => {
+                  // Prefetch gallery data (Next.js Link handles route bundle prefetching automatically)
+                  onPrefetch?.(gallery.galleryId);
+                }}
               >
                 {displayName || gallery.galleryId}
               </Link>
@@ -267,6 +271,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
           ) : (
             <Link
               href={`/galleries/${gallery.galleryId}`}
+              prefetch={true}
               className="block font-semibold text-base text-photographer-heading dark:text-white hover:text-photographer-accent dark:hover:text-photographer-accent transition-colors line-clamp-2"
               onClick={() => {
                 if (typeof window !== "undefined") {
@@ -274,7 +279,10 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
                   sessionStorage.setItem(referrerKey, window.location.pathname);
                 }
               }}
-              onMouseEnter={() => onPrefetch?.(gallery.galleryId)}
+              onMouseEnter={() => {
+                // Prefetch gallery data (Next.js Link handles route bundle prefetching automatically)
+                onPrefetch?.(gallery.galleryId);
+              }}
             >
               {displayName || gallery.galleryId}
             </Link>

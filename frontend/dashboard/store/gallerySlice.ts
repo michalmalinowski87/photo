@@ -7,6 +7,7 @@ import { StateCreator } from "zustand";
  * This slice is kept for type compatibility with UnifiedStore.
  * Gallery types should be imported from types/index.ts.
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface GallerySlice {
   // No state - all gallery data is in React Query cache
 }

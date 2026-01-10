@@ -140,7 +140,7 @@ export async function calculateBestPlanSafe(
 ): Promise<CalculatePlanResponse | null> {
   try {
     return await calculateBestPlan(galleryId, duration, queryClient);
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }

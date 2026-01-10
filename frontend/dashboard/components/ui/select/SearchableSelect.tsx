@@ -12,7 +12,6 @@ interface SearchableSelectProps {
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  searchPlaceholder?: string;
   emptyMessage?: string;
   className?: string;
   disabled?: boolean;
@@ -30,7 +29,6 @@ export const SearchableSelect = ({
   value,
   onChange,
   placeholder = "Wybierz opcję",
-  searchPlaceholder = "Szukaj...",
   emptyMessage = "Brak wyników",
   className = "",
   disabled = false,

@@ -11,6 +11,7 @@ export const getServerSideProps: GetServerSideProps = () => {
 
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
+import type { Order } from "../../types";
 
 interface DeletionStatus {
   exists: boolean;
@@ -64,7 +65,7 @@ export default function TestGalleryExpiry() {
 
     // Complete upload - construct the full S3 key (backend returns galleries/{galleryId}/{key})
     // If presignResponse.key exists, use it; otherwise construct it
-    const s3Key = presignResponse.key || `galleries/${galleryId}/${key}`;
+    const s3Key = presignResponse.key ?? `galleries/${galleryId}/${key}`;
 
     if (!s3Key) {
       const errorMsg = `Failed to get S3 key from presign response. Response: ${JSON.stringify(presignResponse)}`;
@@ -138,10 +139,12 @@ export default function TestGalleryExpiry() {
 
       // Get orders for the gallery
       const ordersResponse = await api.orders.getByGallery(gallery.galleryId);
-      const orders = Array.isArray(ordersResponse) ? ordersResponse : ordersResponse.items || [];
+      const orders: Order[] = Array.isArray(ordersResponse)
+        ? ordersResponse
+        : ordersResponse.items ?? [];
       const order = orders[0];
 
-      if (!order) {
+      if (!order?.orderId) {
         throw new Error("Order not found");
       }
 
@@ -162,8 +165,11 @@ export default function TestGalleryExpiry() {
 
       // Mark final upload as complete (optional - not critical for expiry testing)
       try {
-        if ((api.orders as any).markFinalUploadComplete) {
-          await (api.orders as any).markFinalUploadComplete(gallery.galleryId, order.orderId);
+        const ordersApi = api.orders as {
+          markFinalUploadComplete?: (galleryId: string, orderId: string) => Promise<unknown>;
+        };
+        if (ordersApi.markFinalUploadComplete) {
+          await ordersApi.markFinalUploadComplete(gallery.galleryId, order.orderId);
         }
       } catch (finalErr) {
         console.warn("Failed to mark final upload complete (non-critical):", finalErr);
@@ -204,15 +210,19 @@ export default function TestGalleryExpiry() {
 
       // Start polling for deletion status
       setIsPolling(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       let errorMessage = "Nieznany błąd";
-      if (error?.body?.error === "Missing required environment variables") {
+      const errorObj = error as {
+        body?: { error?: string; message?: string };
+        message?: string;
+      };
+      if (errorObj?.body?.error === "Missing required environment variables") {
         errorMessage =
           "Brak wymaganych zmiennych środowiskowych. Upewnij się, że infrastruktura została wdrożona z najnowszym kodem.";
-      } else if (error?.body?.message) {
-        errorMessage = error.body.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
+      } else if (errorObj?.body?.message) {
+        errorMessage = errorObj.body.message;
+      } else if (errorObj?.message) {
+        errorMessage = errorObj.message;
       } else {
         errorMessage = String(error);
       }
@@ -243,15 +253,20 @@ export default function TestGalleryExpiry() {
           showToast("success", "Sukces", "Galerie została usunięta!");
         } else {
           // Update status
+          const galleryWithExpiry = gallery as {
+            expiresAt?: string;
+            expiryScheduleName?: string;
+          };
           setDeletionStatus({
             exists: true,
-            expiresAt: (gallery as any).expiresAt,
-            scheduleName: (gallery as any).expiryScheduleName,
+            expiresAt: galleryWithExpiry.expiresAt,
+            scheduleName: galleryWithExpiry.expiryScheduleName,
             deleted: false,
           });
         }
-      } catch (error: any) {
-        if (error.status === 404) {
+      } catch (error: unknown) {
+        const errorWithStatus = error as { status?: number };
+        if (errorWithStatus.status === 404) {
           // Gallery deleted
           setDeletionStatus((prev) => ({
             exists: prev?.exists ?? true,

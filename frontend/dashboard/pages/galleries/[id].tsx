@@ -3,22 +3,6 @@ import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useRef } from "react";
 
-
-// Lazy load heavy components to reduce bundle size
-// Using dynamicWithLoading to track bundle loading state for delayed overlay
-const NextStepsOverlay = dynamicWithLoading(
-  () => import("../../components/galleries/NextStepsOverlay.lazy"),
-  {
-    ssr: false,
-  }
-);
-
-const PaymentConfirmationModal = dynamicWithLoading(
-  () => import("../../components/galleries/PaymentConfirmationModal"),
-  {
-    ssr: false,
-  }
-);
 import { useGalleryType } from "../../components/hocs/withGalleryType";
 import { DenyChangeRequestModal } from "../../components/orders/DenyChangeRequestModal";
 import Badge from "../../components/ui/badge/Badge";
@@ -43,6 +27,22 @@ import { formatPrice } from "../../lib/format-price";
 import { formatOrderDisplay } from "../../lib/orderDisplay";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
+
+// Lazy load heavy components to reduce bundle size
+// Using dynamicWithLoading to track bundle loading state for delayed overlay
+const NextStepsOverlay = dynamicWithLoading(
+  () => import("../../components/galleries/NextStepsOverlay.lazy"),
+  {
+    ssr: false,
+  }
+);
+
+const PaymentConfirmationModal = dynamicWithLoading(
+  () => import("../../components/galleries/PaymentConfirmationModal"),
+  {
+    ssr: false,
+  }
+);
 
 // Prevent static generation - this page uses client hooks and dynamic routes
 export const getServerSideProps: GetServerSideProps = () => {
@@ -209,7 +209,7 @@ async function pollGalleryPaymentStatus(
         // Continue polling
         setTimeout(poll, pollInterval);
       }
-    } catch (error) {
+    } catch (_error) {
       // On error, just reload once and stop polling
       if (reloadGallery) {
         await reloadGallery();
@@ -297,6 +297,10 @@ export default function GalleryDetail() {
   // Check if we're coming from gallery creation - show loading overlay until fully loaded
   // Move hooks before conditional return to avoid React Hooks rules violation
   const galleryCreationLoading = useGalleryCreationLoading();
+  
+  // Track when JavaScript bundles are being loaded (for lazy-loaded components)
+  // Move hook before conditional return to avoid React Hooks rules violation
+  const isBundleLoading = useBundleLoading();
 
   // Clear gallery creation flow state when gallery detail page is ready
   const galleryCreationFlowActive = useUnifiedStore((state) => state.galleryCreationFlowActive);
@@ -311,7 +315,7 @@ export default function GalleryDetail() {
     refetch: refetchOrders,
   } = useOrders(galleryIdForQuery);
 
-  const loadOrders = async (): Promise<void> => {
+  const loadOrders = useCallback(async (): Promise<void> => {
     if (!galleryIdForQuery) {
       return;
     }
@@ -335,11 +339,9 @@ export default function GalleryDetail() {
       }
 
       // For other errors, show toast
-      // eslint-disable-next-line no-console
-
       showToast("error", "Błąd", formatApiError(err) ?? "Nie udało się załadować zleceń");
     }
-  };
+  }, [galleryIdForQuery, refetchOrders, logDataLoad, logDataLoaded, logDataError, showToast]);
 
   // Don't render gallery detail if this is a filter route - let Next.js handle static routes
   // Check this AFTER hooks to avoid conditional hook call
@@ -521,7 +523,7 @@ export default function GalleryDetail() {
             } else {
               setIsRedirectingToOrder(false);
             }
-          } catch (err) {
+          } catch (_err) {
             setIsRedirectingToOrder(false);
           }
         };
@@ -774,9 +776,6 @@ export default function GalleryDetail() {
     denyChangeRequestMutation.isPending ||
     payGalleryMutation.isPending ||
     sendGalleryToClientMutation.isPending;
-  
-  // Track when JavaScript bundles are being loaded (for lazy-loaded components)
-  const isBundleLoading = useBundleLoading();
   
   // Combined loading state: mutations OR bundle loading
   const isAnyLoading = isAnyMutationPending || isBundleLoading;

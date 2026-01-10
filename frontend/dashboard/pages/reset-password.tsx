@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
 
 import Button from "../components/ui/button/Button";
-import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import {
   PasswordInputWithStrength,
@@ -14,8 +13,9 @@ import {
 import { initAuth, confirmForgotPassword } from "../lib/auth";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
-  name?: string;
+  name: string;
 }
 
 // Prevent static generation - this page uses client hooks

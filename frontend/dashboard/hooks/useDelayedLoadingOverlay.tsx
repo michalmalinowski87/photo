@@ -58,20 +58,15 @@ interface UseDelayedLoadingOverlayOptions {
 export function useDelayedLoadingOverlay({
   isLoading,
   delay = 400,
-  message,
   minShowDuration = 200,
-}: UseDelayedLoadingOverlayOptions): boolean {
+}: Omit<UseDelayedLoadingOverlayOptions, 'message'>): boolean {
   const [showOverlay, setShowOverlay] = useState(false);
   const delayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const minShowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const overlayShownAtRef = useRef<number | null>(null);
   const loadingStartedAtRef = useRef<number | null>(null);
-  const wasLoadingRef = useRef<boolean>(false);
 
   useEffect(() => {
-    // Track previous loading state
-    const wasLoading = wasLoadingRef.current;
-    wasLoadingRef.current = isLoading;
 
     if (isLoading) {
       // Track when loading started
@@ -86,11 +81,6 @@ export function useDelayedLoadingOverlay({
       }
       
       delayTimeoutRef.current = setTimeout(() => {
-        // Check loading duration at the time the delay elapses
-        const loadingDuration = loadingStartedAtRef.current
-          ? Date.now() - loadingStartedAtRef.current
-          : delay;
-        
         // Show overlay - the delay has elapsed, so user has waited long enough
         setShowOverlay(true);
         overlayShownAtRef.current = Date.now();
@@ -199,11 +189,10 @@ export function DelayedLoadingOverlay({
   delay = 400,
   message,
   minShowDuration = 200,
-}: UseDelayedLoadingOverlayOptions): JSX.Element | null {
+}: UseDelayedLoadingOverlayOptions): React.JSX.Element | null {
   const showOverlay = useDelayedLoadingOverlay({
     isLoading,
     delay,
-    message,
     minShowDuration,
   });
 

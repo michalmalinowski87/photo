@@ -8,8 +8,9 @@ import { Label } from "../components/ui/label";
 import { initAuth, confirmSignUp, resendConfirmationCode } from "../lib/auth";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
-  name?: string;
+  name: string;
 }
 
 // Prevent static generation - this page uses client hooks

@@ -72,7 +72,8 @@ export default function TestUserDeletion() {
     try {
       const result = await api.auth.devTriggerInactivityScanner();
       showToast("success", "Sukces", result.message);
-      console.log("Scanner result:", result.result);
+      // eslint-disable-next-line no-console
+      console.warn("Scanner result:", result.result);
     } catch (err) {
       showToast("error", "Błąd", formatApiError(err as Error));
     } finally {
@@ -238,7 +239,7 @@ export default function TestUserDeletion() {
               Ustaw lastLoginAt na 11 miesięcy temu, a następnie wyzwól skaner - powinien wysłać
               przypomnienie
             </li>
-            <li>Użyj "Usuń natychmiast" aby przetestować pełny proces usuwania bez czekania</li>
+            <li>Użyj &quot;Usuń natychmiast&quot; aby przetestować pełny proces usuwania bez czekania</li>
             <li>Sprawdź status usuwania w ustawieniach konta po wyzwoleniu usunięcia</li>
           </ul>
         </div>

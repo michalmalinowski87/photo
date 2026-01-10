@@ -1,8 +1,7 @@
 import { useState, useCallback } from "react";
 
-import { useUpdateGalleryName } from "./mutations/useGalleryMutations";
 import { formatApiError } from "../lib/api-service";
-
+import { useUpdateGalleryName } from "./mutations/useGalleryMutations";
 import { useToast } from "./useToast";
 
 interface UseGalleryNameEditOptions {

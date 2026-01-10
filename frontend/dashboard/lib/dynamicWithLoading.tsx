@@ -1,4 +1,4 @@
-import dynamic, { type DynamicOptions, type LoaderComponent } from "next/dynamic";
+import dynamic, { type DynamicOptions } from "next/dynamic";
 import { useState, useEffect } from "react";
 
 /**
@@ -77,15 +77,19 @@ export function useBundleLoading(): boolean {
  * Creates a loading component that tracks bundle loading state.
  * This component is rendered by Next.js dynamic() while the bundle is loading.
  */
-function createLoadingTracker(bundleId: string, originalLoading?: React.ComponentType): React.ComponentType {
-  return () => {
+function createLoadingTracker(
+  bundleId: string,
+  originalLoading?: React.ComponentType | ((props: { isLoading?: boolean }) => React.ReactNode)
+): (props: { isLoading?: boolean }) => React.ReactNode {
+  const LoadingTracker = (props: { isLoading?: boolean }) => {
     useEffect(() => {
       // Loading component is rendered = bundle is loading
       loadingBundles.add(bundleId);
       notifyListeners();
       
       if (process.env.NODE_ENV === "development") {
-        console.log("[BundleLoading] Bundle loading started:", bundleId);
+        // eslint-disable-next-line no-console
+        console.warn("[BundleLoading] Bundle loading started:", bundleId);
       }
 
       return () => {
@@ -95,7 +99,8 @@ function createLoadingTracker(bundleId: string, originalLoading?: React.Componen
           loadingBundles.delete(bundleId);
           notifyListeners();
           if (process.env.NODE_ENV === "development") {
-            console.log("[BundleLoading] Bundle loading finished:", bundleId);
+            // eslint-disable-next-line no-console
+            console.warn("[BundleLoading] Bundle loading finished:", bundleId);
           }
         }, 100);
       };
@@ -103,12 +108,15 @@ function createLoadingTracker(bundleId: string, originalLoading?: React.Componen
 
     // Use the original loading component if provided, otherwise return null
     if (originalLoading) {
-      const LoadingComponent = originalLoading;
-      return <LoadingComponent />;
+      // If it's a component type, render it
+      const LoadingComponent = originalLoading as React.ComponentType<{ isLoading?: boolean }>;
+      return <LoadingComponent {...props} />;
     }
 
     return null;
   };
+  LoadingTracker.displayName = `LoadingTracker(${bundleId})`;
+  return LoadingTracker;
 }
 
 /**
@@ -126,23 +134,23 @@ function createLoadingTracker(bundleId: string, originalLoading?: React.Componen
  * });
  * ```
  */
-export function dynamicWithLoading<P = {}>(
+export function dynamicWithLoading<P = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   loader: () => Promise<any>,
   options?: DynamicOptions<P>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): React.ComponentType<any> {
+): React.ComponentType<P> {
   const bundleId = `bundle_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
   // Create loading tracker component
-  const loadingTracker = createLoadingTracker(bundleId, options?.loading as React.ComponentType | undefined);
+  const loadingTracker = createLoadingTracker(
+    bundleId,
+    options?.loading as React.ComponentType | ((props: { isLoading?: boolean }) => React.ReactNode) | undefined
+  );
 
   // Create the dynamic component with our loading tracker
-  // Next.js dynamic() handles the types internally, so we can use any here
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return dynamic(loader as any, {
+  // Next.js dynamic() handles the types internally
+  return dynamic(loader, {
     ...options,
     loading: loadingTracker,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }) as any;
+  });
 }

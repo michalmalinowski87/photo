@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -10,7 +11,7 @@ export function useRequestDeletion() {
       api.auth.requestDeletion(confirmationPhrase),
     onSuccess: () => {
       // Invalidate deletion status to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.deletionStatus() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.deletionStatus() });
     },
   });
 }
@@ -22,7 +23,7 @@ export function useCancelDeletion() {
     mutationFn: () => api.auth.cancelDeletion(),
     onSuccess: () => {
       // Invalidate deletion status to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.deletionStatus() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.deletionStatus() });
     },
   });
 }

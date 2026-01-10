@@ -83,7 +83,7 @@ export const DeleteAccountModal = ({
 
         <div className="mb-6">
           <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Potwierdź wpisując "Potwierdzam"
+            Potwierdź wpisując &quot;Potwierdzam&quot;
           </label>
           <Input
             type="text"

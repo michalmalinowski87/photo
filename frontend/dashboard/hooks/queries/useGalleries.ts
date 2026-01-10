@@ -45,7 +45,7 @@ export function useGallery(
 
       // Handle regular list queries (Gallery[])
       if (Array.isArray(data)) {
-        const galleryFromList = data.find((g: Gallery) => g.galleryId === galleryId);
+        const galleryFromList = (data as Gallery[]).find((g) => g.galleryId === galleryId);
         if (galleryFromList) {
           return galleryFromList;
         }
@@ -97,7 +97,7 @@ export function useGallery(
         throw new Error("Gallery ID is required");
       }
       const gallery = await api.galleries.get(galleryId);
-      return gallery as Gallery;
+      return gallery;
     },
     enabled: !!galleryId,
     initialData,

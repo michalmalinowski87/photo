@@ -275,7 +275,7 @@ const CreateGalleryWizard = ({
       case 3:
         // Check if package is selected OR manual form data exists
         const hasManualPackageData =
-          (data.packageName && data.packageName.trim() !== "") ||
+          (data.packageName?.trim() ?? "") !== "" ||
           data.includedCount > 0 ||
           data.packagePriceCents > 0;
 

@@ -285,7 +285,6 @@ export const ClientStep = ({
                 options={clientOptions}
                 label=""
                 placeholder="Wybierz klienta"
-                searchPlaceholder="Szukaj po imieniu, nazwisku, email..."
                 value={selectedClientId ?? ""}
                 onChange={(value) => {
                   if (value) {

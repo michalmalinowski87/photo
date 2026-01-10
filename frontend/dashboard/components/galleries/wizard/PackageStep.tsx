@@ -138,7 +138,7 @@ export const PackageStep = ({
   useEffect(() => {
     const hasManualData =
       !selectedPackageId &&
-      ((packageName && packageName.trim() !== "") ||
+      ((packageName?.trim() ?? "") !== "" ||
         includedCount > 0 ||
         extraPriceCents > 0 ||
         packagePriceCents > 0);
@@ -184,7 +184,6 @@ export const PackageStep = ({
                 })}
                 label=""
                 placeholder="Wybierz pakiet"
-                searchPlaceholder="Szukaj pakietu..."
                 value={selectedPackageId ?? ""}
                 onChange={(value) => {
                   if (value) {

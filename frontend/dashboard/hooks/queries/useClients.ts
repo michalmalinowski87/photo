@@ -1,4 +1,5 @@
 import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -11,7 +12,7 @@ interface Client {
   isCompany?: boolean;
   companyName?: string;
   nip?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ListResponse<T> {
@@ -46,8 +47,13 @@ export function useClient(
   options?: Omit<UseQueryOptions<Client>, "queryKey" | "queryFn">
 ) {
   return useQuery({
-    queryKey: queryKeys.clients.detail(clientId!),
-    queryFn: () => api.clients.get(clientId!),
+    queryKey: queryKeys.clients.detail(clientId ?? ""),
+    queryFn: () => {
+      if (!clientId) {
+        throw new Error("Client ID is required");
+      }
+      return api.clients.get(clientId);
+    },
     enabled: !!clientId,
     staleTime: 30 * 1000,
     ...options,

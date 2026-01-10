@@ -170,7 +170,7 @@ export default function Settings() {
       ) : deletionStatus?.status === "pendingDeletion" ? (
         // Show only undo deletion banner when pending deletion
         <DeletionPendingBanner
-          deletionScheduledAt={deletionStatus.deletionScheduledAt!}
+          deletionScheduledAt={deletionStatus.deletionScheduledAt ?? new Date().toISOString()}
           deletionReason={deletionStatus.deletionReason}
           onUndo={handleCancelDeletion}
           loading={cancelDeletionMutation.isPending}

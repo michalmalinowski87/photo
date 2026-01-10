@@ -12,27 +12,6 @@ import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
 import { OrderTabs } from "../../../../components/orders/OrderTabs";
 import { OriginalsTab } from "../../../../components/orders/OriginalsTab";
 import { ConfirmDialog } from "../../../../components/ui/confirm/ConfirmDialog";
-
-// Lazy load heavy components to reduce bundle size (~200KB+ savings)
-// Using wrapper files that export as default for proper dynamic() support
-const NextStepsOverlay = dynamic(() => import("../../../../components/galleries/NextStepsOverlay.lazy"), {
-  ssr: false,
-});
-
-const PaymentConfirmationModal = dynamic(
-  () => import("../../../../components/galleries/PaymentConfirmationModal"),
-  {
-    ssr: false,
-  }
-);
-
-const PublishGalleryWizard = dynamic(() => import("../../../../components/galleries/PublishGalleryWizard.lazy"), {
-  ssr: false,
-});
-
-const UppyUploadModal = dynamic(() => import("../../../../components/uppy/UppyUploadModal.lazy"), {
-  ssr: false,
-});
 import { usePayGallery } from "../../../../hooks/mutations/useGalleryMutations";
 import {
   useApproveChangeRequest,
@@ -54,9 +33,26 @@ import { filterDeletedImages, normalizeSelectedKeys } from "../../../../lib/orde
 import { useUnifiedStore } from "../../../../store/unifiedStore";
 import type { GalleryImage } from "../../../../types";
 
-// Order type is imported from types/index.ts
+// Lazy load heavy components to reduce bundle size (~200KB+ savings)
+// Using wrapper files that export as default for proper dynamic() support
+const NextStepsOverlay = dynamic(() => import("../../../../components/galleries/NextStepsOverlay.lazy"), {
+  ssr: false,
+});
 
-// Order type is imported from types/index.ts
+const PaymentConfirmationModal = dynamic(
+  () => import("../../../../components/galleries/PaymentConfirmationModal"),
+  {
+    ssr: false,
+  }
+);
+
+const PublishGalleryWizard = dynamic(() => import("../../../../components/galleries/PublishGalleryWizard.lazy"), {
+  ssr: false,
+});
+
+const UppyUploadModal = dynamic(() => import("../../../../components/uppy/UppyUploadModal.lazy"), {
+  ssr: false,
+});
 
 interface PaymentDetails {
   totalAmountCents: number;
@@ -78,7 +74,7 @@ export default function OrderDetail() {
     pageName: "OrderDetail",
   });
   // Get reloadGallery function from GalleryContext to refresh gallery data after payment
-  const { reloadGallery } = useGallery();
+  const { reloadGallery, gallery: currentGallery } = useGallery();
   const { isNonSelectionGallery } = useGalleryType();
 
   // Import gallery creation flow state
@@ -440,7 +436,8 @@ export default function OrderDetail() {
       !isWalletTopUpRedirect
     ) {
       // Create a unique key for this payment success to prevent re-processing
-      const paymentSuccessKey = `${galleryId}-${paymentSuccess}-${upgradeFlow || limitExceededParam}-${planKeyParam}`;
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+      const paymentSuccessKey = `${galleryIdStr ?? ""}-${paymentSuccess}-${upgradeFlow ?? limitExceededParam}-${planKeyParam ?? ""}`;
 
       // Check if we've already processed this payment success
       if (hasProcessedPaymentSuccessRef.current === paymentSuccessKey) {
@@ -470,8 +467,11 @@ export default function OrderDetail() {
 
         const poll = async (): Promise<void> => {
           try {
+            // Reload gallery once and check the result
             await reloadGallery();
-            const updatedGallery = await reloadGallery();
+
+            // Get the updated gallery from the hook (React Query will have updated it)
+            const updatedGallery = currentGallery;
 
             // Check if plan was updated
             if (updatedGallery?.plan && planKeyParam && updatedGallery.plan === planKeyParam) {
@@ -489,7 +489,7 @@ export default function OrderDetail() {
             } else {
               setTimeout(poll, pollInterval);
             }
-          } catch (error) {
+          } catch (_error) {
             // Error polling for plan update
           }
         };
@@ -499,7 +499,7 @@ export default function OrderDetail() {
 
       void pollForPlanUpdate();
     }
-  }, [galleryId, router.isReady, reloadGallery]);
+  }, [galleryId, router.isReady, reloadGallery, currentGallery]);
 
   // Handle modal close - clear recovery flag if modal was auto-opened from recovery
   const handleUploadModalClose = useCallback(() => {
@@ -910,8 +910,8 @@ export default function OrderDetail() {
             router.isReady && typeof window !== "undefined"
               ? {
                   duration:
-                    new URLSearchParams(window.location.search).get("duration") || undefined,
-                  planKey: new URLSearchParams(window.location.search).get("planKey") || undefined,
+                    new URLSearchParams(window.location.search).get("duration") ?? undefined,
+                  planKey: new URLSearchParams(window.location.search).get("planKey") ?? undefined,
                 }
               : null
           }

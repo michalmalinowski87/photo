@@ -159,7 +159,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     cancelUpload,
     pauseUpload,
     resumeUpload,
-    pauseResumeFile,
     resetUploadState,
   } = useUppyUpload(config);
 

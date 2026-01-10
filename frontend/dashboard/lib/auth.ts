@@ -2,7 +2,6 @@ import {
   CognitoUserPool,
   CognitoUser,
   AuthenticationDetails,
-  CognitoUserAttribute,
   CognitoRefreshToken,
   ISignUpResult,
   CognitoUserSession,
@@ -25,8 +24,19 @@ interface TokenResponse {
 }
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
-  name?: string;
+  name: string;
+  resetAt?: string;
+  minutesUntilReset?: number;
+}
+
+interface ErrorResponse {
+  error?: string;
+  code?: string;
+  resetAt?: string;
+  minutesUntilReset?: number;
+  message?: string;
 }
 
 export function initAuth(userPoolId: string, clientId: string): CognitoUserPool | null {
@@ -482,37 +492,39 @@ export function signUp(email: string, password: string): Promise<ISignUpResult["
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Sign up failed" }));
+        const errorData = (await response.json().catch(() => ({
+          error: "Sign up failed",
+        }))) as ErrorResponse;
 
         // Handle rate limit error
         if (response.status === 429) {
           const rateLimitError = new Error(
-            errorData.error || "Rate limit exceeded"
+            errorData.error ?? "Rate limit exceeded"
           ) as CognitoError;
-          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.code = errorData.code ?? "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
-          (rateLimitError as any).resetAt = errorData.resetAt;
-          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          rateLimitError.resetAt = errorData.resetAt;
+          rateLimitError.minutesUntilReset = errorData.minutesUntilReset;
           reject(rateLimitError);
           return;
         }
 
         // Handle other errors
         if (response.status === 409) {
-          const error = new Error(errorData.error || "User already exists") as CognitoError;
+          const error = new Error(errorData.error ?? "User already exists") as CognitoError;
           error.code = "UsernameExistsException";
           reject(error);
           return;
         }
 
         if (response.status === 400) {
-          const error = new Error(errorData.error || "Invalid parameters") as CognitoError;
+          const error = new Error(errorData.error ?? "Invalid parameters") as CognitoError;
           error.code = "InvalidPasswordException";
           reject(error);
           return;
         }
 
-        const error = new Error(errorData.error || "Sign up failed") as CognitoError;
+        const error = new Error(errorData.error ?? "Sign up failed") as CognitoError;
         reject(error);
         return;
       }
@@ -571,30 +583,32 @@ export function resendConfirmationCode(email: string): Promise<void> {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
+        const errorData = (await response.json().catch(() => ({
+          error: "Failed to resend code",
+        }))) as ErrorResponse;
 
         // Handle rate limit error
         if (response.status === 429) {
           const rateLimitError = new Error(
-            errorData.error || "Rate limit exceeded"
+            errorData.error ?? "Rate limit exceeded"
           ) as CognitoError;
-          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.code = errorData.code ?? "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
-          (rateLimitError as any).resetAt = errorData.resetAt;
-          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          rateLimitError.resetAt = errorData.resetAt;
+          rateLimitError.minutesUntilReset = errorData.minutesUntilReset;
           reject(rateLimitError);
           return;
         }
 
         // Handle other errors
         if (response.status === 404) {
-          const error = new Error(errorData.error || "User not found") as CognitoError;
+          const error = new Error(errorData.error ?? "User not found") as CognitoError;
           error.code = "UserNotFoundException";
           reject(error);
           return;
         }
 
-        const error = new Error(errorData.error || "Failed to resend code") as CognitoError;
+        const error = new Error(errorData.error ?? "Failed to resend code") as CognitoError;
         reject(error);
         return;
       }
@@ -681,23 +695,25 @@ export function forgotPassword(email: string): Promise<void> {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Password reset failed" }));
+        const errorData = (await response.json().catch(() => ({
+          error: "Password reset failed",
+        }))) as ErrorResponse;
 
         // Handle rate limit error
         if (response.status === 429) {
           const rateLimitError = new Error(
-            errorData.error || "Rate limit exceeded"
+            errorData.error ?? "Rate limit exceeded"
           ) as CognitoError;
-          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.code = errorData.code ?? "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
-          (rateLimitError as any).resetAt = errorData.resetAt;
-          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          rateLimitError.resetAt = errorData.resetAt;
+          rateLimitError.minutesUntilReset = errorData.minutesUntilReset;
           reject(rateLimitError);
           return;
         }
 
         // Handle other errors
-        const error = new Error(errorData.error || "Password reset failed") as CognitoError;
+        const error = new Error(errorData.error ?? "Password reset failed") as CognitoError;
         reject(error);
         return;
       }
@@ -728,30 +744,32 @@ export function resendResetCode(email: string): Promise<void> {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to resend code" }));
+        const errorData = (await response.json().catch(() => ({
+          error: "Failed to resend code",
+        }))) as ErrorResponse;
 
         // Handle rate limit error
         if (response.status === 429) {
           const rateLimitError = new Error(
-            errorData.error || "Rate limit exceeded"
+            errorData.error ?? "Rate limit exceeded"
           ) as CognitoError;
-          rateLimitError.code = errorData.code || "RateLimitExceeded";
+          rateLimitError.code = errorData.code ?? "RateLimitExceeded";
           rateLimitError.name = "RateLimitExceeded";
-          (rateLimitError as any).resetAt = errorData.resetAt;
-          (rateLimitError as any).minutesUntilReset = errorData.minutesUntilReset;
+          rateLimitError.resetAt = errorData.resetAt;
+          rateLimitError.minutesUntilReset = errorData.minutesUntilReset;
           reject(rateLimitError);
           return;
         }
 
         // Handle other errors
         if (response.status === 404) {
-          const error = new Error(errorData.error || "User not found") as CognitoError;
+          const error = new Error(errorData.error ?? "User not found") as CognitoError;
           error.code = "UserNotFoundException";
           reject(error);
           return;
         }
 
-        const error = new Error(errorData.error || "Failed to resend code") as CognitoError;
+        const error = new Error(errorData.error ?? "Failed to resend code") as CognitoError;
         reject(error);
         return;
       }
@@ -786,13 +804,13 @@ export function confirmForgotPassword(
       });
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: "Failed to reset password" }));
+        const errorData = (await response.json().catch(() => ({
+          error: "Failed to reset password",
+        }))) as ErrorResponse;
 
         // Handle Cognito errors
         if (response.status === 400) {
-          const error = new Error(errorData.error || "Invalid code or password") as CognitoError;
+          const error = new Error(errorData.error ?? "Invalid code or password") as CognitoError;
           if (errorData.error?.includes("Nieprawidłowy kod")) {
             error.code = "CodeMismatchException";
           } else if (errorData.error?.includes("wygasł")) {
@@ -805,13 +823,13 @@ export function confirmForgotPassword(
         }
 
         if (response.status === 404) {
-          const error = new Error(errorData.error || "User not found") as CognitoError;
+          const error = new Error(errorData.error ?? "User not found") as CognitoError;
           error.code = "UserNotFoundException";
           reject(error);
           return;
         }
 
-        const error = new Error(errorData.error || "Failed to reset password") as CognitoError;
+        const error = new Error(errorData.error ?? "Failed to reset password") as CognitoError;
         reject(error);
         return;
       }

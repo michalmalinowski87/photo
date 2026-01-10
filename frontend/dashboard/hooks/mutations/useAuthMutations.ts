@@ -1,6 +1,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
+
+interface BusinessInfo {
+  businessName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  nip?: string;
+  welcomePopupShown?: boolean;
+  tutorialNextStepsDisabled?: boolean;
+  tutorialClientSendDisabled?: boolean;
+}
 
 export function useChangePassword() {
   return useMutation({
@@ -31,12 +43,12 @@ export function useUpdateBusinessInfo() {
     }) => api.auth.updateBusinessInfo(data),
     onSuccess: (_, variables) => {
       // Update cache directly with new data if available
-      queryClient.setQueryData(queryKeys.auth.businessInfo(), (old: any) => ({
+      queryClient.setQueryData(queryKeys.auth.businessInfo(), (old: BusinessInfo | undefined) => ({
         ...old,
         ...variables,
       }));
       // Also invalidate to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.businessInfo() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.businessInfo() });
     },
   });
 }

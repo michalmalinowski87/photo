@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -10,7 +11,7 @@ export function useCreateCheckout() {
       api.payments.createCheckout(data),
     onSuccess: () => {
       // Invalidate wallet balance after checkout (user might have topped up)
-      queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.balance() });
     },
   });
 }

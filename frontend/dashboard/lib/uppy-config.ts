@@ -887,7 +887,7 @@ export function createUppyInstance(config: UppyConfigOptions): any {
         });
 
         // Track metadata write completion
-        const metadataWritten = response.metadataWritten === true;
+        const metadataWritten = (response as { metadataWritten?: boolean }).metadataWritten === true;
         metadataWritePromises.set(fileId, Promise.resolve(metadataWritten));
 
         return {
@@ -1031,7 +1031,7 @@ export function createUppyInstance(config: UppyConfigOptions): any {
           fileSize,
         });
         // Check if metadata was written successfully
-        return result.metadataWritten === true;
+        return (result as { metadataWritten?: boolean }).metadataWritten === true;
       } catch (error) {
         return false;
       }

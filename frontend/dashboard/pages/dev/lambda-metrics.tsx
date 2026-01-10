@@ -3,14 +3,13 @@
 import {
   Activity,
   TrendingDown,
-  TrendingUp,
   AlertCircle,
   CheckCircle2,
   Loader2,
   RefreshCw,
 } from "lucide-react";
 import type { GetServerSideProps } from "next";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
@@ -33,11 +32,6 @@ interface LambdaMemoryMetric {
   recommendation: string;
 }
 
-interface LambdaMetricsResponse {
-  metrics: LambdaMemoryMetric[];
-  period: string;
-  region: string;
-}
 
 export default function LambdaMetrics() {
   const { showToast } = useToast();
@@ -47,28 +41,27 @@ export default function LambdaMetrics() {
   const [period, setPeriod] = useState("7 days");
   const [region, setRegion] = useState("");
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setRefreshing(true);
       const response = await api.dashboard.getLambdaMetrics();
-      setMetrics(response.metrics || []);
-      setPeriod(response.period || "7 days");
-      setRegion(response.region || "");
-    } catch (error: any) {
-      showToast({
-        title: "Błąd",
-        description: error.response?.data?.message || "Nie udało się pobrać metryk Lambda",
-        variant: "destructive",
-      });
+      setMetrics(response.metrics ?? []);
+      setPeriod(response.period ?? "7 days");
+      setRegion(response.region ?? "");
+    } catch (error: unknown) {
+      const errorMessage =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Nie udało się pobrać metryk Lambda";
+      showToast("error", "Błąd", errorMessage);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
-    fetchMetrics();
-  }, []);
+    void fetchMetrics();
+  }, [fetchMetrics]);
 
   const getUtilizationColor = (percent: number) => {
     if (percent === 0) return "text-gray-400";

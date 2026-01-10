@@ -15,7 +15,9 @@ import {
 import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
+  name: string;
 }
 
 // Prevent static generation - this page uses client hooks
@@ -142,7 +144,7 @@ export default function SignUp() {
             );
             return;
           }
-        } catch (checkError) {
+        } catch (_checkError) {
           // If check fails, fall through to show error message
         }
         setLoading(false); // Hide overlay on error so user can see the error message

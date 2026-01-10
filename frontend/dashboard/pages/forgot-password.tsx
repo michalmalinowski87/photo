@@ -8,7 +8,9 @@ import { Label } from "../components/ui/label";
 import { initAuth, forgotPassword } from "../lib/auth";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
+  name: string;
 }
 
 // Prevent static generation - this page uses client hooks

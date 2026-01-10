@@ -352,7 +352,7 @@ export default function Packages() {
 
   // Determine if this is initial load (no data yet)
   const isInitialLoad =
-    loading && packages.length === 0 && (!data?.pages || data.pages.length === 0);
+    loading && packages.length === 0 && (!data || !('pages' in data) || !(data as { pages: unknown[] }).pages || (data as { pages: unknown[] }).pages.length === 0);
 
   return (
     <div className="space-y-6">

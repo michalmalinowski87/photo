@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -19,7 +20,7 @@ export function useCreateClient() {
     mutationFn: (data: ClientFormData) => api.clients.create(data),
     onSuccess: () => {
       // Invalidate all client lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
     },
   });
 }
@@ -32,9 +33,9 @@ export function useUpdateClient() {
       api.clients.update(clientId, data),
     onSuccess: (_, variables) => {
       // Invalidate specific client detail
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(variables.clientId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(variables.clientId) });
       // Invalidate all client lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
     },
   });
 }
@@ -48,7 +49,7 @@ export function useDeleteClient() {
       // Remove specific client from cache
       queryClient.removeQueries({ queryKey: queryKeys.clients.detail(clientId) });
       // Invalidate all client lists to refetch
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.lists() });
     },
   });
 }

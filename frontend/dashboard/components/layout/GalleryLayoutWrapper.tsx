@@ -131,7 +131,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
         });
         closeDenyModal();
         // React Query will automatically refetch order due to invalidation
-      } catch (err) {
+      } catch (_err) {
         // Error is handled by mutation
       }
     },

@@ -223,7 +223,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         this.uploadToS3(presignedData.bigThumbUrl, bigThumb, "image/webp"),
         this.uploadToS3(presignedData.thumbnailUrl, thumbnailBlob, "image/webp"),
       ]);
-    } catch (error) {
+    } catch (_error) {
       // Don't fail the upload if thumbnail upload fails
       // eslint-disable-next-line no-console
     }

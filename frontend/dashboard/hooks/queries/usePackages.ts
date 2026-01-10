@@ -1,4 +1,5 @@
 import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+
 import api from "../../lib/api-service";
 import { queryKeys } from "../../lib/react-query";
 
@@ -8,7 +9,7 @@ interface Package {
   includedPhotos?: number;
   pricePerExtraPhoto?: number;
   price?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ListResponse<T> {
@@ -33,8 +34,13 @@ export function usePackage(
   options?: Omit<UseQueryOptions<Package>, "queryKey" | "queryFn">
 ) {
   return useQuery({
-    queryKey: queryKeys.packages.detail(packageId!),
-    queryFn: () => api.packages.get(packageId!),
+    queryKey: queryKeys.packages.detail(packageId ?? ""),
+    queryFn: () => {
+      if (!packageId) {
+        throw new Error("Package ID is required");
+      }
+      return api.packages.get(packageId);
+    },
     enabled: !!packageId,
     staleTime: 30 * 1000,
     ...options,

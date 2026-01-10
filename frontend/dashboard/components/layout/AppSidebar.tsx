@@ -95,6 +95,57 @@ const AppSidebar = () => {
 
   const isActive = useCallback((path: string) => router.pathname === path, [router.pathname]);
 
+  // Prefetch all navigation routes when sidebar is visible/expanded
+  // This ensures all navigation links are ready for instant navigation
+  useEffect(() => {
+    if (!router.isReady) {
+      return; // Wait for router to be ready
+    }
+
+    if (!isExpanded && !isMobileOpen) {
+      return; // Don't prefetch if sidebar is not visible
+    }
+
+    // Small delay to avoid blocking initial render
+    const timeoutId = setTimeout(() => {
+      // Collect all routes to prefetch
+      const routesToPrefetch: string[] = [];
+      
+      navItems.forEach((nav) => {
+        if (nav.path && !nav.external) {
+          routesToPrefetch.push(nav.path);
+        }
+        if (nav.subItems) {
+          nav.subItems.forEach((subItem) => {
+            if (subItem.path) {
+              routesToPrefetch.push(subItem.path);
+            }
+          });
+        }
+      });
+
+      // Prefetch all routes
+      // NOTE: Next.js prefetching only works in PRODUCTION mode, not in development
+      // To test prefetching, run: npm run build && npm run start
+      routesToPrefetch.forEach((path) => {
+        // eslint-disable-next-line no-console
+        console.warn('[Sidebar Prefetch] Prefetching route:', path);
+        // router.prefetch() will prefetch the route bundle
+        // In production, this triggers network requests for JS bundles
+        // In development, Next.js disables prefetching to show latest changes
+        void router.prefetch(path).then(() => {
+          // eslint-disable-next-line no-console
+          console.warn('[Sidebar Prefetch] Successfully prefetched:', path);
+        }).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[Sidebar Prefetch] Failed to prefetch:', path, err);
+        });
+      });
+    }, 1000); // Delay to not block initial render
+
+    return () => clearTimeout(timeoutId);
+  }, [isExpanded, isMobileOpen, router.isReady, router]);
+
   useEffect(() => {
     let submenuMatched = false;
     navItems.forEach((nav, index) => {
@@ -195,13 +246,8 @@ const AppSidebar = () => {
                 className={`menu-item group ${
                   isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
                 } transition active:scale-[0.98]`}
-                onMouseEnter={() => {
-                  // Aggressively prefetch route bundle on hover for slow connections
-                  // This helps on slow 4G where downloading 190KB takes time
-                  if (nav.path && !nav.external) {
-                    void router.prefetch(nav.path);
-                  }
-                }}
+                // Next.js Link with prefetch={true} automatically prefetches when visible
+                // No need for manual prefetch on hover - Next.js handles it more efficiently
               >
                 <span
                   className={`menu-item-icon-size ${

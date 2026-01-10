@@ -225,7 +225,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
             order.deliveryStatus === "DELIVERED") && (
             <div className="w-full">
               <ZipDownloadButton
-                galleryId={galleryIdStr || ""}
+                galleryId={galleryIdStr ?? ""}
                 orderId={orderId}
                 type="original"
                 deliveryStatus={order.deliveryStatus}
@@ -238,7 +238,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
         {order?.deliveryStatus === "DELIVERED" && (
           <div className="w-full">
             <ZipDownloadButton
-              galleryId={galleryIdStr || ""}
+              galleryId={galleryIdStr ?? ""}
               orderId={orderId}
               type="final"
               deliveryStatus={order.deliveryStatus}

@@ -77,12 +77,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
 
         // If welcome bonus exists and is the only transaction, show popup immediately
         if (welcomeBonusTransaction && transactions.length === 1) {
-          // Final check before showing popup
-          if (businessInfo?.welcomePopupShown === true) {
-            setChecking(false);
-            setHasCheckedOnce(true);
-            return;
-          }
+          // Note: welcomePopupShown was already checked at the start of checkWelcomeBonus
 
           const bonusAmount =
             welcomeBonusTransaction.amountCents ??
@@ -107,12 +102,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
           await new Promise((resolve) => setTimeout(resolve, 500));
 
           // Check welcomePopupShown again after refetch
-          if (businessInfo?.welcomePopupShown === true) {
-            setChecking(false);
-            setHasCheckedOnce(true);
-            return;
-          }
-
+          // Note: welcomePopupShown was already checked at the start of checkWelcomeBonus
           const retryResult = await refetchTransactions();
           const retryTransactions = retryResult.data?.transactions ?? [];
 
@@ -120,12 +110,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
 
           // Check if welcome bonus is the only transaction
           if (retryWelcomeBonus && retryTransactions.length === 1) {
-            // Final check before showing popup
-            if (businessInfo?.welcomePopupShown === true) {
-              setChecking(false);
-              setHasCheckedOnce(true);
-              return;
-            }
+            // Note: welcomePopupShown was already checked at the start of checkWelcomeBonus
 
             const bonusAmount =
               retryWelcomeBonus.amountCents ??

@@ -8,7 +8,9 @@ import { Label } from "../components/ui/label";
 import { initAuth, resendResetCode } from "../lib/auth";
 
 interface CognitoError extends Error {
+  message: string;
   code?: string;
+  name: string;
 }
 
 // Prevent static generation - this page uses client hooks
@@ -19,7 +21,6 @@ export default function VerifyResetCode() {
   const [code, setCode] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
   const [resending, setResending] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0); // Seconds remaining
   const [resendMessage, setResendMessage] = useState<string>(""); // Success or warning message for resend
@@ -169,9 +170,9 @@ export default function VerifyResetCode() {
             type="submit"
             variant="primary"
             className="w-full"
-            disabled={loading || code.length !== 6}
+            disabled={code.length !== 6}
           >
-            {loading ? "Weryfikowanie..." : "Kontynuuj"}
+            Kontynuuj
           </Button>
         </form>
 
