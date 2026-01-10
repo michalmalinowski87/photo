@@ -486,18 +486,21 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const getThumbnail = (file: TypedUppyFile): string | undefined => {
     // Priority 1: Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
     // This is the fastest option - generated locally, no network request
-    if (file.preview) {
+    // BUT: If we've already created a blob URL, keep using it to avoid flicker
+    const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
+    if (file.preview && !cachedBlobUrl) {
       return file.preview;
     }
 
     // Priority 2: Create blob URL from File object (also local, but slightly slower)
     // Cache the blob URL to avoid recreating it on every render
-    if (file.data && file.data instanceof File) {
-      const cachedUrl = blobUrlCacheRef.current.get(file.id);
-      if (cachedUrl) {
-        return cachedUrl;
-      }
+    // If we already have a cached blob URL, use it (even if preview is now available)
+    // This prevents flicker when ThumbnailGenerator finishes generating preview
+    if (cachedBlobUrl) {
+      return cachedBlobUrl;
+    }
 
+    if (file.data && file.data instanceof File) {
       const blobUrl = URL.createObjectURL(file.data);
       blobUrlCacheRef.current.set(file.id, blobUrl);
       return blobUrl;
