@@ -153,13 +153,13 @@ interface ThumbnailItemProps {
   onRemove: (fileId: string) => void;
 }
 
-  // Memoized thumbnail item to prevent unnecessary re-renders
-  // Only re-renders when props actually change
-  const ThumbnailItem = React.memo<ThumbnailItemProps>(
-    ({ file, thumbnail, status, progress, uploadComplete, onRemove }) => {
-      // Removed manual decode() call - browser handles decoding asynchronously via decoding="async" attribute
-      // Manual decode() was causing 28+ second blocking delays per image
-      // The <img> element already has decoding="async" and loading="lazy" which provides optimal performance
+// Memoized thumbnail item to prevent unnecessary re-renders
+// Only re-renders when props actually change
+const ThumbnailItem = React.memo<ThumbnailItemProps>(
+  ({ file, thumbnail, status, progress, uploadComplete, onRemove }) => {
+    // Removed manual decode() call - browser handles decoding asynchronously via decoding="async" attribute
+    // Manual decode() was causing 28+ second blocking delays per image
+    // The <img> element already has decoding="async" and loading="lazy" which provides optimal performance
 
     const roundedProgress = Math.round(progress);
 
@@ -189,10 +189,7 @@ interface ThumbnailItemProps {
               />
             ) : (
               <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
-                <ImageIcon
-                  className="w-12 h-12 text-gray-400"
-                  strokeWidth={2}
-                />
+                <ImageIcon className="w-12 h-12 text-gray-400" strokeWidth={2} />
               </div>
             )}
             {(status === "uploading" || status === "paused") && (
@@ -200,9 +197,7 @@ interface ThumbnailItemProps {
                 <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
                 <div className="absolute bottom-6 left-0 right-0 text-center z-10">
-                  <p className="text-white text-xs font-bold drop-shadow-lg">
-                    {roundedProgress}%
-                  </p>
+                  <p className="text-white text-xs font-bold drop-shadow-lg">{roundedProgress}%</p>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60 overflow-hidden">
                   <div
@@ -318,7 +313,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
   // Track which files have loaded their preview thumbnails (prevents flicker)
   const previewLoadedRef = useRef<Set<string>>(new Set());
-  
+
   // Track last progress values to avoid unnecessary updates
   const lastProgressRef = useRef<Map<string, number>>(new Map());
   // Per-file thumbnail source cache - ensures consistent source selection
@@ -481,11 +476,11 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     // Track if this is the first file-added event (needs immediate sync for initial render)
     let isFirstFileAdded = true;
-    
+
     // Debounced sync function for batching rapid events
     const debouncedSyncFiles = (forceUpdate = false, immediate = false) => {
       pendingForceUpdate = pendingForceUpdate || forceUpdate;
-      
+
       // Immediate sync for first file-added to show initial render quickly
       if (immediate && isFirstFileAdded) {
         if (syncTimeout) {
@@ -497,7 +492,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         isFirstFileAdded = false;
         return;
       }
-      
+
       if (syncTimeout) {
         clearTimeout(syncTimeout);
       }
@@ -781,7 +776,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     // STRATEGY: Always use generated thumbnail (file.preview) once available for consistency
     // Generated thumbnails provide consistent 250px JPEG quality for all images
     // CRITICAL: Check preview FIRST, even if cache exists, to ensure we upgrade to preview when available
-    
+
     // PRIORITY 1: Use generated thumbnail if available (consistent 250px JPEG quality)
     // Always prefer preview once available - ensures consistent quality across all images
     // This check happens BEFORE cache to ensure we upgrade from blob URL to preview
@@ -791,7 +786,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       fileThumbnailSourceRef.current.set(file.id, thumbnail);
       return thumbnail;
     }
-    
+
     // Check cache only if preview is not available (fallback to cached source)
     const cachedThumbnail = fileThumbnailSourceRef.current.get(file.id);
     if (cachedThumbnail !== undefined) {

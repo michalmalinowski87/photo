@@ -147,9 +147,7 @@ const LayoutContent = ({ children, onCreateGallery }: AppLayoutProps) => {
           }`}
         >
           <AppHeader onCreateGallery={onCreateGallery ?? handleCreateGallery} />
-          <div
-            className={`${wizardOpen ? "" : "p-4 mx-auto max-w-7xl md:p-6"} h-[calc(100vh-60px)]`}
-          >
+          <div className={`${wizardOpen ? "" : "p-4 md:p-6"} h-[calc(100vh-60px)]`}>
             {wizardOpen ? (
               <CreateGalleryWizard
                 isOpen={wizardOpen}

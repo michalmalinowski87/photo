@@ -39,16 +39,17 @@ export class ParallelThumbnailGenerator extends BasePlugin<any, any, any> {
     this.id = "parallel-thumbnail-generator";
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     this.type = "thumbnail";
-    
+
     // Adaptive worker count based on CPU cores (conservative for slower PCs)
     // Use navigator.hardwareConcurrency to detect CPU cores
     // Conservative approach: 4 workers for <=4 cores, 6 workers for >4 cores
     // This ensures good performance on modern PCs while not overwhelming slower ones
-    const cpuCores = typeof navigator !== 'undefined' && navigator.hardwareConcurrency 
-      ? navigator.hardwareConcurrency 
-      : 4; // Default to 4 if not available
+    const cpuCores =
+      typeof navigator !== "undefined" && navigator.hardwareConcurrency
+        ? navigator.hardwareConcurrency
+        : 4; // Default to 4 if not available
     const adaptiveWorkerCount = cpuCores > 4 ? 6 : 4;
-    
+
     this.options = {
       thumbnailWidth: opts.thumbnailWidth ?? 250,
       thumbnailType: opts.thumbnailType ?? "image/jpeg",
@@ -106,7 +107,7 @@ export class ParallelThumbnailGenerator extends BasePlugin<any, any, any> {
             this.uppy.setFileState(fileId, {
               preview: thumbnail,
             });
-            
+
             // Emit thumbnail:generated event (for compatibility with other plugins like ThumbnailUploadPlugin)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             (this.uppy.emit as any)("thumbnail:generated", uppyFile, thumbnail);
@@ -142,34 +143,34 @@ export class ParallelThumbnailGenerator extends BasePlugin<any, any, any> {
       this.workerReady.delete(workerIndex);
       this.activeTasks.set(queuedFile.fileId, queuedFile);
 
-        // Read file data
-        try {
-          const fileData = await this.readFileData(queuedFile.file);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const fileName: string = (queuedFile.file.name as string | undefined) ?? "";
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const fileType: string = (queuedFile.file.type as string | undefined) ?? "image/jpeg";
+      // Read file data
+      try {
+        const fileData = await this.readFileData(queuedFile.file);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const fileName: string = (queuedFile.file.name as string | undefined) ?? "";
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const fileType: string = (queuedFile.file.type as string | undefined) ?? "image/jpeg";
 
-          // Send to worker with file type for better quality preservation
-          worker.postMessage({
-            command: "generate",
-            fileId: queuedFile.fileId,
-            fileData,
-            fileName,
-            fileType,
-          });
-        } catch (error) {
-          this.workerReady.add(workerIndex);
-          this.activeTasks.delete(queuedFile.fileId);
-          queuedFile.reject(
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
+        // Send to worker with file type for better quality preservation
+        worker.postMessage({
+          command: "generate",
+          fileId: queuedFile.fileId,
+          fileData,
+          fileName,
+          fileType,
+        });
+      } catch (error) {
+        this.workerReady.add(workerIndex);
+        this.activeTasks.delete(queuedFile.fileId);
+        queuedFile.reject(error instanceof Error ? error : new Error(String(error)));
+      }
     }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async readFileData(file: UppyFile<Record<string, any>, Record<string, never>>): Promise<ArrayBuffer> {
+  private async readFileData(
+    file: UppyFile<Record<string, any>, Record<string, never>>
+  ): Promise<ArrayBuffer> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const fileData: File | Blob | ArrayBuffer | undefined = file.data as
       | File
@@ -199,7 +200,7 @@ export class ParallelThumbnailGenerator extends BasePlugin<any, any, any> {
     for (let i = 0; i < workerCount; i++) {
       try {
         const worker = new Worker(this.options.workerPath);
-        
+
         worker.onmessage = (event) => {
           const eventData = event.data as {
             fileId: string;
@@ -231,7 +232,7 @@ export class ParallelThumbnailGenerator extends BasePlugin<any, any, any> {
           console.error("Worker error:", workerError);
           const workerIndex = this.workers.indexOf(worker);
           this.workerReady.delete(workerIndex);
-          
+
           // Retry with new worker if possible
           if (this.workers.length < this.options.maxWorkers) {
             void this.initializeWorkers();
