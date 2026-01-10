@@ -527,20 +527,20 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   });
 
   // Add Thumbnail Generator for client-side previews
-  // Generate adaptive thumbnails optimized for both small and large images
+  // Generate high-quality thumbnails optimized for display size
   // Strategy:
-  // - Use 200px as base size (better for small files, prevents upscaling)
-  // - Small images (<200px) will use original size (no upscaling = better quality)
-  // - Large images will be downscaled to 200px (fast, good quality)
+  // - Use 300px as base size to match display size (grid uses minmax(200px, 1fr))
+  // - This prevents upscaling blur and ensures consistent quality
+  // - Large images will be downscaled to 300px (fast, excellent quality)
   // - Note: ThumbnailGenerator uses quality 80 (hardcoded) for WebP
-  // - Quality 80 WebP at 200x200 is excellent for thumbnails and saves bandwidth
+  // - Quality 80 WebP at 300x300 is excellent for thumbnails and saves bandwidth
   // Performance optimizations:
-  // - 200px size balances quality and speed (faster than 300px, still excellent quality)
+  // - 300px size matches display size (no upscaling = better quality)
   // - WebP format is optimized for web (smaller files, faster loading)
   // - Don't wait for thumbnails before upload (non-blocking, better UX)
   uppy.use(ThumbnailGenerator, {
-    thumbnailWidth: 120, // 120px - optimized for speed, still good quality for thumbnails
-    thumbnailHeight: 120, // 120px - maintains aspect ratio, faster generation
+    thumbnailWidth: 300, // 300px - matches display size, prevents upscaling blur
+    thumbnailHeight: 300, // 300px - maintains aspect ratio, excellent quality
     thumbnailType: "image/webp", // WebP format - optimized for web, smaller files
     waitForThumbnailsBeforeUpload: false, // Non-blocking - upload can proceed immediately
   });
