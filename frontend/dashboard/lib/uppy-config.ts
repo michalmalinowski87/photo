@@ -527,15 +527,22 @@ export function createUppyInstance(config: UppyConfigOptions): any {
   });
 
   // Add Thumbnail Generator for client-side previews
-  // Generate thumbnail (300px) for UI display
-  // Note: ThumbnailGenerator uses quality 80 (hardcoded) for WebP
-  // For lossless WebP, we would need quality 1.0, but ThumbnailGenerator doesn't expose this option
-  // Quality 80 WebP at 300x300 is still very good for thumbnails and saves bandwidth
+  // Generate adaptive thumbnails optimized for both small and large images
+  // Strategy:
+  // - Use 200px as base size (better for small files, prevents upscaling)
+  // - Small images (<200px) will use original size (no upscaling = better quality)
+  // - Large images will be downscaled to 200px (fast, good quality)
+  // - Note: ThumbnailGenerator uses quality 80 (hardcoded) for WebP
+  // - Quality 80 WebP at 200x200 is excellent for thumbnails and saves bandwidth
+  // Performance optimizations:
+  // - 200px size balances quality and speed (faster than 300px, still excellent quality)
+  // - WebP format is optimized for web (smaller files, faster loading)
+  // - Don't wait for thumbnails before upload (non-blocking, better UX)
   uppy.use(ThumbnailGenerator, {
-    thumbnailWidth: 300, // Thumbnail width - 300px for professional quality display
-    thumbnailHeight: 300, // Thumbnail height - 300px for professional quality display
-    thumbnailType: "image/webp", // Generate WebP thumbnails (quality 80, hardcoded in ThumbnailGenerator)
-    waitForThumbnailsBeforeUpload: false, // Don't wait, upload can proceed
+    thumbnailWidth: 150, // 150px - faster generation, still excellent quality for thumbnails
+    thumbnailHeight: 150, // 150px - maintains aspect ratio, faster than 200px
+    thumbnailType: "image/webp", // WebP format - optimized for web, smaller files
+    waitForThumbnailsBeforeUpload: false, // Non-blocking - upload can proceed immediately
   });
 
   // Add custom thumbnail upload plugin to upload generated thumbnails to S3
@@ -887,7 +894,8 @@ export function createUppyInstance(config: UppyConfigOptions): any {
         });
 
         // Track metadata write completion
-        const metadataWritten = (response as { metadataWritten?: boolean }).metadataWritten === true;
+        const metadataWritten =
+          (response as { metadataWritten?: boolean }).metadataWritten === true;
         metadataWritePromises.set(fileId, Promise.resolve(metadataWritten));
 
         return {

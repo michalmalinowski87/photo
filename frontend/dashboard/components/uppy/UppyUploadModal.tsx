@@ -181,6 +181,11 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const lastSyncedFileIdsRef = useRef<string[]>([]);
   // Cache blob URLs to avoid recreating them on every render
   const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
+  // Cache image dimensions to avoid re-checking
+  const imageDimensionsCacheRef = useRef<Map<string, { width: number; height: number }>>(new Map());
+  // Queue for dimension checks to batch them and avoid overwhelming the browser
+  const dimensionCheckQueueRef = useRef<Set<File>>(new Set());
+  const dimensionCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track viewport height to conditionally hide dropzone visual on small screens
   useEffect(() => {
@@ -263,6 +268,12 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     isMountedRef.current = true;
 
+    // Copy refs to local variables for cleanup (satisfies ESLint)
+    const blobUrls = blobUrlCacheRef.current;
+    const imageDimensions = imageDimensionsCacheRef.current;
+    const dimensionQueue = dimensionCheckQueueRef.current;
+    const dimensionTimeout = dimensionCheckTimeoutRef.current;
+
     // Sync our files state with Uppy's current state
     // Trust Uppy - it manages all file state, we just display it
     const syncFiles = (forceUpdate = false) => {
@@ -332,6 +343,16 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       // Clear files and reset tracking when effect cleans up (modal closed)
       setFiles([]);
       lastSyncedFileIdsRef.current = [];
+      // Clean up blob URLs and dimensions cache (using refs copied at effect start)
+      blobUrls.forEach((url) => URL.revokeObjectURL(url));
+      blobUrls.clear();
+      imageDimensions.clear();
+      // Clear dimension check queue (using refs copied at effect start)
+      if (dimensionTimeout) {
+        clearTimeout(dimensionTimeout);
+        dimensionCheckTimeoutRef.current = null;
+      }
+      dimensionQueue.clear();
     };
   }, [uppy, isOpen]);
 
@@ -352,6 +373,14 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         // Clean up blob URLs
         blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
         blobUrlCacheRef.current.clear();
+        // Clean up dimensions cache
+        imageDimensionsCacheRef.current.clear();
+        // Clear dimension check queue
+        if (dimensionCheckTimeoutRef.current) {
+          clearTimeout(dimensionCheckTimeoutRef.current);
+          dimensionCheckTimeoutRef.current = null;
+        }
+        dimensionCheckQueueRef.current.clear();
         // Then clear Uppy files
         uppy.clear();
       }
@@ -462,47 +491,253 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     // Clean up blob URLs
     blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
     blobUrlCacheRef.current.clear();
+    // Clean up dimensions cache
+    imageDimensionsCacheRef.current.clear();
+    // Clear dimension check queue
+    if (dimensionCheckTimeoutRef.current) {
+      clearTimeout(dimensionCheckTimeoutRef.current);
+      dimensionCheckTimeoutRef.current = null;
+    }
+    dimensionCheckQueueRef.current.clear();
     // Then clear Uppy files
     uppy.clear();
   };
 
   /**
+   * Get image dimensions from File/Blob using createImageBitmap for faster async processing
+   * Caches results to avoid re-checking the same file
+   * Performance optimized:
+   * - Uses createImageBitmap (faster, async, non-blocking)
+   * - Only checks files <1MB to avoid blocking on slower machines
+   * - Falls back to Image() for older browsers
+   */
+  const getImageDimensions = async (
+    file: File | Blob
+  ): Promise<{ width: number; height: number } | null> => {
+    // Skip dimension check for large files to improve performance on slower machines
+    if (file.size > 1024 * 1024) {
+      // Files >1MB don't need dimension checks - always use generated thumbnail
+      return null;
+    }
+
+    const fileId = file instanceof File ? `${file.name}-${file.size}` : `blob-${file.size}`;
+    const cached = imageDimensionsCacheRef.current.get(fileId);
+    if (cached) {
+      return cached;
+    }
+
+    // Use createImageBitmap for faster, async processing (modern browsers)
+    // This is much faster than Image() and doesn't block the main thread
+    if (typeof createImageBitmap !== "undefined") {
+      try {
+        const url = URL.createObjectURL(file);
+        const imageBitmap = await Promise.race([
+          createImageBitmap(file),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000)),
+        ]);
+        URL.revokeObjectURL(url);
+
+        const dimensions = {
+          width: imageBitmap.width,
+          height: imageBitmap.height,
+        };
+        imageBitmap.close(); // Free memory immediately
+        imageDimensionsCacheRef.current.set(fileId, dimensions);
+        return dimensions;
+      } catch (_error) {
+        // Fall back to Image() if createImageBitmap fails
+        // (e.g., unsupported format, timeout, or older browser)
+      }
+    }
+
+    // Fallback to Image() for older browsers or if createImageBitmap fails
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      // Set timeout to avoid hanging on corrupted/problematic images
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      }, 3000); // Reduced to 3 seconds for faster failure
+
+      img.onload = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        const dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+        imageDimensionsCacheRef.current.set(fileId, dimensions);
+        resolve(dimensions);
+      };
+      img.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
+  };
+
+  /**
+   * Process queued dimension checks in batches to avoid overwhelming the browser
+   * Processes up to 5 files at a time for optimal performance (increased for faster processing)
+   */
+  const processDimensionCheckQueue = async () => {
+    if (dimensionCheckQueueRef.current.size === 0) {
+      return;
+    }
+
+    const filesToProcess = Array.from(dimensionCheckQueueRef.current).slice(0, 5);
+    filesToProcess.forEach((file) => dimensionCheckQueueRef.current.delete(file));
+
+    // Process in parallel (up to 5 at a time for faster processing)
+    await Promise.all(filesToProcess.map((file) => getImageDimensions(file)));
+
+    // Schedule next batch if queue is not empty using requestAnimationFrame for smoother updates
+    if (dimensionCheckQueueRef.current.size > 0) {
+      if (typeof requestAnimationFrame !== "undefined") {
+        requestAnimationFrame(() => {
+          dimensionCheckTimeoutRef.current = setTimeout(() => {
+            void processDimensionCheckQueue();
+          }, 30); // Reduced delay for faster processing
+        });
+      } else {
+        dimensionCheckTimeoutRef.current = setTimeout(() => {
+          void processDimensionCheckQueue();
+        }, 30); // Reduced delay for faster processing
+      }
+    } else {
+      dimensionCheckTimeoutRef.current = null;
+    }
+  };
+
+  /**
+   * Queue a file for dimension checking (batched for performance)
+   */
+  const queueDimensionCheck = (file: File) => {
+    dimensionCheckQueueRef.current.add(file);
+
+    // Start processing if not already running - use requestAnimationFrame for smoother start
+    if (!dimensionCheckTimeoutRef.current) {
+      if (typeof requestAnimationFrame !== "undefined") {
+        requestAnimationFrame(() => {
+          if (typeof requestIdleCallback !== "undefined") {
+            requestIdleCallback(() => {
+              void processDimensionCheckQueue();
+            });
+          } else {
+            dimensionCheckTimeoutRef.current = setTimeout(() => {
+              void processDimensionCheckQueue();
+            }, 50); // Reduced delay
+          }
+        });
+      } else {
+        dimensionCheckTimeoutRef.current = setTimeout(() => {
+          void processDimensionCheckQueue();
+        }, 50); // Reduced delay
+      }
+    }
+  };
+
+  /**
    * Get thumbnail URL for Uppy file
    *
+   * Optimized thumbnail selection strategy for consistent quality and performance:
+   * - Always prefer generated thumbnail when available (consistent, optimized by ThumbnailGenerator)
+   * - For very small images (<200px): Use original (no upscaling)
+   * - For medium-sized files (<500KB): Use original if already optimized (screenshots)
+   * - For larger files: Always use generated thumbnail (optimized, fast)
+   *
+   * Performance optimizations:
+   * - Prioritize generated thumbnails (consistent quality, already processed)
+   * - Cache dimensions to avoid repeated checks
+   * - Skip dimension checks for large files (>1MB) to improve performance
+   * - Use original only when genuinely better (small files, already optimized)
+   *
    * Priority (fastest to slowest):
-   * 1. Blob/Data URL from Uppy's ThumbnailGenerator (file.preview) - FASTEST
-   *    - Generated locally on user's computer before upload
-   *    - No network request needed, instant display
-   *    - This is Uppy's default strategy and should always be preferred
-   * 2. Blob URL created from File object (file.data) - FAST
-   *    - Also local, but requires creating blob URL
-   *    - Cached to avoid recreating on every render
+   * 1. Generated thumbnail (file.preview) - ALWAYS PREFERRED when available
+   *    - Consistent quality, optimized by ThumbnailGenerator
+   *    - Fast rendering, already processed
+   * 2. Original blob URL - Only for genuinely small/optimized files
+   *    - Used when image is <200px OR file is <500KB with reasonable dimensions
+   *    - Avoids unnecessary processing for already-small files
    *
    * Note: We never fetch from CloudFront/S3 for Uppy thumbnails because:
    * - Files are local until upload completes
    * - Blob URLs are the fastest and most responsive option
-   * - Uppy's ThumbnailGenerator already provides optimized thumbnails
    */
   const getThumbnail = (file: TypedUppyFile): string | undefined => {
-    // Priority 1: Uppy's ThumbnailGenerator provides file.preview (data URL or blob URL)
-    // This is the fastest option - generated locally, no network request
-    // BUT: If we've already created a blob URL, keep using it to avoid flicker
     const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
+
+    // PRIORITY 1: If we already have a cached blob URL, stick with it to prevent flickering
+    // Only switch to preview if we haven't cached a blob URL yet
+    if (cachedBlobUrl) {
+      // Check if we should continue using original (prevents flicker)
+      if (file.data && file.data instanceof File) {
+        const fileId = `${file.data.name}-${file.data.size}`;
+        const dimensions = imageDimensionsCacheRef.current.get(fileId);
+        const fileSizeKB = file.data.size / 1024;
+
+        // If we've already cached a blob URL and should use original, stick with it
+        const shouldUseOriginal =
+          dimensions &&
+          (dimensions.width < 150 ||
+            dimensions.height < 150 ||
+            (fileSizeKB < 500 &&
+              dimensions.width < 1000 &&
+              dimensions.height < 1000 &&
+              dimensions.width * dimensions.height < 1000000)); // < 1MP
+
+        if (shouldUseOriginal) {
+          return cachedBlobUrl; // Stick with cached blob URL to prevent flicker
+        }
+      }
+      // If we have cached blob URL but shouldn't use original, fall through to use preview
+    }
+
+    // PRIORITY 2: Use generated thumbnail when available (consistent quality)
+    // Only use this if we don't have a cached blob URL (prevents flickering)
     if (file.preview && !cachedBlobUrl) {
+      // Check if we should use original instead (only for very small/optimized files)
+      if (file.data && file.data instanceof File) {
+        const fileId = `${file.data.name}-${file.data.size}`;
+        const dimensions = imageDimensionsCacheRef.current.get(fileId);
+        const fileSizeKB = file.data.size / 1024;
+
+        const shouldUseOriginal =
+          dimensions &&
+          (dimensions.width < 150 ||
+            dimensions.height < 150 ||
+            (fileSizeKB < 500 &&
+              dimensions.width < 1000 &&
+              dimensions.height < 1000 &&
+              dimensions.width * dimensions.height < 1000000)); // < 1MP
+
+        if (shouldUseOriginal) {
+          // Create blob URL for small/optimized image
+          const blobUrl = URL.createObjectURL(file.data);
+          blobUrlCacheRef.current.set(file.id, blobUrl);
+          return blobUrl;
+        }
+      }
+
+      // Use generated thumbnail (consistent, optimized)
       return file.preview;
     }
 
-    // Priority 2: Create blob URL from File object (also local, but slightly slower)
-    // Cache the blob URL to avoid recreating it on every render
-    // If we already have a cached blob URL, use it (even if preview is now available)
-    // This prevents flicker when ThumbnailGenerator finishes generating preview
+    // PRIORITY 3: Fallback to cached blob URL if available
     if (cachedBlobUrl) {
       return cachedBlobUrl;
     }
 
+    // PRIORITY 4: Create blob URL from File object (temporary until thumbnail is generated)
     if (file.data && file.data instanceof File) {
       const blobUrl = URL.createObjectURL(file.data);
       blobUrlCacheRef.current.set(file.id, blobUrl);
+      // Queue dimension check for future optimization decisions (batched for performance)
+      // Only check for smaller files (<1MB) to avoid performance impact on slower machines
+      if (file.data.size < 1024 * 1024) {
+        queueDimensionCheck(file.data);
+      }
       return blobUrl;
     }
 
@@ -572,7 +807,16 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
             flexDirection: "column",
           }}
         >
-          <div style={{ flex: "1 1 0%", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
+          <div
+            style={{
+              flex: "1 1 0%",
+              overflowY: "auto",
+              overflowX: "hidden",
+              minHeight: 0,
+              willChange: "scroll-position",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
                 Prześlij zdjęcia
@@ -642,7 +886,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                     <VirtuosoGrid
                       totalCount={files.length}
                       data={files}
-                      overscan={1200}
+                      overscan={200}
+                      increaseViewportBy={100}
                       itemContent={(index) => {
                         const file = files[index];
                         if (!file) return null;
@@ -665,6 +910,11 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                     decoding="async"
+                                    style={{
+                                      willChange: "transform",
+                                      contentVisibility: "auto",
+                                      transform: "translateZ(0)",
+                                    }}
                                   />
                                 ) : (
                                   <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
@@ -761,6 +1011,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                                 display: "grid",
                                 gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
                                 gap: "0.75rem",
+                                willChange: "transform",
+                                transform: "translateZ(0)",
                               }}
                             >
                               {children}
