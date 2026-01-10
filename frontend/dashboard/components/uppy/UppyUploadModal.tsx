@@ -181,6 +181,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const lastSyncedFileIdsRef = useRef<string[]>([]);
   // Cache blob URLs to avoid recreating them on every render
   const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
+  // Track which files have loaded their preview thumbnails (prevents flicker)
+  const previewLoadedRef = useRef<Set<string>>(new Set());
 
   // Track viewport height to conditionally hide dropzone visual on small screens
   useEffect(() => {
@@ -338,8 +340,52 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       // Clean up blob URLs (using refs copied at effect start)
       blobUrls.forEach((url) => URL.revokeObjectURL(url));
       blobUrls.clear();
+      // Clear preview loaded tracking
+      previewLoadedRef.current.clear();
     };
   }, [uppy, isOpen]);
+
+  // Preload preview thumbnails when they become available to prevent flicker
+  useEffect(() => {
+    if (!uppy || !isOpen) {
+      return;
+    }
+
+    const preloadPreview = (file: TypedUppyFile) => {
+      // If preview exists but hasn't been loaded yet, preload it
+      if (file.preview && !previewLoadedRef.current.has(file.id)) {
+        const img = new Image();
+        img.onload = () => {
+          // Mark as loaded and trigger re-render
+          previewLoadedRef.current.add(file.id);
+          // Get fresh files from Uppy to trigger re-render
+          const uppyFiles = Object.values(uppy.getFiles());
+          setFiles(uppyFiles as TypedUppyFile[]);
+        };
+        img.onerror = () => {
+          // If preview fails to load, keep using blob URL
+          // Don't mark as loaded, so we'll keep using blob URL
+        };
+        img.src = file.preview;
+      }
+    };
+
+    // Preload previews for all files that have them
+    const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
+    uppyFiles.forEach(preloadPreview);
+
+    // Listen for thumbnail:generated event to preload new previews
+    const handleThumbnailGenerated = () => {
+      const currentFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
+      currentFiles.forEach(preloadPreview);
+    };
+
+    uppy.on("thumbnail:generated", handleThumbnailGenerated);
+
+    return () => {
+      uppy.off("thumbnail:generated", handleThumbnailGenerated);
+    };
+  }, [uppy, isOpen, files]);
 
   const handleClose = () => {
     if (uploading) {
@@ -358,6 +404,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         // Clean up blob URLs
         blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
         blobUrlCacheRef.current.clear();
+        // Clear preview loaded tracking
+        previewLoadedRef.current.clear();
         // Then clear Uppy files
         uppy.clear();
       }
@@ -475,21 +523,21 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   /**
    * Get thumbnail URL for Uppy file
    *
-   * Simplified strategy for consistent quality and performance:
-   * - Always prefer generated thumbnail when available (consistent 300px WebP, optimized)
-   * - Fallback to blob URL only until thumbnail is generated
+   * Strategy for consistent quality and no flickering:
+   * - Prefer generated thumbnail when available AND loaded (consistent 300px WebP, optimized)
+   * - Use cached blob URL if preview hasn't loaded yet (prevents flickering)
+   * - Only create new blob URL if neither preview nor cached blob URL exists
    *
    * Performance optimizations:
    * - Prioritize generated thumbnails (consistent quality, already processed, matches display size)
-   * - Cache blob URLs to prevent flickering during thumbnail generation
-   * - No dimension checking needed - ThumbnailGenerator handles all cases optimally
+   * - Cache blob URLs and use them until preview is confirmed loaded (prevents flickering)
+   * - Track preview load state to know when it's safe to switch
    *
    * Priority:
-   * 1. Generated thumbnail (file.preview) - ALWAYS PREFERRED when available
+   * 1. Generated thumbnail (file.preview) - Use if available AND already loaded (prevents white flash)
    *    - Consistent 300px quality, optimized by ThumbnailGenerator
    *    - Fast rendering, already processed, matches display size
-   * 2. Cached blob URL - Temporary until thumbnail is generated
-   *    - Prevents flickering during thumbnail generation
+   * 2. Cached blob URL - Use if preview exists but hasn't loaded yet (prevents flicker)
    * 3. New blob URL - Fallback for files without thumbnails yet
    *
    * Note: We never fetch from CloudFront/S3 for Uppy thumbnails because:
@@ -497,18 +545,32 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
    * - Blob URLs are the fastest and most responsive option
    */
   const getThumbnail = (file: TypedUppyFile): string | undefined => {
-    // PRIORITY 1: Use generated thumbnail when available (consistent quality, matches display size)
+    const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
+    const previewLoaded = previewLoadedRef.current.has(file.id);
+
+    // PRIORITY 1: Use generated thumbnail if available AND already loaded
+    // This prevents white flash when switching from blob URL to preview
+    if (file.preview && previewLoaded) {
+      return file.preview;
+    }
+
+    // PRIORITY 2: Use cached blob URL if preview exists but hasn't loaded yet
+    // This prevents flickering while preview is loading
+    if (file.preview && cachedBlobUrl) {
+      return cachedBlobUrl;
+    }
+
+    // PRIORITY 3: Use generated thumbnail if available (first time, no cached blob URL)
     if (file.preview) {
       return file.preview;
     }
 
-    // PRIORITY 2: Use cached blob URL if available (prevents flickering during thumbnail generation)
-    const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
+    // PRIORITY 4: Use cached blob URL if available
     if (cachedBlobUrl) {
       return cachedBlobUrl;
     }
 
-    // PRIORITY 3: Create blob URL from File object (temporary until thumbnail is generated)
+    // PRIORITY 5: Create blob URL from File object (temporary until thumbnail is generated)
     if (file.data && file.data instanceof File) {
       const blobUrl = URL.createObjectURL(file.data);
       blobUrlCacheRef.current.set(file.id, blobUrl);
