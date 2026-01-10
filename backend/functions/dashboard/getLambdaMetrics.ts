@@ -76,6 +76,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const endTime = new Date();
 		const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
 		const period = 300; // 5 minute periods (CloudWatch standard granularity)
+		
+		// For memory metrics, use a shorter time window (24 hours) as they're more reliable for recent data
+		// CloudWatch memory metrics can have delays, so focusing on recent data improves accuracy
+		const memoryMetricsStartTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000); // Last 24 hours
 
 		const metricsPromises = functions.map(async (fn) => {
 			const functionName = fn.FunctionName!;
@@ -170,22 +174,77 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const allMetricDataResults: any[] = [];
 				let nextToken: string | undefined;
 				
+				// Query memory metrics separately with shorter time window for better reliability
+				const memoryMetricQueries = metricDataQueries.filter(q => 
+					q.Id === 'maxMemory' || q.Id === 'avgMemory'
+				);
+				const otherMetricQueries = metricDataQueries.filter(q => 
+					q.Id !== 'maxMemory' && q.Id !== 'avgMemory'
+				);
+				
+				// Query memory metrics with 24-hour window and 1-hour period
+				// CloudWatch memory metrics may be aggregated at 1-hour granularity
+				const memoryMetricQueriesWithPeriod = memoryMetricQueries.map(q => ({
+					...q,
+					MetricStat: q.MetricStat ? {
+						...q.MetricStat,
+						Period: 3600 // 1 hour period for memory metrics
+					} : undefined
+				}));
+				
+				const allMemoryResults: any[] = [];
+				let memoryNextToken: string | undefined;
+				if (memoryMetricQueriesWithPeriod.length > 0) {
+					do {
+						const memoryCmd = new GetMetricDataCommand({
+							MetricDataQueries: memoryMetricQueriesWithPeriod,
+							StartTime: memoryMetricsStartTime,
+							EndTime: endTime,
+							NextToken: memoryNextToken
+						});
+						const memoryData = await cloudwatch.send(memoryCmd);
+						if (memoryData.MetricDataResults) {
+							allMemoryResults.push(...memoryData.MetricDataResults);
+						}
+						memoryNextToken = memoryData.NextToken;
+					} while (memoryNextToken);
+					
+					// Enhanced logging for memory metrics
+					logger?.debug(`Memory metrics query for ${functionName}`, {
+						functionName,
+						resultsCount: allMemoryResults.length,
+						results: allMemoryResults.map(r => ({
+							id: r.Id,
+							statusCode: r.StatusCode,
+							valuesCount: r.Values?.length || 0,
+							hasValues: (r.Values?.length || 0) > 0,
+							label: r.Label
+						}))
+					});
+				}
+				
+				// Query other metrics with 7-day window
+				const allOtherResults: any[] = [];
+				let otherNextToken: string | undefined;
 				do {
 					const metricDataCmd = new GetMetricDataCommand({
-						MetricDataQueries: metricDataQueries,
+						MetricDataQueries: otherMetricQueries,
 						StartTime: startTime,
 						EndTime: endTime,
-						NextToken: nextToken
+						NextToken: otherNextToken
 					});
 
 					const metricData = await cloudwatch.send(metricDataCmd);
 					
 					if (metricData.MetricDataResults) {
-						allMetricDataResults.push(...metricData.MetricDataResults);
+						allOtherResults.push(...metricData.MetricDataResults);
 					}
 					
-					nextToken = metricData.NextToken;
-				} while (nextToken);
+					otherNextToken = metricData.NextToken;
+				} while (otherNextToken);
+				
+				// Combine all results
+				const allMetricDataResults = [...allMemoryResults, ...allOtherResults];
 
 				// Merge results by Id (in case of pagination, we need to combine values)
 				const mergedResults = new Map<string, any>();

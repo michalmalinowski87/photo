@@ -141,13 +141,148 @@ async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<v
 }
 
 // ============================================================================
-// Debug Component
+// Memoized Thumbnail Item Component
 // ============================================================================
 
-const FilesGridDebugger = (_props: { uppy: Uppy }) => {
-  // Debug component removed - no longer needed
-  return null;
-};
+interface ThumbnailItemProps {
+  file: TypedUppyFile;
+  thumbnail: string | undefined;
+  status: "pending" | "uploading" | "paused" | "completed" | "error";
+  progress: number;
+  uploadComplete: boolean;
+  onRemove: (fileId: string) => void;
+}
+
+  // Memoized thumbnail item to prevent unnecessary re-renders
+  // Only re-renders when props actually change
+  const ThumbnailItem = React.memo<ThumbnailItemProps>(
+    ({ file, thumbnail, status, progress, uploadComplete, onRemove }) => {
+      // Removed manual decode() call - browser handles decoding asynchronously via decoding="async" attribute
+      // Manual decode() was causing 28+ second blocking delays per image
+      // The <img> element already has decoding="async" and loading="lazy" which provides optimal performance
+
+    const roundedProgress = Math.round(progress);
+
+    return (
+      <div className="p-1.5 h-full" style={{ contain: "layout style paint" }}>
+        <div
+          className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full"
+          style={{ willChange: "transform" }}
+        >
+          <div className="relative" style={{ aspectRatio: "1 / 1", contain: "layout" }}>
+            {thumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumbnail}
+                alt={file.name ?? "Image"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                style={{
+                  contentVisibility: "auto",
+                  transform: "translateZ(0)",
+                  imageRendering: "auto",
+                  backfaceVisibility: "hidden",
+                  WebkitBackfaceVisibility: "hidden",
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
+                <ImageIcon
+                  className="w-12 h-12 text-gray-400"
+                  strokeWidth={2}
+                />
+              </div>
+            )}
+            {(status === "uploading" || status === "paused") && (
+              <div className="absolute inset-0 z-10">
+                <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
+                <div className="absolute bottom-6 left-0 right-0 text-center z-10">
+                  <p className="text-white text-xs font-bold drop-shadow-lg">
+                    {roundedProgress}%
+                  </p>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60 overflow-hidden">
+                  <div
+                    className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm origin-left"
+                    style={{
+                      // Use scaleX for GPU acceleration instead of width
+                      transform: `scaleX(${Math.max(0, Math.min(1, progress / 100))})`,
+                      width: "100%",
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
+            {status === "completed" && (
+              <div className="absolute top-2 right-2 bg-photographer-accent text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                <Check size={16} />
+              </div>
+            )}
+            {status === "error" && (
+              <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
+                <X size={16} />
+              </div>
+            )}
+            {status !== "uploading" && !uploadComplete && (
+              <div className="absolute top-2 right-2 z-20">
+                <Tooltip content="Usuń">
+                  <button
+                    onClick={() => onRemove(file.id)}
+                    className="p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
+                    type="button"
+                  >
+                    <X size={16} />
+                  </button>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+          <div className="p-2">
+            <p
+              className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
+              title={file.name}
+            >
+              {file.name}
+            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {formatFileSize(file.size ?? 0)}
+              </p>
+              {status === "uploading" && (
+                <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
+                  {roundedProgress}%
+                </p>
+              )}
+            </div>
+            {status === "error" && file.error && (
+              <p
+                className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
+                title={String(file.error)}
+              >
+                {String(file.error)}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  },
+  // Custom comparison function - only re-render if these props change
+  (prevProps, nextProps) => {
+    return (
+      prevProps.file.id === nextProps.file.id &&
+      prevProps.thumbnail === nextProps.thumbnail &&
+      prevProps.status === nextProps.status &&
+      Math.abs(prevProps.progress - nextProps.progress) < 1 && // Only update if progress changes by >= 1%
+      prevProps.uploadComplete === nextProps.uploadComplete
+    );
+  }
+);
+
+ThumbnailItem.displayName = "ThumbnailItem";
 
 // ============================================================================
 // Component
@@ -186,6 +321,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   
   // Track last progress values to avoid unnecessary updates
   const lastProgressRef = useRef<Map<string, number>>(new Map());
+  // Per-file thumbnail source cache - ensures consistent source selection
+  // Once a source is chosen for a file, we stick with it to prevent quality inconsistencies
+  const fileThumbnailSourceRef = useRef<Map<string, string | undefined>>(new Map());
 
   // Track viewport height to conditionally hide dropzone visual on small screens
   useEffect(() => {
@@ -270,6 +408,13 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     // Copy refs to local variables for cleanup (satisfies ESLint)
     const blobUrls = blobUrlCacheRef.current;
+    const previewLoaded = previewLoadedRef.current;
+    const lastProgress = lastProgressRef.current;
+    const fileThumbnailSource = fileThumbnailSourceRef.current;
+
+    // Debounce syncFiles to batch rapid events (file-added, files-added) and reduce re-renders
+    let syncTimeout: NodeJS.Timeout | null = null;
+    let pendingForceUpdate = false;
 
     // Sync our files state with Uppy's current state
     // Trust Uppy - it manages all file state, we just display it
@@ -334,9 +479,47 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       "complete",
     ];
 
+    // Track if this is the first file-added event (needs immediate sync for initial render)
+    let isFirstFileAdded = true;
+    
+    // Debounced sync function for batching rapid events
+    const debouncedSyncFiles = (forceUpdate = false, immediate = false) => {
+      pendingForceUpdate = pendingForceUpdate || forceUpdate;
+      
+      // Immediate sync for first file-added to show initial render quickly
+      if (immediate && isFirstFileAdded) {
+        if (syncTimeout) {
+          clearTimeout(syncTimeout);
+          syncTimeout = null;
+        }
+        syncFiles(pendingForceUpdate);
+        pendingForceUpdate = false;
+        isFirstFileAdded = false;
+        return;
+      }
+      
+      if (syncTimeout) {
+        clearTimeout(syncTimeout);
+      }
+      syncTimeout = setTimeout(() => {
+        syncFiles(pendingForceUpdate);
+        pendingForceUpdate = false;
+        syncTimeout = null;
+        isFirstFileAdded = false;
+      }, 16); // Batch events within one frame (~16ms) to reduce re-renders
+    };
+
+    // Store event handlers for proper cleanup
+    const storedEventHandlers: Array<{ event: string; handler: () => void }> = [];
+
     eventHandlers.forEach((event) => {
+      const handler = () => {
+        // Immediate sync for file-added events to show initial render quickly
+        debouncedSyncFiles(false, event === "file-added" || event === "files-added");
+      };
+      storedEventHandlers.push({ event, handler });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-      (uppy.on as any)(event, syncFiles);
+      (uppy.on as any)(event, handler);
     });
 
     // For upload-progress, always force update to show progress overlays
@@ -353,9 +536,13 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     return () => {
       isMountedRef.current = false;
-      eventHandlers.forEach((event) => {
+      if (syncTimeout) {
+        clearTimeout(syncTimeout);
+        syncTimeout = null;
+      }
+      storedEventHandlers.forEach(({ event, handler }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-        (uppy.off as any)(event, syncFiles);
+        (uppy.off as any)(event, handler);
       });
       uppy.off("upload-progress", handleUploadProgress);
       uppy.off("upload", handleUpload);
@@ -366,9 +553,11 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       blobUrls.forEach((url) => URL.revokeObjectURL(url));
       blobUrls.clear();
       // Clear preview loaded tracking
-      previewLoadedRef.current.clear();
+      previewLoaded.clear();
       // Clear progress tracking
-      lastProgressRef.current.clear();
+      lastProgress.clear();
+      // Clear thumbnail source cache
+      fileThumbnailSource.clear();
     };
   }, [uppy, isOpen]);
 
@@ -425,10 +614,12 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       currentFiles.forEach(preloadPreview);
     };
 
-    uppy.on("thumbnail:generated", handleThumbnailGenerated);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    (uppy.on as any)("thumbnail:generated", handleThumbnailGenerated);
 
     return () => {
-      uppy.off("thumbnail:generated", handleThumbnailGenerated);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      (uppy.off as any)("thumbnail:generated", handleThumbnailGenerated);
     };
   }, [uppy, isOpen]); // Removed 'files' dependency to prevent render loop
 
@@ -451,6 +642,8 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         blobUrlCacheRef.current.clear();
         // Clear preview loaded tracking
         previewLoadedRef.current.clear();
+        // Clear thumbnail source cache
+        fileThumbnailSourceRef.current.clear();
         // Then clear Uppy files
         uppy.clear();
       }
@@ -539,16 +732,21 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     } else {
       const droppedFiles = e.dataTransfer.files;
       if (droppedFiles) {
-        Array.from(droppedFiles).forEach((file) => addFileToUppy(uppy, file));
+        Array.from(droppedFiles).forEach((file) => {
+          addFileToUppy(uppy, file);
+        });
       }
     }
   };
 
-  const handleRemoveFile = (fileId: string) => {
-    if (uppy && !uploading && !uploadComplete) {
-      uppy.removeFile(fileId);
-    }
-  };
+  const handleRemoveFile = useCallback(
+    (fileId: string) => {
+      if (uppy && !uploading && !uploadComplete) {
+        uppy.removeFile(fileId);
+      }
+    },
+    [uppy, uploading, uploadComplete]
+  );
 
   const handleClearFiles = () => {
     if (!uppy || uploading || uploadComplete) {
@@ -561,86 +759,57 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     // Clean up blob URLs
     blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
     blobUrlCacheRef.current.clear();
+    // Clear thumbnail source cache
+    fileThumbnailSourceRef.current.clear();
     // Then clear Uppy files
     uppy.clear();
   };
 
-  // Cache thumbnail URLs per file to avoid recalculating on every render
-  const thumbnailCacheRef = useRef<Map<string, string | undefined>>(new Map());
-
   /**
    * Get thumbnail URL for Uppy file
    *
-   * Strategy for consistent quality and no flickering:
-   * - Prefer generated thumbnail when available AND loaded (consistent 300px WebP, optimized)
-   * - Use cached blob URL if preview hasn't loaded yet (prevents flickering)
-   * - Only create new blob URL if neither preview nor cached blob URL exists
-   *
-   * Performance optimizations:
-   * - Prioritize generated thumbnails (consistent quality, already processed, matches display size)
-   * - Cache blob URLs and use them until preview is confirmed loaded (prevents flickering)
-   * - Track preview load state to know when it's safe to switch
-   * - Memoize thumbnail URLs per file to avoid recalculation
-   *
-   * Priority:
-   * 1. Generated thumbnail (file.preview) - Use if available AND already loaded (prevents white flash)
-   *    - Consistent 300px quality, optimized by ThumbnailGenerator
-   *    - Fast rendering, already processed, matches display size
-   * 2. Cached blob URL - Use if preview exists but hasn't loaded yet (prevents flicker)
-   * 3. New blob URL - Fallback for files without thumbnails yet
-   *
-   * Note: We never fetch from CloudFront/S3 for Uppy thumbnails because:
-   * - Files are local until upload completes
-   * - Blob URLs are the fastest and most responsive option
+   * Strategy for consistent quality:
+   * - Use per-file source cache to ensure same source is always used for same file
+   * - Prefer generated thumbnail (file.preview) once available - consistent 250px quality
+   * - Use blob URL only as temporary fallback until thumbnail is generated
+   * - Once thumbnail is generated, always use it (consistent quality)
    */
   const getThumbnail = useCallback((file: TypedUppyFile): string | undefined => {
-    // Create cache key based on file ID, preview state, and preview loaded state
-    const previewLoaded = previewLoadedRef.current.has(file.id);
-    const cacheKey = `${file.id}-${file.preview || ''}-${previewLoaded}`;
-    
-    // Check if we have a cached result for this exact state
-    if (thumbnailCacheRef.current.has(cacheKey)) {
-      return thumbnailCacheRef.current.get(cacheKey);
-    }
-
     const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
     let thumbnail: string | undefined;
 
-    // PRIORITY 1: Use generated thumbnail if available AND already loaded
-    // This prevents white flash when switching from blob URL to preview
-    if (file.preview && previewLoaded) {
+    // STRATEGY: Always use generated thumbnail (file.preview) once available for consistency
+    // Generated thumbnails provide consistent 250px JPEG quality for all images
+    // CRITICAL: Check preview FIRST, even if cache exists, to ensure we upgrade to preview when available
+    
+    // PRIORITY 1: Use generated thumbnail if available (consistent 250px JPEG quality)
+    // Always prefer preview once available - ensures consistent quality across all images
+    // This check happens BEFORE cache to ensure we upgrade from blob URL to preview
+    if (file.preview) {
       thumbnail = file.preview;
+      // Update cache immediately when preview becomes available (ensures consistency)
+      fileThumbnailSourceRef.current.set(file.id, thumbnail);
+      return thumbnail;
     }
-    // PRIORITY 2: Use cached blob URL if preview exists but hasn't loaded yet
-    // This prevents flickering while preview is loading
-    else if (file.preview && cachedBlobUrl) {
+    
+    // Check cache only if preview is not available (fallback to cached source)
+    const cachedThumbnail = fileThumbnailSourceRef.current.get(file.id);
+    if (cachedThumbnail !== undefined) {
+      return cachedThumbnail;
+    }
+
+    // PRIORITY 2: Use blob URL as temporary fallback until thumbnail is generated
+    if (cachedBlobUrl) {
       thumbnail = cachedBlobUrl;
     }
-    // PRIORITY 3: Use generated thumbnail if available (first time, no cached blob URL)
-    else if (file.preview) {
-      thumbnail = file.preview;
-    }
-    // PRIORITY 4: Use cached blob URL if available
-    else if (cachedBlobUrl) {
-      thumbnail = cachedBlobUrl;
-    }
-    // PRIORITY 5: Create blob URL from File object (temporary until thumbnail is generated)
+    // PRIORITY 3: Create blob URL from File object (temporary until thumbnail is generated)
     else if (file.data && file.data instanceof File) {
       thumbnail = URL.createObjectURL(file.data);
       blobUrlCacheRef.current.set(file.id, thumbnail);
     }
 
-    // Cache the result
-    thumbnailCacheRef.current.set(cacheKey, thumbnail);
-    
-    // Clean up old cache entries (keep only last 100 entries to prevent memory leak)
-    if (thumbnailCacheRef.current.size > 100) {
-      const entries = Array.from(thumbnailCacheRef.current.entries());
-      thumbnailCacheRef.current.clear();
-      entries.slice(-50).forEach(([key, value]) => {
-        thumbnailCacheRef.current.set(key, value);
-      });
-    }
+    // Cache the chosen source for this file (ensures consistency across renders)
+    fileThumbnailSourceRef.current.set(file.id, thumbnail);
 
     return thumbnail;
   }, []);
@@ -658,110 +827,16 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       const progress = getFileProgress(freshFile);
       const thumbnail = getThumbnail(freshFile);
 
+      // Use memoized component for better performance
       return (
-        <div className="p-1.5 h-full" style={{ contain: "layout style paint" }}>
-          <div
-            className="relative group bg-white dark:bg-gray-800 rounded-lg border border-gray-400 dark:border-gray-700 overflow-hidden h-full"
-            style={{ willChange: "transform" }}
-          >
-            <div className="aspect-square relative" style={{ contain: "layout" }}>
-              {thumbnail ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={thumbnail}
-                  alt={freshFile.name ?? "Image"}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                  fetchPriority="low"
-                  style={{
-                    willChange: "transform",
-                    contentVisibility: "auto",
-                    transform: "translateZ(0)",
-                    imageRendering: "auto",
-                    backfaceVisibility: "hidden",
-                    WebkitBackfaceVisibility: "hidden",
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full bg-photographer-muted dark:bg-gray-700 flex items-center justify-center">
-                  <ImageIcon
-                    className="w-12 h-12 text-gray-400"
-                    strokeWidth={2}
-                  />
-                </div>
-              )}
-              {(status === "uploading" || status === "paused") && (
-                <div className="absolute inset-0 z-10">
-                  <div className="absolute inset-0 bg-black/50 dark:bg-black/60"></div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
-                  <div className="absolute bottom-6 left-0 right-0 text-center z-10">
-                    <p className="text-white text-xs font-bold drop-shadow-lg">
-                      {Math.round(progress)}%
-                    </p>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/50 dark:bg-black/60">
-                    <div
-                      className="h-full bg-white dark:bg-blue-400 transition-all duration-200 ease-out shadow-sm"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, progress))}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-              {status === "completed" && (
-                <div className="absolute top-2 right-2 bg-photographer-accent text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                  <Check size={16} />
-                </div>
-              )}
-              {status === "error" && (
-                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow-lg flex items-center justify-center w-6 h-6">
-                  <X size={16} />
-                </div>
-              )}
-              {status !== "uploading" && !uploadComplete && (
-                <div className="absolute top-2 right-2 z-20">
-                  <Tooltip content="Usuń">
-                    <button
-                      onClick={() => handleRemoveFile(freshFile.id)}
-                      className="p-1.5 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shadow-lg backdrop-blur-sm"
-                      type="button"
-                    >
-                      <X size={16} />
-                    </button>
-                  </Tooltip>
-                </div>
-              )}
-            </div>
-            <div className="p-2">
-              <p
-                className="text-xs font-medium text-gray-900 dark:text-white truncate mb-0.5"
-                title={freshFile.name}
-              >
-                {freshFile.name}
-              </p>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatFileSize(freshFile.size ?? 0)}
-                </p>
-                {status === "uploading" && (
-                  <p className="text-xs text-gray-600 dark:text-gray-300 font-semibold">
-                    {Math.round(progress)}%
-                  </p>
-                )}
-              </div>
-              {status === "error" && freshFile.error && (
-                <p
-                  className="text-xs text-red-600 dark:text-red-400 mt-1 truncate"
-                  title={String(freshFile.error)}
-                >
-                  {String(freshFile.error)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <ThumbnailItem
+          file={freshFile}
+          thumbnail={thumbnail}
+          status={status}
+          progress={progress}
+          uploadComplete={uploadComplete}
+          onRemove={handleRemoveFile}
+        />
       );
     },
     [files, uppy, getThumbnail, uploadComplete, handleRemoveFile]
@@ -896,9 +971,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
               {files.length > 0 && (
                 <>
-                  {process.env.NODE_ENV === "development" && uppy && (
-                    <FilesGridDebugger uppy={uppy} />
-                  )}
                   <div
                     style={{
                       height: "calc(80vh - 200px)",
@@ -911,7 +983,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
                       data={files}
                       overscan={100}
                       increaseViewportBy={50}
-                      itemContent={renderFileItem}
+                      itemContent={(index) => {
+                        return renderFileItem(index);
+                      }}
                       style={{ height: "100%" }}
                       components={{
                         List: (() => {

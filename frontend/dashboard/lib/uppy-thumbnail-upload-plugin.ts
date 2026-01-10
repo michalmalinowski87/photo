@@ -71,8 +71,8 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
   override install() {
     // Listen for thumbnail generation event from Uppy's ThumbnailGenerator
     // We don't need to access the plugin directly - just listen to its events
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    (this.uppy as Uppy).on("thumbnail:generated", this.handleThumbnailGenerated.bind(this));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    (this.uppy as any).on("thumbnail:generated", this.handleThumbnailGenerated.bind(this));
 
     // Also listen for upload completion to upload preview (1200px) and ensure thumbnail is uploaded
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -80,8 +80,8 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
   }
 
   override uninstall() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
-    (this.uppy as Uppy).off("thumbnail:generated", this.handleThumbnailGenerated);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
+    (this.uppy as any).off("thumbnail:generated", this.handleThumbnailGenerated);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/unbound-method
     (this.uppy as Uppy).off("upload-success", this.handleUploadSuccess);
   }
