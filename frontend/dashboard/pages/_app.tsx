@@ -411,11 +411,13 @@ function AppContent({ Component, pageProps }: AppProps) {
       {/* Delayed loading overlay for all navigation - shows after frustration point */}
       {/* Handles both navigation and bundle loading for all routes */}
       {/* Always render the component (it handles its own visibility) - must stay mounted to track delay */}
-      {/* Longer delay in development (1s) to avoid showing overlay on fast dev speeds */}
+      {/* Longer delay in development (2s) to avoid showing overlay on fast dev speeds */}
+      {/* minShowDuration prevents flickering when overlay shows and bundle loads almost immediately */}
       <DelayedLoadingOverlay
         isLoading={isAnyLoading}
         message={isBundleLoading ? "Ładowanie modułów..." : "Ładowanie..."}
         delay={process.env.NODE_ENV === "development" ? 2000 : 1000}
+        minShowDuration={500}
       />
       
       {/* Mobile warning modal for authenticated dashboard pages */}
