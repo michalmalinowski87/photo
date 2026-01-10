@@ -791,7 +791,7 @@ export default function GalleryDetail() {
       <DelayedLoadingOverlay
         isLoading={isAnyLoading}
         message={isBundleLoading ? "Ładowanie modułów..." : "Przetwarzanie..."}
-        delay={process.env.NODE_ENV === "development" ? 1000 : 400}
+        delay={process.env.NODE_ENV === "development" ? 2000 : 1000}
       />
 
       {/* Main Content - Orders */}

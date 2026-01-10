@@ -60,7 +60,28 @@ export function useCreateGallery() {
           queryKey: queryKeys.orders.list(data.galleryId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+      // Remove ALL gallery infinite list queries from cache (active and inactive)
+      // This ensures new gallery appears in all filter views (robocze, wyslano, etc.)
+      // Removing queries forces fresh fetch when components mount, bypassing refetchOnMount: false
+      void queryClient.removeQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key.length >= 3 &&
+            key[0] === "galleries" &&
+            key[1] === "list" &&
+            key[2] === "infinite"
+          );
+        },
+      });
+
+      // Also invalidate to ensure any remaining queries are marked as stale
+      // This handles edge cases where queries might not match the predicate exactly
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.lists(),
+        refetchType: 'active', // Refetch active queries immediately
+      });
     },
   });
 }

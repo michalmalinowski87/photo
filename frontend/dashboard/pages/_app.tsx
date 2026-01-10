@@ -415,7 +415,7 @@ function AppContent({ Component, pageProps }: AppProps) {
       <DelayedLoadingOverlay
         isLoading={isAnyLoading}
         message={isBundleLoading ? "Ładowanie modułów..." : "Ładowanie..."}
-        delay={process.env.NODE_ENV === "development" ? 1000 : 400}
+        delay={process.env.NODE_ENV === "development" ? 2000 : 1000}
       />
       
       {/* Mobile warning modal for authenticated dashboard pages */}
