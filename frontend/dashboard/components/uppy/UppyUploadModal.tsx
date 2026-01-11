@@ -154,6 +154,25 @@ interface ThumbnailItemProps {
   onRemove: (fileId: string) => void;
 }
 
+// Custom comparison function for ThumbnailItem memoization
+// Only re-render if props actually changed
+const areThumbnailItemPropsEqual = (
+  prevProps: ThumbnailItemProps,
+  nextProps: ThumbnailItemProps
+): boolean => {
+  // Compare all props by value (not just reference)
+  // This ensures we only re-render when actual data changes, not just object references
+  return (
+    prevProps.file.id === nextProps.file.id &&
+    prevProps.file.preview === nextProps.file.preview && // Compare preview value, not reference
+    prevProps.thumbnail === nextProps.thumbnail &&
+    prevProps.status === nextProps.status &&
+    prevProps.progress === nextProps.progress &&
+    prevProps.uploadComplete === nextProps.uploadComplete &&
+    prevProps.onRemove === nextProps.onRemove
+  );
+};
+
 // Memoized thumbnail item to prevent unnecessary re-renders
 // Only re-renders when props actually change
 const ThumbnailItem = React.memo<ThumbnailItemProps>(
@@ -267,7 +286,8 @@ const ThumbnailItem = React.memo<ThumbnailItemProps>(
         </div>
       </div>
     );
-  }
+  },
+  areThumbnailItemPropsEqual
 );
 
 ThumbnailItem.displayName = "ThumbnailItem";
@@ -552,7 +572,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     // Debounce thumbnail updates to batch rapid thumbnail generations
     let thumbnailUpdateTimeout: NodeJS.Timeout | null = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
     const handleThumbnailGenerated = (_file: any) => {
       // Debounce updates to batch rapid thumbnail generations
       if (thumbnailUpdateTimeout) {
@@ -564,9 +584,49 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
           return;
         }
 
-        // Simple update - just sync files from Uppy
-        const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
-        setFiles(uppyFiles);
+        // OPTIMIZED: Preserve file object references and only update the file that changed
+        // This prevents all ThumbnailItem components from re-rendering when only one thumbnail is generated
+        setFiles((prevFiles) => {
+          const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
+          
+          // If file count changed, we need a full update (new files added/removed)
+          if (prevFiles.length !== uppyFiles.length) {
+            return uppyFiles;
+          }
+
+          // Create a map of existing files by ID for quick lookup
+          const existingFilesMap = new Map(prevFiles.map(f => [f.id, f]));
+          
+          // Check if any file's preview actually changed
+          let hasChanges = false;
+          const updatedFiles = uppyFiles.map((uppyFile, index) => {
+            const existingFile = existingFilesMap.get(uppyFile.id);
+            
+            // If file exists and preview changed, create new object with updated preview
+            if (existingFile && existingFile.preview !== uppyFile.preview) {
+              hasChanges = true;
+              // Return new object with updated preview, but keep other properties from existing file
+              return { ...existingFile, preview: uppyFile.preview } as TypedUppyFile;
+            }
+            
+            // Preserve existing reference if nothing changed
+            // Also check if the file at this index is the same reference
+            if (existingFile && prevFiles[index] === existingFile) {
+              return existingFile; // Same reference, same position
+            }
+            
+            return existingFile ?? uppyFile;
+          });
+
+          // CRITICAL: If nothing changed, return the previous array reference
+          // This prevents VirtuosoGrid from seeing a change and re-rendering all items
+          if (!hasChanges && updatedFiles.length === prevFiles.length && 
+              updatedFiles.every((f, i) => f === prevFiles[i])) {
+            return prevFiles; // Return same array reference - no re-render!
+          }
+
+          return updatedFiles;
+        });
       }, 16); // Batch updates within one frame (~16ms)
     };
 
