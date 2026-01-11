@@ -1,5 +1,6 @@
 import Uppy from "@uppy/core";
 import "@uppy/core/css/style.min.css";
+import ThumbnailGenerator from "@uppy/thumbnail-generator";
 import {
   Upload,
   Image as ImageIcon,
@@ -715,6 +716,25 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     blobUrlCacheRef.current.clear();
     // Then clear Uppy files
     uppy.clear();
+    
+    // CRITICAL FIX: ThumbnailGenerator plugin doesn't automatically reinitialize after clear()
+    // We need to reset it by removing and re-adding it to restore thumbnail generation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const thumbnailGeneratorPlugin = (uppy as any).getPlugin('ThumbnailGenerator');
+    if (thumbnailGeneratorPlugin) {
+      // Remove the plugin first to avoid duplicates
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      (uppy as any).removePlugin(thumbnailGeneratorPlugin);
+    }
+    
+    // Re-add ThumbnailGenerator with the same configuration
+    // This ensures it's properly initialized for new files
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    uppy.use(ThumbnailGenerator, {
+      thumbnailWidth: 600,
+      thumbnailType: "image/jpeg",
+      waitForThumbnailsBeforeUpload: false,
+    });
   };
 
   /**
