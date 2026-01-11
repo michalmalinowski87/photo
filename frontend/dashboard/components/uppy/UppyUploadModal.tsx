@@ -171,14 +171,16 @@ const ThumbnailItem = React.memo<ThumbnailItemProps>(
         >
           <div className="relative" style={{ aspectRatio: "1 / 1", contain: "layout" }}>
             {thumbnail ? (
+              // Use regular img tag for Uppy thumbnails (data URLs and blob URLs)
+              // Next.js Image component has compatibility issues with these URL types
               // eslint-disable-next-line @next/next/no-img-element
               <img
+                key={`${file.id}-${thumbnail.substring(0, 50)}`}
                 src={thumbnail}
                 alt={file.name ?? "Image"}
-                className="w-full h-full object-cover"
+                className="object-cover w-full h-full"
                 loading="lazy"
                 decoding="async"
-                fetchPriority="low"
                 style={{
                   contentVisibility: "auto",
                   transform: "translateZ(0)",
@@ -264,16 +266,6 @@ const ThumbnailItem = React.memo<ThumbnailItemProps>(
         </div>
       </div>
     );
-  },
-  // Custom comparison function - only re-render if these props change
-  (prevProps, nextProps) => {
-    return (
-      prevProps.file.id === nextProps.file.id &&
-      prevProps.thumbnail === nextProps.thumbnail &&
-      prevProps.status === nextProps.status &&
-      Math.abs(prevProps.progress - nextProps.progress) < 1 && // Only update if progress changes by >= 1%
-      prevProps.uploadComplete === nextProps.uploadComplete
-    );
   }
 );
 
@@ -311,14 +303,11 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const lastSyncedFileIdsRef = useRef<string[]>([]);
   // Cache blob URLs to avoid recreating them on every render
   const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
-  // Track which files have loaded their preview thumbnails (prevents flicker)
-  const previewLoadedRef = useRef<Set<string>>(new Set());
 
   // Track last progress values to avoid unnecessary updates
   const lastProgressRef = useRef<Map<string, number>>(new Map());
-  // Per-file thumbnail source cache - ensures consistent source selection
-  // Once a source is chosen for a file, we stick with it to prevent quality inconsistencies
-  const fileThumbnailSourceRef = useRef<Map<string, string | undefined>>(new Map());
+
+
 
   // Track viewport height to conditionally hide dropzone visual on small screens
   useEffect(() => {
@@ -403,9 +392,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     // Copy refs to local variables for cleanup (satisfies ESLint)
     const blobUrls = blobUrlCacheRef.current;
-    const previewLoaded = previewLoadedRef.current;
     const lastProgress = lastProgressRef.current;
-    const fileThumbnailSource = fileThumbnailSourceRef.current;
 
     // Debounce syncFiles to batch rapid events (file-added, files-added) and reduce re-renders
     let syncTimeout: NodeJS.Timeout | null = null;
@@ -422,6 +409,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       const uppyFiles = Object.values(uppy.getFiles());
       const currentFileIds = uppyFiles.map((f) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
+
 
       // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
       const filesChanged =
@@ -463,12 +451,13 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     // Listen to ALL Uppy events that affect file state
     // Uppy will notify us of every change, we just display what Uppy tells us
+    // Note: thumbnail:generated is handled in a separate useEffect below to trigger re-renders
+    // (ThumbnailUploadPlugin also listens to it for S3 upload purposes)
     const eventHandlers = [
       "file-added",
       "file-removed",
       "files-added",
       "upload-success",
-      "thumbnail:generated",
       "upload-error",
       "restriction-failed",
       "complete",
@@ -547,76 +536,50 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       // Clean up blob URLs (using refs copied at effect start)
       blobUrls.forEach((url) => URL.revokeObjectURL(url));
       blobUrls.clear();
-      // Clear preview loaded tracking
-      previewLoaded.clear();
       // Clear progress tracking
       lastProgress.clear();
-      // Clear thumbnail source cache
-      fileThumbnailSource.clear();
     };
   }, [uppy, isOpen]);
 
-  // Preload preview thumbnails when they become available to prevent flicker
-  // OPTIMIZATION: Removed 'files' from dependencies to prevent render loop
-  // Instead, we listen to Uppy events directly and use refs to track state
+  // Listen for thumbnail:generated events - Uppy generates thumbnails automatically
+  // Only update the specific file that had its thumbnail generated to prevent re-rendering all items
   useEffect(() => {
     if (!uppy || !isOpen) {
       return;
     }
 
-    const preloadPreview = (file: TypedUppyFile) => {
-      // If preview exists but hasn't been loaded yet, preload it
-      if (file.preview && !previewLoadedRef.current.has(file.id)) {
-        const img = new Image();
-        img.onload = () => {
-          // Mark as loaded - no need to call setFiles, the thumbnail will be used on next render
-          previewLoadedRef.current.add(file.id);
-          // Trigger a single update via syncFiles (which will check if files changed)
-          // Use a small delay to batch multiple preview loads
-          if (isMountedRef.current && uppy && isOpenRef.current) {
-            setTimeout(() => {
-              if (isMountedRef.current && uppy && isOpenRef.current) {
-                const uppyFiles = Object.values(uppy.getFiles());
-                const currentFileIds = uppyFiles.map((f) => f.id).sort();
-                const lastFileIds = lastSyncedFileIdsRef.current.sort();
-                const filesChanged =
-                  currentFileIds.length !== lastFileIds.length ||
-                  !currentFileIds.every((id, idx) => id === lastFileIds[idx]);
-                // Only update if files actually changed
-                if (filesChanged) {
-                  lastSyncedFileIdsRef.current = currentFileIds;
-                  setFiles(uppyFiles as TypedUppyFile[]);
-                }
-              }
-            }, 50); // Batch preview loads within 50ms
-          }
-        };
-        img.onerror = () => {
-          // If preview fails to load, keep using blob URL
-          // Don't mark as loaded, so we'll keep using blob URL
-        };
-        img.src = file.preview;
+    // Debounce thumbnail updates to batch rapid thumbnail generations
+    let thumbnailUpdateTimeout: NodeJS.Timeout | null = null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleThumbnailGenerated = (_file: any) => {
+      // Debounce updates to batch rapid thumbnail generations
+      if (thumbnailUpdateTimeout) {
+        clearTimeout(thumbnailUpdateTimeout);
       }
-    };
 
-    // Preload previews for all files that have them
-    const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
-    uppyFiles.forEach(preloadPreview);
+      thumbnailUpdateTimeout = setTimeout(() => {
+        if (!isMountedRef.current || !uppy || !isOpenRef.current) {
+          return;
+        }
 
-    // Listen for thumbnail:generated event to preload new previews
-    const handleThumbnailGenerated = () => {
-      const currentFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
-      currentFiles.forEach(preloadPreview);
+        // Simple update - just sync files from Uppy
+        const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
+        setFiles(uppyFiles);
+      }, 16); // Batch updates within one frame (~16ms)
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    (uppy.on as any)("thumbnail:generated", handleThumbnailGenerated);
+    (uppy as any).on("thumbnail:generated", handleThumbnailGenerated);
 
     return () => {
+      if (thumbnailUpdateTimeout) {
+        clearTimeout(thumbnailUpdateTimeout);
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (uppy.off as any)("thumbnail:generated", handleThumbnailGenerated);
+      (uppy as any).off("thumbnail:generated", handleThumbnailGenerated);
     };
-  }, [uppy, isOpen]); // Removed 'files' dependency to prevent render loop
+  }, [uppy, isOpen]);
 
   const handleClose = () => {
     if (uploading) {
@@ -635,10 +598,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         // Clean up blob URLs
         blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
         blobUrlCacheRef.current.clear();
-        // Clear preview loaded tracking
-        previewLoadedRef.current.clear();
-        // Clear thumbnail source cache
-        fileThumbnailSourceRef.current.clear();
         // Then clear Uppy files
         uppy.clear();
       }
@@ -754,60 +713,30 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     // Clean up blob URLs
     blobUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
     blobUrlCacheRef.current.clear();
-    // Clear thumbnail source cache
-    fileThumbnailSourceRef.current.clear();
     // Then clear Uppy files
     uppy.clear();
   };
 
   /**
    * Get thumbnail URL for Uppy file
-   *
-   * Strategy for consistent quality:
-   * - Use per-file source cache to ensure same source is always used for same file
-   * - Prefer generated thumbnail (file.preview) once available - consistent 250px quality
-   * - Use blob URL only as temporary fallback until thumbnail is generated
-   * - Once thumbnail is generated, always use it (consistent quality)
+   * 
+   * Ultra-minimal: Only use Uppy's preview, no fallbacks
+   * - Use file.preview if available (Uppy handles placeholder replacement)
+   * - Return undefined if no preview available (let Uppy handle it)
    */
   const getThumbnail = useCallback((file: TypedUppyFile): string | undefined => {
-    const cachedBlobUrl = blobUrlCacheRef.current.get(file.id);
-    let thumbnail: string | undefined;
-
-    // STRATEGY: Always use generated thumbnail (file.preview) once available for consistency
-    // Generated thumbnails provide consistent 250px JPEG quality for all images
-    // CRITICAL: Check preview FIRST, even if cache exists, to ensure we upgrade to preview when available
-
-    // PRIORITY 1: Use generated thumbnail if available (consistent 250px JPEG quality)
-    // Always prefer preview once available - ensures consistent quality across all images
-    // This check happens BEFORE cache to ensure we upgrade from blob URL to preview
-    if (file.preview) {
-      thumbnail = file.preview;
-      // Update cache immediately when preview becomes available (ensures consistency)
-      fileThumbnailSourceRef.current.set(file.id, thumbnail);
-      return thumbnail;
+    // Get fresh file data from Uppy to ensure we have latest preview
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const freshFile = (uppy?.getFile?.(file.id) ?? file) as TypedUppyFile;
+    
+    // Use Uppy's generated thumbnail if available
+    if (freshFile.preview && typeof freshFile.preview === 'string') {
+      return freshFile.preview;
     }
 
-    // Check cache only if preview is not available (fallback to cached source)
-    const cachedThumbnail = fileThumbnailSourceRef.current.get(file.id);
-    if (cachedThumbnail !== undefined) {
-      return cachedThumbnail;
-    }
-
-    // PRIORITY 2: Use blob URL as temporary fallback until thumbnail is generated
-    if (cachedBlobUrl) {
-      thumbnail = cachedBlobUrl;
-    }
-    // PRIORITY 3: Create blob URL from File object (temporary until thumbnail is generated)
-    else if (file.data && file.data instanceof File) {
-      thumbnail = URL.createObjectURL(file.data);
-      blobUrlCacheRef.current.set(file.id, thumbnail);
-    }
-
-    // Cache the chosen source for this file (ensures consistency across renders)
-    fileThumbnailSourceRef.current.set(file.id, thumbnail);
-
-    return thumbnail;
-  }, []);
+    // No fallback - just return undefined if preview not ready
+    return undefined;
+  }, [uppy]);
 
   // Memoize itemContent callback to prevent unnecessary re-renders
   // MUST be before early return to satisfy React hooks rules
@@ -818,6 +747,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
       // Get fresh file state from Uppy to ensure we have latest isPaused value
       const freshFile = (uppy?.getFile(file.id) ?? file) as TypedUppyFile;
+      
       const status = getFileStatus(freshFile);
       const progress = getFileProgress(freshFile);
       const thumbnail = getThumbnail(freshFile);
@@ -834,7 +764,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         />
       );
     },
-    [files, uppy, getThumbnail, uploadComplete, handleRemoveFile]
+    [uppy, files, getThumbnail, uploadComplete, handleRemoveFile]
   );
 
   if (!isOpen) {

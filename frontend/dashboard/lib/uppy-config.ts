@@ -1,9 +1,9 @@
 import AwsS3 from "@uppy/aws-s3";
 import Uppy from "@uppy/core";
 import type { UppyFile } from "@uppy/core";
+import ThumbnailGenerator from "@uppy/thumbnail-generator";
 
 import api from "./api-service";
-import { ParallelThumbnailGenerator } from "./uppy-parallel-thumbnail-plugin";
 import { ThumbnailUploadPlugin } from "./uppy-thumbnail-upload-plugin";
 
 export type UploadType = "originals" | "finals";
@@ -526,26 +526,12 @@ export function createUppyInstance(config: UppyConfigOptions): any {
     // Restriction failed event handler
   });
 
-  // Add Parallel Thumbnail Generator using Web Workers for concurrent processing
-  // Processes thumbnails simultaneously for 4-8x performance improvement
-  // Ultra-aggressively optimized for maximum performance: 96px size (20% reduction), 0.20 quality
-  // Quality limit reached at 0.20, now optimizing dimensions for even faster processing
-  // Adaptive worker count: 4 workers for <=4 cores, 6 workers for >4 cores (conservative for slower PCs)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
-  (uppy.use as any)(ParallelThumbnailGenerator, {
-    thumbnailWidth: 96, // 96px - reduced by 20% from 120px for even faster processing
-    thumbnailType: "image/jpeg", // JPEG - faster encoding than WebP
-    // maxWorkers not specified - will use adaptive count (4 for <=4 cores, 6 for >4 cores)
-    workerPath: "/thumbnail-worker.js", // Path to Web Worker file
+  // Use Uppy's official thumbnail generator - simple and reliable
+  uppy.use(ThumbnailGenerator, {
+    thumbnailWidth: 600, // Higher quality thumbnails for better display
+    thumbnailType: "image/jpeg",
+    waitForThumbnailsBeforeUpload: false, // Don't block uploads
   });
-
-  // Original ThumbnailGenerator disabled - using parallel version for better performance
-  // If quality issues persist, can re-enable original:
-  // uppy.use(ThumbnailGenerator, {
-  //   thumbnailWidth: 250,
-  //   thumbnailType: "image/jpeg",
-  //   waitForThumbnailsBeforeUpload: false,
-  // });
 
   // Add custom thumbnail upload plugin to upload generated thumbnails to S3
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return
