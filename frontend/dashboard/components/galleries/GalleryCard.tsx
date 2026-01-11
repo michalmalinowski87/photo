@@ -6,8 +6,9 @@ import {
   Eye,
   Trash2,
   Paperclip,
-  Image,
+  Image as ImageIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useRef } from "react";
 
@@ -26,6 +27,7 @@ interface GalleryCardProps {
 
 export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: GalleryCardProps) => {
   const [openActionMenu, setOpenActionMenu] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   const galleryName =
@@ -141,22 +143,20 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
     <div className="bg-photographer-surface dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-photographer-border dark:border-gray-700 h-full flex flex-col">
       {/* Cover Photo Section */}
       <div className="relative h-56 bg-photographer-muted dark:bg-gray-700 overflow-hidden flex-shrink-0">
-        {coverPhotoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+        {coverPhotoUrl && !imageError ? (
+          <Image
             src={coverPhotoUrl}
             alt={galleryName || "Gallery cover"}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = "none";
-            }}
+            fill
+            className="object-cover"
+            priority={false}
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="w-24 h-24 rounded-full bg-photographer-border dark:bg-gray-600 flex items-center justify-center">
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <Image
+              <ImageIcon
                 className="w-12 h-12 text-photographer-mutedText dark:text-gray-500"
                 aria-hidden="true"
               />

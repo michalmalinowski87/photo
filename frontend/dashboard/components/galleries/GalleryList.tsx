@@ -1,6 +1,6 @@
 import {
   Trash2,
-  Image,
+  Image as ImageIcon,
   Folder,
   Send,
   CheckCircle,
@@ -13,6 +13,7 @@ import {
   Eye,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 
@@ -148,18 +149,20 @@ const CoverPhotoCell = ({ coverPhotoUrl }: { coverPhotoUrl: string | null | unde
     return (
       <div className="flex items-center justify-center w-24 h-24 bg-photographer-elevated dark:bg-gray-700 rounded-lg">
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <Image className="w-12 h-12 text-gray-400" aria-hidden="true" />
+        <ImageIcon className="w-12 h-12 text-gray-400" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+    <div className="flex items-center justify-center relative w-24 h-24">
+      <Image
         src={coverPhotoUrl}
         alt="Okładka galerii"
-        className="w-24 h-24 object-cover rounded-lg"
+        width={96}
+        height={96}
+        className="object-cover rounded-lg"
+        priority={false}
         onError={() => setImageError(true)}
       />
     </div>
@@ -416,7 +419,7 @@ const GalleryList = ({
       default:
         return {
           // eslint-disable-next-line jsx-a11y/alt-text
-          icon: <Image size={64} aria-hidden="true" />,
+          icon: <ImageIcon size={64} aria-hidden="true" />,
           title: "Brak galerii do wyświetlenia",
           description: "Nie znaleziono galerii spełniających kryteria filtrowania.",
         };
