@@ -35,8 +35,8 @@ export function AuthProvider({
       return;
     }
 
-    // Use provided gallery ID or extract from pathname (e.g., /gallery/abc123 or /login/abc123)
-    const currentGalleryId = initialGalleryId || pathname?.match(/\/(?:gallery|login)\/([^/]+)/)?.[1] || null;
+    // Use provided gallery ID or extract from pathname (e.g., /abc123 or /login/abc123)
+    const currentGalleryId = initialGalleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
 
     if (!currentGalleryId) {
       setIsLoading(false);
@@ -77,15 +77,24 @@ export function AuthProvider({
   };
 
   const logout = () => {
-    const currentGalleryId = galleryId;
+    // Get galleryId from state or extract from current pathname
+    const currentGalleryId = galleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
+    
     if (currentGalleryId) {
       localStorage.removeItem(`gallery_token_${currentGalleryId}`);
       localStorage.removeItem(`gallery_name_${currentGalleryId}`);
+      setToken(null);
+      setGalleryId(null);
+      setGalleryName(null);
+      // Redirect to login page for this gallery
+      router.push(`/login/${currentGalleryId}`);
+    } else {
+      // If no galleryId found, clear everything and redirect to root
+      setToken(null);
+      setGalleryId(null);
+      setGalleryName(null);
+      router.push("/");
     }
-    setToken(null);
-    setGalleryId(null);
-    setGalleryName(null);
-    router.push(`/gallery/login/${currentGalleryId || ""}`);
   };
 
   return (

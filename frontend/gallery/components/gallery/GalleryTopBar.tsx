@@ -118,7 +118,7 @@ export function GalleryTopBar({
           )}
           <button
             onClick={handleLogout}
-            className="px-5 py-2.5 text-base md:text-lg font-medium text-foreground hover:text-foreground transition-colors rounded-lg hover:bg-white/10"
+            className="px-5 py-2.5 text-base md:text-lg font-medium text-foreground hover:text-foreground transition-all duration-200 rounded-lg hover:bg-white/10 active:scale-95 active:opacity-80"
           >
             Wyloguj
           </button>

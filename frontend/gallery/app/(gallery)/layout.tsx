@@ -6,7 +6,8 @@ import { AuthProvider } from "@/providers/AuthProvider";
 export default function GalleryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const params = useParams();
-  const galleryId = params?.id as string || pathname?.match(/\/(?:gallery|login)\/([^/]+)/)?.[1] || null;
+  // Extract galleryId from pathname: /[id] or /login/[id]
+  const galleryId = params?.id as string || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
 
   return (
     <AuthProvider galleryId={galleryId || undefined}>

@@ -16,14 +16,16 @@ export default function GalleryPage() {
   const router = useRouter();
   const { token, galleryId, galleryName, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
-  const [gridLayout, setGridLayout] = useState<GridLayout>("standard");
+  const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || !token || !galleryId)) {
-      router.push(`/gallery/login/${id}`);
+      if (id) {
+        router.push(`/login/${id}`);
+      }
     }
   }, [isLoading, isAuthenticated, token, galleryId, id, router]);
 
@@ -50,8 +52,8 @@ export default function GalleryPage() {
         if (openGalleryRef.current) {
           openGalleryRef.current(0);
         }
-        // Reset to standard layout after opening
-        setGridLayout("standard");
+        // Reset to marble layout after opening
+        setGridLayout("marble");
       }, 100);
       
       return () => clearTimeout(timeoutId);
@@ -110,7 +112,6 @@ export default function GalleryPage() {
       <DownloadOverlay
         isVisible={downloadState.showOverlay}
         isError={downloadState.isError}
-        errorMessage={downloadState.errorMessage}
         onClose={closeOverlay}
       />
       <GalleryTopBar 
@@ -129,7 +130,7 @@ export default function GalleryPage() {
         >
           <VirtuosoGridComponent
             images={images}
-            layout={gridLayout === "carousel" ? "standard" : gridLayout}
+            layout={gridLayout === "carousel" ? "marble" : gridLayout}
             hasNextPage={hasNextPage}
             onLoadMore={() => fetchNextPage()}
             isFetchingNextPage={isFetchingNextPage}

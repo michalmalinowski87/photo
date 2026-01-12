@@ -24,11 +24,14 @@ function LoginForm() {
 
   // Check if already logged in
   useEffect(() => {
-    if (!galleryId || !apiUrl) return;
+    if (!galleryId || !apiUrl) {
+      setChecking(false);
+      return;
+    }
 
     const token = localStorage.getItem(`gallery_token_${galleryId}`);
-    if (token && isAuthenticated) {
-      router.replace(`/gallery/${galleryId}`);
+    if (token && isAuthenticated && galleryId) {
+      router.replace(`/${galleryId}`);
     } else {
       setChecking(false);
     }
@@ -54,8 +57,10 @@ function LoginForm() {
       // Store token and login
       login(galleryId, data.token, data.galleryName);
 
-      // Redirect to gallery
-      router.push(`/gallery/${galleryId}`);
+      // Redirect to gallery view
+      if (galleryId) {
+        router.push(`/${galleryId}`);
+      }
     } catch (err) {
       setError(formatApiError(err));
       setLoading(false);

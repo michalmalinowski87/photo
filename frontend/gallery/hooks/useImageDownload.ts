@@ -16,7 +16,6 @@ interface DownloadOptions {
 export interface DownloadState {
   showOverlay: boolean;
   isError: boolean;
-  errorMessage?: string;
 }
 
 /**
@@ -103,7 +102,6 @@ export function useImageDownload() {
             setDownloadState({
               showOverlay: true,
               isError: true,
-              errorMessage: "Nie można otworzyć okna pobierania. Sprawdź ustawienia blokady wyskakujących okien w przeglądarce.",
             });
             setDownloading(false);
             return;
@@ -147,24 +145,20 @@ export function useImageDownload() {
         }, 300);
       } catch (error) {
         console.error("Download error:", error);
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : "Wystąpił nieoczekiwany błąd podczas pobierania zdjęcia.";
+        // Don't expose actual error message for security reasons
         setDownloadState({
           showOverlay: true,
           isError: true,
-          errorMessage,
         });
         setDownloading(false);
       }
     },
     onError: (error) => {
       console.error("Download error:", formatApiError(error));
-      const errorMessage = formatApiError(error) || "Wystąpił błąd podczas pobierania zdjęcia.";
+      // Don't expose actual error message for security reasons
       setDownloadState({
         showOverlay: true,
         isError: true,
-        errorMessage,
       });
       setDownloading(false);
     },

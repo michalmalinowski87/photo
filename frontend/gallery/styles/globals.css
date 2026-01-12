@@ -6,7 +6,7 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
-    --primary: 139 19% 40%;
+    --primary: 30 25% 45%; /* Beige color #8B6F57 */
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
