@@ -9,6 +9,14 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@photocloud/gallery-components"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'dat3mi5gqa8v2.cloudfront.net',
+      },
+    ],
+  },
   // Optimize package imports to reduce bundle size
   experimental: {
     optimizePackageImports: ["lucide-react", "@tanstack/react-query", "react-virtuoso"],

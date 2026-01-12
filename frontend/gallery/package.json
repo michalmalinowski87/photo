@@ -13,13 +13,23 @@
   },
   "dependencies": {
     "@photocloud/gallery-components": "*",
+    "@tanstack/react-query": "^5.80.5",
+    "autoprefixer": "^10.4.20",
+    "encoding": "^0.1.13",
+    "justified-layout": "^4.1.0",
+    "lightgallery": "^2.8.0",
+    "lucide-react": "^0.468.0",
     "next": "15.5.7",
+    "postcss": "^8.4.49",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/seedrandom": "^3.0.0",
+    "seedrandom": "^3.0.5",
     "typescript": "^5.7.2"
   }
 }

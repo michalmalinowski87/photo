@@ -4,19 +4,48 @@ const path = require('path');
 const nextConfig = {
 	reactStrictMode: true,
 	transpilePackages: ['@photocloud/gallery-components'],
-	// Next.js 15: Bundle external packages for Pages Router for faster startup times
-	experimental: {
-		bundlePagesRouterDependencies: true,
+	images: {
+		remotePatterns: [
+			{
+				protocol: 'https',
+				hostname: 'dat3mi5gqa8v2.cloudfront.net',
+			},
+		],
 	},
 	webpack: (config, { isServer }) => {
-		// Resolve React and React-DOM from root node_modules in yarn workspace
-		// This ensures Next.js can find React even when it's hoisted to the root
+		// Resolve modules from root node_modules in yarn workspace
 		const rootNodeModules = path.resolve(__dirname, '../../node_modules');
-		config.resolve.alias = {
-			...config.resolve.alias,
-			react: path.resolve(rootNodeModules, 'react'),
-			'react-dom': path.resolve(rootNodeModules, 'react-dom'),
-		};
+		const localNodeModules = path.resolve(__dirname, 'node_modules');
+		
+		// Add both local and root node_modules to resolve paths
+		config.resolve.modules = [localNodeModules, rootNodeModules, 'node_modules'];
+
+		// Only alias React for client builds to avoid SSG issues
+		if (!isServer) {
+			config.resolve.alias = {
+				...config.resolve.alias,
+				react: path.resolve(rootNodeModules, 'react'),
+				'react-dom': path.resolve(rootNodeModules, 'react-dom'),
+				'@': path.resolve(__dirname, '.'),
+			};
+		} else {
+			config.resolve.alias = {
+				...config.resolve.alias,
+				'@': path.resolve(__dirname, '.'),
+			};
+		}
+
+		// Handle Node.js modules in browser (client-side only)
+		if (!isServer) {
+			config.resolve.fallback = {
+				...config.resolve.fallback,
+				fs: false,
+				encoding: false,
+				path: false,
+				crypto: false,
+			};
+		}
+
 		return config;
 	},
 };
