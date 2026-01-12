@@ -41,7 +41,7 @@ export function useGalleryImages(
   type: "thumb" | "big-thumb" = "thumb",
   limit: number = 50
 ) {
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.gallery.infiniteImages(galleryId, type, limit),
     queryFn: async ({ pageParam = null }) => {
       // Build query parameters
@@ -99,6 +99,18 @@ export function useGalleryImages(
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
   });
+
+  // Expose prefetch function for proactive loading
+  const prefetchNextPage = async () => {
+    if (query.hasNextPage && !query.isFetchingNextPage) {
+      await query.fetchNextPage();
+    }
+  };
+
+  return {
+    ...query,
+    prefetchNextPage,
+  };
 }
 
 export function useGalleryInfo(galleryId: string, token: string) {

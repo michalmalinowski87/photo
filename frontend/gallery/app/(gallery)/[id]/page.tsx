@@ -36,12 +36,35 @@ export default function GalleryPage() {
     isFetchingNextPage,
     isLoading: imagesLoading,
     error,
+    prefetchNextPage,
   } = useGalleryImages(galleryId || "", token || "", "thumb", 50);
 
   // All hooks must be called before any early returns
   const images = useMemo(() => {
     return data?.pages.flatMap((page) => page.images || []) || [];
   }, [data]);
+
+  // Aggressive prefetching: automatically prefetch next page when current page finishes loading
+  // if user is in the lower portion of the page
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || !data?.pages.length) return;
+
+    // Small delay to ensure DOM is updated after page load
+    const timeoutId = setTimeout(() => {
+      // Check if user is in the lower 60% of the page
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollPercentage = (scrollTop + windowHeight) / documentHeight;
+
+      // If user is in lower 60% of page, automatically prefetch next page
+      if (scrollPercentage > 0.4 && hasNextPage && !isFetchingNextPage) {
+        prefetchNextPage();
+      }
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasNextPage, isFetchingNextPage, prefetchNextPage, data?.pages.length]);
 
   // Handle carousel layout - open gallery when selected
   useEffect(() => {
@@ -127,6 +150,8 @@ export default function GalleryPage() {
           onGalleryReady={(openGallery) => {
             openGalleryRef.current = openGallery;
           }}
+          onPrefetchNextPage={prefetchNextPage}
+          hasNextPage={hasNextPage || false}
         >
           <VirtuosoGridComponent
             images={images}

@@ -175,7 +175,7 @@ export function VirtuosoGridComponent({
           }, 1000);
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { threshold: 0, rootMargin: "3000px" } // Very aggressive prefetching - start loading 3000px before reaching the end (threshold 0 = trigger as soon as any part is visible)
     );
 
     const currentTarget = observerTarget.current;

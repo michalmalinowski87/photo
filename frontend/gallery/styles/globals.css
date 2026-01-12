@@ -84,6 +84,19 @@
   object-fit: cover !important;
 }
 
+/* Active thumbnail border - beige theme color */
+.lg-thumb-item.lg-current,
+.lg-thumb-item.active {
+  border: 3px solid #8B6F57 !important; /* Beige color from theme */
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+}
+
+/* Ensure active thumbnail is visible */
+.lg-thumb-outer .lg-thumb-item.lg-current {
+  border: 3px solid #8B6F57 !important;
+}
+
 /* LightGallery - Hide unwanted controls via CSS (fallback for controls not configurable via options) */
 /* Note: Most controls are hidden via lightGallery configuration options, but some may need CSS fallback */
 /* Hide any remaining zoom controls that might slip through */

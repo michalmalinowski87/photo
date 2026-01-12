@@ -57,6 +57,8 @@ interface LightGalleryWrapperProps {
   galleryId?: string;
   onDownload?: (imageKey: string) => void; // Receives image key, not URL
   onGalleryReady?: (openGallery: (index: number) => void) => void;
+  onPrefetchNextPage?: () => void; // Callback to prefetch next page of images
+  hasNextPage?: boolean; // Whether there are more pages to load
 }
 
 export function LightGalleryWrapper({
@@ -65,6 +67,8 @@ export function LightGalleryWrapper({
   galleryId,
   onDownload,
   onGalleryReady,
+  onPrefetchNextPage,
+  hasNextPage = false,
 }: LightGalleryWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
@@ -72,12 +76,22 @@ export function LightGalleryWrapper({
   const downloadHandlerRef = useRef<((e: Event) => void) | null>(null);
   const onDownloadRef = useRef(onDownload);
   const imagesRef = useRef(images);
+  const onPrefetchNextPageRef = useRef(onPrefetchNextPage);
+  const hasNextPageRef = useRef(hasNextPage);
+  const prefetchTriggeredRef = useRef(false);
+  const slideChangeHandlerRef = useRef<((e: Event) => void) | null>(null);
   
   // Keep refs in sync with latest values
   useEffect(() => {
     onDownloadRef.current = onDownload;
     imagesRef.current = images;
-  }, [onDownload, images]);
+    onPrefetchNextPageRef.current = onPrefetchNextPage;
+    hasNextPageRef.current = hasNextPage;
+    // Reset prefetch trigger when new images are loaded
+    if (images.length > imagesLengthRef.current) {
+      prefetchTriggeredRef.current = false;
+    }
+  }, [onDownload, images, onPrefetchNextPage, hasNextPage]);
 
   // Helper function to get gallery configuration
   const getGalleryConfig = (galleryId?: string) => {
@@ -196,11 +210,72 @@ export function LightGalleryWrapper({
           document.addEventListener('click', downloadClickHandler, true);
         }
 
+        // Listen to slide change events to prefetch next page when approaching end
+        // AND ensure thumbnails update properly on slide change
+        if (containerRef.current) {
+          // Remove existing handler if any
+          if (slideChangeHandlerRef.current) {
+            containerRef.current.removeEventListener('lgAfterSlide', slideChangeHandlerRef.current);
+          }
+          
+          const handleSlideChange = (event: any) => {
+            const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
+            const totalImages = imagesRef.current.length;
+            const imagesUntilEnd = totalImages - currentIndex - 1;
+            
+            // Ensure thumbnail container scrolls to show active thumbnail
+            // lightGallery should handle this automatically, but we ensure it happens
+            if (galleryInstance) {
+              try {
+                // Get all thumbnails - lightGallery uses .lg-thumb-item class
+                const thumbnails = document.querySelectorAll('.lg-thumb-item');
+                
+                // Ensure current index is within bounds
+                if (currentIndex >= 0 && currentIndex < thumbnails.length) {
+                  const activeThumb = thumbnails[currentIndex] as HTMLElement;
+                  
+                  if (activeThumb) {
+                    // Scroll active thumbnail into view smoothly
+                    activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }
+                }
+              } catch (error) {
+                // Ignore errors - thumbnail scrolling is non-critical
+              }
+            }
+            
+            // Prefetch when within 40 images of the end for much earlier loading
+            // This ensures images are ready well before the user reaches them
+            if (imagesUntilEnd <= 40 && hasNextPageRef.current && !prefetchTriggeredRef.current && onPrefetchNextPageRef.current) {
+              prefetchTriggeredRef.current = true;
+              onPrefetchNextPageRef.current();
+            }
+          };
+
+          // Store handler in ref for cleanup
+          slideChangeHandlerRef.current = handleSlideChange;
+          
+          // lightGallery fires 'lgAfterSlide' event after slide change
+          containerRef.current.addEventListener('lgAfterSlide', handleSlideChange);
+        }
+
         // Expose method to open gallery at specific index
         if (onGalleryReady) {
           onGalleryReady((index: number) => {
             if (galleryInstance && typeof galleryInstance.openGallery === 'function') {
               galleryInstance.openGallery(index);
+              // Check if we should prefetch immediately when opening near the end
+              const totalImages = imagesRef.current.length;
+              const imagesUntilEnd = totalImages - index - 1;
+              if (imagesUntilEnd <= 40 && hasNextPageRef.current && onPrefetchNextPageRef.current) {
+                // Small delay to ensure gallery is open
+                setTimeout(() => {
+                  if (hasNextPageRef.current && onPrefetchNextPageRef.current && !prefetchTriggeredRef.current) {
+                    prefetchTriggeredRef.current = true;
+                    onPrefetchNextPageRef.current();
+                  }
+                }, 500);
+              }
             } else if (containerRef.current) {
               // Fallback: programmatically click the first anchor tag
               const anchors = containerRef.current.querySelectorAll<HTMLAnchorElement>('a[data-src]');
@@ -227,6 +302,11 @@ export function LightGalleryWrapper({
         document.removeEventListener('click', downloadHandlerRef.current, true);
         downloadHandlerRef.current = null;
       }
+      // Clean up slide change listener
+      if (containerRef.current && slideChangeHandlerRef.current) {
+        containerRef.current.removeEventListener('lgAfterSlide', slideChangeHandlerRef.current);
+        slideChangeHandlerRef.current = null;
+      }
       if (galleryInstanceRef.current) {
         try {
           galleryInstanceRef.current.destroy();
@@ -245,6 +325,9 @@ export function LightGalleryWrapper({
     // Only refresh if the number of images has increased (new images loaded)
     if (imagesRef.current.length > imagesLengthRef.current) {
       try {
+        // Reset prefetch trigger when new images are loaded
+        prefetchTriggeredRef.current = false;
+        
         // Destroy and recreate to pick up new anchor tags
         galleryInstanceRef.current.destroy();
         galleryInstanceRef.current = null;
@@ -288,11 +371,67 @@ export function LightGalleryWrapper({
             document.addEventListener('click', handleDownloadClick, true);
           }
           
+          // Re-attach slide change listener for prefetching and thumbnail updates
+          if (containerRef.current) {
+            // Remove existing handler if any
+            if (slideChangeHandlerRef.current) {
+              containerRef.current.removeEventListener('lgAfterSlide', slideChangeHandlerRef.current);
+            }
+            
+            const handleSlideChange = (event: any) => {
+              const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
+              const totalImages = imagesRef.current.length;
+              const imagesUntilEnd = totalImages - currentIndex - 1;
+              
+              // Ensure thumbnail container scrolls to show active thumbnail
+              if (galleryInstance) {
+                try {
+                  const thumbnails = document.querySelectorAll('.lg-thumb-item');
+                  
+                  // Ensure current index is within bounds
+                  if (currentIndex >= 0 && currentIndex < thumbnails.length) {
+                    const activeThumb = thumbnails[currentIndex] as HTMLElement;
+                    
+                    if (activeThumb) {
+                      // Scroll active thumbnail into view smoothly
+                      activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }
+                  }
+                } catch (error) {
+                  // Ignore errors
+                }
+              }
+              
+              // Prefetch when within 40 images of the end for much earlier loading
+              // This ensures images are ready well before the user reaches them
+              if (imagesUntilEnd <= 40 && hasNextPageRef.current && !prefetchTriggeredRef.current && onPrefetchNextPageRef.current) {
+                prefetchTriggeredRef.current = true;
+                onPrefetchNextPageRef.current();
+              }
+            };
+
+            // Store handler in ref for cleanup
+            slideChangeHandlerRef.current = handleSlideChange;
+            containerRef.current.addEventListener('lgAfterSlide', handleSlideChange);
+          }
+          
           // Expose method to open gallery at specific index
           if (onGalleryReady) {
             onGalleryReady((index: number) => {
               if (galleryInstance && typeof galleryInstance.openGallery === 'function') {
                 galleryInstance.openGallery(index);
+                // Check if we should prefetch immediately when opening near the end
+                const totalImages = imagesRef.current.length;
+                const imagesUntilEnd = totalImages - index - 1;
+                if (imagesUntilEnd <= 40 && hasNextPageRef.current && onPrefetchNextPageRef.current) {
+                  // Small delay to ensure gallery is open
+                  setTimeout(() => {
+                    if (hasNextPageRef.current && onPrefetchNextPageRef.current && !prefetchTriggeredRef.current) {
+                      prefetchTriggeredRef.current = true;
+                      onPrefetchNextPageRef.current();
+                    }
+                  }, 500);
+                }
               } else if (containerRef.current) {
                 // Fallback: programmatically click the anchor tag at index
                 const anchors = containerRef.current.querySelectorAll<HTMLAnchorElement>('a[data-src]');
