@@ -80,6 +80,8 @@ export function LightGalleryWrapper({
   const hasNextPageRef = useRef(hasNextPage);
   const prefetchTriggeredRef = useRef(false);
   const slideChangeHandlerRef = useRef<((e: Event) => void) | null>(null);
+  const isGalleryOpenRef = useRef(false);
+  const currentGalleryIndexRef = useRef<number>(0);
   
   // Keep refs in sync with latest values
   useEffect(() => {
@@ -105,8 +107,13 @@ export function LightGalleryWrapper({
       speed: 400,
       mode: "lg-fade", // Smooth fade transition
       cssEasing: "ease-in-out",
+      // Disable start animation to prevent initialization animation when updateSlides is called
+      startAnimationDuration: 0, // Set to 0 to disable zoom from image animation
+      startClass: "", // Empty string to prevent start class from being applied
       enableSwipe: true,
       enableDrag: true,
+      loop: false, // Disable looping - prevents going back from first item when pages are loading
+      hideControlOnEnd: true, // Hide prev/next buttons on first/last image
       // Show prev/next controls with custom styling
       controls: true,
       // Thumbnail plugin config
@@ -118,7 +125,6 @@ export function LightGalleryWrapper({
       thumbMargin: 4,
       enableThumbDrag: true,
       enableThumbSwipe: true,
-      hideControlOnEnd: false,
       // Zoom plugin config - disable zoom UI buttons
       scale: 1.5,
       actualSize: false, // Hide actual size button
@@ -174,6 +180,21 @@ export function LightGalleryWrapper({
 
         galleryInstanceRef.current = galleryInstance;
         imagesLengthRef.current = imagesRef.current.length;
+        
+        // Track gallery open/close state
+        const handleGalleryOpen = () => {
+          isGalleryOpenRef.current = true;
+        };
+        
+        const handleGalleryClose = () => {
+          isGalleryOpenRef.current = false;
+        };
+        
+        // Listen to gallery open/close events
+        if (containerRef.current) {
+          containerRef.current.addEventListener('lgAfterOpen', handleGalleryOpen);
+          containerRef.current.addEventListener('lgBeforeClose', handleGalleryClose);
+        }
 
         // Intercept download button clicks - use document-level listener since lightGallery creates buttons dynamically
         if (onDownloadRef.current) {
@@ -220,6 +241,7 @@ export function LightGalleryWrapper({
           
           const handleSlideChange = (event: any) => {
             const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
+            currentGalleryIndexRef.current = currentIndex;
             const totalImages = imagesRef.current.length;
             const imagesUntilEnd = totalImages - currentIndex - 1;
             
@@ -328,6 +350,74 @@ export function LightGalleryWrapper({
         // Reset prefetch trigger when new images are loaded
         prefetchTriggeredRef.current = false;
         
+        // If gallery is currently open, use updateSlides to add new items dynamically
+        if (isGalleryOpenRef.current && galleryInstanceRef.current) {
+          // Store current index
+          const currentIndex = galleryInstanceRef.current?.index ?? currentGalleryIndexRef.current;
+          currentGalleryIndexRef.current = currentIndex;
+          
+          // Get current gallery items
+          const currentItems = galleryInstanceRef.current.galleryItems || [];
+          const oldLength = imagesLengthRef.current;
+          const newLength = imagesRef.current.length;
+          
+          // Get new images that were added (from oldLength to newLength)
+          const newImages = imagesRef.current.slice(oldLength);
+          
+          // Create new gallery items from new images
+          const newItems = newImages.map((image) => {
+            const imageUrl = image.bigThumbUrl || image.thumbnailUrl || image.url;
+            const previewUrl = image.previewUrl || image.url;
+            const fullImageUrl = image.url;
+            const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
+            
+            return {
+              src: fullImageUrl,
+              thumb: carouselThumbUrl,
+              subHtml: image.key || '',
+            };
+          });
+          
+          // Combine existing items with new items
+          const updatedItems = [...currentItems, ...newItems];
+          
+          // Update slides using updateSlides method (works when gallery is open)
+          // Temporarily disable start animation to prevent preview element initialization animation
+          try {
+            const originalSpeed = galleryInstanceRef.current.settings?.speed ?? 400;
+            const originalStartAnimationDuration = galleryInstanceRef.current.settings?.startAnimationDuration ?? 0;
+            const originalStartClass = galleryInstanceRef.current.settings?.startClass ?? "";
+            
+            // Disable start animation during update to prevent initialization animation
+            if (galleryInstanceRef.current.settings) {
+              galleryInstanceRef.current.settings.speed = 0;
+              galleryInstanceRef.current.settings.startAnimationDuration = 0; // Disable start animation
+              galleryInstanceRef.current.settings.startClass = ""; // Prevent start class
+            }
+            
+            // Update slides without animation
+            galleryInstanceRef.current.updateSlides(updatedItems, currentIndex);
+            
+            // Restore original settings after update completes
+            setTimeout(() => {
+              if (galleryInstanceRef.current?.settings) {
+                galleryInstanceRef.current.settings.speed = originalSpeed;
+                galleryInstanceRef.current.settings.startAnimationDuration = originalStartAnimationDuration;
+                galleryInstanceRef.current.settings.startClass = originalStartClass;
+              }
+            }, 50);
+          } catch (error) {
+            console.error('Failed to update slides:', error);
+          }
+          
+          // Update images length ref to prevent re-triggering
+          imagesLengthRef.current = imagesRef.current.length;
+          
+          return; // Exit early - don't destroy/recreate
+        }
+        
+        // Gallery is closed - safe to destroy and recreate
+        
         // Destroy and recreate to pick up new anchor tags
         galleryInstanceRef.current.destroy();
         galleryInstanceRef.current = null;
@@ -340,6 +430,20 @@ export function LightGalleryWrapper({
           
           const galleryInstance = lightGallery(containerRef.current, getGalleryConfig(galleryId));
           galleryInstanceRef.current = galleryInstance;
+          
+          // Track gallery open/close state for recreated instance
+          const handleGalleryOpen = () => {
+            isGalleryOpenRef.current = true;
+          };
+          
+          const handleGalleryClose = () => {
+            isGalleryOpenRef.current = false;
+          };
+          
+          if (containerRef.current) {
+            containerRef.current.addEventListener('lgAfterOpen', handleGalleryOpen);
+            containerRef.current.addEventListener('lgBeforeClose', handleGalleryClose);
+          }
           
           // Re-attach download handler after refresh
           if (onDownloadRef.current) {
@@ -380,6 +484,7 @@ export function LightGalleryWrapper({
             
             const handleSlideChange = (event: any) => {
               const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
+              currentGalleryIndexRef.current = currentIndex;
               const totalImages = imagesRef.current.length;
               const imagesUntilEnd = totalImages - currentIndex - 1;
               

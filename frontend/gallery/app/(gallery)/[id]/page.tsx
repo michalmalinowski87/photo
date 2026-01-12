@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, useLayoutEffect } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGalleryImages } from "@/hooks/useGallery";
 import { useImageDownload } from "@/hooks/useImageDownload";
@@ -19,6 +19,12 @@ export default function GalleryPage() {
   const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
+  const hashPrefetchHandledRef = useRef(false);
+  
+  // Use the ID from params as the stable galleryId (it doesn't change)
+  // The hook will read the token directly from localStorage (source of truth),
+  // so we don't need to manage stable token refs here
+  const queryGalleryId = id || galleryId || "";
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -37,12 +43,60 @@ export default function GalleryPage() {
     isLoading: imagesLoading,
     error,
     prefetchNextPage,
-  } = useGalleryImages(galleryId || "", token || "", "thumb", 50);
+  } = useGalleryImages(queryGalleryId, token, "thumb", 50);
 
   // All hooks must be called before any early returns
   const images = useMemo(() => {
     return data?.pages.flatMap((page) => page.images || []) || [];
   }, [data]);
+
+  // Detect hash parameter on page load and prefetch enough pages to reach target slide
+  useEffect(() => {
+    if (typeof window === "undefined" || hashPrefetchHandledRef.current || !hasNextPage || isFetchingNextPage || imagesLoading || !data?.pages.length) return;
+    
+    // Parse hash to get target slide index
+    // Format: #lg=gallery-{galleryId}&slide={index}
+    const hash = window.location.hash;
+    const slideMatch = hash.match(/slide=(\d+)/);
+    if (!slideMatch) {
+      hashPrefetchHandledRef.current = true; // No slide in hash, mark as handled
+      return; // No slide parameter in hash
+    }
+    
+    const targetSlideIndex = parseInt(slideMatch[1], 10);
+    if (isNaN(targetSlideIndex) || targetSlideIndex < 0) {
+      hashPrefetchHandledRef.current = true;
+      return;
+    }
+    
+    // Calculate how many pages we need (each page has 50 images)
+    const imagesPerPage = 50;
+    const currentImageCount = images.length;
+    const pagesNeeded = Math.ceil((targetSlideIndex + 1) / imagesPerPage);
+    const currentPages = data?.pages.length || 0;
+    const pagesToFetch = pagesNeeded - currentPages;
+    
+    // Prefetch pages if needed
+    if (pagesToFetch > 0 && hasNextPage) {
+      hashPrefetchHandledRef.current = true; // Mark as handled to prevent re-running
+      
+      // Prefetch all needed pages sequentially
+      const prefetchPages = async () => {
+        for (let i = 0; i < pagesToFetch; i++) {
+          if (!hasNextPage) break;
+          await prefetchNextPage();
+          // Small delay between prefetches to avoid overwhelming the server
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      };
+      
+      prefetchPages().catch((err) => {
+        console.error('Error prefetching pages for hash navigation:', err);
+      });
+    } else {
+      hashPrefetchHandledRef.current = true; // No pages to fetch, mark as handled
+    }
+  }, [images.length, data?.pages.length, hasNextPage, isFetchingNextPage, imagesLoading, prefetchNextPage]);
 
   // Aggressive prefetching: automatically prefetch next page when current page finishes loading
   // if user is in the lower portion of the page

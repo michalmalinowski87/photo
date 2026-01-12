@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
@@ -37,12 +38,27 @@ interface GalleryImagesResponse {
 
 export function useGalleryImages(
   galleryId: string,
-  token: string,
+  token: string | null,
   type: "thumb" | "big-thumb" = "thumb",
   limit: number = 50
 ) {
+  const queryKey = queryKeys.gallery.infiniteImages(galleryId, type, limit);
+  
+  // Read token directly from localStorage (source of truth) to avoid query resets when AuthProvider temporarily clears token
+  // This ensures the query stays enabled and doesn't lose cached data
+  // Using useMemo to avoid reading from localStorage on every render
+  // Fallback to token prop if localStorage doesn't have it (handles initial load)
+  const stableToken = useMemo(() => {
+    if (typeof window !== 'undefined' && galleryId) {
+      const storedToken = localStorage.getItem(`gallery_token_${galleryId}`);
+      // Use stored token if available, otherwise fall back to token prop
+      return storedToken || token;
+    }
+    return token;
+  }, [galleryId, token]);
+  
   const query = useInfiniteQuery({
-    queryKey: queryKeys.gallery.infiniteImages(galleryId, type, limit),
+    queryKey,
     queryFn: async ({ pageParam = null }) => {
       // Build query parameters
       const sizes = "thumb,preview,bigthumb";
@@ -61,7 +77,7 @@ export function useGalleryImages(
         `${API_URL}/galleries/${galleryId}/images?${params.toString()}`,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${stableToken}`,
           },
         }
       );
@@ -95,7 +111,8 @@ export function useGalleryImages(
       return undefined;
     },
     initialPageParam: null as string | null,
-    enabled: !!galleryId && !!token,
+    enabled: !!galleryId && !!stableToken, // Require both galleryId and token, but stableToken comes from localStorage (persistent)
+    placeholderData: (previousData) => previousData, // Keep previous data when query is disabled/refetching
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
   });
@@ -104,6 +121,7 @@ export function useGalleryImages(
   const prefetchNextPage = async () => {
     if (query.hasNextPage && !query.isFetchingNextPage) {
       await query.fetchNextPage();
+      // React Query automatically updates the cache and triggers re-renders
     }
   };
 
