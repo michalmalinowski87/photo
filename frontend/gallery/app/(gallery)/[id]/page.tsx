@@ -20,6 +20,8 @@ export default function GalleryPage() {
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
   const hashPrefetchHandledRef = useRef(false);
+  const openedFromCarouselRef = useRef(false);
+  const layoutBeforeCarouselRef = useRef<GridLayout>("marble"); // Track layout before carousel was clicked
   
   // Use the ID from params as the stable galleryId (it doesn't change)
   // The hook will read the token directly from localStorage (source of truth),
@@ -123,14 +125,15 @@ export default function GalleryPage() {
   // Handle carousel layout - open gallery when selected
   useEffect(() => {
     if (gridLayout === "carousel" && openGalleryRef.current && images.length > 0) {
+      openedFromCarouselRef.current = true;
+      
       // Small delay to ensure gallery is fully initialized
       const timeoutId = setTimeout(() => {
         // Open gallery at first image (index 0)
+        // Layout reset will happen when gallery closes via onGalleryClose callback
         if (openGalleryRef.current) {
           openGalleryRef.current(0);
         }
-        // Reset to marble layout after opening
-        setGridLayout("marble");
       }, 100);
       
       return () => clearTimeout(timeoutId);
@@ -194,7 +197,14 @@ export default function GalleryPage() {
       <GalleryTopBar 
         galleryName={galleryName || undefined}
         gridLayout={gridLayout}
-        onGridLayoutChange={setGridLayout}
+        onGridLayoutChange={(newLayout) => {
+          // If switching to carousel, preserve the current layout
+          if (newLayout === "carousel" && gridLayout !== "carousel") {
+            layoutBeforeCarouselRef.current = gridLayout;
+          }
+          
+          setGridLayout(newLayout);
+        }}
       />
       <div className="container mx-auto px-4 py-8">
         <LightGalleryWrapper
@@ -206,10 +216,17 @@ export default function GalleryPage() {
           }}
           onPrefetchNextPage={prefetchNextPage}
           hasNextPage={hasNextPage || false}
+          onGalleryClose={() => {
+            if (openedFromCarouselRef.current) {
+              setGridLayout("marble");
+              openedFromCarouselRef.current = false;
+              layoutBeforeCarouselRef.current = "marble"; // Reset the preserved layout
+            }
+          }}
         >
           <VirtuosoGridComponent
             images={images}
-            layout={gridLayout === "carousel" ? "marble" : gridLayout}
+            layout={gridLayout === "carousel" ? layoutBeforeCarouselRef.current : gridLayout}
             hasNextPage={hasNextPage}
             onLoadMore={() => fetchNextPage()}
             isFetchingNextPage={isFetchingNextPage}

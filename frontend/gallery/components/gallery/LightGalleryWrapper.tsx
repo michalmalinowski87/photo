@@ -59,6 +59,7 @@ interface LightGalleryWrapperProps {
   onGalleryReady?: (openGallery: (index: number) => void) => void;
   onPrefetchNextPage?: () => void; // Callback to prefetch next page of images
   hasNextPage?: boolean; // Whether there are more pages to load
+  onGalleryClose?: () => void; // Callback when gallery is closed
 }
 
 export function LightGalleryWrapper({
@@ -69,6 +70,7 @@ export function LightGalleryWrapper({
   onGalleryReady,
   onPrefetchNextPage,
   hasNextPage = false,
+  onGalleryClose,
 }: LightGalleryWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
@@ -78,6 +80,7 @@ export function LightGalleryWrapper({
   const imagesRef = useRef(images);
   const onPrefetchNextPageRef = useRef(onPrefetchNextPage);
   const hasNextPageRef = useRef(hasNextPage);
+  const onGalleryCloseRef = useRef(onGalleryClose);
   const prefetchTriggeredRef = useRef(false);
   const slideChangeHandlerRef = useRef<((e: Event) => void) | null>(null);
   const isGalleryOpenRef = useRef(false);
@@ -89,11 +92,12 @@ export function LightGalleryWrapper({
     imagesRef.current = images;
     onPrefetchNextPageRef.current = onPrefetchNextPage;
     hasNextPageRef.current = hasNextPage;
+    onGalleryCloseRef.current = onGalleryClose;
     // Reset prefetch trigger when new images are loaded
     if (images.length > imagesLengthRef.current) {
       prefetchTriggeredRef.current = false;
     }
-  }, [onDownload, images, onPrefetchNextPage, hasNextPage]);
+  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose]);
 
   // Helper function to get gallery configuration
   const getGalleryConfig = (galleryId?: string) => {
@@ -188,6 +192,9 @@ export function LightGalleryWrapper({
         
         const handleGalleryClose = () => {
           isGalleryOpenRef.current = false;
+          if (onGalleryCloseRef.current) {
+            onGalleryCloseRef.current();
+          }
         };
         
         // Listen to gallery open/close events
@@ -438,6 +445,9 @@ export function LightGalleryWrapper({
           
           const handleGalleryClose = () => {
             isGalleryOpenRef.current = false;
+            if (onGalleryCloseRef.current) {
+              onGalleryCloseRef.current();
+            }
           };
           
           if (containerRef.current) {
