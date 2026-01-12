@@ -99,11 +99,7 @@
   display: none !important;
 }
 
-/* Hide prev/next controls (should be disabled via controls: false, but CSS as fallback) */
-.lg-icon.lg-prev,
-.lg-icon.lg-next {
-  display: none !important;
-}
+/* Use lightGallery's default prev/next arrows - no custom styling needed */
 
 /* Keep visible: rotate left (.lg-rotate-left), rotate right (.lg-rotate-right), 
    fullscreen (.lg-fullscreen), download (.lg-download), close (.lg-close) */

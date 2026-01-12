@@ -37,7 +37,7 @@ function LoginForm() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     if (!apiUrl || !galleryId || !password) {
-      setError("Please fill in all fields");
+      setError("Proszę wypełnić wszystkie pola");
       return;
     }
 
@@ -66,19 +66,19 @@ function LoginForm() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
         <div className="bg-white p-10 rounded-xl shadow-lg text-center">
-          <div className="text-lg text-gray-600">Loading...</div>
+          <div className="text-lg text-gray-600">Ładowanie...</div>
         </div>
       </div>
     );
   }
 
-  const displayName = galleryName || "Your Gallery";
+  const displayName = galleryName || "Twoja Galeria";
 
   if (!galleryId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
         <div className="bg-white p-10 rounded-xl shadow-lg text-center">
-          <div className="text-lg text-red-600">Gallery ID required</div>
+          <div className="text-lg text-red-600">Wymagane ID galerii</div>
         </div>
       </div>
     );
@@ -94,20 +94,20 @@ function LoginForm() {
             <div className="text-center mb-8">
               <h1 className="text-3xl font-medium text-gray-900 mb-2">{displayName}</h1>
               <p className="text-base text-gray-600 mt-2">
-                Enter your password to access your photos
+                Wprowadź hasło, aby uzyskać dostęp do zdjęć
               </p>
             </div>
 
             <form onSubmit={handleLogin}>
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
+                  Hasło
                 </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter gallery password"
+                  placeholder="Wprowadź hasło do galerii"
                   disabled={loading}
                   className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg box-border transition-colors outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
                   autoFocus
@@ -125,7 +125,7 @@ function LoginForm() {
                 disabled={loading || !password}
                 className="w-full py-3.5 text-base font-medium text-white rounded-lg cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 shadow-md disabled:shadow-none"
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Logowanie..." : "Zaloguj się"}
               </button>
             </form>
           </div>
@@ -140,7 +140,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          <div>Loading...</div>
+          <div>Ładowanie...</div>
         </div>
       }
     >

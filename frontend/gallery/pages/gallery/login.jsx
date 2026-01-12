@@ -35,7 +35,7 @@ export default function GalleryLogin() {
 	async function handleLogin(e) {
 		e.preventDefault();
 		if (!apiUrl || !galleryId || !password) {
-			setError('Please fill in all fields');
+			setError('Proszę wypełnić wszystkie pola');
 			return;
 		}
 
@@ -81,13 +81,13 @@ export default function GalleryLogin() {
 					boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
 					textAlign: 'center'
 				}}>
-					<div style={{ fontSize: '18px', color: '#666' }}>Loading...</div>
+					<div style={{ fontSize: '18px', color: '#666' }}>Ładowanie...</div>
 				</div>
 			</div>
 		);
 	}
 
-	const displayName = galleryName || 'Your Gallery';
+	const displayName = galleryName || 'Twoja Galeria';
 	
 	if (!galleryId) {
 		return (
@@ -106,7 +106,7 @@ export default function GalleryLogin() {
 					boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
 					textAlign: 'center'
 				}}>
-					<div style={{ fontSize: '18px', color: '#c33' }}>Gallery ID required</div>
+					<div style={{ fontSize: '18px', color: '#c33' }}>Wymagane ID galerii</div>
 				</div>
 			</div>
 		);
@@ -147,7 +147,7 @@ export default function GalleryLogin() {
 						color: '#666',
 						marginTop: '8px'
 					}}>
-						Enter your password to access your photos
+						Wprowadź hasło, aby uzyskać dostęp do zdjęć
 					</div>
 				</div>
 
@@ -160,13 +160,13 @@ export default function GalleryLogin() {
 							color: '#333',
 							marginBottom: '8px'
 						}}>
-							Password
+							Hasło
 						</label>
 						<input
 							type="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
-							placeholder="Enter gallery password"
+							placeholder="Wprowadź hasło do galerii"
 							disabled={loading}
 							style={{
 								width: '100%',
@@ -223,7 +223,7 @@ export default function GalleryLogin() {
 							e.target.style.opacity = '1';
 						}}
 					>
-						{loading ? 'Signing in...' : 'Sign In'}
+						{loading ? 'Logowanie...' : 'Zaloguj się'}
 					</button>
 				</form>
 			</div>

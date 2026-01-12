@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { apiFetch, formatApiError } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -11,6 +11,12 @@ interface DownloadOptions {
   token: string;
   imageKey: string;
   onProgress?: (progress: number) => void;
+}
+
+export interface DownloadState {
+  showOverlay: boolean;
+  isError: boolean;
+  errorMessage?: string;
 }
 
 /**
@@ -43,7 +49,13 @@ function isMobile(): boolean {
 
 export function useImageDownload() {
   const [downloading, setDownloading] = useState(false);
+  const [downloadState, setDownloadState] = useState<DownloadState>({
+    showOverlay: false,
+    isError: false,
+  });
   const abortControllerRef = useRef<AbortController | null>(null);
+  const downloadStartedRef = useRef<boolean>(false);
+  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const downloadMutation = useMutation({
     mutationFn: async ({ galleryId, token, imageKey }: Omit<DownloadOptions, "onProgress">) => {
@@ -67,6 +79,15 @@ export function useImageDownload() {
       const isMobileDevice = isMobile();
 
       try {
+        // Mark that download has started
+        downloadStartedRef.current = true;
+        
+        // Clear overlay timeout since download started
+        if (overlayTimeoutRef.current) {
+          clearTimeout(overlayTimeoutRef.current);
+          overlayTimeoutRef.current = null;
+        }
+
         // iOS Safari has poor support for blob downloads and the download attribute
         // Use direct presigned URL with window.open for iOS devices
         // Note: The presigned URL points to the full-resolution original image (not thumbnail/preview)
@@ -78,17 +99,20 @@ export function useImageDownload() {
           // This is the most reliable approach for iOS Safari
           const newWindow = window.open(data.url, "_blank");
           if (!newWindow) {
-            // Popup blocked - fallback to creating a link
-            const link = document.createElement("a");
-            link.href = data.url;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.style.display = "none";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Popup blocked - show error
+            setDownloadState({
+              showOverlay: true,
+              isError: true,
+              errorMessage: "Nie można otworzyć okna pobierania. Sprawdź ustawienia blokady wyskakujących okien w przeglądarce.",
+            });
+            setDownloading(false);
+            return;
           }
-          setDownloading(false);
+          // Close overlay after a short delay for iOS
+          setTimeout(() => {
+            setDownloadState({ showOverlay: false, isError: false });
+            setDownloading(false);
+          }, 500);
           return;
         }
 
@@ -116,39 +140,32 @@ export function useImageDownload() {
           URL.revokeObjectURL(blobUrl);
         }, 100);
         
-        setDownloading(false);
+        // Close overlay after download starts
+        setTimeout(() => {
+          setDownloadState({ showOverlay: false, isError: false });
+          setDownloading(false);
+        }, 300);
       } catch (error) {
         console.error("Download error:", error);
-        // Fallback: try direct download link
-        // For mobile browsers that don't support blob downloads well
-        if (isMobileDevice) {
-          // On mobile, open in new tab as fallback
-          const newWindow = window.open(data.url, "_blank");
-          if (!newWindow) {
-            const link = document.createElement("a");
-            link.href = data.url;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.style.display = "none";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-        } else {
-          // Desktop fallback: try direct link with download attribute
-          const link = document.createElement("a");
-          link.href = data.url;
-          link.download = filename;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : "Wystąpił nieoczekiwany błąd podczas pobierania zdjęcia.";
+        setDownloadState({
+          showOverlay: true,
+          isError: true,
+          errorMessage,
+        });
         setDownloading(false);
       }
     },
     onError: (error) => {
       console.error("Download error:", formatApiError(error));
+      const errorMessage = formatApiError(error) || "Wystąpił błąd podczas pobierania zdjęcia.";
+      setDownloadState({
+        showOverlay: true,
+        isError: true,
+        errorMessage,
+      });
       setDownloading(false);
     },
   });
@@ -159,9 +176,29 @@ export function useImageDownload() {
       abortControllerRef.current.abort();
     }
 
+    // Clear any existing overlay timeout
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+      overlayTimeoutRef.current = null;
+    }
+
+    // Reset download started flag
+    downloadStartedRef.current = false;
+
     // Create new abort controller
     abortControllerRef.current = new AbortController();
     setDownloading(true);
+    setDownloadState({ showOverlay: false, isError: false });
+
+    // Set timeout to show overlay after 400ms if download hasn't started
+    overlayTimeoutRef.current = setTimeout(() => {
+      if (!downloadStartedRef.current) {
+        setDownloadState({
+          showOverlay: true,
+          isError: false,
+        });
+      }
+    }, 400);
 
     try {
       await downloadMutation.mutateAsync({
@@ -171,7 +208,7 @@ export function useImageDownload() {
       });
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {
-        throw error;
+        // Error handling is done in onError callback
       }
     }
   };
@@ -180,14 +217,34 @@ export function useImageDownload() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      setDownloading(false);
     }
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+      overlayTimeoutRef.current = null;
+    }
+    setDownloading(false);
+    setDownloadState({ showOverlay: false, isError: false });
   };
+
+  const closeOverlay = () => {
+    setDownloadState({ showOverlay: false, isError: false });
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (overlayTimeoutRef.current) {
+        clearTimeout(overlayTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return {
     download,
     cancel,
+    closeOverlay,
     downloading: downloading || downloadMutation.isPending,
     error: downloadMutation.error,
+    downloadState,
   };
 }

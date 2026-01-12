@@ -9,6 +9,7 @@ import { GalleryTopBar } from "@/components/gallery/GalleryTopBar";
 import { VirtuosoGridComponent, type GridLayout } from "@/components/gallery/VirtuosoGrid";
 import { LightGalleryWrapper } from "@/components/gallery/LightGalleryWrapper";
 import { ContextMenuPrevention } from "@/components/gallery/ContextMenuPrevention";
+import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
 
 export default function GalleryPage() {
   const params = useParams();
@@ -16,7 +17,7 @@ export default function GalleryPage() {
   const { token, galleryId, galleryName, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
   const [gridLayout, setGridLayout] = useState<GridLayout>("standard");
-  const { download: downloadImage } = useImageDownload();
+  const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
 
   // Redirect to login if not authenticated
@@ -70,15 +71,14 @@ export default function GalleryPage() {
       });
     } catch (error) {
       console.error("Failed to download image:", error);
-      // Don't fallback to opening in new tab - just show error
-      // The user can try again or contact support
+      // Error is handled by the download hook and shown in overlay
     }
   }, [galleryId, token, downloadImage]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div>Loading...</div>
+        <div>Ładowanie...</div>
       </div>
     );
   }
@@ -90,7 +90,7 @@ export default function GalleryPage() {
   if (imagesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div>Loading images...</div>
+        <div>Ładowanie zdjęć...</div>
       </div>
     );
   }
@@ -98,7 +98,7 @@ export default function GalleryPage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-600">Error loading gallery: {String(error)}</div>
+        <div className="text-red-600">Błąd ładowania galerii: {String(error)}</div>
       </div>
     );
   }
@@ -107,6 +107,12 @@ export default function GalleryPage() {
   return (
     <div className="min-h-screen bg-background">
       <ContextMenuPrevention />
+      <DownloadOverlay
+        isVisible={downloadState.showOverlay}
+        isError={downloadState.isError}
+        errorMessage={downloadState.errorMessage}
+        onClose={closeOverlay}
+      />
       <GalleryTopBar 
         galleryName={galleryName || undefined}
         gridLayout={gridLayout}

@@ -93,8 +93,8 @@ export function LightGalleryWrapper({
       cssEasing: "ease-in-out",
       enableSwipe: true,
       enableDrag: true,
-      // Hide default prev/next controls
-      controls: false,
+      // Show prev/next controls with custom styling
+      controls: true,
       // Thumbnail plugin config
       thumbnail: true,
       animateThumb: true,

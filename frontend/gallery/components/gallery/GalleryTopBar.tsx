@@ -21,7 +21,7 @@ export function GalleryTopBar({
   const { logout, galleryName: authGalleryName } = useAuth();
   const [scroll, setScroll] = useState(false);
 
-  const displayName = galleryName || authGalleryName || "Gallery";
+  const displayName = galleryName || authGalleryName || "Galeria";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -73,8 +73,8 @@ export function GalleryTopBar({
                     ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
                     : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
                 }`}
-                title="Standard Layout"
-                aria-label="Standard Layout"
+                title="Układ standardowy"
+                aria-label="Układ standardowy"
               >
                 <Grid3x3 size={20} />
               </button>
@@ -85,8 +85,8 @@ export function GalleryTopBar({
                     ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
                     : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
                 }`}
-                title="Square Layout"
-                aria-label="Square Layout"
+                title="Układ kwadratowy"
+                aria-label="Układ kwadratowy"
               >
                 <LayoutGrid size={20} />
               </button>
@@ -97,8 +97,8 @@ export function GalleryTopBar({
                     ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
                     : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
                 }`}
-                title="Masonry Layout"
-                aria-label="Masonry Layout"
+                title="Układ mozaikowy"
+                aria-label="Układ mozaikowy"
               >
                 <LayoutDashboard size={20} />
               </button>
@@ -109,8 +109,8 @@ export function GalleryTopBar({
                     ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
                     : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
                 }`}
-                title="Open Gallery"
-                aria-label="Open Gallery"
+                title="Otwórz galerię"
+                aria-label="Otwórz galerię"
               >
                 <LayoutPanelTop size={20} />
               </button>
@@ -120,7 +120,7 @@ export function GalleryTopBar({
             onClick={handleLogout}
             className="px-5 py-2.5 text-base md:text-lg font-medium text-foreground hover:text-foreground transition-colors rounded-lg hover:bg-white/10"
           >
-            Logout
+            Wyloguj
           </button>
         </div>
       </div>
