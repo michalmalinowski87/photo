@@ -227,7 +227,7 @@ export function VirtuosoGridComponent({
                 width: box.width,
                 height: box.height,
               }}
-              className="overflow-hidden bg-gray-100 cursor-pointer transition-opacity hover:opacity-95"
+              className="overflow-hidden bg-gray-100 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform"
             >
               <a
                 href={fullImageUrl}

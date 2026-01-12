@@ -88,7 +88,7 @@ export function CarouselView({
                 data-download-url={fullImageUrl}
                 data-thumb={carouselThumbUrl}
                 data-sub-html={image.key}
-                className="block w-full h-full relative rounded-lg overflow-hidden bg-gray-100"
+                className="block w-full h-full relative rounded-lg overflow-hidden bg-gray-100 transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform"
               >
                 <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
                   <Image

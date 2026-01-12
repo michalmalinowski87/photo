@@ -62,12 +62,12 @@ export function ImageGrid({
     switch (layout) {
       case "square":
         // Square layout: rounded corners, background, overflow hidden
-        const squareBaseClasses = "relative overflow-hidden rounded-lg bg-gray-100 transition-opacity hover:opacity-95 cursor-pointer";
+        const squareBaseClasses = "relative overflow-hidden rounded-lg bg-gray-100 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform";
         return `${squareBaseClasses} aspect-square ${selectedClasses}`;
       case "standard":
       default:
         // Standard layout: no background, no rounded corners, show rough edges (natural image edges)
-        const standardBaseClasses = "relative transition-opacity hover:opacity-95 cursor-pointer";
+        const standardBaseClasses = "relative cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform";
         return `${standardBaseClasses} aspect-[4/3] ${selectedClasses}`;
     }
   };

@@ -98,7 +98,7 @@ export function MasonryGrid({
             const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
 
             return (
-              <div className="relative overflow-hidden rounded-lg bg-gray-100 cursor-pointer transition-opacity hover:opacity-95 mb-2">
+              <div className="relative overflow-hidden rounded-lg bg-gray-100 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform mb-2">
                 <a
                   href={fullImageUrl}
                   data-src={previewUrl}
