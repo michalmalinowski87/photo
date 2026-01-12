@@ -22,6 +22,7 @@ import * as galleriesSendToClient from '../../../functions/galleries/sendGallery
 import * as galleriesExport from '../../../functions/galleries/export';
 import * as devSetGalleryExpiry from '../../../functions/dev/setGalleryExpiry';
 import * as galleriesDownloadUnselectedOriginals from '../../../functions/galleries/downloadUnselectedOriginals';
+import * as galleriesDownloadImage from '../../../functions/galleries/downloadImage';
 
 const router = Router();
 

@@ -55,7 +55,7 @@ interface LightGalleryWrapperProps {
   children: React.ReactNode;
   images: ImageData[];
   galleryId?: string;
-  onDownload?: (imageUrl: string) => void;
+  onDownload?: (imageKey: string) => void; // Receives image key, not URL
   onGalleryReady?: (openGallery: (index: number) => void) => void;
 }
 
@@ -69,6 +69,15 @@ export function LightGalleryWrapper({
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
   const imagesLengthRef = useRef<number>(0);
+  const downloadHandlerRef = useRef<((e: Event) => void) | null>(null);
+  const onDownloadRef = useRef(onDownload);
+  const imagesRef = useRef(images);
+  
+  // Keep refs in sync with latest values
+  useEffect(() => {
+    onDownloadRef.current = onDownload;
+    imagesRef.current = images;
+  }, [onDownload, images]);
 
   // Helper function to get gallery configuration
   const getGalleryConfig = (galleryId?: string) => {
@@ -150,7 +159,42 @@ export function LightGalleryWrapper({
         const galleryInstance = lightGallery(containerRef.current, getGalleryConfig(galleryId));
 
         galleryInstanceRef.current = galleryInstance;
-        imagesLengthRef.current = images.length;
+        imagesLengthRef.current = imagesRef.current.length;
+
+        // Intercept download button clicks - use document-level listener since lightGallery creates buttons dynamically
+        if (onDownloadRef.current) {
+          // Remove existing handler if any
+          if (downloadHandlerRef.current) {
+            document.removeEventListener('click', downloadHandlerRef.current, true);
+          }
+          
+          // Listen for clicks on download buttons at document level
+          const downloadClickHandler = (e: Event) => {
+            const target = e.target as HTMLElement;
+            // Check if clicked element is a download button or inside one
+            const downloadButton = target.closest('.lg-download, [data-lg-download]');
+            if (downloadButton) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              
+              // Get current slide index from lightGallery instance
+              const currentIndex = galleryInstance?.index ?? 0;
+              const currentImage = imagesRef.current[currentIndex];
+              
+              if (currentImage && currentImage.key && onDownloadRef.current) {
+                // Pass the image key - the handler will use it correctly
+                onDownloadRef.current(currentImage.key);
+              }
+            }
+          };
+
+          // Store handler in ref for cleanup
+          downloadHandlerRef.current = downloadClickHandler;
+          
+          // Add event listener at document level with capture phase to catch before lightGallery
+          document.addEventListener('click', downloadClickHandler, true);
+        }
 
         // Expose method to open gallery at specific index
         if (onGalleryReady) {
@@ -166,9 +210,6 @@ export function LightGalleryWrapper({
             }
           });
         }
-
-        // Note: Download functionality removed - lightgallery doesn't have download plugin enabled
-        // If download functionality is needed, enable the download plugin first
       } catch (error) {
         console.error("Failed to initialize lightgallery:", error);
       }
@@ -181,6 +222,11 @@ export function LightGalleryWrapper({
 
     return () => {
       clearTimeout(timeoutId);
+      // Clean up download click handler
+      if (downloadHandlerRef.current) {
+        document.removeEventListener('click', downloadHandlerRef.current, true);
+        downloadHandlerRef.current = null;
+      }
       if (galleryInstanceRef.current) {
         try {
           galleryInstanceRef.current.destroy();
@@ -190,19 +236,19 @@ export function LightGalleryWrapper({
         galleryInstanceRef.current = null;
       }
     };
-  }, [galleryId]); // Initialize once, don't depend on images or onDownload (download handler removed)
+  }, [galleryId]); // Only depend on galleryId - images and onDownload are handled via refs
 
   // Refresh gallery when images change (for infinite scroll)
   useEffect(() => {
     if (!galleryInstanceRef.current || !containerRef.current) return;
     
     // Only refresh if the number of images has increased (new images loaded)
-    if (images.length > imagesLengthRef.current) {
+    if (imagesRef.current.length > imagesLengthRef.current) {
       try {
         // Destroy and recreate to pick up new anchor tags
         galleryInstanceRef.current.destroy();
         galleryInstanceRef.current = null;
-        imagesLengthRef.current = images.length;
+        imagesLengthRef.current = imagesRef.current.length;
         
         // Reinitialize after a short delay to ensure DOM is updated
         // Only proceed if plugins are loaded
@@ -211,6 +257,36 @@ export function LightGalleryWrapper({
           
           const galleryInstance = lightGallery(containerRef.current, getGalleryConfig(galleryId));
           galleryInstanceRef.current = galleryInstance;
+          
+          // Re-attach download handler after refresh
+          if (onDownloadRef.current) {
+            // Remove existing handler if any
+            if (downloadHandlerRef.current) {
+              document.removeEventListener('click', downloadHandlerRef.current, true);
+            }
+            
+            const handleDownloadClick = (e: Event) => {
+              const target = e.target as HTMLElement;
+              const downloadButton = target.closest('.lg-download, [data-lg-download]');
+              if (downloadButton) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                const currentIndex = galleryInstance?.index ?? 0;
+                const currentImage = imagesRef.current[currentIndex];
+                
+                if (currentImage && currentImage.key && onDownloadRef.current) {
+                  // Use the image key directly
+                  onDownloadRef.current(currentImage.key);
+                }
+              }
+            };
+
+            // Store handler in ref for cleanup
+            downloadHandlerRef.current = handleDownloadClick;
+            document.addEventListener('click', handleDownloadClick, true);
+          }
           
           // Expose method to open gallery at specific index
           if (onGalleryReady) {
@@ -231,7 +307,7 @@ export function LightGalleryWrapper({
         console.error("Error refreshing lightgallery:", error);
       }
     }
-  }, [images.length, galleryId]);
+  }, [images.length, galleryId]); // images.length is stable, only changes when count changes
 
   // Note: lightgallery automatically detects anchor tags in the container
   // When images change (infinite scrolling), lightgallery will detect new anchor tags

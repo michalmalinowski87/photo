@@ -170,10 +170,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}
 				];
 
-				// Collect all metric data results (handle pagination)
-				const allMetricDataResults: any[] = [];
-				let nextToken: string | undefined;
-				
 				// Query memory metrics separately with shorter time window for better reliability
 				const memoryMetricQueries = metricDataQueries.filter(q => 
 					q.Id === 'maxMemory' || q.Id === 'avgMemory'

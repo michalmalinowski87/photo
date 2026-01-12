@@ -57,14 +57,10 @@ export default function GalleryPage() {
     }
   }, [gridLayout, images.length]);
 
-  const handleDownload = useCallback(async (imageUrl: string) => {
-    // Extract image key from URL if needed, or use the URL directly
-    // For now, try to extract key from URL or use full URL
-    if (!galleryId || !token) return;
-
-    // Extract key from URL (assuming URL format)
-    const urlParts = imageUrl.split("/");
-    const imageKey = urlParts[urlParts.length - 1] || imageUrl;
+  const handleDownload = useCallback(async (imageKey: string) => {
+    if (!galleryId || !token || !imageKey) {
+      return;
+    }
 
     try {
       await downloadImage({
@@ -74,8 +70,8 @@ export default function GalleryPage() {
       });
     } catch (error) {
       console.error("Failed to download image:", error);
-      // Fallback: open URL in new tab
-      window.open(imageUrl, "_blank");
+      // Don't fallback to opening in new tab - just show error
+      // The user can try again or contact support
     }
   }, [galleryId, token, downloadImage]);
 
@@ -120,6 +116,7 @@ export default function GalleryPage() {
         <LightGalleryWrapper
           images={images}
           galleryId={galleryId || undefined}
+          onDownload={handleDownload}
           onGalleryReady={(openGallery) => {
             openGalleryRef.current = openGallery;
           }}
