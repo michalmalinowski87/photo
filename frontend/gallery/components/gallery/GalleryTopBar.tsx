@@ -47,9 +47,9 @@ export function GalleryTopBar({
 
   return (
     <header
-      className={`sticky top-0 inset-x-0 h-20 md:h-24 w-full z-[99999] select-none transition-all bg-white ${
+      className={`sticky top-0 inset-x-0 h-20 md:h-24 w-full z-[99999] select-none transition-all ${
         scroll
-          ? "bg-white/98 backdrop-blur-sm"
+          ? "bg-white/80 backdrop-blur-md backdrop-saturate-150"
           : "bg-white"
       }`}
     >
