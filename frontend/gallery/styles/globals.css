@@ -106,6 +106,20 @@
     background-color: #262626;
     transform: scale(0.98);
   }
+
+  /* Touch manipulation utility for better mobile interaction */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent font bleeding during viewport transitions */
+  .gallery-name-button {
+    contain: layout style paint;
+    will-change: auto;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
 }
 
 /* LightGallery z-index overrides to ensure it appears above header (z-[99999]) */

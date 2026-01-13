@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Grid3x3, LayoutGrid, LayoutDashboard, LayoutPanelTop } from "lucide-react";
+import { Grid3x3, LayoutGrid, LayoutDashboard, LayoutPanelTop, LogOut } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useRouter } from "next/navigation";
 import { useGalleryStatus } from "@/hooks/useGallery";
@@ -57,20 +57,22 @@ export function GalleryTopBar({
         {/* Left: Gallery name */}
         <button
           onClick={scrollToTop}
-          className="text-5xl md:text-6xl text-gray-900 hover:opacity-70 transition-opacity truncate"
-          style={{ fontFamily: "'The Wedding Signature', cursive" }}
+          className="text-5xl md:text-6xl text-gray-900 hover:opacity-70 transition-opacity truncate gallery-name-button"
+          style={{ 
+            fontFamily: "'The Wedding Signature', cursive"
+          }}
         >
           {displayName}
         </button>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-4 md:gap-8 lg:gap-10">
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-8 lg:gap-10">
           {/* Grid Layout Toggle */}
           {onGridLayoutChange && gridLayout && (
-            <div className="flex items-center gap-0.5 bg-transparent p-0.5">
+            <div className="flex items-center gap-2 bg-transparent">
               <button
                 onClick={() => onGridLayoutChange("standard")}
-                className={`h-7 w-7 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 ${
+                className={`h-11 w-11 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "standard"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -78,11 +80,11 @@ export function GalleryTopBar({
                 title="Układ standardowy"
                 aria-label="Układ standardowy"
               >
-                <Grid3x3 className="w-4 h-4 md:w-5 md:h-5" />
+                <Grid3x3 className="w-5 h-5 md:w-5 md:h-5" />
               </button>
               <button
                 onClick={() => onGridLayoutChange("square")}
-                className={`h-7 w-7 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 ${
+                className={`h-11 w-11 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "square"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -90,11 +92,11 @@ export function GalleryTopBar({
                 title="Układ kwadratowy"
                 aria-label="Układ kwadratowy"
               >
-                <LayoutGrid className="w-4 h-4 md:w-5 md:h-5" />
+                <LayoutGrid className="w-5 h-5 md:w-5 md:h-5" />
               </button>
               <button
                 onClick={() => onGridLayoutChange("marble")}
-                className={`h-7 w-7 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 ${
+                className={`h-11 w-11 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "marble"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -102,11 +104,11 @@ export function GalleryTopBar({
                 title="Układ mozaikowy"
                 aria-label="Układ mozaikowy"
               >
-                <LayoutDashboard className="w-4 h-4 md:w-5 md:h-5" />
+                <LayoutDashboard className="w-5 h-5 md:w-5 md:h-5" />
               </button>
               <button
                 onClick={() => onGridLayoutChange("carousel")}
-                className={`h-7 w-7 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 ${
+                className={`h-11 w-11 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "carousel"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -114,16 +116,27 @@ export function GalleryTopBar({
                 title="Otwórz galerię"
                 aria-label="Otwórz galerię"
               >
-                <LayoutPanelTop className="w-4 h-4 md:w-5 md:h-5" />
+                <LayoutPanelTop className="w-5 h-5 md:w-5 md:h-5" />
               </button>
             </div>
           )}
-          <button
-            onClick={handleLogout}
-            className="btn-primary"
-          >
-            Wyloguj
-          </button>
+          <div className="ml-3 sm:ml-0">
+            <button
+              onClick={handleLogout}
+              className="btn-primary hidden sm:inline-flex touch-manipulation"
+              aria-label="Wyloguj"
+            >
+              Wyloguj
+            </button>
+            <button
+              onClick={handleLogout}
+              className="h-11 w-11 md:h-9 md:w-9 rounded transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden"
+              title="Wyloguj"
+              aria-label="Wyloguj"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </header>
