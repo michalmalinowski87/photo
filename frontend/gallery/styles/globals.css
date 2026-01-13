@@ -129,17 +129,17 @@
   object-fit: cover !important;
 }
 
-/* Active thumbnail border - beige theme color */
+/* Active thumbnail border - subtle black border */
 .lg-thumb-item.lg-current,
 .lg-thumb-item.active {
-  border: 3px solid #8B6F57 !important; /* Beige color from theme */
+  border: 1px solid #000000 !important;
   border-radius: 4px !important;
   box-sizing: border-box !important;
 }
 
 /* Ensure active thumbnail is visible */
 .lg-thumb-outer .lg-thumb-item.lg-current {
-  border: 3px solid #8B6F57 !important;
+  border: 1px solid #000000 !important;
 }
 
 /* LightGallery - Hide unwanted controls via CSS (fallback for controls not configurable via options) */
@@ -161,6 +161,92 @@
 
 /* Keep visible: rotate left (.lg-rotate-left), rotate right (.lg-rotate-right), 
    fullscreen (.lg-fullscreen), download (.lg-download), close (.lg-close) */
+
+/* LightGallery Light Theme - Custom styling for light theme */
+.lg-outer {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.lg-backdrop {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Toolbar - light background with dark icons */
+.lg-toolbar {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-bottom: none !important;
+}
+
+.lg-toolbar .lg-icon {
+  color: #333333 !important;
+  background-color: transparent !important;
+}
+
+.lg-toolbar .lg-icon:hover {
+  color: #000000 !important;
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Thumbnails - light background */
+.lg-thumb-outer {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.lg-thumb-item {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.lg-thumb-item:hover {
+  border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Controls (prev/next arrows) - dark on light */
+.lg-prev,
+.lg-next {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.lg-prev:hover,
+.lg-next:hover {
+  background-color: rgba(255, 255, 255, 1) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+  border-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.lg-prev:after,
+.lg-next:before {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.lg-prev:hover:after,
+.lg-next:hover:before {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Image container */
+.lg-item {
+  background-color: transparent !important;
+}
+
+/* Sub-html (captions) - light background */
+.lg-sub-html {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  color: #333333 !important;
+  border-top: none !important;
+}
+
+/* Progress bar - light theme */
+.lg-progress-bar .lg-progress {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+.lg-progress-bar .lg-progress-bar-inner {
+  background-color: #333333 !important;
+}
 
 /* Gallery image styling - subtle shadows for floating effect */
 .gallery-image-container {
