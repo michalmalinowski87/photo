@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { ddbGet } from '../../lib/src/ddb';
-import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
+import { getUserIdFromEvent, verifyGalleryAccess } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 export const handler = lambdaLogger(async (event: any) => {
@@ -12,8 +12,12 @@ export const handler = lambdaLogger(async (event: any) => {
 	if (!gallery) {
 		return { statusCode: 404, body: JSON.stringify({ error: 'not found' }) };
 	}
-	const requesterId = getUserIdFromEvent(event);
-	requireOwnerOr403(gallery.ownerId, requesterId);
+	
+	// Support both owner and client tokens
+	const access = await verifyGalleryAccess(event, id, gallery);
+	if (!access.isOwner && !access.isClient) {
+		return { statusCode: 403, body: JSON.stringify({ error: 'forbidden' }) };
+	}
 	
 	// Derive payment status from transactions
 	let isPaid = false;
@@ -36,7 +40,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		effectiveState = 'PAID_ACTIVE';
 	}
 
-	// Return only status fields - lightweight endpoint
+	// Return status fields and gallery name (for client access)
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
@@ -44,6 +48,7 @@ export const handler = lambdaLogger(async (event: any) => {
 			state: effectiveState,
 			paymentStatus,
 			isPaid,
+			galleryName: gallery.galleryName || null,
 		})
 	};
 });

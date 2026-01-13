@@ -6,10 +6,9 @@ import { useRouter, usePathname } from "next/navigation";
 interface AuthContextType {
   token: string | null;
   galleryId: string | null;
-  galleryName: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (galleryId: string, token: string, galleryName?: string) => void;
+  login: (galleryId: string, token: string) => void;
   logout: () => void;
 }
 
@@ -26,73 +25,112 @@ export function AuthProvider({
   const pathname = usePathname();
   const [token, setToken] = useState<string | null>(null);
   const [galleryId, setGalleryId] = useState<string | null>(initialGalleryId || null);
-  const [galleryName, setGalleryName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Load token and galleryId from sessionStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") {
       setIsLoading(false);
       return;
     }
 
-    // Use provided gallery ID or extract from pathname (e.g., /abc123 or /login/abc123)
     const currentGalleryId = initialGalleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
-
-    if (!currentGalleryId) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Load token from localStorage
-    const storedToken = localStorage.getItem(`gallery_token_${currentGalleryId}`);
-    const storedName = localStorage.getItem(`gallery_name_${currentGalleryId}`);
-
-    if (storedToken) {
-      try {
-        // Decode token to verify it's valid
-        const payload = JSON.parse(atob(storedToken.split(".")[1]));
-        setToken(storedToken);
-        setGalleryId(currentGalleryId);
-        if (storedName) {
-          setGalleryName(storedName);
+    
+    if (currentGalleryId) {
+      setGalleryId(currentGalleryId);
+      
+      // Load token from sessionStorage
+      const storedToken = sessionStorage.getItem(`gallery_token_${currentGalleryId}`);
+      if (storedToken) {
+        try {
+          // Verify token is valid (check if it's a valid JWT format)
+          const parts = storedToken.split(".");
+          if (parts.length === 3) {
+            // Decode payload to check expiration
+            const payload = JSON.parse(atob(parts[1]));
+            const now = Math.floor(Date.now() / 1000);
+            
+            if (payload.exp && payload.exp > now) {
+              // Token is valid and not expired
+              setToken(storedToken);
+            } else {
+              // Token expired, remove it
+              sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+            }
+          }
+        } catch (e) {
+          // Invalid token, remove it
+          sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
         }
-      } catch (e) {
-        // Invalid token, remove it
-        localStorage.removeItem(`gallery_token_${currentGalleryId}`);
-        localStorage.removeItem(`gallery_name_${currentGalleryId}`);
       }
     }
-
+    
     setIsLoading(false);
   }, [initialGalleryId, pathname]);
 
-  const login = (galleryId: string, token: string, galleryName?: string) => {
+  // Update galleryId when pathname changes
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const currentGalleryId = initialGalleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
+    
+    if (currentGalleryId && currentGalleryId !== galleryId) {
+      setGalleryId(currentGalleryId);
+      
+      // Load token for the new galleryId
+      const storedToken = sessionStorage.getItem(`gallery_token_${currentGalleryId}`);
+      if (storedToken) {
+        try {
+          const parts = storedToken.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            const now = Math.floor(Date.now() / 1000);
+            
+            if (payload.exp && payload.exp > now) {
+              setToken(storedToken);
+            } else {
+              sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+              setToken(null);
+            }
+          }
+        } catch (e) {
+          sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+          setToken(null);
+        }
+      } else {
+        setToken(null);
+      }
+    }
+  }, [initialGalleryId, pathname, galleryId]);
+
+  const login = (galleryId: string, token: string) => {
+    // Store token in sessionStorage FIRST (synchronous)
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`gallery_token_${galleryId}`, token);
+    }
+    
+    // Then update state (this triggers re-render)
     setToken(token);
     setGalleryId(galleryId);
-    if (galleryName) {
-      setGalleryName(galleryName);
-      localStorage.setItem(`gallery_name_${galleryId}`, galleryName);
-    }
-    localStorage.setItem(`gallery_token_${galleryId}`, token);
   };
 
   const logout = () => {
-    // Get galleryId from state or extract from current pathname
     const currentGalleryId = galleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
     
+    // Clear token and gallery name from sessionStorage
+    if (typeof window !== "undefined" && currentGalleryId) {
+      sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+      sessionStorage.removeItem(`gallery_name_${currentGalleryId}`);
+    }
+    
+    setToken(null);
+    setGalleryId(null);
+    
     if (currentGalleryId) {
-      localStorage.removeItem(`gallery_token_${currentGalleryId}`);
-      localStorage.removeItem(`gallery_name_${currentGalleryId}`);
-      setToken(null);
-      setGalleryId(null);
-      setGalleryName(null);
-      // Redirect to login page for this gallery
       router.push(`/login/${currentGalleryId}`);
     } else {
-      // If no galleryId found, clear everything and redirect to root
-      setToken(null);
-      setGalleryId(null);
-      setGalleryName(null);
       router.push("/");
     }
   };
@@ -102,7 +140,6 @@ export function AuthProvider({
       value={{
         token,
         galleryId,
-        galleryName,
         isAuthenticated: !!token && !!galleryId,
         isLoading,
         login,

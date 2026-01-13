@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, startTransition } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiFetch, formatApiError } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/react-query";
 
 function LoginForm() {
   const router = useRouter();
   const params = useParams();
   const { login, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
   const galleryId = params?.id as string;
 
   const [apiUrl, setApiUrl] = useState("");
@@ -29,8 +32,7 @@ function LoginForm() {
       return;
     }
 
-    const token = localStorage.getItem(`gallery_token_${galleryId}`);
-    if (token && isAuthenticated && galleryId) {
+    if (isAuthenticated && galleryId) {
       router.replace(`/${galleryId}`);
     } else {
       setChecking(false);
@@ -54,12 +56,39 @@ function LoginForm() {
         body: JSON.stringify({ password }),
       });
 
-      // Store token and login
-      login(galleryId, data.token, data.galleryName);
+      // Store token in sessionStorage FIRST (synchronous, before state update)
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(`gallery_token_${galleryId}`, data.token);
+        // Also store gallery name in sessionStorage for persistence across refreshes
+        if (data.galleryName) {
+          sessionStorage.setItem(`gallery_name_${galleryId}`, data.galleryName);
+        }
+      }
 
+      // Store token and login (state update is async, but sessionStorage is already set)
+      login(galleryId, data.token);
+
+      // Cache gallery name in React Query from the login response
+      if (data.galleryName) {
+        queryClient.setQueryData(
+          queryKeys.gallery.status(galleryId),
+          {
+            state: "PAID_ACTIVE",
+            paymentStatus: "PAID",
+            isPaid: true,
+            galleryName: data.galleryName,
+          }
+        );
+      }
+
+      // Use flushSync or wait for state to update before navigation
+      // Since sessionStorage is already set, the query can read from it if needed
+      // But we'll wait a tick to ensure React has processed the state update
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
       // Redirect to gallery view
       if (galleryId) {
-        router.push(`/${galleryId}`);
+        router.replace(`/${galleryId}`);
       }
     } catch (err) {
       setError(formatApiError(err));

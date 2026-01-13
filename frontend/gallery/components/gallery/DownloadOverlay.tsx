@@ -25,7 +25,7 @@ export function DownloadOverlay({
           </p>
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-[#8B6F57] text-white rounded font-bold text-base uppercase tracking-wider shadow-[0px_0px_1px_rgba(30,26,23,0.05),0px_2px_4px_rgba(30,26,23,0.08)] hover:bg-[#7A5F4A] hover:shadow-[0px_2px_4px_rgba(30,26,23,0.05),0px_8px_16px_rgba(30,26,23,0.08)] transition-all duration-300 ease-out active:scale-95 active:shadow-[0px_0px_1px_rgba(30,26,23,0.05),0px_0.5px_2px_rgba(30,26,23,0.08)]"
+            className="btn-primary"
           >
             Zamknij
           </button>

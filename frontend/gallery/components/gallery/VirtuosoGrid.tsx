@@ -35,11 +35,12 @@ export function VirtuosoGridComponent({
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Update container width on resize
+  // Update container width on resize - use full available width for edge-to-edge
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth || 1200);
+        // Use full container width (parent already handles padding)
+        setContainerWidth(containerRef.current.clientWidth || window.innerWidth);
       }
     };
 
@@ -59,8 +60,8 @@ export function VirtuosoGridComponent({
   const layoutBoxes = useMemo(() => {
     if (images.length === 0) return [];
 
-    const boxSpacing = 8;
-    const effectiveWidth = Math.max(containerWidth - 32, 300);
+    const boxSpacing = 7; // Very tight spacing (2x smaller than before) for edge-to-edge fill
+    const effectiveWidth = Math.max(containerWidth, 300); // Use full width (padding handled by parent)
 
     // For marble (masonry), use column-based masonry layout
     if (layout === "marble") {
@@ -147,7 +148,7 @@ export function VirtuosoGridComponent({
   const containerHeight = useMemo(() => {
     if (layoutBoxes.length === 0) return 0;
     const lastBox = layoutBoxes[layoutBoxes.length - 1];
-    return lastBox.top + lastBox.height + 32; // Add padding at bottom
+    return lastBox.top + lastBox.height + 32; // Minimal bottom padding
   }, [layoutBoxes]);
 
   // Infinite scroll using Intersection Observer
@@ -192,15 +193,15 @@ export function VirtuosoGridComponent({
 
   if (images.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500">
+      <div className="text-center py-16 text-gray-400 bg-white">
         No images found
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="w-full">
-      <div style={{ position: "relative", height: containerHeight, width: "100%" }}>
+    <div ref={containerRef} className="w-full bg-white">
+      <div style={{ position: "relative", height: containerHeight, width: "100%" }} className="bg-white">
         {images.map((image, index) => {
           const box = layoutBoxes[index];
           if (!box) return null;
@@ -212,10 +213,10 @@ export function VirtuosoGridComponent({
 
           const imageClasses =
             layout === "square"
-              ? "object-cover rounded-lg"
+              ? "object-cover rounded-[2px]"
               : layout === "standard"
-              ? "object-contain"
-              : "object-cover rounded-lg";
+              ? "object-contain rounded-[2px]"
+              : "object-cover rounded-[2px]";
 
           return (
             <div
@@ -227,7 +228,7 @@ export function VirtuosoGridComponent({
                 width: box.width,
                 height: box.height,
               }}
-              className="overflow-hidden bg-gray-100 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform"
+              className="overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.005] hover:-translate-y-[0.5px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] active:scale-[1.002] active:shadow-[0_2px_10px_rgba(0,0,0,0.07)]"
             >
               <a
                 href={fullImageUrl}
@@ -254,7 +255,7 @@ export function VirtuosoGridComponent({
       {/* Observer target for infinite scroll - only show if there are more pages */}
       {hasNextPage && <div ref={observerTarget} className="h-4" />}
       {isFetchingNextPage && (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-gray-400 bg-white">
           Loading more images...
         </div>
       )}

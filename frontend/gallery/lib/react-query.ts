@@ -30,6 +30,7 @@ export const queryKeys = {
         type,
         limit,
       ] as const,
+    status: (id: string) => [...queryKeys.gallery.detail(id), "status"] as const,
   },
 };
 

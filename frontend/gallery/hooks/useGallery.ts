@@ -44,18 +44,15 @@ export function useGalleryImages(
 ) {
   const queryKey = queryKeys.gallery.infiniteImages(galleryId, type, limit);
   
-  // Read token directly from localStorage (source of truth) to avoid query resets when AuthProvider temporarily clears token
-  // This ensures the query stays enabled and doesn't lose cached data
-  // Using useMemo to avoid reading from localStorage on every render
-  // Fallback to token prop if localStorage doesn't have it (handles initial load)
-  const stableToken = useMemo(() => {
-    if (typeof window !== 'undefined' && galleryId) {
-      const storedToken = localStorage.getItem(`gallery_token_${galleryId}`);
-      // Use stored token if available, otherwise fall back to token prop
-      return storedToken || token;
+  // Get token from sessionStorage as fallback if token prop is null (handles race condition)
+  const effectiveToken = useMemo(() => {
+    if (token) return token;
+    if (typeof window !== "undefined" && galleryId) {
+      const storedToken = sessionStorage.getItem(`gallery_token_${galleryId}`);
+      return storedToken || null;
     }
-    return token;
-  }, [galleryId, token]);
+    return null;
+  }, [token, galleryId]);
   
   const query = useInfiniteQuery({
     queryKey,
@@ -73,11 +70,17 @@ export function useGalleryImages(
         params.append("cursor", pageParam);
       }
 
+      // Use effectiveToken which includes sessionStorage fallback
+      const tokenToUse = effectiveToken || token;
+      if (!tokenToUse) {
+        throw new Error("No token available");
+      }
+
       const response = await apiFetch(
         `${API_URL}/galleries/${galleryId}/images?${params.toString()}`,
         {
           headers: {
-            Authorization: `Bearer ${stableToken}`,
+            Authorization: `Bearer ${tokenToUse}`,
           },
         }
       );
@@ -111,7 +114,7 @@ export function useGalleryImages(
       return undefined;
     },
     initialPageParam: null as string | null,
-    enabled: !!galleryId && !!stableToken, // Require both galleryId and token, but stableToken comes from localStorage (persistent)
+    enabled: !!galleryId && !!effectiveToken, // Use effectiveToken which includes sessionStorage fallback
     placeholderData: (previousData) => previousData, // Keep previous data when query is disabled/refetching
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -145,5 +148,68 @@ export function useGalleryInfo(galleryId: string, token: string) {
     enabled: !!galleryId && !!token,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
+  });
+}
+
+interface GalleryStatusResponse {
+  state: string;
+  paymentStatus: string;
+  isPaid: boolean;
+  galleryName: string | null;
+}
+
+export function useGalleryStatus(galleryId: string | null, token: string | null) {
+  // Get token from sessionStorage as fallback if token prop is null (handles race condition on refresh)
+  const effectiveToken = useMemo(() => {
+    if (token) return token;
+    if (typeof window !== "undefined" && galleryId) {
+      const storedToken = sessionStorage.getItem(`gallery_token_${galleryId}`);
+      return storedToken || null;
+    }
+    return null;
+  }, [token, galleryId]);
+
+  // Get gallery name from sessionStorage as initial/fallback data
+  const initialData = useMemo(() => {
+    if (typeof window !== "undefined" && galleryId) {
+      const storedName = sessionStorage.getItem(`gallery_name_${galleryId}`);
+      if (storedName) {
+        return {
+          state: "PAID_ACTIVE",
+          paymentStatus: "PAID",
+          isPaid: true,
+          galleryName: storedName,
+        } as GalleryStatusResponse;
+      }
+    }
+    return undefined;
+  }, [galleryId]);
+
+  return useQuery({
+    queryKey: queryKeys.gallery.status(galleryId || ""),
+    queryFn: async () => {
+      if (!galleryId || !effectiveToken) throw new Error("Missing galleryId or token");
+      
+      const response = await apiFetch(`${API_URL}/galleries/${galleryId}/status`, {
+        headers: {
+          Authorization: `Bearer ${effectiveToken}`,
+        },
+      });
+      
+      // Store gallery name in sessionStorage for persistence across refreshes
+      if (response.data?.galleryName && typeof window !== "undefined") {
+        sessionStorage.setItem(`gallery_name_${galleryId}`, response.data.galleryName);
+      }
+      
+      return response.data as GalleryStatusResponse;
+    },
+    enabled: !!galleryId && !!effectiveToken, // Use effectiveToken which includes sessionStorage fallback
+    staleTime: 2 * 60 * 1000, // 2 minutes - refresh more frequently for name updates
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false, // Don't refetch on focus to avoid 401 errors
+    retry: false, // Don't retry on auth errors
+    // Use sessionStorage data as initial data, then React Query cache as fallback
+    initialData,
+    placeholderData: (previousData) => previousData || initialData,
   });
 }

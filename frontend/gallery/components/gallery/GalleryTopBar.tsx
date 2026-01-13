@@ -4,24 +4,25 @@ import { useState, useEffect } from "react";
 import { Grid3x3, LayoutGrid, LayoutDashboard, LayoutPanelTop } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useRouter } from "next/navigation";
+import { useGalleryStatus } from "@/hooks/useGallery";
 import type { GridLayout } from "./ImageGrid";
 
 interface GalleryTopBarProps {
-  galleryName?: string;
   gridLayout?: GridLayout;
   onGridLayoutChange?: (layout: GridLayout) => void;
 }
 
 export function GalleryTopBar({ 
-  galleryName, 
   gridLayout,
   onGridLayoutChange,
 }: GalleryTopBarProps) {
   const router = useRouter();
-  const { logout, galleryName: authGalleryName } = useAuth();
+  const { logout, token, galleryId } = useAuth();
   const [scroll, setScroll] = useState(false);
-
-  const displayName = galleryName || authGalleryName || "Galeria";
+  
+  // Fetch gallery name via React Query (uses cached data from login if status endpoint fails)
+  const { data: galleryStatus, isError } = useGalleryStatus(galleryId, token);
+  const displayName = galleryStatus?.galleryName || "Galeria";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -46,32 +47,33 @@ export function GalleryTopBar({
 
   return (
     <header
-      className={`sticky top-0 inset-x-0 h-20 md:h-24 w-full border-b z-[99999] select-none transition-all ${
+      className={`sticky top-0 inset-x-0 h-20 md:h-24 w-full z-[99999] select-none transition-all bg-white ${
         scroll
-          ? "border-background/80 bg-background/40 backdrop-blur-md"
-          : "border-transparent"
+          ? "bg-white/98 backdrop-blur-sm"
+          : "bg-white"
       }`}
     >
-      <div className="container mx-auto px-4 md:px-6 h-full flex items-center justify-between">
+      <div className="w-full mx-auto px-8 md:px-12 lg:px-16 h-full flex items-center justify-between">
         {/* Left: Gallery name */}
         <button
           onClick={scrollToTop}
-          className="text-2xl md:text-3xl font-semibold text-foreground hover:opacity-80 transition-opacity truncate"
+          className="text-4xl md:text-6xl text-gray-900 hover:opacity-70 transition-opacity truncate"
+          style={{ fontFamily: "'The Wedding Signature', cursive" }}
         >
           {displayName}
         </button>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-3 md:gap-6">
+        <div className="flex items-center gap-8 md:gap-10">
           {/* Grid Layout Toggle */}
           {onGridLayoutChange && gridLayout && (
-            <div className="hidden md:flex items-center gap-2 bg-background/50 dark:bg-background/30 rounded-lg p-1 backdrop-blur-sm border border-border/50">
+            <div className="hidden md:flex items-center gap-0.5 bg-transparent p-0.5">
               <button
                 onClick={() => onGridLayoutChange("standard")}
-                className={`h-10 w-10 rounded-md transition-colors flex items-center justify-center ${
+                className={`h-9 w-9 rounded transition-colors flex items-center justify-center border-0 ${
                   gridLayout === "standard"
-                    ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
-                    : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
+                    ? "bg-transparent text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
                 title="Układ standardowy"
                 aria-label="Układ standardowy"
@@ -80,10 +82,10 @@ export function GalleryTopBar({
               </button>
               <button
                 onClick={() => onGridLayoutChange("square")}
-                className={`h-10 w-10 rounded-md transition-colors flex items-center justify-center ${
+                className={`h-9 w-9 rounded transition-colors flex items-center justify-center border-0 ${
                   gridLayout === "square"
-                    ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
-                    : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
+                    ? "bg-transparent text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
                 title="Układ kwadratowy"
                 aria-label="Układ kwadratowy"
@@ -92,10 +94,10 @@ export function GalleryTopBar({
               </button>
               <button
                 onClick={() => onGridLayoutChange("marble")}
-                className={`h-10 w-10 rounded-md transition-colors flex items-center justify-center ${
+                className={`h-9 w-9 rounded transition-colors flex items-center justify-center border-0 ${
                   gridLayout === "marble"
-                    ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
-                    : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
+                    ? "bg-transparent text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
                 title="Układ mozaikowy"
                 aria-label="Układ mozaikowy"
@@ -104,10 +106,10 @@ export function GalleryTopBar({
               </button>
               <button
                 onClick={() => onGridLayoutChange("carousel")}
-                className={`h-10 w-10 rounded-md transition-colors flex items-center justify-center ${
+                className={`h-9 w-9 rounded transition-colors flex items-center justify-center border-0 ${
                   gridLayout === "carousel"
-                    ? "bg-primary/20 dark:bg-primary/30 text-primary shadow-sm"
-                    : "text-foreground/60 hover:text-foreground dark:hover:text-foreground/80"
+                    ? "bg-transparent text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
                 }`}
                 title="Otwórz galerię"
                 aria-label="Otwórz galerię"
@@ -118,7 +120,7 @@ export function GalleryTopBar({
           )}
           <button
             onClick={handleLogout}
-            className="px-5 py-2.5 text-base md:text-lg font-medium text-foreground hover:text-foreground transition-all duration-200 rounded-lg hover:bg-white/10 active:scale-95 active:opacity-80"
+            className="btn-primary"
           >
             Wyloguj
           </button>

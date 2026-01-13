@@ -31,7 +31,7 @@ router.post('/', wrapHandler(galleriesCreate.handler));
 router.get('/:id', wrapHandler(galleriesGet.handler));
 router.get('/:id/cover-photo', wrapHandler(galleriesGetCoverPhoto.handler));
 router.get('/:id/bytes-used', wrapHandler(galleriesGetBytesUsed.handler));
-router.get('/:id/status', wrapHandler(galleriesGetStatus.handler));
+// status endpoint moved to public client routes in index.ts (supports client JWT tokens)
 router.patch('/:id', wrapHandler(galleriesUpdate.handler));
 router.put('/:id', wrapHandler(galleriesUpdate.handler));
 router.delete('/:id', wrapHandler(galleriesDelete.handler));

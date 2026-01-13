@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useGalleryImages } from "@/hooks/useGallery";
 import { useImageDownload } from "@/hooks/useImageDownload";
 import { GalleryTopBar } from "@/components/gallery/GalleryTopBar";
+import { SecondaryMenu } from "@/components/gallery/SecondaryMenu";
 import { VirtuosoGridComponent, type GridLayout } from "@/components/gallery/VirtuosoGrid";
 import { LightGalleryWrapper } from "@/components/gallery/LightGalleryWrapper";
 import { ContextMenuPrevention } from "@/components/gallery/ContextMenuPrevention";
@@ -14,7 +15,7 @@ import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
 export default function GalleryPage() {
   const params = useParams();
   const router = useRouter();
-  const { token, galleryId, galleryName, isAuthenticated, isLoading } = useAuth();
+  const { token, galleryId, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
   const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
@@ -24,15 +25,13 @@ export default function GalleryPage() {
   const layoutBeforeCarouselRef = useRef<GridLayout>("marble"); // Track layout before carousel was clicked
   
   // Use the ID from params as the stable galleryId (it doesn't change)
-  // The hook will read the token directly from localStorage (source of truth),
-  // so we don't need to manage stable token refs here
   const queryGalleryId = id || galleryId || "";
 
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || !token || !galleryId)) {
       if (id) {
-        router.push(`/login/${id}`);
+        router.replace(`/login/${id}`);
       }
     }
   }, [isLoading, isAuthenticated, token, galleryId, id, router]);
@@ -187,7 +186,7 @@ export default function GalleryPage() {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       <ContextMenuPrevention />
       <DownloadOverlay
         isVisible={downloadState.showOverlay}
@@ -195,7 +194,6 @@ export default function GalleryPage() {
         onClose={closeOverlay}
       />
       <GalleryTopBar 
-        galleryName={galleryName || undefined}
         gridLayout={gridLayout}
         onGridLayoutChange={(newLayout) => {
           // If switching to carousel, preserve the current layout
@@ -206,7 +204,8 @@ export default function GalleryPage() {
           setGridLayout(newLayout);
         }}
       />
-      <div className="container mx-auto px-4 py-8">
+      <SecondaryMenu />
+      <div className="w-full px-2 md:px-2 lg:px-2 py-4 md:py-4">
         <LightGalleryWrapper
           images={images}
           galleryId={galleryId || undefined}

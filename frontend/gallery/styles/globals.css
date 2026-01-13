@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Wedding Signature Font */
+@font-face {
+  font-family: 'The Wedding Signature';
+  src: url('/fonts/TheWeddingSignature-Regular.woff2') format('woff2'),
+       url('/fonts/TheWeddingSignature-Regular.woff') format('woff'),
+       url('/fonts/TheWeddingSignature-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -27,9 +38,16 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-inter), system-ui, sans-serif;
+    @apply bg-white text-foreground;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Ensure Inter is used everywhere except gallery name */
+  * {
+    font-family: inherit;
   }
 
   /* Prevent image selection and context menu */
@@ -60,6 +78,33 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Standard primary button - black background with white text, uppercase, wide, less height, no rounding */
+  .btn-primary {
+    background-color: #000000;
+    color: #ffffff;
+    text-transform: uppercase;
+    border-radius: 0;
+    border: none;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+    font-weight: 500;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+
+  .btn-primary:hover {
+    background-color: #171717;
+  }
+
+  .btn-primary:active {
+    background-color: #262626;
+    transform: scale(0.98);
   }
 }
 
@@ -116,3 +161,15 @@
 
 /* Keep visible: rotate left (.lg-rotate-left), rotate right (.lg-rotate-right), 
    fullscreen (.lg-fullscreen), download (.lg-download), close (.lg-close) */
+
+/* Gallery image styling - subtle shadows for floating effect */
+.gallery-image-container {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 200ms ease-out;
+}
+
+.gallery-image-container:hover {
+  transform: translateY(-0.5px) scale(1.005);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
