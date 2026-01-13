@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 export function SecondaryMenu() {
   const [activeItem, setActiveItem] = useState<string | null>("wybor");
@@ -20,32 +20,42 @@ export function SecondaryMenu() {
     setHoveredItem(itemId);
   };
 
-  // Determine which item should show the indicator (hover takes precedence over active)
-  const getIndicatorItem = () => {
-    return hoveredItem || activeItem;
-  };
-
-  // Update indicator position when active/hovered item changes
-  useEffect(() => {
-    const indicatorItemId = getIndicatorItem();
+  // Update indicator position when active/hovered item changes or window resizes
+  const updateIndicatorPosition = useCallback(() => {
+    const indicatorItemId = hoveredItem || activeItem;
     if (!indicatorItemId) {
       setIndicatorStyle(null);
       return;
     }
 
     const button = buttonRefs.current[indicatorItemId];
-    const container = button?.closest('.menu-container');
+    const nav = button?.closest('nav');
     
-    if (button && container) {
-      const containerRect = container.getBoundingClientRect();
+    if (button && nav) {
+      const navRect = nav.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
       
       setIndicatorStyle({
-        left: buttonRect.left - containerRect.left,
+        left: buttonRect.left - navRect.left,
         width: buttonRect.width,
       });
     }
   }, [activeItem, hoveredItem]);
+
+  useEffect(() => {
+    updateIndicatorPosition();
+  }, [updateIndicatorPosition]);
+
+  // Recalculate indicator position on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      // Small delay to ensure DOM has updated after resize
+      setTimeout(updateIndicatorPosition, 0);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateIndicatorPosition]);
 
   return (
     <nav className="w-full bg-white relative">
