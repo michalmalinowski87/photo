@@ -210,6 +210,7 @@ export default function GalleryPage() {
           images={images}
           galleryId={galleryId || undefined}
           onDownload={handleDownload}
+          enableDownload={false}
           onGalleryReady={(openGallery) => {
             openGalleryRef.current = openGallery;
           }}

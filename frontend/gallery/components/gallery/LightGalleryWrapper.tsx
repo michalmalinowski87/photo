@@ -60,6 +60,7 @@ interface LightGalleryWrapperProps {
   onPrefetchNextPage?: () => void; // Callback to prefetch next page of images
   hasNextPage?: boolean; // Whether there are more pages to load
   onGalleryClose?: () => void; // Callback when gallery is closed
+  enableDownload?: boolean; // Whether to enable download button (disabled during selection stage)
 }
 
 export function LightGalleryWrapper({
@@ -71,6 +72,7 @@ export function LightGalleryWrapper({
   onPrefetchNextPage,
   hasNextPage = false,
   onGalleryClose,
+  enableDownload = false, // Default to false for selection stage
 }: LightGalleryWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
@@ -143,8 +145,8 @@ export function LightGalleryWrapper({
       rotateRight: true, // Enable rotate right button
       flipVertical: false, // Disable flip vertical button
       flipHorizontal: false, // Disable flip horizontal button
-      // Download plugin config
-      download: true,
+      // Download plugin config - only enable when final photos are delivered
+      download: enableDownload,
     };
   };
 
@@ -204,7 +206,8 @@ export function LightGalleryWrapper({
         }
 
         // Intercept download button clicks - use document-level listener since lightGallery creates buttons dynamically
-        if (onDownloadRef.current) {
+        // Only set up download handler if downloads are enabled
+        if (enableDownload && onDownloadRef.current) {
           // Remove existing handler if any
           if (downloadHandlerRef.current) {
             document.removeEventListener('click', downloadHandlerRef.current, true);
@@ -345,7 +348,7 @@ export function LightGalleryWrapper({
         galleryInstanceRef.current = null;
       }
     };
-  }, [galleryId]); // Only depend on galleryId - images and onDownload are handled via refs
+  }, [galleryId, enableDownload]); // Include enableDownload in dependencies
 
   // Refresh gallery when images change (for infinite scroll)
   useEffect(() => {
@@ -455,8 +458,8 @@ export function LightGalleryWrapper({
             containerRef.current.addEventListener('lgBeforeClose', handleGalleryClose);
           }
           
-          // Re-attach download handler after refresh
-          if (onDownloadRef.current) {
+          // Re-attach download handler after refresh - only if downloads are enabled
+          if (enableDownload && onDownloadRef.current) {
             // Remove existing handler if any
             if (downloadHandlerRef.current) {
               document.removeEventListener('click', downloadHandlerRef.current, true);
