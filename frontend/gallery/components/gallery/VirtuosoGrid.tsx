@@ -66,7 +66,7 @@ export function VirtuosoGridComponent({
     // For marble (masonry), use column-based masonry layout
     if (layout === "marble") {
       // Calculate responsive number of columns
-      const numColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : effectiveWidth < 1280 ? 4 : 5;
+      const numColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
       const columnWidth = Math.floor((effectiveWidth - (numColumns - 1) * boxSpacing) / numColumns);
       const columnHeights = new Array(numColumns).fill(0);
       const boxes: LayoutBox[] = [];
@@ -228,7 +228,7 @@ export function VirtuosoGridComponent({
                 width: box.width,
                 height: box.height,
               }}
-              className="overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.005] hover:-translate-y-[0.5px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] active:scale-[1.002] active:shadow-[0_2px_10px_rgba(0,0,0,0.07)]"
+              className="overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
             >
               <a
                 href={fullImageUrl}
