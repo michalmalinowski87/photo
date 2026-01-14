@@ -16,3 +16,37 @@ export interface GalleryInfo {
   name: string;
   [key: string]: any;
 }
+
+export interface PricingPackage {
+  includedCount: number;
+  extraPriceCents: number;
+  packagePriceCents: number;
+  packageName?: string;
+}
+
+export interface SelectionState {
+  selectedKeys: string[];
+  approved: boolean;
+  selectedCount: number;
+  overageCount: number;
+  overageCents: number;
+  canSelect: boolean;
+  changeRequestPending: boolean;
+  hasClientApprovedOrder: boolean;
+  changeRequestsBlocked: boolean;
+  hasDeliveredOrder: boolean;
+  selectionEnabled: boolean;
+  pricingPackage: PricingPackage;
+}
+
+export interface DeliveredOrder {
+  orderId: string;
+  orderNumber?: number;
+  deliveredAt: string;
+  selectedCount: number;
+  createdAt: string;
+}
+
+export interface DeliveredOrdersResponse {
+  items: DeliveredOrder[];
+}

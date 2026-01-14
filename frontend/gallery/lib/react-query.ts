@@ -31,6 +31,7 @@ export const queryKeys = {
         limit,
       ] as const,
     status: (id: string) => [...queryKeys.gallery.detail(id), "status"] as const,
+    selection: (id: string) => [...queryKeys.gallery.detail(id), "selection"] as const,
   },
 };
 

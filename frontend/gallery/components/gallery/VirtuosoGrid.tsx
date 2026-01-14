@@ -14,6 +14,10 @@ interface VirtuosoGridProps {
   onLoadMore?: () => void;
   isFetchingNextPage?: boolean;
   galleryId?: string;
+  selectedKeys?: Set<string>;
+  onImageSelect?: (key: string) => void;
+  canSelect?: boolean;
+  showSelectionIndicators?: boolean;
 }
 
 interface LayoutBox {
@@ -30,6 +34,10 @@ export function VirtuosoGridComponent({
   hasNextPage,
   onLoadMore,
   isFetchingNextPage,
+  selectedKeys = new Set(),
+  onImageSelect,
+  canSelect = false,
+  showSelectionIndicators = false,
 }: VirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -218,6 +226,9 @@ export function VirtuosoGridComponent({
               ? "object-contain rounded-[2px]"
               : "object-cover rounded-[2px]";
 
+          const isSelected = selectedKeys.has(image.key);
+          const showIndicator = showSelectionIndicators && (canSelect || isSelected);
+
           return (
             <div
               key={`${image.key || image.url || 'image'}-${index}`}
@@ -228,7 +239,9 @@ export function VirtuosoGridComponent({
                 width: box.width,
                 height: box.height,
               }}
-              className="overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+              className={`overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
+                isSelected ? "ring-2 ring-black ring-opacity-70" : ""
+              }`}
             >
               <a
                 href={fullImageUrl}
@@ -237,6 +250,13 @@ export function VirtuosoGridComponent({
                 data-thumb={carouselThumbUrl}
                 data-sub-html={image.key}
                 className="block w-full h-full relative"
+                onClick={(e) => {
+                  // If selection is enabled and user clicks the selection indicator area, prevent lightGallery
+                  if (canSelect && onImageSelect && (e.target as HTMLElement).closest('.selection-indicator')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
               >
                 <Image
                   src={imageUrl}
@@ -248,6 +268,59 @@ export function VirtuosoGridComponent({
                   unoptimized={imageUrl.startsWith("http")}
                 />
               </a>
+              
+              {/* Selection indicator */}
+              {showIndicator && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (canSelect && onImageSelect) {
+                      onImageSelect(image.key);
+                    }
+                  }}
+                  className={`selection-indicator absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation z-10 ${
+                    isSelected
+                      ? "bg-black text-white"
+                      : "bg-white/90 text-gray-700 hover:bg-white border-2 border-gray-300"
+                  }`}
+                  aria-label={isSelected ? "Odznacz zdjęcie" : "Zaznacz zdjęcie"}
+                  style={{
+                    minWidth: "44px",
+                    minHeight: "44px",
+                  }}
+                >
+                  {isSelected ? (
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={3}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={3}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                  )}
+                </button>
+              )}
             </div>
           );
         })}

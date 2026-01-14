@@ -188,26 +188,45 @@ export function useGalleryStatus(galleryId: string | null, token: string | null)
   return useQuery({
     queryKey: queryKeys.gallery.status(galleryId || ""),
     queryFn: async () => {
-      if (!galleryId || !effectiveToken) throw new Error("Missing galleryId or token");
-      
-      const response = await apiFetch(`${API_URL}/galleries/${galleryId}/status`, {
-        headers: {
-          Authorization: `Bearer ${effectiveToken}`,
-        },
-      });
-      
-      // Store gallery name in sessionStorage for persistence across refreshes
-      if (response.data?.galleryName && typeof window !== "undefined") {
-        sessionStorage.setItem(`gallery_name_${galleryId}`, response.data.galleryName);
+      if (!galleryId || !effectiveToken) {
+        // Return cached/initial data if available instead of throwing
+        if (initialData) return initialData;
+        throw new Error("Missing galleryId or token");
       }
       
-      return response.data as GalleryStatusResponse;
+      try {
+        const response = await apiFetch(`${API_URL}/galleries/${galleryId}/status`, {
+          headers: {
+            Authorization: `Bearer ${effectiveToken}`,
+          },
+        });
+        
+        // Store gallery name in sessionStorage for persistence across refreshes
+        if (response.data?.galleryName && typeof window !== "undefined") {
+          sessionStorage.setItem(`gallery_name_${galleryId}`, response.data.galleryName);
+        }
+        
+        return response.data as GalleryStatusResponse;
+      } catch (error: any) {
+        // On 401/403 errors, return cached data if available instead of failing
+        if ((error.status === 401 || error.status === 403) && initialData) {
+          return initialData;
+        }
+        throw error;
+      }
     },
     enabled: !!galleryId && !!effectiveToken, // Use effectiveToken which includes sessionStorage fallback
     staleTime: 2 * 60 * 1000, // 2 minutes - refresh more frequently for name updates
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false, // Don't refetch on focus to avoid 401 errors
-    retry: false, // Don't retry on auth errors
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth errors (401, 403)
+      if (error?.status === 401 || error?.status === 403) {
+        return false;
+      }
+      // Retry other errors up to 2 times
+      return failureCount < 2;
+    },
     // Use sessionStorage data as initial data, then React Query cache as fallback
     initialData,
     placeholderData: (previousData) => previousData || initialData,

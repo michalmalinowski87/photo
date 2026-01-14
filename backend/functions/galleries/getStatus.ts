@@ -1,6 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { ddbGet } from '../../lib/src/ddb';
 import { getUserIdFromEvent, verifyGalleryAccess } from '../../lib/src/auth';
+import { getJWTFromEvent } from '../../lib/src/jwt';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 
 export const handler = lambdaLogger(async (event: any) => {
@@ -14,9 +15,21 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 	
 	// Support both owner and client tokens
-	const access = await verifyGalleryAccess(event, id, gallery);
-	if (!access.isOwner && !access.isClient) {
-		return { statusCode: 403, body: JSON.stringify({ error: 'forbidden' }) };
+	// Check client JWT first (like getSelection does) for better reliability
+	let hasAccess = false;
+	
+	// Try client JWT token first
+	const jwtPayload = await getJWTFromEvent(event);
+	if (jwtPayload && jwtPayload.galleryId === id) {
+		hasAccess = true;
+	} else {
+		// Fall back to owner access check
+		const access = await verifyGalleryAccess(event, id, gallery);
+		hasAccess = access.isOwner || access.isClient;
+	}
+	
+	if (!hasAccess) {
+		return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized. Please log in.' }) };
 	}
 	
 	// Derive payment status from transactions

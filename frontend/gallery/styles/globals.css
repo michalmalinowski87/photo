@@ -273,3 +273,67 @@
   transform: translateY(-0.5px) scale(1.005);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
+
+/* Heartbeat animation for download button feedback */
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  75% {
+    transform: scale(1.1);
+  }
+}
+
+.heartbeat {
+  animation: heartbeat 0.6s ease-in-out;
+}
+
+/* Selection border styles */
+.selection-border {
+  border: 2px solid rgba(0, 0, 0, 0.7);
+}
+
+/* Touch target minimum size utility */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Accessibility: Focus states for keyboard navigation */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+/* Long-press feedback for download buttons */
+.download-button-longpress {
+  animation: heartbeat 0.6s ease-in-out;
+}
+
+/* Ensure all interactive elements meet touch target minimums */
+button,
+a[role="button"],
+.touch-manipulation {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* High contrast for selection indicators */
+.selection-indicator {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.selection-indicator:focus-visible {
+  outline: 3px solid #000;
+  outline-offset: 2px;
+}

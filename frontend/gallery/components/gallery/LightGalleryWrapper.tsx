@@ -61,6 +61,10 @@ interface LightGalleryWrapperProps {
   hasNextPage?: boolean; // Whether there are more pages to load
   onGalleryClose?: () => void; // Callback when gallery is closed
   enableDownload?: boolean; // Whether to enable download button (disabled during selection stage)
+  selectedKeys?: Set<string>;
+  onImageSelect?: (key: string) => void;
+  canSelect?: boolean;
+  showSelectionIndicators?: boolean;
 }
 
 export function LightGalleryWrapper({
@@ -73,6 +77,10 @@ export function LightGalleryWrapper({
   hasNextPage = false,
   onGalleryClose,
   enableDownload = false, // Default to false for selection stage
+  selectedKeys = new Set(),
+  onImageSelect,
+  canSelect = false,
+  showSelectionIndicators = false,
 }: LightGalleryWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
@@ -87,6 +95,9 @@ export function LightGalleryWrapper({
   const slideChangeHandlerRef = useRef<((e: Event) => void) | null>(null);
   const isGalleryOpenRef = useRef(false);
   const currentGalleryIndexRef = useRef<number>(0);
+  const selectedKeysRef = useRef(selectedKeys);
+  const onImageSelectRef = useRef(onImageSelect);
+  const canSelectRef = useRef(canSelect);
   
   // Keep refs in sync with latest values
   useEffect(() => {
@@ -95,11 +106,14 @@ export function LightGalleryWrapper({
     onPrefetchNextPageRef.current = onPrefetchNextPage;
     hasNextPageRef.current = hasNextPage;
     onGalleryCloseRef.current = onGalleryClose;
+    selectedKeysRef.current = selectedKeys;
+    onImageSelectRef.current = onImageSelect;
+    canSelectRef.current = canSelect;
     // Reset prefetch trigger when new images are loaded
     if (images.length > imagesLengthRef.current) {
       prefetchTriggeredRef.current = false;
     }
-  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose]);
+  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect]);
 
   // Helper function to get gallery configuration
   const getGalleryConfig = (galleryId?: string) => {
@@ -203,6 +217,91 @@ export function LightGalleryWrapper({
         if (containerRef.current) {
           containerRef.current.addEventListener('lgAfterOpen', handleGalleryOpen);
           containerRef.current.addEventListener('lgBeforeClose', handleGalleryClose);
+        }
+
+        // Add custom selection toggle button to toolbar if selection is enabled
+        const addSelectionButton = () => {
+          if (!canSelectRef.current || !onImageSelectRef.current) return;
+          
+          const toolbar = document.querySelector('.lg-toolbar');
+          if (!toolbar) return;
+
+          // Remove existing selection button if any
+          const existingBtn = toolbar.querySelector('.lg-selection-toggle');
+          if (existingBtn) existingBtn.remove();
+
+          // Create selection toggle button
+          const selectionBtn = document.createElement('button');
+          selectionBtn.className = 'lg-icon lg-selection-toggle';
+          selectionBtn.setAttribute('aria-label', 'Toggle selection');
+          selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+          
+          // Update button icon based on current selection state
+          const updateButtonIcon = () => {
+            if (!galleryInstance) return;
+            const currentIndex = galleryInstance.index ?? 0;
+            const currentImage = imagesRef.current[currentIndex];
+            if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+              selectionBtn.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              `;
+              selectionBtn.setAttribute('aria-label', 'Odznacz zdjęcie');
+            } else {
+              selectionBtn.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              `;
+              selectionBtn.setAttribute('aria-label', 'Zaznacz zdjęcie');
+            }
+          };
+
+          // Initial icon update
+          updateButtonIcon();
+
+          // Handle click
+          selectionBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!galleryInstance) return;
+            const currentIndex = galleryInstance.index ?? 0;
+            const currentImage = imagesRef.current[currentIndex];
+            if (currentImage && onImageSelectRef.current) {
+              onImageSelectRef.current(currentImage.key);
+              // Update icon after a short delay to reflect new state
+              setTimeout(updateButtonIcon, 100);
+            }
+          });
+
+          // Insert before close button (last item)
+          const closeBtn = toolbar.querySelector('.lg-close');
+          if (closeBtn) {
+            toolbar.insertBefore(selectionBtn, closeBtn);
+          } else {
+            toolbar.appendChild(selectionBtn);
+          }
+
+          // Update icon on slide change
+          const updateOnSlideChange = () => {
+            updateButtonIcon();
+          };
+          if (containerRef.current) {
+            containerRef.current.addEventListener('lgAfterSlide', updateOnSlideChange);
+          }
+        };
+
+        // Add button after gallery opens
+        if (canSelectRef.current && onImageSelectRef.current) {
+          const addButtonAfterOpen = () => {
+            setTimeout(addSelectionButton, 100);
+          };
+          if (containerRef.current) {
+            containerRef.current.addEventListener('lgAfterOpen', addButtonAfterOpen);
+          }
+          // Also try to add immediately if gallery is already open
+          setTimeout(addSelectionButton, 200);
         }
 
         // Intercept download button clicks - use document-level listener since lightGallery creates buttons dynamically
@@ -488,6 +587,79 @@ export function LightGalleryWrapper({
             document.addEventListener('click', handleDownloadClick, true);
           }
           
+          // Re-attach selection button if selection is enabled
+          if (canSelectRef.current && onImageSelectRef.current) {
+            const addButtonAfterOpen = () => {
+              setTimeout(() => {
+                const toolbar = document.querySelector('.lg-toolbar');
+                if (!toolbar) return;
+
+                const existingBtn = toolbar.querySelector('.lg-selection-toggle');
+                if (existingBtn) existingBtn.remove();
+
+                const selectionBtn = document.createElement('button');
+                selectionBtn.className = 'lg-icon lg-selection-toggle';
+                selectionBtn.setAttribute('aria-label', 'Toggle selection');
+                selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+                
+                const updateButtonIcon = () => {
+                  if (!galleryInstance) return;
+                  const currentIndex = galleryInstance.index ?? 0;
+                  const currentImage = imagesRef.current[currentIndex];
+                  if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+                    selectionBtn.innerHTML = `
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    `;
+                    selectionBtn.setAttribute('aria-label', 'Odznacz zdjęcie');
+                  } else {
+                    selectionBtn.innerHTML = `
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    `;
+                    selectionBtn.setAttribute('aria-label', 'Zaznacz zdjęcie');
+                  }
+                };
+
+                updateButtonIcon();
+
+                selectionBtn.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!galleryInstance) return;
+                  const currentIndex = galleryInstance.index ?? 0;
+                  const currentImage = imagesRef.current[currentIndex];
+                  if (currentImage && onImageSelectRef.current) {
+                    onImageSelectRef.current(currentImage.key);
+                    setTimeout(updateButtonIcon, 100);
+                  }
+                });
+
+                const closeBtn = toolbar.querySelector('.lg-close');
+                if (closeBtn) {
+                  toolbar.insertBefore(selectionBtn, closeBtn);
+                } else {
+                  toolbar.appendChild(selectionBtn);
+                }
+
+                if (containerRef.current) {
+                  containerRef.current.addEventListener('lgAfterSlide', updateButtonIcon);
+                }
+              }, 100);
+            };
+            if (containerRef.current) {
+              containerRef.current.addEventListener('lgAfterOpen', addButtonAfterOpen);
+            }
+            setTimeout(() => {
+              const toolbar = document.querySelector('.lg-toolbar');
+              if (toolbar) {
+                addButtonAfterOpen();
+              }
+            }, 300);
+          }
+
           // Re-attach slide change listener for prefetching and thumbnail updates
           if (containerRef.current) {
             // Remove existing handler if any
