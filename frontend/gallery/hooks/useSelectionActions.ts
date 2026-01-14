@@ -1,26 +1,69 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, formatApiError } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
-import { formatApiError } from "@/lib/api";
+import { getToken } from "@/lib/token";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-export function useSelectionActions(galleryId: string | null, token: string | null) {
+export function useSelectionActions(galleryId: string | null) {
   const queryClient = useQueryClient();
 
-  // Get token from sessionStorage as fallback
-  const effectiveToken =
-    token ||
-    (typeof window !== "undefined" && galleryId
-      ? sessionStorage.getItem(`gallery_token_${galleryId}`)
-      : null);
+  // Toggle individual photo selection - optimistic update
+  const toggleSelection = useMutation({
+    mutationFn: async ({ key, isSelected }: { key: string; isSelected: boolean }) => {
+      // This is a client-side only operation - we update React Query cache optimistically
+      // The actual server update happens when approving the selection
+      return { key, isSelected };
+    },
+    onMutate: async ({ key, isSelected }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.gallery.selection(galleryId || "") });
+
+      // Snapshot previous value
+      const previousState = queryClient.getQueryData(queryKeys.gallery.selection(galleryId || ""));
+
+      // Optimistically update cache
+      queryClient.setQueryData(queryKeys.gallery.selection(galleryId || ""), (old: any) => {
+        if (!old) {
+          // If no state exists yet, create a minimal one (shouldn't happen but handle gracefully)
+          return old;
+        }
+        
+        const currentKeys = old.selectedKeys || [];
+        const newKeys = isSelected
+          ? [...currentKeys.filter((k: string) => k !== key), key] // Add if not already present
+          : currentKeys.filter((k: string) => k !== key); // Remove
+
+        return {
+          ...old,
+          selectedKeys: newKeys,
+          selectedCount: newKeys.length,
+        };
+      });
+
+      return { previousState };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousState && galleryId) {
+        queryClient.setQueryData(queryKeys.gallery.selection(galleryId), context.previousState);
+      }
+    },
+    // Don't invalidate on settled - optimistic update is sufficient for client-side toggles
+    // Only invalidate when actually approving (which happens in approveSelection mutation)
+  });
 
   const approveSelection = useMutation({
     mutationFn: async (selectedKeys: string[]) => {
-      if (!galleryId || !effectiveToken) {
-        throw new Error("Missing galleryId or token");
+      if (!galleryId) {
+        throw new Error("Missing galleryId");
+      }
+
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
       }
 
       if (selectedKeys.length === 0) {
@@ -30,7 +73,7 @@ export function useSelectionActions(galleryId: string | null, token: string | nu
       const response = await apiFetch(`${API_URL}/galleries/${galleryId}/selections/approve`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${effectiveToken}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ selectedKeys }),
@@ -49,8 +92,13 @@ export function useSelectionActions(galleryId: string | null, token: string | nu
 
   const requestChanges = useMutation({
     mutationFn: async () => {
-      if (!galleryId || !effectiveToken) {
-        throw new Error("Missing galleryId or token");
+      if (!galleryId) {
+        throw new Error("Missing galleryId");
+      }
+
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
       }
 
       const response = await apiFetch(
@@ -58,7 +106,7 @@ export function useSelectionActions(galleryId: string | null, token: string | nu
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${effectiveToken}`,
+            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
         }
@@ -75,6 +123,13 @@ export function useSelectionActions(galleryId: string | null, token: string | nu
   });
 
   return {
+    toggleSelection: {
+      mutate: toggleSelection.mutate,
+      mutateAsync: toggleSelection.mutateAsync,
+      isLoading: toggleSelection.isPending,
+      error: toggleSelection.error ? formatApiError(toggleSelection.error) : null,
+      isSuccess: toggleSelection.isSuccess,
+    },
     approveSelection: {
       mutate: approveSelection.mutate,
       mutateAsync: approveSelection.mutateAsync,

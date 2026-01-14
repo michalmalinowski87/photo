@@ -3,12 +3,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { apiFetch, formatApiError } from "@/lib/api";
+import { getToken } from "@/lib/token";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 interface DownloadOptions {
   galleryId: string;
-  token: string;
   imageKey: string;
   onProgress?: (progress: number) => void;
 }
@@ -57,7 +57,12 @@ export function useImageDownload() {
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const downloadMutation = useMutation({
-    mutationFn: async ({ galleryId, token, imageKey }: Omit<DownloadOptions, "onProgress">) => {
+    mutationFn: async ({ galleryId, imageKey }: Omit<DownloadOptions, "onProgress">) => {
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
+      }
+
       // Request presigned URL for full quality image
       const response = await apiFetch(
         `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(imageKey)}/download`,
@@ -197,7 +202,6 @@ export function useImageDownload() {
     try {
       await downloadMutation.mutateAsync({
         galleryId: options.galleryId,
-        token: options.token,
         imageKey: options.imageKey,
       });
     } catch (error) {

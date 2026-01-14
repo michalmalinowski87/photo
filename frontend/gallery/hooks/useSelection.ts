@@ -1,40 +1,47 @@
 "use client";
 
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
+import { getToken } from "@/lib/token";
 import type { SelectionState } from "@/types/gallery";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-export function useSelection(galleryId: string | null, token: string | null) {
-  // Get token from sessionStorage as fallback if token prop is null (handles race condition on refresh)
-  const effectiveToken = useMemo(() => {
-    if (token) return token;
-    if (typeof window !== "undefined" && galleryId) {
-      const storedToken = sessionStorage.getItem(`gallery_token_${galleryId}`);
-      return storedToken || null;
-    }
-    return null;
-  }, [token, galleryId]);
-
+export function useSelection(galleryId: string | null) {
   return useQuery({
     queryKey: queryKeys.gallery.selection(galleryId || ""),
     queryFn: async () => {
-      if (!galleryId || !effectiveToken) {
-        throw new Error("Missing galleryId or token");
+      if (!galleryId) {
+        throw new Error("Missing galleryId");
+      }
+
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
       }
 
       const response = await apiFetch(`${API_URL}/galleries/${galleryId}/selections`, {
         headers: {
-          Authorization: `Bearer ${effectiveToken}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      return response.data as SelectionState;
+      // Parse response.data if it's a string (JSON string) - apiFetch should parse it, but handle both cases
+      let selectionState: SelectionState;
+      if (typeof response.data === 'string') {
+        try {
+          selectionState = JSON.parse(response.data) as SelectionState;
+        } catch (e) {
+          throw new Error('Failed to parse selection state response');
+        }
+      } else {
+        selectionState = response.data as SelectionState;
+      }
+      
+      return selectionState;
     },
-    enabled: !!galleryId && !!effectiveToken,
+    enabled: !!galleryId && !!getToken(galleryId),
     staleTime: 30 * 1000, // 30 seconds - selection state can change frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,

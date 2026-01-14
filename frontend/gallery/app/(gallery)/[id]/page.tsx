@@ -2,7 +2,10 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
+import { getToken } from "@/lib/token";
 import { useGalleryImages } from "@/hooks/useGallery";
 import { useImageDownload } from "@/hooks/useImageDownload";
 import { useSelection } from "@/hooks/useSelection";
@@ -21,14 +24,14 @@ import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOv
 export default function GalleryPage() {
   const params = useParams();
   const router = useRouter();
-  const { token, galleryId, isAuthenticated, isLoading } = useAuth();
+  const { galleryId, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
+  
   const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const [viewMode, setViewMode] = useState<"all" | "selected">("all");
   const [showHelp, setShowHelp] = useState(false);
   const [showDeliveredView, setShowDeliveredView] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [localSelectedKeys, setLocalSelectedKeys] = useState<Set<string>>(new Set());
   const [showChangesRequestedOverlay, setShowChangesRequestedOverlay] = useState(false);
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
@@ -40,20 +43,33 @@ export default function GalleryPage() {
   // Use the ID from params as the stable galleryId (it doesn't change)
   const queryGalleryId = id || galleryId || "";
 
-  // Selection state
-  const { data: selectionState, isLoading: selectionLoading } = useSelection(galleryId, token);
-  const selectionActions = useSelectionActions(galleryId, token);
+  // Selection state - React Query is the single source of truth
+  const { data: selectionState, isLoading: selectionLoading } = useSelection(galleryId);
+  const selectionActions = useSelectionActions(galleryId);
+
+  // Determine gallery state (matching SecondaryMenu logic)
+  const galleryState = useMemo(() => {
+    if (!selectionState) return "selecting"; // Default to selecting when state is not loaded
+    if (selectionState.hasDeliveredOrder) return "delivered";
+    if (selectionState.changeRequestPending) return "changesRequested";
+    if (selectionState.approved || selectionState.hasClientApprovedOrder) return "approved";
+    return "selecting";
+  }, [selectionState]);
 
   // Determine which images to show (must be computed early)
   const shouldShowDelivered = useMemo(() => {
-    return showDeliveredView || (selectionState?.hasDeliveredOrder && !selectionState?.canSelect && !selectionState?.changeRequestPending);
-  }, [showDeliveredView, selectionState]);
+    return showDeliveredView || galleryState === "delivered";
+  }, [showDeliveredView, galleryState]);
+  
+  // Selection is enabled ONLY when in selecting state
+  // Disabled in approved, changesRequested, and delivered states
   const isSelectingState = useMemo(() => {
-    return selectionState?.canSelect && !selectionState?.hasDeliveredOrder;
-  }, [selectionState]);
+    // Only allow selection when explicitly in "selecting" state
+    return galleryState === "selecting";
+  }, [galleryState]);
 
   // Delivered orders
-  const { data: deliveredOrdersData } = useDeliveredOrders(galleryId, token);
+  const { data: deliveredOrdersData } = useDeliveredOrders(galleryId);
   const deliveredOrders = deliveredOrdersData?.items || [];
   const hasMultipleOrders = deliveredOrders.length > 1;
   const singleOrder = deliveredOrders.length === 1 ? deliveredOrders[0] : null;
@@ -67,19 +83,13 @@ export default function GalleryPage() {
   } = useFinalImages(
     galleryId,
     selectedOrderId || singleOrder?.orderId || null,
-    token,
     50
   );
   const finalImages = useMemo(() => {
     return finalImagesData?.pages.flatMap((page) => page.images || []) || [];
   }, [finalImagesData]);
 
-  // Initialize local selection from server state
-  useEffect(() => {
-    if (selectionState?.selectedKeys && isSelectingState) {
-      setLocalSelectedKeys(new Set(selectionState.selectedKeys));
-    }
-  }, [selectionState?.selectedKeys, isSelectingState]);
+  // No local state needed - React Query is the single source of truth
 
   // Show changes requested overlay on mount if state is changes requested
   useEffect(() => {
@@ -90,12 +100,12 @@ export default function GalleryPage() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !token || !galleryId)) {
+    if (!isLoading && (!isAuthenticated || !galleryId)) {
       if (id) {
         router.replace(`/login/${id}`);
       }
     }
-  }, [isLoading, isAuthenticated, token, galleryId, id, router]);
+  }, [isLoading, isAuthenticated, galleryId, id, router]);
 
   // Get images based on state
   const {
@@ -106,7 +116,7 @@ export default function GalleryPage() {
     isLoading: imagesLoading,
     error,
     prefetchNextPage,
-  } = useGalleryImages(queryGalleryId, token, "thumb", 50);
+  } = useGalleryImages(queryGalleryId, "thumb", 50);
 
   const allImages = useMemo(() => {
     return data?.pages.flatMap((page) => page.images || []) || [];
@@ -118,44 +128,68 @@ export default function GalleryPage() {
       return finalImages;
     }
     
-    if (viewMode === "selected" && selectionState?.selectedKeys && selectionState.selectedKeys.length > 0) {
-      const selectedSet = new Set(selectionState.selectedKeys);
-      return allImages.filter((img) => selectedSet.has(img.key));
+    if (viewMode === "selected") {
+      if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys) && selectionState.selectedKeys.length > 0) {
+        const selectedSet = new Set(selectionState.selectedKeys);
+        return allImages.filter((img) => selectedSet.has(img.key));
+      }
+      return [];
     }
     
     return allImages;
   }, [shouldShowDelivered, finalImages, viewMode, allImages, selectionState?.selectedKeys]);
 
-  // Selection toggle handler
+  // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
+  // Get queryClient to access latest cache state and avoid stale closures
+  const queryClient = useQueryClient();
   const handleImageSelect = useCallback(
     (key: string) => {
-      if (!isSelectingState || !selectionState?.canSelect) return;
+      // Only allow selection changes when in selecting state
+      if (!isSelectingState) {
+        return;
+      }
 
-      setLocalSelectedKeys((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) {
-          next.delete(key);
-        } else {
-          // Check limits
-          const baseLimit = selectionState?.pricingPackage?.includedCount || 0;
-          const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents || 0;
-          const canAddMore = extraPriceCents > 0 || next.size < baseLimit;
-          
-          if (canAddMore) {
-            next.add(key);
-          }
-        }
-        return next;
-      });
+      // Always use selectionState from props (React Query will keep it updated)
+      // The queryClient.getQueryData might return stale data during transitions
+      const stateToUse = selectionState;
+      
+      // Get latest selectionState from React Query cache to avoid stale closures
+      const queryKey = queryKeys.gallery.selection(galleryId || "");
+      const latestState = queryClient.getQueryData(queryKey) as typeof selectionState;
+      const stateToUse = latestState || selectionState;
+      
+      // If selectionState is not loaded yet, don't allow selection
+      if (!stateToUse) {
+        return;
+      }
+
+      // Check limits before allowing selection
+      const currentPricingPackage = stateToUse.pricingPackage;
+      const baseLimit = currentPricingPackage?.includedCount ?? 0;
+      const extraPriceCents = currentPricingPackage?.extraPriceCents ?? 0;
+      const currentSelectedKeys = stateToUse.selectedKeys || [];
+      const isSelected = currentSelectedKeys.includes(key);
+
+      // If deselecting, always allow
+      if (isSelected) {
+        selectionActions.toggleSelection.mutate({ key, isSelected: false });
+        return;
+      }
+
+      // If selecting, check limits
+      const canAddMore = extraPriceCents > 0 || currentSelectedKeys.length < baseLimit;
+            if (canAddMore) {
+              selectionActions.toggleSelection.mutate({ key, isSelected: true });
+            }
     },
-    [isSelectingState, selectionState]
+    [isSelectingState, selectionState, selectionActions, queryClient, galleryId]
   );
 
-  // Approve selection
+  // Approve selection - uses React Query state directly
   const handleApproveSelection = useCallback(async () => {
-    if (!selectionActions.approveSelection.mutateAsync) return;
+    if (!selectionActions.approveSelection.mutateAsync || !selectionState?.selectedKeys) return;
     
-    const keysArray = Array.from(localSelectedKeys);
+    const keysArray = selectionState.selectedKeys;
     if (keysArray.length === 0) return;
 
     try {
@@ -164,7 +198,7 @@ export default function GalleryPage() {
     } catch (error) {
       console.error("Failed to approve selection:", error);
     }
-  }, [localSelectedKeys, selectionActions]);
+  }, [selectionState?.selectedKeys, selectionActions]);
 
   // Request changes
   const handleRequestChanges = useCallback(async () => {
@@ -196,7 +230,10 @@ export default function GalleryPage() {
   // Download ZIP
   const handleDownloadZip = useCallback(async () => {
     const orderId = selectedOrderId || singleOrder?.orderId;
-    if (!galleryId || !token || !orderId) return;
+    if (!galleryId || !orderId) return;
+
+    const token = getToken(galleryId);
+    if (!token) return;
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -225,7 +262,7 @@ export default function GalleryPage() {
     } catch (error) {
       console.error("Failed to download ZIP:", error);
     }
-  }, [galleryId, token, selectedOrderId, singleOrder]);
+  }, [galleryId, selectedOrderId, singleOrder]);
 
   // Buy more photos
   const handleBuyMore = useCallback(() => {
@@ -324,27 +361,36 @@ export default function GalleryPage() {
 
   const handleDownload = useCallback(
     async (imageKey: string) => {
-      if (!galleryId || !token || !imageKey) {
+      if (!galleryId || !imageKey) {
         return;
       }
 
       try {
         await downloadImage({
           galleryId,
-          token,
           imageKey,
         });
       } catch (error) {
         console.error("Failed to download image:", error);
       }
     },
-    [galleryId, token, downloadImage]
+    [galleryId, downloadImage]
   );
 
-  // Determine current selection count
-  const currentSelectedCount = isSelectingState
-    ? localSelectedKeys.size
-    : selectionState?.selectedCount || 0;
+  // Determine current selection count - React Query is single source of truth
+  // Use selectedKeys.length if available (from optimistic updates), otherwise use selectedCount from server
+  const currentSelectedCount = useMemo(() => {
+    const selectedKeysArray = selectionState?.selectedKeys;
+    const countFromKeys = Array.isArray(selectedKeysArray) ? selectedKeysArray.length : 0;
+    const countFromServer = selectionState?.selectedCount ?? 0;
+    return countFromKeys > 0 ? countFromKeys : countFromServer;
+  }, [selectionState?.selectedKeys, selectionState?.selectedCount, selectionState]);
+
+  // Show selection indicators only when:
+  // 1. In selecting state (can actually select)
+  // 2. OR viewing selected photos (to see which ones were selected)
+  const showSelectionIndicatorsValue = isSelectingState || viewMode === "selected";
+  const canSelectValue = isSelectingState;
 
   if (isLoading || selectionLoading) {
     return (
@@ -354,7 +400,7 @@ export default function GalleryPage() {
     );
   }
 
-  if (!isAuthenticated || !token || !galleryId) {
+  if (!isAuthenticated || !galleryId) {
     return null;
   }
 
@@ -484,10 +530,10 @@ export default function GalleryPage() {
                 layoutBeforeCarouselRef.current = "marble";
               }
             }}
-            selectedKeys={isSelectingState ? localSelectedKeys : new Set(selectionState?.selectedKeys || [])}
+            selectedKeys={new Set(selectionState?.selectedKeys || [])}
             onImageSelect={handleImageSelect}
             canSelect={isSelectingState}
-            showSelectionIndicators={isSelectingState || (viewMode === "selected" && !isSelectingState)}
+            showSelectionIndicators={showSelectionIndicatorsValue}
           >
             <VirtuosoGridComponent
               images={displayImages}
@@ -502,10 +548,10 @@ export default function GalleryPage() {
               }}
               isFetchingNextPage={shouldShowDelivered ? isFetchingNextFinalPage : isFetchingNextPage}
               galleryId={galleryId || undefined}
-              selectedKeys={isSelectingState ? localSelectedKeys : new Set(selectionState?.selectedKeys || [])}
+              selectedKeys={new Set(selectionState?.selectedKeys || [])}
               onImageSelect={handleImageSelect}
               canSelect={isSelectingState}
-              showSelectionIndicators={isSelectingState || (viewMode === "selected" && !isSelectingState)}
+              showSelectionIndicators={showSelectionIndicatorsValue}
             />
           </LightGalleryWrapper>
         </div>

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { getToken, setToken, clearToken } from "@/lib/token";
 
 interface AuthContextType {
   token: string | null;
@@ -23,7 +24,8 @@ export function AuthProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [token, setToken] = useState<string | null>(null);
+  // Token state is only for isAuthenticated check - actual token is in sessionStorage
+  const [tokenState, setTokenState] = useState<string | null>(null);
   const [galleryId, setGalleryId] = useState<string | null>(initialGalleryId || null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -39,8 +41,8 @@ export function AuthProvider({
     if (currentGalleryId) {
       setGalleryId(currentGalleryId);
       
-      // Load token from sessionStorage
-      const storedToken = sessionStorage.getItem(`gallery_token_${currentGalleryId}`);
+      // Check if token exists in sessionStorage (single source of truth)
+      const storedToken = getToken(currentGalleryId);
       if (storedToken) {
         try {
           // Verify token is valid (check if it's a valid JWT format)
@@ -51,16 +53,16 @@ export function AuthProvider({
             const now = Math.floor(Date.now() / 1000);
             
             if (payload.exp && payload.exp > now) {
-              // Token is valid and not expired
-              setToken(storedToken);
+              // Token is valid and not expired - set state for isAuthenticated
+              setTokenState(storedToken);
             } else {
               // Token expired, remove it
-              sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+              clearToken(currentGalleryId);
             }
           }
         } catch (e) {
           // Invalid token, remove it
-          sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
+          clearToken(currentGalleryId);
         }
       }
     }
@@ -79,8 +81,8 @@ export function AuthProvider({
     if (currentGalleryId && currentGalleryId !== galleryId) {
       setGalleryId(currentGalleryId);
       
-      // Load token for the new galleryId
-      const storedToken = sessionStorage.getItem(`gallery_token_${currentGalleryId}`);
+      // Check token for the new galleryId
+      const storedToken = getToken(currentGalleryId);
       if (storedToken) {
         try {
           const parts = storedToken.split(".");
@@ -89,43 +91,37 @@ export function AuthProvider({
             const now = Math.floor(Date.now() / 1000);
             
             if (payload.exp && payload.exp > now) {
-              setToken(storedToken);
+              setTokenState(storedToken);
             } else {
-              sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
-              setToken(null);
+              clearToken(currentGalleryId);
+              setTokenState(null);
             }
           }
         } catch (e) {
-          sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
-          setToken(null);
+          clearToken(currentGalleryId);
+          setTokenState(null);
         }
       } else {
-        setToken(null);
+        setTokenState(null);
       }
     }
   }, [initialGalleryId, pathname, galleryId]);
 
   const login = (galleryId: string, token: string) => {
-    // Store token in sessionStorage FIRST (synchronous)
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(`gallery_token_${galleryId}`, token);
-    }
-    
-    // Then update state (this triggers re-render)
-    setToken(token);
+    // Store token in sessionStorage (single source of truth)
+    setToken(galleryId, token);
+    // Update state for isAuthenticated check
+    setTokenState(token);
     setGalleryId(galleryId);
   };
 
   const logout = () => {
     const currentGalleryId = galleryId || pathname?.match(/^\/(?:login\/)?([^/]+)$/)?.[1] || null;
     
-    // Clear token and gallery name from sessionStorage
-    if (typeof window !== "undefined" && currentGalleryId) {
-      sessionStorage.removeItem(`gallery_token_${currentGalleryId}`);
-      sessionStorage.removeItem(`gallery_name_${currentGalleryId}`);
-    }
+    // Clear token from sessionStorage (single source of truth)
+    clearToken(currentGalleryId);
     
-    setToken(null);
+    setTokenState(null);
     setGalleryId(null);
     
     if (currentGalleryId) {
@@ -135,12 +131,15 @@ export function AuthProvider({
     }
   };
 
+  // isAuthenticated is derived from sessionStorage (single source of truth)
+  const isAuthenticated = !!galleryId && !!getToken(galleryId);
+
   return (
     <AuthContext.Provider
       value={{
-        token,
+        token: tokenState, // Keep for backward compatibility, but hooks should use getToken()
         galleryId,
-        isAuthenticated: !!token && !!galleryId,
+        isAuthenticated,
         isLoading,
         login,
         logout,

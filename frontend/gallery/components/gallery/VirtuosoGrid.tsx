@@ -227,7 +227,8 @@ export function VirtuosoGridComponent({
               : "object-cover rounded-[2px]";
 
           const isSelected = selectedKeys.has(image.key);
-          const showIndicator = showSelectionIndicators && (canSelect || isSelected);
+          // Show indicator only when showSelectionIndicators is true (selecting state or viewing selected)
+          const showIndicator = showSelectionIndicators;
 
           return (
             <div
@@ -271,14 +272,14 @@ export function VirtuosoGridComponent({
               
               {/* Selection indicator */}
               {showIndicator && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (canSelect && onImageSelect) {
-                      onImageSelect(image.key);
-                    }
-                  }}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onImageSelect) {
+                onImageSelect(image.key);
+              }
+            }}
                   className={`selection-indicator absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation z-10 ${
                     isSelected
                       ? "bg-black text-white"

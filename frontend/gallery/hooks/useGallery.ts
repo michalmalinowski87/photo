@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
+import { getToken } from "@/lib/token";
 import type { ImageData, GalleryInfo } from "@/types/gallery";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -38,25 +39,19 @@ interface GalleryImagesResponse {
 
 export function useGalleryImages(
   galleryId: string,
-  token: string | null,
   type: "thumb" | "big-thumb" = "thumb",
   limit: number = 50
 ) {
   const queryKey = queryKeys.gallery.infiniteImages(galleryId, type, limit);
   
-  // Get token from sessionStorage as fallback if token prop is null (handles race condition)
-  const effectiveToken = useMemo(() => {
-    if (token) return token;
-    if (typeof window !== "undefined" && galleryId) {
-      const storedToken = sessionStorage.getItem(`gallery_token_${galleryId}`);
-      return storedToken || null;
-    }
-    return null;
-  }, [token, galleryId]);
-  
   const query = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam = null }) => {
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("No token available");
+      }
+
       // Build query parameters
       const sizes = "thumb,preview,bigthumb";
       const params = new URLSearchParams({
@@ -70,17 +65,11 @@ export function useGalleryImages(
         params.append("cursor", pageParam);
       }
 
-      // Use effectiveToken which includes sessionStorage fallback
-      const tokenToUse = effectiveToken || token;
-      if (!tokenToUse) {
-        throw new Error("No token available");
-      }
-
       const response = await apiFetch(
         `${API_URL}/galleries/${galleryId}/images?${params.toString()}`,
         {
           headers: {
-            Authorization: `Bearer ${tokenToUse}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -114,7 +103,7 @@ export function useGalleryImages(
       return undefined;
     },
     initialPageParam: null as string | null,
-    enabled: !!galleryId && !!effectiveToken, // Use effectiveToken which includes sessionStorage fallback
+    enabled: !!galleryId && !!getToken(galleryId),
     placeholderData: (previousData) => previousData, // Keep previous data when query is disabled/refetching
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -134,10 +123,15 @@ export function useGalleryImages(
   };
 }
 
-export function useGalleryInfo(galleryId: string, token: string) {
+export function useGalleryInfo(galleryId: string) {
   return useQuery({
     queryKey: queryKeys.gallery.detail(galleryId),
     queryFn: async () => {
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
+      }
+
       const response = await apiFetch(`${API_URL}/galleries/${galleryId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -145,7 +139,7 @@ export function useGalleryInfo(galleryId: string, token: string) {
       });
       return response.data as GalleryInfo;
     },
-    enabled: !!galleryId && !!token,
+    enabled: !!galleryId && !!getToken(galleryId),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
   });
@@ -158,16 +152,7 @@ interface GalleryStatusResponse {
   galleryName: string | null;
 }
 
-export function useGalleryStatus(galleryId: string | null, token: string | null) {
-  // Get token from sessionStorage as fallback if token prop is null (handles race condition on refresh)
-  const effectiveToken = useMemo(() => {
-    if (token) return token;
-    if (typeof window !== "undefined" && galleryId) {
-      const storedToken = sessionStorage.getItem(`gallery_token_${galleryId}`);
-      return storedToken || null;
-    }
-    return null;
-  }, [token, galleryId]);
+export function useGalleryStatus(galleryId: string | null) {
 
   // Get gallery name from sessionStorage as initial/fallback data
   const initialData = useMemo(() => {
@@ -188,16 +173,21 @@ export function useGalleryStatus(galleryId: string | null, token: string | null)
   return useQuery({
     queryKey: queryKeys.gallery.status(galleryId || ""),
     queryFn: async () => {
-      if (!galleryId || !effectiveToken) {
-        // Return cached/initial data if available instead of throwing
+      if (!galleryId) {
         if (initialData) return initialData;
-        throw new Error("Missing galleryId or token");
+        throw new Error("Missing galleryId");
+      }
+
+      const token = getToken(galleryId);
+      if (!token) {
+        if (initialData) return initialData;
+        throw new Error("Missing token");
       }
       
       try {
         const response = await apiFetch(`${API_URL}/galleries/${galleryId}/status`, {
           headers: {
-            Authorization: `Bearer ${effectiveToken}`,
+            Authorization: `Bearer ${token}`,
           },
         });
         
@@ -215,10 +205,12 @@ export function useGalleryStatus(galleryId: string | null, token: string | null)
         throw error;
       }
     },
-    enabled: !!galleryId && !!effectiveToken, // Use effectiveToken which includes sessionStorage fallback
+    enabled: !!galleryId && !!getToken(galleryId),
     staleTime: 2 * 60 * 1000, // 2 minutes - refresh more frequently for name updates
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false, // Don't refetch on focus to avoid 401 errors
+    refetchOnMount: false, // Don't refetch on mount if we have cached data
+    refetchOnReconnect: false, // Don't refetch on reconnect
     retry: (failureCount, error: any) => {
       // Don't retry on auth errors (401, 403)
       if (error?.status === 401 || error?.status === 403) {

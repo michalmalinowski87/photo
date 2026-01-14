@@ -32,8 +32,8 @@ export function SecondaryMenu({
   onBuyMoreClick,
   onDownloadZip,
 }: SecondaryMenuProps) {
-  const { token, galleryId } = useAuth();
-  const { data: selectionState } = useSelection(galleryId, token);
+  const { galleryId } = useAuth();
+  const { data: selectionState } = useSelection(galleryId);
   const [scroll, setScroll] = useState(false);
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -119,10 +119,10 @@ export function SecondaryMenu({
   }, [updateIndicatorPosition]);
 
   // Calculate selection limit display
-  const baseLimit = selectionState?.pricingPackage?.includedCount || 0;
-  const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents || 0;
-  const overageCount = selectionState?.overageCount || 0;
-  const overageCents = selectionState?.overageCents || 0;
+  const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
+  const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
+  const overageCount = selectionState?.overageCount ?? 0;
+  const overageCents = selectionState?.overageCents ?? 0;
   const limitDisplay = extraPriceCents > 0 ? "no limit" : baseLimit.toString();
   const canApprove = selectedCount >= baseLimit;
 
@@ -294,13 +294,23 @@ export function SecondaryMenu({
 
             {(state === "approved" || state === "changesRequested") && onRequestChanges && (
               <button
+                ref={(el) => {
+                  buttonRefs.current["requestChanges"] = el;
+                }}
                 onClick={onRequestChanges}
-                className={`text-sm text-gray-600 hover:text-gray-900 transition-all duration-300 touch-manipulation min-h-[44px] px-4 ${
+                onMouseEnter={() => handleItemHover("requestChanges")}
+                onMouseLeave={() => handleItemHover(null)}
+                className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
+                style={{
+                  color: hoveredItem === "requestChanges" ? "#666666" : "#AAAAAA",
+                  fontWeight: hoveredItem === "requestChanges" ? "700" : "500",
+                  letterSpacing: "0.05em",
+                }}
                 aria-label="Poproś o zmiany"
               >
-                Poproś o zmiany
+                POPROŚ O ZMIANY
               </button>
             )}
 

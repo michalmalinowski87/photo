@@ -13,11 +13,11 @@ interface GalleryTopBarProps {
 }
 
 export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: GalleryTopBarProps) {
-  const { logout, token, galleryId } = useAuth();
+  const { logout, galleryId } = useAuth();
   const [scroll, setScroll] = useState(false);
   
   // Fetch gallery name via React Query (uses cached data from login if status endpoint fails)
-  const { data: galleryStatus } = useGalleryStatus(galleryId, token);
+  const { data: galleryStatus } = useGalleryStatus(galleryId);
   const displayName = galleryStatus?.galleryName || "Galeria";
 
   useEffect(() => {

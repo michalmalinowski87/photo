@@ -56,7 +56,7 @@ function LoginForm() {
         body: JSON.stringify({ password }),
       });
 
-      // Store token in sessionStorage FIRST (synchronous, before state update)
+      // Store token in sessionStorage (single source of truth)
       if (typeof window !== "undefined") {
         sessionStorage.setItem(`gallery_token_${galleryId}`, data.token);
         // Also store gallery name in sessionStorage for persistence across refreshes
@@ -65,7 +65,7 @@ function LoginForm() {
         }
       }
 
-      // Store token and login (state update is async, but sessionStorage is already set)
+      // Update AuthProvider state (for isAuthenticated check)
       login(galleryId, data.token);
 
       // Cache gallery name in React Query from the login response
