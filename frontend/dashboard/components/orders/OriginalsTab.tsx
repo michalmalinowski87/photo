@@ -333,27 +333,6 @@ export function OriginalsTab({
 
   // Selection gallery but no selectedKeys yet
   if (selectedKeys.length === 0) {
-    // If order has a delivery status that suggests photos should exist, show all images as fallback
-    const shouldShowFallback =
-      (deliveryStatus === "CLIENT_APPROVED" ||
-        deliveryStatus === "AWAITING_FINAL_PHOTOS" ||
-        deliveryStatus === "PREPARING_DELIVERY" ||
-        deliveryStatus === "DELIVERED") &&
-      images.length > 0;
-
-    if (shouldShowFallback) {
-      return (
-        <div className="space-y-2">
-          <div className="p-2 bg-info-50 border border-info-200 rounded-lg dark:bg-info-500/10 dark:border-info-500/20">
-            <p className="text-xs text-info-800 dark:text-info-200">
-              Uwaga: Zlecenie nie ma zapisanych wybranych kluczy. Wyświetlane są wszystkie zdjęcia.
-            </p>
-          </div>
-          {renderImageGrid(images)}
-        </div>
-      );
-    }
-
     return (
       <EmptyState
         icon={<HandHeart size={64} />}

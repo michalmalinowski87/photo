@@ -12,8 +12,8 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'dat3mi5gqa8v2.cloudfront.net',
+        protocol: "https",
+        hostname: "dat3mi5gqa8v2.cloudfront.net",
       },
     ],
   },

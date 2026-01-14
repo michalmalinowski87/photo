@@ -328,8 +328,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   // Track last progress values to avoid unnecessary updates
   const lastProgressRef = useRef<Map<string, number>>(new Map());
 
-
-
   // Track viewport height to conditionally hide dropzone visual on small screens
   useEffect(() => {
     const updateViewportHeight = () => {
@@ -430,7 +428,6 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       const uppyFiles = Object.values(uppy.getFiles());
       const currentFileIds = uppyFiles.map((f) => f.id).sort();
       const lastFileIds = lastSyncedFileIdsRef.current.sort();
-
 
       // Only sync if files actually changed (compare IDs) OR if forced (for progress updates)
       const filesChanged =
@@ -588,40 +585,43 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
         // This prevents all ThumbnailItem components from re-rendering when only one thumbnail is generated
         setFiles((prevFiles) => {
           const uppyFiles = Object.values(uppy.getFiles()) as TypedUppyFile[];
-          
+
           // If file count changed, we need a full update (new files added/removed)
           if (prevFiles.length !== uppyFiles.length) {
             return uppyFiles;
           }
 
           // Create a map of existing files by ID for quick lookup
-          const existingFilesMap = new Map(prevFiles.map(f => [f.id, f]));
-          
+          const existingFilesMap = new Map(prevFiles.map((f) => [f.id, f]));
+
           // Check if any file's preview actually changed
           let hasChanges = false;
           const updatedFiles = uppyFiles.map((uppyFile, index) => {
             const existingFile = existingFilesMap.get(uppyFile.id);
-            
+
             // If file exists and preview changed, create new object with updated preview
             if (existingFile && existingFile.preview !== uppyFile.preview) {
               hasChanges = true;
               // Return new object with updated preview, but keep other properties from existing file
               return { ...existingFile, preview: uppyFile.preview } as TypedUppyFile;
             }
-            
+
             // Preserve existing reference if nothing changed
             // Also check if the file at this index is the same reference
             if (existingFile && prevFiles[index] === existingFile) {
               return existingFile; // Same reference, same position
             }
-            
+
             return existingFile ?? uppyFile;
           });
 
           // CRITICAL: If nothing changed, return the previous array reference
           // This prevents VirtuosoGrid from seeing a change and re-rendering all items
-          if (!hasChanges && updatedFiles.length === prevFiles.length && 
-              updatedFiles.every((f, i) => f === prevFiles[i])) {
+          if (
+            !hasChanges &&
+            updatedFiles.length === prevFiles.length &&
+            updatedFiles.every((f, i) => f === prevFiles[i])
+          ) {
             return prevFiles; // Return same array reference - no re-render!
           }
 
@@ -776,17 +776,17 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     blobUrlCacheRef.current.clear();
     // Then clear Uppy files
     uppy.clear();
-    
+
     // CRITICAL FIX: ThumbnailGenerator plugin doesn't automatically reinitialize after clear()
     // We need to reset it by removing and re-adding it to restore thumbnail generation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const thumbnailGeneratorPlugin = (uppy as any).getPlugin('ThumbnailGenerator');
+    const thumbnailGeneratorPlugin = (uppy as any).getPlugin("ThumbnailGenerator");
     if (thumbnailGeneratorPlugin) {
       // Remove the plugin first to avoid duplicates
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       (uppy as any).removePlugin(thumbnailGeneratorPlugin);
     }
-    
+
     // Re-add ThumbnailGenerator with the same configuration
     // This ensures it's properly initialized for new files
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -799,24 +799,27 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
   /**
    * Get thumbnail URL for Uppy file
-   * 
+   *
    * Ultra-minimal: Only use Uppy's preview, no fallbacks
    * - Use file.preview if available (Uppy handles placeholder replacement)
    * - Return undefined if no preview available (let Uppy handle it)
    */
-  const getThumbnail = useCallback((file: TypedUppyFile): string | undefined => {
-    // Get fresh file data from Uppy to ensure we have latest preview
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const freshFile = (uppy?.getFile?.(file.id) ?? file) as TypedUppyFile;
-    
-    // Use Uppy's generated thumbnail if available
-    if (freshFile.preview && typeof freshFile.preview === 'string') {
-      return freshFile.preview;
-    }
+  const getThumbnail = useCallback(
+    (file: TypedUppyFile): string | undefined => {
+      // Get fresh file data from Uppy to ensure we have latest preview
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const freshFile = (uppy?.getFile?.(file.id) ?? file) as TypedUppyFile;
 
-    // No fallback - just return undefined if preview not ready
-    return undefined;
-  }, [uppy]);
+      // Use Uppy's generated thumbnail if available
+      if (freshFile.preview && typeof freshFile.preview === "string") {
+        return freshFile.preview;
+      }
+
+      // No fallback - just return undefined if preview not ready
+      return undefined;
+    },
+    [uppy]
+  );
 
   // Memoize itemContent callback to prevent unnecessary re-renders
   // MUST be before early return to satisfy React hooks rules
@@ -827,7 +830,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
       // Get fresh file state from Uppy to ensure we have latest isPaused value
       const freshFile = (uppy?.getFile(file.id) ?? file) as TypedUppyFile;
-      
+
       const status = getFileStatus(freshFile);
       const progress = getFileProgress(freshFile);
       const thumbnail = getThumbnail(freshFile);
