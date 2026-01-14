@@ -2,7 +2,9 @@
 
 import { useRef, useEffect } from "react";
 import Image from "next/image";
+import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
+import { EmptyState } from "./EmptyState";
 
 interface CarouselViewProps {
   images: ImageData[];
@@ -55,9 +57,11 @@ export function CarouselView({
 
   if (images.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500">
-        No images found
-      </div>
+      <EmptyState
+        icon={<Sparkles size={64} />}
+        title="Brak zdjęć"
+        description="W tej galerii nie ma jeszcze żadnych zdjęć."
+      />
     );
   }
 

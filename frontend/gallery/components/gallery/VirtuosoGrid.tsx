@@ -3,7 +3,9 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import justifiedLayout from "justified-layout";
 import Image from "next/image";
+import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
+import { EmptyState } from "./EmptyState";
 
 export type GridLayout = "square" | "standard" | "marble" | "carousel";
 
@@ -201,9 +203,11 @@ export function VirtuosoGridComponent({
 
   if (images.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-400 bg-white">
-        No images found
-      </div>
+      <EmptyState
+        icon={<Sparkles size={64} />}
+        title="Brak zdjęć"
+        description="W tej galerii nie ma jeszcze żadnych zdjęć."
+      />
     );
   }
 

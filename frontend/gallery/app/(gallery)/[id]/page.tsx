@@ -149,10 +149,6 @@ export default function GalleryPage() {
         return;
       }
 
-      // Always use selectionState from props (React Query will keep it updated)
-      // The queryClient.getQueryData might return stale data during transitions
-      const stateToUse = selectionState;
-      
       // Get latest selectionState from React Query cache to avoid stale closures
       const queryKey = queryKeys.gallery.selection(galleryId || "");
       const latestState = queryClient.getQueryData(queryKey) as typeof selectionState;

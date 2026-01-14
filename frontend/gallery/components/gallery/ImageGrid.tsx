@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
+import { EmptyState } from "./EmptyState";
 
 export type GridLayout = "square" | "standard" | "marble" | "carousel";
 
@@ -170,9 +172,11 @@ export function ImageGrid({
       </div>
 
       {images.length === 0 && (
-        <div className="text-center py-16 text-gray-500">
-          No images found
-        </div>
+        <EmptyState
+          icon={<Sparkles size={64} />}
+          title="Brak zdjęć"
+          description="W tej galerii nie ma jeszcze żadnych zdjęć."
+        />
       )}
     </div>
   );
