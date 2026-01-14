@@ -45,6 +45,21 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Click effect for all buttons - keyboard-like press feedback */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a[role="button"]:not(:disabled) {
+    cursor: pointer;
+    transition: transform 0.1s ease-in-out;
+    will-change: transform;
+  }
+
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active,
+  a[role="button"]:not(:disabled):active {
+    transform: scale(0.95);
+  }
+
   /* Ensure Inter is used everywhere except gallery name */
   * {
     font-family: inherit;

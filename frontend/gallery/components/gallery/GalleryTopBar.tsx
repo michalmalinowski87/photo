@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { LogOut, HelpCircle, Grid3x3, LayoutGrid, LayoutDashboard, LayoutPanelTop } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGalleryStatus } from "@/hooks/useGallery";
+import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { GridLayout } from "./VirtuosoGrid";
 
 interface GalleryTopBarProps {
@@ -34,10 +35,12 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
   }, []);
 
   const handleLogout = () => {
+    hapticFeedback('medium');
     logout();
   };
 
   const scrollToTop = () => {
+    hapticFeedback('light');
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -69,8 +72,11 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
           {onGridLayoutChange && gridLayout && (
             <div className="flex items-center gap-1 sm:gap-2 bg-transparent">
               <button
-                onClick={() => onGridLayoutChange("standard")}
-                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
+                onClick={() => {
+                  hapticFeedback('light');
+                  onGridLayoutChange("standard");
+                }}
+                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "standard"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -81,8 +87,11 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
                 <Grid3x3 className="w-5 h-5" />
               </button>
               <button
-                onClick={() => onGridLayoutChange("square")}
-                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
+                onClick={() => {
+                  hapticFeedback('light');
+                  onGridLayoutChange("square");
+                }}
+                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "square"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -93,8 +102,11 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
                 <LayoutGrid className="w-5 h-5" />
               </button>
               <button
-                onClick={() => onGridLayoutChange("marble")}
-                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
+                onClick={() => {
+                  hapticFeedback('light');
+                  onGridLayoutChange("marble");
+                }}
+                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "marble"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -105,8 +117,11 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
                 <LayoutDashboard className="w-5 h-5" />
               </button>
               <button
-                onClick={() => onGridLayoutChange("carousel")}
-                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-colors flex items-center justify-center border-0 touch-manipulation ${
+                onClick={() => {
+                  hapticFeedback('light');
+                  onGridLayoutChange("carousel");
+                }}
+                className={`h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation ${
                   gridLayout === "carousel"
                     ? "bg-transparent text-gray-900"
                     : "text-gray-400 hover:text-gray-600"
@@ -119,15 +134,18 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
             </div>
           )}
 
-          {/* Help icon */}
+          {/* Help icon - matches layout selector style */}
           {onHelpClick && (
             <button
-              onClick={onHelpClick}
-              className="h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 active:bg-gray-200 touch-manipulation"
+              onClick={() => {
+                hapticFeedback('light');
+                onHelpClick();
+              }}
+              className="h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation bg-transparent text-gray-400 hover:text-gray-600"
               title="Pomoc"
               aria-label="Pomoc"
             >
-              <HelpCircle className="w-5 h-5 md:w-5 md:h-5" />
+              <HelpCircle className="w-5 h-5" />
             </button>
           )}
           

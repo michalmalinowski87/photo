@@ -6,6 +6,7 @@ import { apiFetch, formatApiError } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/react-query";
+import { FullPageLoading } from "@/components/ui/Loading";
 
 function LoginForm() {
   const router = useRouter();
@@ -97,13 +98,7 @@ function LoginForm() {
   }
 
   if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
-        <div className="bg-white p-10 rounded-xl shadow-lg text-center">
-          <div className="text-lg text-gray-600">Ładowanie...</div>
-        </div>
-      </div>
-    );
+    return <FullPageLoading text="Ładowanie..." />;
   }
 
   const displayName = galleryName || "Twoja Galeria";
@@ -171,13 +166,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div>Ładowanie...</div>
-        </div>
-      }
-    >
+    <Suspense fallback={<FullPageLoading text="Ładowanie..." />}>
       <LoginForm />
     </Suspense>
   );

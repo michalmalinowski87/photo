@@ -43,7 +43,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Get selections from request body (stored in memory on frontend)
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const selectedKeys: string[] = Array.isArray(body?.selectedKeys) ? body.selectedKeys : [];
-	if (selectedKeys.length === 0) return { statusCode: 400, body: 'selectedKeys required' };
 
 	// Query all orders once - reuse for all checks
 	const ordersQuery = await ddb.send(new QueryCommand({
@@ -53,12 +52,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}));
 	const orders = ordersQuery.Items || [];
 
+	// Check for existing CHANGES_REQUESTED order first (cancel change request scenario)
+	const changesRequestedOrder = orders.find((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
+	
+	// If canceling change request, use the existing order's selectedKeys if none provided
+	if (changesRequestedOrder && selectedKeys.length === 0) {
+		selectedKeys.push(...(changesRequestedOrder.selectedKeys || []));
+	}
+
+	// Validate selectedKeys only if we don't have a CHANGES_REQUESTED order to restore
+	if (selectedKeys.length === 0 && !changesRequestedOrder) {
+		return { statusCode: 400, body: 'selectedKeys required' };
+	}
+
 	// Check if there's already an order with CLIENT_APPROVED or PREPARING_DELIVERY status
 	// (PREPARING_DELIVERY means photographer already did the work, so lock selection)
+	// But allow if we're canceling a change request (restoring CHANGES_REQUESTED order)
 	const hasActiveOrder = orders.some((o: any) => 
 		o.deliveryStatus === 'CLIENT_APPROVED' || o.deliveryStatus === 'PREPARING_DELIVERY'
 	);
-	if (hasActiveOrder) {
+	if (hasActiveOrder && !changesRequestedOrder) {
 		return { statusCode: 403, body: 'selection already approved - order with CLIENT_APPROVED or PREPARING_DELIVERY status exists' };
 	}
 
@@ -87,7 +100,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const now = new Date().toISOString();
 	// Check for existing orders: CHANGES_REQUESTED (restore) or CLIENT_SELECTING (update), otherwise create new
 	// Priority: CHANGES_REQUESTED first (restore), then CLIENT_SELECTING (update)
-	const existingOrder = orders.find((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED') 
+	// Note: changesRequestedOrder was already found above, reuse it
+	const existingOrder = changesRequestedOrder 
 		|| orders.find((o: any) => o.deliveryStatus === 'CLIENT_SELECTING');
 	
 	let orderId: string | undefined;

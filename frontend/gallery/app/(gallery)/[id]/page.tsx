@@ -20,6 +20,8 @@ import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
 import { HelpOverlay } from "@/components/gallery/HelpOverlay";
 import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
 import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOverlay";
+import { FullPageLoading } from "@/components/ui/Loading";
+import { hapticFeedback } from "@/utils/hapticFeedback";
 
 export default function GalleryPage() {
   const params = useParams();
@@ -33,6 +35,7 @@ export default function GalleryPage() {
   const [showDeliveredView, setShowDeliveredView] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showChangesRequestedOverlay, setShowChangesRequestedOverlay] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
@@ -92,11 +95,20 @@ export default function GalleryPage() {
   // No local state needed - React Query is the single source of truth
 
   // Show changes requested overlay on mount if state is changes requested
+  // Only show once per session - track dismissal in sessionStorage
   useEffect(() => {
-    if (selectionState?.changeRequestPending && !showChangesRequestedOverlay) {
+    if (!selectionState?.changeRequestPending || showChangesRequestedOverlay) {
+      return;
+    }
+
+    // Check if overlay has been dismissed in this session
+    const dismissedKey = `changes_requested_dismissed_${galleryId}`;
+    const wasDismissed = typeof window !== "undefined" && sessionStorage.getItem(dismissedKey) === "true";
+    
+    if (!wasDismissed) {
       setShowChangesRequestedOverlay(true);
     }
-  }, [selectionState?.changeRequestPending, showChangesRequestedOverlay]);
+  }, [selectionState?.changeRequestPending, showChangesRequestedOverlay, galleryId]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -188,11 +200,14 @@ export default function GalleryPage() {
     const keysArray = selectionState.selectedKeys;
     if (keysArray.length === 0) return;
 
+    setIsActionLoading(true);
     try {
       await selectionActions.approveSelection.mutateAsync(keysArray);
       // Selection state will update via query invalidation
     } catch (error) {
       console.error("Failed to approve selection:", error);
+    } finally {
+      setIsActionLoading(false);
     }
   }, [selectionState?.selectedKeys, selectionActions]);
 
@@ -200,28 +215,46 @@ export default function GalleryPage() {
   const handleRequestChanges = useCallback(async () => {
     if (!selectionActions.requestChanges.mutateAsync) return;
 
+    setIsActionLoading(true);
     try {
       await selectionActions.requestChanges.mutateAsync();
     } catch (error) {
       console.error("Failed to request changes:", error);
+    } finally {
+      setIsActionLoading(false);
     }
   }, [selectionActions]);
 
   // Cancel change request - approve current selection again to restore order
+  // Note: No validation needed - backend will restore the existing CHANGES_REQUESTED order
   const handleCancelChangeRequest = useCallback(async () => {
-    if (!selectionActions.approveSelection.mutateAsync || !selectionState?.selectedKeys) return;
+    if (!selectionActions.approveSelection.mutateAsync) {
+      console.error("approveSelection.mutateAsync is not available");
+      return;
+    }
     
-    // Approve the current selection again - this will restore the CHANGES_REQUESTED order to CLIENT_SELECTING
-    const keysArray = selectionState.selectedKeys;
-    if (keysArray.length === 0) return;
+    // Get selectedKeys from selectionState (should exist from the order)
+    // If not available, pass empty array - backend will handle it
+    const keysArray = selectionState?.selectedKeys || [];
 
+    setIsActionLoading(true);
     try {
+      console.log("Canceling change request by approving selection:", keysArray);
       await selectionActions.approveSelection.mutateAsync(keysArray);
       setShowChangesRequestedOverlay(false);
+      // Clear dismissal flag so overlay can show again if changes are requested again
+      if (galleryId && typeof window !== "undefined") {
+        sessionStorage.removeItem(`changes_requested_dismissed_${galleryId}`);
+      }
+      console.log("Change request canceled successfully");
     } catch (error) {
       console.error("Failed to cancel change request:", error);
+      // Show error to user
+      alert(`Nie udało się anulować prośby o zmiany: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsActionLoading(false);
     }
-  }, [selectionActions, selectionState?.selectedKeys]);
+  }, [selectionActions, selectionState?.selectedKeys, galleryId]);
 
   // Download ZIP
   const handleDownloadZip = useCallback(async () => {
@@ -389,11 +422,7 @@ export default function GalleryPage() {
   const canSelectValue = isSelectingState;
 
   if (isLoading || selectionLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div>Ładowanie...</div>
-      </div>
-    );
+    return <FullPageLoading text="Ładowanie..." />;
   }
 
   if (!isAuthenticated || !galleryId) {
@@ -401,14 +430,12 @@ export default function GalleryPage() {
   }
 
   if (imagesLoading && !shouldShowDelivered) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div>Ładowanie zdjęć...</div>
-      </div>
-    );
+    return <FullPageLoading text="Ładowanie zdjęć..." />;
   }
 
-  if (error && !shouldShowDelivered) {
+  // Only show error if we're not loading, have no data, and actually have an error
+  // This prevents showing transient errors during initial load/retry
+  if (error && !shouldShowDelivered && !imagesLoading && !data?.pages?.length) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-red-600">Błąd ładowania galerii: {String(error)}</div>
@@ -418,6 +445,8 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Show loading overlay immediately when actions are in progress */}
+      {isActionLoading && <FullPageLoading text="Przetwarzanie..." />}
       <ContextMenuPrevention />
       <DownloadButtonFeedback />
       <DownloadOverlay
@@ -428,13 +457,23 @@ export default function GalleryPage() {
       <HelpOverlay isVisible={showHelp} onClose={() => setShowHelp(false)} selectionState={selectionState} />
       <ChangesRequestedOverlay
         isVisible={showChangesRequestedOverlay}
-        onClose={() => setShowChangesRequestedOverlay(false)}
+        onClose={() => {
+          setShowChangesRequestedOverlay(false);
+          // Store dismissal in sessionStorage so it doesn't reappear this session
+          if (galleryId && typeof window !== "undefined") {
+            sessionStorage.setItem(`changes_requested_dismissed_${galleryId}`, "true");
+          }
+        }}
         onCancelRequest={handleCancelChangeRequest}
       />
       <GalleryTopBar 
-        onHelpClick={() => setShowHelp(true)}
+        onHelpClick={() => {
+          hapticFeedback('light');
+          setShowHelp(true);
+        }}
         gridLayout={gridLayout}
         onGridLayoutChange={(newLayout) => {
+          hapticFeedback('light');
           if (newLayout === "carousel" && gridLayout !== "carousel") {
             layoutBeforeCarouselRef.current = gridLayout;
           }

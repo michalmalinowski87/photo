@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { hapticFeedback } from "@/utils/hapticFeedback";
 
 interface ChangesRequestedOverlayProps {
   isVisible: boolean;
@@ -27,7 +28,10 @@ export function ChangesRequestedOverlay({
         <div className="flex items-start justify-between mb-6">
           <h2 className="text-2xl font-bold">Zmiany zgłoszone</h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              hapticFeedback('light');
+              onClose();
+            }}
             className="h-11 w-11 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors touch-manipulation"
             aria-label="Zamknij"
           >
@@ -41,7 +45,7 @@ export function ChangesRequestedOverlay({
           </p>
           <p>
             W tym trybie możesz tylko przeglądać zdjęcia i swój aktualny wybór — nie możesz wprowadzać zmian. 
-            Aby edytować ponownie, anuluj prośbę. To chroni pracę fotografa na wypadek, gdyby edycja już się rozpoczęła.
+            To chroni pracę fotografa na wypadek, gdyby edycja już się rozpoczęła.
           </p>
           <p className="text-sm text-gray-600">
             Dziękujemy za zrozumienie!
@@ -50,14 +54,20 @@ export function ChangesRequestedOverlay({
 
         <div className="flex gap-4 justify-end">
           <button
-            onClick={onCancelRequest}
+            onClick={() => {
+              hapticFeedback('medium');
+              onCancelRequest();
+            }}
             className="btn-primary touch-manipulation min-h-[44px]"
             aria-label="Anuluj prośbę o zmiany"
           >
             Anuluj prośbę
           </button>
           <button
-            onClick={onClose}
+            onClick={() => {
+              hapticFeedback('light');
+              onClose();
+            }}
             className="px-6 py-2 text-gray-600 hover:text-gray-900 transition-colors touch-manipulation min-h-[44px]"
             aria-label="Zamknij"
           >

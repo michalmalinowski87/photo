@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSelection } from "@/hooks/useSelection";
 import { useAuth } from "@/providers/AuthProvider";
+import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { SelectionState } from "@/types/gallery";
 
 interface SecondaryMenuProps {
@@ -165,6 +166,7 @@ export function SecondaryMenu({
   }, [state, viewMode]);
 
   const handleItemClick = (itemId: string) => {
+    hapticFeedback('light');
     setActiveItem(itemId);
     if (itemId === "all" && onViewModeChange) {
       onViewModeChange("all");
@@ -274,7 +276,10 @@ export function SecondaryMenu({
                 ref={(el) => {
                   buttonRefs.current["approve"] = el;
                 }}
-                onClick={onApproveSelection}
+                onClick={() => {
+                  hapticFeedback('medium');
+                  onApproveSelection();
+                }}
                 disabled={!canApprove}
                 onMouseEnter={() => handleApproveButtonHover(true)}
                 onMouseLeave={() => handleApproveButtonHover(false)}
@@ -292,12 +297,15 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {(state === "approved" || state === "changesRequested") && onRequestChanges && (
+            {state === "approved" && onRequestChanges && (
               <button
                 ref={(el) => {
                   buttonRefs.current["requestChanges"] = el;
                 }}
-                onClick={onRequestChanges}
+                onClick={() => {
+                  hapticFeedback('medium');
+                  onRequestChanges();
+                }}
                 onMouseEnter={() => handleItemHover("requestChanges")}
                 onMouseLeave={() => handleItemHover(null)}
                 className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap ${
@@ -316,19 +324,35 @@ export function SecondaryMenu({
 
             {state === "changesRequested" && onCancelChangeRequest && (
               <button
-                onClick={onCancelChangeRequest}
-                className={`text-sm text-gray-600 hover:text-gray-900 transition-all duration-300 touch-manipulation min-h-[44px] px-4 ${
+                ref={(el) => {
+                  buttonRefs.current["cancelRequest"] = el;
+                }}
+                onClick={() => {
+                  hapticFeedback('medium');
+                  onCancelChangeRequest();
+                }}
+                onMouseEnter={() => handleItemHover("cancelRequest")}
+                onMouseLeave={() => handleItemHover(null)}
+                className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
+                style={{
+                  color: hoveredItem === "cancelRequest" ? "#666666" : "#AAAAAA",
+                  fontWeight: hoveredItem === "cancelRequest" ? "700" : "500",
+                  letterSpacing: "0.05em",
+                }}
                 aria-label="Anuluj prośbę o zmiany"
               >
-                Anuluj prośbę
+                ANULUJ PROŚBĘ
               </button>
             )}
 
             {state === "delivered" && onDownloadZip && (
               <button
-                onClick={onDownloadZip}
+                onClick={() => {
+                  hapticFeedback('medium');
+                  onDownloadZip();
+                }}
                 className={`btn-primary touch-manipulation min-h-[44px] transition-all duration-300 ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
@@ -340,7 +364,10 @@ export function SecondaryMenu({
 
             {state === "delivered" && showBuyMore && onBuyMoreClick && (
               <button
-                onClick={onBuyMoreClick}
+                onClick={() => {
+                  hapticFeedback('light');
+                  onBuyMoreClick();
+                }}
                 className={`text-sm text-gray-600 hover:text-gray-900 transition-all duration-300 touch-manipulation min-h-[44px] px-4 ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
