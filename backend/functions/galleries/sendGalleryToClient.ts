@@ -113,7 +113,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	const galleryLink = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
+	const galleryLink = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
 	const galleryName = gallery.galleryName || galleryId;
 	const clientEmail = gallery.clientEmail;
 

@@ -124,7 +124,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Send email to client notifying them the change request was approved
 	if (sender && gallery.clientEmail) {
-		const galleryLink = `${apiUrl}/gallery/${galleryId}`;
+		const galleryLink = `${apiUrl}/${galleryId}`;
 		const emailTemplate = createChangeRequestApprovedEmail(
 			galleryId,
 			gallery.name || galleryId,

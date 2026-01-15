@@ -51,7 +51,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	const secrets = hashPassword(passwordPlain);
 	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
-	const galleryLink = apiUrl ? `${apiUrl}/gallery/${id}` : `https://your-frontend/gallery/${id}`;
+	const galleryLink = apiUrl ? `${apiUrl}/${id}` : `https://your-frontend/${id}`;
 	
 	await ddb.send(new UpdateCommand({
 		TableName: table,

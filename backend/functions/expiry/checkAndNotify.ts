@@ -310,7 +310,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return;
 			}
 			
-			const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
+			const link = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
 			const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
 			
 			// Get owner email (from gallery or Cognito)

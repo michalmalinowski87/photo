@@ -75,7 +75,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 
-	const link = apiUrl ? `${apiUrl}/gallery/${galleryId}` : `https://your-frontend/gallery/${galleryId}`;
+	const link = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
 	const galleryName = gallery.galleryName || galleryId;
 	const isNonSelectionGallery = gallery.selectionEnabled === false;
 
