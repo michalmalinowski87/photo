@@ -53,6 +53,7 @@ export function SecondaryMenu({
       ? "approved"
       : "selecting"
     : "selecting";
+  const shouldBeSticky = state === "selecting";
 
   useEffect(() => {
     let rafId: number | null = null;
@@ -122,9 +123,14 @@ export function SecondaryMenu({
   // Calculate selection limit display
   const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
   const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
-  const overageCount = selectionState?.overageCount ?? 0;
-  const overageCents = selectionState?.overageCents ?? 0;
-  const limitDisplay = extraPriceCents > 0 ? "no limit" : baseLimit.toString();
+  // Compute overage locally for immediate UI correctness with optimistic selection updates.
+  // Backend-provided overageCount/overageCents can lag behind selectedCount/selectedKeys changes.
+  const computedOverageCount = extraPriceCents > 0 ? Math.max(0, selectedCount - baseLimit) : 0;
+  const computedOverageCents = computedOverageCount * extraPriceCents;
+  // If extra-per-photo pricing is enabled, we still show the included limit (baseLimit),
+  // and allow going over it (overageCount / overageCents).
+  // If baseLimit is 0 and extra pricing exists, show "no limit" instead of "0".
+  const limitDisplay = baseLimit > 0 ? baseLimit.toString() : extraPriceCents > 0 ? "no limit" : "0";
   const canApprove = selectedCount >= baseLimit;
 
   // Format price in PLN
@@ -194,7 +200,7 @@ export function SecondaryMenu({
 
   return (
     <nav
-      className={`sticky top-20 md:top-24 w-full bg-white z-[99998] transition-colors duration-300 ease-in-out ${
+      className={`${shouldBeSticky ? "sticky top-20 md:top-24 z-[99998]" : "relative"} w-full bg-white transition-colors duration-300 ease-in-out ${
         scroll
           ? "bg-white/80 backdrop-blur-md backdrop-saturate-150"
           : "bg-white"
@@ -256,18 +262,18 @@ export function SecondaryMenu({
 
           {/* Right: Selection status + Actions */}
           <div className="flex items-center justify-end gap-6 sm:gap-8 ml-auto flex-shrink-0" style={{ alignSelf: 'center' }}>
-            {/* Selection status display (only in selecting state) - moved to right */}
+            {/* Selection status display (only in selecting state)
+                Keep each piece as a sibling so spacing matches the rest of the right-side controls. */}
+            {state === "selecting" && extraPriceCents > 0 && computedOverageCount > 0 && (
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                Dodatkowe ujęcia {computedOverageCount} × {formatPrice(extraPriceCents)} ={" "}
+                {formatPrice(computedOverageCents)}
+              </span>
+            )}
             {state === "selecting" && (
-              <div className="flex items-center gap-2 text-xs text-gray-400 whitespace-nowrap">
-                <span>
-                  Wybrane: {selectedCount} / {limitDisplay}
-                </span>
-                {overageCount > 0 && (
-                  <span className="text-gray-500">
-                    Do zapłaty: +{formatPrice(overageCents)}
-                  </span>
-                )}
-              </div>
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                Wybrane: {selectedCount} / {limitDisplay}
+              </span>
             )}
 
             {/* Action buttons based on state */}

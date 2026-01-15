@@ -115,6 +115,49 @@ export function LightGalleryWrapper({
     }
   }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect]);
 
+  // Keyboard support while LightGallery is open:
+  // Space / Enter toggles selection for the current photo.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isGalleryOpenRef.current) return;
+      if (!canSelectRef.current || !onImageSelectRef.current) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.repeat) return;
+
+      const isActivationKey = e.key === "Enter" || e.key === " " || e.code === "Space";
+      if (!isActivationKey) return;
+
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+        // If the selection button itself is focused, let the browser's native button activation handle it.
+        if (target.closest?.(".lg-selection-toggle")) return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Prefer clicking the actual toolbar button so its label updates consistently.
+      const btn = document.querySelector<HTMLButtonElement>(".lg-toolbar .lg-selection-toggle");
+      if (btn) {
+        btn.click();
+        return;
+      }
+
+      // Fallback: toggle selection directly.
+      const galleryInstance = galleryInstanceRef.current;
+      const currentIndex = galleryInstance?.index ?? currentGalleryIndexRef.current;
+      const currentImage = imagesRef.current[currentIndex];
+      if (currentImage?.key) {
+        onImageSelectRef.current(currentImage.key);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   // Helper function to get gallery configuration
   const getGalleryConfig = (galleryId?: string) => {
     const isDevelopment = process.env.NODE_ENV === "development";
@@ -232,34 +275,37 @@ export function LightGalleryWrapper({
 
           // Create selection toggle button
           const selectionBtn = document.createElement('button');
-          selectionBtn.className = 'lg-icon lg-selection-toggle';
+          selectionBtn.className = 'lg-selection-toggle';
           selectionBtn.setAttribute('aria-label', 'Toggle selection');
-          selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+          selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; padding: 0 12px; display: flex; gap: 8px; align-items: center; justify-content: center; cursor: pointer;';
+          // Prevent pointer interaction from focusing the button (avoids focus-visible ring
+          // appearing when user navigates slides with arrow keys after clicking).
+          selectionBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+          });
           
-          // Update button icon based on current selection state
-          const updateButtonIcon = () => {
+          // Update button label based on current selection state
+          const updateButtonLabel = () => {
             if (!galleryInstance) return;
             const currentIndex = galleryInstance.index ?? 0;
             const currentImage = imagesRef.current[currentIndex];
             if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+              // Use Lucide "Check" icon (inline SVG) to match the icon library used across the app.
               selectionBtn.innerHTML = `
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6 9 17 4 12" />
                 </svg>
+                <span>Wybrane Zdjęcie</span>
               `;
-              selectionBtn.setAttribute('aria-label', 'Odznacz zdjęcie');
+              selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
             } else {
-              selectionBtn.innerHTML = `
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              `;
-              selectionBtn.setAttribute('aria-label', 'Zaznacz zdjęcie');
+              selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
+              selectionBtn.setAttribute('aria-label', 'Wybierz zdjęcie');
             }
           };
 
-          // Initial icon update
-          updateButtonIcon();
+          // Initial label update
+          updateButtonLabel();
 
           // Handle click
           selectionBtn.addEventListener('click', (e) => {
@@ -270,9 +316,11 @@ export function LightGalleryWrapper({
             const currentImage = imagesRef.current[currentIndex];
             if (currentImage && onImageSelectRef.current) {
               onImageSelectRef.current(currentImage.key);
-              // Update icon after a short delay to reflect new state
-              setTimeout(updateButtonIcon, 100);
+              // Update label after a short delay to reflect new state
+              setTimeout(updateButtonLabel, 100);
             }
+            // Ensure the button doesn't keep focus after pointer click.
+            selectionBtn.blur();
           });
 
           // Insert before close button (last item)
@@ -285,7 +333,7 @@ export function LightGalleryWrapper({
 
           // Update icon on slide change
           const updateOnSlideChange = () => {
-            updateButtonIcon();
+            updateButtonLabel();
           };
           if (containerRef.current) {
             containerRef.current.addEventListener('lgAfterSlide', updateOnSlideChange);
@@ -598,32 +646,35 @@ export function LightGalleryWrapper({
                 if (existingBtn) existingBtn.remove();
 
                 const selectionBtn = document.createElement('button');
-                selectionBtn.className = 'lg-icon lg-selection-toggle';
+                selectionBtn.className = 'lg-selection-toggle';
                 selectionBtn.setAttribute('aria-label', 'Toggle selection');
-                selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+                selectionBtn.style.cssText = 'min-width: 44px; min-height: 44px; padding: 0 12px; display: flex; gap: 8px; align-items: center; justify-content: center; cursor: pointer;';
+                // Prevent pointer interaction from focusing the button (avoids focus-visible ring
+                // appearing when user navigates slides with arrow keys after clicking).
+                selectionBtn.addEventListener('pointerdown', (e) => {
+                  e.preventDefault();
+                });
                 
-                const updateButtonIcon = () => {
+                const updateButtonLabel = () => {
                   if (!galleryInstance) return;
                   const currentIndex = galleryInstance.index ?? 0;
                   const currentImage = imagesRef.current[currentIndex];
                   if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+                    // Use Lucide "Check" icon (inline SVG) to match the icon library used across the app.
                     selectionBtn.innerHTML = `
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 6 9 17 4 12" />
                       </svg>
+                      <span>Wybrane Zdjęcie</span>
                     `;
-                    selectionBtn.setAttribute('aria-label', 'Odznacz zdjęcie');
+                    selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
                   } else {
-                    selectionBtn.innerHTML = `
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                    `;
-                    selectionBtn.setAttribute('aria-label', 'Zaznacz zdjęcie');
+                    selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
+                    selectionBtn.setAttribute('aria-label', 'Wybierz zdjęcie');
                   }
                 };
 
-                updateButtonIcon();
+                updateButtonLabel();
 
                 selectionBtn.addEventListener('click', (e) => {
                   e.preventDefault();
@@ -633,8 +684,10 @@ export function LightGalleryWrapper({
                   const currentImage = imagesRef.current[currentIndex];
                   if (currentImage && onImageSelectRef.current) {
                     onImageSelectRef.current(currentImage.key);
-                    setTimeout(updateButtonIcon, 100);
+                    setTimeout(updateButtonLabel, 100);
                   }
+                  // Ensure the button doesn't keep focus after pointer click.
+                  selectionBtn.blur();
                 });
 
                 const closeBtn = toolbar.querySelector('.lg-close');
@@ -645,7 +698,7 @@ export function LightGalleryWrapper({
                 }
 
                 if (containerRef.current) {
-                  containerRef.current.addEventListener('lgAfterSlide', updateButtonIcon);
+                  containerRef.current.addEventListener('lgAfterSlide', updateButtonLabel);
                 }
               }, 100);
             };
