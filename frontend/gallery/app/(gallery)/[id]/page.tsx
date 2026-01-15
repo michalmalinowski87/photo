@@ -11,12 +11,14 @@ import { useImageDownload } from "@/hooks/useImageDownload";
 import { useSelection } from "@/hooks/useSelection";
 import { useSelectionActions } from "@/hooks/useSelectionActions";
 import { useDeliveredOrders, useFinalImages } from "@/hooks/useOrders";
+import { useZipStatus } from "@/hooks/useZipStatus";
 import { GalleryTopBar } from "@/components/gallery/GalleryTopBar";
 import { SecondaryMenu } from "@/components/gallery/SecondaryMenu";
 import { VirtuosoGridComponent, type GridLayout } from "@/components/gallery/VirtuosoGrid";
 import { LightGalleryWrapper } from "@/components/gallery/LightGalleryWrapper";
 import { ContextMenuPrevention } from "@/components/gallery/ContextMenuPrevention";
 import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
+import { ZipOverlay } from "@/components/gallery/ZipOverlay";
 import { HelpOverlay } from "@/components/gallery/HelpOverlay";
 import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
 import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOverlay";
@@ -35,13 +37,19 @@ export default function GalleryPage() {
   const [viewMode, setViewMode] = useState<"all" | "selected">("all");
   const [showHelp, setShowHelp] = useState(false);
   const [showDeliveredView, setShowDeliveredView] = useState(false);
+  const [showUnselectedView, setShowUnselectedView] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showChangesRequestedOverlay, setShowChangesRequestedOverlay] = useState(false);
   const [showChangeRequestCanceledOverlay, setShowChangeRequestCanceledOverlay] = useState(false);
   const [showChangeRequestSubmittedOverlay, setShowChangeRequestSubmittedOverlay] = useState(false);
+  const [showZipOverlay, setShowZipOverlay] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
+  const [zipDownloadState, setZipDownloadState] = useState<{ showOverlay: boolean; isError: boolean }>({
+    showOverlay: false,
+    isError: false,
+  });
   const openGalleryRef = useRef<((index: number) => void) | null>(null);
   const hashPrefetchHandledRef = useRef(false);
   const openedFromCarouselRef = useRef(false);
@@ -65,15 +73,24 @@ export default function GalleryPage() {
 
   // Determine which images to show (must be computed early)
   const shouldShowDelivered = useMemo(() => {
-    return showDeliveredView || galleryState === "delivered";
-  }, [showDeliveredView, galleryState]);
+    return (showDeliveredView || galleryState === "delivered") && !showUnselectedView;
+  }, [showDeliveredView, galleryState, showUnselectedView]);
   
-  // Selection is enabled ONLY when in selecting state
-  // Disabled in approved, changesRequested, and delivered states
+  // Only show unselected view if there's a price per additional photo
+  const canShowUnselected = useMemo(() => {
+    return (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
+  }, [selectionState?.pricingPackage?.extraPriceCents]);
+  
+  const shouldShowUnselected = useMemo(() => {
+    return showUnselectedView && galleryState === "delivered" && canShowUnselected;
+  }, [showUnselectedView, galleryState, canShowUnselected]);
+  
+  // Selection is enabled ONLY when in selecting state OR when viewing unselected photos in delivered state
+  // Disabled in approved, changesRequested, and delivered states (except unselected view)
   const isSelectingState = useMemo(() => {
-    // Only allow selection when explicitly in "selecting" state
-    return galleryState === "selecting";
-  }, [galleryState]);
+    // Allow selection when explicitly in "selecting" state OR when viewing unselected photos
+    return galleryState === "selecting" || shouldShowUnselected;
+  }, [galleryState, shouldShowUnselected]);
 
   // Delivered orders
   const { data: deliveredOrdersData } = useDeliveredOrders(galleryId);
@@ -132,7 +149,7 @@ export default function GalleryPage() {
     }
   }, [isLoading, isAuthenticated, galleryId, id, router]);
 
-  // Get images based on state
+  // Get images based on state - use filterUnselected=false to get all images (including unselected)
   const {
     data,
     fetchNextPage,
@@ -141,16 +158,34 @@ export default function GalleryPage() {
     isLoading: imagesLoading,
     error,
     prefetchNextPage,
-  } = useGalleryImages(queryGalleryId, "thumb", 50);
+  } = useGalleryImages(queryGalleryId, "thumb", 50, false);
 
   const allImages = useMemo(() => {
     return data?.pages.flatMap((page) => page.images || []) || [];
   }, [data]);
 
+  // Get unselected images (only when in delivered state, as we might switch to unselected view)
+  const shouldFetchUnselected = galleryState === "delivered";
+  const {
+    data: unselectedData,
+    fetchNextPage: fetchNextUnselectedPage,
+    hasNextPage: hasNextUnselectedPage,
+    isFetchingNextPage: isFetchingNextUnselectedPage,
+    prefetchNextPage: prefetchNextUnselectedPage,
+  } = useGalleryImages(queryGalleryId, "thumb", 50, true);
+
+  const unselectedImages = useMemo(() => {
+    return unselectedData?.pages.flatMap((page) => page.images || []) || [];
+  }, [unselectedData]);
+
   // Filter images based on view mode and state
   const displayImages = useMemo(() => {
     if (shouldShowDelivered) {
       return finalImages;
+    }
+    
+    if (shouldShowUnselected) {
+      return unselectedImages;
     }
     
     if (viewMode === "selected") {
@@ -162,7 +197,7 @@ export default function GalleryPage() {
     }
     
     return allImages;
-  }, [shouldShowDelivered, finalImages, viewMode, allImages, selectionState?.selectedKeys]);
+  }, [shouldShowDelivered, finalImages, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys]);
 
   // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
   // Get queryClient to access latest cache state and avoid stale closures
@@ -274,13 +309,37 @@ export default function GalleryPage() {
     }
   }, [selectionActions, selectionState?.selectedKeys, galleryId]);
 
+  // ZIP status for current order
+  const currentOrderId = selectedOrderId || singleOrder?.orderId || null;
+  const { data: zipStatus } = useZipStatus(
+    galleryId,
+    currentOrderId,
+    shouldShowDelivered && !!currentOrderId
+  );
+
   // Download ZIP
   const handleDownloadZip = useCallback(async () => {
     const orderId = selectedOrderId || singleOrder?.orderId;
     if (!galleryId || !orderId) return;
 
+    // Show immediate overlay (same as photo download)
+    setZipDownloadState({ showOverlay: true, isError: false });
+
+    // Small delay to ensure overlay is visible
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // If ZIP is generating, switch to ZIP overlay
+    if (zipStatus?.generating) {
+      setZipDownloadState({ showOverlay: false, isError: false });
+      setShowZipOverlay(true);
+      return;
+    }
+
     const token = getToken(galleryId);
-    if (!token) return;
+    if (!token) {
+      setZipDownloadState({ showOverlay: true, isError: true });
+      return;
+    }
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -292,6 +351,13 @@ export default function GalleryPage() {
           },
         }
       );
+
+      // Handle 202 - ZIP is being generated
+      if (response.status === 202) {
+        setZipDownloadState({ showOverlay: false, isError: false });
+        setShowZipOverlay(true);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error("Failed to download ZIP");
@@ -306,17 +372,36 @@ export default function GalleryPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      // Close overlay after download starts
+      setTimeout(() => {
+        setZipDownloadState({ showOverlay: false, isError: false });
+      }, 300);
     } catch (error) {
       console.error("Failed to download ZIP:", error);
+      setZipDownloadState({ showOverlay: true, isError: true });
     }
-  }, [galleryId, selectedOrderId, singleOrder]);
+  }, [galleryId, selectedOrderId, singleOrder, zipStatus]);
 
   // Buy more photos
   const handleBuyMore = useCallback(() => {
     setShowDeliveredView(false);
+    setShowUnselectedView(false);
     setViewMode("all");
     // Selection state will allow selection again
   }, []);
+
+  // Auto-download when ZIP becomes ready
+  useEffect(() => {
+    if (showZipOverlay && zipStatus?.ready && !zipStatus?.generating) {
+      // Small delay to ensure overlay shows the ready state
+      const timeoutId = setTimeout(() => {
+        setShowZipOverlay(false);
+        handleDownloadZip();
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [showZipOverlay, zipStatus?.ready, zipStatus?.generating, handleDownloadZip]);
 
   // Hash prefetching (same as before)
   useEffect(() => {
@@ -475,9 +560,20 @@ export default function GalleryPage() {
       <ContextMenuPrevention />
       <DownloadButtonFeedback />
       <DownloadOverlay
-        isVisible={downloadState.showOverlay}
-        isError={downloadState.isError}
-        onClose={closeOverlay}
+        isVisible={downloadState.showOverlay || zipDownloadState.showOverlay}
+        isError={downloadState.isError || zipDownloadState.isError}
+        onClose={() => {
+          closeOverlay();
+          setZipDownloadState({ showOverlay: false, isError: false });
+        }}
+      />
+      <ZipOverlay
+        isVisible={showZipOverlay}
+        zipStatus={zipStatus}
+        totalPhotos={finalImages.length}
+        onClose={() => {
+          setShowZipOverlay(false);
+        }}
       />
       <HelpOverlay isVisible={showHelp} onClose={() => setShowHelp(false)} selectionState={selectionState} />
       <ChangesRequestedOverlay
@@ -522,13 +618,24 @@ export default function GalleryPage() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         showDeliveredView={showDeliveredView}
-        onDeliveredViewClick={() => setShowDeliveredView(true)}
+        onDeliveredViewClick={() => {
+          setShowDeliveredView(true);
+          setShowUnselectedView(false);
+        }}
+        showUnselectedView={showUnselectedView}
+        onUnselectedViewClick={() => {
+          setShowUnselectedView(true);
+          setShowDeliveredView(false);
+        }}
         showBuyMore={
           selectionState?.hasDeliveredOrder &&
-          (selectionState?.pricingPackage?.extraPriceCents || 0) > 0
+          (selectionState?.pricingPackage?.extraPriceCents || 0) > 0 &&
+          !shouldShowDelivered
         }
         onBuyMoreClick={handleBuyMore}
         onDownloadZip={handleDownloadZip}
+        zipStatus={zipStatus}
+        showDownloadZip={shouldShowDelivered && !shouldShowUnselected}
       />
       
       {/* Delivered orders list (if multiple orders) */}
@@ -578,8 +685,8 @@ export default function GalleryPage() {
       )}
 
       {/* Images grid */}
-      {(!shouldShowDelivered || selectedOrderId || singleOrder) && (
-        <div className="w-full px-2 md:px-2 lg:px-2 py-4 md:py-4">
+      {(!shouldShowDelivered || selectedOrderId || singleOrder || shouldShowUnselected) && (
+        <div className="w-full px-2 md:px-2 lg:px-2 py-4 md:py-4 overflow-hidden">
           <LightGalleryWrapper
             images={displayImages}
             galleryId={galleryId || undefined}
@@ -589,9 +696,19 @@ export default function GalleryPage() {
               openGalleryRef.current = openGallery;
             }}
             onPrefetchNextPage={
-              shouldShowDelivered ? fetchNextFinalPage : prefetchNextPage
+              shouldShowDelivered
+                ? fetchNextFinalPage
+                : shouldShowUnselected
+                ? prefetchNextUnselectedPage
+                : prefetchNextPage
             }
-            hasNextPage={shouldShowDelivered ? hasNextFinalPage || false : hasNextPage || false}
+            hasNextPage={
+              shouldShowDelivered
+                ? hasNextFinalPage || false
+                : shouldShowUnselected
+                ? hasNextUnselectedPage || false
+                : hasNextPage || false
+            }
             onGalleryClose={() => {
               if (openedFromCarouselRef.current) {
                 setGridLayout("marble");
@@ -605,23 +722,40 @@ export default function GalleryPage() {
             showSelectionIndicators={showSelectionIndicatorsValue}
           >
             <VirtuosoGridComponent
+              key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
               images={displayImages}
               layout={gridLayout === "carousel" ? layoutBeforeCarouselRef.current : gridLayout}
-              hasNextPage={shouldShowDelivered ? hasNextFinalPage || false : hasNextPage || false}
+              hasNextPage={
+                shouldShowDelivered
+                  ? hasNextFinalPage || false
+                  : shouldShowUnselected
+                  ? hasNextUnselectedPage || false
+                  : hasNextPage || false
+              }
               onLoadMore={() => {
                 if (shouldShowDelivered) {
                   fetchNextFinalPage();
+                } else if (shouldShowUnselected) {
+                  fetchNextUnselectedPage();
                 } else {
                   fetchNextPage();
                 }
               }}
-              isFetchingNextPage={shouldShowDelivered ? isFetchingNextFinalPage : isFetchingNextPage}
+              isFetchingNextPage={
+                shouldShowDelivered
+                  ? isFetchingNextFinalPage
+                  : shouldShowUnselected
+                  ? isFetchingNextUnselectedPage
+                  : isFetchingNextPage
+              }
               galleryId={galleryId || undefined}
               selectedKeys={new Set(selectionState?.selectedKeys || [])}
               onImageSelect={handleImageSelect}
               canSelect={isSelectingState}
               showSelectionIndicators={showSelectionIndicatorsValue}
               showUnselectedIndicators={showUnselectedIndicators}
+              enableDownload={shouldShowDelivered}
+              onDownload={handleDownload}
             />
           </LightGalleryWrapper>
         </div>

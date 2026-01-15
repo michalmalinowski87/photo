@@ -21,6 +21,8 @@ interface VirtuosoGridProps {
   canSelect?: boolean;
   showSelectionIndicators?: boolean;
   showUnselectedIndicators?: boolean;
+  enableDownload?: boolean;
+  onDownload?: (imageKey: string) => void;
 }
 
 interface LayoutBox {
@@ -42,31 +44,41 @@ export function VirtuosoGridComponent({
   canSelect = false,
   showSelectionIndicators = false,
   showUnselectedIndicators = true,
+  enableDownload = false,
+  onDownload,
 }: VirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Update container width on resize - use full available width for edge-to-edge
+  // Update container width on resize and when images change - use full available width for edge-to-edge
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
         // Use full container width (parent already handles padding)
-        setContainerWidth(containerRef.current.clientWidth || window.innerWidth);
+        // Ensure width doesn't exceed viewport
+        const maxWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+        const width = Math.min(
+          containerRef.current.clientWidth || maxWidth,
+          maxWidth
+        );
+        setContainerWidth(width);
       }
     };
 
-    updateWidth();
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(updateWidth, 0);
     const resizeObserver = new ResizeObserver(updateWidth);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
     window.addEventListener("resize", updateWidth);
     return () => {
+      clearTimeout(timeoutId);
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
-  }, []);
+  }, [images.length, images]); // Recalculate when images change (e.g., switching views) - include images array to detect reference changes
 
   // Calculate layout boxes - justified for square/standard, masonry for marble
   const layoutBoxes = useMemo(() => {
@@ -110,15 +122,18 @@ export function VirtuosoGridComponent({
           }
         }
         
-        // Calculate position
-        const left = shortestColumnIndex * (columnWidth + boxSpacing);
+        // Calculate position - ensure it doesn't exceed container width
+        const left = Math.min(
+          shortestColumnIndex * (columnWidth + boxSpacing),
+          effectiveWidth - columnWidth
+        );
         const top = columnHeights[shortestColumnIndex];
         
         boxes.push({
           aspectRatio: columnWidth / itemHeight,
           top,
-          left,
-          width: columnWidth,
+          left: Math.max(0, left), // Ensure left is never negative
+          width: Math.min(columnWidth, effectiveWidth - left), // Ensure width doesn't exceed container
           height: itemHeight,
         });
 
@@ -157,10 +172,12 @@ export function VirtuosoGridComponent({
   }, [images, layout, containerWidth]);
 
   // Calculate total height for the container
+  // Account for container padding (top: 8px, bottom: 8px) and extra space for ring borders
   const containerHeight = useMemo(() => {
     if (layoutBoxes.length === 0) return 0;
     const lastBox = layoutBoxes[layoutBoxes.length - 1];
-    return lastBox.top + lastBox.height + 32; // Minimal bottom padding
+    // Container padding-top (8px) + last box position + last box height + bottom padding (8px) + ring space (4px)
+    return 8 + lastBox.top + lastBox.height + 8 + 4;
   }, [layoutBoxes]);
 
   // Infinite scroll using Intersection Observer
@@ -214,8 +231,8 @@ export function VirtuosoGridComponent({
   }
 
   return (
-    <div ref={containerRef} className="w-full bg-white">
-      <div style={{ position: "relative", height: containerHeight, width: "100%" }} className="bg-white">
+    <div ref={containerRef} className="w-full bg-white overflow-hidden">
+      <div style={{ position: "relative", height: containerHeight, width: "100%", maxWidth: "100%", paddingTop: "8px", paddingBottom: "8px" }} className="bg-white overflow-hidden">
         {images.map((image, index) => {
           const box = layoutBoxes[index];
           if (!box) return null;
@@ -243,10 +260,11 @@ export function VirtuosoGridComponent({
               key={`${image.key || image.url || 'image'}-${index}`}
               style={{
                 position: "absolute",
-                top: box.top,
+                top: box.top + 8, // Container padding-top provides the spacing
                 left: box.left,
                 width: box.width,
                 height: box.height,
+                boxSizing: "border-box", // Ensure ring border is included in dimensions
               }}
               className={`overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
                 isSelected ? "ring-2 ring-black ring-opacity-70" : ""
@@ -328,6 +346,39 @@ export function VirtuosoGridComponent({
                       />
                     </svg>
                   )}
+                </button>
+              )}
+
+              {/* Download button - only show in delivered view */}
+              {enableDownload && onDownload && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (onDownload) {
+                      onDownload(image.key);
+                    }
+                  }}
+                  className="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-all touch-manipulation z-10 shadow-md hover:shadow-lg"
+                  aria-label="Pobierz zdjęcie"
+                  style={{
+                    minWidth: "44px",
+                    minHeight: "44px",
+                  }}
+                >
+                  <svg
+                    className="w-5 h-5 text-gray-800"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
                 </button>
               )}
             </div>

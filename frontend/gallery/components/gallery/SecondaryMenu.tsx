@@ -6,6 +6,20 @@ import { useAuth } from "@/providers/AuthProvider";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { SelectionState } from "@/types/gallery";
 
+interface ZipStatus {
+  status?: "ready" | "generating" | "not_started";
+  generating?: boolean;
+  ready?: boolean;
+  zipExists?: boolean;
+  zipSize?: number;
+  elapsedSeconds?: number;
+  progress?: {
+    processed: number;
+    total: number;
+    percent: number;
+  };
+}
+
 interface SecondaryMenuProps {
   selectedCount?: number;
   onApproveSelection?: () => void;
@@ -15,9 +29,13 @@ interface SecondaryMenuProps {
   onViewModeChange?: (mode: "all" | "selected") => void;
   showDeliveredView?: boolean;
   onDeliveredViewClick?: () => void;
+  showUnselectedView?: boolean;
+  onUnselectedViewClick?: () => void;
   showBuyMore?: boolean;
   onBuyMoreClick?: () => void;
   onDownloadZip?: () => void;
+  zipStatus?: ZipStatus;
+  showDownloadZip?: boolean;
 }
 
 export function SecondaryMenu({
@@ -29,9 +47,13 @@ export function SecondaryMenu({
   onViewModeChange,
   showDeliveredView = false,
   onDeliveredViewClick,
+  showUnselectedView = false,
+  onUnselectedViewClick,
   showBuyMore = false,
   onBuyMoreClick,
   onDownloadZip,
+  zipStatus,
+  showDownloadZip = true,
 }: SecondaryMenuProps) {
   const { galleryId } = useAuth();
   const { data: selectionState } = useSelection(galleryId);
@@ -123,9 +145,11 @@ export function SecondaryMenu({
   // Calculate selection limit display
   const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
   const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
+  // In "Niewybrane" view (delivered state), all photos are additional - no base limit applies
+  const effectiveBaseLimit = showUnselectedView ? 0 : baseLimit;
   // Compute overage locally for immediate UI correctness with optimistic selection updates.
   // Backend-provided overageCount/overageCents can lag behind selectedCount/selectedKeys changes.
-  const computedOverageCount = extraPriceCents > 0 ? Math.max(0, selectedCount - baseLimit) : 0;
+  const computedOverageCount = extraPriceCents > 0 ? Math.max(0, selectedCount - effectiveBaseLimit) : 0;
   const computedOverageCents = computedOverageCount * extraPriceCents;
   // If extra-per-photo pricing is enabled, we still show the included limit (baseLimit),
   // and allow going over it (overageCount / overageCents).
@@ -141,9 +165,14 @@ export function SecondaryMenu({
   // Menu items based on state
   const getMenuItems = () => {
     if (state === "delivered") {
-      return [
+      const items = [
         { id: "delivered", label: "DOSTARCZONE ZDJĘCIA" },
       ];
+      // Only show "Niewybrane" if there's a price per additional photo
+      if (extraPriceCents > 0) {
+        items.push({ id: "unselected", label: "NIEWYBRANE" });
+      }
+      return items;
     } else if (state === "approved" || state === "changesRequested") {
       return [
         { id: "all", label: "WSZYSTKIE ZDJĘCIA" },
@@ -167,9 +196,13 @@ export function SecondaryMenu({
     } else if ((state === "approved" || state === "changesRequested") && viewMode === "selected") {
       setActiveItem("selected");
     } else if (state === "delivered") {
-      setActiveItem("delivered");
+      if (showUnselectedView) {
+        setActiveItem("unselected");
+      } else {
+        setActiveItem("delivered");
+      }
     }
-  }, [state, viewMode]);
+  }, [state, viewMode, showUnselectedView]);
 
   const handleItemClick = (itemId: string) => {
     hapticFeedback('light');
@@ -180,6 +213,8 @@ export function SecondaryMenu({
       onViewModeChange("selected");
     } else if (itemId === "delivered" && onDeliveredViewClick) {
       onDeliveredViewClick();
+    } else if (itemId === "unselected" && onUnselectedViewClick) {
+      onUnselectedViewClick();
     }
   };
 
@@ -234,7 +269,8 @@ export function SecondaryMenu({
                 (item.id === "all" && viewMode === "all") ||
                 (item.id === "selected" && viewMode === "selected") ||
                 (item.id === "wybor" && state === "selecting") ||
-                (item.id === "delivered" && showDeliveredView);
+                (item.id === "delivered" && showDeliveredView) ||
+                (item.id === "unselected" && showUnselectedView);
               const isHovered = hoveredItem === item.id;
               
               return (
@@ -273,6 +309,14 @@ export function SecondaryMenu({
             {state === "selecting" && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Wybrane: {selectedCount} / {limitDisplay}
+              </span>
+            )}
+
+            {/* Niewybrane view status - show price calculation for all selected photos */}
+            {state === "delivered" && showUnselectedView && extraPriceCents > 0 && selectedCount > 0 && (
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                Dodatkowe ujęcia {selectedCount} × {formatPrice(extraPriceCents)} ={" "}
+                {formatPrice(selectedCount * extraPriceCents)}
               </span>
             )}
 
@@ -353,33 +397,81 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {state === "delivered" && onDownloadZip && (
+            {state === "delivered" && onDownloadZip && showDownloadZip && (
               <button
+                ref={(el) => {
+                  buttonRefs.current["downloadZip"] = el;
+                }}
                 onClick={() => {
                   hapticFeedback('medium');
                   onDownloadZip();
                 }}
-                className={`btn-primary touch-manipulation min-h-[44px] transition-all duration-300 ${
+                onMouseEnter={() => handleItemHover("downloadZip")}
+                onMouseLeave={() => handleItemHover(null)}
+                className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
-                aria-label="Pobierz ZIP"
+                style={{
+                  color: hoveredItem === "downloadZip" ? "#666666" : "#AAAAAA",
+                  fontWeight: hoveredItem === "downloadZip" ? "700" : "500",
+                  letterSpacing: "0.05em",
+                }}
+                aria-label={zipStatus?.generating ? "Generowanie ZIP" : "Pobierz ZIP"}
               >
-                Pobierz ZIP
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                {zipStatus?.generating ? "GENEROWANIE ZIP" : "POBIERZ ZIP"}
               </button>
             )}
 
-            {state === "delivered" && showBuyMore && onBuyMoreClick && (
+            {state === "delivered" && showBuyMore && onBuyMoreClick && !showDeliveredView && (
               <button
-                onClick={() => {
-                  hapticFeedback('light');
-                  onBuyMoreClick();
+                ref={(el) => {
+                  buttonRefs.current["buyMore"] = el;
                 }}
-                className={`text-sm text-gray-600 hover:text-gray-900 transition-all duration-300 touch-manipulation min-h-[44px] px-4 ${
+                onClick={() => {
+                  if (selectedCount > 0) {
+                    hapticFeedback('medium');
+                    onBuyMoreClick();
+                  }
+                }}
+                disabled={selectedCount === 0}
+                onMouseEnter={() => {
+                  if (selectedCount > 0) {
+                    handleItemHover("buyMore");
+                  }
+                }}
+                onMouseLeave={() => handleItemHover(null)}
+                className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
-                }`}
+                } ${selectedCount === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                style={{
+                  color: selectedCount === 0 
+                    ? "#AAAAAA" 
+                    : hoveredItem === "buyMore" 
+                    ? "#666666" 
+                    : "#AAAAAA",
+                  fontWeight: selectedCount === 0 
+                    ? "500" 
+                    : hoveredItem === "buyMore" 
+                    ? "700" 
+                    : "500",
+                  letterSpacing: "0.05em",
+                }}
                 aria-label="Kup więcej zdjęć"
               >
-                Kup więcej zdjęć
+                KUP WIĘCEJ ZDJĘĆ
               </button>
             )}
           </div>

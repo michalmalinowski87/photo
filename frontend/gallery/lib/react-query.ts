@@ -21,7 +21,8 @@ export const queryKeys = {
     infiniteImages: (
       id: string,
       type: "thumb" | "big-thumb" | "full" = "thumb",
-      limit?: number
+      limit?: number,
+      filterUnselected?: boolean
     ) =>
       [
         ...queryKeys.gallery.detail(id),
@@ -29,6 +30,7 @@ export const queryKeys = {
         "infinite",
         type,
         limit,
+        filterUnselected,
       ] as const,
     status: (id: string) => [...queryKeys.gallery.detail(id), "status"] as const,
     selection: (id: string) => [...queryKeys.gallery.detail(id), "selection"] as const,

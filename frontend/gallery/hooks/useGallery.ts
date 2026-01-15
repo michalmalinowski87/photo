@@ -40,9 +40,10 @@ interface GalleryImagesResponse {
 export function useGalleryImages(
   galleryId: string,
   type: "thumb" | "big-thumb" = "thumb",
-  limit: number = 50
+  limit: number = 50,
+  filterUnselected: boolean = true
 ) {
-  const queryKey = queryKeys.gallery.infiniteImages(galleryId, type, limit);
+  const queryKey = queryKeys.gallery.infiniteImages(galleryId, type, limit, filterUnselected);
   
   const query = useInfiniteQuery({
     queryKey,
@@ -57,7 +58,7 @@ export function useGalleryImages(
       const params = new URLSearchParams({
         sizes,
         limit: limit.toString(),
-        filterUnselected: "true",
+        filterUnselected: filterUnselected ? "true" : "false",
       });
       
       // Add cursor if we have one
