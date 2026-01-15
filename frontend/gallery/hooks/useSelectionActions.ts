@@ -66,7 +66,13 @@ export function useSelectionActions(galleryId: string | null) {
         throw new Error("Missing token");
       }
 
-      if (selectedKeys.length === 0) {
+      // Check if we're canceling a change request (backend will restore the order)
+      // If changeRequestPending is true, allow empty selectedKeys - backend will use existing order's keys
+      const selectionState = queryClient.getQueryData(queryKeys.gallery.selection(galleryId)) as any;
+      const isCancelingChangeRequest = selectionState?.changeRequestPending === true;
+
+      // Only validate selectedKeys if we're not canceling a change request
+      if (selectedKeys.length === 0 && !isCancelingChangeRequest) {
         throw new Error("At least one photo must be selected");
       }
 

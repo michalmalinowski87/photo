@@ -20,6 +20,8 @@ import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
 import { HelpOverlay } from "@/components/gallery/HelpOverlay";
 import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
 import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOverlay";
+import { ChangeRequestCanceledOverlay } from "@/components/gallery/ChangeRequestCanceledOverlay";
+import { ChangeRequestSubmittedOverlay } from "@/components/gallery/ChangeRequestSubmittedOverlay";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 
@@ -35,6 +37,8 @@ export default function GalleryPage() {
   const [showDeliveredView, setShowDeliveredView] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showChangesRequestedOverlay, setShowChangesRequestedOverlay] = useState(false);
+  const [showChangeRequestCanceledOverlay, setShowChangeRequestCanceledOverlay] = useState(false);
+  const [showChangeRequestSubmittedOverlay, setShowChangeRequestSubmittedOverlay] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
@@ -94,18 +98,27 @@ export default function GalleryPage() {
 
   // No local state needed - React Query is the single source of truth
 
-  // Show changes requested overlay on mount if state is changes requested
-  // Only show once per session - track dismissal in sessionStorage
+  // Show "changes requested" overlay ONLY right after login.
+  // This must NOT pop up due to in-session state changes (e.g. user clicking "Poproś o zmiany").
   useEffect(() => {
     if (!selectionState?.changeRequestPending || showChangesRequestedOverlay) {
       return;
     }
 
-    // Check if overlay has been dismissed in this session
-    const dismissedKey = `changes_requested_dismissed_${galleryId}`;
-    const wasDismissed = typeof window !== "undefined" && sessionStorage.getItem(dismissedKey) === "true";
-    
-    if (!wasDismissed) {
+    if (typeof window === "undefined" || !galleryId) {
+      return;
+    }
+
+    const justLoggedInKey = `just_logged_in_${galleryId}`;
+
+    const justLoggedIn = sessionStorage.getItem(justLoggedInKey) === "true";
+
+    // Consume the "just logged in" flag regardless, so this overlay can only be triggered once.
+    if (justLoggedIn) {
+      sessionStorage.removeItem(justLoggedInKey);
+    }
+
+    if (justLoggedIn) {
       setShowChangesRequestedOverlay(true);
     }
   }, [selectionState?.changeRequestPending, showChangesRequestedOverlay, galleryId]);
@@ -218,12 +231,16 @@ export default function GalleryPage() {
     setIsActionLoading(true);
     try {
       await selectionActions.requestChanges.mutateAsync();
+      // Smooth UX: keep loading overlay up, then show confirmation overlay, then hide loading.
+      // Also ensure we don't have stale confirmation overlays visible.
+      setShowChangeRequestCanceledOverlay(false);
+      setShowChangeRequestSubmittedOverlay(true);
+      setIsActionLoading(false);
     } catch (error) {
       console.error("Failed to request changes:", error);
-    } finally {
       setIsActionLoading(false);
     }
-  }, [selectionActions]);
+  }, [selectionActions, galleryId]);
 
   // Cancel change request - approve current selection again to restore order
   // Note: No validation needed - backend will restore the existing CHANGES_REQUESTED order
@@ -241,17 +258,18 @@ export default function GalleryPage() {
     try {
       console.log("Canceling change request by approving selection:", keysArray);
       await selectionActions.approveSelection.mutateAsync(keysArray);
-      setShowChangesRequestedOverlay(false);
-      // Clear dismissal flag so overlay can show again if changes are requested again
-      if (galleryId && typeof window !== "undefined") {
-        sessionStorage.removeItem(`changes_requested_dismissed_${galleryId}`);
-      }
       console.log("Change request canceled successfully");
+      
+      // Smooth UX: keep the first modal visible under the loading overlay,
+      // then swap to the success confirmation without flashing the page.
+      setShowChangesRequestedOverlay(false);
+      setShowChangeRequestSubmittedOverlay(false);
+      setShowChangeRequestCanceledOverlay(true);
+      setIsActionLoading(false);
     } catch (error) {
       console.error("Failed to cancel change request:", error);
       // Show error to user
       alert(`Nie udało się anulować prośby o zmiany: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
       setIsActionLoading(false);
     }
   }, [selectionActions, selectionState?.selectedKeys, galleryId]);
@@ -415,10 +433,13 @@ export default function GalleryPage() {
     return countFromKeys > 0 ? countFromKeys : countFromServer;
   }, [selectionState?.selectedKeys, selectionState?.selectedCount, selectionState]);
 
-  // Show selection indicators only when:
-  // 1. In selecting state (can actually select)
-  // 2. OR viewing selected photos (to see which ones were selected)
-  const showSelectionIndicatorsValue = isSelectingState || viewMode === "selected";
+  // Show selection indicators when:
+  // 1. In selecting state (can actually select) - show both checkmarks and + buttons
+  // 2. OR when approved and viewing "all" photos (to show checkmarks ONLY on selected photos, no + buttons)
+  // But NOT when viewing "selected" photos (no checkmarks needed there)
+  const showSelectionIndicatorsValue = isSelectingState || (galleryState === "approved" && viewMode === "all");
+  // Only show unselected indicators (+) when in selecting state
+  const showUnselectedIndicators = isSelectingState;
   const canSelectValue = isSelectingState;
 
   if (isLoading || selectionLoading) {
@@ -459,10 +480,19 @@ export default function GalleryPage() {
         isVisible={showChangesRequestedOverlay}
         onClose={() => {
           setShowChangesRequestedOverlay(false);
-          // Store dismissal in sessionStorage so it doesn't reappear this session
-          if (galleryId && typeof window !== "undefined") {
-            sessionStorage.setItem(`changes_requested_dismissed_${galleryId}`, "true");
-          }
+        }}
+        onCancelRequest={handleCancelChangeRequest}
+      />
+      <ChangeRequestCanceledOverlay
+        isVisible={showChangeRequestCanceledOverlay}
+        onClose={() => {
+          setShowChangeRequestCanceledOverlay(false);
+        }}
+      />
+      <ChangeRequestSubmittedOverlay
+        isVisible={showChangeRequestSubmittedOverlay}
+        onClose={() => {
+          setShowChangeRequestSubmittedOverlay(false);
         }}
         onCancelRequest={handleCancelChangeRequest}
       />
@@ -587,6 +617,7 @@ export default function GalleryPage() {
               onImageSelect={handleImageSelect}
               canSelect={isSelectingState}
               showSelectionIndicators={showSelectionIndicatorsValue}
+              showUnselectedIndicators={showUnselectedIndicators}
             />
           </LightGalleryWrapper>
         </div>

@@ -20,6 +20,7 @@ interface VirtuosoGridProps {
   onImageSelect?: (key: string) => void;
   canSelect?: boolean;
   showSelectionIndicators?: boolean;
+  showUnselectedIndicators?: boolean;
 }
 
 interface LayoutBox {
@@ -40,6 +41,7 @@ export function VirtuosoGridComponent({
   onImageSelect,
   canSelect = false,
   showSelectionIndicators = false,
+  showUnselectedIndicators = true,
 }: VirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -231,8 +233,10 @@ export function VirtuosoGridComponent({
               : "object-cover rounded-[2px]";
 
           const isSelected = selectedKeys.has(image.key);
-          // Show indicator only when showSelectionIndicators is true (selecting state or viewing selected)
-          const showIndicator = showSelectionIndicators;
+          // Show indicator when:
+          // - showSelectionIndicators is true AND
+          // - (image is selected OR showUnselectedIndicators is true)
+          const showIndicator = showSelectionIndicators && (isSelected || showUnselectedIndicators);
 
           return (
             <div

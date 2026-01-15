@@ -69,6 +69,12 @@ function LoginForm() {
       // Update AuthProvider state (for isAuthenticated check)
       login(galleryId, data.token);
 
+      // Mark "just logged in" for this gallery so we can show one-time overlays
+      // (e.g. CHANGES_REQUESTED notification) only right after login.
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(`just_logged_in_${galleryId}`, "true");
+      }
+
       // Cache gallery name in React Query from the login response
       if (data.galleryName) {
         queryClient.setQueryData(
