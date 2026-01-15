@@ -45,13 +45,14 @@ export function useDeliveredOrders(galleryId: string | null) {
 interface FinalImagesApiResponse {
   images: Array<{
     key: string;
+    finalUrl?: string;
+    finalUrlFallback?: string;
     previewUrl?: string;
     previewUrlFallback?: string;
     bigThumbUrl?: string;
     bigThumbUrlFallback?: string;
     thumbUrl?: string;
     thumbUrlFallback?: string;
-    url: string;
     size?: number;
     lastModified?: string;
     width?: number;
@@ -109,7 +110,8 @@ export function useFinalImages(
 
       const mappedImages: ImageData[] = apiData.images.map((img) => ({
         key: img.key,
-        url: img.url,
+        // Use finalUrl for display and download (finals storage, not originals)
+        url: img.finalUrl || img.finalUrlFallback || '',
         previewUrl: img.previewUrl || img.previewUrlFallback,
         thumbnailUrl: img.thumbUrl || img.thumbUrlFallback,
         thumbUrl: img.thumbUrl || img.thumbUrlFallback,

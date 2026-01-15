@@ -4,7 +4,7 @@ export interface EmailTemplate {
 	html?: string;
 }
 
-// Design system colors matching Photo Hub dashboard
+// Design system colors matching PhotoCloud dashboard
 const COLORS = {
 	// Primary accent color (photographer-accent) - used in light theme
 	primary: {

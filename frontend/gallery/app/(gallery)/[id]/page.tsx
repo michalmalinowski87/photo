@@ -24,8 +24,10 @@ import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedb
 import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOverlay";
 import { ChangeRequestCanceledOverlay } from "@/components/gallery/ChangeRequestCanceledOverlay";
 import { ChangeRequestSubmittedOverlay } from "@/components/gallery/ChangeRequestSubmittedOverlay";
+import { GalleryNotFound } from "@/components/gallery/GalleryNotFound";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { hapticFeedback } from "@/utils/hapticFeedback";
+import type { ApiError } from "@/lib/api";
 
 export default function GalleryPage() {
   const params = useParams();
@@ -363,15 +365,21 @@ export default function GalleryPage() {
         throw new Error("Failed to download ZIP");
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `gallery-${orderId}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Backend returns JSON with presigned URL, not the ZIP blob directly
+      const data = await response.json();
+      if (data.url) {
+        // Download from presigned URL
+        const downloadUrl = data.url;
+        const filename = data.filename || `gallery-${orderId}.zip`;
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        throw new Error("No download URL in response");
+      }
 
       // Close overlay after download starts
       setTimeout(() => {
@@ -498,15 +506,23 @@ export default function GalleryPage() {
       }
 
       try {
+        // If in delivered view, download from finals storage
+        const isDeliveredView = shouldShowDelivered && (selectedOrderId || singleOrder?.orderId);
+        const orderIdForDownload = isDeliveredView ? (selectedOrderId || singleOrder?.orderId || null) : null;
+        
         await downloadImage({
           galleryId,
           imageKey,
+          ...(orderIdForDownload && {
+            orderId: orderIdForDownload,
+            type: 'final' as const,
+          }),
         });
       } catch (error) {
         console.error("Failed to download image:", error);
       }
     },
-    [galleryId, downloadImage]
+    [galleryId, downloadImage, shouldShowDelivered, selectedOrderId, singleOrder]
   );
 
   // Determine current selection count - React Query is single source of truth
@@ -546,6 +562,20 @@ export default function GalleryPage() {
   // Only show error if we're not loading, have no data, and actually have an error
   // This prevents showing transient errors during initial load/retry
   if (error && !shouldShowDelivered && !imagesLoading && !data?.pages?.length) {
+    // Check if this is a "Gallery not found" error (404 or error message contains "Gallery not found")
+    const apiError = error as ApiError;
+    const errorMessage = String(error).toLowerCase();
+    const isNotFoundError = 
+      apiError?.status === 404 || 
+      errorMessage.includes("gallery not found") ||
+      errorMessage.includes("galeria nie została znaleziona") ||
+      errorMessage.includes("not found");
+
+    if (isNotFoundError) {
+      return <GalleryNotFound galleryId={galleryId || undefined} />;
+    }
+
+    // For other errors, show a generic error message (fallback)
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-red-600">Błąd ładowania galerii: {String(error)}</div>

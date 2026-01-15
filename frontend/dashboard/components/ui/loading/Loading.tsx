@@ -53,13 +53,13 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
 
   const content = (
     <div className="flex flex-col items-center justify-center gap-6 opacity-60">
-      {/* Logo or PhotoHub text with fade animation */}
+      {/* Logo or PhotoCloud text with fade animation */}
       <div className="flex items-center justify-center">
         {logo ? (
           <div className="animate-pulse">{logo}</div>
         ) : (
           <h1 className="text-5xl font-bold text-gray-900 dark:text-white animate-fade-in-out">
-            PhotoHub
+            PhotoCloud
           </h1>
         )}
       </div>
@@ -110,15 +110,15 @@ export const InlineLoading = ({ text }: { text?: string }) => {
   return <Loading size="md" text={text} />;
 };
 
-// Gallery loading component - subtle PhotoHub text fading in/out with customizable loading text
+// Gallery loading component - subtle PhotoCloud text fading in/out with customizable loading text
 // Use this for gallery image loading states (originals, user selected, finals)
 export const GalleryLoading = ({ text = "Ładowanie..." }: { text?: string }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[300px] py-16">
       <div className="flex flex-col items-center justify-center gap-4">
-        {/* PhotoHub text with subtle fade animation */}
+        {/* PhotoCloud text with subtle fade animation */}
         <h1 className="text-4xl font-bold text-gray-500 dark:text-gray-600 animate-fade-in-out">
-          PhotoHub
+          PhotoCloud
         </h1>
         {/* Loading text */}
         <p className="text-base text-gray-600 dark:text-gray-400 font-medium">{text}</p>
@@ -143,13 +143,13 @@ export const ContentViewLoading = ({ text, logo }: { text?: string; logo?: React
   return (
     <div className="flex items-center justify-center min-h-[400px] py-16">
       <div className="flex flex-col items-center justify-center gap-6 opacity-60">
-        {/* Logo or PhotoHub text with fade animation */}
+        {/* Logo or PhotoCloud text with fade animation */}
         <div className="flex items-center justify-center">
           {logo ? (
             <div className="animate-pulse">{logo}</div>
           ) : (
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white animate-fade-in-out">
-              PhotoHub
+              PhotoCloud
             </h1>
           )}
         </div>
@@ -195,9 +195,9 @@ export const ContentAreaLoadingOverlay = ({ text }: { text?: string }) => {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-50">
       <div className="flex flex-col items-center justify-center gap-6 opacity-60">
-        {/* PhotoHub text with fade animation */}
+        {/* PhotoCloud text with fade animation */}
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white animate-fade-in-out">
-          PhotoHub
+          PhotoCloud
         </h1>
 
         {/* Welcoming message */}

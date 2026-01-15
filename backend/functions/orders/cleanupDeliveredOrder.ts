@@ -1,21 +1,21 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand, DeleteCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
 
 /**
- * Cleanup function to delete originals and finals after order is DELIVERED
- * Keeps only previews and thumbs for display purposes
+ * Cleanup function to delete originals after order is DELIVERED
+ * Keeps finals originals to allow individual downloads, and keeps previews/thumbs for display
  * 
  * IMPORTANT: This function deletes S3 objects ONLY - DynamoDB metadata is preserved!
  * This allows images to still be displayed using previews/thumbs even after originals are deleted.
  * 
  * This function:
  * 1. Deletes selected originals from S3 (galleries/{galleryId}/originals/)
- * 2. Deletes finals originals from S3 (galleries/{galleryId}/final/{orderId}/)
+ * 2. Keeps finals originals in S3 (galleries/{galleryId}/final/{orderId}/) to allow individual downloads
  * 3. Keeps previews and thumbs in all locations
  * 4. Keeps DynamoDB image metadata (NOT deleted - allows display after S3 deletion)
  * 5. Updates DynamoDB order to mark cleanup completed
@@ -106,7 +106,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		let deletedOriginalsCount = 0;
-		let deletedFinalsCount = 0;
 		const errors: string[] = [];
 
 		// 1. Delete selected originals from S3 ONLY (keep DynamoDB metadata for display)
@@ -164,98 +163,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 2. Delete finals originals from S3 ONLY (keep DynamoDB metadata for display)
-		// IMPORTANT: We do NOT delete DynamoDB records - metadata must be preserved
-		// so images can still be displayed using previews/thumbs after originals are deleted
-		try {
-			// Query DynamoDB to get S3 keys for final images (but don't delete DynamoDB records)
-			let allFinalImageRecords: any[] = [];
-			let lastEvaluatedKey: any = undefined;
-
-			do {
-				const queryParams: any = {
-					TableName: imagesTable,
-					IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
-					KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
-					FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
-					ExpressionAttributeNames: {
-						'#type': 'type'
-					},
-					ExpressionAttributeValues: {
-						':g': galleryId,
-						':orderId': orderId,
-						':type': 'final'
-					},
-					Limit: 1000
-				};
-
-				if (lastEvaluatedKey) {
-					queryParams.ExclusiveStartKey = lastEvaluatedKey;
-				}
-
-				const queryResponse = await ddb.send(new QueryCommand(queryParams));
-				allFinalImageRecords.push(...(queryResponse.Items || []));
-				lastEvaluatedKey = queryResponse.LastEvaluatedKey;
-			} while (lastEvaluatedKey);
-
-			if (allFinalImageRecords.length > 0) {
-				// Delete from S3 only (DynamoDB metadata is preserved)
-				const finalsPrefix = `galleries/${galleryId}/final/${orderId}/`;
-				const filesToDelete = allFinalImageRecords
-					.map(record => ({
-						Key: record.s3Key || `${finalsPrefix}${record.filename}`
-					}))
-					.filter(item => {
-						const key = item.Key;
-						// Keep previews, thumbs, bigthumbs subdirectories
-						return !key.includes('/previews/') && 
-							!key.includes('/thumbs/') && 
-							!key.includes('/bigthumbs/') &&
-							// Only delete files directly in final/{orderId}/, not subdirectories
-							key.replace(finalsPrefix, '').indexOf('/') === -1;
-					});
-
-				// Delete in batches
-				const BATCH_SIZE = 1000;
-				for (let i = 0; i < filesToDelete.length; i += BATCH_SIZE) {
-					const batch = filesToDelete.slice(i, i + BATCH_SIZE);
-					
-					try {
-						const deleteResponse = await s3.send(new DeleteObjectsCommand({
-							Bucket: bucket,
-							Delete: {
-								Objects: batch,
-								Quiet: true
-							}
-						}));
-						
-						deletedFinalsCount += deleteResponse.Deleted?.length || 0;
-						
-						if (deleteResponse.Errors && deleteResponse.Errors.length > 0) {
-							deleteResponse.Errors.forEach(err => {
-								errors.push(`Failed to delete final ${err.Key}: ${err.Code} - ${err.Message}`);
-							});
-						}
-					} catch (batchErr: any) {
-						errors.push(`Failed to delete finals S3 batch ${i}-${i + batch.length}: ${batchErr.message}`);
-					}
-				}
-				
-				logger.info('Deleted finals originals from S3 (DynamoDB metadata preserved)', { 
-					galleryId, 
-					orderId, 
-					s3DeletedCount: deletedFinalsCount,
-					totalFiles: allFinalImageRecords.length
-				});
-			}
-		} catch (finalsErr: any) {
-			logger.error('Failed to delete finals originals', {
-				error: finalsErr.message,
-				galleryId,
-				orderId
-			});
-			errors.push(`Failed to delete finals: ${finalsErr.message}`);
-		}
+		// 2. Finals originals are NOT deleted - kept in S3 to allow individual downloads
+		// (galleries/{galleryId}/final/{orderId}/) remain available for download buttons
 
 		// 3. Mark cleanup as completed in DynamoDB
 		try {
@@ -286,7 +195,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				orderId,
 				message: 'Cleanup completed',
 				deletedOriginalsCount,
-				deletedFinalsCount,
+				finalsKept: true, // Finals originals are kept for individual downloads
 				errors: errors.length > 0 ? errors : undefined,
 				cleanupCompleted: true
 			})

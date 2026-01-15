@@ -31,6 +31,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	const galleryId = event?.pathParameters?.id;
 	const imageKeyParam = event?.pathParameters?.imageKey;
+	const orderId = event?.queryStringParameters?.orderId;
+	const imageType = event?.queryStringParameters?.type; // 'final' or undefined (original)
 	
 	if (!galleryId || !imageKeyParam) {
 		return {
@@ -43,9 +45,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Decode the imageKey (API Gateway URL-encodes path parameters)
 	const filename = decodeURIComponent(imageKeyParam);
 	
-	// The imageKey in DynamoDB is stored as "original#{filename}" for original images
-	// The frontend passes just the filename, so we need to construct the full imageKey
-	const imageKey = `original#${filename}`;
+	// Determine image type and construct the imageKey
+	// For finals: require orderId and use "final#{filename}"
+	// For originals: use "original#{filename}" (default)
+	const isFinal = imageType === 'final';
+	if (isFinal && !orderId) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing orderId for final image download' })
+		};
+	}
+	
+	const imageKey = isFinal ? `final#${filename}` : `original#${filename}`;
 
 	try {
 		// Fetch gallery to verify access
@@ -100,9 +112,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
-		// Generate presigned URL for the original image
-		// Use s3Key from DynamoDB if available, otherwise construct it using filename
-		const s3Key = image.s3Key || `galleries/${galleryId}/originals/${filename}`;
+		// Generate presigned URL for the image (original or final)
+		// Use s3Key from DynamoDB if available, otherwise construct it
+		let s3Key: string;
+		if (isFinal) {
+			// For finals: use s3Key from DynamoDB or construct from finals path
+			s3Key = image.s3Key || `galleries/${galleryId}/final/${orderId}/${filename}`;
+		} else {
+			// For originals: use s3Key from DynamoDB or construct from originals path
+			s3Key = image.s3Key || `galleries/${galleryId}/originals/${filename}`;
+		}
 		
 		// Use filename from DynamoDB record or the decoded filename
 		const downloadFilename = image.filename || filename || 'image.jpg';
@@ -137,7 +156,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			},
 			galleryId,
 			filename,
-			imageKey
+			imageKey,
+			orderId,
+			isFinal
 		});
 		return createLambdaErrorResponse(error, 'Failed to download image', 500);
 	}

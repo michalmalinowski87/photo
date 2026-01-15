@@ -1,11 +1,13 @@
 import { Trash2 } from "lucide-react";
-import React, { useState } from "react";
+import { useRouter } from "next/router";
+import React, { useEffect, useState } from "react";
 
 import { useDeleteGallery } from "../../../hooks/mutations/useGalleryMutations";
 import { useNavigation } from "../../../hooks/useNavigation";
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
+import { isGalleryRoute } from "../../../lib/navigation";
 import Button from "../../ui/button/Button";
 import { ConfirmDialog } from "../../ui/confirm/ConfirmDialog";
 import { FullPageLoading } from "../../ui/loading/Loading";
@@ -16,6 +18,7 @@ interface DeleteGalleryButtonProps {
 }
 
 export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryButtonProps) => {
+  const router = useRouter();
   const { replace } = useNavigation();
   const { showToast } = useToast();
   const { closePublishFlow } = usePublishFlow();
@@ -24,6 +27,38 @@ export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryBut
 
   // Use React Query mutation for delete operation
   const deleteGalleryMutation = useDeleteGallery();
+
+  // Keep overlay visible until we've actually navigated away from the gallery route
+  useEffect(() => {
+    if (!isRedirecting) {
+      return;
+    }
+
+    const handleRouteChangeComplete = (url: string) => {
+      // Only hide overlay when we're no longer on a gallery route
+      if (!isGalleryRoute(url)) {
+        setIsRedirecting(false);
+      }
+    };
+
+    const handleRouteChangeError = () => {
+      // Hide overlay on navigation error
+      setIsRedirecting(false);
+    };
+
+    router.events.on("routeChangeComplete", handleRouteChangeComplete);
+    router.events.on("routeChangeError", handleRouteChangeError);
+
+    // Also check current route in case navigation already completed
+    if (!isGalleryRoute(router.asPath)) {
+      setIsRedirecting(false);
+    }
+
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChangeComplete);
+      router.events.off("routeChangeError", handleRouteChangeError);
+    };
+  }, [isRedirecting, router]);
 
   const handleDeleteClick = () => {
     setShowDeleteDialog(true);
@@ -48,6 +83,7 @@ export const DeleteGalleryButton = ({ galleryId, galleryName }: DeleteGalleryBut
 
       // Navigate with explicit cleanup (navigation utility handles additional cleanup)
       // React Query cache will be invalidated automatically by the mutation
+      // Keep overlay visible - it will be hidden by the routeChangeComplete handler
       void replace("/");
 
       // Show toast after navigation starts

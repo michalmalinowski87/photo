@@ -166,7 +166,7 @@ export function SecondaryMenu({
   const getMenuItems = () => {
     if (state === "delivered") {
       const items = [
-        { id: "delivered", label: "DOSTARCZONE ZDJĘCIA" },
+        { id: "delivered", label: "DOSTARCZONE" },
       ];
       // Only show "Niewybrane" if there's a price per additional photo
       if (extraPriceCents > 0) {
@@ -176,7 +176,7 @@ export function SecondaryMenu({
     } else if (state === "approved" || state === "changesRequested") {
       return [
         { id: "all", label: "WSZYSTKIE ZDJĘCIA" },
-        { id: "selected", label: "WYBRANE ZDJĘCIA" },
+        { id: "selected", label: "WYBRANE" },
       ];
     } else {
       return [

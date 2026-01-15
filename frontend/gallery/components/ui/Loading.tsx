@@ -24,13 +24,13 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
 
   const content = (
     <div className="flex flex-col items-center justify-center gap-6 opacity-60">
-      {/* Logo or PhotoHub text with fade animation */}
+      {/* Logo or PhotoCloud text with fade animation */}
       <div className="flex items-center justify-center">
         {logo ? (
           <div className="animate-pulse">{logo}</div>
         ) : (
           <h1 className="text-5xl font-bold text-gray-900 animate-fade-in-out">
-            PhotoHub
+            PhotoCloud
           </h1>
         )}
       </div>

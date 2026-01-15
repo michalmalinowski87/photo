@@ -10,6 +10,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 interface DownloadOptions {
   galleryId: string;
   imageKey: string;
+  orderId?: string; // Optional orderId for downloading final images
+  type?: 'final' | 'original'; // Image type: 'final' for finals, 'original' for originals (default)
   onProgress?: (progress: number) => void;
 }
 
@@ -57,22 +59,29 @@ export function useImageDownload() {
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const downloadMutation = useMutation({
-    mutationFn: async ({ galleryId, imageKey }: Omit<DownloadOptions, "onProgress">) => {
+    mutationFn: async ({ galleryId, imageKey, orderId, type }: Omit<DownloadOptions, "onProgress">) => {
       const token = getToken(galleryId);
       if (!token) {
         throw new Error("Missing token");
       }
 
-      // Request presigned URL for full quality image
-      const response = await apiFetch(
-        `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(imageKey)}/download`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // Build query parameters for final images
+      const params = new URLSearchParams();
+      if (type === 'final' && orderId) {
+        params.append('type', 'final');
+        params.append('orderId', orderId);
+      }
+
+      const queryString = params.toString();
+      const url = `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(imageKey)}/download${queryString ? `?${queryString}` : ''}`;
+
+      // Request presigned URL for full quality image (original or final)
+      const response = await apiFetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       return response.data as { url: string; filename?: string };
     },

@@ -9,7 +9,7 @@ import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
