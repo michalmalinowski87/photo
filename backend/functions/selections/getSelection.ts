@@ -55,10 +55,14 @@ export const handler = lambdaLogger(async (event: any) => {
 	const isApproved = activeOrder && (activeOrder.deliveryStatus === 'CLIENT_APPROVED' || activeOrder.deliveryStatus === 'PREPARING_DELIVERY');
 	
 	// Pull selection from order if it exists, otherwise use defaults
+	const selectedKeys = activeOrder?.selectedKeys || [];
+	// Calculate selectedCount from selectedKeys.length to ensure consistency (selectedKeys is source of truth)
+	const selectedKeysArray = Array.isArray(selectedKeys) ? selectedKeys : [];
+	const calculatedSelectedCount = selectedKeysArray.length;
 	const selection = activeOrder ? {
-		selectedKeys: activeOrder.selectedKeys || [],
+		selectedKeys: selectedKeysArray,
 		approved: isApproved,
-		selectedCount: activeOrder.selectedCount || 0,
+		selectedCount: calculatedSelectedCount, // Use calculated count from selectedKeys, not stale DB value
 		overageCount: activeOrder.overageCount || 0,
 		overageCents: activeOrder.overageCents || 0
 	} : { selectedKeys: [], approved: false, selectedCount: 0, overageCount: 0, overageCents: 0 };
@@ -70,18 +74,19 @@ export const handler = lambdaLogger(async (event: any) => {
 	const changeRequestsBlocked = canRequestChanges && (clientApprovedOrder?.changeRequestsBlocked === true || preparingDeliveryOrder?.changeRequestsBlocked === true);
 	
 	// Include gallery-level status and pricing info
+	const responseBody = {
+		...selection,
+		canSelect, // Simplified: true if no order or order is CLIENT_SELECTING
+		changeRequestPending: !!changesRequestedOrder, // True if waiting for photographer approval
+		hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
+		changeRequestsBlocked: changeRequestsBlocked || false, // True if change requests are blocked for this order
+		hasDeliveredOrder, // For showing processed photos view
+		selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
+		pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
+	};
 	return { 
 		statusCode: 200, 
-		body: JSON.stringify({
-			...selection,
-			canSelect, // Simplified: true if no order or order is CLIENT_SELECTING
-			changeRequestPending: !!changesRequestedOrder, // True if waiting for photographer approval
-			hasClientApprovedOrder: canRequestChanges, // True if order is approved or preparing delivery (can request changes)
-			changeRequestsBlocked: changeRequestsBlocked || false, // True if change requests are blocked for this order
-			hasDeliveredOrder, // For showing processed photos view
-			selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
-			pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
-		})
+		body: JSON.stringify(responseBody)
 	};
 });
 

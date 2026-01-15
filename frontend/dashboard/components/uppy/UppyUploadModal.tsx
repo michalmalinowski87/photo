@@ -779,7 +779,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     // CRITICAL FIX: ThumbnailGenerator plugin doesn't automatically reinitialize after clear()
     // We need to reset it by removing and re-adding it to restore thumbnail generation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const thumbnailGeneratorPlugin = (uppy as any).getPlugin("ThumbnailGenerator");
     if (thumbnailGeneratorPlugin) {
       // Remove the plugin first to avoid duplicates

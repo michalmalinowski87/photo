@@ -291,7 +291,7 @@ export function VirtuosoGridComponent({
                   className={`selection-indicator absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation z-10 ${
                     isSelected
                       ? "bg-black text-white"
-                      : "bg-white/90 text-gray-700 hover:bg-white border-2 border-gray-300"
+                      : "bg-white/80 text-gray-700 hover:bg-white/95 border-0"
                   }`}
                   aria-label={isSelected ? "Odznacz zdjęcie" : "Zaznacz zdjęcie"}
                   style={{

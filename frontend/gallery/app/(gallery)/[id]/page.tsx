@@ -425,12 +425,16 @@ export default function GalleryPage() {
   );
 
   // Determine current selection count - React Query is single source of truth
-  // Use selectedKeys.length if available (from optimistic updates), otherwise use selectedCount from server
+  // Always prefer selectedKeys.length when available (even if 0), as it's the source of truth
+  // Only fall back to selectedCount from server if selectedKeys is not available
   const currentSelectedCount = useMemo(() => {
     const selectedKeysArray = selectionState?.selectedKeys;
-    const countFromKeys = Array.isArray(selectedKeysArray) ? selectedKeysArray.length : 0;
-    const countFromServer = selectionState?.selectedCount ?? 0;
-    return countFromKeys > 0 ? countFromKeys : countFromServer;
+    // If selectedKeys is an array (even if empty), use its length as the source of truth
+    if (Array.isArray(selectedKeysArray)) {
+      return selectedKeysArray.length;
+    }
+    // Fall back to server's selectedCount only if selectedKeys is not available
+    return selectionState?.selectedCount ?? 0;
   }, [selectionState?.selectedKeys, selectionState?.selectedCount, selectionState]);
 
   // Show selection indicators when:
