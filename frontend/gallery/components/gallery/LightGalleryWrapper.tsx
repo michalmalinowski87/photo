@@ -65,6 +65,9 @@ interface LightGalleryWrapperProps {
   onImageSelect?: (key: string) => void;
   canSelect?: boolean;
   showSelectionIndicators?: boolean;
+  baseLimit?: number; // Base limit for included photos
+  extraPriceCents?: number; // Price per additional photo in cents
+  currentSelectedCount?: number; // Current number of selected photos
 }
 
 export function LightGalleryWrapper({
@@ -81,6 +84,9 @@ export function LightGalleryWrapper({
   onImageSelect,
   canSelect = false,
   showSelectionIndicators = false,
+  baseLimit = 0,
+  extraPriceCents = 0,
+  currentSelectedCount = 0,
 }: LightGalleryWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const galleryInstanceRef = useRef<any>(null);
@@ -98,6 +104,9 @@ export function LightGalleryWrapper({
   const selectedKeysRef = useRef(selectedKeys);
   const onImageSelectRef = useRef(onImageSelect);
   const canSelectRef = useRef(canSelect);
+  const baseLimitRef = useRef(baseLimit);
+  const extraPriceCentsRef = useRef(extraPriceCents);
+  const currentSelectedCountRef = useRef(currentSelectedCount);
   
   // Keep refs in sync with latest values
   useEffect(() => {
@@ -109,11 +118,14 @@ export function LightGalleryWrapper({
     selectedKeysRef.current = selectedKeys;
     onImageSelectRef.current = onImageSelect;
     canSelectRef.current = canSelect;
+    baseLimitRef.current = baseLimit;
+    extraPriceCentsRef.current = extraPriceCents;
+    currentSelectedCountRef.current = currentSelectedCount;
     // Reset prefetch trigger when new images are loaded
     if (images.length > imagesLengthRef.current) {
       prefetchTriggeredRef.current = false;
     }
-  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect]);
+  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect, baseLimit, extraPriceCents, currentSelectedCount]);
 
   // Keyboard support while LightGallery is open:
   // Space / Enter toggles selection for the current photo.
@@ -251,6 +263,16 @@ export function LightGalleryWrapper({
         
         const handleGalleryClose = () => {
           isGalleryOpenRef.current = false;
+          // Clean up any polling intervals for selection buttons
+          if (containerRef.current) {
+            const selectionBtn = containerRef.current.querySelector('.lg-selection-toggle');
+            if (selectionBtn) {
+              const interval = (selectionBtn as any).__selectionCheckInterval;
+              if (interval) {
+                clearInterval(interval);
+              }
+            }
+          }
           if (onGalleryCloseRef.current) {
             onGalleryCloseRef.current();
           }
@@ -271,7 +293,14 @@ export function LightGalleryWrapper({
 
           // Remove existing selection button if any
           const existingBtn = toolbar.querySelector('.lg-selection-toggle');
-          if (existingBtn) existingBtn.remove();
+          if (existingBtn) {
+            // Clean up any polling interval
+            const existingInterval = (existingBtn as any).__selectionCheckInterval;
+            if (existingInterval) {
+              clearInterval(existingInterval);
+            }
+            existingBtn.remove();
+          }
 
           // Create selection toggle button
           const selectionBtn = document.createElement('button');
@@ -284,12 +313,18 @@ export function LightGalleryWrapper({
             e.preventDefault();
           });
           
-          // Update button label based on current selection state
+          // Update button label and state based on current selection state
           const updateButtonLabel = () => {
             if (!galleryInstance) return;
             const currentIndex = galleryInstance.index ?? 0;
             const currentImage = imagesRef.current[currentIndex];
-            if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+            if (!currentImage) return;
+            
+            const isSelected = selectedKeysRef.current.has(currentImage.key);
+            const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
+            const shouldDisable = !isSelected && isAtMaxLimit;
+            
+            if (isSelected) {
               // Use Lucide "Check" icon (inline SVG) to match the icon library used across the app.
               selectionBtn.innerHTML = `
                 <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -298,9 +333,25 @@ export function LightGalleryWrapper({
                 <span>Wybrane Zdjęcie</span>
               `;
               selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
+              selectionBtn.disabled = false;
+              selectionBtn.style.opacity = '1';
+              selectionBtn.style.cursor = 'pointer';
+              selectionBtn.removeAttribute('title');
             } else {
               selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
-              selectionBtn.setAttribute('aria-label', 'Wybierz zdjęcie');
+              selectionBtn.setAttribute('aria-label', shouldDisable ? 'Osiągnięto limit wyboru zdjęć' : 'Wybierz zdjęcie');
+              
+              if (shouldDisable) {
+                selectionBtn.disabled = true;
+                selectionBtn.style.opacity = '0.5';
+                selectionBtn.style.cursor = 'not-allowed';
+                selectionBtn.setAttribute('title', `Osiągnięto limit wyboru zdjęć (${baseLimitRef.current}). Odznacz przynajmniej jedno zdjęcie, aby wybrać inne.`);
+              } else {
+                selectionBtn.disabled = false;
+                selectionBtn.style.opacity = '1';
+                selectionBtn.style.cursor = 'pointer';
+                selectionBtn.removeAttribute('title');
+              }
             }
           };
 
@@ -314,11 +365,18 @@ export function LightGalleryWrapper({
             if (!galleryInstance) return;
             const currentIndex = galleryInstance.index ?? 0;
             const currentImage = imagesRef.current[currentIndex];
-            if (currentImage && onImageSelectRef.current) {
-              onImageSelectRef.current(currentImage.key);
-              // Update label after a short delay to reflect new state
-              setTimeout(updateButtonLabel, 100);
+            if (!currentImage || !onImageSelectRef.current) return;
+            
+            // Prevent action if button is disabled
+            const isSelected = selectedKeysRef.current.has(currentImage.key);
+            const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
+            if (!isSelected && isAtMaxLimit) {
+              return; // Button is disabled, don't process click
             }
+            
+            onImageSelectRef.current(currentImage.key);
+            // Update label after a short delay to reflect new state
+            setTimeout(updateButtonLabel, 100);
             // Ensure the button doesn't keep focus after pointer click.
             selectionBtn.blur();
           });
@@ -331,13 +389,24 @@ export function LightGalleryWrapper({
             toolbar.appendChild(selectionBtn);
           }
 
-          // Update icon on slide change
+          // Update icon on slide change and when selection changes
           const updateOnSlideChange = () => {
             updateButtonLabel();
           };
           if (containerRef.current) {
             containerRef.current.addEventListener('lgAfterSlide', updateOnSlideChange);
           }
+          
+          // Also update button when selection might have changed externally
+          // Use a polling approach to check for selection changes (since we can't easily observe Set changes)
+          const selectionCheckInterval = setInterval(() => {
+            if (isGalleryOpenRef.current && galleryInstance) {
+              updateButtonLabel();
+            }
+          }, 500); // Check every 500ms
+          
+          // Store interval ID for cleanup
+          (selectionBtn as any).__selectionCheckInterval = selectionCheckInterval;
         };
 
         // Add button after gallery opens
@@ -643,7 +712,14 @@ export function LightGalleryWrapper({
                 if (!toolbar) return;
 
                 const existingBtn = toolbar.querySelector('.lg-selection-toggle');
-                if (existingBtn) existingBtn.remove();
+                if (existingBtn) {
+                  // Clean up any polling interval
+                  const existingInterval = (existingBtn as any).__selectionCheckInterval;
+                  if (existingInterval) {
+                    clearInterval(existingInterval);
+                  }
+                  existingBtn.remove();
+                }
 
                 const selectionBtn = document.createElement('button');
                 selectionBtn.className = 'lg-selection-toggle';
@@ -659,7 +735,13 @@ export function LightGalleryWrapper({
                   if (!galleryInstance) return;
                   const currentIndex = galleryInstance.index ?? 0;
                   const currentImage = imagesRef.current[currentIndex];
-                  if (currentImage && selectedKeysRef.current.has(currentImage.key)) {
+                  if (!currentImage) return;
+                  
+                  const isSelected = selectedKeysRef.current.has(currentImage.key);
+                  const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
+                  const shouldDisable = !isSelected && isAtMaxLimit;
+                  
+                  if (isSelected) {
                     // Use Lucide "Check" icon (inline SVG) to match the icon library used across the app.
                     selectionBtn.innerHTML = `
                       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -668,9 +750,25 @@ export function LightGalleryWrapper({
                       <span>Wybrane Zdjęcie</span>
                     `;
                     selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
+                    selectionBtn.disabled = false;
+                    selectionBtn.style.opacity = '1';
+                    selectionBtn.style.cursor = 'pointer';
+                    selectionBtn.removeAttribute('title');
                   } else {
                     selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
-                    selectionBtn.setAttribute('aria-label', 'Wybierz zdjęcie');
+                    selectionBtn.setAttribute('aria-label', shouldDisable ? 'Osiągnięto limit wyboru zdjęć' : 'Wybierz zdjęcie');
+                    
+                    if (shouldDisable) {
+                      selectionBtn.disabled = true;
+                      selectionBtn.style.opacity = '0.5';
+                      selectionBtn.style.cursor = 'not-allowed';
+                      selectionBtn.setAttribute('title', `Osiągnięto limit wyboru zdjęć (${baseLimitRef.current}). Odznacz przynajmniej jedno zdjęcie, aby wybrać inne.`);
+                    } else {
+                      selectionBtn.disabled = false;
+                      selectionBtn.style.opacity = '1';
+                      selectionBtn.style.cursor = 'pointer';
+                      selectionBtn.removeAttribute('title');
+                    }
                   }
                 };
 
@@ -682,10 +780,17 @@ export function LightGalleryWrapper({
                   if (!galleryInstance) return;
                   const currentIndex = galleryInstance.index ?? 0;
                   const currentImage = imagesRef.current[currentIndex];
-                  if (currentImage && onImageSelectRef.current) {
-                    onImageSelectRef.current(currentImage.key);
-                    setTimeout(updateButtonLabel, 100);
+                  if (!currentImage || !onImageSelectRef.current) return;
+                  
+                  // Prevent action if button is disabled
+                  const isSelected = selectedKeysRef.current.has(currentImage.key);
+                  const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
+                  if (!isSelected && isAtMaxLimit) {
+                    return; // Button is disabled, don't process click
                   }
+                  
+                  onImageSelectRef.current(currentImage.key);
+                  setTimeout(updateButtonLabel, 100);
                   // Ensure the button doesn't keep focus after pointer click.
                   selectionBtn.blur();
                 });
@@ -700,6 +805,16 @@ export function LightGalleryWrapper({
                 if (containerRef.current) {
                   containerRef.current.addEventListener('lgAfterSlide', updateButtonLabel);
                 }
+                
+                // Also update button when selection might have changed externally
+                const selectionCheckInterval = setInterval(() => {
+                  if (isGalleryOpenRef.current && galleryInstance) {
+                    updateButtonLabel();
+                  }
+                }, 500); // Check every 500ms
+                
+                // Store interval ID for cleanup
+                (selectionBtn as any).__selectionCheckInterval = selectionCheckInterval;
               }, 100);
             };
             if (containerRef.current) {

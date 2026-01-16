@@ -544,7 +544,19 @@ export default function GalleryPage() {
   // But NOT when viewing "selected" photos (no checkmarks needed there)
   const showSelectionIndicatorsValue = isSelectingState || (galleryState === "approved" && viewMode === "all");
   // Only show unselected indicators (+) when in selecting state
-  const showUnselectedIndicators = isSelectingState;
+  // When there's no price per additional photo and we've reached the limit, hide all + signs
+  // They will reappear when user unselects photos (bringing selection below limit)
+  const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
+  const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
+  const showUnselectedIndicators = useMemo(() => {
+    if (!isSelectingState) return false;
+    // If there's no price per additional photo and we've reached the limit, hide + signs
+    if (extraPriceCents === 0 && currentSelectedCount >= baseLimit) {
+      return false;
+    }
+    // Otherwise, show + signs for unselected photos
+    return true;
+  }, [isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
   const canSelectValue = isSelectingState;
 
   if (isLoading || selectionLoading) {
@@ -750,6 +762,9 @@ export default function GalleryPage() {
             onImageSelect={handleImageSelect}
             canSelect={isSelectingState}
             showSelectionIndicators={showSelectionIndicatorsValue}
+            baseLimit={baseLimit}
+            extraPriceCents={extraPriceCents}
+            currentSelectedCount={currentSelectedCount}
           >
             <VirtuosoGridComponent
               key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
