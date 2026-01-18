@@ -936,6 +936,13 @@ export class AppStack extends Stack {
 			integration: new HttpLambdaIntegration('ApiClientLoginIntegration', apiFn)
 			// No authorizer - public endpoint
 		});
+		// Public gallery info endpoint (login page): non-sensitive fields only
+		httpApi.addRoutes({
+			path: '/galleries/{id}/public-info',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiGalleryPublicInfoIntegration', apiFn)
+			// No authorizer - public endpoint
+		});
 
 		// Client gallery endpoints (use client JWT tokens, not Cognito)
 		// These endpoints verify client JWT tokens in the Lambda function itself

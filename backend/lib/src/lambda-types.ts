@@ -8,26 +8,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda
  * Extended Lambda event with helper types for common operations
  */
 export interface LambdaEvent extends APIGatewayProxyEvent {
-	pathParameters?: {
-		id?: string;
-		galleryId?: string;
-		orderId?: string;
-		clientId?: string;
-		packageId?: string;
-		[key: string]: string | undefined;
-	};
-	queryStringParameters?: {
-		page?: string;
-		limit?: string;
-		itemsPerPage?: string;
-		offset?: string;
-		search?: string;
-		filter?: string;
-		deliveryStatus?: string;
-		excludeDeliveryStatus?: string;
-		lastKey?: string;
-		[key: string]: string | undefined;
-	};
 }
 
 /**

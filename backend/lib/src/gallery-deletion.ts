@@ -14,7 +14,7 @@ import { createGalleryDeletedEmail } from './email';
 async function getOwnerEmail(
 	gallery: any,
 	userPoolId: string | undefined,
-	cognito: CognitoIdentityProviderClient,
+	cognito: any,
 	logger: any
 ): Promise<string | undefined> {
 	if (gallery.ownerEmail) {
@@ -370,7 +370,7 @@ export async function deleteGallery(
 		ddb: DynamoDBDocumentClient;
 		s3: S3Client;
 		ses: any;
-		cognito: CognitoIdentityProviderClient;
+		cognito: any;
 	},
 	logger: any,
 	options: DeleteGalleryOptions = {}

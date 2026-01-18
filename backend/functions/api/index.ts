@@ -7,6 +7,7 @@ import { sanitizeErrorMessage } from '../../lib/src/error-utils';
 
 import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
+import * as galleriesGetPublicInfo from '../galleries/getPublicInfo';
 import * as galleriesListImages from '../galleries/listImages';
 import * as galleriesDownloadImage from '../galleries/downloadImage';
 import * as galleriesGetStatus from '../galleries/getStatus';
@@ -85,6 +86,8 @@ app.get('/health', (req: Request, res: Response) => {
 // Public gallery routes (no auth required)
 // Client login endpoint - clients authenticate with gallery password, not Cognito
 app.post('/galleries/:id/client-login', wrapHandler(galleriesClientLogin.handler));
+// Public login page info: non-sensitive fields only (name + cover)
+app.get('/galleries/:id/public-info', wrapHandler(galleriesGetPublicInfo.handler));
 
 // Client gallery endpoints (use client JWT tokens, not Cognito)
 // These endpoints verify client JWT tokens in the Lambda function itself

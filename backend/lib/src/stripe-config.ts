@@ -4,7 +4,7 @@ import { getConfigWithEnvFallback } from './ssm-config';
 let stripeSecretKeyCache: string | null = null;
 let stripeSecretKeyPromise: Promise<string> | null = null;
 let stripeWebhookSecretCache: string | null = null;
-let stripeWebhookSecretPromise: Promise<string> | null = null;
+let stripeWebhookSecretPromise: Promise<string | undefined> | null = null;
 
 /**
  * Gets Stripe secret key from SSM Parameter Store with fallback to environment variable
