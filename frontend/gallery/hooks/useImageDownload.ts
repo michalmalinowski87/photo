@@ -212,6 +212,8 @@ export function useImageDownload() {
       await downloadMutation.mutateAsync({
         galleryId: options.galleryId,
         imageKey: options.imageKey,
+        orderId: options.orderId,
+        type: options.type,
       });
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {

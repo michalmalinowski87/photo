@@ -46,7 +46,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const filename = decodeURIComponent(imageKeyParam);
 	
 	// Determine image type and construct the imageKey
-	// For finals: require orderId and use "final#{filename}"
+	// For finals: require orderId and use "final#{orderId}#{filename}"
 	// For originals: use "original#{filename}" (default)
 	const isFinal = imageType === 'final';
 	if (isFinal && !orderId) {
@@ -57,7 +57,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 	
-	const imageKey = isFinal ? `final#${filename}` : `original#${filename}`;
+	const imageKey = isFinal ? `final#${orderId}#${filename}` : `original#${filename}`;
 
 	try {
 		// Fetch gallery to verify access

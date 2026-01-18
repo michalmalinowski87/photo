@@ -95,10 +95,11 @@ export default function GalleryPage() {
   }, [galleryState, shouldShowUnselected]);
 
   // Delivered orders
-  const { data: deliveredOrdersData } = useDeliveredOrders(galleryId);
+  const { data: deliveredOrdersData, isLoading: isLoadingDeliveredOrders } = useDeliveredOrders(galleryId);
   const deliveredOrders = deliveredOrdersData?.items || [];
   const hasMultipleOrders = deliveredOrders.length > 1;
   const singleOrder = deliveredOrders.length === 1 ? deliveredOrders[0] : null;
+  const orderIdForFinals = selectedOrderId || singleOrder?.orderId || null;
 
   // Final images for selected order
   const {
@@ -106,9 +107,10 @@ export default function GalleryPage() {
     fetchNextPage: fetchNextFinalPage,
     hasNextPage: hasNextFinalPage,
     isFetchingNextPage: isFetchingNextFinalPage,
+    isLoading: isLoadingFinalImages,
   } = useFinalImages(
     galleryId,
-    selectedOrderId || singleOrder?.orderId || null,
+    orderIdForFinals,
     50
   );
   const finalImages = useMemo(() => {
@@ -559,16 +561,25 @@ export default function GalleryPage() {
   }, [isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
   const canSelectValue = isSelectingState;
 
-  if (isLoading || selectionLoading) {
+  // Combine all loading states to prevent blink between loading screens
+  // For delivered view: wait for both selection state AND final images
+  // For regular view: wait for both selection state AND regular images
+  const isFullyLoading =
+    isLoading ||
+    selectionLoading ||
+    // Finals view has a two-step dependency: we must load delivered orders to know the orderId,
+    // then load final images for that order. Without this, the loader can disappear briefly
+    // between "selection loaded" and "finals query enabled".
+    (shouldShowDelivered &&
+      (isLoadingDeliveredOrders || (orderIdForFinals ? isLoadingFinalImages : false))) ||
+    (!shouldShowDelivered && imagesLoading);
+
+  if (isFullyLoading) {
     return <FullPageLoading text="Ładowanie..." />;
   }
 
   if (!isAuthenticated || !galleryId) {
     return null;
-  }
-
-  if (imagesLoading && !shouldShowDelivered) {
-    return <FullPageLoading text="Ładowanie zdjęć..." />;
   }
 
   // Only show error if we're not loading, have no data, and actually have an error
@@ -794,7 +805,7 @@ export default function GalleryPage() {
                   : isFetchingNextPage
               }
               galleryId={galleryId || undefined}
-              selectedKeys={new Set(selectionState?.selectedKeys || [])}
+              selectedKeys={viewMode === "selected" ? new Set() : new Set(selectionState?.selectedKeys || [])}
               onImageSelect={handleImageSelect}
               canSelect={isSelectingState}
               showSelectionIndicators={showSelectionIndicatorsValue}
