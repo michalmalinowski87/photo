@@ -5,7 +5,15 @@ import { createPortal } from "react-dom";
 
 // Full page loading component
 // Fixed overlay that covers the entire screen including header
-export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
+export const FullPageLoading = ({
+  text,
+  logo,
+  isVisible = true,
+}: {
+  text?: string;
+  logo?: React.ReactNode;
+  isVisible?: boolean;
+}) => {
   const [isMounted, setIsMounted] = React.useState(false);
 
   // Ensure component only renders on client to prevent hydration mismatch
@@ -67,8 +75,8 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
     </div>
   );
 
-  // Don't render on server to prevent hydration mismatch
-  if (!isMounted) {
+  // Don't render on server / pre-hydration.
+  if (!isMounted || !isVisible) {
     return null;
   }
 

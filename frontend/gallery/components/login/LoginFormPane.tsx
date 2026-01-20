@@ -2,11 +2,13 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch, formatApiError } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
+import { FullPageLoading } from "@/components/ui/Loading";
 
 export function LoginFormPane({
   galleryId,
@@ -37,8 +39,12 @@ export function LoginFormPane({
       return;
     }
 
-    setLoading(true);
-    setError("");
+    // Make the loading overlay render immediately before starting the request.
+    flushSync(() => {
+      setLoading(true);
+      setError("");
+    });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     try {
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/client-login`, {
@@ -76,6 +82,12 @@ export function LoginFormPane({
 
   return (
     <section className="w-full md:w-[45%] min-h-[calc(100vh-320px)] md:min-h-screen bg-white flex items-center justify-center px-6 py-10">
+      {/* Keep this mounted so the portal is "warmed up" and can show instantly on submit */}
+      <FullPageLoading
+        isVisible={loading}
+        text={defaultLoginPageConfig.submitLoadingLabel}
+      />
+
       <div className="w-full max-w-md">
         <div className="mb-8">
           <h1
@@ -90,20 +102,38 @@ export function LoginFormPane({
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        <form
+          onSubmit={handleLogin}
+          className="space-y-5"
+          autoComplete="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-ddg-autofill="false"
+          data-form-type="other"
+        >
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {defaultLoginPageConfig.passwordLabel}
             </label>
             <input
               type="password"
+              name="gallery-access-code"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={defaultLoginPageConfig.passwordPlaceholder}
               disabled={loading}
               className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg box-border transition-colors outline-none focus:border-black focus:ring-1 focus:ring-black"
               autoFocus
-              autoComplete="current-password"
+              // Prevent browsers/extensions from treating this as a saved-login password field.
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              data-ddg-autofill="false"
             />
           </div>
 
