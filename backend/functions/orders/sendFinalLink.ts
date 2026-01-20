@@ -11,6 +11,11 @@ import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import {
+	decryptClientGalleryPassword,
+	getGalleryPasswordEncryptionSecret,
+	isEncryptedClientGalleryPassword,
+} from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -24,6 +29,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
+	const encSecret = await getGalleryPasswordEncryptionSecret(stage);
 	const sender = await getSenderEmail();
 	if (!galleriesTable || !ordersTable || !sender || !bucket) return { statusCode: 500, body: 'Missing env' };
 	const galleryId = event?.pathParameters?.id;
@@ -92,16 +98,32 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Decrypt password
+		if (!encSecret) {
+			return {
+				statusCode: 500,
+				body: JSON.stringify({
+					error: 'Missing GalleryPasswordEncryptionSecret',
+					message:
+						'Cannot retrieve gallery password because encryption secret is not configured. Set SSM /PhotoHub/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
+				}),
+			};
+		}
+
+		if (!isEncryptedClientGalleryPassword(gallery.clientPasswordEncrypted)) {
+			logger.error('Stored clientPasswordEncrypted is not in encrypted format', { galleryId, orderId });
+			return { statusCode: 500, body: JSON.stringify({ error: 'Failed to retrieve password' }) };
+		}
+
 		let password: string;
 		try {
-			password = Buffer.from(gallery.clientPasswordEncrypted, 'base64').toString('utf-8');
-		} catch (e: any) {
+			password = decryptClientGalleryPassword(gallery.clientPasswordEncrypted, encSecret);
+		} catch {
 			logger.error('Failed to decrypt stored password', {
 				galleryId,
 				orderId,
-				error: e.message
+				hasEncSecret: true,
 			});
-			return { statusCode: 500, body: JSON.stringify({ error: 'Failed to retrieve password', message: e.message }) };
+			return { statusCode: 500, body: JSON.stringify({ error: 'Failed to retrieve password' }) };
 		}
 
 		// Send first email: link with password info

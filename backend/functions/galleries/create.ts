@@ -2,21 +2,20 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
-import { randomBytes, pbkdf2Sync } from 'crypto';
 import type { LambdaEvent, LambdaContext, GalleryItem } from '../../lib/src/lambda-types';
 import { createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
+import {
+	encryptClientGalleryPassword,
+	getGalleryPasswordEncryptionSecret,
+	hashClientGalleryPassword,
+} from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-function hashPassword(password: string) {
-	const salt = randomBytes(16).toString('hex');
-	const hash = pbkdf2Sync(password, salt, 100_000, 32, 'sha256').toString('hex');
-	return { salt, hash, iterations: 100000, algo: 'pbkdf2-sha256' };
-}
 
 export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaContext) => {
 	const logger = context?.logger;
 	const envProc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 
@@ -146,13 +145,25 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		
 		if (clientPassword && typeof clientPassword === 'string' && clientPassword.trim()) {
 			const passwordPlain = clientPassword.trim();
-			const secrets = hashPassword(passwordPlain);
-			item.clientPasswordHash = secrets.hash;
-			item.clientPasswordSalt = secrets.salt;
+			const secrets = hashClientGalleryPassword(passwordPlain);
+			item.clientPasswordHash = secrets.hashHex;
+			item.clientPasswordSalt = secrets.saltHex;
 			item.clientPasswordIter = secrets.iterations;
 			
-			// Store password encrypted (base64) to send via email later - in production, use KMS encryption
-			item.clientPasswordEncrypted = Buffer.from(passwordPlain, 'utf-8').toString('base64');
+			// Store password encrypted (reversible) for future email sending (NEVER store plaintext/base64).
+			const encSecret = await getGalleryPasswordEncryptionSecret(stage);
+			if (!encSecret) {
+				return {
+					statusCode: 500,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						error: 'Missing GalleryPasswordEncryptionSecret',
+						message:
+							'Gallery password encryption secret is not configured. Set SSM /PhotoHub/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
+					}),
+				};
+			}
+			item.clientPasswordEncrypted = encryptClientGalleryPassword(passwordPlain, encSecret);
 		}
 	}
 

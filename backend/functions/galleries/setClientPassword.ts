@@ -1,23 +1,21 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { randomBytes, pbkdf2Sync } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createPasswordResetEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import {
+	encryptClientGalleryPassword,
+	getGalleryPasswordEncryptionSecret,
+	hashClientGalleryPassword,
+} from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 // Use require to avoid type resolution requirement during lint without installed types
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const ses = new SESClient({});
-
-function hashPassword(password: string) {
-	const salt = randomBytes(16).toString('hex');
-	const hash = pbkdf2Sync(password, salt, 100_000, 32, 'sha256').toString('hex');
-	return { salt, hash, iterations: 100000, algo: 'pbkdf2-sha256' };
-}
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -49,7 +47,20 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return { statusCode: 400, body: 'password and clientEmail cannot be empty after trimming' };
 	}
 
-	const secrets = hashPassword(passwordPlain);
+	const secrets = hashClientGalleryPassword(passwordPlain);
+	const encSecret = await getGalleryPasswordEncryptionSecret(stage);
+	if (!encSecret) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				error: 'Missing GalleryPasswordEncryptionSecret',
+				message:
+					'Gallery password encryption secret is not configured. Set SSM /PhotoHub/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
+			}),
+		};
+	}
+	const encrypted = encryptClientGalleryPassword(passwordPlain, encSecret);
 	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
 	const galleryLink = apiUrl ? `${apiUrl}/${id}` : `https://your-frontend/${id}`;
 	
@@ -58,11 +69,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		Key: { galleryId: id },
 		UpdateExpression: 'SET clientPasswordHash = :h, clientPasswordSalt = :s, clientPasswordIter = :i, clientEmail = :e, clientPasswordEncrypted = :enc, updatedAt = :u',
 		ExpressionAttributeValues: {
-			':h': secrets.hash,
-			':s': secrets.salt,
+			':h': secrets.hashHex,
+			':s': secrets.saltHex,
 			':i': secrets.iterations,
 			':e': emailPlain,
-			':enc': Buffer.from(passwordPlain, 'utf-8').toString('base64'), // Store encrypted for future email sending
+			':enc': encrypted,
 			':u': new Date().toISOString()
 		}
 	}));

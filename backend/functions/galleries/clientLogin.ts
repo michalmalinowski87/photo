@@ -1,17 +1,11 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { pbkdf2Sync } from 'crypto';
 import { signJWT } from '../../lib/src/jwt';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { verifyClientGalleryPassword } from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-function verifyPassword(password: string, hash?: string, salt?: string, iter?: number) {
-	if (!hash || !salt || !iter) return false;
-	const calc = pbkdf2Sync(password, salt, iter, 32, 'sha256').toString('hex');
-	return calc === hash;
-}
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -111,12 +105,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Verify password
-	const passwordValid = verifyPassword(
-		password,
-		gallery.clientPasswordHash,
-		gallery.clientPasswordSalt,
-		gallery.clientPasswordIter
-	);
+	const passwordValid = verifyClientGalleryPassword(password, {
+		hashHex: gallery.clientPasswordHash,
+		saltHex: gallery.clientPasswordSalt,
+		iterations: gallery.clientPasswordIter,
+	});
 
 	if (!passwordValid) {
 		logger.warn('Invalid password attempt', { 

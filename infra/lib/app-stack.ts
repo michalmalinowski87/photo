@@ -341,6 +341,13 @@ export class AppStack extends Stack {
 			process.env.JWT_SECRET || 
 			`photocloud-${props.stage}-jwt-secret-change-in-production`;
 
+		// Secret for encrypting client gallery passwords stored in DynamoDB (reversible, for emailing).
+		// IMPORTANT: This must be a long, random secret in production.
+		const galleryPasswordEncryptionSecret =
+			this.node.tryGetContext('galleryPasswordEncryptionSecret') ||
+			process.env.GALLERY_PASSWORD_ENCRYPTION_SECRET ||
+			`photocloud-${props.stage}-gallery-password-enc-secret-change-in-production`;
+
 		// Debug: Log Stripe key status at CDK synthesis time
 		const stripeKeyFromEnv = process.env.STRIPE_SECRET_KEY;
 		if (!stripeKeyFromEnv || stripeKeyFromEnv.trim() === '') {
@@ -361,6 +368,15 @@ export class AppStack extends Stack {
 			parameterName: `${ssmParameterPrefix}/JwtSecret`,
 			stringValue: jwtSecret,
 			description: 'JWT secret for client gallery authentication'
+		});
+
+		// Client gallery password encryption secret (used to encrypt `clientPasswordEncrypted` in DynamoDB).
+		// NOTE: Stored as plain String to match the existing config approach in this stack.
+		// If you want stronger protection, migrate this to Secrets Manager or SecureString + kms:Decrypt permissions.
+		const galleryPasswordEncryptionSecretParam = new StringParameter(this, 'GalleryPasswordEncryptionSecretParam', {
+			parameterName: `${ssmParameterPrefix}/GalleryPasswordEncryptionSecret`,
+			stringValue: galleryPasswordEncryptionSecret,
+			description: 'Secret used to encrypt client gallery passwords stored in DynamoDB (AES-256-GCM, versioned)'
 		});
 
 		// Stripe configuration - Using String type (SecureString deprecated in CDK)

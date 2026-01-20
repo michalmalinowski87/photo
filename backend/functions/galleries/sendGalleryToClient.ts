@@ -7,6 +7,12 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createGalleryInvitationEmail, createGalleryPasswordEmail, createGalleryReminderEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import {
+	decryptClientGalleryPassword,
+	encryptClientGalleryPassword,
+	getGalleryPasswordEncryptionSecret,
+	isEncryptedClientGalleryPassword,
+} from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -19,6 +25,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
 	const sender = await getSenderEmail();
+	const encSecret = await getGalleryPasswordEncryptionSecret(stage);
 	
 	if (!galleriesTable || !sender) {
 		return {
@@ -94,14 +101,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const body = event?.body ? JSON.parse(event.body) : {};
 	let password = body?.password;
 
-	// If password is stored encrypted, decrypt it
-	// Otherwise, require it to be passed
+	// If password is stored encrypted, decrypt it.
 	if (!password && gallery.clientPasswordEncrypted) {
-		// Decrypt password (simple base64 decode for now - in production, use proper encryption)
-		try {
-			password = Buffer.from(gallery.clientPasswordEncrypted, 'base64').toString('utf-8');
-		} catch (e) {
-			logger?.warn('Failed to decrypt stored password', { galleryId });
+		if (!encSecret) {
+			logger?.warn('Missing GalleryPasswordEncryptionSecret; cannot decrypt stored password', { galleryId });
+		} else if (!isEncryptedClientGalleryPassword(gallery.clientPasswordEncrypted)) {
+			logger?.warn('Stored clientPasswordEncrypted is not in encrypted format', { galleryId });
+		} else {
+			try {
+				password = decryptClientGalleryPassword(gallery.clientPasswordEncrypted, encSecret);
+			} catch {
+				logger?.warn('Failed to decrypt stored password', { galleryId });
+			}
 		}
 	}
 
@@ -111,6 +122,39 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Password required to send email. Please provide the password in the request body, or set it during gallery creation.' })
 		};
+	}
+	password = password.trim();
+	if (!password) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Password required to send email. Password cannot be empty.' }),
+		};
+	}
+
+	// If password was provided and nothing is stored yet, store it encrypted for future sends.
+	if (encSecret) {
+		const stored = gallery.clientPasswordEncrypted;
+		const needsPersist =
+			!stored || (typeof stored === 'string' && !isEncryptedClientGalleryPassword(stored));
+		if (needsPersist) {
+			try {
+				const now = new Date().toISOString();
+				await ddb.send(
+					new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: 'SET clientPasswordEncrypted = :enc, updatedAt = :u',
+						ExpressionAttributeValues: {
+							':enc': encryptClientGalleryPassword(password, encSecret),
+							':u': now,
+						},
+					})
+				);
+			} catch {
+				// Best-effort; don't fail sending.
+			}
+		}
 	}
 
 	const galleryLink = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
@@ -278,9 +322,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Send password email (separate function call for future flexibility - e.g., SMS)
 	// Always send password email regardless of whether it's invitation or reminder
+	const passwordTemplate = createGalleryPasswordEmail(galleryId, galleryName, clientEmail, password, galleryLink);
 	try {
-		const passwordTemplate = createGalleryPasswordEmail(galleryId, galleryName, clientEmail, password, galleryLink);
-		
 		logger.info('Sending SES email - Gallery Password', {
 			from: sender,
 			to: clientEmail,

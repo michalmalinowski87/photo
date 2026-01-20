@@ -13,16 +13,9 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { randomBytes, pbkdf2Sync } from 'crypto';
+import { encryptClientGalleryPassword, hashClientGalleryPassword } from '../backend/lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-// Password hashing matching the exact implementation from setClientPassword.ts
-function hashPassword(password: string): { hash: string; salt: string; iterations: number } {
-	const salt = randomBytes(16).toString('hex');
-	const hash = pbkdf2Sync(password, salt, 100_000, 32, 'sha256').toString('hex');
-	return { hash, salt, iterations: 100000 };
-}
 
 async function markGalleryAsSent(galleryId: string, clientEmail?: string, password?: string) {
 	const stage = process.env.STAGE || 'dev';
@@ -72,8 +65,13 @@ async function markGalleryAsSent(galleryId: string, clientEmail?: string, passwo
 	
 	// Step 3: Update gallery with clientEmail and password
 	console.log('3️⃣  Updating gallery with client email and password...');
-	const { hash, salt, iterations } = hashPassword(defaultPassword);
-	const passwordEncrypted = Buffer.from(defaultPassword).toString('base64');
+	const encSecret = process.env.GALLERY_PASSWORD_ENCRYPTION_SECRET;
+	if (!encSecret) {
+		console.error('❌ Missing GALLERY_PASSWORD_ENCRYPTION_SECRET (required to store encrypted gallery passwords).');
+		process.exit(1);
+	}
+	const { hashHex, saltHex, iterations } = hashClientGalleryPassword(defaultPassword);
+	const passwordEncrypted = encryptClientGalleryPassword(defaultPassword, encSecret);
 	
 	const now = new Date().toISOString();
 	await ddb.send(new UpdateCommand({
@@ -82,8 +80,8 @@ async function markGalleryAsSent(galleryId: string, clientEmail?: string, passwo
 		UpdateExpression: 'SET clientEmail = :email, clientPasswordHash = :hash, clientPasswordSalt = :salt, clientPasswordIter = :iter, clientPasswordEncrypted = :enc, updatedAt = :u',
 		ExpressionAttributeValues: {
 			':email': defaultEmail,
-			':hash': hash,
-			':salt': salt,
+			':hash': hashHex,
+			':salt': saltHex,
 			':iter': iterations,
 			':enc': passwordEncrypted,
 			':u': now

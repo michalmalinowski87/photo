@@ -4,10 +4,10 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-d
 import { S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { pbkdf2Sync } from 'crypto';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { getSenderEmail } from '../../lib/src/email-config';
+import { verifyClientGalleryPassword } from '../../lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 // Configure S3Client with explicit region to ensure presigned URLs work correctly
@@ -16,14 +16,6 @@ const s3 = new S3Client({
 	region: process.env.AWS_REGION || 'eu-west-1' // Default to eu-west-1 if AWS_REGION not set
 });
 const ses = new SESClient({});
-
-function verifyPassword(password: string, hash?: string, salt?: string, iter?: number) {
-	if (!hash || !salt || !iter) return false;
-	const calc = pbkdf2Sync(password, salt, iter, 32, 'sha256').toString('hex');
-	return calc === hash;
-}
-
-import { getSenderEmail } from '../../lib/src/email-config';
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
@@ -72,7 +64,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (access.isOwner) {
 		// Owner has access
 		hasAccess = true;
-	} else if (password && verifyPassword(password, gallery.clientPasswordHash, gallery.clientPasswordSalt, gallery.clientPasswordIter)) {
+	} else if (
+		typeof password === 'string' &&
+		verifyClientGalleryPassword(password.trim(), {
+			hashHex: gallery.clientPasswordHash,
+			saltHex: gallery.clientPasswordSalt,
+			iterations: gallery.clientPasswordIter,
+		})
+	) {
 		// Client with correct password has access
 		hasAccess = true;
 	}
