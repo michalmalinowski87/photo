@@ -1,3 +1,5 @@
+import { getPublicDashboardUrl } from "./public-env";
+
 const TOKEN_REQUEST_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_REQUEST";
 const TOKEN_RESPONSE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_RESPONSE";
 
@@ -45,9 +47,11 @@ export async function requestDashboardIdToken(options: {
 
   const timeoutMs = options.timeoutMs ?? 4000;
 
-  const dashboardUrl =
-    process.env.NEXT_PUBLIC_DASHBOARD_URL || (typeof document !== "undefined" ? document.referrer : "");
-  const dashboardOrigin = dashboardUrl ? normalizeOrigin(dashboardUrl) : null;
+  const dashboardUrl = getPublicDashboardUrl();
+  const dashboardOrigin = normalizeOrigin(dashboardUrl);
+  if (!dashboardOrigin) {
+    throw new Error("Invalid NEXT_PUBLIC_DASHBOARD_URL (must be a valid URL)");
+  }
 
   if (!window.opener) {
     throw new Error("Missing window.opener (preview must be opened from dashboard)");
@@ -65,8 +69,7 @@ export async function requestDashboardIdToken(options: {
     }, timeoutMs);
 
     const onMessage = (event: MessageEvent<TokenResponseMessage>) => {
-      const trusted = dashboardOrigin;
-      if (trusted && !isTrustedOrigin(event.origin, trusted)) {
+      if (!isTrustedOrigin(event.origin, dashboardOrigin)) {
         return;
       }
 
@@ -83,7 +86,7 @@ export async function requestDashboardIdToken(options: {
     window.addEventListener("message", onMessage);
 
     try {
-      window.opener.postMessage(message, dashboardOrigin ?? "*");
+      window.opener.postMessage(message, dashboardOrigin);
     } catch (e) {
       window.clearTimeout(timeoutId);
       window.removeEventListener("message", onMessage);

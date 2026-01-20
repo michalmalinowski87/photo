@@ -7,7 +7,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, UpdateComm
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { createUserDeletionSchedule, cancelUserDeletionSchedule } from '../../../lib/src/user-deletion-scheduler';
 import { createDeletionRequestEmail, createDeletionCancelledEmail } from '../../../lib/src/email';
-import { getConfigValueFromSsm, getConfigWithEnvFallback } from '../../../lib/src/ssm-config';
+import { getConfigValueFromSsm, getRequiredConfigValue } from '../../../lib/src/ssm-config';
 import { getSenderEmail } from '../../../lib/src/email-config';
 
 const router = Router();
@@ -20,23 +20,37 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 	const usersTable = envProc?.env?.USERS_TABLE as string;
 	const stage = envProc?.env?.STAGE as string || 'dev';
 	
-	// Read configuration from SSM Parameter Store (allows runtime changes without redeployment)
-	const [sender, dashboardUrl, apiUrl, deletionLambdaArn, scheduleRoleArn, dlqArn] = await Promise.all([
-		getConfigValueFromSsm(stage, 'SenderEmail'),
-		getConfigValueFromSsm(stage, 'PublicDashboardUrl'),
-		getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL'),
-		getConfigValueFromSsm(stage, 'UserDeletionLambdaArn'),
-		getConfigValueFromSsm(stage, 'UserDeletionScheduleRoleArn'),
-		getConfigValueFromSsm(stage, 'UserDeletionDlqArn')
-	]);
-	
-	// Fallback to env vars for backward compatibility during migration
-	const finalSender = sender || envProc?.env?.SENDER_EMAIL as string;
-	const finalDashboardUrl = dashboardUrl || envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-	const finalApiUrl = apiUrl || envProc?.env?.PUBLIC_API_URL || envProc?.env?.API_URL || '';
+	let finalSender: string;
+	let finalDashboardUrl: string;
+	let finalApiUrl: string;
+	let deletionLambdaArn: string | undefined;
+	let scheduleRoleArn: string | undefined;
+	let dlqArn: string | undefined;
+
+	try {
+		[finalSender, finalDashboardUrl, finalApiUrl, deletionLambdaArn, scheduleRoleArn, dlqArn] = await Promise.all([
+			getRequiredConfigValue(stage, 'SenderEmail', { envVarName: 'SENDER_EMAIL' }),
+			getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' }),
+			getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' }),
+			getConfigValueFromSsm(stage, 'UserDeletionLambdaArn'),
+			getConfigValueFromSsm(stage, 'UserDeletionScheduleRoleArn'),
+			getConfigValueFromSsm(stage, 'UserDeletionDlqArn'),
+		]);
+	} catch (error: any) {
+		logger?.error('Missing configuration', { error: error.message });
+		return res.status(500).json({ error: 'Missing configuration', message: error.message });
+	}
 
 	if (!usersTable) {
 		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
+	}
+	if (!deletionLambdaArn || !scheduleRoleArn || !dlqArn) {
+		return res.status(500).json({
+			error: 'Missing deletion scheduler configuration',
+			message:
+				`Missing one or more required SSM parameters under /PhotoHub/${stage}: ` +
+				'UserDeletionLambdaArn, UserDeletionScheduleRoleArn, UserDeletionDlqArn',
+		});
 	}
 
 	const event = reqToEvent(req);
@@ -348,8 +362,13 @@ publicUndoDeletionRouter.get('/undo-deletion/:token', async (req: Request, res: 
 	const stage = envProc?.env?.STAGE || 'dev';
 	const usersTable = envProc?.env?.USERS_TABLE as string;
 	const sender = await getSenderEmail();
-	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+	let dashboardUrl: string;
+	try {
+		dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+	} catch (error: any) {
+		logger?.error('Missing configuration', { error: error.message });
+		return res.status(500).json({ error: 'Missing configuration', message: error.message });
+	}
 
 	if (!usersTable) {
 		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });

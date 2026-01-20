@@ -4,8 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, formatApiError } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { getToken } from "@/lib/token";
+import { getPublicApiUrl } from "@/lib/public-env";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = getPublicApiUrl();
 
 export function useSelectionActions(galleryId: string | null) {
   const queryClient = useQueryClient();

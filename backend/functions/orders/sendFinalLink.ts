@@ -10,7 +10,7 @@ import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 import {
 	decryptClientGalleryPassword,
 	getGalleryPasswordEncryptionSecret,
@@ -28,7 +28,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
+	let galleryUrl: string;
+	try {
+		galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message })
+		};
+	}
 	const encSecret = await getGalleryPasswordEncryptionSecret(stage);
 	const sender = await getSenderEmail();
 	if (!galleriesTable || !ordersTable || !sender || !bucket) return { statusCode: 500, body: 'Missing env' };
@@ -81,7 +90,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 
-	const link = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
+	const base = galleryUrl.replace(/\/+$/, '');
+	const link = `${base}/${galleryId}`;
 	const galleryName = gallery.galleryName || galleryId;
 	const isNonSelectionGallery = gallery.selectionEnabled === false;
 

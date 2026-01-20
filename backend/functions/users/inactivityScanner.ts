@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, ScanCommand, PutCommand, UpdateCommand } from '
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { createUserDeletionSchedule } from '../../lib/src/user-deletion-scheduler';
 import { createInactivityReminderEmail, createInactivityFinalWarningEmail } from '../../lib/src/email';
-import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -19,19 +19,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const dlqArn = envProc?.env?.USER_DELETION_DLQ_ARN as string;
 	const stage = envProc?.env?.STAGE as string || 'dev';
 	
-	// Read configuration from SSM Parameter Store with fallback to environment variables
-	const [senderFromSsm, dashboardUrlFromSsm] = await Promise.all([
-		getConfigValueFromSsm(stage, 'SenderEmail'),
-		getConfigValueFromSsm(stage, 'PublicDashboardUrl')
-	]);
-	const senderFromEnv = envProc?.env?.SENDER_EMAIL as string;
-	const dashboardUrlFromEnv = envProc?.env?.PUBLIC_DASHBOARD_URL || envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL;
-	const sender = senderFromSsm || senderFromEnv;
-	const dashboardUrl = dashboardUrlFromSsm || dashboardUrlFromEnv || 'https://photocloud.com';
+	let sender: string;
+	let dashboardUrl: string;
+	let landingUrl: string;
+	try {
+		[sender, dashboardUrl, landingUrl] = await Promise.all([
+			getRequiredConfigValue(stage, 'SenderEmail', { envVarName: 'SENDER_EMAIL' }),
+			getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' }),
+			getRequiredConfigValue(stage, 'PublicLandingUrl', { envVarName: 'PUBLIC_LANDING_URL' }),
+		]);
+	} catch (error: any) {
+		logger.error('Missing configuration', { error: error.message, stage });
+		throw error;
+	}
 
 	logger.debug('Configuration loaded', {
 		stage,
-		senderEmailSource: senderFromSsm ? 'SSM' : (senderFromEnv ? 'ENV' : 'none'),
 		hasSenderEmail: !!sender,
 		hasUsersTable: !!usersTable,
 		hasDeletionLambdaArn: !!deletionLambdaArn,
@@ -43,13 +46,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		return;
 	}
 
-	if (!sender) {
-		logger.warn('Missing SENDER_EMAIL configuration - emails will not be sent', {
-			ssmValue: senderFromSsm ? '(present)' : '(not found)',
-			envValue: senderFromEnv ? '(present)' : '(not found)',
-			ssmParameterPath: `/PhotoHub/${stage}/SenderEmail`
-		});
-	}
+	// sender is required; getRequiredConfigValue throws if missing
 
 	const now = Date.now();
 	const elevenMonthsAgo = now - (11 * 30 * 24 * 60 * 60 * 1000); // Approximate 11 months
@@ -152,7 +149,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							// User is at 11 months, they have 30 days grace period after hitting 12 months
 							const daysUntilDeletion = 30;
 							const loginUrl = `${dashboardUrl}/auth/sign-in`;
-							const emailTemplate = createInactivityReminderEmail(userEmail, daysUntilDeletion, loginUrl, sender);
+							const emailTemplate = createInactivityReminderEmail(userEmail, daysUntilDeletion, loginUrl, sender, landingUrl);
 							
 							// Send email first
 							await ses.send(new SendEmailCommand({
@@ -247,7 +244,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						try {
 							const deletionDate = new Date(thirtyDaysFromNow).toISOString();
 							const loginUrl = `${dashboardUrl}/auth/sign-in`;
-							const emailTemplate = createInactivityFinalWarningEmail(userEmail, deletionDate, loginUrl, sender);
+							const emailTemplate = createInactivityFinalWarningEmail(userEmail, deletionDate, loginUrl, sender, landingUrl);
 							
 							// Send email first
 							await ses.send(new SendEmailCommand({

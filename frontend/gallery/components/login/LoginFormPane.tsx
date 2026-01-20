@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
 import { FullPageLoading } from "@/components/ui/Loading";
+import { getPublicLandingUrl } from "@/lib/public-env";
 
 export function LoginFormPane({
   galleryId,
@@ -29,7 +30,7 @@ export function LoginFormPane({
 
   const displayName = galleryName || "Galeria";
 
-  const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || "/";
+  const landingUrl = getPublicLandingUrl();
   const landingIsExternal = landingUrl.startsWith("http");
 
   async function handleLogin(e: React.FormEvent) {

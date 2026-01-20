@@ -100,18 +100,25 @@ yarn deploy
   ```bash
   # Sign-up flow if self-sign-up enabled; otherwise admin create via console is simpler for MVP
   ```
-- The API routes for payments/galleries/uploads are protected by the Cognito authorizer. Use the dashboard app to authenticate and call these routes (future step: Hosted UI/JWT flow).
+- The API routes for payments/galleries/uploads are protected by the Cognito authorizer. Use the dashboard app to authenticate (Cognito) and call these routes.
 
 ### 8) Frontend Configuration & Run
 - Dashboard:
   ```bash
   cd frontend/dashboard
-  NEXT_PUBLIC_API_URL=$API_URL yarn dev
+  NEXT_PUBLIC_API_URL=$API_URL \\
+  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001 \\
+  NEXT_PUBLIC_GALLERY_URL=http://localhost:3000 \\
+  NEXT_PUBLIC_LANDING_URL=http://localhost:3002 \\
+  yarn dev
   ```
   - Open http://localhost:3000 and run the API Health Check.
 - Client Gallery:
   ```bash
   cd frontend/gallery
+  NEXT_PUBLIC_API_URL=$API_URL \\
+  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001 \\
+  NEXT_PUBLIC_LANDING_URL=http://localhost:3002 \\
   yarn dev
   ```
 
@@ -150,13 +157,33 @@ API_URL=https://xxxxx.execute-api.<region>.amazonaws.com yarn smoke
 Dashboard (set API URL to enable health check UI):
 ```bash
 cd frontend/dashboard
-NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.<region>.amazonaws.com yarn dev
+NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.<region>.amazonaws.com \\
+NEXT_PUBLIC_DASHBOARD_URL=https://dashboard.example.com \\
+NEXT_PUBLIC_GALLERY_URL=https://gallery.example.com \\
+NEXT_PUBLIC_LANDING_URL=https://example.com \\
+yarn dev
 ```
 
 Client Gallery:
 ```bash
 cd frontend/gallery
+NEXT_PUBLIC_API_URL=https://xxxxx.execute-api.<region>.amazonaws.com \\
+NEXT_PUBLIC_DASHBOARD_URL=https://dashboard.example.com \\
+NEXT_PUBLIC_LANDING_URL=https://example.com \\
 yarn dev
+```
+
+## Frontend build-time config from SSM (recommended for deploy/CI)
+You can export the public URLs from SSM and feed them into `next build` / `next start`:
+
+```bash
+STAGE=prod node scripts/export-public-urls-from-ssm.mjs
+```
+
+To apply them in your shell for the current process:
+
+```bash
+eval \"$(STAGE=prod node scripts/export-public-urls-from-ssm.mjs)\"
 ```
 
 ## Development Notes

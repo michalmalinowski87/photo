@@ -32,24 +32,19 @@ Landing page to publiczna strona marketingowa PhotoCloud, która służy jako pu
 
 ## Konfiguracja
 
+Landing **nie przechowuje tokenów Cognito** i **nie loguje użytkownika bezpośrednio**. Dashboard jest źródłem prawdy dla sesji fotografa.
+
+Landing sprawdza stan logowania na domenie dashboard poprzez **ukryty iframe + postMessage** (auth-status check).
+
 Utwórz plik `.env.local` w katalogu `frontend/landing` z następującymi zmiennymi środowiskowymi:
 
 ```env
-# Cognito Configuration
-NEXT_PUBLIC_COGNITO_USER_POOL_ID=your-user-pool-id
-NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
-NEXT_PUBLIC_COGNITO_DOMAIN=your-cognito-domain
+# Landing / website URL (wymagane; pełny URL, bez fallbacków)
+NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 
-# Dashboard URL (gdzie przekierować po zalogowaniu)
+# Dashboard URL (wymagane)
 NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 ```
-
-### Gdzie znaleźć wartości:
-
-- **NEXT_PUBLIC_COGNITO_USER_POOL_ID**: ID User Pool w AWS Cognito Console
-- **NEXT_PUBLIC_COGNITO_CLIENT_ID**: ID App Client w Cognito User Pool
-- **NEXT_PUBLIC_COGNITO_DOMAIN**: Domain prefix Cognito Hosted UI (np. `photocloud-dev`)
-- **NEXT_PUBLIC_DASHBOARD_URL**: URL do aplikacji dashboard (domyślnie `http://localhost:3001`)
 
 ## Uruchomienie
 
@@ -133,9 +128,8 @@ frontend/landing/
 - Informacje kontaktowe
 
 ### Logowanie
-- Integracja z AWS Cognito Hosted UI
-- Obsługa OAuth callback
-- Automatyczne przekierowanie do dashboard po zalogowaniu
+- Landing wyświetla CTA i linki do dashboard.
+- Dla UI (np. „Zalogowany / Wylogowany”) landing cyklicznie sprawdza status sesji na domenie dashboard (iframe + postMessage).
 
 ## Technologie
 
@@ -149,11 +143,15 @@ frontend/landing/
 
 ## Integracja z Dashboard
 
-Po zalogowaniu użytkownik jest przekierowywany do aplikacji dashboard (`NEXT_PUBLIC_DASHBOARD_URL`). Upewnij się, że:
+Landing komunikuje się z dashboard w dwóch sytuacjach:
+
+1. **Auth status check**: ukryty iframe ładuje zasób z domeny dashboard i pyta o stan zalogowania przez postMessage.
+2. **Nawigacja**: CTA i linki kierują do dashboard (`NEXT_PUBLIC_DASHBOARD_URL`).
+
+Upewnij się, że:
 
 1. Dashboard jest uruchomiony i dostępny pod podanym URL
-2. Dashboard akceptuje tokeny JWT z Cognito
-3. Callback URL w Cognito User Pool zawiera `/login` z landing page
+2. `NEXT_PUBLIC_LANDING_URL` i `NEXT_PUBLIC_DASHBOARD_URL` są ustawione poprawnie (służą m.in. do walidacji origin)
 
 ## Rozwój
 

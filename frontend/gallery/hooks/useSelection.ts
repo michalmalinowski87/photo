@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { getToken } from "@/lib/token";
+import { getPublicApiUrl } from "@/lib/public-env";
 import type { SelectionState } from "@/types/gallery";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = getPublicApiUrl();
 
 export function useSelection(galleryId: string | null) {
   return useQuery({

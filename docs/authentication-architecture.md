@@ -20,6 +20,7 @@ PhotoCloud uses **OAuth 2.0 Authorization Code flow with PKCE** for secure, cros
 - **Auth Domain**: `auth.photocloud.com` (centralized authentication)
 - **Website**: `photocloud.com` (landing page)
 - **Dashboard**: `dashboard.photocloud.com` (dashboard app)
+- **Gallery**: `gallery.photocloud.com` (public gallery app)
 
 ## Authentication Flow
 
@@ -69,6 +70,21 @@ Tokens are stored in the domain's `localStorage`:
 ### 7. Redirect to Original Destination
 
 User is redirected to the original `returnUrl` from the `state` parameter.
+
+## Gallery Owner Preview (Dashboard → Gallery)
+
+The gallery app supports an **owner preview mode** that reuses the photographer’s Cognito session from the dashboard without forcing the client login flow.
+
+### How it works
+
+1. **Dashboard opens gallery** in a new tab/window with `?ownerPreview=1`.
+2. **Gallery detects owner preview** and requests the dashboard’s `idToken` using `window.opener.postMessage`.
+3. **Dashboard responds** to `PHOTOCLOUD_TOKEN_REQUEST` with `PHOTOCLOUD_TOKEN_RESPONSE` containing `idToken` (and optionally `accessToken`/`refreshToken`) if valid and unexpired.
+4. **Gallery stores the token** in session storage (scoped to the gallery) and uses it for owner-authenticated API calls during preview.
+
+### Requirements
+- `NEXT_PUBLIC_DASHBOARD_URL` must be set in the gallery app (used to validate message origin).
+- The preview window must be opened from the dashboard (requires `window.opener`).
 
 ## Security Features
 
@@ -128,6 +144,7 @@ NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
 NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
 NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 ```
 
 ### Dashboard (`.env.local`)
@@ -137,6 +154,15 @@ NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
 NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
 NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_GALLERY_URL=http://localhost:3000
+```
+
+### Gallery (`.env.local`)
+```bash
+NEXT_PUBLIC_API_URL=https://your-api-gateway-url
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 ```
 
 ## Cognito Configuration

@@ -7,7 +7,7 @@ import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
@@ -32,7 +32,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
+
+	let apiUrl: string;
+	try {
+		apiUrl = await getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message })
+		};
+	}
 
 	if (!galleriesTable || !transactionsTable) {
 		return {
@@ -400,14 +410,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
-		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-		const successUrl = apiUrl 
-			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
-		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}`
-			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}`;
+		const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}`;
 
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],

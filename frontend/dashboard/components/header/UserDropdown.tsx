@@ -1,6 +1,7 @@
 import { UserCircle, ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { useState } from "react";
 
+import { getPublicLandingUrl } from "../../lib/public-env";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
@@ -20,7 +21,7 @@ export default function UserDropdown() {
       const { signOut, getHostedUILogoutUrl } = await import("../../lib/auth");
       signOut();
       const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
-      const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002";
+      const landingUrl = getPublicLandingUrl();
       if (userPoolDomain) {
         const logoutUrl = getHostedUILogoutUrl(userPoolDomain, landingUrl);
         window.location.href = logoutUrl;

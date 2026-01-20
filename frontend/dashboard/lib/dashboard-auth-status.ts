@@ -5,6 +5,8 @@
  * Works via postMessage from iframe or direct window communication
  */
 
+import { getPublicLandingUrl } from "./public-env";
+
 const AUTH_STATUS_REQUEST = "PHOTOCLOUD_AUTH_STATUS_REQUEST";
 const AUTH_STATUS_RESPONSE = "PHOTOCLOUD_AUTH_STATUS_RESPONSE";
 
@@ -54,10 +56,7 @@ export function setupDashboardAuthStatusListener(): void {
 
   window.addEventListener("message", (event: MessageEvent<AuthStatusRequestMessage>) => {
     // Validate origin
-    const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
-    if (!landingUrl) {
-      return;
-    }
+    const landingUrl = getPublicLandingUrl();
 
     try {
       const landingOrigin = new URL(landingUrl).origin;

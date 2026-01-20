@@ -31,6 +31,7 @@ cd infra
 - `PUBLIC_API_URL` - Your API Gateway URL (get after first deploy)
 - `PUBLIC_DASHBOARD_URL` - Frontend dashboard URL
 - `PUBLIC_GALLERY_URL` - Client gallery frontend URL
+- `PUBLIC_LANDING_URL` - Landing (website) URL
 
 ### Email (REQUIRED for notifications)
 - `SENDER_EMAIL` - SES verified sender email
@@ -43,8 +44,10 @@ cd infra
 
 - `STAGE` - Deployment stage (dev/staging/prod), defaults to 'dev'
 - `JWT_SECRET` - JWT secret for client gallery auth (auto-generated for dev)
+- `GALLERY_PASSWORD_ENCRYPTION_SECRET` - Secret used to encrypt/decrypt client gallery passwords stored in DynamoDB (required for production; set a long random value)
 - `CORS_ORIGINS` - Comma-separated allowed origins
 - `COGNITO_CALLBACK_URLS` - Comma-separated callback URLs
+- `COGNITO_LOGOUT_URLS` - Comma-separated sign-out URLs (Cognito App Client setting)
 - `COST_ALERT_EMAIL` - Email for CloudWatch cost alerts
 
 ## Notes

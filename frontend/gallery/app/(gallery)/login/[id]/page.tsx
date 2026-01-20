@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginCoverPane } from "@/components/login/LoginCoverPane";
 import { LoginFormPane } from "@/components/login/LoginFormPane";
+import { getPublicApiUrl } from "@/lib/public-env";
 
 function LoginScreen() {
   const router = useRouter();
@@ -17,7 +18,7 @@ function LoginScreen() {
   const [galleryName, setGalleryName] = useState<string | null>(null);
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL || "");
+    setApiUrl(getPublicApiUrl());
   }, []);
 
   // Check if already logged in

@@ -2,7 +2,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -30,7 +30,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 	
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
+	let apiUrl: string;
+	try {
+		apiUrl = await getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message })
+		};
+	}
 
 	const requester = getUserIdFromEvent(event);
 	if (!requester) {
@@ -59,8 +68,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const galleryId = body?.galleryId || '';
 		
 		// Get dashboard URL for fallback redirects (only used if redirectUrl is not provided)
-		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
 		
 		// ALWAYS use redirectUrl from request if provided (this is the primary method)
 		// Fallback to default only if redirectUrl is not provided
@@ -110,12 +118,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		const successUrl = apiUrl 
-			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-			: 'https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}';
-		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`
-			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`;
+		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`;
 
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],

@@ -6,6 +6,17 @@ const ssm = new SSMClient({});
 const parameterCache: Record<string, { value: string; timestamp: number }> = {};
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
+function isRunningInLambda(): boolean {
+	const envProc = (globalThis as any).process;
+	return !!envProc?.env?.AWS_LAMBDA_FUNCTION_NAME;
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+	if (typeof value !== 'string') return undefined;
+	const trimmed = value.trim();
+	return trimmed ? trimmed : undefined;
+}
+
 /**
  * Reads a single parameter from SSM Parameter Store
  * @param parameterName - Full parameter name (e.g., /PhotoHub/dev/CognitoUserPoolId)
@@ -148,6 +159,57 @@ export async function getConfigValueFromSsm(
 ): Promise<string | undefined> {
 	const parameterName = `/PhotoHub/${stage}/${configKey}`;
 	return getSsmParameter(parameterName);
+}
+
+export type RequiredConfigOptions = {
+	/**
+	 * Environment variable name used ONLY for local development.
+	 * In AWS Lambda, SSM is always the source of truth and env fallback is not allowed.
+	 */
+	envVarName?: string;
+};
+
+/**
+ * Gets a required configuration value.
+ *
+ * Rules:
+ * - In AWS Lambda: must be present in SSM (/PhotoHub/<stage>/<key>), no env fallback.
+ * - Locally: must be present in process.env[envVarName] (if provided).
+ */
+export async function getRequiredConfigValue(
+	stage: string,
+	configKey: string,
+	options: RequiredConfigOptions = {}
+): Promise<string> {
+	const envProc = (globalThis as any).process;
+
+	if (isRunningInLambda()) {
+		const parameterName = `/PhotoHub/${stage}/${configKey}`;
+		const ssmValue = asNonEmptyString(await getSsmParameter(parameterName));
+		if (!ssmValue) {
+			throw new Error(
+				`Missing required SSM parameter: ${parameterName}. ` +
+					`This value must be set in AWS SSM Parameter Store for non-local environments.`
+			);
+		}
+		return ssmValue;
+	}
+
+	if (options.envVarName) {
+		const envValue = asNonEmptyString(envProc?.env?.[options.envVarName]);
+		if (!envValue) {
+			throw new Error(
+				`Missing required environment variable: ${options.envVarName}. ` +
+					`This is required for local development. (SSM key: /PhotoHub/${stage}/${configKey})`
+			);
+		}
+		return envValue;
+	}
+
+	throw new Error(
+		`Missing required configuration for local development: env var not specified. ` +
+			`(SSM key: /PhotoHub/${stage}/${configKey})`
+	);
 }
 
 /**

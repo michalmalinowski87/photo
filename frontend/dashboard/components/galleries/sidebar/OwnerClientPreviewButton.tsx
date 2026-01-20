@@ -1,7 +1,8 @@
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye } from "lucide-react";
 import React from "react";
 
 import { useToast } from "../../../hooks/useToast";
+import { getPublicGalleryUrl } from "../../../lib/public-env";
 import Button from "../../ui/button/Button";
 
 interface OwnerClientPreviewButtonProps {
@@ -16,9 +17,7 @@ export function OwnerClientPreviewButton({ galleryId }: OwnerClientPreviewButton
       return;
     }
 
-    const base =
-      process.env.NEXT_PUBLIC_GALLERY_URL ??
-      (typeof window !== "undefined" ? `${window.location.origin}/gallery` : "");
+    const base = getPublicGalleryUrl();
 
     if (!base) {
       showToast(

@@ -3,8 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/token";
+import { getPublicApiUrl } from "@/lib/public-env";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = getPublicApiUrl();
 
 interface ZipStatus {
   status: "ready" | "generating" | "not_started";

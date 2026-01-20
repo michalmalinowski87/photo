@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import { PLANS } from '@/utils/constants/pricing';
+import { getPublicDashboardUrl } from '@/lib/public-env';
 
 // Note: revalidate cannot be exported from client components
 // ISR is handled at the layout level for this route group
@@ -13,7 +14,7 @@ type Duration = '1m' | '3m' | '12m';
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('who');
   const [selectedDuration, setSelectedDuration] = useState<Duration>('1m');
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+  const dashboardUrl = getPublicDashboardUrl();
 
   return (
     <>

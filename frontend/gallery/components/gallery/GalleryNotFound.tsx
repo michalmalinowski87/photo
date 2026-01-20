@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { getPublicLandingUrl } from "@/lib/public-env";
 
 interface GalleryNotFoundProps {
   galleryId?: string;
@@ -14,7 +15,7 @@ export function GalleryNotFound({ galleryId }: GalleryNotFoundProps) {
     // Using window.location for external navigation if needed
     if (typeof window !== "undefined") {
       // Try to get the landing page URL from environment or use relative path
-      const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || "/";
+      const landingUrl = getPublicLandingUrl();
       if (landingUrl.startsWith("http")) {
         window.location.href = landingUrl;
       } else {

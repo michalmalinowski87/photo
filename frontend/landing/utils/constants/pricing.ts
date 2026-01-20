@@ -16,10 +16,12 @@
  * from utils/photo-estimates.ts (assumes 15-25MB per photo)
  */
 import { calculatePhotoEstimateFromStorage } from "../photo-estimates";
+import { getPublicDashboardUrl } from "../../lib/public-env";
 
 const photoEstimate1GB = calculatePhotoEstimateFromStorage("1GB");
 const photoEstimate3GB = calculatePhotoEstimateFromStorage("3GB");
 const photoEstimate10GB = calculatePhotoEstimateFromStorage("10GB");
+const dashboardUrl = getPublicDashboardUrl();
 
 export const PLANS = [
   {
@@ -39,7 +41,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
+      href: `${dashboardUrl}/sign-up`,
       variant: "default",
     }
   },
@@ -60,7 +62,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
+      href: `${dashboardUrl}/sign-up`,
       variant: "primary",
     }
   },
@@ -81,7 +83,7 @@ export const PLANS = [
     ],
     btn: {
       text: "Rozpocznij za darmo",
-      href: `${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`,
+      href: `${dashboardUrl}/sign-up`,
       variant: "default",
     }
   }

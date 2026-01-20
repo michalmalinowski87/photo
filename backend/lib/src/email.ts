@@ -598,10 +598,16 @@ Zespół PhotoCloud`,
 	};
 }
 
-export function createInactivityReminderEmail(userEmail: string, daysUntilDeletion: number, loginUrl: string, senderEmail: string): EmailTemplate {
+export function createInactivityReminderEmail(
+	userEmail: string,
+	daysUntilDeletion: number,
+	loginUrl: string,
+	senderEmail: string,
+	websiteUrl: string
+): EmailTemplate {
 	const companyName = 'PhotoCloud';
 	const supportEmail = senderEmail;
-	const websiteUrl = loginUrl.split('/auth')[0] || 'https://photocloud.com';
+	const websiteUrlNormalized = websiteUrl.replace(/\/+$/, '');
 	
 	const content = `
 		${createHeading('Drogi Użytkowniku / Droga Użytkowniczko,', 2)}
@@ -612,7 +618,7 @@ export function createInactivityReminderEmail(userEmail: string, daysUntilDeleti
 		${createParagraph('Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy przy logowaniu, nasz zespół wsparcia jest do Twojej dyspozycji.', 'margin-top: 24px;')}
 		${createParagraph('Dziękujemy, że jesteś z nami i mamy nadzieję wkrótce Cię zobaczyć!')}
 		<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid ${COLORS.gray[200]};">
-			${createSmallText(`Pozdrawiamy serdecznie,<br><strong>Zespół ${companyName}</strong><br><a href="mailto:${supportEmail}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${supportEmail}</a><br><a href="${websiteUrl}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${websiteUrl}</a>`)}
+			${createSmallText(`Pozdrawiamy serdecznie,<br><strong>Zespół ${companyName}</strong><br><a href="mailto:${supportEmail}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${supportEmail}</a><br><a href="${websiteUrlNormalized}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${websiteUrlNormalized}</a>`)}
 		</div>
 	`;
 	
@@ -634,12 +640,18 @@ Dziękujemy, że jesteś z nami i mamy nadzieję wkrótce Cię zobaczyć!
 Pozdrawiamy serdecznie,
 Zespół ${companyName}
 ${supportEmail}
-${websiteUrl}`,
+${websiteUrlNormalized}`,
 		html: createEmailWrapper(content)
 	};
 }
 
-export function createInactivityFinalWarningEmail(userEmail: string, deletionDate: string, loginUrl: string, senderEmail: string): EmailTemplate {
+export function createInactivityFinalWarningEmail(
+	userEmail: string,
+	deletionDate: string,
+	loginUrl: string,
+	senderEmail: string,
+	websiteUrl: string
+): EmailTemplate {
 	const deletionDateFormatted = new Date(deletionDate).toLocaleDateString('pl-PL', {
 		day: 'numeric',
 		month: 'long',
@@ -649,7 +661,7 @@ export function createInactivityFinalWarningEmail(userEmail: string, deletionDat
 	});
 	const companyName = 'PhotoCloud';
 	const supportEmail = senderEmail;
-	const websiteUrl = loginUrl.split('/auth')[0] || 'https://photocloud.com';
+	const websiteUrlNormalized = websiteUrl.replace(/\/+$/, '');
 
 	const content = `
 		${createHeading('🚨 OSTATNIE OSTRZEŻENIE: Twoje konto zostanie usunięte', 2)}
@@ -661,7 +673,7 @@ export function createInactivityFinalWarningEmail(userEmail: string, deletionDat
 		${createParagraph(`Jeśli nie zalogujesz się przed tą datą, Twoje konto zostanie trwale usunięte zgodnie z naszą polityką ochrony danych (RODO/GDPR).`, 'color: ' + COLORS.error[500] + '; font-weight: 600;')}
 		${createParagraph('Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy, nasz zespół wsparcia jest do Twojej dyspozycji.', 'margin-top: 24px;')}
 		<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid ${COLORS.gray[200]};">
-			${createSmallText(`Pozdrawiamy serdecznie,<br><strong>Zespół ${companyName}</strong><br><a href="mailto:${supportEmail}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${supportEmail}</a><br><a href="${websiteUrl}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${websiteUrl}</a>`)}
+			${createSmallText(`Pozdrawiamy serdecznie,<br><strong>Zespół ${companyName}</strong><br><a href="mailto:${supportEmail}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${supportEmail}</a><br><a href="${websiteUrlNormalized}" style="color: ${COLORS.primary[500]}; text-decoration: none;">${websiteUrlNormalized}</a>`)}
 		</div>
 	`;
 	
@@ -683,7 +695,7 @@ Jeśli masz jakiekolwiek pytania lub potrzebujesz pomocy, nasz zespół wsparcia
 Pozdrawiamy serdecznie,
 Zespół ${companyName}
 ${supportEmail}
-${websiteUrl}`,
+${websiteUrlNormalized}`,
 		html: createEmailWrapper(content)
 	};
 }

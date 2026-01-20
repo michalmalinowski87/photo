@@ -36,6 +36,7 @@ export STRIPE_WEBHOOK_SECRET
 export PUBLIC_API_URL
 export PUBLIC_DASHBOARD_URL
 export PUBLIC_GALLERY_URL
+export PUBLIC_LANDING_URL
 export SENDER_EMAIL
 
 echo "Environment variables loaded and exported."
@@ -53,6 +54,12 @@ if [ -z "$PUBLIC_API_URL" ] || [ "$PUBLIC_API_URL" = "https://your-api-id.execut
   echo "This may cause issues. Update it after first deployment with the actual API Gateway URL"
 fi
 
+if [ -z "$PUBLIC_LANDING_URL" ]; then
+  echo "ERROR: PUBLIC_LANDING_URL is not set in .env file"
+  echo "This is required to populate SSM /PhotoHub/<stage>/PublicLandingUrl (used for website links, redirects, and emails)."
+  exit 1
+fi
+
 echo "✓ Critical environment variables validated"
 echo "✓ STRIPE_SECRET_KEY is set (length: ${#STRIPE_SECRET_KEY} chars, prefix: ${STRIPE_SECRET_KEY:0:10}...)"
 
@@ -61,6 +68,7 @@ echo ""
 echo "Verifying environment variables are exported:"
 echo "  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:+SET} (${#STRIPE_SECRET_KEY} chars)"
 echo "  PUBLIC_API_URL: ${PUBLIC_API_URL:+SET}"
+echo "  PUBLIC_LANDING_URL: ${PUBLIC_LANDING_URL:+SET}"
 echo ""
 
 # Change to infra directory

@@ -18,11 +18,12 @@ import MaxWidthWrapper from "../global/max-width-wrapper";
 import MobileNavbar from "./mobile-navbar";
 import AnimationContainer from "../global/animation-container";
 import { useAuth } from "@/hooks/use-auth";
+import { getPublicDashboardUrl } from "@/lib/public-env";
 
 const Navbar = () => {
   const [scroll, setScroll] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+  const dashboardUrl = getPublicDashboardUrl();
 
   const handleScroll = () => {
     if (window.scrollY > 8) {

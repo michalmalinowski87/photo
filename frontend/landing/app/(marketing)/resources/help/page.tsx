@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import MagicBadge from "@/components/ui/magic-badge";
 import { Mail, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { getPublicDashboardUrl } from "@/lib/public-env";
 
 // ISR: Revalidate every hour (3600 seconds)
 export const revalidate = 3600;
@@ -94,6 +95,8 @@ const gettingStartedSteps = [
 ];
 
 const HelpPage = () => {
+  const dashboardUrl = getPublicDashboardUrl();
+
   return (
     <>
       {/* Hero Section */}
@@ -216,7 +219,7 @@ const HelpPage = () => {
                   </p>
                   <div className="light-rounded-buttons">
                     <Link 
-                      href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`} 
+                      href={`${dashboardUrl}/sign-up`} 
                       className="btn primary-btn-outline"
                     >
                       Rozpocznij za Darmo – Bez Karty!

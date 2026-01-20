@@ -7,7 +7,7 @@ import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../l
 import { recalculateStorageInternal } from './recalculateBytesUsed';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -170,7 +170,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 		const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 		const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
-		const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
+		let apiUrl: string;
+		try {
+			apiUrl = await getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' });
+		} catch (error: any) {
+			logger.error('Missing PublicApiUrl configuration', { error: error.message });
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing configuration', message: error.message })
+			};
+		}
 		// Always use wallet if available (no need for useWallet parameter)
 
 		// Get Stripe secret key from SSM
@@ -1393,8 +1403,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		try {
 			const stripe = new Stripe(stripeSecretKey);
-		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
 		// ALWAYS use redirectUrl from request body if provided (this is the primary method)
 		// Fallback to default only if redirectUrl is not provided
 		let finalRedirectUrl = redirectUrl;
@@ -1404,13 +1413,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			finalRedirectUrl = `${dashboardUrl}/galleries/${galleryId}?payment=success`;
 		}
 		
-		const successUrl = apiUrl 
-			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
 		// Cancel URL should also redirect back to gallery view
-		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`
-			: `https://your-frontend/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`;
+		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`;
 
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
 		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)

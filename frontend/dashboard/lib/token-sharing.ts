@@ -5,6 +5,8 @@
  * using postMessage API. Dashboard is the source of truth for auth.
  */
 
+import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
+
 const TOKEN_SHARE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_SHARE";
 const TOKEN_REQUEST_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_REQUEST";
 const TOKEN_RESPONSE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_RESPONSE";
@@ -40,11 +42,7 @@ export function requestTokensFromOtherDomains(): void {
     return;
   }
 
-  const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
-
-  if (!landingUrl) {
-    return;
-  }
+  const landingUrl = getPublicLandingUrl();
 
   const message: TokenRequestMessage = {
     type: TOKEN_REQUEST_MESSAGE_TYPE,
@@ -86,11 +84,7 @@ export function shareTokensWithOtherDomains(): void {
     return;
   }
 
-  const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
-
-  if (!landingUrl) {
-    return;
-  }
+  const landingUrl = getPublicLandingUrl();
 
   const message: TokenShareMessage = {
     type: TOKEN_SHARE_MESSAGE_TYPE,
@@ -129,11 +123,13 @@ export function setupTokenSharingListener(): void {
 
   window.addEventListener("message", (event: MessageEvent<TokenMessage>) => {
     // Verify origin is trusted
-    const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? window.location.origin;
-    const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
-    const galleryUrl = process.env.NEXT_PUBLIC_GALLERY_URL;
+    const dashboardUrl = getPublicDashboardUrl();
+    const landingUrl = getPublicLandingUrl();
+    const galleryUrl = getPublicGalleryUrl();
 
-    const trustedOrigins = [dashboardUrl, landingUrl, galleryUrl].filter(Boolean) as string[];
+    const trustedOrigins = [dashboardUrl, landingUrl, galleryUrl].filter(
+      (v): v is string => typeof v === "string" && v.trim() !== ""
+    );
 
     // Validate origin
     const isValidOrigin = trustedOrigins.some((origin) => {

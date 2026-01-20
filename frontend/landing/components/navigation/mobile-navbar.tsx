@@ -20,11 +20,12 @@ import { LucideIcon, Menu, X } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from 'react';
 import { useAuth } from "@/hooks/use-auth";
+import { getPublicDashboardUrl } from "@/lib/public-env";
 
 const MobileNavbar = () => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const { isAuthenticated, isLoading } = useAuth();
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+  const dashboardUrl = getPublicDashboardUrl();
 
   const handleClose = () => {
     setIsOpen(false);

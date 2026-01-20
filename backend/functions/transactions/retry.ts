@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-d
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -29,7 +29,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const transactionId = event?.pathParameters?.id;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
+	let apiUrl: string;
+	try {
+		apiUrl = await getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message }),
+		};
+	}
 
 	if (!transactionId) {
 		return {
@@ -105,18 +114,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		const stripe = new Stripe(stripeSecretKey);
-		const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-			envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+		let dashboardUrl: string;
+		try {
+			dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+		} catch (error: any) {
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing configuration', message: error.message }),
+			};
+		}
 		const redirectUrl = transaction.galleryId 
 			? `${dashboardUrl}/galleries?payment=success&gallery=${transaction.galleryId}`
 			: `${dashboardUrl}/wallet?payment=success`;
 		
-		const successUrl = apiUrl 
-			? `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`
-			: `https://your-frontend/payments/success?session_id={CHECKOUT_SESSION_ID}`;
-		const cancelUrl = apiUrl
-			? `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${requester}`
-			: `https://your-frontend/payments/cancel?transactionId=${transactionId}&userId=${requester}`;
+		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
+		const cancelUrl = `${apiUrl}/payments/cancel?transactionId=${transactionId}&userId=${requester}`;
 
 		/**
 		 * Calculate Stripe processing fees for PLN payments

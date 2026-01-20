@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { CheckCircleIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from 'react';
+import { getPublicDashboardUrl } from "@/lib/public-env";
 
 type Tab = "1m" | "3m" | "12m";
 
@@ -16,6 +17,7 @@ const PricingCards = () => {
   const MotionTabTrigger = motion.create(TabsTrigger);
   const [activeTab, setActiveTab] = useState<Tab>("1m");
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const dashboardUrl = getPublicDashboardUrl();
 
   const getTabLabel = (value: Tab) => {
     switch (value) {
@@ -161,7 +163,7 @@ const PricingCards = () => {
               </CardContent>
               <CardFooter className="w-full mt-auto">
                 <Link
-                  href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}
+                  href={`${dashboardUrl}/sign-up`}
                   style={{ width: "100%" }}
                   className={buttonVariants({ 
                     variant: isHovered ? "primary" : "ghost",

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { useSidebar } from "../../hooks/useSidebar";
+import { getPublicLandingUrl } from "../../lib/public-env";
 
 type NavItem = {
   name: string;
@@ -68,7 +69,7 @@ const navItems: NavItem[] = [
   {
     name: "Strona główna",
     icon: <Globe size={20} />,
-    path: process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002",
+    path: getPublicLandingUrl(),
     external: true,
   },
 ];
@@ -360,7 +361,7 @@ const AppSidebar = () => {
                 const { signOut, getHostedUILogoutUrl } = await import("../../lib/auth");
                 signOut();
                 const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
-                const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002";
+                const landingUrl = getPublicLandingUrl();
                 if (userPoolDomain) {
                   const logoutUrl = getHostedUILogoutUrl(userPoolDomain, landingUrl);
                   window.location.href = logoutUrl;

@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createPasswordResetEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 import {
 	encryptClientGalleryPassword,
 	getGalleryPasswordEncryptionSecret,
@@ -61,8 +61,18 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 	const encrypted = encryptClientGalleryPassword(passwordPlain, encSecret);
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
-	const galleryLink = apiUrl ? `${apiUrl}/${id}` : `https://your-frontend/${id}`;
+	let galleryUrl: string;
+	try {
+		galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message }),
+		};
+	}
+	const base = galleryUrl.replace(/\/+$/, '');
+	const galleryLink = `${base}/${id}`;
 	
 	await ddb.send(new UpdateCommand({
 		TableName: table,

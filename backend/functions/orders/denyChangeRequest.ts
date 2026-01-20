@@ -6,7 +6,7 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { createChangeRequestDeniedEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -18,7 +18,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
+	let galleryUrl: string;
+	try {
+		galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'Missing configuration', message: error.message }),
+		};
+	}
 	const sender = await getSenderEmail();
 	
 	if (!galleriesTable || !ordersTable) {
@@ -174,7 +183,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Send email to client notifying them the change request was denied
 	if (sender && gallery.clientEmail) {
-		const galleryLink = `${apiUrl}/${galleryId}`;
+	const base = galleryUrl.replace(/\/+$/, '');
+	const galleryLink = `${base}/${galleryId}`;
 		const emailTemplate = createChangeRequestDeniedEmail(
 			galleryId,
 			gallery.name || galleryId,

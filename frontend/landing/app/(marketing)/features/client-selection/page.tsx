@@ -4,11 +4,14 @@ import { LampContainer } from "@/components/ui/lamp";
 import MagicBadge from "@/components/ui/magic-badge";
 import { ArrowRightIcon } from "lucide-react";
 import Link from "next/link";
+import { getPublicDashboardUrl } from "@/lib/public-env";
 
 // ISR: Revalidate every hour (3600 seconds)
 export const revalidate = 3600;
 
 const ClientSelectionPage = () => {
+  const dashboardUrl = getPublicDashboardUrl();
+
   return (
     <>
       <MaxWidthWrapper>
@@ -23,7 +26,7 @@ const ClientSelectionPage = () => {
             </p>
             <div className="flex items-center justify-center gap-x-4 mt-8">
               <Button size="sm" asChild>
-                <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}>
+                <Link href={`${dashboardUrl}/sign-up`}>
                   Rozpocznij za darmo
                 </Link>
               </Button>
@@ -55,7 +58,7 @@ const ClientSelectionPage = () => {
               </p>
               <div className="mt-6">
                 <Button asChild>
-                  <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`} className="flex items-center">
+                  <Link href={`${dashboardUrl}/sign-up`} className="flex items-center">
                     Rozpocznij za darmo
                     <ArrowRightIcon className="w-4 h-4 ml-2" />
                   </Link>

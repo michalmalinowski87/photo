@@ -3,6 +3,7 @@ import { AnimationContainer, MaxWidthWrapper } from "@/components";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { getPublicDashboardUrl } from "@/lib/public-env";
 import MagicBadge from "@/components/ui/magic-badge";
 import { Lock, DollarSign, Settings, Users } from "lucide-react";
 import { generateMetadata as baseGenerateMetadata } from '@/utils/functions/metadata';
@@ -44,6 +45,8 @@ const featuresList = [
 ];
 
 export default function FeaturesPage() {
+  const dashboardUrl = getPublicDashboardUrl();
+
   return (
     <MaxWidthWrapper className="py-20">
       <AnimationContainer delay={0.1}>
@@ -97,7 +100,7 @@ export default function FeaturesPage() {
             Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoCloud.
           </p>
           <Button asChild size="lg">
-            <Link href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'}/sign-up`}>
+            <Link href={`${dashboardUrl}/sign-up`}>
               Rozpocznij za darmo
             </Link>
           </Button>

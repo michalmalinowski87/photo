@@ -5,6 +5,7 @@
 
 import { initAuth, getIdToken } from "./auth";
 import { setupDashboardAuthStatusListener } from "./dashboard-auth-status";
+import { getPublicDashboardUrl } from "./public-env";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "./token-sharing";
 
 /**
@@ -97,7 +98,6 @@ export function initializeAuth(
  */
 export function redirectToLandingSignIn(returnUrl: string = "/"): void {
   // Redirect to dashboard login page instead of landing sign-in
-  const dashboardUrl =
-    typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const dashboardUrl = getPublicDashboardUrl();
   window.location.href = `${dashboardUrl}/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 }

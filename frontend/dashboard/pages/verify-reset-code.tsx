@@ -6,6 +6,7 @@ import Button from "../components/ui/button/Button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { initAuth, resendResetCode } from "../lib/auth";
+import { getPublicLandingUrl } from "../lib/public-env";
 
 interface CognitoError extends Error {
   message: string;
@@ -128,10 +129,7 @@ export default function VerifyResetCode() {
   return (
     <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
       <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link
-          href={process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002"}
-          className="flex items-center gap-x-2"
-        >
+        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
           <span className="text-xl font-bold" style={{ color: "#465fff" }}>
             PhotoCloud
           </span>

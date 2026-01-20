@@ -6,7 +6,7 @@ import { generatePaymentPageHTML } from './payment-page-template';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const getSecurityHeaders = () => ({
 	'Content-Type': 'text/html; charset=utf-8',
@@ -72,8 +72,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const stage = envProc?.env?.STAGE || 'dev';
-	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
+
+	let dashboardUrl: string;
+	try {
+		dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: getSecurityHeaders(),
+			body: generatePaymentPageHTML({
+				title: 'Błąd konfiguracji',
+				message: error.message || 'Missing configuration',
+				redirectUrl: 'about:blank',
+				redirectDelay: 0,
+				isSuccess: false,
+			}),
+		};
+	}
+
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	
 	const sessionId = event?.queryStringParameters?.session_id;

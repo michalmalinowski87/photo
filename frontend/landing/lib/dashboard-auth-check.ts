@@ -5,6 +5,8 @@
  * Uses postMessage API to communicate with dashboard
  */
 
+import { getPublicDashboardUrl, getPublicLandingUrl } from "./public-env";
+
 const AUTH_STATUS_REQUEST = 'PHOTOCLOUD_AUTH_STATUS_REQUEST';
 const AUTH_STATUS_RESPONSE = 'PHOTOCLOUD_AUTH_STATUS_RESPONSE';
 
@@ -23,11 +25,7 @@ export function checkDashboardAuthStatus(): Promise<boolean> {
 			return;
 		}
 
-		const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL;
-		if (!dashboardUrl) {
-			resolve(false);
-			return;
-		}
+		const dashboardUrl = getPublicDashboardUrl();
 
 		const currentRequestId = ++requestId;
 		let resolved = false;
@@ -151,7 +149,7 @@ export function checkDashboardAuthStatus(): Promise<boolean> {
 
 		// Point iframe to auth-check HTML file on dashboard
 		// Pass landing URL as query param so iframe knows which origin to accept
-		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL || window.location.origin;
+		const landingUrl = getPublicLandingUrl();
 		iframe.src = `${dashboardUrl}/auth-check-frame.html?landing=${encodeURIComponent(landingUrl)}`;
 		document.body.appendChild(iframe);
 	});
@@ -166,8 +164,7 @@ export function setupDashboardAuthStatusListener() {
 
 	window.addEventListener('message', (event) => {
 		// Validate origin
-		const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
-		if (!landingUrl) return;
+		const landingUrl = getPublicLandingUrl();
 
 		try {
 			const landingOrigin = new URL(landingUrl).origin;

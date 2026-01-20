@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { getPublicDashboardUrl } from '@/lib/public-env';
 
 export default function NavbarBusiness() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -13,7 +14,7 @@ export default function NavbarBusiness() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
-  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001';
+  const dashboardUrl = getPublicDashboardUrl();
 
   // Track when component has mounted to avoid hydration mismatch
   useEffect(() => {

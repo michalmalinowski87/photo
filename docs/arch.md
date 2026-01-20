@@ -144,6 +144,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
 #### Client Gallery (`frontend/gallery`)
 - Next.js public-facing gallery
 - Password-protected access
+- Owner preview mode (`?ownerPreview=1`) can reuse the dashboard Cognito token via `window.opener` postMessage
 - Photo selection interface
 - Order approval flow
 - Processed photos viewing and download

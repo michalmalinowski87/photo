@@ -6,7 +6,7 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import { createExpiryWarningEmail, createExpiryFinalWarningEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -154,9 +154,6 @@ async function processGalleryBatch(
 	}
 }
 
-import { getSenderEmail } from '../../lib/src/email-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
-
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
@@ -164,7 +161,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const sender = await getSenderEmail();
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicGalleryUrl', 'PUBLIC_GALLERY_URL') || '';
+	let galleryUrl: string;
+	try {
+		galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
+	} catch (error: any) {
+		logger.error('Missing PublicGalleryUrl configuration', { error: error.message });
+		return;
+	}
 	
 	if (!galleriesTable || !sender) return;
 
@@ -310,7 +313,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				return;
 			}
 			
-			const link = apiUrl ? `${apiUrl}/${galleryId}` : `https://your-frontend/${galleryId}`;
+			const base = galleryUrl.replace(/\/+$/, '');
+			const link = `${base}/${galleryId}`;
 			const daysRemaining = Math.ceil((expiryDate - now) / (24 * 3600 * 1000));
 			
 			// Get owner email (from gallery or Cognito)

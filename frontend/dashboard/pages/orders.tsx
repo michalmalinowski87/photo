@@ -18,6 +18,7 @@ import { useOrders } from "../hooks/queries/useOrders";
 import { formatApiError } from "../lib/api-service";
 import { signOut, getHostedUILogoutUrl } from "../lib/auth";
 import { formatPrice } from "../lib/format-price";
+import { getPublicLandingUrl } from "../lib/public-env";
 
 // Prevent static generation - this page uses client hooks
 export const getServerSideProps: GetServerSideProps = () => {
@@ -260,7 +261,7 @@ export default function Orders() {
     // Redirect to Cognito logout endpoint to clear server-side session cookies
     // After logout, redirect to landing main page
     const userPoolDomain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
-    const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL ?? "http://localhost:3002";
+    const landingUrl = getPublicLandingUrl();
     const logoutRedirectUrl = landingUrl; // Redirect to main landing page, not logout-callback
 
     if (userPoolDomain) {

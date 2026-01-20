@@ -415,8 +415,14 @@ export class AppStack extends Stack {
 
 		const publicDashboardUrlParam = new StringParameter(this, 'PublicDashboardUrlParam', {
 			parameterName: `${ssmParameterPrefix}/PublicDashboardUrl`,
-			stringValue: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000',
+			stringValue: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || '',
 			description: 'Public dashboard frontend URL'
+		});
+
+		const publicLandingUrlParam = new StringParameter(this, 'PublicLandingUrlParam', {
+			parameterName: `${ssmParameterPrefix}/PublicLandingUrl`,
+			stringValue: process.env.PUBLIC_LANDING_URL || '',
+			description: 'Public landing (website) URL'
 		});
 
 		// CORS Origins configuration

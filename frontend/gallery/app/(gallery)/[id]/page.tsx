@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { getToken } from "@/lib/token";
+import { getPublicApiUrl } from "@/lib/public-env";
 import { useGalleryImages } from "@/hooks/useGallery";
 import { useImageDownload } from "@/hooks/useImageDownload";
 import { useSelection } from "@/hooks/useSelection";
@@ -356,7 +357,7 @@ export default function GalleryPage() {
     }
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+      const API_URL = getPublicApiUrl();
       const response = await fetch(
         `${API_URL}/galleries/${galleryId}/orders/${orderId}/final/zip`,
         {

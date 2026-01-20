@@ -7,6 +7,13 @@ This document describes the cross-domain authentication architecture for PhotoCl
 - **Auth Domain**: `auth.photocloud.com` (or landing page for now)
 - **Website**: `photocloud.com` (landing page)
 - **Dashboard**: `dashboard.photocloud.com`
+- **Gallery**: `gallery.photocloud.com`
+
+### Current behavior in this repo
+
+- **Dashboard** is the source of truth for photographer authentication (Cognito Hosted UI + tokens stored on dashboard domain).
+- **Landing** does not store Cognito tokens; it checks auth status on the dashboard domain via hidden iframe + postMessage.
+- **Gallery** supports owner preview (`?ownerPreview=1`) and can request the dashboard `idToken` from `window.opener` via postMessage.
 
 ## Authentication Flow
 
@@ -48,7 +55,7 @@ Each domain needs:
 - `NEXT_PUBLIC_COGNITO_DOMAIN`: Cognito Hosted UI domain
 - `NEXT_PUBLIC_COGNITO_CLIENT_ID`: Cognito App Client ID
 - `NEXT_PUBLIC_COGNITO_USER_POOL_ID`: Cognito User Pool ID
-- `NEXT_PUBLIC_AUTH_DOMAIN`: Central auth domain (for future use)
+  - Note: There is no separate `NEXT_PUBLIC_AUTH_DOMAIN` env var used in this repo today.
 
 ## Callback URLs
 
@@ -58,7 +65,8 @@ Each domain must register its callback URL in Cognito:
 
 ## Token Storage
 
-- Tokens stored in `localStorage` on each domain
-- Refresh tokens used to get new access tokens
-- Tokens validated on each API request
+- **Dashboard**: tokens stored in `localStorage` (`idToken`, `accessToken`, `refreshToken`)
+- **Landing**: no token storage (only auth status checks)
+- **Gallery owner preview**: owner token stored in session storage scoped to the gallery
+- Tokens are validated on each API request; expired tokens are ignored
 

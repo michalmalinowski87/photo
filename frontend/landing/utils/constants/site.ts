@@ -1,11 +1,8 @@
+import { getPublicLandingUrl } from "../../lib/public-env";
+
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "PhotoCloud";
 
-export const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN 
-  ? `https://${process.env.NEXT_PUBLIC_APP_DOMAIN}`
-  : process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3002";
-
-export const APP_HOSTNAMES = new Set([
-  process.env.NEXT_PUBLIC_APP_DOMAIN,
-  process.env.NEXT_PUBLIC_APP_DOMAIN ? `www.${process.env.NEXT_PUBLIC_APP_DOMAIN}` : "localhost:3000",
-].filter(Boolean));
+export const APP_DOMAIN = getPublicLandingUrl();
+// NOTE: We intentionally do not maintain a www/non-www allowlist here.
+// If you need host validation later, derive it from APP_DOMAIN where it’s actually used.
 

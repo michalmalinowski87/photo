@@ -3,7 +3,7 @@ import { lambdaLogger } from '../../../packages/logger/src';
 const Stripe = require('stripe');
 import { generatePaymentPageHTML } from './payment-page-template';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
-import { getConfigWithEnvFallback } from '../../lib/src/ssm-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const getSecurityHeaders = () => ({
 	'Content-Type': 'text/html; charset=utf-8',
@@ -19,9 +19,28 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const stage = envProc?.env?.STAGE || 'dev';
 	const sessionId = event?.queryStringParameters?.session_id;
-	const dashboardUrl = await getConfigWithEnvFallback(stage, 'PublicDashboardUrl', 'PUBLIC_DASHBOARD_URL') || 
-		envProc?.env?.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-	const apiUrl = await getConfigWithEnvFallback(stage, 'PublicApiUrl', 'PUBLIC_API_URL') || '';
+
+	let dashboardUrl: string;
+	let apiUrl: string;
+	try {
+		[dashboardUrl, apiUrl] = await Promise.all([
+			getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' }),
+			getRequiredConfigValue(stage, 'PublicApiUrl', { envVarName: 'PUBLIC_API_URL' }),
+		]);
+	} catch (error: any) {
+		return {
+			statusCode: 500,
+			headers: getSecurityHeaders(),
+			body: generatePaymentPageHTML({
+				title: 'Błąd konfiguracji',
+				message: error.message || 'Missing configuration',
+				redirectUrl: 'about:blank',
+				redirectDelay: 0,
+				isSuccess: false,
+				sessionId: sessionId || undefined,
+			}),
+		};
+	}
 	
 	// Default to root dashboard if no valid session
 	let redirectUrl = `${dashboardUrl}/`;
@@ -59,7 +78,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		redirectDelay: 2000,
 		isSuccess: true,
 		sessionId: sessionId || undefined,
-		apiUrl: apiUrl || undefined
+		apiUrl
 	});
 
 	return {
