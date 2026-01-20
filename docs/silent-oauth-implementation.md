@@ -36,14 +36,14 @@ Frontends never read SSM directly. Public URLs come from SSM at deploy/build-tim
 ### Landing (`frontend/landing/.env.local`)
 ```env
 NEXT_PUBLIC_LANDING_URL=http://localhost:3002
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
 ```
 
 ### Dashboard (`frontend/dashboard/.env.local`)
 ```env
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
 NEXT_PUBLIC_LANDING_URL=http://localhost:3002
-NEXT_PUBLIC_GALLERY_URL=http://localhost:3000
+NEXT_PUBLIC_GALLERY_URL=http://localhost:3001
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
 
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=your-pool-id
@@ -54,7 +54,7 @@ NEXT_PUBLIC_COGNITO_DOMAIN=your-cognito-domain
 ### Gallery (`frontend/gallery/.env.local`)
 ```env
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
 NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 ```
 

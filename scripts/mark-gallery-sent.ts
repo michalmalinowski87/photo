@@ -137,7 +137,7 @@ async function markGalleryAsSent(galleryId: string, clientEmail?: string, passwo
 	
 	console.log('✅ Gallery successfully marked as "Sent To Client"!');
 	console.log(`\n📧 Client can now access the gallery at:`);
-	console.log(`   https://your-gallery-url/gallery/${galleryId}`);
+	console.log(`   https://your-gallery-url/${galleryId}`);
 	console.log(`   Email: ${defaultEmail}`);
 	console.log(`   Password: ${defaultPassword}\n`);
 }

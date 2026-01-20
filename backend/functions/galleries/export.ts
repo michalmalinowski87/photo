@@ -6,6 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { verifyGalleryAccess } from '../../lib/src/auth';
+import { createExportEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { verifyClientGalleryPassword } from '../../lib/src/client-gallery-password';
 
@@ -199,6 +200,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			try {
 				const manifestJson = JSON.stringify(manifest, null, 2);
 				const galleryDisplayName = gallery.galleryName || galleryId;
+				const emailTemplate = createExportEmail(galleryDisplayName, urls.length, manifestJson);
 				logger.info('Sending SES email - Export', {
 					from: sender,
 					to: gallery.clientEmail,
@@ -210,14 +212,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Source: sender,
 					Destination: { ToAddresses: [gallery.clientEmail] },
 					Message: {
-						Subject: { Data: `PhotoCloud Export: ${galleryDisplayName}` },
+						Subject: { Data: emailTemplate.subject },
 						Body: {
 							Text: { 
-								Data: `Your photo export is ready!\n\nGallery: ${galleryDisplayName}\nPhotos: ${urls.length}\n\nManifest (JSON):\n${manifestJson}\n\nAll URLs expire in 24 hours.`
+								Data: emailTemplate.text
 							},
-							Html: {
-								Data: `<h2>Your photo export is ready!</h2><p>Gallery: <strong>${galleryDisplayName}</strong></p><p>Photos: <strong>${urls.length}</strong></p><pre style="background: #f5f5f5; padding: 12px; overflow-x: auto;">${manifestJson}</pre><p><small>All URLs expire in 24 hours.</small></p>`
-							}
+							Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
 						}
 					}
 				}));
@@ -241,7 +241,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					emailDetails: {
 						from: sender,
 						to: gallery.clientEmail,
-						subject: `PhotoCloud Export: ${galleryId}`,
+						subject: `Eksport zdjęć: ${galleryId}`,
 						galleryId,
 						photoCount: urls.length
 					},

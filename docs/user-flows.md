@@ -481,7 +481,7 @@ Clients access password-protected galleries, browse photos, select favorites, an
 
 1. **Client Access**
    - Client receives email invitation with:
-     - Gallery link: `https://gallery-domain/gallery/{galleryId}`
+     - Gallery link: `<PublicGalleryUrl>/{galleryId}`
      - Password (if set by photographer)
    - Client navigates to gallery login page
    - Enters gallery ID and password

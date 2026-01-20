@@ -43,7 +43,7 @@ Utwórz plik `.env.local` w katalogu `frontend/landing` z następującymi zmienn
 NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 
 # Dashboard URL (wymagane)
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
 ```
 
 ## Uruchomienie
@@ -54,7 +54,7 @@ NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
 yarn dev
 ```
 
-Aplikacja będzie dostępna pod adresem: **http://localhost:3000**
+Aplikacja będzie dostępna pod adresem: **http://localhost:3002**
 
 ### Build produkcyjny
 
@@ -67,15 +67,15 @@ yarn start
 
 Po uruchomieniu aplikacji:
 
-1. **Strona główna**: http://localhost:3000
-2. **Cennik**: http://localhost:3000/pricing
-3. **Pomoc**: http://localhost:3000/help
-4. **Logowanie**: http://localhost:3000/login
+1. **Strona główna**: http://localhost:3002
+2. **Cennik**: http://localhost:3002/pricing
+3. **Pomoc**: http://localhost:3002/help
+4. **Logowanie**: http://localhost:3002/login
 5. **Funkcje**:
-   - Ochrona hasłem: http://localhost:3000/features/password-protection
-   - Opłacalność: http://localhost:3000/features/cost-efficient
-   - Elastyczne ceny: http://localhost:3000/features/flexible-pricing
-   - Wybór przez klienta: http://localhost:3000/features/client-selection
+   - Ochrona hasłem: http://localhost:3002/features/password-protection
+   - Opłacalność: http://localhost:3002/features/cost-efficient
+   - Elastyczne ceny: http://localhost:3002/features/flexible-pricing
+   - Wybór przez klienta: http://localhost:3002/features/client-selection
 
 ## Struktura projektu
 

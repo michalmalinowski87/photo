@@ -107,8 +107,8 @@ yarn deploy
   ```bash
   cd frontend/dashboard
   NEXT_PUBLIC_API_URL=$API_URL \\
-  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001 \\
-  NEXT_PUBLIC_GALLERY_URL=http://localhost:3000 \\
+  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000 \\
+  NEXT_PUBLIC_GALLERY_URL=http://localhost:3001 \\
   NEXT_PUBLIC_LANDING_URL=http://localhost:3002 \\
   yarn dev
   ```
@@ -117,7 +117,7 @@ yarn deploy
   ```bash
   cd frontend/gallery
   NEXT_PUBLIC_API_URL=$API_URL \\
-  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001 \\
+  NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000 \\
   NEXT_PUBLIC_LANDING_URL=http://localhost:3002 \\
   yarn dev
   ```

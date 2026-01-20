@@ -14,4 +14,3 @@ package-lock.json
 # Build artifacts in public/ directory
 frontend/dashboard/public/browser-image-compression.js
 frontend/dashboard/public/pica.min.js
-

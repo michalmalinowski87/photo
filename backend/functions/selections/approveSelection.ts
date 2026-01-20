@@ -10,6 +10,7 @@ import { getJWTFromEvent } from '../../lib/src/jwt';
 import { createSelectionApprovedEmail } from '../../lib/src/email';
 import { createHash } from 'crypto';
 import { getSenderEmail } from '../../lib/src/email-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -342,16 +343,29 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 
 	// Notify photographer with summary (best effort)
-	const sender = (globalThis as any).process?.env?.SENDER_EMAIL as string;
+	const stage = (globalThis as any).process?.env?.STAGE || 'dev';
+	const sender = await getSenderEmail();
 	const notify = gallery.ownerEmail;
+	let dashboardUrl: string | undefined;
+	try {
+		dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+	} catch {
+		// Best-effort: still send email without order link if config is missing
+		dashboardUrl = undefined;
+	}
+	const dashboardBase = dashboardUrl ? dashboardUrl.replace(/\/+$/, '') : undefined;
+	const orderUrl = dashboardBase && orderId ? `${dashboardBase}/galleries/${galleryId}/orders/${orderId}` : undefined;
+
 	if (sender && notify && orderId) {
 		const emailTemplate = createSelectionApprovedEmail(
 			galleryId,
+			gallery.galleryName || gallery.name,
 			clientId,
 			selectedCount,
 			overageCount,
 			overageCents,
-			orderId
+			orderId,
+			orderUrl
 		);
 		try {
 			logger.info('Sending SES email - Selection Approved', {

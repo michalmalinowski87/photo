@@ -137,7 +137,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryLink = `${base}/${galleryId}`;
 		const emailTemplate = createChangeRequestApprovedEmail(
 			galleryId,
-			gallery.name || galleryId,
+			gallery.galleryName || gallery.name || '',
 			gallery.clientEmail,
 			galleryLink
 		);

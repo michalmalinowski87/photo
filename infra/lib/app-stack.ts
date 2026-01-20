@@ -33,6 +33,17 @@ export class AppStack extends Stack {
 	constructor(scope: Construct, id: string, props: AppStackProps) {
 		super(scope, id, props);
 
+		function requireEnv(name: string): string {
+			const value = process.env[name];
+			if (!value || value.trim() === '') {
+				throw new Error(
+					`Missing required environment variable: ${name}. ` +
+						`This is required to deploy the CDK stack because it is written into SSM Parameter Store.`
+				);
+			}
+			return value.trim();
+		}
+
 		const galleriesBucket = new Bucket(this, 'GalleriesBucket', {
 			blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
 			autoDeleteObjects: false,
@@ -348,14 +359,15 @@ export class AppStack extends Stack {
 			process.env.GALLERY_PASSWORD_ENCRYPTION_SECRET ||
 			`photocloud-${props.stage}-gallery-password-enc-secret-change-in-production`;
 
-		// Debug: Log Stripe key status at CDK synthesis time
-		const stripeKeyFromEnv = process.env.STRIPE_SECRET_KEY;
-		if (!stripeKeyFromEnv || stripeKeyFromEnv.trim() === '') {
-			console.warn('⚠️  WARNING: STRIPE_SECRET_KEY is not set in process.env at CDK synthesis time');
-			console.warn('   Available STRIPE-related env vars:', Object.keys(process.env).filter(k => k.includes('STRIPE')).join(', ') || 'none');
-		} else {
-			console.log('✓ STRIPE_SECRET_KEY is available at CDK synthesis time (length:', stripeKeyFromEnv.length, 'chars)');
-		}
+		// Validate env vars that are written into SSM Parameter Store
+		const stripeKeyFromEnv = requireEnv('STRIPE_SECRET_KEY');
+		console.log('✓ STRIPE_SECRET_KEY is available at CDK synthesis time (length:', stripeKeyFromEnv.length, 'chars)');
+		const stripeWebhookSecretFromEnv = requireEnv('STRIPE_WEBHOOK_SECRET');
+		const senderEmailFromEnv = requireEnv('SENDER_EMAIL');
+		const publicApiUrlFromEnv = requireEnv('PUBLIC_API_URL');
+		const publicGalleryUrlFromEnv = requireEnv('PUBLIC_GALLERY_URL');
+		const publicDashboardUrlFromEnv = requireEnv('PUBLIC_DASHBOARD_URL');
+		const publicLandingUrlFromEnv = requireEnv('PUBLIC_LANDING_URL');
 
 		// Create SSM parameters for configurable values (can be changed without redeploying)
 		// These parameters are read at runtime by Lambda functions
@@ -383,45 +395,45 @@ export class AppStack extends Stack {
 		// For production, consider migrating to AWS Secrets Manager
 		const stripeSecretKeyParam = new StringParameter(this, 'StripeSecretKeyParam', {
 			parameterName: `${ssmParameterPrefix}/StripeSecretKey`,
-			stringValue: stripeKeyFromEnv || '',
+			stringValue: stripeKeyFromEnv,
 			description: 'Stripe secret key for payment processing'
 		});
 
 		const stripeWebhookSecretParam = new StringParameter(this, 'StripeWebhookSecretParam', {
 			parameterName: `${ssmParameterPrefix}/StripeWebhookSecret`,
-			stringValue: process.env.STRIPE_WEBHOOK_SECRET || '',
+			stringValue: stripeWebhookSecretFromEnv,
 			description: 'Stripe webhook secret for webhook verification'
 		});
 
 		// Email configuration
 		const senderEmailParam = new StringParameter(this, 'SenderEmailParam', {
 			parameterName: `${ssmParameterPrefix}/SenderEmail`,
-			stringValue: process.env.SENDER_EMAIL || '',
+			stringValue: senderEmailFromEnv,
 			description: 'SES verified sender email address'
 		});
 
 		// Public URLs configuration
 		const publicApiUrlParam = new StringParameter(this, 'PublicApiUrlParam', {
 			parameterName: `${ssmParameterPrefix}/PublicApiUrl`,
-			stringValue: process.env.PUBLIC_API_URL || '',
+			stringValue: publicApiUrlFromEnv,
 			description: 'Public API Gateway URL'
 		});
 
 		const publicGalleryUrlParam = new StringParameter(this, 'PublicGalleryUrlParam', {
 			parameterName: `${ssmParameterPrefix}/PublicGalleryUrl`,
-			stringValue: process.env.PUBLIC_GALLERY_URL || '',
+			stringValue: publicGalleryUrlFromEnv,
 			description: 'Public gallery frontend URL'
 		});
 
 		const publicDashboardUrlParam = new StringParameter(this, 'PublicDashboardUrlParam', {
 			parameterName: `${ssmParameterPrefix}/PublicDashboardUrl`,
-			stringValue: process.env.PUBLIC_DASHBOARD_URL || process.env.NEXT_PUBLIC_DASHBOARD_URL || '',
+			stringValue: publicDashboardUrlFromEnv,
 			description: 'Public dashboard frontend URL'
 		});
 
 		const publicLandingUrlParam = new StringParameter(this, 'PublicLandingUrlParam', {
 			parameterName: `${ssmParameterPrefix}/PublicLandingUrl`,
-			stringValue: process.env.PUBLIC_LANDING_URL || '',
+			stringValue: publicLandingUrlFromEnv,
 			description: 'Public landing (website) URL'
 		});
 

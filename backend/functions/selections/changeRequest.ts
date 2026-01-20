@@ -82,7 +82,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const sender = await getSenderEmail();
 	const notify = gallery.ownerEmail;
 	if (sender && notify) {
-		const emailTemplate = createChangeRequestEmail(galleryId, clientId || 'client');
+		const emailTemplate = createChangeRequestEmail(galleryId, gallery.galleryName, clientId || 'client');
 		try {
 			logger.info('Sending SES email - Change Request', {
 				from: sender,

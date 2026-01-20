@@ -12,8 +12,9 @@ PhotoCloud uses **OAuth 2.0 Authorization Code flow with PKCE** for secure, cros
 ## Architecture
 
 ### Current Setup (Development)
-- **Landing**: `localhost:3003` (or `localhost:3000`)
-- **Dashboard**: `localhost:3001`
+- **Dashboard**: `localhost:3000`
+- **Gallery**: `localhost:3001`
+- **Landing**: `localhost:3002`
 - **Auth**: Cognito Hosted UI (AWS managed)
 
 ### Future Production Setup
@@ -143,8 +144,8 @@ The gallery app supports an **owner preview mode** that reuses the photographerâ
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
 NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
-NEXT_PUBLIC_LANDING_URL=http://localhost:3003
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
+NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 ```
 
 ### Dashboard (`.env.local`)
@@ -152,17 +153,17 @@ NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
 NEXT_PUBLIC_COGNITO_CLIENT_ID=your-client-id
 NEXT_PUBLIC_COGNITO_DOMAIN=photocloud-dev.auth.eu-west-1.amazoncognito.com
-NEXT_PUBLIC_LANDING_URL=http://localhost:3003
+NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
-NEXT_PUBLIC_GALLERY_URL=http://localhost:3000
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
+NEXT_PUBLIC_GALLERY_URL=http://localhost:3001
 ```
 
 ### Gallery (`.env.local`)
 ```bash
 NEXT_PUBLIC_API_URL=https://your-api-gateway-url
-NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3001
-NEXT_PUBLIC_LANDING_URL=http://localhost:3003
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000
+NEXT_PUBLIC_LANDING_URL=http://localhost:3002
 ```
 
 ## Cognito Configuration
@@ -172,14 +173,14 @@ NEXT_PUBLIC_LANDING_URL=http://localhost:3003
 1. **OAuth 2.0 Flow**: `authorization_code`
 2. **OAuth Scopes**: `openid`, `email`, `profile`
 3. **Allowed Callback URLs**:
-   - `http://localhost:3003/auth/auth-callback` (landing - dev)
-   - `http://localhost:3001/auth/auth-callback` (dashboard - dev)
+   - `http://localhost:3001/auth/auth-callback` (landing - dev)
+   - `http://localhost:3000/auth/auth-callback` (dashboard - dev)
    - `https://photocloud.com/auth/auth-callback` (landing - prod)
    - `https://dashboard.photocloud.com/auth/auth-callback` (dashboard - prod)
 
 4. **Allowed Sign-Out URLs**:
-   - `http://localhost:3003` (landing - dev)
-   - `http://localhost:3001` (dashboard - dev)
+   - `http://localhost:3001` (landing - dev)
+   - `http://localhost:3000` (dashboard - dev)
    - `https://photocloud.com` (landing - prod)
    - `https://dashboard.photocloud.com` (dashboard - prod)
 

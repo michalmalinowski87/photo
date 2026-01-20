@@ -8,6 +8,7 @@ import { useOrder, useOrders, useOrderFinalImages } from "../../../hooks/queries
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
+import { getPublicGalleryUrl } from "../../../lib/public-env";
 import Button from "../../ui/button/Button";
 import { Tooltip } from "../../ui/tooltip/Tooltip";
 
@@ -126,8 +127,8 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Compute gallery URL from galleryId
   const displayGalleryUrl =
-    typeof window !== "undefined" && galleryIdStr
-      ? `${window.location.origin}/gallery/${galleryIdStr}`
+    galleryIdStr && typeof galleryIdStr === "string"
+      ? `${getPublicGalleryUrl().replace(/\/+$/, "")}/${encodeURIComponent(galleryIdStr)}`
       : "";
 
   // Use last known paid state during refetches to prevent flicker
