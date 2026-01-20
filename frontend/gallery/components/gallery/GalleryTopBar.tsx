@@ -11,9 +11,15 @@ interface GalleryTopBarProps {
   onHelpClick?: () => void;
   gridLayout?: GridLayout;
   onGridLayoutChange?: (layout: GridLayout) => void;
+  hideLogout?: boolean;
 }
 
-export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: GalleryTopBarProps) {
+export function GalleryTopBar({
+  onHelpClick,
+  gridLayout,
+  onGridLayoutChange,
+  hideLogout = false,
+}: GalleryTopBarProps) {
   const { logout, galleryId } = useAuth();
   const [scroll, setScroll] = useState(false);
   
@@ -150,21 +156,25 @@ export function GalleryTopBar({ onHelpClick, gridLayout, onGridLayoutChange }: G
           )}
           
           {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="btn-primary hidden sm:inline-flex touch-manipulation"
-            aria-label="Wyloguj"
-          >
-            Wyloguj
-          </button>
-          <button
-            onClick={handleLogout}
-            className="h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden"
-            title="Wyloguj"
-            aria-label="Wyloguj"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          {!hideLogout && (
+            <>
+              <button
+                onClick={handleLogout}
+                className="btn-primary hidden sm:inline-flex touch-manipulation"
+                aria-label="Wyloguj"
+              >
+                Wyloguj
+              </button>
+              <button
+                onClick={handleLogout}
+                className="h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden"
+                title="Wyloguj"
+                aria-label="Wyloguj"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </header>

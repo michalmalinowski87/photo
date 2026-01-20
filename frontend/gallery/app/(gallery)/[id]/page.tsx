@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/react-query";
@@ -32,8 +32,11 @@ import type { ApiError } from "@/lib/api";
 export default function GalleryPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { galleryId, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
+
+  const isOwnerPreview = searchParams?.get("ownerPreview") === "1";
   
   const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const [viewMode, setViewMode] = useState<"all" | "selected">("all");
@@ -208,6 +211,10 @@ export default function GalleryPage() {
   const queryClient = useQueryClient();
   const handleImageSelect = useCallback(
     (key: string) => {
+      // Owner preview is always read-only.
+      if (isOwnerPreview) {
+        return;
+      }
       // Only allow selection changes when in selecting state
       if (!isSelectingState) {
         return;
@@ -242,7 +249,7 @@ export default function GalleryPage() {
               selectionActions.toggleSelection.mutate({ key, isSelected: true });
             }
     },
-    [isSelectingState, selectionState, selectionActions, queryClient, galleryId]
+    [isOwnerPreview, isSelectingState, selectionState, selectionActions, queryClient, galleryId]
   );
 
   // Approve selection - uses React Query state directly
@@ -323,6 +330,9 @@ export default function GalleryPage() {
 
   // Download ZIP
   const handleDownloadZip = useCallback(async () => {
+    if (isOwnerPreview) {
+      return;
+    }
     const orderId = selectedOrderId || singleOrder?.orderId;
     if (!galleryId || !orderId) return;
 
@@ -391,7 +401,7 @@ export default function GalleryPage() {
       console.error("Failed to download ZIP:", error);
       setZipDownloadState({ showOverlay: true, isError: true });
     }
-  }, [galleryId, selectedOrderId, singleOrder, zipStatus]);
+  }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus]);
 
   // Buy more photos
   const handleBuyMore = useCallback(() => {
@@ -503,6 +513,9 @@ export default function GalleryPage() {
 
   const handleDownload = useCallback(
     async (imageKey: string) => {
+      if (isOwnerPreview) {
+        return;
+      }
       if (!galleryId || !imageKey) {
         return;
       }
@@ -524,7 +537,7 @@ export default function GalleryPage() {
         console.error("Failed to download image:", error);
       }
     },
-    [galleryId, downloadImage, shouldShowDelivered, selectedOrderId, singleOrder]
+    [isOwnerPreview, galleryId, downloadImage, shouldShowDelivered, selectedOrderId, singleOrder]
   );
 
   // Determine current selection count - React Query is single source of truth
@@ -544,13 +557,15 @@ export default function GalleryPage() {
   // 1. In selecting state (can actually select) - show both checkmarks and + buttons
   // 2. OR when approved and viewing "all" photos (to show checkmarks ONLY on selected photos, no + buttons)
   // But NOT when viewing "selected" photos (no checkmarks needed there)
-  const showSelectionIndicatorsValue = isSelectingState || (galleryState === "approved" && viewMode === "all");
+  const showSelectionIndicatorsValue =
+    !isOwnerPreview && (isSelectingState || (galleryState === "approved" && viewMode === "all"));
   // Only show unselected indicators (+) when in selecting state
   // When there's no price per additional photo and we've reached the limit, hide all + signs
   // They will reappear when user unselects photos (bringing selection below limit)
   const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
   const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
   const showUnselectedIndicators = useMemo(() => {
+    if (isOwnerPreview) return false;
     if (!isSelectingState) return false;
     // If there's no price per additional photo and we've reached the limit, hide + signs
     if (extraPriceCents === 0 && currentSelectedCount >= baseLimit) {
@@ -558,8 +573,8 @@ export default function GalleryPage() {
     }
     // Otherwise, show + signs for unselected photos
     return true;
-  }, [isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
-  const canSelectValue = isSelectingState;
+  }, [isOwnerPreview, isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
+  const canSelectValue = !isOwnerPreview && isSelectingState;
 
   // Combine all loading states to prevent blink between loading screens
   // For delivered view: wait for both selection state AND final images
@@ -649,7 +664,7 @@ export default function GalleryPage() {
         }}
         onCancelRequest={handleCancelChangeRequest}
       />
-      <GalleryTopBar 
+      <GalleryTopBar
         onHelpClick={() => {
           hapticFeedback('light');
           setShowHelp(true);
@@ -662,12 +677,13 @@ export default function GalleryPage() {
           }
           setGridLayout(newLayout);
         }}
+        hideLogout={isOwnerPreview}
       />
       <SecondaryMenu
         selectedCount={currentSelectedCount}
-        onApproveSelection={handleApproveSelection}
-        onRequestChanges={handleRequestChanges}
-        onCancelChangeRequest={handleCancelChangeRequest}
+        onApproveSelection={isOwnerPreview ? undefined : handleApproveSelection}
+        onRequestChanges={isOwnerPreview ? undefined : handleRequestChanges}
+        onCancelChangeRequest={isOwnerPreview ? undefined : handleCancelChangeRequest}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         showDeliveredView={showDeliveredView}
@@ -681,14 +697,15 @@ export default function GalleryPage() {
           setShowDeliveredView(false);
         }}
         showBuyMore={
+          !isOwnerPreview &&
           selectionState?.hasDeliveredOrder &&
           (selectionState?.pricingPackage?.extraPriceCents || 0) > 0 &&
           !shouldShowDelivered
         }
-        onBuyMoreClick={handleBuyMore}
-        onDownloadZip={handleDownloadZip}
+        onBuyMoreClick={isOwnerPreview ? undefined : handleBuyMore}
+        onDownloadZip={isOwnerPreview ? undefined : handleDownloadZip}
         zipStatus={zipStatus}
-        showDownloadZip={shouldShowDelivered && !shouldShowUnselected}
+        showDownloadZip={!isOwnerPreview && shouldShowDelivered && !shouldShowUnselected}
       />
       
       {/* Delivered orders list (if multiple orders) */}
@@ -743,8 +760,8 @@ export default function GalleryPage() {
           <LightGalleryWrapper
             images={displayImages}
             galleryId={galleryId || undefined}
-            onDownload={handleDownload}
-            enableDownload={shouldShowDelivered}
+            onDownload={isOwnerPreview ? undefined : handleDownload}
+            enableDownload={!isOwnerPreview && shouldShowDelivered}
             onGalleryReady={(openGallery) => {
               openGalleryRef.current = openGallery;
             }}
@@ -770,8 +787,8 @@ export default function GalleryPage() {
               }
             }}
             selectedKeys={new Set(selectionState?.selectedKeys || [])}
-            onImageSelect={handleImageSelect}
-            canSelect={isSelectingState}
+            onImageSelect={isOwnerPreview ? undefined : handleImageSelect}
+            canSelect={canSelectValue}
             showSelectionIndicators={showSelectionIndicatorsValue}
             baseLimit={baseLimit}
             extraPriceCents={extraPriceCents}
@@ -806,8 +823,8 @@ export default function GalleryPage() {
               }
               galleryId={galleryId || undefined}
               selectedKeys={viewMode === "selected" ? new Set() : new Set(selectionState?.selectedKeys || [])}
-              onImageSelect={handleImageSelect}
-              canSelect={isSelectingState}
+              onImageSelect={isOwnerPreview ? undefined : handleImageSelect}
+              canSelect={canSelectValue}
               showSelectionIndicators={showSelectionIndicatorsValue}
               showUnselectedIndicators={showUnselectedIndicators}
               enableDownload={shouldShowDelivered}

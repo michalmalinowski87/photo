@@ -128,8 +128,6 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
     }
   }
 
-
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async handleUploadSuccess(file: any) {
     const fileWithMeta = file as UppyFileWithMeta;
@@ -178,7 +176,6 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
     }
   }
 
-
   /**
    * Generate thumbnail (300x300, square) from image using browser-image-compression
    * For dashboard thumbnails and CMS grid views
@@ -202,7 +199,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       // Prioritize quality over size - even at high quality, 300x300 thumbnails will be small
       let quality: number;
       if (fileSizeMB && fileSizeMB > 20) {
-        quality = 0.90;
+        quality = 0.9;
       } else if (fileSizeMB && fileSizeMB > 10) {
         quality = 0.92;
       } else if (fileSizeMB && fileSizeMB >= 2) {
@@ -258,17 +255,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       }
 
       // Draw cropped square portion of image to fill 300x300 canvas
-      ctx.drawImage(
-        imageBitmap,
-        sourceX,
-        sourceY,
-        cropSize,
-        cropSize,
-        0,
-        0,
-        300,
-        300
-      );
+      ctx.drawImage(imageBitmap, sourceX, sourceY, cropSize, cropSize, 0, 0, 300, 300);
 
       // Convert canvas to blob
       return new Promise<Blob>((resolve, reject) => {
@@ -288,7 +275,6 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       return null;
     }
   }
-
 
   /**
    * Upload blob to S3 using presigned URL
@@ -396,5 +382,4 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       return null;
     }
   }
-
 }

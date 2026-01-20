@@ -14,6 +14,7 @@ import { GalleryMetadata } from "./sidebar/GalleryMetadata";
 import { GalleryNavigation } from "./sidebar/GalleryNavigation";
 import { GalleryUrlSection } from "./sidebar/GalleryUrlSection";
 import { OrderActionsSection } from "./sidebar/OrderActionsSection";
+import { OwnerClientPreviewButton } from "./sidebar/OwnerClientPreviewButton";
 
 export default function GallerySidebar() {
   const router = useRouter();
@@ -141,6 +142,8 @@ export default function GallerySidebar() {
       <GalleryNavigation />
 
       {orderId && order && <OrderActionsSection orderId={orderId} />}
+
+      <OwnerClientPreviewButton galleryId={effectiveGallery?.galleryId ?? ""} />
 
       <DeleteGalleryButton
         galleryId={effectiveGallery?.galleryId ?? ""}

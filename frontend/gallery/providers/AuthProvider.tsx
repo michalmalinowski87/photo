@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { getToken, setToken, clearToken } from "@/lib/token";
+import { getToken, setToken, setOwnerToken, clearToken, setAuthMode } from "@/lib/token";
+import { requestDashboardIdToken } from "@/lib/dashboard-token-sharing";
 
 interface AuthContextType {
   token: string | null;
@@ -41,6 +42,33 @@ export function AuthProvider({
     if (currentGalleryId) {
       setGalleryId(currentGalleryId);
       
+      const params = new URLSearchParams(window.location.search);
+      const isLoginPreview = params.get("loginPreview") === "1";
+      const isOwnerPreview = params.get("ownerPreview") === "1";
+
+      // Owner preview: obtain Cognito token from dashboard via postMessage and store separately.
+      // NOTE: This MUST NOT run for loginPreview, as we want to show the login UI.
+      if (isOwnerPreview && !isLoginPreview) {
+        setAuthMode(currentGalleryId, "owner");
+        // If token exists in sessionStorage (single source of truth), we'll validate it below.
+        // If not, request it from the opener.
+        const existingOwnerToken = getToken(currentGalleryId);
+        if (!existingOwnerToken) {
+          void (async () => {
+            try {
+              const idToken = await requestDashboardIdToken({ timeoutMs: 4000 });
+              setOwnerToken(currentGalleryId, idToken);
+              setTokenState(idToken);
+            } catch {
+              // If we can't obtain a token, fall back to unauthenticated (gallery page will redirect to login)
+            } finally {
+              setIsLoading(false);
+            }
+          })();
+          return;
+        }
+      }
+
       // Check if token exists in sessionStorage (single source of truth)
       const storedToken = getToken(currentGalleryId);
       if (storedToken) {

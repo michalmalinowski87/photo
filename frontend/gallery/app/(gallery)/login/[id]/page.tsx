@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginCoverPane } from "@/components/login/LoginCoverPane";
 import { LoginFormPane } from "@/components/login/LoginFormPane";
@@ -9,6 +9,7 @@ import { LoginFormPane } from "@/components/login/LoginFormPane";
 function LoginScreen() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
   const galleryId = params?.id as string;
 
@@ -21,10 +22,15 @@ function LoginScreen() {
 
   // Check if already logged in
   useEffect(() => {
+    const isLoginPreview = searchParams?.get("loginPreview") === "1";
+    if (isLoginPreview) {
+      return;
+    }
+
     if (isAuthenticated && galleryId) {
       router.replace(`/${galleryId}`);
     }
-  }, [galleryId, router, isAuthenticated]);
+  }, [galleryId, router, isAuthenticated, searchParams]);
 
   if (!galleryId) {
     return (

@@ -273,7 +273,7 @@ export function VirtuosoGridComponent({
               <a
                 href={fullImageUrl}
                 data-src={previewUrl}
-                data-download-url={fullImageUrl}
+                data-download-url={enableDownload ? fullImageUrl : undefined}
                 data-thumb={carouselThumbUrl}
                 data-sub-html={image.key}
                 className="block w-full h-full relative"

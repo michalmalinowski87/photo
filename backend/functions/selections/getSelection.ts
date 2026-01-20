@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { getJWTFromEvent } from '../../lib/src/jwt';
+import { verifyGalleryAccess } from '../../lib/src/auth';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -13,19 +13,15 @@ export const handler = lambdaLogger(async (event: any) => {
 	const galleryId = event?.pathParameters?.id;
 	if (!galleryId) return { statusCode: 400, body: 'missing galleryId' };
 
-	// Verify JWT token - get clientId from token, not URL
-	const jwtPayload = await getJWTFromEvent(event);
-	if (!jwtPayload || jwtPayload.galleryId !== galleryId) {
-		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
-	}
-	const clientId = jwtPayload.clientId;
-	if (!clientId) {
-		return { statusCode: 401, body: 'Invalid token. Missing clientId.' };
-	}
-
 	const g = await ddb.send(new GetCommand({ TableName: galleriesTable, Key: { galleryId } }));
 	const gallery = g.Item as any;
 	if (!gallery) return { statusCode: 404, body: 'not found' };
+
+	// Verify access - supports both owner (Cognito) and client (JWT) tokens
+	const access = await verifyGalleryAccess(event, galleryId, gallery);
+	if (!access.isOwner && !access.isClient) {
+		return { statusCode: 401, body: 'Unauthorized. Please log in.' };
+	}
 	
 	// Get pricing package from gallery (set by photographer per gallery)
 	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packageName?: string; packagePriceCents?: number } | undefined;

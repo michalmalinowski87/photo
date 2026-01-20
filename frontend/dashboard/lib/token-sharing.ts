@@ -131,8 +131,9 @@ export function setupTokenSharingListener(): void {
     // Verify origin is trusted
     const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? window.location.origin;
     const landingUrl = process.env.NEXT_PUBLIC_LANDING_URL;
+    const galleryUrl = process.env.NEXT_PUBLIC_GALLERY_URL;
 
-    const trustedOrigins = [dashboardUrl, landingUrl].filter(Boolean) as string[];
+    const trustedOrigins = [dashboardUrl, landingUrl, galleryUrl].filter(Boolean) as string[];
 
     // Validate origin
     const isValidOrigin = trustedOrigins.some((origin) => {
