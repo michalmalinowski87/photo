@@ -677,7 +677,8 @@ export default function GalleryPage() {
           }
           setGridLayout(newLayout);
         }}
-        hideLogout={isOwnerPreview}
+        isOwnerPreview={isOwnerPreview}
+        disableLogout={isOwnerPreview}
       />
       <SecondaryMenu
         selectedCount={currentSelectedCount}

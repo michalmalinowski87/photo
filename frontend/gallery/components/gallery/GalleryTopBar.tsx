@@ -1,27 +1,39 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LogOut, HelpCircle, Grid3x3, LayoutGrid, LayoutDashboard, LayoutPanelTop } from "lucide-react";
+import {
+  LogOut,
+  HelpCircle,
+  Grid3x3,
+  LayoutGrid,
+  LayoutDashboard,
+  LayoutPanelTop,
+  Eye,
+} from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGalleryStatus } from "@/hooks/useGallery";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { GridLayout } from "./VirtuosoGrid";
+import { OwnerPreviewInfoOverlay } from "./OwnerPreviewInfoOverlay";
 
 interface GalleryTopBarProps {
   onHelpClick?: () => void;
   gridLayout?: GridLayout;
   onGridLayoutChange?: (layout: GridLayout) => void;
-  hideLogout?: boolean;
+  isOwnerPreview?: boolean;
+  disableLogout?: boolean;
 }
 
 export function GalleryTopBar({
   onHelpClick,
   gridLayout,
   onGridLayoutChange,
-  hideLogout = false,
+  isOwnerPreview = false,
+  disableLogout = false,
 }: GalleryTopBarProps) {
   const { logout, galleryId } = useAuth();
   const [scroll, setScroll] = useState(false);
+  const [showOwnerPreviewInfo, setShowOwnerPreviewInfo] = useState(false);
   
   // Fetch gallery name via React Query (uses cached data from login if status endpoint fails)
   const { data: galleryStatus } = useGalleryStatus(galleryId);
@@ -41,6 +53,9 @@ export function GalleryTopBar({
   }, []);
 
   const handleLogout = () => {
+    if (disableLogout) {
+      return;
+    }
     hapticFeedback('medium');
     logout();
   };
@@ -59,18 +74,38 @@ export function GalleryTopBar({
       }`}
     >
       {/* First row: Gallery name (left) + Help + Logout (right) */}
-      <div className="w-full mx-auto px-8 md:px-12 lg:px-16 h-20 md:h-24 flex items-center justify-between border-b border-gray-200">
+      <div className="relative w-full mx-auto px-8 md:px-12 lg:px-16 h-20 md:h-24 flex items-center justify-between border-b border-gray-200">
         {/* Left: Gallery name */}
-        <button
-          onClick={scrollToTop}
-          className="text-5xl md:text-6xl text-gray-900 hover:opacity-70 transition-opacity truncate gallery-name-button"
-          style={{ 
-            fontFamily: "'The Wedding Signature', cursive"
-          }}
-          aria-label="Scroll to top"
-        >
-          {displayName}
-        </button>
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={scrollToTop}
+            className="text-5xl md:text-6xl text-gray-900 hover:opacity-70 transition-opacity truncate gallery-name-button"
+            style={{
+              fontFamily: "'The Wedding Signature', cursive",
+            }}
+            aria-label="Scroll to top"
+          >
+            {displayName}
+          </button>
+        </div>
+
+        {isOwnerPreview && (
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <button
+              type="button"
+              onClick={() => {
+                hapticFeedback("light");
+                setShowOwnerPreviewInfo(true);
+              }}
+              className="inline-flex items-center gap-2 bg-transparent border-0 p-0 m-0 text-red-900 text-lg md:text-xl font-semibold whitespace-nowrap cursor-pointer hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2"
+              title="Tryb podglądu fotografa — kliknij, aby zobaczyć szczegóły"
+              aria-label="Tryb podglądu fotografa — pokaż szczegóły"
+            >
+              <Eye className="w-5 h-5" />
+              <span>Podgląd fotografa</span>
+            </button>
+          </div>
+        )}
 
         {/* Right: Layout selector + Help + Logout */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -154,29 +189,47 @@ export function GalleryTopBar({
               <HelpCircle className="w-5 h-5" />
             </button>
           )}
-          
+
           {/* Logout */}
-          {!hideLogout && (
-            <>
-              <button
-                onClick={handleLogout}
-                className="btn-primary hidden sm:inline-flex touch-manipulation"
-                aria-label="Wyloguj"
-              >
-                Wyloguj
-              </button>
-              <button
-                onClick={handleLogout}
-                className="h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden"
-                title="Wyloguj"
-                aria-label="Wyloguj"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </>
-          )}
+          <>
+            <button
+              onClick={handleLogout}
+              disabled={disableLogout}
+              className={`btn-primary hidden sm:inline-flex touch-manipulation ${
+                disableLogout ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              aria-label="Wyloguj"
+              title={
+                disableLogout
+                  ? "Wylogowanie jest wyłączone w trybie podglądu"
+                  : "Wyloguj"
+              }
+            >
+              Wyloguj
+            </button>
+            <button
+              onClick={handleLogout}
+              disabled={disableLogout}
+              className={`h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden ${
+                disableLogout ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              title={
+                disableLogout
+                  ? "Wylogowanie jest wyłączone w trybie podglądu"
+                  : "Wyloguj"
+              }
+              aria-label="Wyloguj"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </>
         </div>
       </div>
+
+      <OwnerPreviewInfoOverlay
+        isVisible={showOwnerPreviewInfo}
+        onClose={() => setShowOwnerPreviewInfo(false)}
+      />
     </header>
   );
 }
