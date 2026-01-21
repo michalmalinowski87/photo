@@ -12,9 +12,8 @@ import {
   PasswordStrengthResult,
   PasswordStrengthValidator,
 } from "../components/ui/password-strength-validator";
-import { initAuth, signUp, checkUserVerificationStatus, checkSubdomainAvailability } from "../lib/auth";
+import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 import { getPublicLandingUrl } from "../lib/public-env";
-import { buildSubdomainPreviewUrl, normalizeSubdomainInput, validateSubdomainFormat } from "../lib/subdomain";
 
 interface CognitoError extends Error {
   message: string;
@@ -28,16 +27,10 @@ export const dynamic = "force-dynamic";
 export default function SignUp() {
   const router = useRouter();
   const [email, setEmail] = useState<string>("");
-  const [subdomain, setSubdomain] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [hostname, setHostname] = useState<string>("");
-  const [subdomainCheck, setSubdomainCheck] = useState<
-    | { state: "idle" | "invalid" | "checking" | "available" | "taken" | "unknown"; message?: string }
-    | undefined
-  >({ state: "idle" });
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
@@ -45,8 +38,6 @@ export default function SignUp() {
   );
 
   useEffect(() => {
-    setHostname(typeof window !== "undefined" ? window.location.hostname : "");
-
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
     const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
 
@@ -61,53 +52,13 @@ export default function SignUp() {
     }
   }, [router]);
 
-  // Subdomain availability check (best-effort)
-  useEffect(() => {
-    const normalized = normalizeSubdomainInput(subdomain);
-    if (!normalized) {
-      setSubdomainCheck({ state: "idle" });
-      return;
-    }
-
-    const validation = validateSubdomainFormat(normalized);
-    if (!validation.ok) {
-      setSubdomainCheck({ state: "invalid", message: validation.message });
-      return;
-    }
-
-    setSubdomainCheck({ state: "checking" });
-    const t = setTimeout(() => {
-      void (async () => {
-        try {
-          const result = await checkSubdomainAvailability(normalized);
-          if (result.available) {
-            setSubdomainCheck({ state: "available" });
-            return;
-          }
-          if (result.reason === "TAKEN") {
-            setSubdomainCheck({ state: "taken" });
-            return;
-          }
-          setSubdomainCheck({
-            state: "unknown",
-            message: result.message ?? (result.reason ? `Nie można sprawdzić (${result.reason})` : undefined),
-          });
-        } catch (_e) {
-          setSubdomainCheck({ state: "unknown", message: "Nie można sprawdzić dostępności teraz" });
-        }
-      })();
-    }, 400);
-
-    return () => clearTimeout(t);
-  }, [subdomain]);
-
   // Calculate validator position when password changes or on scroll/resize
   useEffect(() => {
     const updatePosition = () => {
       if (password && passwordInputRef.current) {
         const inputRect = passwordInputRef.current.getBoundingClientRect();
         setValidatorPosition({
-          top: 401.667, // Fixed position to align with input field
+          top: inputRect.top + window.scrollY - 4, // Align slightly above password input field
           left: inputRect.right + 16, // 16px = ml-4
         });
       } else {
@@ -156,23 +107,33 @@ export default function SignUp() {
       await signUp(email, password);
       // Redirect to verification page with email
       const returnUrl = router.query.returnUrl ?? "/";
-      const normalized = normalizeSubdomainInput(subdomain);
-      const validation = normalized ? validateSubdomainFormat(normalized) : { ok: true as const };
-      const subdomainParam =
-        normalized && validation.ok ? `&subdomain=${encodeURIComponent(normalized)}` : "";
       void router.push(
-        `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}${subdomainParam}`
+        `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
       );
       // Keep loading true - overlay will stay until redirect completes
     } catch (err) {
       const error = err as CognitoError & { minutesUntilReset?: number };
-      // Handle rate limit errors
+      // Handle rate limit errors - check if account was created
       if (error.code === "RateLimitExceeded" || error.name === "RateLimitExceeded") {
-        setLoading(false); // Hide overlay on error so user can see the error message
-        // Use the friendly message from backend, or provide a fallback
+        setLoading(false); // Hide overlay to check account status
+        // Check if account was created despite rate limit error
+        try {
+          const verificationStatus = await checkUserVerificationStatus(email);
+          const returnUrl = router.query.returnUrl ?? "/";
+          
+          // If account exists (verified or unverified), redirect to verification
+          if (verificationStatus === "verified" || verificationStatus === "unverified") {
+            void router.push(
+              `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
+            );
+            return;
+          }
+        } catch (_checkError) {
+          // If check fails, fall through to show error message
+        }
+        // Account was not created - show user-friendly error
         setError(
-          error.message ||
-            "Sprawdź swoją skrzynkę email - kod weryfikacyjny mógł już dotrzeć. Sprawdź również folder spam."
+          "Nie udało się utworzyć konta w tym momencie. Spróbuj ponownie za chwilę."
         );
         return;
       }
@@ -220,29 +181,31 @@ export default function SignUp() {
   return (
     <>
       {loading && <FullPageLoading text="Tworzymy Twoje konto..." />}
-      <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
-        <div className="flex items-center w-full py-8 border-b border-border/80">
-          <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-            <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+      <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 px-4 md:px-8 relative">
+        <div className="flex items-center w-full py-10 border-b border-border/80">
+          <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+            <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
               PhotoCloud
             </span>
           </Link>
         </div>
 
-        <div className="flex flex-col w-full mt-8 relative">
-          <h2 className="text-2xl font-semibold mb-2 text-foreground">Zarejestruj się</h2>
-          <p className="text-sm text-muted-foreground mb-6">
+        <div className="flex flex-col w-full mt-10 relative">
+          <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
+            Zarejestruj się
+          </h2>
+          <p className="text-base md:text-lg text-muted-foreground mb-8">
             Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
           </p>
 
           {error && (
-            <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+            <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSignUp} className="w-full space-y-4 relative">
-            <div className="space-y-2">
+          <form onSubmit={handleSignUp} className="w-full space-y-5 md:space-y-6 relative">
+            <div className="space-y-3">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -253,39 +216,6 @@ export default function SignUp() {
                 required
                 autoComplete="email"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="subdomain">Subdomena (opcjonalnie)</Label>
-              <Input
-                id="subdomain"
-                type="text"
-                value={subdomain}
-                onChange={(e) => setSubdomain(normalizeSubdomainInput(e.target.value))}
-                placeholder="michalphotography"
-                autoComplete="off"
-                inputMode="text"
-              />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>
-                  Dozwolone: <strong>a–z</strong>, <strong>0–9</strong>, <strong>-</strong>. Musi
-                  zaczynać i kończyć się literą/cyfrą. 3–30 znaków.
-                </p>
-                {subdomain && hostname && (
-                  <p>
-                    Podgląd: <strong>{buildSubdomainPreviewUrl(subdomain, hostname)}</strong>
-                  </p>
-                )}
-                {subdomainCheck?.state === "checking" && <p>Sprawdzanie dostępności…</p>}
-                {subdomainCheck?.state === "available" && <p className="text-green-500">Dostępna</p>}
-                {subdomainCheck?.state === "taken" && <p className="text-red-500">Zajęta</p>}
-                {subdomainCheck?.state === "invalid" && (
-                  <p className="text-red-500">{subdomainCheck.message}</p>
-                )}
-                {subdomainCheck?.state === "unknown" && subdomainCheck.message && (
-                  <p>{subdomainCheck.message}</p>
-                )}
-              </div>
             </div>
 
             <div className="space-y-2 relative">
@@ -319,10 +249,10 @@ export default function SignUp() {
                   autoComplete="new-password"
                 />
                 {confirmPassword && password !== confirmPassword && (
-                  <p className="text-xs text-red-500 mt-1">Hasła nie są identyczne</p>
+                  <p className="text-sm text-red-500 mt-2">Hasła nie są identyczne</p>
                 )}
                 {confirmPassword && password === confirmPassword && password.length > 0 && (
-                  <p className="text-xs text-green-500 mt-1">Hasła są identyczne</p>
+                  <p className="text-sm text-green-500 mt-2">Hasła są identyczne</p>
                 )}
               </div>
 
@@ -358,26 +288,26 @@ export default function SignUp() {
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground mt-4 text-center">
+          <p className="text-sm text-muted-foreground mt-5 text-center">
             Po rejestracji otrzymasz email z kodem weryfikacyjnym
           </p>
+
+          <div className="flex flex-col items-start w-full mt-10">
+            <p className="text-base text-muted-foreground">
+              Rejestrując się, akceptujesz nasze{" "}
+              <Link href="/terms" className="text-primary font-bold">
+                Warunki korzystania{" "}
+              </Link>
+              i{" "}
+              <Link href="/privacy" className="text-primary font-bold">
+                Politykę prywatności
+              </Link>
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col items-start w-full mt-8">
-          <p className="text-sm text-muted-foreground">
-            Rejestrując się, akceptujesz nasze{" "}
-            <Link href="/terms" className="text-primary font-bold">
-              Warunki korzystania{" "}
-            </Link>
-            i{" "}
-            <Link href="/privacy" className="text-primary font-bold">
-              Politykę prywatności
-            </Link>
-          </p>
-        </div>
-
-        <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
+          <p className="text-base text-muted-foreground">
             Masz już konto?{" "}
             <Link href="/login" className="text-primary font-bold">
               Zaloguj się

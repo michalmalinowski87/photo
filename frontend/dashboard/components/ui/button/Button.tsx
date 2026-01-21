@@ -25,8 +25,8 @@ const Button = ({
 }: ButtonProps) => {
   // Size Classes
   const sizeClasses = {
-    sm: "px-4 py-3 text-sm",
-    md: "px-5 py-3.5 text-sm",
+    sm: "px-5 h-10 text-base",
+    md: "px-6 h-12 text-base font-medium",
   };
 
   // Variant Classes

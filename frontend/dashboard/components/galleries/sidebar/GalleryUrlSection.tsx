@@ -8,7 +8,7 @@ import { useOrder, useOrders, useOrderFinalImages } from "../../../hooks/queries
 import { usePublishFlow } from "../../../hooks/usePublishFlow";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { getPublicGalleryUrl } from "../../../lib/public-env";
+import { buildTenantGalleryUrl } from "../../../lib/gallery-url";
 import Button from "../../ui/button/Button";
 import { Tooltip } from "../../ui/tooltip/Tooltip";
 
@@ -125,10 +125,10 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     return null;
   }
 
-  // Compute gallery URL from galleryId
+  // Compute gallery URL from galleryId using tenant URL builder
   const displayGalleryUrl =
-    galleryIdStr && typeof galleryIdStr === "string"
-      ? `${getPublicGalleryUrl().replace(/\/+$/, "")}/${encodeURIComponent(galleryIdStr)}`
+    galleryIdStr && typeof galleryIdStr === "string" && gallery
+      ? buildTenantGalleryUrl(gallery)
       : "";
 
   // Use last known paid state during refetches to prevent flicker

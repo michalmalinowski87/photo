@@ -4,6 +4,8 @@ import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { signJWT } from '../../lib/src/jwt';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { verifyClientGalleryPassword } from '../../lib/src/client-gallery-password';
+import { getOwnerSubdomain, extractSubdomainFromEvent, extractBaseDomain } from '../../lib/src/gallery-url';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -11,6 +13,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	const stage = envProc?.env?.STAGE || 'dev';
 	
 	if (!galleriesTable) {
 		return {
@@ -64,6 +68,43 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ error: 'Gallery not found' })
 		};
+	}
+
+	// Security: Validate that if request is via subdomain, it matches gallery owner's subdomain
+	// This prevents accessing galleries via someone else's subdomain (e.g., michalm.lvh.me/gal_userB_galleryId)
+	try {
+		// Get base domain from config to extract subdomain from request
+		const galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
+		const baseDomain = extractBaseDomain(galleryUrl);
+		
+		// Extract subdomain from request (if any)
+		const requestSubdomain = extractSubdomainFromEvent(event, baseDomain);
+		
+		// If request is via subdomain, validate it matches gallery owner
+		if (requestSubdomain) {
+			const ownerSubdomain = await getOwnerSubdomain(gallery.ownerId, usersTable);
+			if (!ownerSubdomain || ownerSubdomain !== requestSubdomain) {
+				// Request is via subdomain but doesn't match gallery owner - security violation
+				logger.warn('Subdomain mismatch on client login', { 
+					galleryId, 
+					requestSubdomain, 
+					ownerSubdomain,
+					ownerId: gallery.ownerId 
+				});
+				return {
+					statusCode: 403,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'forbidden',
+						message: 'Gallery does not belong to this subdomain'
+					}),
+				};
+			}
+		}
+	} catch (error) {
+		// If we can't validate (e.g., config missing), log but don't block
+		// This allows the endpoint to work even if subdomain validation fails
+		logger.warn('Failed to validate subdomain ownership on client login', { error, galleryId });
 	}
 
 	// Check if gallery is published before allowing client login

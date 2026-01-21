@@ -1,18 +1,12 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
+import { CodeInput } from "../components/ui/code-input";
 import {
   initAuth,
-  confirmSignUpAndClaimSubdomain,
   resendConfirmationCode,
-  checkSubdomainAvailability,
 } from "../lib/auth";
-import { getPublicLandingUrl } from "../lib/public-env";
-import { buildSubdomainPreviewUrl, normalizeSubdomainInput, validateSubdomainFormat } from "../lib/subdomain";
 
 interface CognitoError extends Error {
   message: string;
@@ -27,24 +21,14 @@ export default function VerifyEmail() {
   const router = useRouter();
   const [code, setCode] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [subdomain, setSubdomain] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [success, setSuccess] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [hostname, setHostname] = useState<string>("");
-  const [subdomainHint, setSubdomainHint] = useState<string>("");
-  const [subdomainCheck, setSubdomainCheck] = useState<
-    | { state: "idle" | "invalid" | "checking" | "available" | "taken" | "unknown"; message?: string }
-    | undefined
-  >({ state: "idle" });
   const [resending, setResending] = useState<boolean>(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0); // Seconds remaining
   const [resendMessage, setResendMessage] = useState<string>(""); // Success or warning message for resend
   const [resendMessageType, setResendMessageType] = useState<"success" | "warning" | "">(""); // Type of resend message
 
   useEffect(() => {
-    setHostname(typeof window !== "undefined" ? window.location.hostname : "");
-
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
     const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
 
@@ -60,52 +44,7 @@ export default function VerifyEmail() {
       // No email provided, redirect to sign-up
       void router.push("/sign-up");
     }
-
-    const subdomainParam = router.query.subdomain;
-    if (subdomainParam) {
-      setSubdomain(normalizeSubdomainInput(decodeURIComponent(typeof subdomainParam === "string" ? subdomainParam : subdomainParam[0])));
-    }
   }, [router]);
-
-  // Subdomain availability check (best-effort)
-  useEffect(() => {
-    const normalized = normalizeSubdomainInput(subdomain);
-    if (!normalized) {
-      setSubdomainCheck({ state: "idle" });
-      return;
-    }
-
-    const validation = validateSubdomainFormat(normalized);
-    if (!validation.ok) {
-      setSubdomainCheck({ state: "invalid", message: validation.message });
-      return;
-    }
-
-    setSubdomainCheck({ state: "checking" });
-    const t = setTimeout(() => {
-      void (async () => {
-        try {
-          const result = await checkSubdomainAvailability(normalized);
-          if (result.available) {
-            setSubdomainCheck({ state: "available" });
-            return;
-          }
-          if (result.reason === "TAKEN") {
-            setSubdomainCheck({ state: "taken" });
-            return;
-          }
-          setSubdomainCheck({
-            state: "unknown",
-            message: result.message ?? (result.reason ? `Nie można sprawdzić (${result.reason})` : undefined),
-          });
-        } catch (_e) {
-          setSubdomainCheck({ state: "unknown", message: "Nie można sprawdzić dostępności teraz" });
-        }
-      })();
-    }, 400);
-
-    return () => clearTimeout(t);
-  }, [subdomain]);
 
   // Countdown timer for resend cooldown
   useEffect(() => {
@@ -126,10 +65,8 @@ export default function VerifyEmail() {
     }
   }, [resendCooldown, resendMessageType]);
 
-  const handleVerify = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
+  const handleVerifyCode = async (): Promise<void> => {
     setError("");
-    setSubdomainHint("");
 
     if (code?.length !== 6) {
       setError("Wprowadź 6-cyfrowy kod weryfikacyjny");
@@ -138,44 +75,20 @@ export default function VerifyEmail() {
 
     setLoading(true);
     try {
-      const normalized = normalizeSubdomainInput(subdomain);
-      const validation = normalized ? validateSubdomainFormat(normalized) : { ok: true as const };
-      const requestedSubdomain = normalized && validation.ok ? normalized : undefined;
-
-      if (normalized && !validation.ok) {
-        setSubdomainHint("Pominięto rezerwację subdomeny (niepoprawny format). Możesz ustawić ją później.");
-      }
-
-      const result = await confirmSignUpAndClaimSubdomain(email, code, requestedSubdomain);
-      setSuccess(true);
-      if (result.subdomainClaimed && result.subdomain) {
-        setSubdomainHint(`Zarezerwowano subdomenę: ${result.subdomain}`);
-      } else if (result.subdomainError?.message) {
-        setSubdomainHint(`Konto zweryfikowane, ale subdomena nie została zarezerwowana: ${result.subdomainError.message}`);
-      }
-      // Redirect to login after a short delay
+      // Just validate format and redirect - actual verification happens in register-subdomain
       const returnUrl = router.query.returnUrl ?? "/";
-      setTimeout(() => {
-        void router.push(
-          `/login?verified=true${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
-        );
-      }, 2000);
+      const returnUrlParam = returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : "";
+      const redirectUrl = `/register-subdomain?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}${returnUrlParam}`;
+      // Use router.push and ensure it completes
+      void router.push(redirectUrl);
+      // Keep loading state - page will change
     } catch (err) {
-      const error = err as CognitoError;
-      // Handle Cognito errors - check both code and name properties for robustness
-      if (error.code === "CodeMismatchException" || error.name === "CodeMismatchException") {
-        setError("Nieprawidłowy kod weryfikacyjny");
-      } else if (error.code === "ExpiredCodeException" || error.name === "ExpiredCodeException") {
-        setError("Kod weryfikacyjny wygasł. Wyślij nowy kod.");
-      } else if (error.message) {
-        setError(error.message);
-      } else {
-        setError("Nie udało się zweryfikować konta. Spróbuj ponownie.");
-      }
-    } finally {
+      // Handle redirect errors
+      setError("Nie udało się przekierować. Spróbuj ponownie.");
       setLoading(false);
     }
   };
+
 
   const handleResendCode = async (): Promise<void> => {
     // Prevent multiple clicks during cooldown
@@ -221,117 +134,65 @@ export default function VerifyEmail() {
     }
   };
 
-  if (success) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="max-w-sm w-full mx-auto px-4">
-          <div className="text-center">
-            <div className="mb-4 text-green-600 text-4xl">✓</div>
-            <h2 className="text-2xl font-semibold mb-2 text-foreground">Konto zweryfikowane!</h2>
-            {subdomainHint && (
-              <p className="text-sm text-muted-foreground mb-2">
-                {subdomainHint}
-              </p>
-            )}
-            <p className="text-sm text-muted-foreground mb-6">
-              Przekierowywanie do strony logowania...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Code verification step - Apple style
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
-            PhotoCloud
-          </span>
-        </Link>
-      </div>
-
-      <div className="flex flex-col w-full mt-8">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Weryfikacja email</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres <strong>{email}</strong>
-        </p>
+    <div className="flex flex-col items-center justify-start min-h-screen px-4 pt-[25vh] md:pt-[30vh]">
+      <div className="w-full max-w-md text-center space-y-8">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-semibold mb-3 text-foreground">
+            Weryfikacja email
+          </h1>
+          <p className="text-base md:text-lg text-muted-foreground">
+            Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres
+          </p>
+          <p className="text-base md:text-lg font-medium text-foreground mt-1">{email}</p>
+        </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+          <div className="mx-auto max-w-md p-4 bg-error-500/15 border border-error-700 rounded-lg text-base text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleVerify} className="w-full space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="code">Kod weryfikacyjny</Label>
-            <Input
-              id="code"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="000000"
-              required
-              maxLength={6}
-              className="text-center text-2xl tracking-widest"
-              autoFocus
-            />
-          </div>
+        <div className="space-y-6">
+          <CodeInput
+            value={code}
+            onChange={setCode}
+            length={6}
+            autoFocus
+            disabled={loading}
+            error={!!error}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="subdomain">Subdomena (opcjonalnie)</Label>
-            <Input
-              id="subdomain"
-              type="text"
-              value={subdomain}
-              onChange={(e) => setSubdomain(normalizeSubdomainInput(e.target.value))}
-              placeholder="michalphotography"
-              autoComplete="off"
-              inputMode="text"
-            />
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>
-                Dozwolone: <strong>a–z</strong>, <strong>0–9</strong>, <strong>-</strong>. Musi
-                zaczynać i kończyć się literą/cyfrą. 3–30 znaków.
-              </p>
-              {subdomain && hostname && (
-                <p>
-                  Podgląd: <strong>{buildSubdomainPreviewUrl(subdomain, hostname)}</strong>
-                </p>
-              )}
-              {subdomainCheck?.state === "checking" && <p>Sprawdzanie dostępności…</p>}
-              {subdomainCheck?.state === "available" && <p className="text-green-500">Dostępna</p>}
-              {subdomainCheck?.state === "taken" && <p className="text-red-500">Zajęta</p>}
-              {subdomainCheck?.state === "invalid" && (
-                <p className="text-red-500">{subdomainCheck.message}</p>
-              )}
-              {subdomainCheck?.state === "unknown" && subdomainCheck.message && <p>{subdomainCheck.message}</p>}
-            </div>
-          </div>
+          {code.length === 6 && (
+            <Button
+              type="button"
+              variant="primary"
+              className="w-full"
+              onClick={handleVerifyCode}
+              disabled={loading}
+            >
+              {loading ? "Weryfikowanie..." : "Kontynuuj"}
+            </Button>
+          )}
+        </div>
 
-          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
-            {loading ? "Weryfikowanie..." : "Zweryfikuj konto"}
-          </Button>
-        </form>
-
-        <div className="mt-4 text-center space-y-2">
+        <div className="space-y-3">
           <button
             type="button"
             onClick={handleResendCode}
             disabled={resending || resendCooldown > 0}
-            className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="text-primary font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-base"
           >
             {resending
               ? "Wysyłanie..."
               : resendCooldown > 0
                 ? `Wyślij nowy kod (${resendCooldown}s)`
-                : "Wyślij nowy kod"}
+                : "Nie otrzymałeś kodu? Wyślij ponownie"}
           </button>
           {resendMessage && (
             <div
-              className={`text-sm px-3 py-2 rounded ${
+              className={`text-sm px-4 py-3 rounded-lg ${
                 resendMessageType === "success"
                   ? "bg-green-500/15 border border-green-700 text-green-400"
                   : "bg-error-500/15 border border-error-700 text-error-400"
@@ -341,20 +202,6 @@ export default function VerifyEmail() {
             </div>
           )}
         </div>
-      </div>
-
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
-          Nie otrzymałeś kodu? Sprawdź folder spam lub{" "}
-          <button
-            type="button"
-            onClick={handleResendCode}
-            disabled={resending || resendCooldown > 0}
-            className="text-primary font-bold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {resending ? "Wysyłanie..." : "wyślij ponownie"}
-          </button>
-        </p>
       </div>
     </div>
   );

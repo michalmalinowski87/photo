@@ -38,6 +38,7 @@ export interface Gallery {
   createdAt?: string;
   clientFirstName?: string;
   clientLastName?: string;
+  ownerSubdomain?: string | null;
   [key: string]: unknown;
 }
 

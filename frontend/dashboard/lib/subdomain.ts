@@ -52,4 +52,3 @@ export function buildSubdomainPreviewUrl(subdomain: string, hostname: string): s
   const baseDomain = getBaseDomainFromHostname(hostname);
   return `https://${subdomain}.${baseDomain}`;
 }
-

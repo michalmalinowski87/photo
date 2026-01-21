@@ -56,6 +56,7 @@ const AUTH_ROUTES = [
   "/login",
   "/sign-up",
   "/verify-email",
+  "/register-subdomain",
   "/auth/auth-callback",
   "/auth/undo-deletion/[token]",
   "/forgot-password",

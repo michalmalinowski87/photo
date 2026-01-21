@@ -158,6 +158,14 @@ export default function GalleryPage() {
     }
   }, [isLoading, isAuthenticated, galleryId, id, router, isOwnerPreview]);
 
+  // For owner preview, if still not authenticated after loading completes, redirect to login
+  // This ensures security: owner preview requires a valid dashboard token
+  useEffect(() => {
+    if (isOwnerPreview && !isAuthenticated && !isLoading && id) {
+      router.replace(`/login/${id}`);
+    }
+  }, [isOwnerPreview, isAuthenticated, isLoading, id, router]);
+
   // Get images based on state - use filterUnselected=false to get all images (including unselected)
   const {
     data,
@@ -606,12 +614,9 @@ export default function GalleryPage() {
     return <FullPageLoading text="Ładowanie podglądu..." />;
   }
   
-  // For owner preview, if still not authenticated after loading completes, redirect to login
-  // This ensures security: owner preview requires a valid dashboard token
+  // For owner preview, if still not authenticated after loading completes, show nothing
+  // (redirect is handled in useEffect above)
   if (isOwnerPreview && !isAuthenticated && !isLoading) {
-    if (id) {
-      router.replace(`/login/${id}`);
-    }
     return null;
   }
 

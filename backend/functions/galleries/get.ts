@@ -3,12 +3,14 @@ import { ddbGet } from '../../lib/src/ddb';
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
 import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
+import { getOwnerSubdomain } from '../../lib/src/gallery-url';
 
 export const handler = lambdaLogger(async (event: any) => {
 	const id = event?.pathParameters?.id;
 	if (!id) return { statusCode: 400, body: 'missing id' };
 	const envProc = (globalThis as any).process;
 	const tableName = envProc && envProc.env ? (envProc.env.GALLERIES_TABLE as string) : '';
+	const usersTable = envProc?.env?.USERS_TABLE as string;
 	const stage = envProc?.env?.STAGE || 'dev';
 	const gallery = await ddbGet<any>(tableName, { galleryId: id });
 	if (!gallery) {
@@ -16,6 +18,9 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 	const requesterId = getUserIdFromEvent(event);
 	requireOwnerOr403(gallery.ownerId, requesterId);
+	
+	// Get owner's subdomain for tenant URL construction
+	const ownerSubdomain = await getOwnerSubdomain(gallery.ownerId, usersTable);
 	
 	let isPaid = false;
 	let paymentStatus = 'UNPAID';
@@ -68,7 +73,8 @@ export const handler = lambdaLogger(async (event: any) => {
 			state: effectiveState,
 			paymentStatus,
 			isPaid,
-			daysUntilExpiry
+			daysUntilExpiry,
+			ownerSubdomain: ownerSubdomain || null
 		})
 	};
 });

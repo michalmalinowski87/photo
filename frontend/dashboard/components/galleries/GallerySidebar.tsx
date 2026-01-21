@@ -143,7 +143,7 @@ export default function GallerySidebar() {
 
       {orderId && order && <OrderActionsSection orderId={orderId} />}
 
-      <OwnerClientPreviewButton galleryId={effectiveGallery?.galleryId ?? ""} />
+      <OwnerClientPreviewButton gallery={effectiveGallery} />
 
       <DeleteGalleryButton
         galleryId={effectiveGallery?.galleryId ?? ""}

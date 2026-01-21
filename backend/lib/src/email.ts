@@ -762,3 +762,21 @@ export function createExportEmail(galleryDisplayName: string, photoCount: number
 	};
 }
 
+/**
+ * Creates a verification code email template matching PhotoCloud design system
+ * This is used for Cognito email verification codes
+ * Note: The {####} placeholder will be replaced by Cognito with the actual code
+ */
+export function createVerificationCodeEmail(codePlaceholder: string = '{####}'): string {
+	const content = `
+		${createHeading('Weryfikuj swoje konto', 2)}
+		${createParagraph('Dziękujemy za rejestrację! Aby dokończyć tworzenie konta, wprowadź poniższy kod weryfikacyjny:')}
+		<div style="background-color: ${COLORS.surface.elevated}; border: 2px dashed ${COLORS.brand.accent}; border-radius: 12px; padding: 24px; margin: 32px 0; text-align: center;">
+			<p style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: ${COLORS.brand.accent}; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${codePlaceholder}</p>
+		</div>
+		${createSmallText('Ten kod jest ważny przez 15 minut. Jeśli nie rejestrowałeś się w PhotoCloud, możesz zignorować tę wiadomość.')}
+	`;
+	
+	return createEmailWrapper(content);
+}
+

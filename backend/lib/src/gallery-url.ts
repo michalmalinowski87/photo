@@ -10,7 +10,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
  * - "https://gallery.lvh.me" -> "lvh.me"
  * - "https://photocloud.com/gallery" -> "photocloud.com"
  */
-function extractBaseDomain(galleryUrl: string): string {
+export function extractBaseDomain(galleryUrl: string): string {
 	try {
 		const url = new URL(galleryUrl);
 		const hostname = url.hostname;
@@ -104,4 +104,50 @@ export async function getOwnerSubdomain(
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Extract subdomain from API Gateway event headers.
+ * Looks for subdomain in Host header (e.g., "michalm.lvh.me" -> "michalm").
+ * Returns null if no subdomain is found or if accessing via default gallery domain.
+ * 
+ * @param event - API Gateway Lambda event
+ * @param baseDomain - Base domain to extract subdomain from (e.g., "lvh.me", "photocloud.com")
+ * @returns The subdomain or null if not found/using default domain
+ */
+export function extractSubdomainFromEvent(event: any, baseDomain?: string): string | null {
+	const headers = event?.headers || {};
+	const host = headers.Host || headers.host || '';
+	
+	if (!host) {
+		return null;
+	}
+
+	// Remove port if present (e.g., "michalm.lvh.me:3000" -> "michalm.lvh.me")
+	const hostname = host.split(':')[0];
+	
+	// If baseDomain is provided, check if hostname ends with it
+	if (baseDomain) {
+		// Check for subdomain.baseDomain pattern
+		const subdomainPattern = new RegExp(`^([^.]+)\\.${baseDomain.replace(/\./g, '\\.')}$`);
+		const match = hostname.match(subdomainPattern);
+		if (match && match[1]) {
+			return match[1];
+		}
+		
+		// If hostname exactly matches baseDomain, no subdomain
+		if (hostname === baseDomain) {
+			return null;
+		}
+	}
+	
+	// Fallback: try to extract subdomain by splitting on dots
+	// This works for patterns like "subdomain.domain.tld"
+	const parts = hostname.split('.');
+	if (parts.length >= 3) {
+		// Assume first part is subdomain (e.g., "michalm.lvh.me" -> "michalm")
+		return parts[0];
+	}
+	
+	return null;
 }

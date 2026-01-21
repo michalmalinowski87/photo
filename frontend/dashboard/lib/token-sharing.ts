@@ -5,8 +5,9 @@
  * using postMessage API. Dashboard is the source of truth for auth.
  */
 
-import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
 import { isValidOrigin, isTrustedFixedOrigin } from "../../shared-auth/origin-validation";
+
+import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
 
 const TOKEN_SHARE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_SHARE";
 const TOKEN_REQUEST_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_REQUEST";
@@ -135,7 +136,8 @@ export function setupTokenSharingListener(): void {
     );
 
     // Validate origin - fixed hosts must match exactly
-    const isValid = isTrustedFixedOrigin(event.origin, trustedOrigins) ||
+    const isValid =
+      isTrustedFixedOrigin(event.origin, trustedOrigins) ||
       // For tenant subdomains, check if event origin is valid for any trusted base domain
       trustedOrigins.some((origin) => isValidOrigin(event.origin, origin));
 

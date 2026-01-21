@@ -79,30 +79,32 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+    <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-hidden pt-4 md:pt-20 px-4 md:px-8">
+      <div className="flex items-center w-full py-10 border-b border-border/80">
+        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+          <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
             PhotoCloud
           </span>
         </Link>
       </div>
 
-      <div className="flex flex-col w-full mt-8">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Resetowanie hasła</h2>
-        <p className="text-sm text-muted-foreground mb-6">
+      <div className="flex flex-col w-full mt-10">
+        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
+          Resetowanie hasła
+        </h2>
+        <p className="text-base md:text-lg text-muted-foreground mb-8">
           Wprowadź adres email powiązany z Twoim kontem. Wyślemy Ci kod weryfikacyjny do resetowania
           hasła.
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+          <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleForgotPassword} className="w-full space-y-4">
-          <div className="space-y-2">
+        <form onSubmit={handleForgotPassword} className="w-full space-y-5 md:space-y-6">
+          <div className="space-y-3">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
@@ -125,8 +127,8 @@ export default function ForgotPassword() {
         </form>
       </div>
 
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
+        <p className="text-base text-muted-foreground">
           Pamiętasz hasło?{" "}
           <Link
             href={`/login${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}

@@ -1,6 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { nanoid } from 'nanoid';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import type { LambdaEvent, LambdaContext, GalleryItem } from '../../lib/src/lambda-types';
 import { createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
@@ -80,7 +81,9 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 	}
 
 	const now = new Date().toISOString();
-	const galleryId = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+	// Generate clean, professional gallery ID using NanoID (URL-safe, collision-resistant)
+	// Default length is 21 characters, which provides excellent uniqueness
+	const galleryId = nanoid();
 	
 	// UNPAID galleries expire in 3 days
 	// Set expiresAt (ISO timestamp) and create EventBridge schedule for precise deletion

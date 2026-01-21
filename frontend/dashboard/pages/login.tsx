@@ -206,7 +206,7 @@ export default function Login() {
             <div className="border-[3px] border-primary rounded-full border-b-transparent animate-spin w-12 h-12"></div>
             <div className="absolute inset-0 border-[3px] border-transparent rounded-full border-t-primary/30"></div>
           </div>
-          <p className="text-sm text-muted-foreground mt-4">Sprawdzanie sesji...</p>
+          <p className="text-base text-muted-foreground mt-5">Sprawdzanie sesji...</p>
         </div>
       </div>
     );
@@ -216,32 +216,32 @@ export default function Login() {
     <>
       {loading && <FullPageLoading text="Logujemy Cię..." />}
       <MobileWarningModal isOpen={showMobileWarning} onClose={() => setShowMobileWarning(false)} />
-      <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-        <div className="flex items-center w-full py-8 border-b border-border/80">
-          <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-            <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+      <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-hidden pt-4 md:pt-20 px-4 md:px-8">
+        <div className="flex items-center w-full py-10 border-b border-border/80">
+          <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+            <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
               PhotoCloud
             </span>
           </Link>
         </div>
 
-        <div className="flex flex-col w-full mt-8">
-          <h2 className="text-2xl font-semibold mb-2 text-foreground">Zaloguj się</h2>
-          <p className="text-sm text-muted-foreground mb-6">
+        <div className="flex flex-col w-full mt-10">
+          <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">Zaloguj się</h2>
+          <p className="text-base md:text-lg text-muted-foreground mb-8">
             Zaloguj się, aby zarządzać swoimi galeriami i klientami
           </p>
 
           {error && (
-            <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+            <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSignIn} className="w-full space-y-4">
-            <div className="space-y-2">
+          <form onSubmit={handleSignIn} className="w-full space-y-5 md:space-y-6">
+            <div className="space-y-3">
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="block text-base font-medium text-gray-700 dark:text-gray-300"
               >
                 Email
               </label>
@@ -257,17 +257,17 @@ export default function Login() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  className="block text-base font-medium text-gray-700 dark:text-gray-300"
                 >
                   Hasło
                 </label>
                 <Link
                   href={`/forgot-password${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
-                  className="text-sm text-primary font-medium hover:opacity-70 transition-opacity"
+                  className="text-base text-primary font-medium hover:opacity-70 transition-opacity"
                 >
                   Zapomniałeś hasła?
                 </Link>
@@ -288,23 +288,23 @@ export default function Login() {
               {loading ? "Logowanie..." : "Zaloguj się"}
             </Button>
           </form>
+
+          <div className="flex flex-col items-start w-full mt-10">
+            <p className="text-base text-muted-foreground">
+              Logując się, akceptujesz nasze{" "}
+              <Link href="/terms" className="text-primary font-bold">
+                Warunki korzystania{" "}
+              </Link>
+              i{" "}
+              <Link href="/privacy" className="text-primary font-bold">
+                Politykę prywatności
+              </Link>
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col items-start w-full mt-8">
-          <p className="text-sm text-muted-foreground">
-            Logując się, akceptujesz nasze{" "}
-            <Link href="/terms" className="text-primary font-bold">
-              Warunki korzystania{" "}
-            </Link>
-            i{" "}
-            <Link href="/privacy" className="text-primary font-bold">
-              Politykę prywatności
-            </Link>
-          </p>
-        </div>
-
-        <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
+          <p className="text-base text-muted-foreground">
             Nie masz konta?{" "}
             <Link href="/sign-up" className="text-primary font-bold">
               Zarejestruj się

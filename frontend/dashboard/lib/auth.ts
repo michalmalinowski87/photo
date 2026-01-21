@@ -602,7 +602,9 @@ export type SubdomainAvailabilityResult = {
   message?: string;
 };
 
-export async function checkSubdomainAvailability(subdomain: string): Promise<SubdomainAvailabilityResult> {
+export async function checkSubdomainAvailability(
+  subdomain: string
+): Promise<SubdomainAvailabilityResult> {
   const apiUrl = getApiBaseUrlOrThrow();
   const response = await fetch(
     `${apiUrl}/auth/public/subdomain-availability?subdomain=${encodeURIComponent(subdomain)}`,

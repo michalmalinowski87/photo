@@ -71,7 +71,7 @@ export default function ResetPassword() {
       if (password && passwordInputRef.current) {
         const inputRect = passwordInputRef.current.getBoundingClientRect();
         setValidatorPosition({
-          top: 401.667, // Fixed position to align with input field
+          top: inputRect.top + window.scrollY - 4, // Align slightly above password input field
           left: inputRect.right + 16, // 16px = ml-4
         });
       } else {
@@ -155,11 +155,11 @@ export default function ResetPassword() {
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="max-w-sm w-full mx-auto px-4">
+        <div className="max-w-sm md:max-w-lg w-full mx-auto px-4 md:px-8">
           <div className="text-center">
-            <div className="mb-4 text-green-600 text-4xl">✓</div>
-            <h2 className="text-2xl font-semibold mb-2 text-foreground">Hasło zresetowane!</h2>
-            <p className="text-sm text-muted-foreground mb-6">
+            <div className="mb-5 text-green-600 text-5xl">✓</div>
+            <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">Hasło zresetowane!</h2>
+            <p className="text-base text-muted-foreground mb-8">
               Przekierowywanie do strony logowania...
             </p>
           </div>
@@ -169,35 +169,37 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 relative">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+    <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 px-4 md:px-8 relative">
+      <div className="flex items-center w-full py-10 border-b border-border/80">
+        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+          <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
             PhotoCloud
           </span>
         </Link>
       </div>
 
-      <div className="flex flex-col w-full mt-8 relative">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Ustaw nowe hasło</h2>
-        <p className="text-sm text-muted-foreground mb-6">
+      <div className="flex flex-col w-full mt-10 relative">
+        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
+          Ustaw nowe hasło
+        </h2>
+        <p className="text-base md:text-lg text-muted-foreground mb-8">
           Wprowadź nowe hasło dla konta <strong>{email}</strong>
         </p>
 
         {code && (
-          <div className="mb-4 p-3 bg-green-500/15 border border-green-700 rounded text-sm text-green-400">
+          <div className="mb-5 p-4 bg-green-500/15 border border-green-700 rounded text-base text-green-400">
             Kod weryfikacyjny został zweryfikowany
           </div>
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+          <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleResetPassword} className="w-full space-y-4 relative">
-          <div className="space-y-2 relative">
+        <form onSubmit={handleResetPassword} className="w-full space-y-5 md:space-y-6 relative">
+          <div className="space-y-3 relative">
             <Label htmlFor="password">Nowe hasło</Label>
             <PasswordInputWithStrength
               ref={passwordInputRef}
@@ -214,7 +216,7 @@ export default function ResetPassword() {
               minLength={8}
             />
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
               <PasswordInputWithToggle
                 id="confirmPassword"
@@ -228,10 +230,10 @@ export default function ResetPassword() {
                 autoComplete="new-password"
               />
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-red-500 mt-1">Hasła nie są identyczne</p>
+                <p className="text-sm text-red-500 mt-2">Hasła nie są identyczne</p>
               )}
               {confirmPassword && password === confirmPassword && password.length > 0 && (
-                <p className="text-xs text-green-500 mt-1">Hasła są identyczne</p>
+                <p className="text-sm text-green-500 mt-2">Hasła są identyczne</p>
               )}
             </div>
 

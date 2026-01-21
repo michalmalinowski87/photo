@@ -127,29 +127,31 @@ export default function VerifyResetCode() {
   };
 
   return (
-    <div className="flex flex-col items-start max-w-sm mx-auto h-dvh overflow-hidden pt-4 md:pt-20">
-      <div className="flex items-center w-full py-8 border-b border-border/80">
-        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-2">
-          <span className="text-xl font-bold" style={{ color: "#465fff" }}>
+    <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-hidden pt-4 md:pt-20 px-4 md:px-8">
+      <div className="flex items-center w-full py-10 border-b border-border/80">
+        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+          <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
             PhotoCloud
           </span>
         </Link>
       </div>
 
-      <div className="flex flex-col w-full mt-8">
-        <h2 className="text-2xl font-semibold mb-2 text-foreground">Weryfikacja kodu</h2>
-        <p className="text-sm text-muted-foreground mb-6">
+      <div className="flex flex-col w-full mt-10">
+        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
+          Weryfikacja kodu
+        </h2>
+        <p className="text-base md:text-lg text-muted-foreground mb-8">
           Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres <strong>{email}</strong>
         </p>
 
         {error && (
-          <div className="mb-4 p-3 bg-error-500/15 border border-error-700 rounded text-sm text-error-400">
+          <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleVerify} className="w-full space-y-4">
-          <div className="space-y-2">
+        <form onSubmit={handleVerify} className="w-full space-y-5 md:space-y-6">
+          <div className="space-y-3">
             <Label htmlFor="code">Kod weryfikacyjny</Label>
             <Input
               id="code"
@@ -169,12 +171,12 @@ export default function VerifyResetCode() {
           </Button>
         </form>
 
-        <div className="mt-4 text-center space-y-2">
+        <div className="mt-5 text-center space-y-3">
           <button
             type="button"
             onClick={handleResendCode}
             disabled={resending || resendCooldown > 0}
-            className="text-primary font-bold hover:opacity-70 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="text-primary font-bold hover:opacity-70 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-base"
           >
             {resending
               ? "Wysyłanie..."
@@ -184,7 +186,7 @@ export default function VerifyResetCode() {
           </button>
           {resendMessage && (
             <div
-              className={`text-sm px-3 py-2 rounded ${
+              className={`text-base px-4 py-3 rounded ${
                 resendMessageType === "success"
                   ? "bg-green-500/15 border border-green-700 text-green-400"
                   : "bg-error-500/15 border border-error-700 text-error-400"
@@ -196,8 +198,8 @@ export default function VerifyResetCode() {
         </div>
       </div>
 
-      <div className="flex items-start mt-auto border-t border-border/80 py-6 w-full">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
+        <p className="text-base text-muted-foreground">
           Nie otrzymałeś kodu? Sprawdź folder spam lub{" "}
           <button
             type="button"
