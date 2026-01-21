@@ -1,0 +1,10 @@
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/lvh.me.pem
+        keyFile: /certs/lvh.me-key.pem
+  certificates:
+    - certFile: /certs/lvh.me.pem
+      keyFile: /certs/lvh.me-key.pem
+

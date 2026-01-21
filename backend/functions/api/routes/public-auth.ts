@@ -1,11 +1,46 @@
 import { Router, Request, Response } from 'express';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand, ForgotPasswordCommand, ConfirmForgotPasswordCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand, ForgotPasswordCommand, ConfirmForgotPasswordCommand, AdminGetUserCommand, ConfirmSignUpCommand } from '@aws-sdk/client-cognito-identity-provider';
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
+
+const RESERVED_SUBDOMAINS = new Set([
+	'dashboard',
+	'photocloud',
+	'api',
+	'auth',
+	'www',
+	'gallery',
+	'landing',
+	'static',
+	'cdn'
+]);
+
+function normalizeSubdomain(input: unknown): string {
+	return String(input ?? '').trim().toLowerCase();
+}
+
+function validateSubdomain(subdomain: string): { ok: true } | { ok: false; code: string; message: string } {
+	if (!subdomain) {
+		return { ok: false, code: 'MISSING', message: 'Subdomain is required' };
+	}
+	if (subdomain.length < 3 || subdomain.length > 30) {
+		return { ok: false, code: 'INVALID_LENGTH', message: 'Subdomain must be 3-30 characters long' };
+	}
+	if (!/^[a-z0-9-]+$/.test(subdomain)) {
+		return { ok: false, code: 'INVALID_CHARS', message: 'Only lowercase letters (a-z), digits (0-9) and hyphen (-) are allowed' };
+	}
+	if (!/^[a-z0-9].*[a-z0-9]$/.test(subdomain)) {
+		return { ok: false, code: 'INVALID_EDGE', message: 'Subdomain must start and end with a letter or digit' };
+	}
+	if (RESERVED_SUBDOMAINS.has(subdomain)) {
+		return { ok: false, code: 'RESERVED', message: 'This subdomain is reserved' };
+	}
+	return { ok: true };
+}
 
 const MAX_CODES_PER_HOUR = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -623,6 +658,154 @@ router.post('/confirm-forgot-password', async (req: Request, res: Response) => {
 		}
 
 		return res.status(500).json({ error: 'Failed to reset password', message: error.message });
+	}
+});
+
+/**
+ * Public endpoint for checking subdomain availability.
+ * Used by the dashboard signup flow (best-effort).
+ */
+router.get('/subdomain-availability', async (req: Request, res: Response) => {
+	const envProc = (globalThis as any).process;
+	const subdomainsTable = envProc?.env?.SUBDOMAINS_TABLE as string;
+	const raw = (req.query?.subdomain ?? '') as string;
+	const subdomain = normalizeSubdomain(raw);
+
+	if (!subdomain) {
+		return res.status(400).json({ error: 'subdomain is required' });
+	}
+
+	const validation = validateSubdomain(subdomain);
+	if (!validation.ok) {
+		return res.json({ subdomain, available: false, reason: validation.code, message: validation.message });
+	}
+
+	if (!subdomainsTable) {
+		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
+	}
+
+	try {
+		const existing = await ddb.send(new GetCommand({ TableName: subdomainsTable, Key: { subdomain } }));
+		if (existing.Item) {
+			return res.json({ subdomain, available: false, reason: 'TAKEN' });
+		}
+		return res.json({ subdomain, available: true });
+	} catch (err: any) {
+		// Fail closed on availability (treat as unavailable if we can't check)
+		return res.json({ subdomain, available: false, reason: 'CHECK_FAILED' });
+	}
+});
+
+/**
+ * Public endpoint for confirming signup and optionally claiming a subdomain.
+ * This is called after the user enters the email verification code.
+ */
+router.post('/confirm-signup', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	const clientId = (envProc?.env?.COGNITO_USER_POOL_CLIENT_ID || envProc?.env?.COGNITO_CLIENT_ID) as string;
+	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	const subdomainsTable = envProc?.env?.SUBDOMAINS_TABLE as string;
+
+	if (!clientId) {
+		return res.status(500).json({ error: 'Missing Cognito client ID configuration' });
+	}
+	if (!userPoolId) {
+		return res.status(500).json({ error: 'Missing Cognito user pool ID configuration' });
+	}
+	if (!usersTable) {
+		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
+	}
+	if (!subdomainsTable) {
+		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
+	}
+
+	const { email, code, subdomain: rawSubdomain } = req.body ?? {};
+	const normalizedEmail = String(email ?? '').toLowerCase().trim();
+
+	// Validate email + code
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	if (!emailRegex.test(normalizedEmail)) {
+		return res.status(400).json({ error: 'Invalid email format' });
+	}
+	if (!/^\d{6}$/.test(String(code ?? ''))) {
+		return res.status(400).json({ error: 'Code must be 6 digits' });
+	}
+
+	// 1) Confirm signup in Cognito
+	try {
+		await cognito.send(new ConfirmSignUpCommand({
+			ClientId: clientId,
+			Username: normalizedEmail,
+			ConfirmationCode: String(code)
+		}));
+	} catch (err: any) {
+		// If already confirmed, do not allow claiming here (public endpoint).
+		if (err?.name === 'NotAuthorizedException') {
+			return res.status(409).json({ error: 'User is already confirmed. Please sign in to manage your subdomain.' });
+		}
+		logger?.warn('ConfirmSignUp failed', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
+		return res.status(400).json({ error: 'Failed to confirm signup', message: err?.message || 'Unknown error' });
+	}
+
+	// 2) Look up userId (sub) from Cognito (AdminGetUser requires pool id)
+	let userId: string | null = null;
+	try {
+		const user = await cognito.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: normalizedEmail }));
+		const subAttr = (user.UserAttributes || []).find((a) => a?.Name === 'sub');
+		userId = subAttr?.Value ?? null;
+	} catch (err: any) {
+		logger?.error('AdminGetUser failed after confirmation', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
+	}
+
+	if (!userId) {
+		// Account is confirmed, but we can't safely claim a subdomain without a stable userId
+		return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: 'USER_ID_MISSING', message: 'Account verified, but could not finalize subdomain setup. Please try later.' } });
+	}
+
+	// 3) Best-effort claim subdomain (optional)
+	const subdomain = normalizeSubdomain(rawSubdomain);
+	if (!subdomain) {
+		// No subdomain requested: just return verified.
+		return res.json({ verified: true, subdomainClaimed: false });
+	}
+
+	const validation = validateSubdomain(subdomain);
+	if (!validation.ok) {
+		return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: validation.code, message: validation.message } });
+	}
+
+	try {
+		const now = new Date().toISOString();
+
+		// Claim the subdomain (unique constraint)
+		await ddb.send(new PutCommand({
+			TableName: subdomainsTable,
+			Item: { subdomain, userId, createdAt: now },
+			ConditionExpression: 'attribute_not_exists(subdomain)'
+		}));
+
+		// Upsert the user record to store the chosen subdomain
+		await ddb.send(new UpdateCommand({
+			TableName: usersTable,
+			Key: { userId },
+			UpdateExpression: 'SET subdomain = :s, contactEmail = :e, updatedAt = :u, createdAt = if_not_exists(createdAt, :u)',
+			ExpressionAttributeValues: {
+				':s': subdomain,
+				':e': normalizedEmail,
+				':u': now
+			}
+		}));
+
+		return res.json({ verified: true, subdomainClaimed: true, subdomain });
+	} catch (err: any) {
+		// Conditional failure = taken
+		if (err?.name === 'ConditionalCheckFailedException') {
+			return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: 'TAKEN', message: 'This subdomain is already taken' } });
+		}
+		logger?.error('Claim subdomain failed', { subdomain, userId, errorName: err?.name, errorMessage: err?.message });
+		return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: 'CLAIM_FAILED', message: 'Account verified, but failed to claim subdomain. Please try later.' } });
 	}
 });
 

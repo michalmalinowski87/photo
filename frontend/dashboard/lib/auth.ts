@@ -476,11 +476,7 @@ export function signIn(email: string, password: string): Promise<string> {
 export function signUp(email: string, password: string): Promise<ISignUpResult["user"]> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for signup with rate limiting
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      reject(new Error("API URL not configured"));
-      return;
-    }
+    const apiUrl = getApiBaseUrlOrThrow();
 
     try {
       const response = await fetch(`${apiUrl}/auth/public/signup`, {
@@ -542,36 +538,94 @@ export function signUp(email: string, password: string): Promise<ISignUpResult["
   });
 }
 
-export function confirmSignUp(email: string, code: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!userPool) {
-      reject(new Error("Auth not initialized"));
-      return;
+export type ConfirmSignUpResult = {
+  verified: boolean;
+  subdomainClaimed?: boolean;
+  subdomain?: string;
+  subdomainError?: { code: string; message: string };
+};
+
+function getApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (raw) {
+    return raw.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    // Local Traefik proxy provides same-origin `/api/*`
+    if (host === "lvh.me" || host.endsWith(".lvh.me")) {
+      return `${window.location.origin}/api`;
     }
+  }
+  return "";
+}
 
-    const cognitoUser = new CognitoUser({
-      Username: email,
-      Pool: userPool,
-    });
+function getApiBaseUrlOrThrow(): string {
+  const apiUrl = getApiBaseUrl();
+  if (!apiUrl) {
+    throw new Error("API URL not configured");
+  }
+  return apiUrl;
+}
 
-    cognitoUser.confirmRegistration(code, true, (err: Error | null) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve();
-    });
+export async function confirmSignUpAndClaimSubdomain(
+  email: string,
+  code: string,
+  subdomain?: string
+): Promise<ConfirmSignUpResult> {
+  const apiUrl = getApiBaseUrlOrThrow();
+
+  const response = await fetch(`${apiUrl}/auth/public/confirm-signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code, subdomain }),
   });
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({
+      error: "Failed to confirm signup",
+    }))) as { error?: string; message?: string; code?: string };
+    const err = new Error(
+      errorData.error ?? errorData.message ?? "Failed to confirm signup"
+    ) as CognitoError;
+    err.code = errorData.code ?? "ConfirmSignUpFailed";
+    throw err;
+  }
+
+  return (await response.json()) as ConfirmSignUpResult;
+}
+
+export type SubdomainAvailabilityResult = {
+  subdomain: string;
+  available: boolean;
+  reason?: string;
+  message?: string;
+};
+
+export async function checkSubdomainAvailability(subdomain: string): Promise<SubdomainAvailabilityResult> {
+  const apiUrl = getApiBaseUrlOrThrow();
+  const response = await fetch(
+    `${apiUrl}/auth/public/subdomain-availability?subdomain=${encodeURIComponent(subdomain)}`,
+    { method: "GET" }
+  );
+
+  if (!response.ok) {
+    // Best-effort endpoint; treat failures as unavailable to avoid false positives
+    return { subdomain, available: false, reason: "CHECK_FAILED" };
+  }
+
+  return (await response.json()) as SubdomainAvailabilityResult;
+}
+
+export function confirmSignUp(email: string, code: string): Promise<void> {
+  // Backwards-compatible wrapper (no subdomain claim)
+  return confirmSignUpAndClaimSubdomain(email, code).then(() => undefined);
 }
 
 export function resendConfirmationCode(email: string): Promise<void> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for resending code with rate limiting
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      reject(new Error("API URL not configured"));
-      return;
-    }
+    const apiUrl = getApiBaseUrlOrThrow();
 
     try {
       const response = await fetch(`${apiUrl}/auth/public/resend-verification-code`, {
@@ -679,11 +733,7 @@ export function checkUserVerificationStatus(
 export function forgotPassword(email: string): Promise<void> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for password reset with rate limiting
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      reject(new Error("API URL not configured"));
-      return;
-    }
+    const apiUrl = getApiBaseUrlOrThrow();
 
     try {
       const response = await fetch(`${apiUrl}/auth/public/forgot-password`, {
@@ -728,11 +778,7 @@ export function forgotPassword(email: string): Promise<void> {
 export function resendResetCode(email: string): Promise<void> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for resending reset code with rate limiting
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      reject(new Error("API URL not configured"));
-      return;
-    }
+    const apiUrl = getApiBaseUrlOrThrow();
 
     try {
       const response = await fetch(`${apiUrl}/auth/public/resend-reset-code`, {
@@ -788,11 +834,7 @@ export function confirmForgotPassword(
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for confirming password reset
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      reject(new Error("API URL not configured"));
-      return;
-    }
+    const apiUrl = getApiBaseUrlOrThrow();
 
     try {
       const response = await fetch(`${apiUrl}/auth/public/confirm-forgot-password`, {
@@ -1231,7 +1273,8 @@ export function getHostedUILogoutUrl(userPoolDomain: string, redirectUri: string
   const baseUrl = `https://${domain}`;
   const params = new URLSearchParams({
     client_id: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? "",
-    logout_uri: cleanRedirectUri,
+    logout_uri: cleanRedirectUri, // Use logout_uri for logout endpoint (must be in allowed sign-out URLs)
+    redirect_uri: cleanRedirectUri, // Some Cognito configurations also require redirect_uri
   });
   return `${baseUrl}/logout?${params.toString()}`;
 }

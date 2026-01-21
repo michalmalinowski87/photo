@@ -103,6 +103,13 @@ yarn deploy
 - The API routes for payments/galleries/uploads are protected by the Cognito authorizer. Use the dashboard app to authenticate (Cognito) and call these routes.
 
 ### 8) Frontend Configuration & Run
+
+**Option A: Local HTTPS Multi-Domain Setup (Recommended)**
+
+For local development with HTTPS and tenant subdomains (e.g., `https://michalphotography.lvh.me/<galleryId>`), see [Local HTTPS Multi-Domain Development](docs/local-https-multidomain.md).
+
+**Option B: Traditional localhost Setup**
+
 - Dashboard:
   ```bash
   cd frontend/dashboard

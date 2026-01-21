@@ -149,13 +149,14 @@ export default function GalleryPage() {
   }, [selectionState?.changeRequestPending, showChangesRequestedOverlay, galleryId]);
 
   // Redirect to login if not authenticated
+  // But don't redirect during owner preview loading (token is fetched asynchronously via postMessage)
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !galleryId)) {
+    if (!isLoading && !isOwnerPreview && (!isAuthenticated || !galleryId)) {
       if (id) {
         router.replace(`/login/${id}`);
       }
     }
-  }, [isLoading, isAuthenticated, galleryId, id, router]);
+  }, [isLoading, isAuthenticated, galleryId, id, router, isOwnerPreview]);
 
   // Get images based on state - use filterUnselected=false to get all images (including unselected)
   const {
@@ -594,7 +595,23 @@ export default function GalleryPage() {
     return <FullPageLoading text="Ładowanie..." />;
   }
 
-  if (!isAuthenticated || !galleryId) {
+  // For owner preview, wait for authentication to complete before showing content
+  // For regular access, redirect is handled by useEffect above
+  if (!isOwnerPreview && (!isAuthenticated || !galleryId)) {
+    return null;
+  }
+  
+  // For owner preview, show loading while waiting for token, but don't redirect
+  if (isOwnerPreview && isLoading) {
+    return <FullPageLoading text="Ładowanie podglądu..." />;
+  }
+  
+  // For owner preview, if still not authenticated after loading completes, redirect to login
+  // This ensures security: owner preview requires a valid dashboard token
+  if (isOwnerPreview && !isAuthenticated && !isLoading) {
+    if (id) {
+      router.replace(`/login/${id}`);
+    }
     return null;
   }
 

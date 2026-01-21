@@ -12,8 +12,9 @@ import {
   PasswordStrengthResult,
   PasswordStrengthValidator,
 } from "../components/ui/password-strength-validator";
-import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
+import { initAuth, signUp, checkUserVerificationStatus, checkSubdomainAvailability } from "../lib/auth";
 import { getPublicLandingUrl } from "../lib/public-env";
+import { buildSubdomainPreviewUrl, normalizeSubdomainInput, validateSubdomainFormat } from "../lib/subdomain";
 
 interface CognitoError extends Error {
   message: string;
@@ -27,10 +28,16 @@ export const dynamic = "force-dynamic";
 export default function SignUp() {
   const router = useRouter();
   const [email, setEmail] = useState<string>("");
+  const [subdomain, setSubdomain] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [hostname, setHostname] = useState<string>("");
+  const [subdomainCheck, setSubdomainCheck] = useState<
+    | { state: "idle" | "invalid" | "checking" | "available" | "taken" | "unknown"; message?: string }
+    | undefined
+  >({ state: "idle" });
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
@@ -38,6 +45,8 @@ export default function SignUp() {
   );
 
   useEffect(() => {
+    setHostname(typeof window !== "undefined" ? window.location.hostname : "");
+
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
     const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
 
@@ -51,6 +60,46 @@ export default function SignUp() {
       setError(decodeURIComponent(typeof errorParam === "string" ? errorParam : errorParam[0]));
     }
   }, [router]);
+
+  // Subdomain availability check (best-effort)
+  useEffect(() => {
+    const normalized = normalizeSubdomainInput(subdomain);
+    if (!normalized) {
+      setSubdomainCheck({ state: "idle" });
+      return;
+    }
+
+    const validation = validateSubdomainFormat(normalized);
+    if (!validation.ok) {
+      setSubdomainCheck({ state: "invalid", message: validation.message });
+      return;
+    }
+
+    setSubdomainCheck({ state: "checking" });
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await checkSubdomainAvailability(normalized);
+          if (result.available) {
+            setSubdomainCheck({ state: "available" });
+            return;
+          }
+          if (result.reason === "TAKEN") {
+            setSubdomainCheck({ state: "taken" });
+            return;
+          }
+          setSubdomainCheck({
+            state: "unknown",
+            message: result.message ?? (result.reason ? `Nie można sprawdzić (${result.reason})` : undefined),
+          });
+        } catch (_e) {
+          setSubdomainCheck({ state: "unknown", message: "Nie można sprawdzić dostępności teraz" });
+        }
+      })();
+    }, 400);
+
+    return () => clearTimeout(t);
+  }, [subdomain]);
 
   // Calculate validator position when password changes or on scroll/resize
   useEffect(() => {
@@ -107,8 +156,12 @@ export default function SignUp() {
       await signUp(email, password);
       // Redirect to verification page with email
       const returnUrl = router.query.returnUrl ?? "/";
+      const normalized = normalizeSubdomainInput(subdomain);
+      const validation = normalized ? validateSubdomainFormat(normalized) : { ok: true as const };
+      const subdomainParam =
+        normalized && validation.ok ? `&subdomain=${encodeURIComponent(normalized)}` : "";
       void router.push(
-        `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
+        `/verify-email?email=${encodeURIComponent(email)}${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}${subdomainParam}`
       );
       // Keep loading true - overlay will stay until redirect completes
     } catch (err) {
@@ -200,6 +253,39 @@ export default function SignUp() {
                 required
                 autoComplete="email"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subdomain">Subdomena (opcjonalnie)</Label>
+              <Input
+                id="subdomain"
+                type="text"
+                value={subdomain}
+                onChange={(e) => setSubdomain(normalizeSubdomainInput(e.target.value))}
+                placeholder="michalphotography"
+                autoComplete="off"
+                inputMode="text"
+              />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>
+                  Dozwolone: <strong>a–z</strong>, <strong>0–9</strong>, <strong>-</strong>. Musi
+                  zaczynać i kończyć się literą/cyfrą. 3–30 znaków.
+                </p>
+                {subdomain && hostname && (
+                  <p>
+                    Podgląd: <strong>{buildSubdomainPreviewUrl(subdomain, hostname)}</strong>
+                  </p>
+                )}
+                {subdomainCheck?.state === "checking" && <p>Sprawdzanie dostępności…</p>}
+                {subdomainCheck?.state === "available" && <p className="text-green-500">Dostępna</p>}
+                {subdomainCheck?.state === "taken" && <p className="text-red-500">Zajęta</p>}
+                {subdomainCheck?.state === "invalid" && (
+                  <p className="text-red-500">{subdomainCheck.message}</p>
+                )}
+                {subdomainCheck?.state === "unknown" && subdomainCheck.message && (
+                  <p>{subdomainCheck.message}</p>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2 relative">

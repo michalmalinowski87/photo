@@ -6,6 +6,7 @@
  */
 
 import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
+import { isValidOrigin, isTrustedFixedOrigin } from "../../shared-auth/origin-validation";
 
 const TOKEN_SHARE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_SHARE";
 const TOKEN_REQUEST_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_REQUEST";
@@ -22,6 +23,7 @@ interface TokenShareMessage {
 interface TokenRequestMessage {
   type: typeof TOKEN_REQUEST_MESSAGE_TYPE;
   source: string;
+  nonce?: string;
 }
 
 interface TokenResponseMessage {
@@ -30,6 +32,7 @@ interface TokenResponseMessage {
   accessToken?: string;
   refreshToken?: string;
   source: string;
+  nonce?: string;
 }
 
 type TokenMessage = TokenShareMessage | TokenRequestMessage | TokenResponseMessage;
@@ -131,21 +134,12 @@ export function setupTokenSharingListener(): void {
       (v): v is string => typeof v === "string" && v.trim() !== ""
     );
 
-    // Validate origin
-    const isValidOrigin = trustedOrigins.some((origin) => {
-      try {
-        const originUrl = new URL(origin);
-        const eventUrl = new URL(event.origin);
-        return (
-          originUrl.hostname === eventUrl.hostname ||
-          eventUrl.hostname.endsWith(originUrl.hostname.replace(/^https?:\/\//, ""))
-        );
-      } catch {
-        return event.origin === origin || event.origin.startsWith(origin);
-      }
-    });
+    // Validate origin - fixed hosts must match exactly
+    const isValid = isTrustedFixedOrigin(event.origin, trustedOrigins) ||
+      // For tenant subdomains, check if event origin is valid for any trusted base domain
+      trustedOrigins.some((origin) => isValidOrigin(event.origin, origin));
 
-    if (!isValidOrigin) {
+    if (!isValid) {
       return; // Ignore messages from untrusted origins
     }
 
@@ -180,7 +174,7 @@ export function setupTokenSharingListener(): void {
       }
     }
 
-    // Handle token request message - respond if we have tokens
+    // Handle token request message - respond if we have tokens (with nonce for security)
     if (data?.type === TOKEN_REQUEST_MESSAGE_TYPE) {
       const idToken = localStorage.getItem("idToken");
       const accessToken = localStorage.getItem("accessToken");
@@ -192,13 +186,14 @@ export function setupTokenSharingListener(): void {
           const now = Math.floor(Date.now() / 1000);
 
           if (payload.exp && payload.exp > now) {
-            // Respond with tokens
+            // Respond with tokens (include nonce if provided for secure handshake)
             const response: TokenResponseMessage = {
               type: TOKEN_RESPONSE_MESSAGE_TYPE,
               idToken,
               accessToken: accessToken ?? undefined,
               refreshToken: refreshToken ?? undefined,
               source: window.location.origin,
+              nonce: data.nonce, // Echo back nonce for verification
             };
 
             if (event.source && "postMessage" in event.source) {

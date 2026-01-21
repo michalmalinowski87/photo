@@ -40,7 +40,7 @@ export default function AuthCallback() {
       hasRedirected.current = true;
       // Redirect to dashboard login page
       const dashboardUrl =
-        typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+        typeof window !== "undefined" ? window.location.origin : "";
       const returnUrl = state
         ? decodeURIComponent(typeof state === "string" ? state : state[0])
         : "/";
@@ -89,7 +89,7 @@ export default function AuthCallback() {
           hasRedirected.current = true;
           // Redirect to dashboard login page
           const dashboardUrl =
-            typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+            typeof window !== "undefined" ? window.location.origin : "";
           const returnUrl = state
             ? decodeURIComponent(typeof state === "string" ? state : state[0])
             : "/";
@@ -106,7 +106,7 @@ export default function AuthCallback() {
       hasRedirected.current = true;
       // No code, redirect to dashboard login page
       const dashboardUrl =
-        typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+        typeof window !== "undefined" ? window.location.origin : "";
       const returnUrl = state
         ? decodeURIComponent(typeof state === "string" ? state : state[0])
         : "/";

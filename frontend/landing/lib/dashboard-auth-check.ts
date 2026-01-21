@@ -6,6 +6,7 @@
  */
 
 import { getPublicDashboardUrl, getPublicLandingUrl } from "./public-env";
+import { isValidOrigin } from "../../shared-auth/origin-validation";
 
 const AUTH_STATUS_REQUEST = 'PHOTOCLOUD_AUTH_STATUS_REQUEST';
 const AUTH_STATUS_RESPONSE = 'PHOTOCLOUD_AUTH_STATUS_RESPONSE';
@@ -53,12 +54,7 @@ export function checkDashboardAuthStatus(): Promise<boolean> {
 
 		// Listen for ready signal from iframe
 		const readyHandler = (event: MessageEvent) => {
-			try {
-				const dashboardOrigin = new URL(dashboardUrl).origin;
-				if (event.origin !== dashboardOrigin) {
-					return;
-				}
-			} catch {
+			if (!isValidOrigin(event.origin, dashboardUrl)) {
 				return;
 			}
 
@@ -79,12 +75,7 @@ export function checkDashboardAuthStatus(): Promise<boolean> {
 
 		const messageHandler = (event: MessageEvent) => {
 			// Validate origin - must be from dashboard domain
-			try {
-				const dashboardOrigin = new URL(dashboardUrl).origin;
-				if (event.origin !== dashboardOrigin) {
-					return;
-				}
-			} catch {
+			if (!isValidOrigin(event.origin, dashboardUrl)) {
 				return;
 			}
 
@@ -166,12 +157,7 @@ export function setupDashboardAuthStatusListener() {
 		// Validate origin
 		const landingUrl = getPublicLandingUrl();
 
-		try {
-			const landingOrigin = new URL(landingUrl).origin;
-			if (event.origin !== landingOrigin && event.origin !== window.location.origin) {
-				return;
-			}
-		} catch {
+		if (!isValidOrigin(event.origin, landingUrl) && !isValidOrigin(event.origin, window.location.origin)) {
 			return;
 		}
 

@@ -1,6 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { ddbGet } from '../../lib/src/ddb';
 import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
+import { getOwnerSubdomain } from '../../lib/src/gallery-url';
 
 /**
  * Public (no-auth) endpoint for gallery login page.
@@ -18,6 +19,7 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	const envProc = (globalThis as any).process;
 	const tableName = envProc && envProc.env ? (envProc.env.GALLERIES_TABLE as string) : '';
+	const usersTable = envProc?.env?.USERS_TABLE as string;
 	const stage = envProc?.env?.STAGE || 'dev';
 
 	const gallery = await ddbGet<any>(tableName, { galleryId: id });
@@ -28,6 +30,9 @@ export const handler = lambdaLogger(async (event: any) => {
 			body: JSON.stringify({ error: 'not found' }),
 		};
 	}
+
+	// Get owner's subdomain for canonical URL construction
+	const ownerSubdomain = await getOwnerSubdomain(gallery.ownerId, usersTable);
 
 	// Convert coverPhotoUrl from S3 to CloudFront if needed
 	// Read CloudFront domain from SSM Parameter Store (avoids circular dependency in CDK)
@@ -53,6 +58,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		body: JSON.stringify({
 			galleryName: gallery.galleryName || null,
 			coverPhotoUrl,
+			ownerSubdomain: ownerSubdomain || null,
 		}),
 	};
 });

@@ -28,6 +28,41 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
 const ses = new SESClient({});
 
+const RESERVED_SUBDOMAINS = new Set([
+	'dashboard',
+	'photocloud',
+	'api',
+	'auth',
+	'www',
+	'gallery',
+	'landing',
+	'static',
+	'cdn'
+]);
+
+function normalizeSubdomain(input: unknown): string {
+	return String(input ?? '').trim().toLowerCase();
+}
+
+function validateSubdomain(subdomain: string): { ok: true } | { ok: false; code: string; message: string } {
+	if (!subdomain) {
+		return { ok: false, code: 'MISSING', message: 'Subdomain is required' };
+	}
+	if (subdomain.length < 3 || subdomain.length > 30) {
+		return { ok: false, code: 'INVALID_LENGTH', message: 'Subdomain must be 3-30 characters long' };
+	}
+	if (!/^[a-z0-9-]+$/.test(subdomain)) {
+		return { ok: false, code: 'INVALID_CHARS', message: 'Only lowercase letters (a-z), digits (0-9) and hyphen (-) are allowed' };
+	}
+	if (!/^[a-z0-9].*[a-z0-9]$/.test(subdomain)) {
+		return { ok: false, code: 'INVALID_EDGE', message: 'Subdomain must start and end with a letter or digit' };
+	}
+	if (RESERVED_SUBDOMAINS.has(subdomain)) {
+		return { ok: false, code: 'RESERVED', message: 'This subdomain is reserved' };
+	}
+	return { ok: true };
+}
+
 router.get('/business-info', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
@@ -258,6 +293,66 @@ router.post('/change-password', async (req: Request, res: Response) => {
 		}
 
 		return res.status(500).json({ error: 'Failed to change password', message: error.message });
+	}
+});
+
+/**
+ * Claim a tenant subdomain (one-time).
+ * If the user already has a subdomain, this returns 409.
+ */
+router.post('/subdomain', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	const subdomainsTable = envProc?.env?.SUBDOMAINS_TABLE as string;
+
+	if (!usersTable) {
+		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
+	}
+	if (!subdomainsTable) {
+		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
+	}
+
+	const event = reqToEvent(req);
+	const userId = getUserIdFromEvent(event);
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	const requested = normalizeSubdomain(req.body?.subdomain);
+	const validation = validateSubdomain(requested);
+	if (!validation.ok) {
+		return res.status(400).json({ error: validation.message, code: validation.code });
+	}
+
+	try {
+		// Enforce one-time set: if user already has a subdomain, don't allow overwrite
+		const existingUser = await ddb.send(new GetCommand({ TableName: usersTable, Key: { userId } }));
+		if (existingUser.Item?.subdomain) {
+			return res.status(409).json({ error: 'Subdomain already set' });
+		}
+
+		const now = new Date().toISOString();
+		await ddb.send(new PutCommand({
+			TableName: subdomainsTable,
+			Item: { subdomain: requested, userId, createdAt: now },
+			ConditionExpression: 'attribute_not_exists(subdomain)'
+		}));
+
+		await ddb.send(new UpdateCommand({
+			TableName: usersTable,
+			Key: { userId },
+			UpdateExpression: 'SET subdomain = :s, updatedAt = :u, createdAt = if_not_exists(createdAt, :u)',
+			ExpressionAttributeValues: { ':s': requested, ':u': now }
+		}));
+
+		return res.json({ subdomain: requested });
+	} catch (error: any) {
+		if (error?.name === 'ConditionalCheckFailedException') {
+			return res.status(409).json({ error: 'Subdomain is already taken' });
+		}
+		logger?.error('Claim subdomain failed', { userId, errorName: error?.name, errorMessage: error?.message });
+		return res.status(500).json({ error: 'Failed to claim subdomain' });
 	}
 });
 

@@ -306,7 +306,8 @@ export function getLogoutUrl(redirectUri) {
 	const baseUrl = `https://${domain}`;
 	const params = new URLSearchParams({
 		client_id: clientId,
-		logout_uri: cleanRedirectUri
+		logout_uri: cleanRedirectUri, // Use logout_uri for logout endpoint (must be in allowed sign-out URLs)
+		redirect_uri: cleanRedirectUri // Some Cognito configurations also require redirect_uri
 	});
 	
 	return `${baseUrl}/logout?${params.toString()}`;

@@ -7,9 +7,9 @@
 <body>
     <script>
         (function() {
-            // Get landing URL from query param or use default
+            // Get landing URL from query param or use current origin (works with proxy)
             const params = new URLSearchParams(window.location.search);
-            const landingUrl = params.get('landing') || 'http://localhost:3002';
+            const landingUrl = params.get('landing') || window.location.origin.replace('dashboard.lvh.me', 'photocloud.lvh.me');
             const expectedOrigin = new URL(landingUrl).origin;
             
             // Listen for auth status requests from parent window (landing page)

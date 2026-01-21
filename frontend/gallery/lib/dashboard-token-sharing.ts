@@ -1,11 +1,15 @@
 import { getPublicDashboardUrl } from "./public-env";
+import { isValidOrigin } from "../../shared-auth/origin-validation";
 
 const TOKEN_REQUEST_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_REQUEST";
 const TOKEN_RESPONSE_MESSAGE_TYPE = "PHOTOCLOUD_TOKEN_RESPONSE";
+const TOKEN_REQUEST_NONCE = "PHOTOCLOUD_TOKEN_REQUEST_NONCE";
+const TOKEN_RESPONSE_NONCE = "PHOTOCLOUD_TOKEN_RESPONSE_NONCE";
 
 interface TokenRequestMessage {
   type: typeof TOKEN_REQUEST_MESSAGE_TYPE;
   source: string;
+  nonce?: string;
 }
 
 interface TokenResponseMessage {
@@ -14,28 +18,14 @@ interface TokenResponseMessage {
   accessToken?: string;
   refreshToken?: string;
   source: string;
+  nonce?: string;
 }
 
-function normalizeOrigin(urlOrOrigin: string): string | null {
-  try {
-    // If it's already an origin (e.g. "https://x.com"), URL() still works.
-    return new URL(urlOrOrigin).origin;
-  } catch {
-    return null;
-  }
-}
+// Store pending nonces for handshake (prevents token exfiltration)
+const pendingNonces = new Map<string, { timeout: number; resolve: (token: string) => void; reject: (err: Error) => void }>();
 
-function isTrustedOrigin(eventOrigin: string, trustedOrigin: string): boolean {
-  try {
-    const trusted = new URL(trustedOrigin);
-    const eventUrl = new URL(eventOrigin);
-    return (
-      trusted.hostname === eventUrl.hostname ||
-      eventUrl.hostname.endsWith(trusted.hostname.replace(/^https?:\/\//, ""))
-    );
-  } catch {
-    return eventOrigin === trustedOrigin || eventOrigin.startsWith(trustedOrigin);
-  }
+function generateNonce(): string {
+	return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
 }
 
 export async function requestDashboardIdToken(options: {
@@ -48,8 +38,10 @@ export async function requestDashboardIdToken(options: {
   const timeoutMs = options.timeoutMs ?? 4000;
 
   const dashboardUrl = getPublicDashboardUrl();
-  const dashboardOrigin = normalizeOrigin(dashboardUrl);
-  if (!dashboardOrigin) {
+  // Validate that dashboardUrl is a valid URL format
+  try {
+    new URL(dashboardUrl);
+  } catch {
     throw new Error("Invalid NEXT_PUBLIC_DASHBOARD_URL (must be a valid URL)");
   }
 
@@ -57,19 +49,18 @@ export async function requestDashboardIdToken(options: {
     throw new Error("Missing window.opener (preview must be opened from dashboard)");
   }
 
-  const message: TokenRequestMessage = {
-    type: TOKEN_REQUEST_MESSAGE_TYPE,
-    source: window.location.origin,
-  };
+  // Generate nonce for secure handshake
+  const nonce = generateNonce();
 
   return await new Promise<string>((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
+      pendingNonces.delete(nonce);
       window.removeEventListener("message", onMessage);
       reject(new Error("Timed out waiting for dashboard token"));
     }, timeoutMs);
 
     const onMessage = (event: MessageEvent<TokenResponseMessage>) => {
-      if (!isTrustedOrigin(event.origin, dashboardOrigin)) {
+      if (!isValidOrigin(event.origin, dashboardUrl)) {
         return;
       }
 
@@ -78,16 +69,29 @@ export async function requestDashboardIdToken(options: {
         return;
       }
 
+      // Verify nonce matches
+      if (data.nonce !== nonce) {
+        return; // Ignore response with wrong nonce
+      }
+
       window.clearTimeout(timeoutId);
+      pendingNonces.delete(nonce);
       window.removeEventListener("message", onMessage);
       resolve(data.idToken);
     };
 
     window.addEventListener("message", onMessage);
 
+    const message: TokenRequestMessage = {
+      type: TOKEN_REQUEST_MESSAGE_TYPE,
+      source: window.location.origin,
+      nonce,
+    };
+
     try {
-      window.opener.postMessage(message, dashboardOrigin);
+      window.opener.postMessage(message, dashboardUrl);
     } catch (e) {
+      pendingNonces.delete(nonce);
       window.clearTimeout(timeoutId);
       window.removeEventListener("message", onMessage);
       reject(e instanceof Error ? e : new Error(String(e)));

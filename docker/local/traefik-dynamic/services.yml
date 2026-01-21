@@ -1,0 +1,28 @@
+http:
+  services:
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"
+        passHostHeader: true
+    
+    landing:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3002"
+        passHostHeader: true
+    
+    gallery:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3001"
+        passHostHeader: true
+    
+    # Note: devApi service URL must be set manually in this file
+    # Replace YOUR_API_GATEWAY_URL with your actual API Gateway URL
+    # Example: https://651eeav7sc.execute-api.eu-west-1.amazonaws.com
+    devApi:
+      loadBalancer:
+        servers:
+          - url: "YOUR_API_GATEWAY_URL"
+        passHostHeader: true

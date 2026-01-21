@@ -13,6 +13,7 @@ import {
 	getGalleryPasswordEncryptionSecret,
 	isEncryptedClientGalleryPassword,
 } from '../../lib/src/client-gallery-password';
+import { buildTenantGalleryUrl } from '../../lib/src/gallery-url';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ses = new SESClient({});
@@ -23,6 +24,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const stage = envProc?.env?.STAGE || 'dev';
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
 	let galleryUrl: string;
 	try {
 		galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
@@ -166,8 +168,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	const base = galleryUrl.replace(/\/+$/, '');
-	const galleryLink = `${base}/${galleryId}`;
+	// Build tenant-specific gallery URL if owner has a subdomain
+	const galleryLink = await buildTenantGalleryUrl(gallery.ownerId, galleryId, galleryUrl, usersTable);
 	const galleryName = gallery.galleryName || galleryId;
 	const clientEmail = gallery.clientEmail;
 

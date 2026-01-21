@@ -1,0 +1,90 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --accesslog=true
+      - --log.level=DEBUG
+      - --log.filePath=/dev/stdout
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Required: points to your deployed dev HTTP API (API Gateway).
+      # Example: https://651eeav7sc.execute-api.eu-west-1.amazonaws.com
+      - DEV_API_ORIGIN=${DEV_API_ORIGIN:?set DEV_API_ORIGIN to your deployed dev API Gateway URL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-dynamic:/etc/traefik/dynamic:ro
+      - ../../local-certs:/certs:ro
+    labels:
+      - traefik.enable=true
+
+      # -----------------------
+      # Dashboard (Next dev)
+      # -----------------------
+      - traefik.http.routers.dashboard.rule=Host(`dashboard.lvh.me`)
+      - traefik.http.routers.dashboard.entrypoints=websecure
+      - traefik.http.routers.dashboard.tls=true
+      - traefik.http.routers.dashboard.priority=100
+      - traefik.http.routers.dashboard.service=dashboard@file
+      - traefik.http.routers.dashboard.middlewares=dashboard-headers
+      - traefik.http.middlewares.dashboard-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
+
+      # -----------------------
+      # Landing (Next dev)
+      # -----------------------
+      - traefik.http.routers.landing.rule=Host(`photocloud.lvh.me`)
+      - traefik.http.routers.landing.entrypoints=websecure
+      - traefik.http.routers.landing.tls=true
+      - traefik.http.routers.landing.priority=100
+      - traefik.http.routers.landing.service=landing@file
+      - traefik.http.routers.landing.middlewares=landing-headers
+      - traefik.http.middlewares.landing-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
+
+      # -----------------------
+      # Gallery (tenant hosts)
+      # -----------------------
+      - traefik.http.routers.galleryTenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.lvh.me`)
+      - traefik.http.routers.galleryTenant.entrypoints=websecure
+      - traefik.http.routers.galleryTenant.tls=true
+      - traefik.http.routers.galleryTenant.priority=1
+      - traefik.http.routers.galleryTenant.service=gallery@file
+      - traefik.http.routers.galleryTenant.middlewares=gallery-headers
+      - traefik.http.middlewares.gallery-headers.headers.customRequestHeaders.X-Forwarded-Proto=https
+
+      # Optional convenience host for gallery (non-tenant).
+      - traefik.http.routers.galleryBase.rule=Host(`gallery.lvh.me`)
+      - traefik.http.routers.galleryBase.entrypoints=websecure
+      - traefik.http.routers.galleryBase.tls=true
+      - traefik.http.routers.galleryBase.priority=90
+      - traefik.http.routers.galleryBase.service=gallery@file
+      - traefik.http.routers.galleryBase.middlewares=gallery-headers
+
+      # -----------------------
+      # API routing
+      # -----------------------
+      # Same-origin API: https://<any-host>/api/* -> DEV_API_ORIGIN/*
+      - traefik.http.routers.apiPath.rule=PathPrefix(`/api`)
+      - traefik.http.routers.apiPath.entrypoints=websecure
+      - traefik.http.routers.apiPath.tls=true
+      - traefik.http.routers.apiPath.priority=200
+      - traefik.http.routers.apiPath.middlewares=stripApiPrefix
+      - traefik.http.routers.apiPath.service=devApi@file
+      - traefik.http.middlewares.stripApiPrefix.stripPrefix.prefixes=/api
+
+      # Direct API host (useful for testing): https://api.lvh.me/* -> DEV_API_ORIGIN/*
+      - traefik.http.routers.apiHost.rule=Host(`api.lvh.me`)
+      - traefik.http.routers.apiHost.entrypoints=websecure
+      - traefik.http.routers.apiHost.tls=true
+      - traefik.http.routers.apiHost.priority=200
+      - traefik.http.routers.apiHost.service=devApi@file
+

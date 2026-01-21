@@ -199,6 +199,14 @@ export class AppStack extends Stack {
 		removalPolicy: RemovalPolicy.RETAIN
 	});
 
+	// Reserved subdomains registry (enforces uniqueness for photographer tenant subdomains).
+	// Partition key is the subdomain itself (lowercased).
+	const subdomains = new Table(this, 'SubdomainsTable', {
+		partitionKey: { name: 'subdomain', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+
 	const emailCodeRateLimit = new Table(this, 'EmailCodeRateLimitTable', {
 		partitionKey: { name: 'email', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
@@ -465,6 +473,7 @@ export class AppStack extends Stack {
 			PACKAGES_TABLE: packages.tableName,
 			NOTIFICATIONS_TABLE: notifications.tableName,
 			USERS_TABLE: users.tableName,
+			SUBDOMAINS_TABLE: subdomains.tableName,
 			EMAIL_CODE_RATE_LIMIT_TABLE: emailCodeRateLimit.tableName,
 			GALLERIES_TABLE: galleries.tableName,
 			PAYMENTS_TABLE: payments.tableName,
@@ -749,6 +758,7 @@ export class AppStack extends Stack {
 		// Grant permissions to auth Lambda
 		emailCodeRateLimit.grantReadWriteData(authFn);
 		users.grantReadWriteData(authFn);
+		subdomains.grantReadWriteData(authFn);
 		
 		// Cognito permissions for auth Lambda
 		authFn.addToRolePolicy(new PolicyStatement({

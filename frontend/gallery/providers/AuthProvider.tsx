@@ -48,19 +48,37 @@ export function AuthProvider({
 
       // Owner preview: obtain Cognito token from dashboard via postMessage and store separately.
       // NOTE: This MUST NOT run for loginPreview, as we want to show the login UI.
+      // SECURITY: Owner preview requires a valid token from the dashboard (via window.opener).
+      // If window.opener doesn't exist or token request fails, user must authenticate normally.
       if (isOwnerPreview && !isLoginPreview) {
         setAuthMode(currentGalleryId, "owner");
         // If token exists in sessionStorage (single source of truth), we'll validate it below.
         // If not, request it from the opener.
         const existingOwnerToken = getToken(currentGalleryId);
         if (!existingOwnerToken) {
+          // Check if window.opener exists (security: must be opened from dashboard)
+          if (typeof window === "undefined" || !window.opener) {
+            // Not opened from dashboard - clear owner preview mode and require normal auth
+            setAuthMode(currentGalleryId, "client");
+            setIsLoading(false);
+            return;
+          }
+          
           void (async () => {
             try {
               const idToken = await requestDashboardIdToken({ timeoutMs: 4000 });
+              // Validate token format before storing
+              const parts = idToken.split(".");
+              if (parts.length !== 3) {
+                throw new Error("Invalid token format");
+              }
               setOwnerToken(currentGalleryId, idToken);
               setTokenState(idToken);
-            } catch {
-              // If we can't obtain a token, fall back to unauthenticated (gallery page will redirect to login)
+            } catch (error) {
+              // Token request failed - clear owner preview mode and require normal authentication
+              // This prevents bypassing auth by just adding ?ownerPreview=1 to URL
+              setAuthMode(currentGalleryId, "client");
+              clearToken(currentGalleryId);
             } finally {
               setIsLoading(false);
             }
