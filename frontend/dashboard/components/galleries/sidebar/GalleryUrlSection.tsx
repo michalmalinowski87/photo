@@ -27,7 +27,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Use React Query hooks (must be called before any early returns)
   const { data: gallery, isLoading, isFetching } = useGallery(galleryIdForQuery);
-  const { data: galleryOrders = [], isLoading: isLoadingOrders } = useOrders(galleryIdForQuery);
+  const { data: galleryOrders = [], isLoading: isLoadingOrders, isFetching: isFetchingOrders } = useOrders(galleryIdForQuery);
   const sendGalleryLinkToClientMutation = useSendGalleryToClient();
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
   const { startPublishFlow } = usePublishFlow();
@@ -39,6 +39,12 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   // Track last known paid state to prevent flicker during refetches
   const lastKnownIsPaidRef = useRef<boolean>(false);
 
+  // Track last known hasClientSelectingOrder state to prevent button disappearing during refetches
+  const lastKnownHasClientSelectingOrderRef = useRef<boolean>(false);
+
+  // Track if we just sent to client to maintain processing state during refetch
+  const isProcessingAfterSendRef = useRef<boolean>(false);
+
   // Track if send link request is in flight to prevent concurrent calls
   const isSendingRef = useRef(false);
 
@@ -48,6 +54,21 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
       lastKnownIsPaidRef.current = typeof gallery.isPaid === "boolean" ? gallery.isPaid : false;
     }
   }, [gallery, isFetching]);
+
+  // Update ref when orders data changes (but not during refetches)
+  useEffect(() => {
+    if (!isFetchingOrders && galleryOrders.length >= 0) {
+      const hasClientSelecting = galleryOrders.some(
+        (o) => o.deliveryStatus === "CLIENT_SELECTING"
+      );
+      lastKnownHasClientSelectingOrderRef.current = hasClientSelecting;
+      // Only clear processing flag when we have confirmed CLIENT_SELECTING order exists
+      // This ensures smooth transition from processing -> sent state without showing "send" button again
+      if (isProcessingAfterSendRef.current && hasClientSelecting) {
+        isProcessingAfterSendRef.current = false;
+      }
+    }
+  }, [galleryOrders, isFetchingOrders]);
   // Use mutation loading state instead of local state
   const sendLinkLoading = sendGalleryLinkToClientMutation.isPending;
 
@@ -89,6 +110,9 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     try {
       const result = await sendGalleryLinkToClientMutation.mutateAsync(galleryIdStr);
 
+      // Mark that we're processing after send - this will be cleared when CLIENT_SELECTING order is confirmed
+      isProcessingAfterSendRef.current = true;
+
       showToast(
         "success",
         "Sukces",
@@ -115,6 +139,33 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     // Use centralized publish flow action
     startPublishFlow(galleryIdStr);
   }, [galleryIdStr, startPublishFlow]);
+
+  // Compute values needed for button state (before early returns)
+  const currentHasClientSelectingOrder = galleryOrders.some(
+    (o) => o.deliveryStatus === "CLIENT_SELECTING"
+  );
+  const hasClientSelectingOrder =
+    isFetchingOrders && lastKnownHasClientSelectingOrderRef.current !== undefined
+      ? lastKnownHasClientSelectingOrderRef.current
+      : currentHasClientSelectingOrder;
+  const isProcessingAfterSend = sendLinkLoading || isProcessingAfterSendRef.current;
+  const hasExistingOrders = galleryOrders.length > 0;
+  const orderDeliveryStatus =
+    order && typeof order === "object" && "deliveryStatus" in order
+      ? (order as { deliveryStatus?: string }).deliveryStatus
+      : undefined;
+  const shouldShowShareButtonComputed =
+    !isLoading &&
+    (!isFetching || isProcessingAfterSend) &&
+    !isLoadingOrders &&
+    gallery &&
+    typeof gallery.isPaid === "boolean" &&
+    gallery.isPaid &&
+    Boolean(gallery.selectionEnabled) &&
+    typeof gallery.clientEmail === "string" &&
+    gallery.clientEmail.length > 0 &&
+    orderDeliveryStatus !== "PREPARING_DELIVERY" &&
+    orderDeliveryStatus !== "DELIVERED";
 
   // Early return: don't render if gallery doesn't exist or should hide
   // Check gallery FIRST to prevent any computation or rendering with stale data
@@ -168,29 +219,12 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   };
 
   // Check if gallery has a CLIENT_SELECTING order
-  const hasClientSelectingOrder = galleryOrders.some(
-    (o) => o.deliveryStatus === "CLIENT_SELECTING"
-  );
+  // Use last known state during refetches to prevent button disappearing
+  // (already computed above)
 
-  // Check if gallery has any existing orders (for determining button text)
-  const hasExistingOrders = galleryOrders.length > 0;
-
-  const orderDeliveryStatus =
-    order && typeof order === "object" && "deliveryStatus" in order
-      ? (order as { deliveryStatus?: string }).deliveryStatus
-      : undefined;
-
-  const shouldShowShareButton =
-    !isLoading &&
-    !isFetching &&
-    !isLoadingOrders &&
-    gallery &&
-    isPaid &&
-    Boolean(gallery.selectionEnabled) &&
-    typeof gallery.clientEmail === "string" &&
-    gallery.clientEmail.length > 0 &&
-    orderDeliveryStatus !== "PREPARING_DELIVERY" &&
-    orderDeliveryStatus !== "DELIVERED";
+  // Show share button when conditions are met
+  // Don't hide during refetches if we're in a processing state (mutation pending or refetching after send)
+  const shouldShowShareButton = shouldShowShareButtonComputed;
 
   return (
     <div className="py-3 border-b border-gray-400 dark:border-gray-800">
@@ -270,15 +304,15 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
       {/* Share Button - Show when published and ready to send */}
       {shouldShowShareButton && (
         <>
-          {hasClientSelectingOrder ? (
+          {hasClientSelectingOrder || sendLinkLoading || isProcessingAfterSendRef.current ? (
             <Button
               variant="outline"
               size="md"
               disabled
-              className="w-full mt-2.5"
+              className="w-full mt-2.5 transition-opacity duration-300"
               startIcon={<Share2 size={20} />}
             >
-              Udostępniono klientowi
+              {sendLinkLoading ? "Wysyłanie..." : "Udostępniono klientowi"}
             </Button>
           ) : (
             <Button
@@ -286,14 +320,12 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
               size="md"
               onClick={handleSendLink}
               disabled={sendLinkLoading}
-              className="w-full mt-2.5"
+              className="w-full mt-2.5 transition-opacity duration-300"
               startIcon={<Share2 size={20} />}
             >
-              {sendLinkLoading
-                ? "Wysyłanie..."
-                : hasExistingOrders
-                  ? "Wyślij link przypominający"
-                  : "Udostępnij klientowi"}
+              {hasExistingOrders
+                ? "Wyślij link przypominający"
+                : "Udostępnij klientowi"}
             </Button>
           )}
         </>

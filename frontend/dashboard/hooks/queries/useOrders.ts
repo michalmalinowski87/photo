@@ -6,7 +6,7 @@ import type { Order } from "../../types";
 
 export function useOrders(
   galleryId?: string,
-  options?: Omit<UseQueryOptions<Order[]>, "queryKey" | "queryFn">
+  options?: Omit<UseQueryOptions<Order[]>, "queryKey" | "queryFn" | "placeholderData">
 ) {
   return useQuery({
     queryKey: queryKeys.orders.list(galleryId),
@@ -19,6 +19,8 @@ export function useOrders(
     // Only fetch if galleryId is provided (for gallery-specific orders)
     // or if no galleryId (for all orders)
     enabled: true,
+    // Keep previous data while loading new orders for smoother transitions
+    placeholderData: (previousData) => previousData,
     ...options,
   });
 }
