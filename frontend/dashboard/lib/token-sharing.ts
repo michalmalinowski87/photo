@@ -5,7 +5,7 @@
  * using postMessage API. Dashboard is the source of truth for auth.
  */
 
-import { isValidOrigin, isTrustedFixedOrigin } from "../../shared-auth/origin-validation";
+import { isValidOrigin, isTrustedFixedOrigin, getBaseDomain, isTenantSubdomain } from "../../shared-auth/origin-validation";
 
 import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
 
@@ -136,10 +136,23 @@ export function setupTokenSharingListener(): void {
     );
 
     // Validate origin - fixed hosts must match exactly
+    // For tenant subdomains: allow if they share the same base domain as any trusted origin
     const isValid =
       isTrustedFixedOrigin(event.origin, trustedOrigins) ||
       // For tenant subdomains, check if event origin is valid for any trusted base domain
-      trustedOrigins.some((origin) => isValidOrigin(event.origin, origin));
+      trustedOrigins.some((origin) => isValidOrigin(event.origin, origin)) ||
+      // Allow tenant subdomains that share the same base domain as dashboard (for owner preview)
+      (() => {
+        try {
+          const eventUrl = new URL(event.origin);
+          const dashboardUrlObj = new URL(dashboardUrl);
+          const eventBase = getBaseDomain(eventUrl.hostname);
+          const dashboardBase = getBaseDomain(dashboardUrlObj.hostname);
+          return eventBase === dashboardBase && isTenantSubdomain(eventUrl.hostname);
+        } catch {
+          return false;
+        }
+      })();
 
     if (!isValid) {
       return; // Ignore messages from untrusted origins
