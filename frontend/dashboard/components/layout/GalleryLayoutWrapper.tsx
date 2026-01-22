@@ -171,7 +171,7 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
   // This ensures overlay covers everything (including sidebar) from the first render
   const loadingText =
     isOrderPage && shouldShowOrderLoading ? "Ładowanie zlecenia..." : "Ładowanie galerii...";
-  
+
   if (hasOrder) {
     // Order is loaded, render children normally
   } else if (shouldShowLoading) {

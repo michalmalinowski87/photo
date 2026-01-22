@@ -83,7 +83,7 @@ export const ClientSendSuccessPopup = ({
         <div className="p-6 border-b border-gray-400 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Link został wysłany do klienta! 
+              Link został wysłany do klienta!
             </h2>
             <button
               onClick={onClose}

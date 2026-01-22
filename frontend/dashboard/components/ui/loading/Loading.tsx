@@ -36,7 +36,6 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 // Fixed overlay that covers the entire screen including header
 // CRITICAL: Renders immediately on client to prevent content flash (sidebar appearing before overlay)
 export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
-
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",

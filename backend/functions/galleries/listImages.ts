@@ -422,7 +422,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					previewUrlFallback, // S3 presigned URL fallback for preview
 					bigThumbUrl,   // CloudFront WebP big thumb URL (600px) from bigthumbs folder
 					bigThumbUrlFallback, // S3 presigned URL fallback for big thumb
-					thumbUrl,      // CloudFront WebP thumb URL (300x300) from thumbs folder
+					thumbUrl,      // CloudFront WebP thumb URL (600px) from thumbs folder
 					thumbUrlFallback, // S3 presigned URL fallback for thumb
 					url: originalUrl, // S3 presigned URL for original photo (ultimate fallback, may be null if deleted)
 					size,

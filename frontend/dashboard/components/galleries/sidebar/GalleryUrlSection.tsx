@@ -27,7 +27,11 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
 
   // Use React Query hooks (must be called before any early returns)
   const { data: gallery, isLoading, isFetching } = useGallery(galleryIdForQuery);
-  const { data: galleryOrders = [], isLoading: isLoadingOrders, isFetching: isFetchingOrders } = useOrders(galleryIdForQuery);
+  const {
+    data: galleryOrders = [],
+    isLoading: isLoadingOrders,
+    isFetching: isFetchingOrders,
+  } = useOrders(galleryIdForQuery);
   const sendGalleryLinkToClientMutation = useSendGalleryToClient();
   const { data: order } = useOrder(galleryIdForQuery, orderIdForQuery);
   const { startPublishFlow } = usePublishFlow();
@@ -58,9 +62,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   // Update ref when orders data changes (but not during refetches)
   useEffect(() => {
     if (!isFetchingOrders && galleryOrders.length >= 0) {
-      const hasClientSelecting = galleryOrders.some(
-        (o) => o.deliveryStatus === "CLIENT_SELECTING"
-      );
+      const hasClientSelecting = galleryOrders.some((o) => o.deliveryStatus === "CLIENT_SELECTING");
       lastKnownHasClientSelectingOrderRef.current = hasClientSelecting;
       // Only clear processing flag when we have confirmed CLIENT_SELECTING order exists
       // This ensures smooth transition from processing -> sent state without showing "send" button again
@@ -323,9 +325,7 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
               className="w-full mt-2.5 transition-opacity duration-300"
               startIcon={<Share2 size={20} />}
             >
-              {hasExistingOrders
-                ? "Wyślij link przypominający"
-                : "Udostępnij klientowi"}
+              {hasExistingOrders ? "Wyślij link przypominający" : "Udostępnij klientowi"}
             </Button>
           )}
         </>
