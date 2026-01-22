@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
 interface LoadingProps {
@@ -36,6 +36,8 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 // Fixed overlay that covers the entire screen including header
 // CRITICAL: Renders immediately on client to prevent content flash (sidebar appearing before overlay)
 export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
+  const [hasMounted, setHasMounted] = useState(false);
+
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",
@@ -44,6 +46,12 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
   ];
 
   const defaultMessage = welcomingMessages[0];
+
+  // Track client-side mount to prevent hydration mismatch
+  // Use useLayoutEffect for synchronous rendering before paint
+  useLayoutEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const content = (
     <div className="flex flex-col items-center justify-center gap-6 opacity-60">
@@ -90,15 +98,14 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
     </div>
   );
 
-  // CRITICAL: Render overlay immediately to prevent content flash
-  // For client-side only components, we can render immediately
-  // The portal ensures it's above all content, and rendering immediately prevents sidebar from showing first
-  if (typeof window === "undefined") {
-    // Server-side: return null to prevent hydration mismatch
+  // Prevent hydration mismatch by ensuring server and client first render match
+  // Server-side and client first render: return null
+  // Client after mount: render portal to prevent content flash
+  if (!hasMounted || typeof window === "undefined") {
     return null;
   }
 
-  // Client-side: render immediately via portal to prevent any content flash
+  // Client-side after mount: render immediately via portal to prevent any content flash
   // This ensures overlay appears before sidebar/layout renders
   return createPortal(loadingOverlay, document.body);
 };
