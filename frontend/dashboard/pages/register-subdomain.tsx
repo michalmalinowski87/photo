@@ -4,11 +4,7 @@ import React, { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { Label } from "../components/ui/label";
-import {
-  initAuth,
-  confirmSignUpAndClaimSubdomain,
-  checkSubdomainAvailability,
-} from "../lib/auth";
+import { initAuth, confirmSignUpAndClaimSubdomain, checkSubdomainAvailability } from "../lib/auth";
 import {
   normalizeSubdomainInput,
   validateSubdomainFormat,

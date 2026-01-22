@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from "react";
 
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../../lib/currency";
 import { formatPrice } from "../../../lib/format-price";
+import Badge from "../../ui/badge/Badge";
 import TypeformInput from "../../ui/input/TypeformInput";
 import SearchableSelect from "../../ui/select/SearchableSelect";
 
@@ -226,10 +227,47 @@ export const PackageStep = ({
               errorMessage={fieldErrors.initialPaymentAmountCents}
               hint="Kwota wpłacona przez klienta za pakiet zakupiony od fotografa"
             />
+            {/* Payment status - shown below payment amount field */}
+            {(() => {
+              const packagePriceCentsForStatus = packagePriceCents ?? 0;
+              // Always show "Nieopłacone" if no package price is set
+              const paymentStatus =
+                packagePriceCentsForStatus === 0
+                  ? "UNPAID"
+                  : initialPaymentAmountCents === 0
+                    ? "UNPAID"
+                    : initialPaymentAmountCents >= packagePriceCentsForStatus
+                      ? "PAID"
+                      : "PARTIALLY_PAID";
+
+              return (
+                <div className="flex items-center gap-3 mt-3">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Status płatności:
+                  </span>
+                  <Badge
+                    color={
+                      paymentStatus === "PAID"
+                        ? "success"
+                        : paymentStatus === "PARTIALLY_PAID"
+                          ? "warning"
+                          : "error"
+                    }
+                    variant="light"
+                  >
+                    {paymentStatus === "PAID"
+                      ? "Opłacone"
+                      : paymentStatus === "PARTIALLY_PAID"
+                        ? "Częściowo opłacone"
+                        : "Nieopłacone"}
+                  </Badge>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
-        <div className="flex justify-center mt-28">
+        <div className="flex justify-center mt-[5.3rem]">
           <button
             onClick={() => {
               setIsFormMode(true);
@@ -346,6 +384,43 @@ export const PackageStep = ({
               errorMessage={fieldErrors.initialPaymentAmountCents}
               hint="Kwota wpłacona przez klienta za pakiet zakupiony od fotografa"
             />
+            {/* Payment status - shown below payment amount field */}
+            {(() => {
+              const packagePriceCentsForStatus = packagePriceCents ?? 0;
+              // Always show "Nieopłacone" if no package price is set
+              const paymentStatus =
+                packagePriceCentsForStatus === 0
+                  ? "UNPAID"
+                  : initialPaymentAmountCents === 0
+                    ? "UNPAID"
+                    : initialPaymentAmountCents >= packagePriceCentsForStatus
+                      ? "PAID"
+                      : "PARTIALLY_PAID";
+
+              return (
+                <div className="flex items-center gap-3 mt-3">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Status płatności:
+                  </span>
+                  <Badge
+                    color={
+                      paymentStatus === "PAID"
+                        ? "success"
+                        : paymentStatus === "PARTIALLY_PAID"
+                          ? "warning"
+                          : "error"
+                    }
+                    variant="light"
+                  >
+                    {paymentStatus === "PAID"
+                      ? "Opłacone"
+                      : paymentStatus === "PARTIALLY_PAID"
+                        ? "Częściowo opłacone"
+                        : "Nieopłacone"}
+                  </Badge>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

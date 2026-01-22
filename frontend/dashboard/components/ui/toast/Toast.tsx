@@ -10,7 +10,7 @@ interface ToastProps {
   duration?: number;
 }
 
-const Toast = ({ variant, title, message, onClose, duration = 2000 }: ToastProps) => {
+const Toast = ({ variant, title, message, onClose, duration = 1500 }: ToastProps) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {

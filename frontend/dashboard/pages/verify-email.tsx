@@ -3,10 +3,7 @@ import React, { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { CodeInput } from "../components/ui/code-input";
-import {
-  initAuth,
-  resendConfirmationCode,
-} from "../lib/auth";
+import { initAuth, resendConfirmationCode } from "../lib/auth";
 
 interface CognitoError extends Error {
   message: string;
@@ -65,7 +62,7 @@ export default function VerifyEmail() {
     }
   }, [resendCooldown, resendMessageType]);
 
-  const handleVerifyCode = async (): Promise<void> => {
+  const handleVerifyCode = (): void => {
     setError("");
 
     if (code?.length !== 6) {
@@ -77,18 +74,19 @@ export default function VerifyEmail() {
     try {
       // Just validate format and redirect - actual verification happens in register-subdomain
       const returnUrl = router.query.returnUrl ?? "/";
-      const returnUrlParam = returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : "";
+      const returnUrlParam = returnUrl
+        ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}`
+        : "";
       const redirectUrl = `/register-subdomain?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}${returnUrlParam}`;
       // Use router.push and ensure it completes
       void router.push(redirectUrl);
       // Keep loading state - page will change
-    } catch (err) {
+    } catch (_err) {
       // Handle redirect errors
       setError("Nie udało się przekierować. Spróbuj ponownie.");
       setLoading(false);
     }
   };
-
 
   const handleResendCode = async (): Promise<void> => {
     // Prevent multiple clicks during cooldown

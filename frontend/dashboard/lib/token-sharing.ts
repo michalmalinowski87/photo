@@ -5,7 +5,12 @@
  * using postMessage API. Dashboard is the source of truth for auth.
  */
 
-import { isValidOrigin, isTrustedFixedOrigin, getBaseDomain, isTenantSubdomain } from "../../shared-auth/origin-validation";
+import {
+  isValidOrigin,
+  isTrustedFixedOrigin,
+  getBaseDomain,
+  isTenantSubdomain,
+} from "../../shared-auth/origin-validation";
 
 import { getPublicDashboardUrl, getPublicGalleryUrl, getPublicLandingUrl } from "./public-env";
 

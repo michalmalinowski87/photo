@@ -120,7 +120,7 @@ export default function SignUp() {
         try {
           const verificationStatus = await checkUserVerificationStatus(email);
           const returnUrl = router.query.returnUrl ?? "/";
-          
+
           // If account exists (verified or unverified), redirect to verification
           if (verificationStatus === "verified" || verificationStatus === "unverified") {
             void router.push(
@@ -132,9 +132,7 @@ export default function SignUp() {
           // If check fails, fall through to show error message
         }
         // Account was not created - show user-friendly error
-        setError(
-          "Nie udało się utworzyć konta w tym momencie. Spróbuj ponownie za chwilę."
-        );
+        setError("Nie udało się utworzyć konta w tym momencie. Spróbuj ponownie za chwilę.");
         return;
       }
       // Handle Cognito errors

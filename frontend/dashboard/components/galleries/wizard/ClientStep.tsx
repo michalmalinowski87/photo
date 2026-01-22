@@ -353,7 +353,7 @@ export const ClientStep = ({
             </div>
           </form>
 
-          <div className="flex justify-center mt-28">
+          <div className="flex justify-center mt-24">
             <button
               onClick={() => {
                 setIsFormMode(true);

@@ -64,7 +64,7 @@ export const ToastContainer = () => {
             title={toast.title}
             message={toast.message}
             onClose={() => removeToast(toast.id)}
-            duration={toast.duration ?? 2000}
+            duration={toast.duration ?? 1500}
           />
         </div>
       ))}

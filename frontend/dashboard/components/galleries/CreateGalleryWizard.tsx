@@ -10,7 +10,6 @@ import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { useUnifiedStore } from "../../store/unifiedStore";
 import type { Gallery } from "../../types";
-import Badge from "../ui/badge/Badge";
 
 import { ClientStep } from "./wizard/ClientStep";
 import { GalleryNameStep } from "./wizard/GalleryNameStep";
@@ -102,7 +101,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={disabled}
-      className="px-6 py-2.5 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+      className="px-6 h-14 w-full bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
     >
       {disabled ? "Przetwarzanie..." : "Utwórz galerię"}
     </button>
@@ -792,86 +791,53 @@ const CreateGalleryWizard = ({
         </div>
 
         {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
-        <div className="flex items-center justify-between gap-4 px-6 py-6 bg-photographer-background dark:bg-gray-dark flex-shrink-0 h-24">
-          {currentStep > 1 && (
-            <button
-              onClick={handleBack}
-              disabled={loading}
-              className="px-6 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-[0.98]"
-            >
-              ← Wstecz
-            </button>
-          )}
+        <div className="flex items-center gap-4 px-6 py-6 bg-photographer-background dark:bg-gray-dark flex-shrink-0 min-h-[88px]">
+          {/* Step 1: Show Anuluj button, and Next Step only if gallery type is selected */}
           {currentStep === 1 && (
-            <button
-              onClick={onClose}
-              disabled={loading}
-              className="px-5 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-photographer-elevated dark:hover:bg-gray-800 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Anuluj
-            </button>
+            <>
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="w-40 px-8 h-14 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-transparent hover:bg-photographer-elevated dark:hover:bg-gray-800 flex items-center justify-center"
+              >
+                Anuluj
+              </button>
+              {data.selectionEnabled !== undefined && (
+                <button
+                  onClick={handleNext}
+                  disabled={loading}
+                  className="flex-1 px-6 h-14 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {loading ? "Przetwarzanie..." : "Następny Krok"}
+                </button>
+              )}
+            </>
           )}
-          <div className="flex items-center gap-4 ml-auto">
-            {/* Payment status - only for step 3 (Package step) */}
-            {currentStep === 3 &&
-              (() => {
-                const packagePriceCentsForStatus = data.packagePriceCents ?? 0;
-                // Always show "Nieopłacone" if no package price is set
-                const paymentStatus =
-                  packagePriceCentsForStatus === 0
-                    ? "UNPAID"
-                    : data.initialPaymentAmountCents === 0
-                      ? "UNPAID"
-                      : data.initialPaymentAmountCents >= packagePriceCentsForStatus
-                        ? "PAID"
-                        : "PARTIALLY_PAID";
-
-                return (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Status płatności:
-                    </span>
-                    <Badge
-                      color={
-                        paymentStatus === "PAID"
-                          ? "success"
-                          : paymentStatus === "PARTIALLY_PAID"
-                            ? "warning"
-                            : "error"
-                      }
-                      variant="light"
-                    >
-                      {paymentStatus === "PAID"
-                        ? "Opłacone"
-                        : paymentStatus === "PARTIALLY_PAID"
-                          ? "Częściowo opłacone"
-                          : "Nieopłacone"}
-                    </Badge>
-                  </div>
-                );
-              })()}
-            {currentStep > 1 &&
-              (currentStep === 4 ? (
-                <form onSubmit={handleFormSubmit}>
+          {/* Steps 2-4: Show Wstecz button on the left, Continue/Submit button on the right */}
+          {currentStep > 1 && (
+            <>
+              <button
+                onClick={handleBack}
+                disabled={loading}
+                className="w-40 px-8 h-14 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-transparent hover:bg-photographer-elevated dark:hover:bg-gray-800 flex items-center justify-center"
+              >
+                Wstecz
+              </button>
+              {currentStep === 4 ? (
+                <form onSubmit={handleFormSubmit} className="flex-1">
                   <SubmitButton onSubmit={handleSubmit} disabled={loading} />
                 </form>
               ) : (
                 <button
                   onClick={handleNext}
                   disabled={loading}
-                  className="px-6 py-2.5 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-sm font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="flex-1 px-6 h-14 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  {loading ? (
-                    "Przetwarzanie..."
-                  ) : (
-                    <>
-                      OK <span className="text-lg">✓</span>
-                    </>
-                  )}
+                  {loading ? "Przetwarzanie..." : "Następny Krok"}
                 </button>
-              ))}
-          </div>
-          {currentStep === 1 && <div />}
+              )}
+            </>
+          )}
         </div>
       </div>
     </>

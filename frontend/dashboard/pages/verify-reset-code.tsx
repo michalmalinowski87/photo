@@ -137,9 +137,7 @@ export default function VerifyResetCode() {
       </div>
 
       <div className="flex flex-col w-full mt-10">
-        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
-          Weryfikacja kodu
-        </h2>
+        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">Weryfikacja kodu</h2>
         <p className="text-base md:text-lg text-muted-foreground mb-8">
           Wprowadź 6-cyfrowy kod weryfikacyjny wysłany na adres <strong>{email}</strong>
         </p>

@@ -158,7 +158,9 @@ export default function ResetPassword() {
         <div className="max-w-sm md:max-w-lg w-full mx-auto px-4 md:px-8">
           <div className="text-center">
             <div className="mb-5 text-green-600 text-5xl">✓</div>
-            <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">Hasło zresetowane!</h2>
+            <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
+              Hasło zresetowane!
+            </h2>
             <p className="text-base text-muted-foreground mb-8">
               Przekierowywanie do strony logowania...
             </p>
@@ -179,9 +181,7 @@ export default function ResetPassword() {
       </div>
 
       <div className="flex flex-col w-full mt-10 relative">
-        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
-          Ustaw nowe hasło
-        </h2>
+        <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">Ustaw nowe hasło</h2>
         <p className="text-base md:text-lg text-muted-foreground mb-8">
           Wprowadź nowe hasło dla konta <strong>{email}</strong>
         </p>

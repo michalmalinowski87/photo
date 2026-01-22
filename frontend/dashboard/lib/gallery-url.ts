@@ -42,7 +42,7 @@ function extractBaseDomain(galleryUrl: string): string {
  * Build tenant-specific gallery URL.
  * If the gallery owner has a subdomain, returns: https://${subdomain}.${baseDomain}/${galleryId}
  * Otherwise, falls back to: ${galleryUrl}/${galleryId}
- * 
+ *
  * @param gallery - Gallery object (must have galleryId and optionally ownerSubdomain)
  * @param galleryUrl - Optional base gallery URL (defaults to NEXT_PUBLIC_GALLERY_URL)
  * @returns The tenant-specific gallery URL
@@ -69,7 +69,7 @@ export function buildTenantGalleryUrl(
 /**
  * Build tenant-specific gallery login URL (for client access).
  * Similar to buildTenantGalleryUrl but constructs the login URL format: /login/${galleryId}
- * 
+ *
  * @param gallery - Gallery object (must have galleryId and optionally ownerSubdomain)
  * @param galleryUrl - Optional base gallery URL (defaults to NEXT_PUBLIC_GALLERY_URL)
  * @returns The tenant-specific gallery login URL
