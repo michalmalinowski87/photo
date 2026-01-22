@@ -167,15 +167,23 @@ export default function GalleryLayoutWrapper({ children }: GalleryLayoutWrapperP
     !galleryCreationLoading;
 
   // CRITICAL: If we have the order, NEVER show loading overlay
+  // CRITICAL: Render overlay OUTSIDE layout to prevent sidebar from showing first
+  // This ensures overlay covers everything (including sidebar) from the first render
+  const loadingText =
+    isOrderPage && shouldShowOrderLoading ? "Ładowanie zlecenia..." : "Ładowanie galerii...";
+  
   if (hasOrder) {
     // Order is loaded, render children normally
   } else if (shouldShowLoading) {
-    const loadingText =
-      isOrderPage && shouldShowOrderLoading ? "Ładowanie zlecenia..." : "Ładowanie galerii...";
     return (
-      <GalleryLayout>
+      <>
+        {/* Render overlay FIRST and OUTSIDE layout to cover everything immediately */}
         <FullPageLoading text={loadingText} />
-      </GalleryLayout>
+        {/* Layout is still rendered but overlay covers it completely */}
+        <GalleryLayout>
+          <div />
+        </GalleryLayout>
+      </>
     );
   }
 

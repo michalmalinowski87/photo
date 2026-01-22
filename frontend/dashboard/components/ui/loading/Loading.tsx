@@ -34,13 +34,8 @@ export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => 
 
 // Full page loading component
 // Fixed overlay that covers the entire screen including header
+// CRITICAL: Renders immediately on client to prevent content flash (sidebar appearing before overlay)
 export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.ReactNode }) => {
-  const [isMounted, setIsMounted] = React.useState(false);
-
-  // Ensure component only renders on client to prevent hydration mismatch
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
@@ -96,12 +91,16 @@ export const FullPageLoading = ({ text, logo }: { text?: string; logo?: React.Re
     </div>
   );
 
-  // Don't render on server to prevent hydration mismatch
-  if (!isMounted) {
+  // CRITICAL: Render overlay immediately to prevent content flash
+  // For client-side only components, we can render immediately
+  // The portal ensures it's above all content, and rendering immediately prevents sidebar from showing first
+  if (typeof window === "undefined") {
+    // Server-side: return null to prevent hydration mismatch
     return null;
   }
 
-  // Render full-page loading via portal to document.body to ensure it's above all other content
+  // Client-side: render immediately via portal to prevent any content flash
+  // This ensures overlay appears before sidebar/layout renders
   return createPortal(loadingOverlay, document.body);
 };
 
