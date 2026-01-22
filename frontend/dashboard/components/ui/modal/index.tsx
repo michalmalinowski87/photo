@@ -90,16 +90,16 @@ export const Modal = ({
       : `${baseClasses} max-w-2xl`;
 
   const modalContent = (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[1000] p-6">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-[10000] p-6">
       {!isFullscreen && (
         <div
-          className="fixed inset-0 h-full w-full bg-black/30 dark:bg-black/50 backdrop-blur-sm z-[999]"
+          className="fixed inset-0 h-full w-full bg-black/30 dark:bg-black/50 backdrop-blur-sm z-[9999]"
           onClick={closeOnClickOutside ? onClose : undefined}
         ></div>
       )}
       <div
         ref={modalRef}
-        className={`${contentClasses} z-[1000] relative`}
+        className={`${contentClasses} z-[10000] relative`}
         style={isAuthPage ? { backgroundColor: "hsl(0 0% 3.9%)" } : undefined}
         onClick={(e) => e.stopPropagation()}
       >

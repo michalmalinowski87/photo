@@ -51,7 +51,7 @@ export const UploadCompletionOverlay = ({
   }
 
   const overlayContent = (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mx-4 border border-gray-400 dark:border-gray-800">
         {/* Header with prominent button placement */}
         <div className="px-10 pt-10 pb-6">

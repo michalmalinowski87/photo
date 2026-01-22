@@ -261,7 +261,7 @@ html.dark input[type="text"].bg-transparent:-webkit-autofill:active {
 /* Toast z-index override - ensure toasts appear above most content but below full-page overlays */
 [data-toast-container],
 .toast-container {
-  z-index: 10000 !important;
+  z-index: 9999 !important;
   position: fixed !important;
   border-radius: 0.75rem !important; /* rounded-xl to match toast alerts */
   overflow: hidden !important; /* Ensure rounded corners are respected */

@@ -42,7 +42,7 @@ export const ToastContainer = () => {
           position: "fixed",
           top: "87px",
           right: "16px",
-          zIndex: 10000,
+          zIndex: 9999,
           maxWidth: "420px",
           width: "auto",
           pointerEvents: "none",

@@ -28,7 +28,7 @@ export const StripeRedirectOverlay = ({ isVisible, checkoutUrl }: StripeRedirect
   }
 
   const overlayContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 dark:bg-black/90 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 dark:bg-black/90 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full mx-4 p-8">
         <div className="text-center">
           <div className="mb-6">
