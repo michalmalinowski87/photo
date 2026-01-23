@@ -4,6 +4,7 @@ const path = require('path');
 const nextConfig = {
 	reactStrictMode: true,
 	transpilePackages: ['@photocloud/gallery-components'],
+	// Optimize images
 	images: {
 		remotePatterns: [
 			{
@@ -11,6 +12,19 @@ const nextConfig = {
 				hostname: 'dat3mi5gqa8v2.cloudfront.net',
 			},
 		],
+		// Enable image optimization
+		formats: ['image/avif', 'image/webp'],
+		// Reduce image quality slightly for better performance (default is 75)
+		deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+		imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+	},
+	// Enable compression
+	compress: true,
+	// Optimize production builds
+	swcMinify: true,
+	// Enable experimental features for better performance
+	experimental: {
+		optimizePackageImports: ['@tanstack/react-query', 'lightgallery'],
 	},
 	webpack: (config, { isServer }) => {
 		// Resolve modules from root node_modules in yarn workspace

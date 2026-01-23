@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
@@ -16,19 +16,28 @@ import { useZipStatus } from "@/hooks/useZipStatus";
 import { GalleryTopBar } from "@/components/gallery/GalleryTopBar";
 import { SecondaryMenu } from "@/components/gallery/SecondaryMenu";
 import { VirtuosoGridComponent, type GridLayout } from "@/components/gallery/VirtuosoGrid";
-import { LightGalleryWrapper } from "@/components/gallery/LightGalleryWrapper";
 import { ContextMenuPrevention } from "@/components/gallery/ContextMenuPrevention";
-import { DownloadOverlay } from "@/components/gallery/DownloadOverlay";
-import { ZipOverlay } from "@/components/gallery/ZipOverlay";
-import { HelpOverlay } from "@/components/gallery/HelpOverlay";
-import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
-import { ChangesRequestedOverlay } from "@/components/gallery/ChangesRequestedOverlay";
-import { ChangeRequestCanceledOverlay } from "@/components/gallery/ChangeRequestCanceledOverlay";
-import { ChangeRequestSubmittedOverlay } from "@/components/gallery/ChangeRequestSubmittedOverlay";
-import { GalleryNotFound } from "@/components/gallery/GalleryNotFound";
+import { ScrollToTopButton } from "@/components/gallery/ScrollToTopButton";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { ApiError } from "@/lib/api";
+
+// Lazy load heavy components that are conditionally rendered
+const LightGalleryWrapper = lazy(() => import("@/components/gallery/LightGalleryWrapper").then(m => ({ default: m.LightGalleryWrapper })));
+const DownloadOverlay = lazy(() => import("@/components/gallery/DownloadOverlay").then(m => ({ default: m.DownloadOverlay })));
+const ZipOverlay = lazy(() => import("@/components/gallery/ZipOverlay").then(m => ({ default: m.ZipOverlay })));
+const HelpOverlay = lazy(() => import("@/components/gallery/HelpOverlay").then(m => ({ default: m.HelpOverlay })));
+const DownloadButtonFeedback = lazy(() => import("@/components/gallery/DownloadButtonFeedback").then(m => ({ default: m.DownloadButtonFeedback })));
+const ChangesRequestedOverlay = lazy(() => import("@/components/gallery/ChangesRequestedOverlay").then(m => ({ default: m.ChangesRequestedOverlay })));
+const ChangeRequestCanceledOverlay = lazy(() => import("@/components/gallery/ChangeRequestCanceledOverlay").then(m => ({ default: m.ChangeRequestCanceledOverlay })));
+const ChangeRequestSubmittedOverlay = lazy(() => import("@/components/gallery/ChangeRequestSubmittedOverlay").then(m => ({ default: m.ChangeRequestSubmittedOverlay })));
+const GalleryNotFound = lazy(() => import("@/components/gallery/GalleryNotFound").then(m => ({ default: m.GalleryNotFound })));
+
+// Get API URL at module level to avoid useEffect delay
+const API_URL = typeof window !== "undefined" ? getPublicApiUrl() : "";
+
+// Configure route as dynamic (since it requires authentication)
+export const dynamic = 'force-dynamic';
 
 export default function GalleryPage() {
   const params = useParams();
@@ -37,7 +46,11 @@ export default function GalleryPage() {
   const { galleryId, isAuthenticated, isLoading } = useAuth();
   const id = params?.id as string;
 
-  const isOwnerPreview = searchParams?.get("ownerPreview") === "1";
+  // Memoize searchParams check to avoid unnecessary re-renders
+  const isOwnerPreview = useMemo(
+    () => searchParams?.get("ownerPreview") === "1",
+    [searchParams]
+  );
   
   const [gridLayout, setGridLayout] = useState<GridLayout>("marble");
   const [viewMode, setViewMode] = useState<"all" | "selected">("all");
@@ -589,15 +602,26 @@ export default function GalleryPage() {
   // Combine all loading states to prevent blink between loading screens
   // For delivered view: wait for both selection state AND final images
   // For regular view: wait for both selection state AND regular images
-  const isFullyLoading =
-    isLoading ||
-    selectionLoading ||
-    // Finals view has a two-step dependency: we must load delivered orders to know the orderId,
-    // then load final images for that order. Without this, the loader can disappear briefly
-    // between "selection loaded" and "finals query enabled".
-    (shouldShowDelivered &&
-      (isLoadingDeliveredOrders || (orderIdForFinals ? isLoadingFinalImages : false))) ||
-    (!shouldShowDelivered && imagesLoading);
+  const isFullyLoading = useMemo(
+    () =>
+      isLoading ||
+      selectionLoading ||
+      // Finals view has a two-step dependency: we must load delivered orders to know the orderId,
+      // then load final images for that order. Without this, the loader can disappear briefly
+      // between "selection loaded" and "finals query enabled".
+      (shouldShowDelivered &&
+        (isLoadingDeliveredOrders || (orderIdForFinals ? isLoadingFinalImages : false))) ||
+      (!shouldShowDelivered && imagesLoading),
+    [
+      isLoading,
+      selectionLoading,
+      shouldShowDelivered,
+      isLoadingDeliveredOrders,
+      orderIdForFinals,
+      isLoadingFinalImages,
+      imagesLoading,
+    ]
+  );
 
   if (isFullyLoading) {
     return <FullPageLoading text="Ładowanie..." />;
@@ -633,7 +657,11 @@ export default function GalleryPage() {
       errorMessage.includes("not found");
 
     if (isNotFoundError) {
-      return <GalleryNotFound galleryId={galleryId || undefined} />;
+      return (
+        <Suspense fallback={<FullPageLoading text="Ładowanie..." />}>
+          <GalleryNotFound galleryId={galleryId || undefined} />
+        </Suspense>
+      );
     }
 
     // For other errors, show a generic error message (fallback)
@@ -649,44 +677,59 @@ export default function GalleryPage() {
       {/* Show loading overlay immediately when actions are in progress */}
       {isActionLoading && <FullPageLoading text="Przetwarzanie..." />}
       <ContextMenuPrevention />
-      <DownloadButtonFeedback />
-      <DownloadOverlay
+      <ScrollToTopButton />
+      <Suspense fallback={null}>
+        <DownloadButtonFeedback />
+      </Suspense>
+      <Suspense fallback={null}>
+        <DownloadOverlay
         isVisible={downloadState.showOverlay || zipDownloadState.showOverlay}
         isError={downloadState.isError || zipDownloadState.isError}
         onClose={() => {
           closeOverlay();
           setZipDownloadState({ showOverlay: false, isError: false });
         }}
-      />
-      <ZipOverlay
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ZipOverlay
         isVisible={showZipOverlay}
         zipStatus={zipStatus}
         totalPhotos={finalImages.length}
         onClose={() => {
           setShowZipOverlay(false);
         }}
-      />
-      <HelpOverlay isVisible={showHelp} onClose={() => setShowHelp(false)} selectionState={selectionState} />
-      <ChangesRequestedOverlay
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <HelpOverlay isVisible={showHelp} onClose={() => setShowHelp(false)} selectionState={selectionState} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ChangesRequestedOverlay
         isVisible={showChangesRequestedOverlay}
         onClose={() => {
           setShowChangesRequestedOverlay(false);
         }}
         onCancelRequest={handleCancelChangeRequest}
-      />
-      <ChangeRequestCanceledOverlay
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ChangeRequestCanceledOverlay
         isVisible={showChangeRequestCanceledOverlay}
         onClose={() => {
           setShowChangeRequestCanceledOverlay(false);
         }}
-      />
-      <ChangeRequestSubmittedOverlay
-        isVisible={showChangeRequestSubmittedOverlay}
-        onClose={() => {
-          setShowChangeRequestSubmittedOverlay(false);
-        }}
-        onCancelRequest={handleCancelChangeRequest}
-      />
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ChangeRequestSubmittedOverlay
+          isVisible={showChangeRequestSubmittedOverlay}
+          onClose={() => {
+            setShowChangeRequestSubmittedOverlay(false);
+          }}
+          onCancelRequest={handleCancelChangeRequest}
+        />
+      </Suspense>
       <GalleryTopBar
         onHelpClick={() => {
           hapticFeedback('light');
@@ -781,7 +824,8 @@ export default function GalleryPage() {
       {/* Images grid */}
       {(!shouldShowDelivered || selectedOrderId || singleOrder || shouldShowUnselected) && (
         <div className="w-full px-2 md:px-2 lg:px-2 py-4 md:py-4 overflow-hidden">
-          <LightGalleryWrapper
+          <Suspense fallback={<FullPageLoading text="Ładowanie galerii..." />}>
+            <LightGalleryWrapper
             images={displayImages}
             galleryId={galleryId || undefined}
             onDownload={isOwnerPreview ? undefined : handleDownload}
@@ -855,6 +899,7 @@ export default function GalleryPage() {
               onDownload={handleDownload}
             />
           </LightGalleryWrapper>
+          </Suspense>
         </div>
       )}
     </div>
