@@ -142,7 +142,20 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
   return (
     <div className="bg-photographer-surface dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-photographer-border dark:border-gray-700 h-full flex flex-col">
       {/* Cover Photo Section */}
-      <div className="relative h-56 bg-photographer-muted dark:bg-gray-700 overflow-hidden flex-shrink-0">
+      <Link
+        href={`/galleries/${gallery.galleryId}`}
+        prefetch={true}
+        onClick={() => {
+          if (typeof window !== "undefined") {
+            const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+            sessionStorage.setItem(referrerKey, window.location.pathname);
+          }
+        }}
+        onMouseEnter={() => {
+          onPrefetch?.(gallery.galleryId);
+        }}
+        className="relative h-56 bg-photographer-muted dark:bg-gray-700 overflow-hidden flex-shrink-0 hover:opacity-90 transition-opacity cursor-pointer block"
+      >
         {coverPhotoUrl && !imageError ? (
           <Image
             src={coverPhotoUrl}
@@ -242,7 +255,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
             </DropdownItem>
           </Dropdown>
         </div>
-      </div>
+      </Link>
 
       {/* Content Section */}
       <div className="p-4 flex flex-col flex-1 min-h-0">

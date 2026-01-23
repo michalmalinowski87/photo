@@ -142,20 +142,51 @@ const calculateUsagePercentage = (gallery: Gallery): number => {
 };
 
 // Cover photo cell component with error handling
-const CoverPhotoCell = ({ coverPhotoUrl }: { coverPhotoUrl: string | null | undefined }) => {
+const CoverPhotoCell = ({
+  coverPhotoUrl,
+  galleryId,
+  onPrefetch,
+}: {
+  coverPhotoUrl: string | null | undefined;
+  galleryId: string;
+  onPrefetch?: (galleryId: string) => void;
+}) => {
   const [imageError, setImageError] = useState(false);
+
+  const handleClick = () => {
+    if (typeof window !== "undefined") {
+      const referrerKey = `gallery_referrer_${galleryId}`;
+      sessionStorage.setItem(referrerKey, window.location.pathname);
+    }
+  };
+
+  const handleMouseEnter = () => {
+    onPrefetch?.(galleryId);
+  };
 
   if (!coverPhotoUrl || imageError) {
     return (
-      <div className="flex items-center justify-center w-24 h-24 bg-photographer-elevated dark:bg-gray-700 rounded-lg">
+      <Link
+        href={`/galleries/${galleryId}`}
+        prefetch={true}
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        className="flex items-center justify-center w-24 h-24 bg-photographer-elevated dark:bg-gray-700 rounded-lg hover:opacity-80 transition-opacity cursor-pointer"
+      >
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <ImageIcon className="w-12 h-12 text-gray-400" aria-hidden="true" />
-      </div>
+      </Link>
     );
   }
 
   return (
-    <div className="flex items-center justify-center relative w-24 h-24">
+    <Link
+      href={`/galleries/${galleryId}`}
+      prefetch={true}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      className="flex items-center justify-center relative w-24 h-24 hover:opacity-80 transition-opacity cursor-pointer"
+    >
       <Image
         src={coverPhotoUrl}
         alt="Okładka galerii"
@@ -165,7 +196,7 @@ const CoverPhotoCell = ({ coverPhotoUrl }: { coverPhotoUrl: string | null | unde
         priority={false}
         onError={() => setImageError(true)}
       />
-    </div>
+    </Link>
   );
 };
 
@@ -655,7 +686,11 @@ const GalleryList = ({
                       }`}
                     >
                       <TableCell className="px-3 py-5 align-middle text-center w-[90px]">
-                        <CoverPhotoCell coverPhotoUrl={coverPhotoUrl} />
+                        <CoverPhotoCell
+                          coverPhotoUrl={coverPhotoUrl}
+                          galleryId={gallery.galleryId}
+                          onPrefetch={prefetchGallery}
+                        />
                       </TableCell>
                       <TableCell className="px-3 py-5 align-middle min-w-[300px]">
                         <Link
