@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
 import { getPublicLandingUrl } from "@/lib/public-env";
 
-export function LoginFormPane({
+export const LoginFormPane = memo(function LoginFormPane({
   galleryId,
   apiUrl,
   galleryName,
@@ -31,10 +31,10 @@ export function LoginFormPane({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const displayName = galleryName || "Galeria";
+  const displayName = useMemo(() => galleryName || "Galeria", [galleryName]);
 
-  const landingUrl = getPublicLandingUrl();
-  const landingIsExternal = landingUrl.startsWith("http");
+  const landingUrl = useMemo(() => getPublicLandingUrl(), []);
+  const landingIsExternal = useMemo(() => landingUrl.startsWith("http"), [landingUrl]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -188,5 +188,5 @@ export function LoginFormPane({
       </div>
     </section>
   );
-}
+});
 

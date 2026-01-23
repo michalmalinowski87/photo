@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import Image from "next/image";
 import { apiFetch } from "@/lib/api";
 import { CoverAreaLoading } from "@/components/ui/CoverAreaLoading";
@@ -12,7 +12,7 @@ export interface GalleryPublicInfo {
   coverPhotoUrl: string | null;
 }
 
-export function LoginCoverPane({
+export const LoginCoverPane = memo(function LoginCoverPane({
   galleryId,
   apiUrl,
   onPublicInfoLoaded,
@@ -147,5 +147,5 @@ export function LoginCoverPane({
       {isLoading && <CoverAreaLoading />}
     </section>
   );
-}
+});
 

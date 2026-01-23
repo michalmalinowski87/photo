@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginCoverPane } from "@/components/login/LoginCoverPane";
@@ -9,6 +9,9 @@ import { FullPageLoading } from "@/components/ui/Loading";
 import { defaultLoginPageConfig } from "@/config/login-page";
 import { getPublicApiUrl } from "@/lib/public-env";
 
+// Get API URL at module level to avoid useEffect delay
+const API_URL = typeof window !== "undefined" ? getPublicApiUrl() : "";
+
 function LoginScreen() {
   const router = useRouter();
   const params = useParams();
@@ -16,14 +19,11 @@ function LoginScreen() {
   const { isAuthenticated } = useAuth();
   const galleryId = params?.id as string;
 
-  const [apiUrl, setApiUrl] = useState("");
+  // Use module-level API URL or get it on mount (fallback for SSR)
+  const [apiUrl] = useState(() => API_URL || (typeof window !== "undefined" ? getPublicApiUrl() : ""));
   const [galleryName, setGalleryName] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isPublicInfoLoading, setIsPublicInfoLoading] = useState(true);
-
-  useEffect(() => {
-    setApiUrl(getPublicApiUrl());
-  }, []);
 
   // Memoize callbacks to prevent unnecessary re-renders and API calls
   const handlePublicInfoLoadingChange = useCallback((loading: boolean) => {
@@ -32,6 +32,10 @@ function LoginScreen() {
 
   const handlePublicInfoLoaded = useCallback((info: { galleryName: string | null }) => {
     setGalleryName(info.galleryName);
+    // Update document title for better SEO
+    if (info.galleryName && typeof document !== "undefined") {
+      document.title = `${info.galleryName} - PhotoCloud`;
+    }
   }, []);
 
   const handleLoginStart = useCallback(() => {
@@ -42,9 +46,13 @@ function LoginScreen() {
     setIsLoggingIn(false);
   }, []);
 
-  // Check if already logged in
+  // Check if already logged in - memoize searchParams check
+  const isLoginPreview = useMemo(
+    () => searchParams?.get("loginPreview") === "1",
+    [searchParams]
+  );
+
   useEffect(() => {
-    const isLoginPreview = searchParams?.get("loginPreview") === "1";
     if (isLoginPreview) {
       return;
     }
@@ -52,7 +60,7 @@ function LoginScreen() {
     if (isAuthenticated && galleryId) {
       router.replace(`/${galleryId}`);
     }
-  }, [galleryId, router, isAuthenticated, searchParams]);
+  }, [galleryId, router, isAuthenticated, isLoginPreview]);
 
   if (!galleryId) {
     return (
@@ -68,7 +76,10 @@ function LoginScreen() {
   }
 
   // Show loading overlay until public-info is loaded OR during login
-  const shouldShowLoading = isPublicInfoLoading || isLoggingIn;
+  const shouldShowLoading = useMemo(
+    () => isPublicInfoLoading || isLoggingIn,
+    [isPublicInfoLoading, isLoggingIn]
+  );
 
   return (
     <div className="min-h-screen bg-white">
