@@ -16,23 +16,48 @@ export function LoginCoverPane({
   galleryId,
   apiUrl,
   onPublicInfoLoaded,
+  onPublicInfoLoadingChange,
 }: {
   galleryId: string;
   apiUrl: string;
   onPublicInfoLoaded?: (info: GalleryPublicInfo) => void;
+  onPublicInfoLoadingChange?: (loading: boolean) => void;
 }) {
   const [publicInfo, setPublicInfo] = React.useState<GalleryPublicInfo | null>(null);
   // Start with the cover loader visible (per requested UX).
   const [isLoading, setIsLoading] = React.useState(true);
+  const fetchControllerRef = React.useRef<AbortController | null>(null);
+  const lastFetchedRef = React.useRef<{ galleryId: string; apiUrl: string } | null>(null);
 
   React.useEffect(() => {
     if (!galleryId || !apiUrl) {
       // If we can't fetch yet, keep loader until we can.
+      // But ensure parent knows we're still loading
+      if (!galleryId || !apiUrl) {
+        onPublicInfoLoadingChange?.(true);
+      }
       return;
     }
 
+    // If we already fetched for this exact galleryId/apiUrl combination, don't fetch again
+    if (
+      lastFetchedRef.current &&
+      lastFetchedRef.current.galleryId === galleryId &&
+      lastFetchedRef.current.apiUrl === apiUrl &&
+      publicInfo !== null
+    ) {
+      return;
+    }
+
+    // If there's already a fetch in progress, abort it and start a new one
+    if (fetchControllerRef.current) {
+      fetchControllerRef.current.abort();
+    }
+
     const controller = new AbortController();
+    fetchControllerRef.current = controller;
     setIsLoading(true);
+    onPublicInfoLoadingChange?.(true);
 
     (async () => {
       try {
@@ -43,17 +68,26 @@ export function LoginCoverPane({
 
         const info = data as GalleryPublicInfo;
         setPublicInfo(info);
+        lastFetchedRef.current = { galleryId, apiUrl };
         onPublicInfoLoaded?.(info);
       } catch {
         // Non-blocking: if we can't load public info, assume no cover and show PhotoCloud fallback.
         setPublicInfo({ galleryName: null, coverPhotoUrl: null });
       } finally {
-        setIsLoading(false);
+        // Only update state if this request wasn't aborted
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          onPublicInfoLoadingChange?.(false);
+          fetchControllerRef.current = null;
+        }
       }
     })();
 
-    return () => controller.abort();
-  }, [galleryId, apiUrl, onPublicInfoLoaded]);
+    return () => {
+      controller.abort();
+      fetchControllerRef.current = null;
+    };
+  }, [galleryId, apiUrl, onPublicInfoLoaded, onPublicInfoLoadingChange]);
 
   const coverPhotoUrl = publicInfo?.coverPhotoUrl || null;
   const isResolved = publicInfo !== null;

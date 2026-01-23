@@ -21,6 +21,9 @@ export const FullPageLoading = ({
     setIsMounted(true);
   }, []);
 
+  // Ensure document.body exists
+  const canRender = isMounted && typeof document !== "undefined" && !!document.body;
+
   const welcomingMessages = [
     "Przygotowujemy wszystko dla Ciebie...",
     "Już prawie gotowe...",
@@ -69,17 +72,21 @@ export const FullPageLoading = ({
   const loadingOverlay = (
     <div
       className="fixed inset-0 flex items-center justify-center bg-white/95 backdrop-blur-sm"
-      style={{ zIndex: 2147483647 }}
+      style={{ 
+        zIndex: 2147483647,
+        display: isVisible ? 'flex' : 'none',
+      }}
     >
       {content}
     </div>
   );
 
-  // Don't render on server / pre-hydration.
-  if (!isMounted || !isVisible) {
+  // Don't render on server / pre-hydration
+  if (!canRender) {
     return null;
   }
 
-  // Render full-page loading via portal to document.body to ensure it's above all other content
+  // Always render the portal when mounted, control visibility with CSS
+  // This ensures the portal is set up and ready to show instantly
   return createPortal(loadingOverlay, document.body);
 };

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginCoverPane } from "@/components/login/LoginCoverPane";
 import { LoginFormPane } from "@/components/login/LoginFormPane";
+import { FullPageLoading } from "@/components/ui/Loading";
+import { defaultLoginPageConfig } from "@/config/login-page";
 import { getPublicApiUrl } from "@/lib/public-env";
 
 function LoginScreen() {
@@ -16,9 +18,28 @@ function LoginScreen() {
 
   const [apiUrl, setApiUrl] = useState("");
   const [galleryName, setGalleryName] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isPublicInfoLoading, setIsPublicInfoLoading] = useState(true);
 
   useEffect(() => {
     setApiUrl(getPublicApiUrl());
+  }, []);
+
+  // Memoize callbacks to prevent unnecessary re-renders and API calls
+  const handlePublicInfoLoadingChange = useCallback((loading: boolean) => {
+    setIsPublicInfoLoading(loading);
+  }, []);
+
+  const handlePublicInfoLoaded = useCallback((info: { galleryName: string | null }) => {
+    setGalleryName(info.galleryName);
+  }, []);
+
+  const handleLoginStart = useCallback(() => {
+    setIsLoggingIn(true);
+  }, []);
+
+  const handleLoginComplete = useCallback(() => {
+    setIsLoggingIn(false);
   }, []);
 
   // Check if already logged in
@@ -46,15 +67,31 @@ function LoginScreen() {
     );
   }
 
+  // Show loading overlay until public-info is loaded OR during login
+  const shouldShowLoading = isPublicInfoLoading || isLoggingIn;
+
   return (
     <div className="min-h-screen bg-white">
-      <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Loading overlay at page level - show until public-info loads, then during login */}
+      <FullPageLoading
+        isVisible={shouldShowLoading}
+        text={isLoggingIn ? defaultLoginPageConfig.submitLoadingLabel : "Ładowanie..."}
+      />
+      {/* Always render components so they can make API calls, but overlay will hide content */}
+      <div className="min-h-screen flex flex-col md:flex-row" style={{ visibility: isPublicInfoLoading ? 'hidden' : 'visible' }}>
         <LoginCoverPane
           galleryId={galleryId}
           apiUrl={apiUrl}
-          onPublicInfoLoaded={(info) => setGalleryName(info.galleryName)}
+          onPublicInfoLoadingChange={handlePublicInfoLoadingChange}
+          onPublicInfoLoaded={handlePublicInfoLoaded}
         />
-        <LoginFormPane galleryId={galleryId} apiUrl={apiUrl} galleryName={galleryName} />
+        <LoginFormPane 
+          galleryId={galleryId} 
+          apiUrl={apiUrl} 
+          galleryName={galleryName}
+          onLoginStart={handleLoginStart}
+          onLoginComplete={handleLoginComplete}
+        />
       </div>
     </div>
   );

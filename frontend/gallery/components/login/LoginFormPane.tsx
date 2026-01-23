@@ -8,17 +8,20 @@ import { apiFetch, formatApiError } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
-import { FullPageLoading } from "@/components/ui/Loading";
 import { getPublicLandingUrl } from "@/lib/public-env";
 
 export function LoginFormPane({
   galleryId,
   apiUrl,
   galleryName,
+  onLoginStart,
+  onLoginComplete,
 }: {
   galleryId: string;
   apiUrl: string;
   galleryName: string | null;
+  onLoginStart?: () => void;
+  onLoginComplete?: () => void;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -45,6 +48,7 @@ export function LoginFormPane({
       setLoading(true);
       setError("");
     });
+    onLoginStart?.();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     try {
@@ -73,21 +77,50 @@ export function LoginFormPane({
         });
       }
 
+      // Keep loading overlay visible until public-info call completes
+      try {
+        const publicInfoResponse = await apiFetch(`${apiUrl}/galleries/${galleryId}/public-info`, {
+          method: "GET",
+        });
+        
+        // Store public-info data in sessionStorage so gallery page can use it immediately
+        if (typeof window !== "undefined" && publicInfoResponse.data) {
+          const publicInfo = publicInfoResponse.data as { galleryName?: string | null; coverPhotoUrl?: string | null };
+          if (publicInfo.galleryName) {
+            sessionStorage.setItem(`gallery_name_${galleryId}`, publicInfo.galleryName);
+          }
+          // Store public info for immediate use
+          sessionStorage.setItem(`gallery_public_info_${galleryId}`, JSON.stringify(publicInfo));
+        }
+      } catch (publicInfoErr) {
+        // Non-blocking: if public-info fails, still proceed to gallery page
+        // The gallery page can handle missing public info gracefully
+        console.warn("Failed to fetch public info after login:", publicInfoErr);
+      }
+
+      // Store a flag in sessionStorage to indicate we're transitioning
+      // The gallery page can check this and show loading until it's ready
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(`gallery_loading_${galleryId}`, "true");
+      }
+      
       await new Promise((resolve) => setTimeout(resolve, 50));
       router.replace(`/${galleryId}`);
+      
+      // Keep overlay visible for a bit longer to cover the navigation transition
+      // The gallery page will clear the loading flag when ready
+      setTimeout(() => {
+        onLoginComplete?.();
+      }, 500);
     } catch (err) {
       setError(formatApiError(err));
       setLoading(false);
+      onLoginComplete?.();
     }
   }
 
   return (
     <section className="w-full md:w-[45%] min-h-[calc(100vh-320px)] md:min-h-screen bg-white flex items-center justify-center px-6 py-10">
-      {/* Keep this mounted so the portal is "warmed up" and can show instantly on submit */}
-      <FullPageLoading
-        isVisible={loading}
-        text={defaultLoginPageConfig.submitLoadingLabel}
-      />
 
       <div className="w-full max-w-md">
         <div className="mb-8">

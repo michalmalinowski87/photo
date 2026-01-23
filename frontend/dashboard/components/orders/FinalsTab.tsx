@@ -1,9 +1,11 @@
 import { Plus, Trash2, Sparkles, CheckSquare, Square, Check, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 import { useImageSelection } from "../../hooks/useImageSelection";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
+import { DashboardVirtuosoGrid } from "../galleries/DashboardVirtuosoGrid";
+import type { GridLayout } from "../galleries/LayoutSelector";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
@@ -37,6 +39,7 @@ interface FinalsTabProps {
   fetchNextPage?: () => void;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
+  layout?: GridLayout;
 }
 
 // Lazy load BulkDeleteConfirmDialog - only shown when bulk delete confirmation is open
@@ -67,6 +70,7 @@ export function FinalsTab({
   fetchNextPage,
   hasNextPage = false,
   isFetchingNextPage = false,
+  layout = "standard",
 }: FinalsTabProps) {
   // Selection mode for bulk delete
   const {
@@ -183,142 +187,127 @@ export function FinalsTab({
   };
 
   const uploadDisabledMessage = getUploadDisabledMessage();
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const gridContainerRef = useRef<HTMLDivElement>(null);
-  const scrollbarDetectedRef = useRef(false);
-  const imagesCountWhenScrollbarAppearedRef = useRef<number | null>(null);
-  const measuredRowHeightRef = useRef<number | null>(null);
 
-  // Measure actual row height from DOM - adapts to any item height
-  const measureRowHeight = useCallback(() => {
-    if (!gridContainerRef.current || images.length === 0) {
-      return null;
-    }
+  // Render image item for DashboardVirtuosoGrid
+  const renderImageItem = useCallback(
+    (img: GalleryImage, idx: number) => {
+      const imageKey = img.key ?? img.filename ?? "";
+      const isSelected = selectedKeys.has(imageKey);
+      const isDeleting = deletingImages.has(imageKey);
 
-    const grid = gridContainerRef.current;
-    const children = Array.from(grid.children) as HTMLElement[];
+      return (
+        <div
+          key={imageKey ?? idx}
+          className={`relative group rounded-lg overflow-hidden transition-all ${
+            isSelectionMode ? "select-none" : ""
+          } ${
+            isDeleting
+              ? "opacity-60"
+              : isSelected && isSelectionMode
+                ? "ring-2 ring-photographer-accentLight dark:ring-photographer-accent/30"
+                : ""
+          } ${
+            layout === "square"
+              ? "bg-gray-100 dark:bg-gray-800"
+              : layout === "marble"
+                ? "bg-white dark:bg-gray-800"
+                : "bg-white dark:bg-gray-800"
+          }`}
+          onMouseDown={(e) => {
+            // Prevent browser text/element selection when in selection mode
+            if (isSelectionMode) {
+              e.preventDefault();
+            }
+          }}
+          onClick={(e) => {
+            if (isSelectionMode) {
+              handleSelectionClick(imageKey, idx, e.nativeEvent, images);
+            }
+          }}
+        >
+          <div
+            className={`relative w-full h-full ${
+              layout === "square" ? "aspect-square" : layout === "marble" ? "" : "aspect-[4/3]"
+            }`}
+          >
+            {/* Selection checkbox overlay */}
+            {isSelectionMode && (
+              <div className="absolute top-2 left-2 z-30">
+                <div
+                  className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                    isSelected
+                      ? "bg-photographer-accentHover border-photographer-accentHover dark:bg-photographer-accent dark:border-photographer-accent"
+                      : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectionClick(imageKey, idx, e.nativeEvent, images);
+                  }}
+                >
+                  {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                </div>
+              </div>
+            )}
 
-    if (children.length === 0) {
-      return null;
-    }
-
-    // Calculate columns based on viewport width
-    const viewportWidth = grid.clientWidth;
-    let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280)
-      columns = 6; // xl
-    else if (viewportWidth >= 1024)
-      columns = 5; // lg
-    else if (viewportWidth >= 768)
-      columns = 4; // md
-    else if (viewportWidth >= 640) columns = 3; // sm
-
-    // Measure height of first few rows to get average
-    // Need at least 2 rows to calculate row height accurately
-    const minItemsForMeasurement = columns * 2;
-    if (children.length < minItemsForMeasurement) {
-      return null;
-    }
-
-    // Get positions of items in first two rows
-    const firstRowItems = children.slice(0, columns);
-    const secondRowItems = children.slice(columns, columns * 2);
-
-    if (firstRowItems.length === 0 || secondRowItems.length === 0) {
-      return null;
-    }
-
-    // Get top position of first item in first row
-    const firstItemTop = firstRowItems[0].offsetTop;
-    // Get top position of first item in second row
-    const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-
-    // Calculate row height (difference between rows)
-    const rowHeight = secondRowFirstItemTop - firstItemTop;
-
-    // Validate measurement (should be positive and reasonable)
-    if (rowHeight > 0 && rowHeight < 1000) {
-      return rowHeight;
-    }
-
-    return null;
-  }, [images.length]);
-
-  // Update measured row height when images change or on resize
-  useEffect(() => {
-    const updateRowHeight = () => {
-      const measured = measureRowHeight();
-      if (measured !== null) {
-        measuredRowHeightRef.current = measured;
-      }
-    };
-
-    // Measure after a short delay to ensure DOM is updated
-    const timeoutId = setTimeout(updateRowHeight, 100);
-
-    // Also measure on window resize
-    window.addEventListener("resize", updateRowHeight);
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener("resize", updateRowHeight);
-    };
-  }, [images.length, measureRowHeight]);
-
-  // Auto-fetch strategy for initial load:
-  // 1. Detect when scrollbar first appears
-  // 2. Note how many images we had when scrollbar appeared
-  // 3. Fetch until we have double that amount (if 30 images needed scroll, fetch until 60)
-  // 4. After initial prefetch, use normal smooth scrolling strategy
-  useEffect(() => {
-    if (
-      !scrollContainerRef.current ||
-      isFetchingNextPage ||
-      error ||
-      images.length === 0 ||
-      !fetchNextPage
-    ) {
-      return;
-    }
-
-    const container = scrollContainerRef.current;
-    const needsScrolling = container.scrollHeight > container.clientHeight;
-
-    // Detect when scrollbar first appears
-    if (needsScrolling && !scrollbarDetectedRef.current) {
-      scrollbarDetectedRef.current = true;
-      imagesCountWhenScrollbarAppearedRef.current = images.length;
-    }
-
-    // Initial prefetch phase: fetch double the images count when scrollbar appeared
-    if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
-      const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-
-      if (images.length < targetImagesCount && hasNextPage) {
-        // Still in initial prefetch phase - fetch until we have double
-        const timeoutId = setTimeout(() => {
-          if (hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
-            void fetchNextPage();
-          }
-        }, 100);
-        return () => clearTimeout(timeoutId);
-      }
-      // After initial prefetch is complete, scroll handler will take over
-      return;
-    }
-
-    // Before scrollbar appears, keep fetching until we get scroll
-    if (!scrollbarDetectedRef.current && !needsScrolling && hasNextPage) {
-      const timeoutId = setTimeout(() => {
-        if (hasNextPage && !isFetchingNextPage && !error && fetchNextPage) {
-          void fetchNextPage();
-        }
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-
-    return undefined;
-  }, [images.length, hasNextPage, isFetchingNextPage, error, fetchNextPage]);
+            <LazyRetryableImage
+              imageData={img as ImageFallbackUrls}
+              alt={imageKey}
+              className={`w-full h-full ${
+                layout === "square"
+                  ? "object-cover rounded-lg"
+                  : layout === "marble"
+                    ? "object-cover rounded-[2px]"
+                    : "object-contain"
+              }`}
+              preferredSize={layout === "marble" ? "bigthumb" : "thumb"}
+            />
+            {/* Deleting overlay - always visible when deleting */}
+            {isDeleting && (
+              <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
+                <div className="flex flex-col items-center space-y-2">
+                  <Loading size="sm" />
+                  <span className="text-white text-sm font-medium">Usuwanie...</span>
+                </div>
+              </div>
+            )}
+            {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
+            {onDeleteImage &&
+              !isDeleting &&
+              !isSelectionMode &&
+              orderDeliveryStatus !== "DELIVERED" && (
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteImage(img);
+                    }}
+                    disabled={deletingImages.size > 0}
+                    className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
+                      deletingImages.size > 0
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-error-500 text-white hover:bg-error-600"
+                    }`}
+                  >
+                    <Trash2 size={14} />
+                    Usuń
+                  </button>
+                </div>
+              )}
+          </div>
+        </div>
+      );
+    },
+    [
+      selectedKeys,
+      isSelectionMode,
+      deletingImages,
+      layout,
+      handleSelectionClick,
+      images,
+      onDeleteImage,
+      orderDeliveryStatus,
+    ]
+  );
 
   return (
     <div className="space-y-4">
@@ -439,133 +428,19 @@ export function FinalsTab({
         />
       ) : (
         <div
-          ref={scrollContainerRef}
           className={`w-full overflow-auto table-scrollbar ${isSelectionMode ? "select-none" : ""}`}
           style={{ height: "calc(100vh - 470px)", minHeight: "600px", overscrollBehavior: "none" }}
-          onScroll={(e) => {
-            const target = e.target as HTMLElement;
-            const scrollTop = target.scrollTop;
-            const scrollHeight = target.scrollHeight;
-            const clientHeight = target.clientHeight;
-
-            // Use scrollHeight-based calculation for more reliable bottom detection
-            // This ensures we detect when we're near the bottom regardless of item count
-            const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-            const threshold = 200; // Fetch when within 200px of bottom
-
-            // Don't fetch if there's an error or already fetching
-            if (
-              distanceFromBottom <= threshold &&
-              hasNextPage &&
-              !isFetchingNextPage &&
-              !error &&
-              fetchNextPage
-            ) {
-              void fetchNextPage();
-            }
-          }}
         >
-          <div
-            ref={gridContainerRef}
-            className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-8 ${isSelectionMode ? "select-none" : ""}`}
-          >
-            {images.map((img, idx) => {
-              const imageKey = img.key ?? img.filename ?? "";
-              const isSelected = selectedKeys.has(imageKey);
-              const isDeleting = deletingImages.has(imageKey);
-
-              return (
-                <div
-                  key={imageKey ?? idx}
-                  className={`relative group border rounded-lg overflow-hidden transition-all ${
-                    isSelectionMode ? "select-none" : ""
-                  } ${
-                    isDeleting
-                      ? "opacity-60"
-                      : isSelected && isSelectionMode
-                        ? "border-photographer-accent ring-2 ring-photographer-accentLight dark:ring-photographer-accent/30"
-                        : "border-gray-400 dark:border-gray-700 hover:border-photographer-accent dark:hover:border-photographer-accent"
-                  }`}
-                  onMouseDown={(e) => {
-                    // Prevent browser text/element selection when in selection mode
-                    if (isSelectionMode) {
-                      e.preventDefault();
-                    }
-                  }}
-                  onClick={(e) => {
-                    if (isSelectionMode) {
-                      handleSelectionClick(imageKey, idx, e.nativeEvent, images);
-                    }
-                  }}
-                >
-                  <div className="aspect-square relative">
-                    {/* Selection checkbox overlay */}
-                    {isSelectionMode && (
-                      <div className="absolute top-2 left-2 z-30">
-                        <div
-                          className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                            isSelected
-                              ? "bg-photographer-accentHover border-photographer-accentHover dark:bg-photographer-accent dark:border-photographer-accent"
-                              : "bg-white/90 border-gray-400 dark:bg-gray-800/90 dark:border-gray-600"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectionClick(imageKey, idx, e.nativeEvent, images);
-                          }}
-                        >
-                          {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                        </div>
-                      </div>
-                    )}
-
-                    <LazyRetryableImage
-                      imageData={img as ImageFallbackUrls}
-                      alt={imageKey}
-                      className="w-full h-full object-cover rounded-lg"
-                      preferredSize="thumb"
-                    />
-                    {/* Deleting overlay - always visible when deleting */}
-                    {isDeleting && (
-                      <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
-                        <div className="flex flex-col items-center space-y-2">
-                          <Loading size="sm" />
-                          <span className="text-white text-sm font-medium">Usuwanie...</span>
-                        </div>
-                      </div>
-                    )}
-                    {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
-                    {onDeleteImage &&
-                      !isDeleting &&
-                      !isSelectionMode &&
-                      orderDeliveryStatus !== "DELIVERED" && (
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteImage(img);
-                            }}
-                            disabled={deletingImages.size > 0}
-                            className={`opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 ${
-                              deletingImages.size > 0
-                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                : "bg-error-500 text-white hover:bg-error-600"
-                            }`}
-                          >
-                            <Trash2 size={14} />
-                            Usuń
-                          </button>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {isFetchingNextPage && (
-            <div className="flex justify-center py-4">
-              <Loading size="sm" text="Ładowanie więcej zdjęć..." />
-            </div>
-          )}
+          <DashboardVirtuosoGrid
+            images={images}
+            layout={layout}
+            renderImageItem={renderImageItem}
+            hasNextPage={hasNextPage}
+            onLoadMore={fetchNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            isLoading={_isLoading}
+            error={error}
+          />
         </div>
       )}
 

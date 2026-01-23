@@ -16,6 +16,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
+import { DashboardVirtuosoGrid } from "../../../components/galleries/DashboardVirtuosoGrid";
+import { LayoutSelector, type GridLayout } from "../../../components/galleries/LayoutSelector";
 import { DeliveryStatusBadge } from "../../../components/orders/StatusBadges";
 import Badge from "../../../components/ui/badge/Badge";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
@@ -98,215 +100,6 @@ interface ApiImage {
 
 // UploadProgress interface is imported from PhotoUploadHandler
 
-// Component for rendering images with infinite scroll within an order section
-interface OrderImagesGridProps {
-  images: GalleryImage[];
-  renderImageItem: (img: GalleryImage, index: number, allImages: GalleryImage[]) => React.ReactNode;
-  fetchNextPage: () => void;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  imagesError: Error | null;
-  isLoading?: boolean;
-  isFetching?: boolean;
-}
-
-function OrderImagesGrid({
-  images,
-  renderImageItem,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  imagesError,
-  isLoading = false,
-  isFetching = false,
-}: OrderImagesGridProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const gridContainerRef = useRef<HTMLDivElement>(null);
-  const scrollbarDetectedRef = useRef(false);
-  const imagesCountWhenScrollbarAppearedRef = useRef<number | null>(null);
-  const measuredRowHeightRef = useRef<number | null>(null);
-
-  // Show loading state when fetching and no images yet
-  const isInitialLoading = (isLoading || isFetching) && images.length === 0;
-
-  // Measure actual row height from DOM - adapts to any item height
-  const measureRowHeight = useCallback(() => {
-    if (!gridContainerRef.current || images.length === 0) {
-      return null;
-    }
-
-    const grid = gridContainerRef.current;
-    const children = Array.from(grid.children) as HTMLElement[];
-
-    if (children.length === 0) {
-      return null;
-    }
-
-    // Calculate columns based on viewport width
-    const viewportWidth = grid.clientWidth;
-    let columns = 2; // Default for mobile
-    if (viewportWidth >= 1280)
-      columns = 6; // xl
-    else if (viewportWidth >= 1024)
-      columns = 5; // lg
-    else if (viewportWidth >= 768)
-      columns = 4; // md
-    else if (viewportWidth >= 640) columns = 3; // sm
-
-    // Measure height of first few rows to get average
-    // Need at least 2 rows to calculate row height accurately
-    const minItemsForMeasurement = columns * 2;
-    if (children.length < minItemsForMeasurement) {
-      return null;
-    }
-
-    // Get positions of items in first two rows
-    const firstRowItems = children.slice(0, columns);
-    const secondRowItems = children.slice(columns, columns * 2);
-
-    if (firstRowItems.length === 0 || secondRowItems.length === 0) {
-      return null;
-    }
-
-    // Get top position of first item in first row
-    const firstItemTop = firstRowItems[0].offsetTop;
-    // Get top position of first item in second row
-    const secondRowFirstItemTop = secondRowItems[0].offsetTop;
-
-    // Calculate row height (difference between rows)
-    const rowHeight = secondRowFirstItemTop - firstItemTop;
-
-    // Validate measurement (should be positive and reasonable)
-    if (rowHeight > 0 && rowHeight < 1000) {
-      return rowHeight;
-    }
-
-    return null;
-  }, [images.length]);
-
-  // Update measured row height when images change or on resize
-  useEffect(() => {
-    const updateRowHeight = () => {
-      const measured = measureRowHeight();
-      if (measured !== null) {
-        measuredRowHeightRef.current = measured;
-      }
-    };
-
-    // Measure after a short delay to ensure DOM is updated
-    const timeoutId = setTimeout(updateRowHeight, 100);
-
-    // Also measure on window resize
-    window.addEventListener("resize", updateRowHeight);
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener("resize", updateRowHeight);
-    };
-  }, [images.length, measureRowHeight]);
-
-  // Auto-fetch strategy for initial load:
-  // 1. Detect when scrollbar first appears
-  // 2. Note how many images we had when scrollbar appeared
-  // 3. Fetch until we have double that amount (if 30 images needed scroll, fetch until 60)
-  // 4. After initial prefetch, use normal smooth scrolling strategy
-  useEffect(() => {
-    if (!scrollContainerRef.current || isFetchingNextPage || imagesError || images.length === 0) {
-      return;
-    }
-
-    const container = scrollContainerRef.current;
-    const needsScrolling = container.scrollHeight > container.clientHeight;
-
-    // Detect when scrollbar first appears
-    if (needsScrolling && !scrollbarDetectedRef.current) {
-      scrollbarDetectedRef.current = true;
-      imagesCountWhenScrollbarAppearedRef.current = images.length;
-    }
-
-    // Initial prefetch phase: fetch double the images count when scrollbar appeared
-    if (scrollbarDetectedRef.current && imagesCountWhenScrollbarAppearedRef.current !== null) {
-      const targetImagesCount = imagesCountWhenScrollbarAppearedRef.current * 2;
-
-      if (images.length < targetImagesCount && hasNextPage) {
-        // Still in initial prefetch phase - fetch until we have double
-        const timeoutId = setTimeout(() => {
-          if (hasNextPage && !isFetchingNextPage && !imagesError) {
-            void fetchNextPage();
-          }
-        }, 100);
-        return () => clearTimeout(timeoutId);
-      }
-      // After initial prefetch is complete, scroll handler will take over
-      return;
-    }
-
-    // Before scrollbar appears, keep fetching until we get scroll
-    if (!scrollbarDetectedRef.current && !needsScrolling && hasNextPage) {
-      const timeoutId = setTimeout(() => {
-        if (hasNextPage && !isFetchingNextPage && !imagesError) {
-          void fetchNextPage();
-        }
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-
-    return undefined;
-  }, [images.length, hasNextPage, isFetchingNextPage, imagesError, fetchNextPage]);
-
-  // Show loading state when initially loading/fetching and no images yet
-  if (isInitialLoading) {
-    return <GalleryLoading text="Ładowanie zdjęć..." />;
-  }
-
-  return (
-    <div
-      ref={scrollContainerRef}
-      className="w-full overflow-auto table-scrollbar"
-      style={{
-        height: "calc(100vh - 400px)",
-        minHeight: "400px",
-        maxHeight: "800px",
-        overscrollBehavior: "none",
-      }}
-      onScroll={(e) => {
-        const target = e.target as HTMLElement;
-        const scrollTop = target.scrollTop;
-        const scrollHeight = target.scrollHeight;
-        const clientHeight = target.clientHeight;
-
-        // Simple approach: fetch when near the bottom of the scroll container
-        // After initial prefetch, just fetch when user scrolls close to the end
-        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-        const threshold = 200; // Fetch when within 200px of bottom
-
-        // Only fetch if we're past the initial prefetch phase
-        if (
-          scrollbarDetectedRef.current &&
-          distanceFromBottom <= threshold &&
-          hasNextPage &&
-          !isFetchingNextPage &&
-          !imagesError
-        ) {
-          void fetchNextPage();
-        }
-      }}
-    >
-      <div
-        ref={gridContainerRef}
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-4"
-      >
-        {images.map((img, index) => renderImageItem(img, index, images))}
-      </div>
-      {isFetchingNextPage && (
-        <div className="flex justify-center py-4">
-          <Loading size="sm" text="Ładowanie więcej zdjęć..." />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Prevent static generation - this page uses client hooks
 export const getServerSideProps: GetServerSideProps = () => {
   return Promise.resolve({ props: {} });
@@ -327,6 +120,24 @@ export default function GalleryPhotos() {
 
   // State for expanded section must be defined before queries that use it
   const [expandedSection, setExpandedSection] = useState<string | null>(null); // Track expanded section - only one can be expanded at a time (all collapsed by default)
+
+  // Layout state with localStorage persistence
+  const [layout, setLayout] = useState<GridLayout>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dashboard-gallery-layout") as GridLayout;
+      if (saved && ["standard", "square", "marble"].includes(saved)) {
+        return saved;
+      }
+    }
+    return "standard";
+  });
+
+  // Save layout preference to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("dashboard-gallery-layout", layout);
+    }
+  }, [layout]);
 
   const queryClient = useQueryClient();
 
@@ -1395,7 +1206,8 @@ export default function GalleryPhotos() {
 
   // Render single image item (extracted for reuse)
   const renderImageItem = useCallback(
-    (img: GalleryImage, index: number, allImages: GalleryImage[]) => {
+    (img: GalleryImage, index: number, allImages: GalleryImage[], itemLayout?: GridLayout) => {
+      const currentLayout = itemLayout ?? layout;
       // Combine deleting states from both single and bulk delete
       const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
 
@@ -1415,17 +1227,21 @@ export default function GalleryPhotos() {
       return (
         <div
           key={imageKey}
-          className={`relative group border rounded-lg overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700 transition-all ${
+          className={`relative group rounded-lg overflow-hidden transition-all ${
             isSelectionMode ? "select-none" : ""
           } ${
             isDeleting
               ? "opacity-60"
               : isSelected && isSelectionMode
-                ? "border-brand-500 ring-2 ring-brand-200 dark:ring-photographer-accent/30 dark:border-photographer-accent"
-                : isNonDeletable && isSelectionMode
-                  ? "opacity-60 border-gray-400 dark:border-gray-600"
-                  : "border-gray-400"
-          } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""}`}
+                ? "ring-2 ring-brand-200 dark:ring-photographer-accent/30"
+                : ""
+          } ${isNonDeletable && isSelectionMode ? "cursor-not-allowed" : ""} ${
+            currentLayout === "square"
+              ? "bg-gray-100 dark:bg-gray-800"
+              : currentLayout === "marble"
+                ? "bg-white dark:bg-gray-800"
+                : "bg-white dark:bg-gray-800"
+          }`}
           onMouseDown={(e) => {
             // Prevent browser text/element selection when in selection mode
             if (isSelectionMode) {
@@ -1444,7 +1260,15 @@ export default function GalleryPhotos() {
             }
           }}
         >
-          <div className="aspect-square relative">
+          <div
+            className={`relative ${
+              currentLayout === "square"
+                ? "aspect-square"
+                : currentLayout === "marble"
+                  ? "w-full h-full"
+                  : "aspect-[4/3]"
+            }`}
+          >
             {/* Selection checkbox overlay */}
             {isSelectionMode && (
               <div className="absolute top-2 left-2 z-30 group/checkbox">
@@ -1503,10 +1327,14 @@ export default function GalleryPhotos() {
                     } as ImageFallbackUrls & { key?: string; filename?: string }
                   }
                   alt={imageKey}
-                  className={`w-full h-full object-cover rounded-lg ${
-                    isNonDeletable && isSelectionMode ? "opacity-60" : ""
-                  }`}
-                  preferredSize="thumb"
+                  className={`w-full h-full ${
+                    currentLayout === "square"
+                      ? "object-cover rounded-lg"
+                      : currentLayout === "marble"
+                        ? "object-cover rounded-[2px]"
+                        : "object-contain"
+                  } ${isNonDeletable && isSelectionMode ? "opacity-60" : ""}`}
+                  preferredSize={currentLayout === "marble" ? "bigthumb" : "thumb"}
                 />
                 {orderStatus &&
                   (() => {
@@ -1552,7 +1380,13 @@ export default function GalleryPhotos() {
                   </div>
                 )}
                 {!isDeleting && !isSelectionMode && !isDelivered && !isInAnyOrder && (
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center z-20">
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex flex-col items-center justify-center z-20">
+                    {/* Image name tooltip on hover */}
+                    <div className="absolute top-2 left-0 right-0 flex justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-white text-base font-bold truncate max-w-full px-2">
+                        {removeFileExtension(imageKey)}
+                      </div>
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1569,13 +1403,18 @@ export default function GalleryPhotos() {
                     </button>
                   </div>
                 )}
+                {/* Image name tooltip on hover - show when no delete button overlay */}
+                {!isDeleting && (isSelectionMode || isDelivered || isInAnyOrder) && (
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity z-20 pointer-events-none">
+                    <div className="absolute top-2 left-0 right-0 flex justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-white text-base font-bold truncate max-w-full px-2">
+                        {removeFileExtension(imageKey)}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
-          </div>
-          <div className="p-2">
-            <p className="text-xs text-gray-600 dark:text-gray-400 truncate" title={imageKey}>
-              {removeFileExtension(imageKey)}
-            </p>
           </div>
         </div>
       );
@@ -1590,6 +1429,7 @@ export default function GalleryPhotos() {
       isSelectionMode,
       handleSelectionClick,
       handleDeletePhotoClick,
+      layout,
     ]
   );
 
@@ -1837,22 +1677,25 @@ export default function GalleryPhotos() {
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Zdjęcia w galerii
           </h1>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {imagesLoading ? (
-              <Loading size="sm" />
-            ) : (
-              <>
-                {totalGalleryImageCount}{" "}
-                {totalGalleryImageCount === 1
-                  ? "zdjęcie"
-                  : totalGalleryImageCount < 5
-                    ? "zdjęcia"
-                    : "zdjęć"}
-                {imagesFetching && (
-                  <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
-                )}
-              </>
-            )}
+          <div className="flex items-center gap-4">
+            <LayoutSelector layout={layout} onLayoutChange={setLayout} />
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {imagesLoading ? (
+                <Loading size="sm" />
+              ) : (
+                <>
+                  {totalGalleryImageCount}{" "}
+                  {totalGalleryImageCount === 1
+                    ? "zdjęcie"
+                    : totalGalleryImageCount < 5
+                      ? "zdjęcia"
+                      : "zdjęć"}
+                  {imagesFetching && (
+                    <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
         {/* Action Buttons */}
@@ -2051,16 +1894,27 @@ export default function GalleryPhotos() {
                   </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg bg-white dark:bg-gray-800">
-                      <OrderImagesGrid
-                        images={orderImages}
-                        renderImageItem={renderImageItem}
-                        fetchNextPage={fetchNextPage}
-                        hasNextPage={hasNextPage}
-                        isFetchingNextPage={isFetchingNextPage}
-                        imagesError={imagesError}
-                        isLoading={imagesLoading}
-                        isFetching={imagesFetching}
-                      />
+                      <div
+                        className="w-full overflow-auto table-scrollbar"
+                        style={{
+                          height: "calc(100vh - 174px)",
+                          minHeight: "400px",
+                          overscrollBehavior: "none",
+                        }}
+                      >
+                        <DashboardVirtuosoGrid
+                          images={orderImages}
+                          layout={layout}
+                          renderImageItem={(img, idx, all) =>
+                            renderImageItem(img, idx, all, layout)
+                          }
+                          hasNextPage={hasNextPage}
+                          onLoadMore={fetchNextPage}
+                          isFetchingNextPage={isFetchingNextPage}
+                          isLoading={imagesLoading}
+                          error={imagesError}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2122,16 +1976,25 @@ export default function GalleryPhotos() {
                   {(imagesLoading || imagesFetching) && unselectedImages.length === 0 ? (
                     <GalleryLoading text="Ładowanie niewybranych zdjęć..." />
                   ) : unselectedImages.length > 0 ? (
-                    <OrderImagesGrid
-                      images={unselectedImages}
-                      renderImageItem={renderImageItem}
-                      fetchNextPage={fetchNextPage}
-                      hasNextPage={hasNextPage}
-                      isFetchingNextPage={isFetchingNextPage}
-                      imagesError={imagesError}
-                      isLoading={imagesLoading}
-                      isFetching={imagesFetching}
-                    />
+                    <div
+                      className="w-full overflow-auto table-scrollbar"
+                      style={{
+                        height: "calc(100vh - 174px)",
+                        minHeight: "400px",
+                        overscrollBehavior: "none",
+                      }}
+                    >
+                      <DashboardVirtuosoGrid
+                        images={unselectedImages}
+                        layout={layout}
+                        renderImageItem={(img, idx, all) => renderImageItem(img, idx, all, layout)}
+                        hasNextPage={hasNextPage}
+                        onLoadMore={fetchNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        isLoading={imagesLoading}
+                        error={imagesError}
+                      />
+                    </div>
                   ) : (
                     <EmptyState
                       // eslint-disable-next-line jsx-a11y/alt-text
@@ -2150,16 +2013,25 @@ export default function GalleryPhotos() {
           (imagesLoading || imagesFetching) && images.length === 0 ? (
             <GalleryLoading text="Ładowanie zdjęć..." />
           ) : images.length > 0 ? (
-            <OrderImagesGrid
-              images={images}
-              renderImageItem={renderImageItem}
-              fetchNextPage={fetchNextPage}
-              hasNextPage={hasNextPage}
-              isFetchingNextPage={isFetchingNextPage}
-              imagesError={imagesError}
-              isLoading={imagesLoading}
-              isFetching={imagesFetching}
-            />
+            <div
+              className="w-full overflow-auto table-scrollbar"
+              style={{
+                height: "calc(100vh - 174px)",
+                minHeight: "400px",
+                overscrollBehavior: "none",
+              }}
+            >
+              <DashboardVirtuosoGrid
+                images={images}
+                layout={layout}
+                renderImageItem={(img, idx, all) => renderImageItem(img, idx, all, layout)}
+                hasNextPage={hasNextPage}
+                onLoadMore={fetchNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                isLoading={imagesLoading}
+                error={imagesError}
+              />
+            </div>
           ) : (
             <EmptyState
               // eslint-disable-next-line jsx-a11y/alt-text

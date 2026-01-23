@@ -87,9 +87,19 @@ export async function buildTenantGalleryUrl(
  */
 export async function getOwnerSubdomain(
 	ownerId: string,
-	usersTable?: string
+	usersTable?: string,
+	event?: any
 ): Promise<string | null> {
+	const logger = event?.logger;
+	
+	if (logger) {
+		logger.debug('getOwnerSubdomain: starting', { ownerId, usersTable, hasUsersTable: !!usersTable });
+	}
+	
 	if (!usersTable) {
+		if (logger) {
+			logger.debug('getOwnerSubdomain: no usersTable provided');
+		}
 		return null;
 	}
 
@@ -100,8 +110,29 @@ export async function getOwnerSubdomain(
 			ProjectionExpression: 'subdomain'
 		}));
 
-		return (userResult.Item?.subdomain as string | undefined) || null;
-	} catch {
+		const subdomain = (userResult.Item?.subdomain as string | undefined) || null;
+		
+		if (logger) {
+			logger.debug('getOwnerSubdomain: retrieved from database', {
+				ownerId,
+				subdomain,
+				hasItem: !!userResult.Item,
+				itemKeys: userResult.Item ? Object.keys(userResult.Item) : [],
+				subdomainType: typeof subdomain,
+				subdomainLength: subdomain?.length,
+				subdomainCharCodes: subdomain?.split('').map((c: string) => c.charCodeAt(0))
+			});
+		}
+
+		return subdomain;
+	} catch (error) {
+		if (logger) {
+			logger.warn('getOwnerSubdomain: error retrieving subdomain', {
+				ownerId,
+				errorName: (error as any)?.name,
+				errorMessage: (error as any)?.message
+			});
+		}
 		return null;
 	}
 }
@@ -117,36 +148,122 @@ export async function getOwnerSubdomain(
  */
 export function extractSubdomainFromEvent(event: any, baseDomain?: string): string | null {
 	const headers = event?.headers || {};
-	const host = headers.Host || headers.host || '';
 	
-	if (!host) {
-		return null;
+	// Log for debugging
+	const logger = (event as any)?.logger;
+	if (logger) {
+		logger.debug('extractSubdomainFromEvent: starting', { 
+			host: headers.Host || headers.host,
+			xForwardedHost: headers['X-Forwarded-Host'] || headers['x-forwarded-host'],
+			origin: headers.Origin || headers.origin,
+			baseDomain,
+			headersKeys: Object.keys(headers)
+		});
 	}
-
-	// Remove port if present (e.g., "michalm.lvh.me:3000" -> "michalm.lvh.me")
-	const hostname = host.split(':')[0];
 	
-	// If baseDomain is provided, check if hostname ends with it
-	if (baseDomain) {
-		// Check for subdomain.baseDomain pattern
-		const subdomainPattern = new RegExp(`^([^.]+)\\.${baseDomain.replace(/\./g, '\\.')}$`);
-		const match = hostname.match(subdomainPattern);
-		if (match && match[1]) {
-			return match[1];
-		}
-		
-		// If hostname exactly matches baseDomain, no subdomain
-		if (hostname === baseDomain) {
+	// Helper function to extract subdomain from a hostname
+	const extractFromHostname = (hostname: string): string | null => {
+		if (!hostname || !baseDomain) {
 			return null;
 		}
+		
+		// Remove port if present (e.g., "michalm.lvh.me:3000" -> "michalm.lvh.me")
+		const cleanHostname = hostname.split(':')[0];
+		
+		// Check for subdomain.baseDomain pattern (case-insensitive match)
+		const subdomainPattern = new RegExp(`^([^.]+)\\.${baseDomain.replace(/\./g, '\\.')}$`, 'i');
+		const match = cleanHostname.match(subdomainPattern);
+		if (match && match[1]) {
+			const extracted = match[1].toLowerCase();
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: extracted via pattern match', { 
+					extracted, 
+					original: match[1],
+					hostname: cleanHostname,
+					pattern: subdomainPattern.toString()
+				});
+			}
+			return extracted;
+		}
+		
+		// If hostname exactly matches baseDomain (case-insensitive), no subdomain
+		if (cleanHostname.toLowerCase() === baseDomain.toLowerCase()) {
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: hostname matches baseDomain exactly, no subdomain', { hostname: cleanHostname });
+			}
+			return null;
+		}
+		
+		return null;
+	};
+	
+	// Check if a hostname is an API Gateway hostname (should be ignored)
+	const isApiGatewayHostname = (hostname: string): boolean => {
+		return hostname.includes('.execute-api.') || 
+		       hostname.includes('.amazonaws.com') ||
+		       hostname.includes('lambda-url.');
+	};
+	
+	// Priority 1: Check X-Forwarded-Host header (standard for proxied requests)
+	const xForwardedHost = headers['X-Forwarded-Host'] || headers['x-forwarded-host'];
+	if (xForwardedHost) {
+		if (logger) {
+			logger.debug('extractSubdomainFromEvent: checking X-Forwarded-Host', { xForwardedHost });
+		}
+		const extracted = extractFromHostname(xForwardedHost);
+		if (extracted) {
+			return extracted;
+		}
 	}
 	
-	// Fallback: try to extract subdomain by splitting on dots
-	// This works for patterns like "subdomain.domain.tld"
-	const parts = hostname.split('.');
-	if (parts.length >= 3) {
-		// Assume first part is subdomain (e.g., "michalm.lvh.me" -> "michalm")
-		return parts[0];
+	// Priority 2: Check Origin header (contains the original origin)
+	const origin = headers.Origin || headers.origin;
+	if (origin) {
+		try {
+			const originUrl = new URL(origin);
+			const originHostname = originUrl.hostname;
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: checking Origin header', { origin, originHostname });
+			}
+			const extracted = extractFromHostname(originHostname);
+			if (extracted) {
+				return extracted;
+			}
+		} catch (e) {
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: failed to parse Origin header', { origin, error: (e as any)?.message });
+			}
+		}
+	}
+	
+	// Priority 3: Check Host header, but only if it's not an API Gateway hostname
+	const host = headers.Host || headers.host || '';
+	if (host) {
+		const hostname = host.split(':')[0];
+		
+		// Skip API Gateway hostnames - they don't contain the original subdomain
+		if (isApiGatewayHostname(hostname)) {
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: Host header is API Gateway hostname, skipping', { hostname });
+			}
+		} else {
+			if (logger) {
+				logger.debug('extractSubdomainFromEvent: checking Host header', { hostname });
+			}
+			const extracted = extractFromHostname(hostname);
+			if (extracted) {
+				return extracted;
+			}
+		}
+	}
+	
+	if (logger) {
+		logger.debug('extractSubdomainFromEvent: no subdomain found in any header', { 
+			host, 
+			xForwardedHost, 
+			origin,
+			baseDomain 
+		});
 	}
 	
 	return null;

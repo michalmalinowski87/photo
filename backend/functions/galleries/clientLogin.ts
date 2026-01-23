@@ -77,19 +77,63 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const galleryUrl = await getRequiredConfigValue(stage, 'PublicGalleryUrl', { envVarName: 'PUBLIC_GALLERY_URL' });
 		const baseDomain = extractBaseDomain(galleryUrl);
 		
+		logger.info('Subdomain validation: starting', {
+			galleryId,
+			ownerId: gallery.ownerId,
+			galleryUrl,
+			baseDomain,
+			hostHeader: event?.headers?.Host || event?.headers?.host || 'not found',
+			allHeaders: Object.keys(event?.headers || {})
+		});
+		
 		// Extract subdomain from request (if any)
-		const requestSubdomain = extractSubdomainFromEvent(event, baseDomain);
+		// Pass logger via event so extractSubdomainFromEvent can use it
+		const eventWithLogger = { ...event, logger };
+		const requestSubdomain = extractSubdomainFromEvent(eventWithLogger, baseDomain);
+		
+		logger.info('Subdomain validation: extracted request subdomain', {
+			galleryId,
+			requestSubdomain,
+			baseDomain,
+			hasRequestSubdomain: !!requestSubdomain
+		});
 		
 		// If request is via subdomain, validate it matches gallery owner
 		if (requestSubdomain) {
-			const ownerSubdomain = await getOwnerSubdomain(gallery.ownerId, usersTable);
+			const ownerSubdomain = await getOwnerSubdomain(gallery.ownerId, usersTable, { logger });
+			
+			logger.info('Subdomain validation: comparing subdomains', {
+				galleryId,
+				ownerId: gallery.ownerId,
+				requestSubdomain,
+				ownerSubdomain,
+				requestSubdomainType: typeof requestSubdomain,
+				ownerSubdomainType: typeof ownerSubdomain,
+				requestSubdomainLength: requestSubdomain?.length,
+				ownerSubdomainLength: ownerSubdomain?.length,
+				areEqual: ownerSubdomain === requestSubdomain,
+				requestSubdomainCharCodes: requestSubdomain?.split('').map((c: string) => c.charCodeAt(0)),
+				ownerSubdomainCharCodes: ownerSubdomain?.split('').map((c: string) => c.charCodeAt(0))
+			});
+			
 			if (!ownerSubdomain || ownerSubdomain !== requestSubdomain) {
 				// Request is via subdomain but doesn't match gallery owner - security violation
 				logger.warn('Subdomain mismatch on client login', { 
 					galleryId, 
 					requestSubdomain, 
 					ownerSubdomain,
-					ownerId: gallery.ownerId 
+					ownerId: gallery.ownerId,
+					requestSubdomainType: typeof requestSubdomain,
+					ownerSubdomainType: typeof ownerSubdomain,
+					requestSubdomainLength: requestSubdomain?.length,
+					ownerSubdomainLength: ownerSubdomain?.length,
+					comparisonDetails: {
+						requestSubdomainJSON: JSON.stringify(requestSubdomain),
+						ownerSubdomainJSON: JSON.stringify(ownerSubdomain),
+						strictEqual: ownerSubdomain === requestSubdomain,
+						requestTrimmed: requestSubdomain?.trim(),
+						ownerTrimmed: ownerSubdomain?.trim()
+					}
 				});
 				return {
 					statusCode: 403,
@@ -100,11 +144,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}),
 				};
 			}
+			
+			logger.info('Subdomain validation: passed', {
+				galleryId,
+				requestSubdomain,
+				ownerSubdomain
+			});
+		} else {
+			logger.info('Subdomain validation: no request subdomain, skipping validation', {
+				galleryId
+			});
 		}
 	} catch (error) {
 		// If we can't validate (e.g., config missing), log but don't block
 		// This allows the endpoint to work even if subdomain validation fails
-		logger.warn('Failed to validate subdomain ownership on client login', { error, galleryId });
+		logger.warn('Failed to validate subdomain ownership on client login', { 
+			error, 
+			galleryId,
+			errorName: (error as any)?.name,
+			errorMessage: (error as any)?.message,
+			errorStack: (error as any)?.stack
+		});
 	}
 
 	// Check if gallery is published before allowing client login

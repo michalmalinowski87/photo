@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
+import { LayoutSelector, type GridLayout } from "../../../../components/galleries/LayoutSelector";
 import { useGalleryType } from "../../../../components/hocs/withGalleryType";
 import { OrderHeader } from "../../../../components/orders/OrderHeader";
 import { OrderInfoCard } from "../../../../components/orders/OrderInfoCard";
@@ -260,6 +261,27 @@ export default function OrderDetail() {
 
   const [error, setError] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"originals" | "finals">("originals");
+
+  // Layout state with localStorage persistence (shared with main gallery view)
+  const [layout, setLayout] = useState<GridLayout>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dashboard-gallery-layout") as
+        | "standard"
+        | "square"
+        | "marble";
+      if (saved && ["standard", "square", "marble"].includes(saved)) {
+        return saved;
+      }
+    }
+    return "standard";
+  });
+
+  // Save layout preference to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("dashboard-gallery-layout", layout);
+    }
+  }, [layout]);
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [, setOptimisticFinalsBytes] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
@@ -876,11 +898,18 @@ export default function OrderDetail() {
       />
 
       {shouldShowTabs && (
-        <OrderTabs
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          finalsCount={totalFinalImagesCount}
-        />
+        <div className="flex items-center justify-between border-b border-gray-400 dark:border-gray-700">
+          <div className="flex-1">
+            <OrderTabs
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              finalsCount={totalFinalImagesCount}
+            />
+          </div>
+          <div className="pr-4">
+            <LayoutSelector layout={layout} onLayoutChange={setLayout} />
+          </div>
+        </div>
       )}
 
       {shouldShowTabs && activeTab === "originals" && (
@@ -894,6 +923,7 @@ export default function OrderDetail() {
           fetchNextPage={fetchNextOriginalPage}
           hasNextPage={hasNextOriginalPage}
           isFetchingNextPage={isFetchingNextOriginalPage}
+          layout={layout}
         />
       )}
 
@@ -902,6 +932,7 @@ export default function OrderDetail() {
           images={finalImages}
           canUpload={canUploadFinals}
           deletingImages={deletingImages}
+          layout={layout}
           onUploadClick={() => setUploadModalOpen(true)}
           onDeleteImage={handleDeleteFinalImageClick}
           onDeleteImagesBatch={handleDeleteFinalImagesBatch}
