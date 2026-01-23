@@ -42,124 +42,201 @@ export function DashboardVirtuosoGrid({
   className = "",
 }: DashboardVirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
-  const [imageDimensions, setImageDimensions] = useState<
-    Map<string, { width: number; height: number }>
-  >(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
-  const imageRefs = useRef<Map<string, HTMLImageElement>>(new Map());
+  // Store actual image dimensions extracted from loaded images
+  const [imageDimensions, setImageDimensions] = useState<Map<string, { width: number; height: number }>>(new Map());
+  // Track previous images length to detect actual image changes (not dimension extraction updates)
+  const prevImagesLengthRef = useRef<number>(images.length);
+  // Track if dimensions are ready for marble layout (to avoid showing broken layout)
+  // Start as true - we'll use estimates immediately and refine as dimensions are extracted
+  const [dimensionsReady, setDimensionsReady] = useState(true);
+  
+  // No longer reset dimensionsReady - we render immediately with estimates and refine as dimensions are extracted
 
   // Update container width on resize and when images change
   // Use actual container width (not window width) to account for sidebar
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        // Use getBoundingClientRect for accurate width measurement
-        // This accounts for any padding, borders, and scrollbars correctly
-        const rect = containerRef.current.getBoundingClientRect();
-        const width = rect.width || containerRef.current.clientWidth || 1200;
-        // Ensure we have a valid width (at least 300px for mobile)
-        const validWidth = Math.max(width, 300);
-        // Only update if width actually changed to avoid unnecessary re-renders
-        setContainerWidth((prev) => {
-          // Use a small threshold to avoid constant updates from minor floating point differences
-          if (Math.abs(prev - validWidth) > 1) {
-            return validWidth;
-          }
-          return prev;
-        });
+        // Use full container width (parent already handles padding)
+        // Ensure width doesn't exceed viewport
+        const maxWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+        const width = Math.min(
+          containerRef.current.clientWidth || maxWidth,
+          maxWidth
+        );
+        setContainerWidth(width);
       }
     };
 
-    // Initial update with requestAnimationFrame to ensure DOM is fully laid out
-    const rafId = requestAnimationFrame(updateWidth);
-    const timeoutId = setTimeout(updateWidth, 100); // Also update after a short delay for initial render
-
-    const resizeObserver = new ResizeObserver(() => {
-      // Use requestAnimationFrame in ResizeObserver callback for smooth updates
-      requestAnimationFrame(updateWidth);
-    });
-
+    // Small delay to ensure DOM is ready - match gallery app approach
+    const timeoutId = setTimeout(updateWidth, 0);
+    const resizeObserver = new ResizeObserver(updateWidth);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
-      // Also observe parent container if it's a scroll container
-      const parent = containerRef.current.parentElement;
-      if (parent) {
-        const parentStyle = window.getComputedStyle(parent);
-        if (
-          parentStyle.overflow === "auto" ||
-          parentStyle.overflowY === "auto" ||
-          parentStyle.overflow === "scroll" ||
-          parentStyle.overflowY === "scroll"
-        ) {
-          resizeObserver.observe(parent);
-        }
-      }
     }
-
     window.addEventListener("resize", updateWidth);
-
     return () => {
-      cancelAnimationFrame(rafId);
       clearTimeout(timeoutId);
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
   }, [images.length, images]);
 
-  // Measure images after they load to get accurate dimensions
+  // Extract dimensions from loaded images - only for images in current images array
   useEffect(() => {
-    const updateDimensions = () => {
-      const updates = new Map<string, { width: number; height: number }>();
+    if (layout !== "marble") {
+      // For non-marble layouts, dimensions aren't needed, so mark as ready immediately
+      setDimensionsReady(true);
+      return;
+    }
+    
+    if (!containerRef.current || images.length === 0) {
+      return;
+    }
 
-      imageRefs.current.forEach((imgElement, imageKey) => {
-        if (imgElement?.naturalWidth && imgElement.naturalHeight) {
-          // Get current dimensions from state (read directly, don't depend on it)
-          const currentDims = imageDimensions.get(imageKey);
-          const newWidth = imgElement.naturalWidth;
-          const newHeight = imgElement.naturalHeight;
+    // No longer reset dimensionsReady - we render immediately with estimates and refine as dimensions are extracted
+    // Update ref to track current images length for future reference
+    prevImagesLengthRef.current = images.length;
 
-          // Only update if dimensions changed or don't exist
-          if (currentDims?.width !== newWidth || currentDims.height !== newHeight) {
-            updates.set(imageKey, {
-              width: newWidth,
-              height: newHeight,
-            });
+    // Create a Set of valid image keys for quick lookup
+    const validImageKeys = new Set(
+      images.map((img) => img.key ?? img.filename ?? '').filter(Boolean)
+    );
+
+    const extractDimensions = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Look for images in the container and any hidden extraction containers (siblings)
+      const parent = container.parentElement;
+      const searchRoot = parent || container;
+      const imgElements = Array.from(searchRoot.querySelectorAll('img')) as HTMLImageElement[];
+      const dimensionsToAdd = new Map<string, { width: number; height: number }>();
+
+      imgElements.forEach((img) => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          // Find the image key from the parent structure
+          const imageContainer = img.closest('[data-image-key]');
+          if (imageContainer) {
+            const imageKey = imageContainer.getAttribute('data-image-key');
+            // Only extract dimensions for images that are in the current images array
+            if (imageKey && validImageKeys.has(imageKey)) {
+              dimensionsToAdd.set(imageKey, {
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+              });
+            }
           }
         }
       });
 
-      // Only update state if there are actual changes
-      if (updates.size > 0) {
+      if (dimensionsToAdd.size > 0) {
         setImageDimensions((prev) => {
-          // Double-check to prevent unnecessary updates
-          let hasRealChanges = false;
-          const next = new Map(prev);
-          updates.forEach((dims, key) => {
-            const existing = prev.get(key);
-            if (!existing || existing.width !== dims.width || existing.height !== dims.height) {
-              next.set(key, dims);
-              hasRealChanges = true;
+          const updated = new Map(prev);
+          let hasNew = false;
+          dimensionsToAdd.forEach((dims, key) => {
+            // Only update if this image is still in the current images array
+            if (validImageKeys.has(key) && !updated.has(key)) {
+              updated.set(key, dims);
+              hasNew = true;
             }
           });
-          return hasRealChanges ? next : prev;
+          
+          // Check if we have dimensions for a reasonable percentage of images (at least 50% or first 10)
+          const extractedCount = Array.from(validImageKeys).filter(key => 
+            updated.has(key)
+          ).length;
+          const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
+          
+          // Mark as ready if we have dimensions for enough images
+          if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
+            setDimensionsReady(true);
+          }
+          
+          return hasNew ? updated : prev;
+        });
+      } else {
+        // Even if no new dimensions, check if we already have enough
+        setImageDimensions((prev) => {
+          const extractedCount = Array.from(validImageKeys).filter(key => 
+            prev.has(key)
+          ).length;
+          const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
+          if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
+            setDimensionsReady(true);
+          }
+          return prev;
         });
       }
     };
 
-    // Check for loaded images less frequently to avoid infinite loops
-    const intervalId = setInterval(updateDimensions, 500);
-    // Also update after a delay to allow images to start loading
-    const timeoutId = setTimeout(updateDimensions, 200);
+    // Extract dimensions immediately for already-loaded images, then with a small delay for others
+    extractDimensions(); // Immediate extraction for already-loaded images
+    
+    const timeoutId = setTimeout(() => {
+      extractDimensions();
+      // Mark as ready after timeout even if not all dimensions are extracted (fallback to estimates)
+      setDimensionsReady(true);
+    }, 300); // Give images time to load, but don't wait too long
+    
+    // Also extract on image load events - use event delegation on parent for better performance
+    const container = containerRef.current;
+    const parent = container?.parentElement;
+    const loadHandler = (e: Event) => {
+      const img = e.target as HTMLImageElement;
+      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const imageContainer = img.closest('[data-image-key]');
+        if (imageContainer) {
+          const imageKey = imageContainer.getAttribute('data-image-key');
+          // Only extract dimensions for images that are in the current images array
+          if (imageKey && validImageKeys.has(imageKey)) {
+            setImageDimensions((prev) => {
+              if (!prev.has(imageKey)) {
+                const updated = new Map(prev);
+                updated.set(imageKey, {
+                  width: img.naturalWidth,
+                  height: img.naturalHeight,
+                });
+                
+                // Check if we should mark as ready after this extraction
+                const extractedCount = Array.from(validImageKeys).filter(key => 
+                  updated.has(key)
+                ).length;
+                const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
+                if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
+                  setDimensionsReady(true);
+                }
+                
+                return updated;
+              }
+              return prev;
+            });
+          }
+        }
+      }
+    };
+
+    // Use event delegation on parent to catch images in hidden container too
+    if (parent) {
+      parent.addEventListener('load', loadHandler, true);
+    } else if (container) {
+      container.addEventListener('load', loadHandler, true);
+    }
 
     return () => {
-      clearInterval(intervalId);
       clearTimeout(timeoutId);
+      if (parent) {
+        parent.removeEventListener('load', loadHandler, true);
+      } else if (container) {
+        container.removeEventListener('load', loadHandler, true);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images]); // Only depend on images, not imageDimensions to avoid loops
+  }, [images, layout]); // Re-run when images or layout change, but NOT when imageDimensions changes (to avoid resetting dimensionsReady)
 
   // Calculate layout boxes - justified for square/standard, masonry for marble
+  // Always calculate layout immediately (like gallery app) - use estimates if dimensions not available
   const layoutBoxes = useMemo(() => {
     if (images.length === 0) return [];
 
@@ -168,47 +245,35 @@ export function DashboardVirtuosoGrid({
 
     // For marble (masonry), use column-based masonry layout
     if (layout === "marble") {
-      // Calculate responsive number of columns for dashboard
-      // Dashboard has sidebar, so use fewer columns and smaller images
-      // Always cap at 3 columns for dashboard to fit properly
-      const numColumns = effectiveWidth < 640 ? 2 : 3;
-      // Calculate column width more precisely to avoid rounding errors
-      // Total spacing between columns = (numColumns - 1) * boxSpacing
-      const totalSpacing = (numColumns - 1) * boxSpacing;
-      const availableWidth = effectiveWidth - totalSpacing;
-      const columnWidth = availableWidth / numColumns;
+      // Calculate responsive number of columns - match gallery app logic
+      const numColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
+      // Calculate column width using Math.floor like gallery app for precision
+      const columnWidth = Math.floor((effectiveWidth - (numColumns - 1) * boxSpacing) / numColumns);
       const columnHeights = new Array(numColumns).fill(0);
       const boxes: LayoutBox[] = [];
 
       images.forEach((image, index) => {
         // Calculate item dimensions based on actual image dimensions or estimate
+        // Match gallery app approach: use image.width/image.height if available, otherwise estimate
         let itemHeight: number;
+        
+        // Check for dimensions from API first, then from extracted dimensions
         const imageKey = image.key ?? image.filename ?? `image-${index}`;
-
-        // First try to get dimensions from state (measured from loaded images)
-        const measuredDimensions = imageDimensions.get(imageKey);
-        if (
-          measuredDimensions?.width &&
-          measuredDimensions.width > 0 &&
-          measuredDimensions.height > 0
-        ) {
-          const aspectRatio = measuredDimensions.width / measuredDimensions.height;
+        const extractedDims = imageDimensions.get(imageKey);
+        const imageWidth = typeof image.width === 'number' ? image.width : extractedDims?.width;
+        const imageHeight = typeof image.height === 'number' ? image.height : extractedDims?.height;
+        
+        if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
+          // Use actual aspect ratio to calculate height
+          const aspectRatio = imageWidth / imageHeight;
           itemHeight = columnWidth / aspectRatio;
         } else {
-          // Fallback to image metadata if available
-          const width = typeof image.width === "number" ? image.width : undefined;
-          const height = typeof image.height === "number" ? image.height : undefined;
-
-          if (width && height && width > 0 && height > 0) {
-            // Use actual aspect ratio to calculate height
-            const aspectRatio = width / height;
-            itemHeight = columnWidth / aspectRatio;
-          } else {
-            // Conservative estimate - use a more reasonable default aspect ratio
-            // Most photos are between 3:4 (portrait) and 4:3 (landscape)
-            // Use 4:3 as default (slightly landscape) which is common for photos
-            itemHeight = columnWidth * 0.75; // 4:3 aspect ratio
-          }
+          // Estimate based on index for variety (alternating between portrait and landscape)
+          // This creates natural variation in masonry layout
+          const isPortrait = index % 3 !== 0; // Roughly 2/3 portrait, 1/3 landscape
+          itemHeight = isPortrait 
+            ? columnWidth * 1.4  // Portrait: taller
+            : columnWidth * 0.75; // Landscape: shorter
         }
 
         // Find the shortest column (true masonry algorithm)
@@ -222,15 +287,18 @@ export function DashboardVirtuosoGrid({
           }
         }
 
-        // Calculate position - use precise calculation to avoid rounding errors
-        const left = shortestColumnIndex * (columnWidth + boxSpacing);
+        // Calculate position - match gallery app: ensure it doesn't exceed container width
+        const left = Math.min(
+          shortestColumnIndex * (columnWidth + boxSpacing),
+          effectiveWidth - columnWidth
+        );
         const top = columnHeights[shortestColumnIndex] as number;
 
         boxes.push({
           aspectRatio: columnWidth / itemHeight,
           top,
-          left: Math.max(0, left),
-          width: columnWidth, // Use exact columnWidth, no need to min with effectiveWidth
+          left: Math.max(0, left), // Ensure left is never negative
+          width: Math.min(columnWidth, effectiveWidth - left), // Ensure width doesn't exceed container - match gallery app
           height: itemHeight,
         });
 
@@ -244,14 +312,11 @@ export function DashboardVirtuosoGrid({
     // For square and standard, use justified layout
     const targetRowHeight = layout === "square" ? 200 : 200;
 
-    // Get image dimensions - use actual dimensions if available, or estimate
+    // Get image dimensions - match gallery app: use API dimensions only, not extracted
     const items = images.map((image) => {
-      const width = typeof image.width === "number" ? image.width : undefined;
-      const height = typeof image.height === "number" ? image.height : undefined;
-
-      // Use actual dimensions if available
-      if (width && height) {
-        return { width, height };
+      // Use actual dimensions if available from API - match gallery app
+      if (typeof image.width === 'number' && typeof image.height === 'number') {
+        return { width: image.width, height: image.height };
       }
       // For square layout, force 1:1 aspect ratio
       if (layout === "square") {
@@ -270,15 +335,19 @@ export function DashboardVirtuosoGrid({
     }) as { boxes: LayoutBox[] };
 
     return justified.boxes;
-  }, [images, layout, containerWidth, imageDimensions]);
+  }, [images, layout, containerWidth, imageDimensions]); // Include imageDimensions to recalculate when extracted dimensions change
 
   // Calculate total height for the container
+  // Match gallery app approach: use last box for all layouts (simpler and more reliable)
   const containerHeight = useMemo(() => {
     if (layoutBoxes.length === 0) return 0;
 
+    // Use last box for all layouts (match gallery app) - simpler and more reliable
+    const lastBox = layoutBoxes[layoutBoxes.length - 1];
+    if (!lastBox) return 0;
+    
+    // For marble, also check max bottom to ensure we capture tallest column
     if (layout === "marble") {
-      // For masonry layout, find the maximum bottom position across all boxes
-      // This ensures we account for the tallest column, not just the last box
       let maxBottom = 0;
       for (const box of layoutBoxes) {
         const bottom = box.top + box.height;
@@ -286,14 +355,13 @@ export function DashboardVirtuosoGrid({
           maxBottom = bottom;
         }
       }
-      // Container padding-top (8px) + max bottom position + bottom padding (8px) + extra buffer (16px)
-      // The extra buffer ensures images at the bottom aren't cut off due to rounding or measurement errors
-      return 8 + maxBottom + 8 + 16;
+      const heightFromMax = 8 + maxBottom + 8 + 16;
+      const heightFromLast = 8 + lastBox.top + lastBox.height + 8 + 16;
+      
+      // Use the larger of the two to ensure we capture the tallest column
+      return Math.max(heightFromMax, heightFromLast);
     }
 
-    // For other layouts, use the last box
-    const lastBox = layoutBoxes[layoutBoxes.length - 1];
-    if (!lastBox) return 0;
     // Container padding-top (8px) + last box position + last box height + bottom padding (8px) + extra buffer (16px)
     return 8 + lastBox.top + lastBox.height + 8 + 16;
   }, [layoutBoxes, layout]);
@@ -386,7 +454,7 @@ export function DashboardVirtuosoGrid({
   }
 
   return (
-    <div ref={containerRef} className={`w-full overflow-hidden ${className}`}>
+    <div ref={containerRef} className={`w-full overflow-hidden relative ${className}`}>
       <div
         style={{
           position: "relative",
@@ -415,58 +483,7 @@ export function DashboardVirtuosoGrid({
                 boxSizing: "border-box",
               }}
             >
-              <div
-                ref={(el) => {
-                  if (el) {
-                    // Find the img element inside to measure it
-                    const img = el.querySelector("img");
-                    if (img && !imageRefs.current.has(imageKey)) {
-                      // Only set up listener if we haven't already for this image
-                      imageRefs.current.set(imageKey, img);
-
-                      // Update dimensions when image loads - check if already measured
-                      const handleLoad = () => {
-                        const currentDims = imageDimensions.get(imageKey);
-                        if (
-                          img.naturalWidth &&
-                          img.naturalHeight &&
-                          (!currentDims ||
-                            currentDims.width !== img.naturalWidth ||
-                            currentDims.height !== img.naturalHeight)
-                        ) {
-                          setImageDimensions((prev) => {
-                            const next = new Map(prev);
-                            next.set(imageKey, {
-                              width: img.naturalWidth,
-                              height: img.naturalHeight,
-                            });
-                            return next;
-                          });
-                        }
-                      };
-
-                      if (img.complete && img.naturalWidth && img.naturalHeight) {
-                        // Image already loaded, measure it immediately but async to avoid loops
-                        setTimeout(handleLoad, 0);
-                      } else {
-                        // Wait for image to load
-                        img.addEventListener("load", handleLoad, { once: true });
-                        img.addEventListener(
-                          "error",
-                          () => {
-                            // Remove ref on error to prevent memory leaks
-                            imageRefs.current.delete(imageKey);
-                          },
-                          { once: true }
-                        );
-                      }
-                    }
-                  } else {
-                    imageRefs.current.delete(imageKey);
-                  }
-                }}
-                style={{ width: "100%", height: "100%" }}
-              >
+              <div style={{ width: "100%", height: "100%" }} data-image-key={imageKey}>
                 {renderImageItem(image, index, images)}
               </div>
             </div>

@@ -129,7 +129,7 @@ export default function GalleryPhotos() {
         return saved;
       }
     }
-    return "standard";
+    return "square";
   });
 
   // Save layout preference to localStorage
@@ -137,6 +137,44 @@ export default function GalleryPhotos() {
     if (typeof window !== "undefined") {
       localStorage.setItem("dashboard-gallery-layout", layout);
     }
+  }, [layout]);
+
+  // Reset scroll to top when layout changes
+  useEffect(() => {
+    const resetScroll = () => {
+      // Find all scroll containers with table-scrollbar class
+      // These containers have overflow-auto in className, not style
+      const scrollContainers = document.querySelectorAll('.table-scrollbar');
+      scrollContainers.forEach((container) => {
+        if (container instanceof HTMLElement) {
+          // Reset the container's scroll
+          container.scrollTop = 0;
+          // Also check if there's a scrollable parent and reset that too
+          let parent = container.parentElement;
+          while (parent) {
+            const style = window.getComputedStyle(parent);
+            if (
+              (style.overflow === 'auto' || style.overflowY === 'auto' || 
+               style.overflow === 'scroll' || style.overflowY === 'scroll') &&
+              parent.scrollHeight > parent.clientHeight
+            ) {
+              parent.scrollTop = 0;
+              break; // Only reset the first scrollable parent
+            }
+            parent = parent.parentElement;
+          }
+        }
+      });
+    };
+
+    // Use double requestAnimationFrame to ensure DOM has fully updated after layout change
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resetScroll();
+        // Also try after a small delay as fallback for containers that might render later
+        setTimeout(resetScroll, 50);
+      });
+    });
   }, [layout]);
 
   const queryClient = useQueryClient();
@@ -285,6 +323,74 @@ export default function GalleryPhotos() {
     error: imagesError,
     refetch: refetchGalleryImages,
   } = currentSectionQuery;
+
+  // Aggressive prefetching for smooth infinite scrolling (like gallery app)
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || !imagesData?.pages.length) return;
+
+    const handleScroll = () => {
+      // Try to find the scroll container used by DashboardVirtuosoGrid
+      // It's typically a div with overflow-auto or overflow-y-auto
+      const scrollContainers = document.querySelectorAll('[style*="overflow"]');
+      let scrollContainer: HTMLElement | Window = window;
+      let scrollTop = 0;
+      let scrollHeight = 0;
+      let clientHeight = 0;
+
+      // Find the first scrollable container that has scroll content
+      for (const container of Array.from(scrollContainers)) {
+        const el = container as HTMLElement;
+        if (el.scrollHeight > el.clientHeight) {
+          scrollContainer = el;
+          scrollTop = el.scrollTop;
+          scrollHeight = el.scrollHeight;
+          clientHeight = el.clientHeight;
+          break;
+        }
+      }
+
+      // Fallback to window if no scrollable container found
+      if (scrollContainer === window) {
+        scrollTop = window.scrollY || document.documentElement.scrollTop;
+        scrollHeight = document.documentElement.scrollHeight;
+        clientHeight = window.innerHeight;
+      }
+
+      const scrollPercentage = scrollHeight > 0 ? (scrollTop + clientHeight) / scrollHeight : 0;
+
+      // More aggressive prefetching - trigger at 20% scroll for smoother infinite scrolling
+      if (scrollPercentage > 0.2 && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    };
+
+    // Throttle scroll events
+    let timeoutId: NodeJS.Timeout;
+    const throttledHandleScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleScroll, 200);
+    };
+
+    // Listen to scroll on both window and scrollable containers
+    window.addEventListener('scroll', throttledHandleScroll, { passive: true });
+    
+    // Also listen to scroll on scrollable containers
+    const scrollContainers = document.querySelectorAll('[style*="overflow"]');
+    scrollContainers.forEach((container) => {
+      container.addEventListener('scroll', throttledHandleScroll, { passive: true });
+    });
+    
+    // Also check initial scroll position
+    handleScroll();
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('scroll', throttledHandleScroll);
+      scrollContainers.forEach((container) => {
+        container.removeEventListener('scroll', throttledHandleScroll);
+      });
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, imagesData?.pages.length]);
 
   // Prefer query data first, then fall back to cached data for current section
   // Only use cached data if it exists and matches the current expanded section

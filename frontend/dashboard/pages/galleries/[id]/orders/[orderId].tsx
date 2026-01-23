@@ -273,7 +273,7 @@ export default function OrderDetail() {
         return saved;
       }
     }
-    return "standard";
+    return "square";
   });
 
   // Save layout preference to localStorage
@@ -281,6 +281,44 @@ export default function OrderDetail() {
     if (typeof window !== "undefined") {
       localStorage.setItem("dashboard-gallery-layout", layout);
     }
+  }, [layout]);
+
+  // Reset scroll to top when layout changes
+  useEffect(() => {
+    const resetScroll = () => {
+      // Find all scroll containers with table-scrollbar class
+      // These containers have overflow-auto in className, not style
+      const scrollContainers = document.querySelectorAll('.table-scrollbar');
+      scrollContainers.forEach((container) => {
+        if (container instanceof HTMLElement) {
+          // Reset the container's scroll
+          container.scrollTop = 0;
+          // Also check if there's a scrollable parent and reset that too
+          let parent = container.parentElement;
+          while (parent) {
+            const style = window.getComputedStyle(parent);
+            if (
+              (style.overflow === 'auto' || style.overflowY === 'auto' || 
+               style.overflow === 'scroll' || style.overflowY === 'scroll') &&
+              parent.scrollHeight > parent.clientHeight
+            ) {
+              parent.scrollTop = 0;
+              break; // Only reset the first scrollable parent
+            }
+            parent = parent.parentElement;
+          }
+        }
+      });
+    };
+
+    // Use double requestAnimationFrame to ensure DOM has fully updated after layout change
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resetScroll();
+        // Also try after a small delay as fallback for containers that might render later
+        setTimeout(resetScroll, 50);
+      });
+    });
   }, [layout]);
   const [denyModalOpen, setDenyModalOpen] = useState<boolean>(false);
   const [, setOptimisticFinalsBytes] = useState<number | null>(null);
