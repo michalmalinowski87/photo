@@ -5,6 +5,7 @@ export interface ImageData {
   thumbnailUrl?: string; // Thumbnail URL (600px) for carousel thumbnails (may be mapped from thumbUrl)
   thumbUrl?: string; // Thumbnail URL (600px) from backend API
   bigThumbUrl?: string; // Big thumbnail URL (600px)
+  size?: number; // bytes (when provided by API)
   alt?: string;
   width?: number;
   height?: number;

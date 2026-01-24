@@ -288,7 +288,7 @@ export default function OrderDetail() {
     const resetScroll = () => {
       // Find all scroll containers with table-scrollbar class
       // These containers have overflow-auto in className, not style
-      const scrollContainers = document.querySelectorAll('.table-scrollbar');
+      const scrollContainers = document.querySelectorAll(".table-scrollbar");
       scrollContainers.forEach((container) => {
         if (container instanceof HTMLElement) {
           // Reset the container's scroll
@@ -298,8 +298,10 @@ export default function OrderDetail() {
           while (parent) {
             const style = window.getComputedStyle(parent);
             if (
-              (style.overflow === 'auto' || style.overflowY === 'auto' || 
-               style.overflow === 'scroll' || style.overflowY === 'scroll') &&
+              (style.overflow === "auto" ||
+                style.overflowY === "auto" ||
+                style.overflow === "scroll" ||
+                style.overflowY === "scroll") &&
               parent.scrollHeight > parent.clientHeight
             ) {
               parent.scrollTop = 0;

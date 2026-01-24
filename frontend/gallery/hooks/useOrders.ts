@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { getToken } from "@/lib/token";
@@ -61,6 +61,7 @@ interface FinalImagesApiResponse {
   }>;
   count: number;
   totalCount: number;
+  totalBytes?: number;
   hasMore: boolean;
   nextCursor?: string | null;
 }
@@ -69,6 +70,8 @@ interface FinalImagesResponse {
   images: ImageData[];
   hasMore: boolean;
   nextCursor?: string | null;
+  totalCount: number;
+  totalBytes?: number;
 }
 
 export function useFinalImages(
@@ -78,7 +81,13 @@ export function useFinalImages(
 ) {
   const queryKey = ["orders", "final", "images", galleryId, orderId, limit];
 
-  return useInfiniteQuery({
+  return useInfiniteQuery<
+    FinalImagesResponse,
+    unknown,
+    InfiniteData<FinalImagesResponse>,
+    typeof queryKey,
+    string | null
+  >({
     queryKey,
     queryFn: async ({ pageParam = null }) => {
       if (!galleryId || !orderId) {
@@ -117,6 +126,7 @@ export function useFinalImages(
         thumbnailUrl: img.thumbUrl || img.thumbUrlFallback,
         thumbUrl: img.thumbUrl || img.thumbUrlFallback,
         bigThumbUrl: img.bigThumbUrl || img.bigThumbUrlFallback,
+        size: img.size,
         width: img.width,
         height: img.height,
         alt: img.key,
@@ -126,6 +136,8 @@ export function useFinalImages(
         images: mappedImages,
         hasMore: apiData.hasMore,
         nextCursor: apiData.nextCursor,
+        totalCount: apiData.totalCount,
+        totalBytes: apiData.totalBytes,
       } as FinalImagesResponse;
     },
     getNextPageParam: (lastPage) => {

@@ -148,7 +148,7 @@ export const ClientSendSuccessPopup = ({
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Gdy klient zatwierdzi wybór, zlecenie zmieni status. Przejdź do szczegółów
-                    zlecenia, aby zobaczyć wybrane zdjęcia i dostarczyć finały.
+                    zlecenia, aby zobaczyć wybrane zdjęcia i dostarczyć zdjęcia finalne.
                   </p>
                 </div>
               </div>
@@ -159,7 +159,7 @@ export const ClientSendSuccessPopup = ({
                 </div>
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white mb-1">
-                    Dostarcz finały i wyślij finalny link
+                    Dostarcz zdjęcia finalne i wyślij finalny link
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Prześlij przetworzone, finalne zdjęcia do zlecenia. Gdy wszystko będzie gotowe,

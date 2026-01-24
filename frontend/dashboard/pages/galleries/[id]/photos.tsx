@@ -144,7 +144,7 @@ export default function GalleryPhotos() {
     const resetScroll = () => {
       // Find all scroll containers with table-scrollbar class
       // These containers have overflow-auto in className, not style
-      const scrollContainers = document.querySelectorAll('.table-scrollbar');
+      const scrollContainers = document.querySelectorAll(".table-scrollbar");
       scrollContainers.forEach((container) => {
         if (container instanceof HTMLElement) {
           // Reset the container's scroll
@@ -154,8 +154,10 @@ export default function GalleryPhotos() {
           while (parent) {
             const style = window.getComputedStyle(parent);
             if (
-              (style.overflow === 'auto' || style.overflowY === 'auto' || 
-               style.overflow === 'scroll' || style.overflowY === 'scroll') &&
+              (style.overflow === "auto" ||
+                style.overflowY === "auto" ||
+                style.overflow === "scroll" ||
+                style.overflowY === "scroll") &&
               parent.scrollHeight > parent.clientHeight
             ) {
               parent.scrollTop = 0;
@@ -372,22 +374,22 @@ export default function GalleryPhotos() {
     };
 
     // Listen to scroll on both window and scrollable containers
-    window.addEventListener('scroll', throttledHandleScroll, { passive: true });
-    
+    window.addEventListener("scroll", throttledHandleScroll, { passive: true });
+
     // Also listen to scroll on scrollable containers
     const scrollContainers = document.querySelectorAll('[style*="overflow"]');
     scrollContainers.forEach((container) => {
-      container.addEventListener('scroll', throttledHandleScroll, { passive: true });
+      container.addEventListener("scroll", throttledHandleScroll, { passive: true });
     });
-    
+
     // Also check initial scroll position
     handleScroll();
 
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('scroll', throttledHandleScroll);
+      window.removeEventListener("scroll", throttledHandleScroll);
       scrollContainers.forEach((container) => {
-        container.removeEventListener('scroll', throttledHandleScroll);
+        container.removeEventListener("scroll", throttledHandleScroll);
       });
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, imagesData?.pages.length]);

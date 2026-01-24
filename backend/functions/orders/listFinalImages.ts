@@ -215,6 +215,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Secondary sort: by filename ascending (for consistent ordering when timestamps are identical)
 				return a.filename.localeCompare(b.filename);
 			});
+		
+		// Total size of all final files (bytes) - used for ZIP ETA estimates in the client.
+		// Note: sizes come from DynamoDB metadata written on upload.
+		const totalBytes = sortedFinalFiles.reduce((sum, f) => sum + (f.size || 0), 0);
 
 		// Generate WebP filename helper (replace extension with .webp)
 		const getWebpFilename = (fname: string) => {
@@ -416,6 +420,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				images: finalImages,
 				count: finalImages.length,
 				totalCount,
+				totalBytes,
 				hasMore,
 				nextCursor
 			})

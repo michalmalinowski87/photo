@@ -113,7 +113,7 @@ export const WelcomePopup = ({
                 </h4>
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                   Po utworzeniu galerii, prześlij zdjęcia do przeglądu przez klienta lub od razu
-                  finały - Ty decydujesz o przepływie pracy.
+                  zdjęcia finalne - Ty decydujesz o przepływie pracy.
                 </p>
               </div>
             </div>

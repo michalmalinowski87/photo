@@ -77,6 +77,34 @@ export function SecondaryMenu({
     : "selecting";
   const shouldBeSticky = state === "selecting";
 
+  const zipCtaText = zipStatus?.ready
+    ? "POBIERZ ZIP"
+    : zipStatus?.generating
+    ? "GENEROWANIE ZIP"
+    : "PRZYGOTOWYWANIE ZIP";
+  const zipCtaAriaLabel = zipStatus?.ready
+    ? "Pobierz ZIP"
+    : zipStatus?.generating
+    ? "Generowanie ZIP"
+    : "Przygotowywanie ZIP";
+
+  const zipProgressPercent = (() => {
+    const p = zipStatus?.progress;
+    if (p?.percent !== undefined && typeof p.percent === "number" && !isNaN(p.percent)) {
+      return Math.round(p.percent);
+    }
+    if (
+      p?.processed !== undefined &&
+      p?.total !== undefined &&
+      typeof p.processed === "number" &&
+      typeof p.total === "number" &&
+      p.total > 0
+    ) {
+      return Math.round((p.processed / p.total) * 100);
+    }
+    return undefined;
+  })();
+
   useEffect(() => {
     let rafId: number | null = null;
     const handleScroll = () => {
@@ -408,7 +436,7 @@ export function SecondaryMenu({
                 }}
                 onMouseEnter={() => handleItemHover("downloadZip")}
                 onMouseLeave={() => handleItemHover(null)}
-                className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 ${
+                className={`relative h-[44px] py-2 uppercase text-sm transition-all touch-manipulation min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 overflow-hidden ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
                 }`}
                 style={{
@@ -416,7 +444,7 @@ export function SecondaryMenu({
                   fontWeight: hoveredItem === "downloadZip" ? "700" : "500",
                   letterSpacing: "0.05em",
                 }}
-                aria-label={zipStatus?.generating ? "Generowanie ZIP" : "Pobierz ZIP"}
+                aria-label={zipCtaAriaLabel}
               >
                 <svg
                   className="w-4 h-4"
@@ -431,7 +459,14 @@ export function SecondaryMenu({
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                   />
                 </svg>
-                {zipStatus?.generating ? "GENEROWANIE ZIP" : "POBIERZ ZIP"}
+                {zipStatus?.generating && zipProgressPercent !== undefined ? (
+                  <span className="flex flex-col items-start leading-[14px]">
+                    <span>GENEROWANIE ZIP</span>
+                    <span className="text-[11px] font-normal">{zipProgressPercent}%</span>
+                  </span>
+                ) : (
+                  <span>{zipCtaText}</span>
+                )}
               </button>
             )}
 

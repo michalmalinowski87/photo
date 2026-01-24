@@ -16,7 +16,7 @@ export function DeliveryStatusBadge({ status }: { status?: string }) {
     CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
     AWAITING_FINAL_PHOTOS: {
       color: "warning",
-      label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na finały",
+      label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na zdjęcia finalne",
     },
     CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
     PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },

@@ -1,13 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import { getToken } from "@/lib/token";
 import { getPublicApiUrl } from "@/lib/public-env";
 
+import { useAdaptivePolling } from "./useAdaptivePolling";
+
 const API_URL = getPublicApiUrl();
 
-interface ZipStatus {
+export interface ZipStatus {
   status: "ready" | "generating" | "not_started";
   generating: boolean;
   ready: boolean;
@@ -26,8 +29,16 @@ export function useZipStatus(
   orderId: string | null,
   enabled: boolean = true
 ) {
-  return useQuery<ZipStatus>({
-    queryKey: ["zipStatus", "final", galleryId, orderId],
+  const queryClient = useQueryClient();
+  const { interval: adaptiveInterval, shouldPollImmediately, updateLastPollTime } =
+    useAdaptivePolling();
+  const shouldPoll = adaptiveInterval !== null;
+
+  const queryKey = ["zipStatus", galleryId, orderId, "final"];
+  const isPollingRef = useRef<boolean>(false);
+
+  const query = useQuery<ZipStatus>({
+    queryKey,
     queryFn: async () => {
       if (!galleryId || !orderId) {
         throw new Error("Missing galleryId or orderId");
@@ -38,25 +49,78 @@ export function useZipStatus(
         throw new Error("Missing token");
       }
 
-      const response = await apiFetch(
-        `${API_URL}/galleries/${galleryId}/orders/${orderId}/final/zip/status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // Prevent concurrent polls
+      if (isPollingRef.current) {
+        return (
+          queryClient.getQueryData<ZipStatus>(queryKey) || {
+            status: "not_started" as const,
+            generating: false,
+            ready: false,
+            zipExists: false,
+          }
+        );
+      }
 
-      return response.data as ZipStatus;
+      isPollingRef.current = true;
+
+      try {
+        const response = await apiFetch(
+          `${API_URL}/galleries/${galleryId}/orders/${orderId}/final/zip/status`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        updateLastPollTime();
+        return response.data as ZipStatus;
+      } finally {
+        isPollingRef.current = false;
+      }
     },
-    enabled: enabled && !!galleryId && !!orderId && !!getToken(galleryId),
-    refetchInterval: (query) => {
-      const data = query.state.data as ZipStatus | undefined;
-      // Poll every 3 seconds if generating, otherwise don't poll
-      return data?.generating ? 3000 : false;
+    enabled: enabled && !!galleryId && !!orderId && !!getToken(galleryId) && shouldPoll,
+    refetchInterval: (rq) => {
+      const data = rq.state.data as ZipStatus | undefined;
+      // Stop polling once ready
+      if (data?.ready) return false;
+      // Faster updates when generating, otherwise keep it light (dashboard-style)
+      return data?.generating ? 3000 : 15000;
     },
-    staleTime: 2000, // Consider data stale after 2 seconds
-    refetchOnWindowFocus: false,
+    refetchIntervalInBackground: false,
+    refetchOnMount: false,
+    staleTime: 10_000,
+    notifyOnChangeProps: ["data"],
+    refetchOnWindowFocus: false, // handled by adaptive polling
+    refetchOnReconnect: false, // handled by adaptive polling
     retry: false,
   });
+
+  // Immediate poll only when coming back from true idle (60s+), not on tab switch
+  const prevShouldPollImmediatelyRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (
+      shouldPollImmediately &&
+      !prevShouldPollImmediatelyRef.current &&
+      enabled &&
+      shouldPoll &&
+      galleryId &&
+      orderId
+    ) {
+      void queryClient.invalidateQueries({ queryKey });
+      updateLastPollTime();
+    }
+    prevShouldPollImmediatelyRef.current = shouldPollImmediately;
+  }, [
+    shouldPollImmediately,
+    enabled,
+    shouldPoll,
+    queryClient,
+    queryKey,
+    updateLastPollTime,
+    galleryId,
+    orderId,
+  ]);
+
+  return query;
 }

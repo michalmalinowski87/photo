@@ -107,14 +107,14 @@ export function ZipDownloadButton({
     isGenerating || downloadZipMutation.isPending || downloadFinalZipMutation.isPending;
 
   // Polish text based on ZIP type and state
-  const zipTypeLabel = type === "final" ? "Finały (ZIP)" : "Wybrane przez klienta (ZIP)";
+  const zipTypeLabel = type === "final" ? "Zdjęcia finalne (ZIP)" : "Wybrane przez klienta (ZIP)";
 
   let buttonText = `Pobierz ${zipTypeLabel}`;
   let statusInfo: string | null = null;
 
   // Show generating state when we have data indicating generation is happening
   if (isGenerating) {
-    buttonText = `Generowanie ${zipTypeLabel}...`;
+    buttonText = `Generowanie ZIP`;
 
     // Only show progress info if we have actual progress data (from polling or cache)
     if (effectiveProgress) {

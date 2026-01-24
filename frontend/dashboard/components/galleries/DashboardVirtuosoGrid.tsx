@@ -45,10 +45,12 @@ export function DashboardVirtuosoGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   // Store actual image dimensions extracted from loaded images
-  const [imageDimensions, setImageDimensions] = useState<Map<string, { width: number; height: number }>>(new Map());
+  const [imageDimensions, setImageDimensions] = useState<
+    Map<string, { width: number; height: number }>
+  >(new Map());
   // Track previous images length to detect actual image changes (not dimension extraction updates)
   const prevImagesLengthRef = useRef<number>(images.length);
-  
+
   // We render immediately with estimates and refine as dimensions are extracted
 
   // Update container width on resize and when images change
@@ -58,11 +60,8 @@ export function DashboardVirtuosoGrid({
       if (containerRef.current) {
         // Use full container width (parent already handles padding)
         // Ensure width doesn't exceed viewport
-        const maxWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
-        const width = Math.min(
-          containerRef.current.clientWidth || maxWidth,
-          maxWidth
-        );
+        const maxWidth = typeof window !== "undefined" ? window.innerWidth : 1920;
+        const width = Math.min(containerRef.current.clientWidth || maxWidth, maxWidth);
         setContainerWidth(width);
       }
     };
@@ -87,7 +86,7 @@ export function DashboardVirtuosoGrid({
       // For non-marble layouts, dimensions aren't needed
       return;
     }
-    
+
     if (!containerRef.current || images.length === 0) {
       return;
     }
@@ -98,7 +97,7 @@ export function DashboardVirtuosoGrid({
 
     // Create a Set of valid image keys for quick lookup
     const validImageKeys = new Set(
-      images.map((img) => img.key ?? img.filename ?? '').filter(Boolean)
+      images.map((img) => img.key ?? img.filename ?? "").filter(Boolean)
     );
 
     const extractDimensions = () => {
@@ -108,15 +107,15 @@ export function DashboardVirtuosoGrid({
       // Look for images in the container and any hidden extraction containers (siblings)
       const parent = container.parentElement;
       const searchRoot = parent ?? container;
-      const imgElements = Array.from(searchRoot.querySelectorAll('img'));
+      const imgElements = Array.from(searchRoot.querySelectorAll("img"));
       const dimensionsToAdd = new Map<string, { width: number; height: number }>();
 
       imgElements.forEach((img) => {
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
           // Find the image key from the parent structure
-          const imageContainer = img.closest('[data-image-key]');
+          const imageContainer = img.closest("[data-image-key]");
           if (imageContainer) {
-            const imageKey = imageContainer.getAttribute('data-image-key');
+            const imageKey = imageContainer.getAttribute("data-image-key");
             // Only extract dimensions for images that are in the current images array
             if (imageKey && validImageKeys.has(imageKey)) {
               dimensionsToAdd.set(imageKey, {
@@ -139,7 +138,7 @@ export function DashboardVirtuosoGrid({
               hasNew = true;
             }
           });
-          
+
           return hasNew ? updated : prev;
         });
       }
@@ -147,20 +146,20 @@ export function DashboardVirtuosoGrid({
 
     // Extract dimensions immediately for already-loaded images, then with a small delay for others
     extractDimensions(); // Immediate extraction for already-loaded images
-    
+
     const timeoutId = setTimeout(() => {
       extractDimensions();
     }, 300); // Give images time to load, but don't wait too long
-    
+
     // Also extract on image load events - use event delegation on parent for better performance
     const container = containerRef.current;
     const parent = container?.parentElement;
     const loadHandler = (e: Event) => {
       const img = e.target as HTMLImageElement;
       if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const imageContainer = img.closest('[data-image-key]');
+        const imageContainer = img.closest("[data-image-key]");
         if (imageContainer) {
-          const imageKey = imageContainer.getAttribute('data-image-key');
+          const imageKey = imageContainer.getAttribute("data-image-key");
           // Only extract dimensions for images that are in the current images array
           if (imageKey && validImageKeys.has(imageKey)) {
             setImageDimensions((prev) => {
@@ -181,17 +180,17 @@ export function DashboardVirtuosoGrid({
 
     // Use event delegation on parent to catch images in hidden container too
     if (parent) {
-      parent.addEventListener('load', loadHandler, true);
+      parent.addEventListener("load", loadHandler, true);
     } else if (container) {
-      container.addEventListener('load', loadHandler, true);
+      container.addEventListener("load", loadHandler, true);
     }
 
     return () => {
       clearTimeout(timeoutId);
       if (parent) {
-        parent.removeEventListener('load', loadHandler, true);
+        parent.removeEventListener("load", loadHandler, true);
       } else if (container) {
-        container.removeEventListener('load', loadHandler, true);
+        container.removeEventListener("load", loadHandler, true);
       }
     };
   }, [images, layout]); // Re-run when images or layout change, but NOT when imageDimensions changes
@@ -217,13 +216,13 @@ export function DashboardVirtuosoGrid({
         // Calculate item dimensions based on actual image dimensions or estimate
         // Match gallery app approach: use image.width/image.height if available, otherwise estimate
         let itemHeight: number;
-        
+
         // Check for dimensions from API first, then from extracted dimensions
         const imageKey = image.key ?? image.filename ?? `image-${index}`;
         const extractedDims = imageDimensions.get(imageKey);
-        const imageWidth = typeof image.width === 'number' ? image.width : extractedDims?.width;
-        const imageHeight = typeof image.height === 'number' ? image.height : extractedDims?.height;
-        
+        const imageWidth = typeof image.width === "number" ? image.width : extractedDims?.width;
+        const imageHeight = typeof image.height === "number" ? image.height : extractedDims?.height;
+
         if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
           // Use actual aspect ratio to calculate height
           const aspectRatio = imageWidth / imageHeight;
@@ -232,8 +231,8 @@ export function DashboardVirtuosoGrid({
           // Estimate based on index for variety (alternating between portrait and landscape)
           // This creates natural variation in masonry layout
           const isPortrait = index % 3 !== 0; // Roughly 2/3 portrait, 1/3 landscape
-          itemHeight = isPortrait 
-            ? columnWidth * 1.4  // Portrait: taller
+          itemHeight = isPortrait
+            ? columnWidth * 1.4 // Portrait: taller
             : columnWidth * 0.75; // Landscape: shorter
         }
 
@@ -276,7 +275,7 @@ export function DashboardVirtuosoGrid({
     // Get image dimensions - match gallery app: use API dimensions only, not extracted
     const items = images.map((image) => {
       // Use actual dimensions if available from API - match gallery app
-      if (typeof image.width === 'number' && typeof image.height === 'number') {
+      if (typeof image.width === "number" && typeof image.height === "number") {
         return { width: image.width, height: image.height };
       }
       // For square layout, force 1:1 aspect ratio
@@ -306,7 +305,7 @@ export function DashboardVirtuosoGrid({
     // Use last box for all layouts (match gallery app) - simpler and more reliable
     const lastBox = layoutBoxes[layoutBoxes.length - 1];
     if (!lastBox) return 0;
-    
+
     // For marble, also check max bottom to ensure we capture tallest column
     if (layout === "marble") {
       let maxBottom = 0;
@@ -318,7 +317,7 @@ export function DashboardVirtuosoGrid({
       }
       const heightFromMax = 8 + maxBottom + 8 + 16;
       const heightFromLast = 8 + lastBox.top + lastBox.height + 8 + 16;
-      
+
       // Use the larger of the two to ensure we capture the tallest column
       return Math.max(heightFromMax, heightFromLast);
     }

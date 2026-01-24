@@ -820,13 +820,13 @@ Photographers view order details, manage original and final photos, and download
    - Creation date
    - Selected photos count (if applicable)
 
-3. **Tabs: Oryginały and Finały**
+3. **Tabs: Oryginały and Zdjęcia finalne**
    - **Oryginały Tab**:
      - Shows all original photos uploaded to gallery
      - Highlights photos selected by client (green badge)
      - Displays selection count: "Wybrane zdjęcia przez klienta: X z Y"
      - Shows selected keys list
-   - **Finały Tab**:
+   - **Zdjęcia finalne Tab**:
      - Shows final processed photos for this order
      - Upload interface (if order status allows):
        - File picker (multiple files)

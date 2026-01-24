@@ -134,7 +134,7 @@ PhotoCloud is a serverless SaaS platform for photographers to create secure priv
   - Multi-step gallery creation wizard (5 steps)
   - Gallery list with status filtering (6 filter pages)
   - Gallery detail page with sidebar and orders mini-control-panel
-  - Order detail page with Oryginały/Finały tabs and ZIP download
+  - Order detail page with Oryginały/Zdjęcia finalne tabs and ZIP download
 - **Clients & Packages CRUD**: Full CRUD interfaces
 - **Wallet Management**: Balance display, transaction history, top-up functionality
 - **Settings**: Business info and password change forms

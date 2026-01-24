@@ -18,6 +18,7 @@ interface ZipOverlayProps {
   isVisible: boolean;
   zipStatus?: ZipStatus;
   totalPhotos?: number;
+  totalBytes?: number;
   onClose: () => void;
 }
 
@@ -25,6 +26,7 @@ export function ZipOverlay({
   isVisible,
   zipStatus,
   totalPhotos = 0,
+  totalBytes,
   onClose,
 }: ZipOverlayProps) {
   if (!isVisible) return null;
@@ -36,30 +38,68 @@ export function ZipOverlay({
   const percent = progress?.percent || 0;
   const elapsedSeconds = zipStatus?.elapsedSeconds || 0;
 
-  // Estimate time remaining based on progress
-  const estimateTimeRemaining = () => {
-    if (!isGenerating || processed === 0 || total === 0) {
-      // Rough estimate: ~0.5-1 second per photo
-      const estimatedSeconds = Math.max(10, Math.ceil(totalPhotos * 0.75));
-      if (estimatedSeconds < 60) {
-        return `około ${estimatedSeconds} sekund`;
+  const formatDurationShort = (seconds: number) => {
+    const sec = Math.max(0, Math.round(seconds));
+    if (sec < 60) return `${sec} s`;
+    const minutes = Math.round(sec / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+  };
+
+  const estimateEtaRangeSeconds = (): { minSeconds: number; maxSeconds: number } | null => {
+    const safeTotalPhotos = Math.max(0, totalPhotos || 0);
+    const safeTotalBytes = typeof totalBytes === "number" && totalBytes > 0 ? totalBytes : undefined;
+
+    // If we have progress + elapsed time, use it as the primary ETA signal.
+    if (isGenerating && processed > 0 && total > 0 && elapsedSeconds > 0) {
+      const rate = processed / elapsedSeconds; // photos per second
+      if (rate > 0) {
+        const remaining = Math.max(0, total - processed);
+        const remainingSeconds = remaining / rate;
+        const minSeconds = Math.max(10, Math.floor(remainingSeconds * 0.7));
+        const maxSeconds = Math.max(minSeconds + 10, Math.ceil(remainingSeconds * 1.3));
+        return { minSeconds, maxSeconds };
       }
-      const minutes = Math.ceil(estimatedSeconds / 60);
-      return `około ${minutes} ${minutes === 1 ? "minutę" : minutes < 5 ? "minuty" : "minut"}`;
     }
 
-    const rate = processed / elapsedSeconds; // photos per second
-    if (rate === 0) return "obliczanie...";
-    
-    const remaining = total - processed;
-    const estimatedSeconds = Math.ceil(remaining / rate);
-    
-    if (estimatedSeconds < 60) {
-      return `około ${estimatedSeconds} sekund`;
+    // Otherwise, estimate from total size (preferred) or photo count fallback.
+    // These min/max bounds are intentionally conservative to set expectations.
+    if (safeTotalBytes !== undefined) {
+      const MB = 1024 * 1024;
+      const throughputMinMBps = 3; // worst-case
+      const throughputMaxMBps = 12; // best-case
+
+      const bytesSecondsMin = safeTotalBytes / (throughputMaxMBps * MB);
+      const bytesSecondsMax = safeTotalBytes / (throughputMinMBps * MB);
+
+      // Overhead per photo (listing, ZIP entries, multipart completion, etc.)
+      const overheadSeconds = Math.min(90, safeTotalPhotos * 0.15);
+
+      const minSeconds = Math.max(10, Math.round(bytesSecondsMin + overheadSeconds));
+      const maxSeconds = Math.max(minSeconds + 10, Math.round(bytesSecondsMax + overheadSeconds));
+      return { minSeconds, maxSeconds };
     }
-    const minutes = Math.ceil(estimatedSeconds / 60);
-    return `około ${minutes} ${minutes === 1 ? "minutę" : minutes < 5 ? "minuty" : "minut"}`;
+
+    if (safeTotalPhotos > 0) {
+      const perPhotoMin = 0.2;
+      const perPhotoMax = 1.0;
+      const minSeconds = Math.max(10, Math.round(safeTotalPhotos * perPhotoMin));
+      const maxSeconds = Math.max(minSeconds + 10, Math.round(safeTotalPhotos * perPhotoMax));
+      return { minSeconds, maxSeconds };
+    }
+
+    return null;
   };
+
+  const eta = estimateEtaRangeSeconds();
+  const etaLabel =
+    eta === null
+      ? "obliczanie..."
+      : eta.maxSeconds - eta.minSeconds <= 15
+      ? `około ${formatDurationShort(eta.maxSeconds)}`
+      : `${formatDurationShort(eta.minSeconds)}–${formatDurationShort(eta.maxSeconds)}`;
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md">
@@ -92,7 +132,7 @@ export function ZipOverlay({
             )}
 
             <p className="text-white/70 text-sm mb-6">
-              Szacowany czas: {estimateTimeRemaining()}
+              Szacowany czas: {etaLabel}
             </p>
 
             <p className="text-white/60 text-xs">
@@ -106,7 +146,10 @@ export function ZipOverlay({
               Przygotowywanie ZIP
             </h2>
             <p className="text-white/80 mb-6">
-              Rozpoczynamy generowanie archiwum ZIP. To może chwilę potrwać.
+              Archiwum ZIP jest przygotowywane. Jeśli zostało właśnie dostarczone dużo zdjęć, wygenerowanie ZIP może chwilę potrwać.
+            </p>
+            <p className="text-white/70 text-sm mb-6">
+              Szacowany czas: {etaLabel}
             </p>
             <p className="text-white/60 text-xs">
               Możesz zamknąć to okno - pobieranie rozpocznie się automatycznie, gdy plik będzie gotowy.

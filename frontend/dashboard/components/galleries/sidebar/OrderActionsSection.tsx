@@ -296,10 +296,10 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
             startIcon={<Send size={20} strokeWidth={2} />}
           >
             {order.deliveryStatus === "DELIVERED"
-              ? "Finały wysłane"
+              ? "Zdjęcia finalne wysłane"
               : sendFinalsLoading
                 ? "Wysyłanie..."
-                : "Wyślij finały do klienta"}
+                : "Wyślij zdjęcia do klienta"}
           </Button>
         )}
       </div>
@@ -329,9 +329,9 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
           }
         }}
         onConfirm={handleSendFinalsToClientConfirm}
-        title="Wyślij finały do klienta"
-        message={`Czy na pewno chcesz wysłać finały dla zlecenia #${displayOrderNumber} do klienta?\n\nTa operacja jest nieodwracalna. Klient otrzyma email z linkiem do pobrania finalnych zdjęć.`}
-        confirmText="Wyślij finały"
+        title="Wyślij zdjęcia finalne do klienta"
+        message={`Czy na pewno chcesz wysłać zdjęcia finalne dla zlecenia #${displayOrderNumber} do klienta?\n\nTa operacja jest nieodwracalna. Klient otrzyma email z linkiem do pobrania finalnych zdjęć.`}
+        confirmText="Wyślij zdjęcia finalne"
         cancelText="Anuluj"
         variant="info"
         loading={sendFinalsLoading}

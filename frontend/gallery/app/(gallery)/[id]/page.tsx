@@ -133,6 +133,15 @@ export default function GalleryPage() {
   const finalImages = useMemo(() => {
     return finalImagesData?.pages.flatMap((page) => page.images || []) || [];
   }, [finalImagesData]);
+  const finalImagesTotalCount = useMemo(() => {
+    return finalImagesData?.pages?.[0]?.totalCount ?? finalImages.length;
+  }, [finalImagesData, finalImages.length]);
+  const finalImagesTotalBytes = useMemo(() => {
+    const fromApi = finalImagesData?.pages?.[0]?.totalBytes;
+    if (typeof fromApi === "number" && fromApi > 0) return fromApi;
+    const sumLoaded = finalImages.reduce((sum, img) => sum + (img.size || 0), 0);
+    return sumLoaded > 0 ? sumLoaded : undefined;
+  }, [finalImagesData, finalImages]);
 
   // No local state needed - React Query is the single source of truth
 
@@ -359,13 +368,8 @@ export default function GalleryPage() {
     const orderId = selectedOrderId || singleOrder?.orderId;
     if (!galleryId || !orderId) return;
 
-    // Show immediate overlay (same as photo download)
-    setZipDownloadState({ showOverlay: true, isError: false });
-
-    // Small delay to ensure overlay is visible
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // If ZIP is generating, switch to ZIP overlay
+    // If ZIP is not ready (generating or not started), show ZIP overlay (status + ETA).
+    // We'll still attempt download below when status is unknown/not_started; 404 becomes a normal "preparing" state.
     if (zipStatus?.generating) {
       setZipDownloadState({ showOverlay: false, isError: false });
       setShowZipOverlay(true);
@@ -380,6 +384,18 @@ export default function GalleryPage() {
 
     try {
       const API_URL = getPublicApiUrl();
+
+      // If status says "ready", just download.
+      // Otherwise, try anyway (to avoid stale status); treat 404/202 as "preparing".
+      if (!zipStatus?.ready) {
+        // Show immediate overlay while we probe the ZIP endpoint.
+        setZipDownloadState({ showOverlay: true, isError: false });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } else {
+        setZipDownloadState({ showOverlay: true, isError: false });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       const response = await fetch(
         `${API_URL}/galleries/${galleryId}/orders/${orderId}/final/zip`,
         {
@@ -389,10 +405,12 @@ export default function GalleryPage() {
         }
       );
 
-      // Handle 202 - ZIP is being generated
-      if (response.status === 202) {
+      // 404 => ZIP not yet created (normal). 202 => backend-side generation (defensive).
+      if (response.status === 404 || response.status === 202) {
         setZipDownloadState({ showOverlay: false, isError: false });
         setShowZipOverlay(true);
+        // Kick status polling to refresh soon.
+        void queryClient.invalidateQueries({ queryKey: ["zipStatus", galleryId, orderId, "final"] });
         return;
       }
 
@@ -424,7 +442,7 @@ export default function GalleryPage() {
       console.error("Failed to download ZIP:", error);
       setZipDownloadState({ showOverlay: true, isError: true });
     }
-  }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus]);
+  }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus, queryClient]);
 
   // Buy more photos
   const handleBuyMore = useCallback(() => {
@@ -695,7 +713,8 @@ export default function GalleryPage() {
         <ZipOverlay
         isVisible={showZipOverlay}
         zipStatus={zipStatus}
-        totalPhotos={finalImages.length}
+        totalPhotos={finalImagesTotalCount}
+        totalBytes={finalImagesTotalBytes}
         onClose={() => {
           setShowZipOverlay(false);
         }}
