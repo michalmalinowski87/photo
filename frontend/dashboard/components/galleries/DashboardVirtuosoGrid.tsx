@@ -48,11 +48,8 @@ export function DashboardVirtuosoGrid({
   const [imageDimensions, setImageDimensions] = useState<Map<string, { width: number; height: number }>>(new Map());
   // Track previous images length to detect actual image changes (not dimension extraction updates)
   const prevImagesLengthRef = useRef<number>(images.length);
-  // Track if dimensions are ready for marble layout (to avoid showing broken layout)
-  // Start as true - we'll use estimates immediately and refine as dimensions are extracted
-  const [dimensionsReady, setDimensionsReady] = useState(true);
   
-  // No longer reset dimensionsReady - we render immediately with estimates and refine as dimensions are extracted
+  // We render immediately with estimates and refine as dimensions are extracted
 
   // Update container width on resize and when images change
   // Use actual container width (not window width) to account for sidebar
@@ -87,8 +84,7 @@ export function DashboardVirtuosoGrid({
   // Extract dimensions from loaded images - only for images in current images array
   useEffect(() => {
     if (layout !== "marble") {
-      // For non-marble layouts, dimensions aren't needed, so mark as ready immediately
-      setDimensionsReady(true);
+      // For non-marble layouts, dimensions aren't needed
       return;
     }
     
@@ -111,8 +107,8 @@ export function DashboardVirtuosoGrid({
 
       // Look for images in the container and any hidden extraction containers (siblings)
       const parent = container.parentElement;
-      const searchRoot = parent || container;
-      const imgElements = Array.from(searchRoot.querySelectorAll('img')) as HTMLImageElement[];
+      const searchRoot = parent ?? container;
+      const imgElements = Array.from(searchRoot.querySelectorAll('img'));
       const dimensionsToAdd = new Map<string, { width: number; height: number }>();
 
       imgElements.forEach((img) => {
@@ -144,30 +140,7 @@ export function DashboardVirtuosoGrid({
             }
           });
           
-          // Check if we have dimensions for a reasonable percentage of images (at least 50% or first 10)
-          const extractedCount = Array.from(validImageKeys).filter(key => 
-            updated.has(key)
-          ).length;
-          const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
-          
-          // Mark as ready if we have dimensions for enough images
-          if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
-            setDimensionsReady(true);
-          }
-          
           return hasNew ? updated : prev;
-        });
-      } else {
-        // Even if no new dimensions, check if we already have enough
-        setImageDimensions((prev) => {
-          const extractedCount = Array.from(validImageKeys).filter(key => 
-            prev.has(key)
-          ).length;
-          const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
-          if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
-            setDimensionsReady(true);
-          }
-          return prev;
         });
       }
     };
@@ -177,8 +150,6 @@ export function DashboardVirtuosoGrid({
     
     const timeoutId = setTimeout(() => {
       extractDimensions();
-      // Mark as ready after timeout even if not all dimensions are extracted (fallback to estimates)
-      setDimensionsReady(true);
     }, 300); // Give images time to load, but don't wait too long
     
     // Also extract on image load events - use event delegation on parent for better performance
@@ -199,16 +170,6 @@ export function DashboardVirtuosoGrid({
                   width: img.naturalWidth,
                   height: img.naturalHeight,
                 });
-                
-                // Check if we should mark as ready after this extraction
-                const extractedCount = Array.from(validImageKeys).filter(key => 
-                  updated.has(key)
-                ).length;
-                const minRequired = Math.min(10, Math.ceil(validImageKeys.size * 0.5));
-                if (extractedCount >= minRequired || extractedCount >= validImageKeys.size) {
-                  setDimensionsReady(true);
-                }
-                
                 return updated;
               }
               return prev;
@@ -233,7 +194,7 @@ export function DashboardVirtuosoGrid({
         container.removeEventListener('load', loadHandler, true);
       }
     };
-  }, [images, layout]); // Re-run when images or layout change, but NOT when imageDimensions changes (to avoid resetting dimensionsReady)
+  }, [images, layout]); // Re-run when images or layout change, but NOT when imageDimensions changes
 
   // Calculate layout boxes - justified for square/standard, masonry for marble
   // Always calculate layout immediately (like gallery app) - use estimates if dimensions not available

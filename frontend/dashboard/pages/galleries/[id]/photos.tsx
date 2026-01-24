@@ -360,7 +360,7 @@ export default function GalleryPhotos() {
 
       // More aggressive prefetching - trigger at 20% scroll for smoother infinite scrolling
       if (scrollPercentage > 0.2 && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage();
+        void fetchNextPage();
       }
     };
 
@@ -2039,27 +2039,38 @@ export default function GalleryPhotos() {
                   </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 rounded-b-lg bg-white dark:bg-gray-800">
-                      <div
-                        className="w-full overflow-auto table-scrollbar"
-                        style={{
-                          height: scrollContainerHeight,
-                          minHeight: "400px",
-                          overscrollBehavior: "none",
-                        }}
-                      >
-                        <DashboardVirtuosoGrid
-                          images={orderImages}
-                          layout={layout}
-                          renderImageItem={(img, idx, all) =>
-                            renderImageItem(img, idx, all, layout)
-                          }
-                          hasNextPage={hasNextPage}
-                          onLoadMore={fetchNextPage}
-                          isFetchingNextPage={isFetchingNextPage}
-                          isLoading={imagesLoading}
-                          error={imagesError}
+                      {(imagesLoading || imagesFetching) && orderImages.length === 0 ? (
+                        <GalleryLoading text="Ładowanie zdjęć zlecenia..." />
+                      ) : orderImages.length > 0 ? (
+                        <div
+                          className="w-full overflow-auto table-scrollbar"
+                          style={{
+                            height: scrollContainerHeight,
+                            minHeight: "400px",
+                            overscrollBehavior: "none",
+                          }}
+                        >
+                          <DashboardVirtuosoGrid
+                            images={orderImages}
+                            layout={layout}
+                            renderImageItem={(img, idx, all) =>
+                              renderImageItem(img, idx, all, layout)
+                            }
+                            hasNextPage={hasNextPage}
+                            onLoadMore={fetchNextPage}
+                            isFetchingNextPage={isFetchingNextPage}
+                            isLoading={imagesLoading}
+                            error={imagesError}
+                          />
+                        </div>
+                      ) : (
+                        <EmptyState
+                          // eslint-disable-next-line jsx-a11y/alt-text
+                          icon={<Image size={64} aria-hidden="true" />}
+                          title="Brak zdjęć w zleceniu"
+                          description="W tym zleceniu nie ma jeszcze żadnych zdjęć."
                         />
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
