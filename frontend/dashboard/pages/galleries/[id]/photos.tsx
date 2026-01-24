@@ -1695,6 +1695,45 @@ export default function GalleryPhotos() {
     return 0;
   }, [unselectedCountFromFilteredQuery, imageStats]);
 
+  // Calculate dynamic scroll container height accounting for all order separators
+  // Base offset: header section (title + layout selector) + action buttons + spacing
+  const scrollContainerHeight = useMemo(() => {
+    if (deliveredOrders.length === 0) {
+      // No orders: use fixed calculation (header + action buttons)
+      return "calc(100vh - 174px)";
+    }
+
+    // Fixed top section: header (title + layout selector) + action buttons + spacing
+    const fixedTopOffset = 174; // Base offset for header and action buttons
+
+    // Each order section header is approximately 70-80px (px-5 py-3 with content)
+    // Using 75px as average to account for wrapping content
+    const orderHeaderHeight = 75;
+    const numOrderSections = deliveredOrders.length;
+
+    // Unselected section header (same height as order headers)
+    const unselectedHeaderHeight = 75;
+
+    // Spacing between sections: space-y-2 = 8px per gap
+    // Total sections = order sections + unselected section
+    // Number of gaps = total sections - 1 (space-y-2 adds margin-top to all except first)
+    const totalSections = numOrderSections + 1; // orders + unselected
+    const spacingBetweenSections = 8;
+    const numGaps = totalSections - 1; // One gap before each section except the first
+
+    // Total offset = fixed top + all order headers + unselected header + all spacing
+    // Add small buffer (16px) to account for padding and prevent bottom cutoff
+    const buffer = 16;
+    const totalOffset =
+      fixedTopOffset +
+      numOrderSections * orderHeaderHeight +
+      unselectedHeaderHeight +
+      numGaps * spacingBetweenSections +
+      buffer;
+
+    return `calc(100vh - ${totalOffset}px)`;
+  }, [deliveredOrders.length]);
+
   // Handler for deleting all unselected images
   const handleDeleteAllUnselectedClick = useCallback(() => {
     if (unselectedImages.length === 0) {
@@ -2003,7 +2042,7 @@ export default function GalleryPhotos() {
                       <div
                         className="w-full overflow-auto table-scrollbar"
                         style={{
-                          height: "calc(100vh - 174px)",
+                          height: scrollContainerHeight,
                           minHeight: "400px",
                           overscrollBehavior: "none",
                         }}
@@ -2085,7 +2124,7 @@ export default function GalleryPhotos() {
                     <div
                       className="w-full overflow-auto table-scrollbar"
                       style={{
-                        height: "calc(100vh - 174px)",
+                        height: scrollContainerHeight,
                         minHeight: "400px",
                         overscrollBehavior: "none",
                       }}
@@ -2122,7 +2161,7 @@ export default function GalleryPhotos() {
             <div
               className="w-full overflow-auto table-scrollbar"
               style={{
-                height: "calc(100vh - 174px)",
+                height: scrollContainerHeight,
                 minHeight: "400px",
                 overscrollBehavior: "none",
               }}

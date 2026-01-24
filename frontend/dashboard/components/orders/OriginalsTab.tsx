@@ -53,17 +53,11 @@ export function OriginalsTab({
   const renderImageItem = useCallback(
     (img: GalleryImage, idx: number) => {
       const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
-      const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
-      const isSelected = normalizedSelectedKeys.includes(imgKey.toString().trim());
 
       return (
         <div
           key={imgKey ?? idx}
           className={`relative group rounded-lg overflow-hidden transition-all ${
-            isSelected
-              ? "ring-2 ring-photographer-accentLight dark:ring-photographer-accent/30"
-              : ""
-          } ${
             layout === "square"
               ? "bg-gray-100 dark:bg-gray-800"
               : layout === "marble"
@@ -92,7 +86,7 @@ export function OriginalsTab({
         </div>
       );
     },
-    [selectedKeys, layout]
+    [layout]
   );
 
   // Auto-fetch if we have selectedKeys and need to fetch more to match them

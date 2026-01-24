@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 
 import {
   ImageFallbackUrls,
@@ -64,6 +64,10 @@ export const LazyRetryableImage = ({
     urls: string;
     lastModified: string | number | undefined;
   } | null>(null);
+  // Track if we've already handled the load to prevent race conditions
+  const loadHandledRef = useRef<boolean>(false);
+  // Track current loading state in a ref to avoid stale closures
+  const isLoadingRef = useRef<boolean>(true);
 
   // Generate stable identifier for the image (key or filename, or fallback to alt)
   const imageIdentifier = useMemo(() => {
@@ -177,6 +181,8 @@ export const LazyRetryableImage = ({
     const freshInitialSrc = getInitialImageUrl(imageData, preferredSize);
 
     hasInitializedRef.current = false;
+    loadHandledRef.current = false; // Reset load handled flag
+    isLoadingRef.current = true; // Update ref
 
     setIsLoading(true);
     setHasError(false);
@@ -214,6 +220,18 @@ export const LazyRetryableImage = ({
       { rootMargin }
     );
 
+    // Check if element is already in view before observing
+    const rect = containerRef.current.getBoundingClientRect();
+    const isAlreadyInView = rect.top < window.innerHeight + 50 && rect.bottom > -50;
+    
+    // If already in view, set isInView immediately instead of waiting for observer callback
+    // This prevents the !isInView placeholder from showing when element is already visible
+    if (isAlreadyInView && !isInView) {
+      setIsInView(true);
+      observer.disconnect();
+      return;
+    }
+
     observer.observe(containerRef.current);
 
     return () => {
@@ -222,6 +240,12 @@ export const LazyRetryableImage = ({
   }, [rootMargin, isInView, alt, currentSrc]);
 
   const handleLoad = (): void => {
+    // Prevent duplicate calls
+    if (loadHandledRef.current) {
+      return;
+    }
+    loadHandledRef.current = true;
+    isLoadingRef.current = false; // Update ref
     setIsLoading(false);
     setHasError(false);
     // Record success for circuit breaker
@@ -307,15 +331,113 @@ export const LazyRetryableImage = ({
       return;
     }
 
-    // No more fallbacks available
+      // No more fallbacks available
+    isLoadingRef.current = false;
     setIsLoading(false);
     setHasError(true);
   };
 
+  // Check if image is already complete when rendering (cached images)
+  // MUST be before conditional return to follow Rules of Hooks
+  // This handles the case where cached images load instantly before onLoad fires
+  // useLayoutEffect runs synchronously after DOM mutations, perfect for checking cached images
+  useLayoutEffect(() => {
+    if (!isInView || !currentSrc || !imgRef.current || loadHandledRef.current) return;
+    
+    const img = imgRef.current;
+    // If image is already complete (cached), trigger load handler immediately
+    // Use ref to check current loading state to avoid stale closures
+    // CRITICAL: Check img.src matches currentSrc to handle tab switching where src might change
+    const srcMatches = img.src === currentSrc;
+    if (srcMatches && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0 && isLoadingRef.current && !loadHandledRef.current) {
+      loadHandledRef.current = true;
+      isLoadingRef.current = false;
+      setIsLoading(false);
+      setHasError(false);
+      imageFallbackThrottler.recordSuccess();
+    }
+  }, [isInView, currentSrc, imageIdentifier]);
+
+  // Also check with useEffect as a fallback for async cases and when src changes
+  // This is critical for tab switching - cached images load instantly
+  useEffect(() => {
+    if (!isInView || !currentSrc) return;
+    
+    const checkImageComplete = () => {
+      if (!imgRef.current || loadHandledRef.current) return;
+      const img = imgRef.current;
+      // If image is already complete (cached), trigger load handler
+      // Use ref to check current state to avoid stale closure issues
+      // CRITICAL: Check img.src matches currentSrc to handle tab switching where src might change
+      const srcMatches = img.src === currentSrc;
+      if (srcMatches && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0 && isLoadingRef.current && !loadHandledRef.current) {
+        loadHandledRef.current = true;
+        isLoadingRef.current = false;
+        setIsLoading(false);
+        setHasError(false);
+        imageFallbackThrottler.recordSuccess();
+      }
+    };
+
+    // Check immediately when src changes (for cached images when switching tabs)
+    // Use multiple strategies to catch images that load instantly
+    checkImageComplete();
+    
+    // Also check after short delays to catch images that load very quickly
+    const timeoutId1 = setTimeout(checkImageComplete, 0);
+    const timeoutId2 = setTimeout(checkImageComplete, 10);
+    const timeoutId3 = setTimeout(checkImageComplete, 50);
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(checkImageComplete);
+    });
+
+    return () => {
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      clearTimeout(timeoutId3);
+      cancelAnimationFrame(rafId);
+    };
+  }, [isInView, currentSrc, imageIdentifier]);
+
+  // Sync ref with state changes
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+
+  // Ensure container maintains parent's explicit dimensions to prevent collapse
+  // MUST be before conditional return to follow Rules of Hooks
+  // Run regardless of isInView to catch collapse even during initial render
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      const parent = containerRef.current.parentElement;
+      const parentRect = parent?.getBoundingClientRect();
+      const rect = containerRef.current.getBoundingClientRect();
+      
+      // If container has collapsed (height < 50px) but parent has explicit dimensions, force it to maintain size
+      // This prevents the narrow bar issue when switching tabs
+      // Check even when isInView is false to prevent initial collapse
+      if (rect.height < 50 && parentRect && parentRect.height > 50) {
+        // Force container to maintain parent's height immediately
+        if (containerRef.current) {
+          containerRef.current.style.minHeight = `${parentRect.height}px`;
+        }
+      }
+    }
+  }, [isLoading, hasError, imageIdentifier, isInView]);
+
   // Not in view yet - show placeholder
   if (!isInView) {
     return (
-      <div ref={containerRef} className={className}>
+      <div 
+        ref={containerRef} 
+        className={className}
+        style={{
+          // Ensure placeholder container also maintains parent's dimensions
+          // This prevents collapse during initial render before isInView becomes true
+          minHeight: "200px",
+        }}
+      >
         {placeholder ?? (
           <div className="w-full h-full bg-photographer-elevated dark:bg-gray-800 flex items-center justify-center rounded-lg">
             <div className="text-xs text-gray-500 dark:text-gray-400">Ładowanie...</div>
@@ -326,8 +448,46 @@ export const LazyRetryableImage = ({
   }
 
   // In view - show image with loading/error states
+
   return (
-    <div ref={containerRef} className="relative w-full h-full">
+    <div 
+      ref={containerRef} 
+      className="relative w-full h-full"
+    >
+      {/* Spacer in normal flow to maintain container height when img is loading */}
+      {/* This prevents the narrow bar issue when switching tabs */}
+      {/* Always render spacer when loading/error to prevent initial collapse */}
+      {/* The parent has explicit dimensions (288×216 = 4:3), so we use that aspect ratio */}
+      {(isLoading || hasError) && (
+        <div
+          className="w-full"
+          aria-hidden="true"
+          style={{
+            pointerEvents: "none",
+            // Use padding-bottom trick to create height based on container width
+            // 75% = 4:3 aspect ratio to match common image dimensions
+            paddingBottom: "75%",
+            height: 0,
+          }}
+        />
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        ref={imgRef}
+        src={currentSrc}
+        alt={alt}
+        className={`${className} ${isLoading || hasError ? "opacity-0 absolute inset-0" : "opacity-100"} transition-opacity`}
+        style={{
+          // Ensure img maintains container dimensions
+          display: "block",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+        }}
+        onError={handleError}
+        onLoad={handleLoad}
+        loading="lazy"
+      />
       {isLoading && (
         <div className="absolute inset-0 bg-photographer-elevated dark:bg-gray-800 flex items-center justify-center rounded-lg z-10">
           {loadingPlaceholder ?? (
@@ -342,16 +502,6 @@ export const LazyRetryableImage = ({
           )}
         </div>
       )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={currentSrc}
-        alt={alt}
-        className={`${className} ${isLoading || hasError ? "opacity-0" : "opacity-100"} transition-opacity`}
-        onError={handleError}
-        onLoad={handleLoad}
-        loading="lazy"
-      />
     </div>
   );
 };
