@@ -5,11 +5,17 @@ import api from "../lib/api-service";
 import { useAdaptivePolling } from "./useAdaptivePolling";
 
 interface ZipStatus {
-  status: "ready" | "generating" | "not_started";
+  status: "ready" | "generating" | "not_started" | "error";
   generating: boolean;
   ready: boolean;
   zipExists: boolean;
   zipSize?: number;
+  error?: {
+    message: string;
+    attempts: number;
+    canRetry: boolean;
+    details?: any[];
+  };
 }
 
 interface UseZipStatusPollingOptions {
@@ -60,6 +66,10 @@ export function useZipStatusPolling({
       // Stop polling once ready - ZIP is complete
       const data = rq.state.data as ZipStatus | undefined;
       if (data?.ready) {
+        return false;
+      }
+      // Stop polling if error state - no need to keep checking
+      if (data?.status === "error") {
         return false;
       }
       // Poll every 15s when enabled and should poll, otherwise stop

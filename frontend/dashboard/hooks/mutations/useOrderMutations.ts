@@ -734,3 +734,29 @@ export function useUploadFinalPhotos() {
     },
   });
 }
+
+export function useRetryZipGeneration() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      galleryId,
+      orderId,
+      type = "original",
+    }: {
+      galleryId: string;
+      orderId: string;
+      type?: "original" | "final";
+    }) => api.orders.retryZipGeneration(galleryId, orderId, type),
+    onSuccess: (_, variables) => {
+      // Invalidate ZIP status queries to start polling again
+      void queryClient.invalidateQueries({
+        queryKey: ["zipStatus", variables.galleryId, variables.orderId, variables.type === "final" ? "final" : "original"],
+      });
+      // Invalidate order detail to refresh error state
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.galleryId, variables.orderId),
+      });
+    },
+  });
+}

@@ -16,6 +16,7 @@ import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
 import * as ordersUploadFinalComplete from '../../../functions/orders/uploadFinalComplete';
 import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOriginals';
+import * as ordersRetryZipGeneration from '../../../functions/orders/retryZipGeneration';
 // zip/status, final/zip, final/images, and final/zip/status routes are registered as public routes in index.ts (no requireAuth)
 
 const router = Router();
@@ -42,6 +43,7 @@ router.post('/galleries/:id/orders/:orderId/final/upload-complete', wrapHandler(
 // final/zip route is registered as public route in index.ts (no requireAuth)
 router.post('/galleries/:id/orders/:orderId/send-final-link', wrapHandler(ordersSendFinalLink.handler));
 router.post('/galleries/:id/orders/:orderId/cleanup-originals', wrapHandler(ordersCleanupOriginals.handler));
+router.post('/galleries/:id/orders/:orderId/retry-zip', wrapHandler(ordersRetryZipGeneration.handler));
 
 router.get('/orders', wrapHandler(ordersListAll.handler));
 

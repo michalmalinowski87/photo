@@ -780,3 +780,56 @@ export function createVerificationCodeEmail(codePlaceholder: string = '{####}'):
 	return createEmailWrapper(content);
 }
 
+export function createZipGenerationFailedEmail(
+	galleryId: string,
+	galleryName: string,
+	orderId: string,
+	attempts: number,
+	dashboardUrl?: string
+): EmailTemplate {
+	const galleryDisplayName = sanitizeInlineText(galleryName || galleryId);
+	const attemptsText = attempts === 1 ? '1 próbę' : attempts < 5 ? `${attempts} próby` : `${attempts} prób`;
+	
+	const dashboardLink = dashboardUrl 
+		? createButton('Otwórz zamówienie w panelu', dashboardUrl, 'primary')
+		: '';
+	const dashboardLinkText = dashboardUrl
+		? `<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				Link do zamówienia: <a href="${escapeHtml(dashboardUrl)}" style="color: ${COLORS.brand.accent}; text-decoration: none;">${escapeHtml(dashboardUrl)}</a>
+			</p>`
+		: '';
+	
+	const content = `
+		${createHeading('Błąd generowania pliku ZIP', 2)}
+		${createParagraphHtml(`Wystąpił problem podczas automatycznego generowania pliku ZIP dla zamówienia <strong>${escapeHtml(orderId)}</strong> w galerii <strong>${escapeHtml(galleryDisplayName)}</strong>.`)}
+		${createAlert(`System wykonał ${attemptsText} automatycznego generowania pliku ZIP, ale wszystkie próby zakończyły się niepowodzeniem.`, 'error')}
+		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; padding: 16px; margin: 24px 0; border-radius: 12px;">
+			<ul style="margin: 0; padding-left: 20px; color: ${COLORS.text.heading}; font-size: 14px; line-height: 1.9; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				<li><strong>Galeria:</strong> ${escapeHtml(galleryDisplayName)}</li>
+				<li><strong>Numer zamówienia:</strong> ${escapeHtml(orderId)}</li>
+				<li><strong>Liczba prób:</strong> ${attempts}</li>
+			</ul>
+		</div>
+		${createParagraph('Możesz spróbować wygenerować plik ZIP ręcznie w panelu zarządzania zamówieniem. Jeśli problem będzie się powtarzał, skontaktuj się z nami.')}
+		${dashboardLink}
+		${dashboardLinkText}
+		${createParagraph('Szczegóły błędu zostały zapisane w systemie i będą dostępne w panelu zarządzania zamówieniem.', 'margin-top: 24px;')}
+	`;
+	
+	return {
+		subject: galleryDisplayName
+			? `Błąd generowania ZIP — ${galleryDisplayName} — Zamówienie ${orderId}`
+			: `Błąd generowania ZIP — Zamówienie ${orderId}`,
+		text:
+			`Wystąpił problem podczas automatycznego generowania pliku ZIP dla zamówienia ${orderId} w galerii ${galleryDisplayName}.\n\n` +
+			`System wykonał ${attemptsText} automatycznego generowania pliku ZIP, ale wszystkie próby zakończyły się niepowodzeniem.\n\n` +
+			`Galeria: ${galleryDisplayName}\n` +
+			`Numer zamówienia: ${orderId}\n` +
+			`Liczba prób: ${attempts}\n\n` +
+			`Możesz spróbować wygenerować plik ZIP ręcznie w panelu zarządzania zamówieniem. Jeśli problem będzie się powtarzał, skontaktuj się z nami.\n` +
+			(dashboardUrl ? `\nLink do zamówienia: ${dashboardUrl}\n` : '') +
+			`\nSzczegóły błędu zostały zapisane w systemie i będą dostępne w panelu zarządzania zamówieniem.`,
+		html: createEmailWrapper(content)
+	};
+}
+

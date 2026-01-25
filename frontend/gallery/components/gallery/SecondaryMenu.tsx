@@ -7,11 +7,16 @@ import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { SelectionState } from "@/types/gallery";
 
 interface ZipStatus {
-  status?: "ready" | "generating" | "not_started";
+  status?: "ready" | "generating" | "not_started" | "error";
   generating?: boolean;
   ready?: boolean;
   zipExists?: boolean;
   zipSize?: number;
+  error?: {
+    message: string;
+    attempts: number;
+    canRetry: boolean;
+  };
 }
 
 interface SecondaryMenuProps {
@@ -71,12 +76,17 @@ export function SecondaryMenu({
     : "selecting";
   const shouldBeSticky = state === "selecting";
 
-  const zipCtaText = zipStatus?.ready
+  const hasError = zipStatus?.status === "error";
+  const zipCtaText = hasError
+    ? "BRAK PLIKU ZIP"
+    : zipStatus?.ready
     ? "POBIERZ ZIP"
     : zipStatus?.generating
     ? "GENEROWANIE ZIP"
     : "PRZYGOTOWYWANIE ZIP";
-  const zipCtaAriaLabel = zipStatus?.ready
+  const zipCtaAriaLabel = hasError
+    ? "Brak pliku ZIP - skontaktuj się z fotografem"
+    : zipStatus?.ready
     ? "Pobierz ZIP"
     : zipStatus?.generating
     ? "Generowanie ZIP"
@@ -409,34 +419,61 @@ export function SecondaryMenu({
                   buttonRefs.current["downloadZip"] = el;
                 }}
                 onClick={() => {
-                  hapticFeedback('medium');
-                  onDownloadZip();
+                  if (!hasError) {
+                    hapticFeedback('medium');
+                    onDownloadZip();
+                  }
                 }}
-                onMouseEnter={() => handleItemHover("downloadZip")}
+                disabled={hasError}
+                onMouseEnter={() => {
+                  if (!hasError) {
+                    handleItemHover("downloadZip");
+                  }
+                }}
                 onMouseLeave={() => handleItemHover(null)}
                 className={`relative h-[44px] py-2 uppercase text-sm transition-all touch-manipulation min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 overflow-hidden ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
-                }`}
+                } ${hasError ? "cursor-not-allowed" : ""}`}
                 style={{
-                  color: hoveredItem === "downloadZip" ? "#666666" : "#AAAAAA",
-                  fontWeight: hoveredItem === "downloadZip" ? "700" : "500",
+                  color: hasError 
+                    ? "#DC2626" // Red color for error state
+                    : hoveredItem === "downloadZip" 
+                    ? "#666666" 
+                    : "#AAAAAA",
+                  fontWeight: hoveredItem === "downloadZip" || hasError ? "700" : "500",
                   letterSpacing: "0.05em",
                 }}
                 aria-label={zipCtaAriaLabel}
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
+                {hasError ? (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                )}
                 <span>{zipCtaText}</span>
               </button>
             )}

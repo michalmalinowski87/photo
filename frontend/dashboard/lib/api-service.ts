@@ -1217,7 +1217,7 @@ class ApiService {
       galleryId: string,
       orderId: string
     ): Promise<{
-      status: "ready" | "generating" | "not_started";
+      status: "ready" | "generating" | "not_started" | "error";
       generating: boolean;
       ready: boolean;
       zipExists: boolean;
@@ -1227,6 +1227,12 @@ class ApiService {
         processed: number;
         total: number;
         percent: number;
+      };
+      error?: {
+        message: string;
+        attempts: number;
+        canRetry: boolean;
+        details?: any[];
       };
     }> => {
       if (!galleryId || !orderId) {
@@ -1242,7 +1248,7 @@ class ApiService {
       galleryId: string,
       orderId: string
     ): Promise<{
-      status: "ready" | "generating" | "not_started";
+      status: "ready" | "generating" | "not_started" | "error";
       generating: boolean;
       ready: boolean;
       zipExists: boolean;
@@ -1253,11 +1259,42 @@ class ApiService {
         total: number;
         percent: number;
       };
+      error?: {
+        message: string;
+        attempts: number;
+        canRetry: boolean;
+        details?: any[];
+      };
     }> => {
       if (!galleryId || !orderId) {
         throw new Error("Gallery ID and Order ID are required");
       }
       return await this._request(`/galleries/${galleryId}/orders/${orderId}/final/zip/status`);
+    },
+
+    /**
+     * Retry ZIP generation after failure (owner only)
+     */
+    retryZipGeneration: async (
+      galleryId: string,
+      orderId: string,
+      type: "original" | "final" = "original"
+    ): Promise<{
+      message: string;
+      galleryId: string;
+      orderId: string;
+      type: string;
+      isFinal: boolean;
+    }> => {
+      if (!galleryId || !orderId) {
+        throw new Error("Gallery ID and Order ID are required");
+      }
+      return await this._request(
+        `/galleries/${galleryId}/orders/${orderId}/retry-zip?type=${type}`,
+        {
+          method: "POST",
+        }
+      );
     },
 
     downloadFinalZip: async (

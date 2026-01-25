@@ -11,10 +11,16 @@ import {
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import pLimit from 'p-limit';
 import { createHash } from 'crypto';
+import { getSenderEmail } from '../../lib/src/email-config';
+import { createZipGenerationFailedEmail } from '../../lib/src/email';
 
 // S3Client configured for production reliability
 // Note: AWS_NODEJS_CONNECTION_REUSE_ENABLED=1 is set in Lambda environment for connection reuse
@@ -50,6 +56,244 @@ const CONCURRENT_DOWNLOADS = 12;
 interface MultipartPart {
 	partNumber: number;
 	etag: string;
+}
+
+interface ZipErrorDetail {
+	galleryId: string;
+	orderId: string;
+	attempt: number;
+	timestamp: number;
+	error: {
+		name: string;
+		message: string;
+		stack?: string;
+	};
+	context?: {
+		multipartUploadId?: string;
+		partsUploaded?: number;
+		filesProcessed?: number;
+	};
+}
+
+interface ZipErrorFinal {
+	galleryId: string;
+	orderId: string;
+	timestamp: number;
+	attempts: number;
+	error: {
+		name: string;
+		message: string;
+		stack?: string;
+	};
+	details: ZipErrorDetail[];
+}
+
+/**
+ * Gets owner email from gallery or Cognito
+ */
+async function getOwnerEmail(
+	gallery: any,
+	userPoolId: string | undefined,
+	cognito: any,
+	logger: any
+): Promise<string | undefined> {
+	if (gallery?.ownerEmail) {
+		return gallery.ownerEmail;
+	}
+
+	if (userPoolId && gallery?.ownerId) {
+		try {
+			const cognitoResponse = await cognito.send(new AdminGetUserCommand({
+				UserPoolId: userPoolId,
+				Username: gallery.ownerId
+			}));
+			const emailAttr = cognitoResponse.UserAttributes?.find((attr: any) => attr.Name === 'email');
+			if (emailAttr?.Value) {
+				return emailAttr.Value;
+			}
+		} catch (err: any) {
+			logger?.warn('Failed to get owner email from Cognito', {
+				error: err.message,
+				galleryId: gallery?.galleryId,
+				ownerId: gallery?.ownerId
+			});
+		}
+	}
+
+	return undefined;
+}
+
+/**
+ * Logs error attempt to DynamoDB
+ */
+async function logErrorAttempt(
+	ddb: DynamoDBDocumentClient,
+	ordersTable: string,
+	galleryId: string,
+	orderId: string,
+	attempt: number,
+	error: any,
+	context: { multipartUploadId?: string; partsUploaded?: number; filesProcessed?: number },
+	isFinal: boolean,
+	logger: any
+): Promise<void> {
+	try {
+		const errorDetail: ZipErrorDetail = {
+			galleryId,
+			orderId,
+			attempt,
+			timestamp: Date.now(),
+			error: {
+				name: error.name || 'Error',
+				message: error.message || 'Unknown error',
+				stack: error.stack
+			},
+			context
+		};
+
+		const errorField = isFinal ? 'finalZipErrorDetails' : 'zipErrorDetails';
+		const attemptsField = isFinal ? 'finalZipErrorAttempts' : 'zipErrorAttempts';
+
+		// Append error detail to array and increment attempt counter
+		await ddb.send(new UpdateCommand({
+			TableName: ordersTable,
+			Key: { galleryId, orderId },
+			UpdateExpression: `SET ${errorField} = list_append(if_not_exists(${errorField}, :emptyList), :errorDetail), ${attemptsField} = :attempt`,
+			ExpressionAttributeValues: {
+				':emptyList': [],
+				':errorDetail': [errorDetail],
+				':attempt': attempt
+			}
+		}));
+
+		logger?.info(`Logged error attempt ${attempt} to DynamoDB`, {
+			galleryId,
+			orderId,
+			attempt,
+			isFinal
+		});
+	} catch (logErr: any) {
+		logger?.error('Failed to log error attempt to DynamoDB', {
+			error: logErr.message,
+			galleryId,
+			orderId,
+			attempt
+		});
+	}
+}
+
+/**
+ * Stores final error state after all retries exhausted
+ */
+async function storeFinalError(
+	ddb: DynamoDBDocumentClient,
+	ordersTable: string,
+	galleryId: string,
+	orderId: string,
+	errorDetails: ZipErrorDetail[],
+	finalError: any,
+	isFinal: boolean,
+	logger: any
+): Promise<void> {
+	try {
+		const errorFinal: ZipErrorFinal = {
+			galleryId,
+			orderId,
+			timestamp: Date.now(),
+			attempts: errorDetails.length,
+			error: {
+				name: finalError.name || 'Error',
+				message: finalError.message || 'Unknown error',
+				stack: finalError.stack
+			},
+			details: errorDetails
+		};
+
+		const errorFinalField = isFinal ? 'finalZipErrorFinal' : 'zipErrorFinal';
+		const finalizedField = isFinal ? 'finalZipErrorFinalized' : 'zipErrorFinalized';
+
+		await ddb.send(new UpdateCommand({
+			TableName: ordersTable,
+			Key: { galleryId, orderId },
+			UpdateExpression: `SET ${errorFinalField} = :errorFinal, ${finalizedField} = :finalized`,
+			ExpressionAttributeValues: {
+				':errorFinal': errorFinal,
+				':finalized': true
+			}
+		}));
+
+		logger?.info('Stored final error state', {
+			galleryId,
+			orderId,
+			attempts: errorDetails.length,
+			isFinal
+		});
+	} catch (storeErr: any) {
+		logger?.error('Failed to store final error state', {
+			error: storeErr.message,
+			galleryId,
+			orderId
+		});
+	}
+}
+
+/**
+ * Sends email notification to gallery owner about ZIP generation failure
+ */
+async function sendFailureEmail(
+	ses: any,
+	sender: string,
+	ownerEmail: string | undefined,
+	galleryId: string,
+	galleryName: string | undefined,
+	orderId: string,
+	attempts: number,
+	logger: any
+): Promise<void> {
+	if (!sender || !ownerEmail) {
+		logger?.warn('Cannot send failure email - missing sender or owner email', {
+			hasSender: !!sender,
+			hasOwnerEmail: !!ownerEmail,
+			galleryId,
+			orderId
+		});
+		return;
+	}
+
+	try {
+		const emailTemplate = createZipGenerationFailedEmail(
+			galleryId,
+			galleryName || galleryId,
+			orderId,
+			attempts
+		);
+
+		await ses.send(new SendEmailCommand({
+			Source: sender,
+			Destination: { ToAddresses: [ownerEmail] },
+			Message: {
+				Subject: { Data: emailTemplate.subject },
+				Body: {
+					Text: { Data: emailTemplate.text },
+					Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+				}
+			}
+		}));
+
+		logger?.info('Sent ZIP generation failure email to owner', {
+			ownerEmail,
+			galleryId,
+			orderId,
+			attempts
+		});
+	} catch (emailErr: any) {
+		logger?.error('Failed to send ZIP generation failure email', {
+			error: emailErr.message,
+			ownerEmail,
+			galleryId,
+			orderId
+		});
+	}
 }
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -441,15 +685,68 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 		
-		let multipartUploadId: string | undefined;
-		let firstPartBuffer: Buffer | undefined;
-		let parts: MultipartPart[] = []; // Declared outside try block for error handling
+		// Retry configuration
+		const MAX_RETRIES = 3;
+		const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
 		
-		// Sequential part upload queue to ensure order and proper error handling
-		// Declared outside try block so it's accessible in catch block for cleanup
-		let lastUploadPromise = Promise.resolve<void>(undefined);
+		// Get gallery info for email notification (fetch once, reuse)
+		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		let gallery: any = null;
+		let ownerEmail: string | undefined;
+		if (galleriesTable) {
+			try {
+				const galleryGet = await ddb.send(new GetCommand({
+					TableName: galleriesTable,
+					Key: { galleryId }
+				}));
+				gallery = galleryGet.Item;
+				
+				// Get owner email
+				const userPoolId = envProc?.env?.USER_POOL_ID as string;
+				if (userPoolId) {
+					const cognito = new CognitoIdentityProviderClient({});
+					ownerEmail = await getOwnerEmail(gallery, userPoolId, cognito, logger);
+				} else if (gallery?.ownerEmail) {
+					ownerEmail = gallery.ownerEmail;
+				}
+			} catch (galleryErr: any) {
+				logger?.warn('Failed to fetch gallery for email notification', {
+					error: galleryErr.message,
+					galleryId
+				});
+			}
+		}
 
-		try {
+		// Get orders table for error logging
+		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+		
+		// Retry state
+		const errorDetails: ZipErrorDetail[] = [];
+		let lastError: any = null;
+		let attempt = 0;
+		let success = false;
+
+		// Retry loop
+		while (attempt < MAX_RETRIES && !success) {
+			attempt++;
+			const isLastAttempt = attempt === MAX_RETRIES;
+			
+			// Variables for ZIP generation (reset on each retry)
+			let multipartUploadId: string | undefined;
+			let firstPartBuffer: Buffer | undefined;
+			let parts: MultipartPart[] = [];
+			let lastUploadPromise = Promise.resolve<void>(undefined);
+			let filesProcessed = 0;
+			let filesAdded = 0;
+
+			try {
+				logger?.info(`ZIP generation attempt ${attempt}/${MAX_RETRIES}`, {
+					requestId,
+					galleryId,
+					orderId,
+					isFinal,
+					isLastAttempt
+				});
 		// For final ZIPs, fetch file list from DynamoDB
 		let finalKeys: string[] = [];
 		if (isFinal) {
@@ -763,6 +1060,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		});
 
 		await Promise.all(fileTasks);
+		
+		filesProcessed = filesAdded;
 
 		// Ensure at least one file was added
 		if (filesAdded === 0) {
@@ -919,77 +1218,255 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		return {
-			statusCode: 200,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				zipKey,
-				galleryId,
-				orderId,
-				message: 'ZIP created successfully. Use download endpoint to access.'
-			})
-		};
-	} catch (error: any) {
-		const durationMs = Date.now() - startTime;
-		const remainingTime = context?.getRemainingTimeInMillis?.();
+				// Mark success - ZIP generation completed
+				success = true;
+				
+				return {
+					statusCode: 200,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						zipKey,
+						galleryId,
+						orderId,
+						message: 'ZIP created successfully. Use download endpoint to access.',
+						attempt
+					})
+				};
+			} catch (error: any) {
+				// Error occurred during ZIP generation
+				lastError = error;
+				const durationMs = Date.now() - startTime;
+				const remainingTime = context?.getRemainingTimeInMillis?.();
+				
+				logger?.error(`ZIP generation failed (attempt ${attempt}/${MAX_RETRIES})`, {
+					requestId,
+					galleryId: galleryId || 'unknown',
+					orderId: orderId || 'unknown',
+					attempt,
+					isLastAttempt,
+					errorName: error.name,
+					errorMessage: error.message,
+					durationSeconds: Math.round(durationMs / 1000),
+					remainingTimeMs: remainingTime || 'unknown',
+					multipartUploadId: multipartUploadId || 'none',
+					partsUploaded: parts.length,
+					filesProcessed
+				}, error);
+				
+				// Cleanup on error
+				// Wait for any pending upload operations to complete or timeout
+				if (lastUploadPromise) {
+					try {
+						await Promise.race([
+							lastUploadPromise,
+							new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 30000))
+						]);
+					} catch (cleanupErr: any) {
+						logger?.warn('Error waiting for upload queue', {
+							error: cleanupErr.message,
+							galleryId,
+							orderId,
+							attempt
+						});
+					}
+				}
+				
+				// Abort multipart upload on failure
+				if (multipartUploadId && zipKey) {
+					try {
+						await s3.send(new AbortMultipartUploadCommand({
+							Bucket: bucket,
+							Key: zipKey,
+							UploadId: multipartUploadId
+						}));
+						logger?.info('Aborted multipart upload after failure', {
+							galleryId,
+							orderId,
+							uploadId: multipartUploadId,
+							attempt
+						});
+					} catch (abortErr: any) {
+						logger?.error('Failed to abort multipart upload', {
+							error: abortErr.message,
+							galleryId,
+							orderId,
+							uploadId: multipartUploadId,
+							attempt
+						}, abortErr);
+					}
+				}
+				
+				// Log error attempt to DynamoDB
+				if (ordersTable && galleryId && orderId) {
+					await logErrorAttempt(
+						ddb,
+						ordersTable,
+						galleryId,
+						orderId,
+						attempt,
+						error,
+						{
+							multipartUploadId,
+							partsUploaded: parts.length,
+							filesProcessed
+						},
+						isFinal,
+						logger
+					);
+					
+					// Store error detail for final error summary
+					errorDetails.push({
+						galleryId,
+						orderId,
+						attempt,
+						timestamp: Date.now(),
+						error: {
+							name: error.name || 'Error',
+							message: error.message || 'Unknown error',
+							stack: error.stack
+						},
+						context: {
+							multipartUploadId,
+							partsUploaded: parts.length,
+							filesProcessed
+						}
+					});
+				}
+				
+				// If not last attempt, wait and retry
+				if (!isLastAttempt) {
+					const delay = RETRY_DELAYS[attempt - 1];
+					logger?.info(`Retrying ZIP generation after ${delay}ms`, {
+						galleryId,
+						orderId,
+						attempt,
+						nextAttempt: attempt + 1,
+						delay
+					});
+					await new Promise(resolve => setTimeout(resolve, delay));
+					continue; // Retry
+				}
+				
+				// Last attempt failed - handle final error
+				logger?.error('ZIP generation failed after all retries', {
+					requestId,
+					galleryId: galleryId || 'unknown',
+					orderId: orderId || 'unknown',
+					totalAttempts: attempt,
+					errorName: lastError.name,
+					errorMessage: lastError.message
+				});
+				
+				// Store final error state
+				if (ordersTable && galleryId && orderId) {
+					await storeFinalError(
+						ddb,
+						ordersTable,
+						galleryId,
+						orderId,
+						errorDetails,
+						lastError,
+						isFinal,
+						logger
+					);
+					
+					// Clear generating flags
+					try {
+						const updateExpr = isFinal
+							? 'REMOVE finalZipGenerating, finalZipGeneratingSince'
+							: 'REMOVE zipGenerating, zipGeneratingSince';
+						await ddb.send(new UpdateCommand({
+							TableName: ordersTable,
+							Key: { galleryId, orderId },
+							UpdateExpression: updateExpr
+						}));
+						logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after all retries failed`, { 
+							galleryId, 
+							orderId,
+							isFinal,
+							attempts: attempt
+						});
+					} catch (clearErr: any) {
+						logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after error`, {
+							error: clearErr.message,
+							galleryId,
+							orderId,
+							isFinal
+						}, clearErr);
+					}
+				}
+				
+				// Send email notification to gallery owner
+				const sender = await getSenderEmail();
+				if (sender && ownerEmail) {
+					const ses = new SESClient({});
+					await sendFailureEmail(
+						ses,
+						sender,
+						ownerEmail,
+						galleryId,
+						gallery?.galleryName,
+						orderId,
+						attempt,
+						logger
+					);
+				}
+				
+				// Return error response
+				return {
+					statusCode: 500,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'ZIP generation failed after all retries', 
+						message: lastError.message,
+						attempts: attempt,
+						galleryId,
+						orderId
+					})
+				};
+			}
+		}
 		
-		logger?.error('ZIP generation failed', {
+		// If we exit the loop without success, return error (shouldn't happen, but safety check)
+		if (!success) {
+			logger?.error('ZIP generation failed - exited retry loop without success', {
+				requestId,
+				galleryId: galleryId || 'unknown',
+				orderId: orderId || 'unknown',
+				attempts: attempt
+			});
+			
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'ZIP generation failed', 
+					message: lastError?.message || 'Unknown error',
+					attempts: attempt,
+					galleryId,
+					orderId
+				})
+			};
+		}
+	} catch (error: any) {
+		// This catch block handles errors that occur before the retry loop
+		// (e.g., payload parsing, missing env vars, etc.)
+		// Errors during ZIP generation are handled by the retry loop above
+		const durationMs = Date.now() - startTime;
+		
+		logger?.error('ZIP generation failed (before retry loop)', {
 			requestId,
 			galleryId: galleryId || 'unknown',
 			orderId: orderId || 'unknown',
 			errorName: error.name,
 			errorMessage: error.message,
-			durationSeconds: Math.round(durationMs / 1000),
-			remainingTimeMs: remainingTime || 'unknown',
-			multipartUploadId: multipartUploadId || 'none',
-			partsUploaded: parts.length
+			durationSeconds: Math.round(durationMs / 1000)
 		}, error);
 		
-		// Wait for any pending upload operations to complete or timeout
-		if (lastUploadPromise) {
-			try {
-				await Promise.race([
-					lastUploadPromise,
-					new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 30000))
-				]);
-			} catch (cleanupErr: any) {
-				logger?.warn('Error waiting for upload queue', {
-					error: cleanupErr.message,
-					galleryId,
-					orderId
-				});
-			}
-		}
-		
-		// Abort multipart upload on failure
-		if (multipartUploadId && zipKey) {
-			try {
-				await s3.send(new AbortMultipartUploadCommand({
-					Bucket: bucket,
-					Key: zipKey,
-					UploadId: multipartUploadId
-				}));
-				logger?.info('Aborted multipart upload after failure', {
-					galleryId,
-					orderId,
-					uploadId: multipartUploadId
-				});
-			} catch (abortErr: any) {
-				// Log but don't fail - we're already in error state
-				logger?.error('Failed to abort multipart upload', {
-					error: abortErr.message,
-					galleryId,
-					orderId,
-					uploadId: multipartUploadId
-				}, abortErr);
-			}
-		}
-		
-		// Clear ZIP generating flag on failure and store error in progress so UI can show it
+		// Clear ZIP generating flag if we got far enough to set it
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 		if (ordersTable && galleryId && orderId) {
 			try {
-				// Clear generating flags on error - no progress tracking
 				const updateExpr = isFinal
 					? 'REMOVE finalZipGenerating, finalZipGeneratingSince'
 					: 'REMOVE zipGenerating, zipGeneratingSince';
@@ -998,15 +1475,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Key: { galleryId, orderId },
 					UpdateExpression: updateExpr
 				}));
-				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after failure`, { 
+				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early failure`, { 
 					galleryId, 
 					orderId,
-					isFinal,
-					error: error.message
+					isFinal
 				});
 			} catch (clearErr: any) {
-				// Log but don't fail - we're already in error state
-				logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after error`, {
+				logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early error`, {
 					error: clearErr.message,
 					galleryId,
 					orderId,

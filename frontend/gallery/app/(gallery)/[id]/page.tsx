@@ -370,6 +370,13 @@ export default function GalleryPage() {
     const orderId = selectedOrderId || singleOrder?.orderId;
     if (!galleryId || !orderId) return;
 
+    // If ZIP has error status, show error overlay
+    if (zipStatus?.status === "error") {
+      setZipDownloadState({ showOverlay: false, isError: false });
+      setShowZipOverlay(true);
+      return;
+    }
+
     // If ZIP is not ready (generating or not started), show ZIP overlay (status + ETA).
     // We'll still attempt download below when status is unknown/not_started; 404 becomes a normal "preparing" state.
     if (zipStatus?.generating) {
@@ -445,6 +452,13 @@ export default function GalleryPage() {
       setZipDownloadState({ showOverlay: true, isError: true });
     }
   }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus, queryClient]);
+
+  // Show error overlay when ZIP status changes to error
+  useEffect(() => {
+    if (zipStatus?.status === "error" && !isOwnerPreview) {
+      setShowZipOverlay(true);
+    }
+  }, [zipStatus?.status, isOwnerPreview]);
 
   // Buy more photos
   const handleBuyMore = useCallback(() => {

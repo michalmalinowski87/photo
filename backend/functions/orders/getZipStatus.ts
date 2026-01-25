@@ -96,18 +96,51 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Determine status
 		let status: 'ready' | 'generating' | 'not_started' | 'error' = 'not_started';
 		let generating = false;
+		let errorInfo: any = undefined;
 
-		// Check for error state in zipProgress (for error status only, no progress tracking)
-		const zipProgress = order.zipProgress as any;
-		
-		// Check for error state (only if zipProgress is an object with error)
-		if (zipProgress && typeof zipProgress === 'object' && !Array.isArray(zipProgress) && (zipProgress.status === 'error' || zipProgress.error)) {
+		// Check for error state (new error tracking system)
+		if (order.zipErrorFinalized === true) {
 			status = 'error';
-		} else if (zipExists) {
-			status = 'ready';
-		} else if (order.zipGenerating) {
-			status = 'generating';
-			generating = true;
+			const zipErrorFinal = order.zipErrorFinal as any;
+			const zipErrorAttempts = order.zipErrorAttempts as number | undefined;
+			const zipErrorDetails = order.zipErrorDetails as any[] | undefined;
+			
+			if (zipErrorFinal) {
+				errorInfo = {
+					message: zipErrorFinal.error?.message || 'ZIP generation failed after multiple attempts',
+					attempts: zipErrorAttempts || zipErrorFinal.attempts || 0,
+					canRetry: access.isOwner, // Only owners can retry
+					timestamp: zipErrorFinal.timestamp
+				};
+				
+				// Include detailed error information for owners only
+				if (access.isOwner && zipErrorDetails) {
+					errorInfo.details = zipErrorDetails;
+				}
+			} else {
+				// Fallback if zipErrorFinal is missing
+				errorInfo = {
+					message: 'ZIP generation failed',
+					attempts: zipErrorAttempts || 0,
+					canRetry: access.isOwner
+				};
+			}
+		} else {
+			// Check for error state in zipProgress (legacy error status, for backward compatibility)
+			const zipProgress = order.zipProgress as any;
+			if (zipProgress && typeof zipProgress === 'object' && !Array.isArray(zipProgress) && (zipProgress.status === 'error' || zipProgress.error)) {
+				status = 'error';
+				errorInfo = {
+					message: zipProgress.error?.message || zipProgress.message || 'ZIP generation failed',
+					attempts: 1,
+					canRetry: access.isOwner
+				};
+			} else if (zipExists) {
+				status = 'ready';
+			} else if (order.zipGenerating) {
+				status = 'generating';
+				generating = true;
+			}
 		}
 
 		return {
@@ -120,7 +153,8 @@ export const handler = lambdaLogger(async (event: any) => {
 				generating,
 				ready: status === 'ready',
 				zipExists,
-				zipSize
+				zipSize,
+				...(errorInfo && { error: errorInfo })
 			})
 		};
 	} catch (error: any) {

@@ -1,11 +1,16 @@
 "use client";
 
 interface ZipStatus {
-  status?: "ready" | "generating" | "not_started";
+  status?: "ready" | "generating" | "not_started" | "error";
   generating?: boolean;
   ready?: boolean;
   zipExists?: boolean;
   zipSize?: number;
+  error?: {
+    message: string;
+    attempts: number;
+    canRetry: boolean;
+  };
 }
 
 interface ZipOverlayProps {
@@ -24,11 +29,49 @@ export function ZipOverlay({
   if (!isVisible) return null;
 
   const isGenerating = zipStatus?.generating || false;
+  const hasError = zipStatus?.status === "error";
+  const errorInfo = zipStatus?.error;
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md">
       <div className="flex flex-col items-center justify-center text-center px-4 max-w-md">
-        {isGenerating ? (
+        {hasError ? (
+          <>
+            <div className="w-16 h-16 border-4 border-red-500 rounded-full flex items-center justify-center mb-6">
+              <svg
+                className="w-8 h-8 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold text-white mb-4">
+              Brak pliku ZIP
+            </h2>
+            <p className="text-white/80 mb-4">
+              Niestety, automatyczne generowanie pliku ZIP nie powiodło się. Wykonaliśmy nasze najlepsze wysiłki, aby wygenerować plik, ale wystąpił problem techniczny.
+            </p>
+            <p className="text-white/90 font-semibold mb-4">
+              Prosimy o kontakt z fotografem, aby uzyskać pomoc w pobraniu zdjęć.
+            </p>
+            {errorInfo && errorInfo.attempts > 1 && (
+              <p className="text-white/70 text-sm mb-6">
+                System wykonał {errorInfo.attempts} próby wygenerowania pliku ZIP przed wystąpieniem błędu.
+              </p>
+            )}
+            <p className="text-white/70 text-sm mb-6">
+              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku karuzeli).
+            </p>
+          </>
+        ) : isGenerating ? (
           <>
             <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-6" />
             <h2 className="text-2xl font-semibold text-white mb-4">

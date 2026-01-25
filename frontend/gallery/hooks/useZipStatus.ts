@@ -11,11 +11,16 @@ import { useAdaptivePolling } from "./useAdaptivePolling";
 const API_URL = getPublicApiUrl();
 
 export interface ZipStatus {
-  status: "ready" | "generating" | "not_started";
+  status: "ready" | "generating" | "not_started" | "error";
   generating: boolean;
   ready: boolean;
   zipExists: boolean;
   zipSize?: number;
+  error?: {
+    message: string;
+    attempts: number;
+    canRetry: boolean;
+  };
 }
 
 export function useZipStatus(
@@ -94,6 +99,10 @@ export function useZipStatus(
       const data = rq.state.data as ZipStatus | undefined;
       // Stop polling once ready
       if (data?.ready) return false;
+      // Stop polling if error state - no need to keep checking
+      if (data?.status === "error") {
+        return false;
+      }
       // Faster updates when generating, otherwise keep it light (dashboard-style)
       return data?.generating ? 3000 : 15000;
     },

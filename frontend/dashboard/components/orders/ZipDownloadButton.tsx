@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import React from "react";
 
-import { useDownloadZip, useDownloadFinalZip } from "../../hooks/mutations/useOrderMutations";
+import { useDownloadZip, useDownloadFinalZip, useRetryZipGeneration } from "../../hooks/mutations/useOrderMutations";
 import { useZipStatusPolling } from "../../hooks/useZipStatusPolling";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
@@ -25,7 +25,12 @@ interface ZipStatus {
   zipSize?: number;
   elapsedSeconds?: number;
   progress?: ZipProgress;
-  error?: string;
+  error?: {
+    message: string;
+    attempts: number;
+    canRetry: boolean;
+    details?: any[];
+  };
 }
 
 interface ZipDownloadButtonProps {
@@ -71,6 +76,7 @@ export function ZipDownloadButton({
 
   const downloadZipMutation = useDownloadZip();
   const downloadFinalZipMutation = useDownloadFinalZip();
+  const retryZipMutation = useRetryZipGeneration();
 
   const handleDownload = () => {
     if (type === "final") {
@@ -78,6 +84,10 @@ export function ZipDownloadButton({
     } else {
       downloadZipMutation.mutate({ galleryId, orderId });
     }
+  };
+
+  const handleRetry = () => {
+    retryZipMutation.mutate({ galleryId, orderId, type });
   };
 
   // Use generating flag from ZIP status polling (authoritative source)
@@ -92,17 +102,25 @@ export function ZipDownloadButton({
   // Important: prioritize polling data over cache to ensure UI updates correctly
   const effectiveReady = ready ?? cacheZipReady;
 
+  // Check for error state
+  const hasError = (zipStatus as ZipStatus | undefined)?.status === "error";
+  const errorInfo = (zipStatus as ZipStatus | undefined)?.error;
+  const canRetry = errorInfo?.canRetry ?? false;
+
   // Determine button state
   // Button should always be visible when order is in the right state, but disabled until ZIP is ready
+  // For error state, allow retry if user is owner
   const isDisabled = Boolean(
-    !effectiveReady ||
+    (!effectiveReady && !hasError) ||
+    (hasError && !canRetry) ||
     isGenerating ||
     downloadZipMutation.isPending ||
-    downloadFinalZipMutation.isPending
+    downloadFinalZipMutation.isPending ||
+    retryZipMutation.isPending
   );
-  // Show loader when generating (even without progress data) or downloading
+  // Show loader when generating (even without progress data) or downloading or retrying
   const isLoading =
-    isGenerating || downloadZipMutation.isPending || downloadFinalZipMutation.isPending;
+    isGenerating || downloadZipMutation.isPending || downloadFinalZipMutation.isPending || retryZipMutation.isPending;
 
   // Polish text based on ZIP type and state
   const zipTypeLabel = type === "final" ? "Zdjęcia finalne (ZIP)" : "Wybrane przez klienta (ZIP)";
@@ -116,10 +134,16 @@ export function ZipDownloadButton({
     // No progress percentage shown - generation time depends on number of photos
   } else if (downloadZipMutation.isPending || downloadFinalZipMutation.isPending) {
     buttonText = `Pobieranie ${zipTypeLabel}...`;
-  } else if ((zipStatus as ZipStatus | undefined)?.status === "error") {
-    // ZIP generation failed - show error
-    buttonText = `Błąd generowania ${zipTypeLabel}`;
-    statusInfo = "Wystąpił błąd podczas generowania ZIP";
+  } else if (retryZipMutation.isPending) {
+    buttonText = `Ponowne generowanie ZIP...`;
+  } else if (hasError) {
+    // ZIP generation failed - show error with retry option
+    const attempts = errorInfo?.attempts ?? 0;
+    const attemptsText = attempts > 1 ? ` (${attempts} próby)` : "";
+    buttonText = canRetry ? `Ponów generowanie ${zipTypeLabel}` : `Błąd generowania ${zipTypeLabel}`;
+    statusInfo = errorInfo?.message 
+      ? `${errorInfo.message}${attemptsText}`
+      : `Wystąpił błąd podczas generowania ZIP${attemptsText}`;
   } else if (effectiveReady) {
     // ZIP is ready
     buttonText = `Pobierz ${zipTypeLabel}`;
@@ -129,32 +153,45 @@ export function ZipDownloadButton({
     statusInfo = null;
   }
 
+  // Determine button variant and icon based on state
+  const buttonVariant = hasError ? "danger" : "outline";
+  const startIcon = isLoading ? (
+    <span className="inline-block">
+      <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+    </span>
+  ) : hasError && canRetry ? (
+    <RefreshCw size={20} aria-hidden="true" />
+  ) : hasError ? (
+    <AlertCircle size={20} aria-hidden="true" />
+  ) : effectiveReady ? (
+    <Download size={20} aria-hidden="true" />
+  ) : (
+    <span className="inline-block">
+      <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+    </span>
+  );
+
+  // Use retry handler for error state with retry capability, otherwise use download handler
+  const onClickHandler = hasError && canRetry ? handleRetry : handleDownload;
+
   return (
     <div className={`w-full ${className}`}>
       <Button
         size="md"
-        variant="outline"
-        onClick={handleDownload}
+        variant={buttonVariant}
+        onClick={onClickHandler}
         disabled={isDisabled}
         className="w-full justify-start"
-        startIcon={
-          isLoading ? (
-            <span className="inline-block">
-              <Loader2 size={20} className="animate-spin" aria-hidden="true" />
-            </span>
-          ) : effectiveReady ? (
-            <Download size={20} aria-hidden="true" />
-          ) : (
-            <span className="inline-block">
-              <Loader2 size={20} className="animate-spin" aria-hidden="true" />
-            </span>
-          )
-        }
+        startIcon={startIcon}
       >
         <div className="flex flex-col items-start gap-0.5">
           <span>{buttonText}</span>
           {statusInfo && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+            <span className={`text-xs font-normal ${
+              hasError 
+                ? "text-red-600 dark:text-red-400" 
+                : "text-gray-500 dark:text-gray-400"
+            }`}>
               {statusInfo}
             </span>
           )}

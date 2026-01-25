@@ -95,10 +95,38 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 
 		// Determine status
-		let status: 'ready' | 'generating' | 'not_started' = 'not_started';
+		let status: 'ready' | 'generating' | 'not_started' | 'error' = 'not_started';
 		let generating = false;
+		let errorInfo: any = undefined;
 
-		if (zipExists) {
+		// Check for error state (new error tracking system for final ZIPs)
+		if (order.finalZipErrorFinalized === true) {
+			status = 'error';
+			const finalZipErrorFinal = order.finalZipErrorFinal as any;
+			const finalZipErrorAttempts = order.finalZipErrorAttempts as number | undefined;
+			const finalZipErrorDetails = order.finalZipErrorDetails as any[] | undefined;
+			
+			if (finalZipErrorFinal) {
+				errorInfo = {
+					message: finalZipErrorFinal.error?.message || 'Final ZIP generation failed after multiple attempts',
+					attempts: finalZipErrorAttempts || finalZipErrorFinal.attempts || 0,
+					canRetry: access.isOwner, // Only owners can retry
+					timestamp: finalZipErrorFinal.timestamp
+				};
+				
+				// Include detailed error information for owners only
+				if (access.isOwner && finalZipErrorDetails) {
+					errorInfo.details = finalZipErrorDetails;
+				}
+			} else {
+				// Fallback if finalZipErrorFinal is missing
+				errorInfo = {
+					message: 'Final ZIP generation failed',
+					attempts: finalZipErrorAttempts || 0,
+					canRetry: access.isOwner
+				};
+			}
+		} else if (zipExists) {
 			status = 'ready';
 		} else if (order.finalZipGenerating) {
 			status = 'generating';
@@ -115,7 +143,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				generating,
 				ready: status === 'ready',
 				zipExists,
-				zipSize
+				zipSize,
+				...(errorInfo && { error: errorInfo })
 			})
 		};
 	} catch (error: any) {
