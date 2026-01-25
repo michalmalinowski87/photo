@@ -4,24 +4,19 @@ import * as ordersList from '../../../functions/orders/list';
 import * as ordersListAll from '../../../functions/orders/listAll';
 import * as ordersGet from '../../../functions/orders/get';
 import * as ordersGetStatus from '../../../functions/orders/getStatus';
-import * as ordersDownloadZip from '../../../functions/orders/downloadZip';
 import * as ordersMarkPaid from '../../../functions/orders/markPaid';
 import * as ordersMarkPartiallyPaid from '../../../functions/orders/markPartiallyPaid';
 import * as ordersMarkCanceled from '../../../functions/orders/markCanceled';
 import * as ordersMarkRefunded from '../../../functions/orders/markRefunded';
 import * as ordersApproveChangeRequest from '../../../functions/orders/approveChangeRequest';
 import * as ordersDenyChangeRequest from '../../../functions/orders/denyChangeRequest';
-import * as ordersListDelivered from '../../../functions/orders/listDelivered';
-import * as ordersListFinalImages from '../../../functions/orders/listFinalImages';
 import * as ordersUploadFinal from '../../../functions/orders/uploadFinal';
 import * as ordersUploadFinalBatch from '../../../functions/orders/uploadFinalBatch';
-import * as ordersDownloadFinalZip from '../../../functions/orders/downloadFinalZip';
 import * as ordersSendFinalLink from '../../../functions/orders/sendFinalLink';
 import * as ordersUpdate from '../../../functions/orders/update';
 import * as ordersUploadFinalComplete from '../../../functions/orders/uploadFinalComplete';
 import * as ordersCleanupOriginals from '../../../functions/orders/cleanupOriginals';
-import * as ordersGetZipStatus from '../../../functions/orders/getZipStatus';
-import * as ordersGetFinalZipStatus from '../../../functions/orders/getFinalZipStatus';
+// zip/status, final/zip, final/images, and final/zip/status routes are registered as public routes in index.ts (no requireAuth)
 
 const router = Router();
 
@@ -30,8 +25,7 @@ const router = Router();
 // orders/delivered route is registered as public route in index.ts (no requireAuth)
 router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
 router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));
-router.get('/galleries/:id/orders/:orderId/zip/status', wrapHandler(ordersGetZipStatus.handler));
-router.get('/galleries/:id/orders/:orderId/final/zip/status', wrapHandler(ordersGetFinalZipStatus.handler));
+// zip/status and final/zip/status routes are registered as public routes in index.ts (no requireAuth) to support client JWT tokens
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));
 // orders/:orderId/zip route is registered as public route in index.ts (no requireAuth)
 router.post('/galleries/:id/orders/:orderId/mark-paid', wrapHandler(ordersMarkPaid.handler));

@@ -10,12 +10,6 @@ interface ZipStatus {
   ready: boolean;
   zipExists: boolean;
   zipSize?: number;
-  elapsedSeconds?: number;
-  progress?: {
-    processed: number;
-    total: number;
-    percent: number;
-  };
 }
 
 interface UseZipStatusPollingOptions {
@@ -44,46 +38,33 @@ export function useZipStatusPolling({
   } = useAdaptivePolling();
   const shouldPoll = adaptiveInterval !== null;
 
-  // Calculate interval for React Query (15s when should poll, false otherwise)
-  const interval = shouldPoll && enabled ? 15000 : false;
-
   const queryKey = ["zipStatus", galleryId, orderId, type];
-  const isPollingRef = useRef<boolean>(false);
 
   const { data, error } = useQuery<ZipStatus>({
     queryKey,
     queryFn: async () => {
-      // Prevent concurrent polls
-      if (isPollingRef.current) {
-        return (
-          queryClient.getQueryData<ZipStatus>(queryKey) || {
-            status: "not_started" as const,
-            generating: false,
-            ready: false,
-            zipExists: false,
-          }
-        );
-      }
+      // React Query handles request deduplication automatically,
+      // so we don't need isPollingRef here - multiple components using the same
+      // query key will share the same request
+      const result =
+        type === "final"
+          ? await api.orders.getFinalZipStatus(galleryId, orderId)
+          : await api.orders.getZipStatus(galleryId, orderId);
 
-      isPollingRef.current = true;
+      updateLastPollTime();
 
-      try {
-        const result =
-          type === "final"
-            ? await api.orders.getFinalZipStatus(galleryId, orderId)
-            : await api.orders.getZipStatus(galleryId, orderId);
-
-        updateLastPollTime();
-
-        return result;
-      } catch (pollError: unknown) {
-        throw pollError instanceof Error ? pollError : new Error(String(pollError));
-      } finally {
-        isPollingRef.current = false;
-      }
+      return result;
     },
     enabled: enabled && shouldPoll,
-    refetchInterval: interval,
+    refetchInterval: (rq) => {
+      // Stop polling once ready - ZIP is complete
+      const data = rq.state.data as ZipStatus | undefined;
+      if (data?.ready) {
+        return false;
+      }
+      // Poll every 15s when enabled and should poll, otherwise stop
+      return shouldPoll && enabled ? 15000 : false;
+    },
     refetchIntervalInBackground: false,
     refetchOnMount: false,
     staleTime: 10_000, // Prevent refetch if data is <10s old
@@ -110,8 +91,6 @@ export function useZipStatusPolling({
     ready: data?.ready || false,
     zipExists: data?.zipExists || false,
     zipSize: data?.zipSize,
-    elapsedSeconds: data?.elapsedSeconds,
-    progress: data?.progress,
     error,
     isLoading: !data && !error,
     zipStatus: data, // Return full status object for error checking

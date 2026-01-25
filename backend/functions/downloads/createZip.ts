@@ -350,8 +350,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			try {
 				if (isFinal) {
 					const updateExpr = finalFilesHash
-						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt SET finalZipFilesHash = :h'
-						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt';
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
 					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
 					await ddb.send(new UpdateCommand({
 						TableName: ordersTable,
@@ -360,10 +360,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						ExpressionAttributeValues: updateValues
 					}));
 				} else {
-					// Clear original ZIP flag and store hash, remove progress fields
+					// Clear original ZIP flag and store hash
 					const updateExpr = currentHash
-						? 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt SET zipSelectedKeysHash = :h'
-						: 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt';
+						? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince';
 					const updateValues = currentHash ? { ':h': currentHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -751,58 +751,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			return true;
 		});
 		
-		let processed = 0;
-		let lastProgressLog = Date.now();
-		let lastProgressUpdate = Date.now();
-		const PROGRESS_LOG_INTERVAL = 5000; // Log every 5 seconds for production (reduced verbosity)
-		const PROGRESS_UPDATE_INTERVAL = 5000; // Update DynamoDB every 5 seconds
-		const TIMEOUT_WARNING_MS = 2 * 60 * 1000; // Warn if less than 2 minutes remaining
-		
-		// Helper function to update progress in DynamoDB
-		const updateProgressInDynamoDB = async (processedCount: number, totalCount: number) => {
-			const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-			if (!ordersTable) return;
-			
-			const progressPercent = Math.round((processedCount / totalCount) * 100);
-			const now = Date.now();
-			
-			try {
-				if (isFinal) {
-					await ddb.send(new UpdateCommand({
-						TableName: ordersTable,
-						Key: { galleryId, orderId },
-						UpdateExpression: 'SET finalZipProgress = :p, finalZipProgressTotal = :t, finalZipProgressPercent = :percent, finalZipProgressUpdatedAt = :ts',
-						ExpressionAttributeValues: {
-							':p': processedCount,
-							':t': totalCount,
-							':percent': progressPercent,
-							':ts': now
-						}
-					}));
-				} else {
-					await ddb.send(new UpdateCommand({
-						TableName: ordersTable,
-						Key: { galleryId, orderId },
-						UpdateExpression: 'SET zipProgress = :p, zipProgressTotal = :t, zipProgressPercent = :percent, zipProgressUpdatedAt = :ts',
-						ExpressionAttributeValues: {
-							':p': processedCount,
-							':t': totalCount,
-							':percent': progressPercent,
-							':ts': now
-						}
-					}));
-				}
-			} catch (updateErr: any) {
-				// Log but don't fail - progress updates are best effort
-				logger?.warn('Failed to update progress in DynamoDB', {
-					error: updateErr.message,
-					galleryId,
-					orderId,
-					isFinal
-				});
-			}
-		};
-		
 		const fileTasks = validKeys.map(key => {
 			// Construct S3 key based on type
 			const s3Key = isFinal 
@@ -810,37 +758,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				: `galleries/${galleryId}/originals/${key}`;
 			return limit(async () => {
 				const result = await addFileToZip(s3Key, key);
-				processed++;
-				
-				// Log progress periodically with timeout monitoring
-				const now = Date.now();
-				const remainingTime = context?.getRemainingTimeInMillis?.();
-				if (now - lastProgressLog >= PROGRESS_LOG_INTERVAL) {
-					const elapsedMs = now - startTime;
-					const logData: any = {
-						requestId,
-						processed,
-						total: validKeys.length,
-						progressPercent: Math.round((processed / validKeys.length) * 100),
-						elapsedSeconds: Math.round(elapsedMs / 1000),
-						isFinal
-					};
-					
-					if (remainingTime && remainingTime < TIMEOUT_WARNING_MS) {
-						logData.warning = 'Low remaining time';
-						logData.remainingTimeMs = remainingTime;
-					}
-					
-					logger?.info(`Progress: ${processed}/${validKeys.length} files added`, logData);
-					lastProgressLog = now;
-				}
-				
-				// Update progress in DynamoDB periodically
-				if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
-					await updateProgressInDynamoDB(processed, validKeys.length);
-					lastProgressUpdate = now;
-				}
-				
 				return result;
 			});
 		});
@@ -965,10 +882,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		if (ordersTable) {
 			try {
 				if (isFinal) {
-					// Clear final ZIP flags and store hash, remove progress fields
+					// Clear final ZIP flags and store hash
 					const updateExpr = finalFilesHash
-						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt SET finalZipFilesHash = :h'
-						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipProgress, finalZipProgressTotal, finalZipProgressPercent, finalZipProgressUpdatedAt';
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
 					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -978,10 +895,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						ExpressionAttributeValues: updateValues
 					}));
 				} else {
-					// Clear original ZIP flag and store hash, remove progress fields
+					// Clear original ZIP flag and store hash
 					const updateExpr = currentHash
-						? 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt SET zipSelectedKeysHash = :h'
-						: 'REMOVE zipGenerating, zipGeneratingSince, zipProgress, zipProgressTotal, zipProgressPercent, zipProgressUpdatedAt';
+						? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince';
 					const updateValues = currentHash ? { ':h': currentHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -1072,28 +989,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 		if (ordersTable && galleryId && orderId) {
 			try {
-				// Use available variables - parts.length is always available, use it for progress
-				const errorProgress = {
-					status: 'error',
-					message: error.message,
-					processed: parts.length, // Number of parts uploaded before failure
-					total: parts.length > 0 ? parts.length : 1, // Estimate based on parts
-					progressPercent: 0, // Can't calculate accurately without knowing total files
-					elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
-					isFinal: isFinal,
-					error: error.message
-				};
-				
+				// Clear generating flags on error - no progress tracking
 				const updateExpr = isFinal
-					? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET zipProgress = :p'
-					: 'REMOVE zipGenerating, zipGeneratingSince SET zipProgress = :p';
+					? 'REMOVE finalZipGenerating, finalZipGeneratingSince'
+					: 'REMOVE zipGenerating, zipGeneratingSince';
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
 					Key: { galleryId, orderId },
-					UpdateExpression: updateExpr,
-					ExpressionAttributeValues: { ':p': errorProgress }
+					UpdateExpression: updateExpr
 				}));
-				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag and stored error progress after failure`, { 
+				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after failure`, { 
 					galleryId, 
 					orderId,
 					isFinal,

@@ -108,7 +108,8 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
 		const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf-8')) as JWTPayload;
 
 		// Check expiration
-		if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+		const now = Math.floor(Date.now() / 1000);
+		if (payload.exp && payload.exp < now) {
 			return null;
 		}
 
@@ -125,6 +126,7 @@ export async function getJWTFromEvent(event: any): Promise<JWTPayload | null> {
 	}
 
 	const token = authHeader.substring(7);
-	return verifyJWT(token);
+	const result = await verifyJWT(token);
+	return result;
 }
 

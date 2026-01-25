@@ -16,12 +16,6 @@ export interface ZipStatus {
   ready: boolean;
   zipExists: boolean;
   zipSize?: number;
-  elapsedSeconds?: number;
-  progress?: {
-    processed: number;
-    total: number;
-    percent: number;
-  };
 }
 
 export function useZipStatus(
@@ -75,12 +69,28 @@ export function useZipStatus(
 
         updateLastPollTime();
         return response.data as ZipStatus;
+      } catch (error: unknown) {
+        // Handle 401 (Unauthorized) - stop polling to avoid spamming the server
+        // This typically means the token expired or is invalid
+        const apiError = error as { status?: number; message?: string };
+        if (apiError?.status === 401) {
+          // Stop polling on auth errors - user may need to re-authenticate
+          console.warn("ZIP status polling stopped: authentication failed (401)");
+          throw error;
+        }
+        throw error;
       } finally {
         isPollingRef.current = false;
       }
     },
     enabled: enabled && !!galleryId && !!orderId && !!getToken(galleryId) && shouldPoll,
     refetchInterval: (rq) => {
+      // Stop polling on 401 errors (auth issues)
+      const error = rq.state.error as { status?: number } | undefined;
+      if (error?.status === 401) {
+        return false;
+      }
+
       const data = rq.state.data as ZipStatus | undefined;
       // Stop polling once ready
       if (data?.ready) return false;

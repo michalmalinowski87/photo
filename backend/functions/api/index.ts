@@ -15,6 +15,8 @@ import { ordersRoutes } from './routes/orders';
 import * as ordersList from '../../functions/orders/list';
 import * as ordersListDelivered from '../../functions/orders/listDelivered';
 import * as ordersDownloadZip from '../../functions/orders/downloadZip';
+import * as ordersGetZipStatus from '../../functions/orders/getZipStatus';
+import * as ordersGetFinalZipStatus from '../../functions/orders/getFinalZipStatus';
 import { clientsRoutes } from './routes/clients';
 import { packagesRoutes } from './routes/packages';
 // Stripe payments are handled by separate Lambda functions
@@ -100,9 +102,11 @@ app.get('/galleries/:id/selections', wrapHandler(selectionsGet.handler));
 app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.handler));
 app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
 app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
+app.get('/galleries/:id/orders/:orderId/zip/status', wrapHandler(ordersGetZipStatus.handler));
 app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
 app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
+app.get('/galleries/:id/orders/:orderId/final/zip/status', wrapHandler(ordersGetFinalZipStatus.handler));
 
 // Public undo deletion route (no auth required - uses token in URL)
 app.use('/auth', undoDeletionPublicRoutes);

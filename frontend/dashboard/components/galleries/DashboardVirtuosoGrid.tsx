@@ -206,7 +206,48 @@ export function DashboardVirtuosoGrid({
     // For marble (masonry), use column-based masonry layout
     if (layout === "marble") {
       // Calculate responsive number of columns - match gallery app logic
-      const numColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
+      const maxColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
+
+      // When there are too few photos to form multiple masonry rows, a single-row masonry layout
+      // tends to look awkward (varying heights across a single line). Use a single-row "fit to width"
+      // layout (preserve portrait/landscape ratios and fill full width).
+      if (images.length <= maxColumns) {
+        const aspectRatios = images.map((image, index) => {
+          const imageKey = image.key ?? image.filename ?? `image-${index}`;
+          const extractedDims = imageDimensions.get(imageKey);
+          const imageWidth = typeof image.width === "number" ? image.width : extractedDims?.width;
+          const imageHeight = typeof image.height === "number" ? image.height : extractedDims?.height;
+
+          if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
+            return imageWidth / imageHeight;
+          }
+          return index % 3 === 0 ? 1.5 : 1.3333;
+        });
+
+        const rowWidthWithoutSpacing =
+          effectiveWidth - (images.length - 1) * boxSpacing;
+        const sumAspectRatios = aspectRatios.reduce((sum, ar) => sum + ar, 0);
+        const rowHeight =
+          sumAspectRatios > 0 ? rowWidthWithoutSpacing / sumAspectRatios : 200;
+
+        let left = 0;
+        const boxes: LayoutBox[] = aspectRatios.map((aspectRatio) => {
+          const width = aspectRatio * rowHeight;
+          const box: LayoutBox = {
+            aspectRatio,
+            top: 0,
+            left,
+            width,
+            height: rowHeight,
+          };
+          left += width + boxSpacing;
+          return box;
+        });
+
+        return boxes;
+      }
+
+      const numColumns = maxColumns;
       // Calculate column width using Math.floor like gallery app for precision
       const columnWidth = Math.floor((effectiveWidth - (numColumns - 1) * boxSpacing) / numColumns);
       const columnHeights = new Array(numColumns).fill(0);

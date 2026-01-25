@@ -25,6 +25,7 @@ import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { StringParameter, ParameterType, CfnParameter } from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 
+
 interface AppStackProps extends StackProps {
 	stage: string;
 }
@@ -1059,6 +1060,22 @@ export class AppStack extends Stack {
 		zipFn.grantInvoke(apiFn);
 		onOrderDeliveredFn.grantInvoke(apiFn);
 
+		// Create a single wildcard permission for HTTP API to invoke the Lambda
+		// This replaces individual permissions per route, avoiding the 20KB policy size limit
+		// Based on AWS support recommendation: use wildcard SourceArn instead of per-route permissions
+		apiFn.addPermission('AllowHttpApiInvoke', {
+			principal: new ServicePrincipal('apigateway.amazonaws.com'),
+			sourceArn: Stack.of(this).formatArn({
+				service: 'execute-api',
+				resource: httpApi.apiId,
+				resourceName: '*/*'
+			})
+		});
+
+		// Note: We use httpApi.addRoutes (not CfnRoute) to update existing routes instead of creating new ones
+		// This prevents "Route already exists" conflicts. Individual permissions will be cleaned up manually
+		// after deployment using the cleanup script.
+
 		// Explicit OPTIONS route for CORS preflight - must come before catch-all route
 		// API Gateway HTTP API v2's built-in CORS may not work correctly with authorizers,
 		// so we handle OPTIONS explicitly to ensure preflight requests succeed
@@ -1077,80 +1094,30 @@ export class AppStack extends Stack {
 			integration: new HttpLambdaIntegration('AuthPublicIntegration', authFn)
 			// No authorizer - public endpoints
 		});
-		// User deletion endpoints - handled by API Lambda (require authentication)
-		// These routes must be defined BEFORE the /auth/{proxy+} catch-all to take precedence
-		// OPTIONS routes for CORS preflight (must be public, no authorizer)
-		httpApi.addRoutes({
-			path: '/auth/request-deletion',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('UserDeletionRequestOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
-		httpApi.addRoutes({
-			path: '/auth/cancel-deletion',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('UserDeletionCancelOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
-		httpApi.addRoutes({
-			path: '/auth/deletion-status',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('UserDeletionStatusOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
+		// Public undo deletion route - must be public (no authorizer) as it uses token in URL
+		// This is the only public /auth route that needs special handling
+		// All other /auth routes are handled by the catch-all below
 		httpApi.addRoutes({
 			path: '/auth/undo-deletion/{token}',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('UserDeletionUndoOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
-		// Actual endpoints with authentication
-		httpApi.addRoutes({
-			path: '/auth/request-deletion',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('UserDeletionRequestIntegration', apiFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/auth/cancel-deletion',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('UserDeletionCancelIntegration', apiFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/auth/deletion-status',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('UserDeletionStatusIntegration', apiFn),
-			authorizer
-		});
-		httpApi.addRoutes({
-			path: '/auth/undo-deletion/{token}',
-			methods: [HttpMethod.GET],
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('UserDeletionUndoIntegration', apiFn)
-			// No authorizer - public endpoint accessed via token
+			// No authorizer - public endpoint accessed via token in URL
 		});
-		// Dev endpoints - handled by API Lambda (require authentication)
-		// These routes must be defined BEFORE the /auth/{proxy+} catch-all to take precedence
-		httpApi.addRoutes({
-			path: '/auth/dev/trigger-inactivity-scanner',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('DevTriggerInactivityScannerOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
-		httpApi.addRoutes({
-			path: '/auth/dev/trigger-inactivity-scanner',
-			methods: [HttpMethod.POST],
-			integration: new HttpLambdaIntegration('DevTriggerInactivityScannerIntegration', apiFn),
-			authorizer
-		});
-		// OPTIONS for protected auth endpoints - must be public for CORS preflight
+
+		// OPTIONS for all /auth endpoints - must be public for CORS preflight
+		// This catch-all handles OPTIONS for all /auth routes (including deletion, dev, etc.)
 		httpApi.addRoutes({
 			path: '/auth/{proxy+}',
 			methods: [HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('AuthOptionsIntegration', authFn)
 			// No authorizer - OPTIONS requests must be public for CORS to work
 		});
-		// Protected auth endpoints (change password, business info) - require authorizer
+
+		// Protected /auth endpoints catch-all - handles all authenticated /auth routes
+		// Routes like /auth/request-deletion, /auth/cancel-deletion, /auth/deletion-status,
+		// /auth/dev/trigger-inactivity-scanner, /auth/change-password, etc. are all handled here
+		// Express routing in the Lambda function handles the actual path matching
+		// This consolidates many individual routes into one, saving Lambda permission space
 		httpApi.addRoutes({
 			path: '/auth/{proxy+}',
 			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
@@ -1174,6 +1141,8 @@ export class AppStack extends Stack {
 
 		// Client gallery endpoints (use client JWT tokens, not Cognito)
 		// These endpoints verify client JWT tokens in the Lambda function itself
+		// Note: HttpLambdaIntegration will create individual permissions, but we have a wildcard permission above
+		// that covers all routes. After deployment, run the cleanup script to remove individual permissions.
 		httpApi.addRoutes({
 			path: '/galleries/{id}/images',
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
@@ -1184,6 +1153,12 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/images/{imageKey}/download',
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiGalleryImageDownloadIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/status',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiGalleryStatusIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
@@ -1223,6 +1198,12 @@ export class AppStack extends Stack {
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/zip/status',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiOrdersZipStatusIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/images',
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOrdersFinalImagesIntegration', apiFn)
@@ -1232,6 +1213,12 @@ export class AppStack extends Stack {
 			path: '/galleries/{id}/orders/{orderId}/final/zip',
 			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS], // Support both GET (new) and POST (backward compatibility)
 			integration: new HttpLambdaIntegration('ApiOrdersFinalZipIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/final/zip/status',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiOrdersFinalZipStatusIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
 		});
 
@@ -1353,7 +1340,7 @@ export class AppStack extends Stack {
 			// No authorizer - public status check endpoint
 		});
 
-		// Single catch-all route for all API endpoints
+		// Single catch-all route for all other API endpoints (protected routes)
 		// Exclude OPTIONS from catch-all since it's handled separately above
 		httpApi.addRoutes({
 			path: '/{proxy+}',
@@ -2158,6 +2145,18 @@ export class AppStack extends Stack {
 			value: postAuthenticationFn.functionArn,
 			description: 'ARN of PostAuthentication Lambda - configure this as Post Authentication trigger in Cognito User Pool'
 		});
+
+		// Note: HttpLambdaIntegration automatically creates individual permissions for each route
+		// We have a wildcard permission above that covers all routes, but individual permissions
+		// still get created and count toward the 20KB limit.
+		// 
+		// Solution: After the first deployment (which may fail due to limit), manually remove
+		// individual permissions using the script: scripts/cleanup-lambda-permissions.mjs
+		// Or delete them via AWS Console: Lambda > apiFn > Configuration > Permissions
+		// 
+		// Once individual permissions are removed, the wildcard permission will be sufficient
+		// and future deployments should work (though HttpLambdaIntegration will try to recreate
+		// them, which may cause issues - this is a known CDK limitation).
 	}
 }
 

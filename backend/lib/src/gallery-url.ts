@@ -138,6 +138,22 @@ export async function getOwnerSubdomain(
 }
 
 /**
+ * Reserved subdomains that should be treated as default domains (no subdomain).
+ * "gallery" is the default gallery domain for clients without custom subdomains.
+ */
+const RESERVED_GALLERY_SUBDOMAINS = new Set([
+	'gallery',
+	'dashboard',
+	'photocloud',
+	'api',
+	'auth',
+	'www',
+	'landing',
+	'static',
+	'cdn'
+]);
+
+/**
  * Extract subdomain from API Gateway event headers.
  * Looks for subdomain in Host header (e.g., "michalm.lvh.me" -> "michalm").
  * Returns null if no subdomain is found or if accessing via default gallery domain.
@@ -175,6 +191,18 @@ export function extractSubdomainFromEvent(event: any, baseDomain?: string): stri
 		const match = cleanHostname.match(subdomainPattern);
 		if (match && match[1]) {
 			const extracted = match[1].toLowerCase();
+			
+			// If extracted subdomain is reserved (e.g., "gallery"), treat as default domain (no subdomain)
+			if (RESERVED_GALLERY_SUBDOMAINS.has(extracted)) {
+				if (logger) {
+					logger.debug('extractSubdomainFromEvent: extracted subdomain is reserved, treating as default domain', { 
+						extracted, 
+						hostname: cleanHostname
+					});
+				}
+				return null;
+			}
+			
 			if (logger) {
 				logger.debug('extractSubdomainFromEvent: extracted via pattern match', { 
 					extracted, 

@@ -50,8 +50,8 @@ export function ZipDownloadButton({
 }: ZipDownloadButtonProps) {
   const queryClient = useQueryClient();
 
-  // Check order cache for zipGenerating flags, ready flags, and progress (from dashboard status poll)
-  // This allows us to show loader and progress immediately when generation starts
+  // Check order cache for zipGenerating flags and ready flags (from dashboard status poll)
+  // This allows us to show loader immediately when generation starts
   const orderCache = queryClient.getQueryData<Order>(queryKeys.orders.detail(galleryId, orderId));
   const cacheZipGenerating =
     type === "final"
@@ -61,17 +61,13 @@ export function ZipDownloadButton({
     type === "final"
       ? ((orderCache as Order & { finalZipReady?: boolean })?.finalZipReady ?? false)
       : ((orderCache as Order & { zipReady?: boolean })?.zipReady ?? false);
-  const cacheProgress = orderCache?.zipProgress as ZipProgress | undefined;
 
-  const { generating, ready, progress, zipStatus } = useZipStatusPolling({
+  const { generating, ready, zipStatus } = useZipStatusPolling({
     galleryId,
     orderId,
     type,
     enabled: !!galleryId && !!orderId,
   });
-
-  // Use progress from polling if available, otherwise fall back to cache
-  const effectiveProgress: ZipProgress | undefined = progress ?? cacheProgress;
 
   const downloadZipMutation = useDownloadZip();
   const downloadFinalZipMutation = useDownloadFinalZip();
@@ -84,14 +80,16 @@ export function ZipDownloadButton({
     }
   };
 
-  // Use cache flag if ZIP status polling hasn't fetched yet
-  // This ensures we show loader immediately when generation starts (from dashboard status poll)
+  // Use generating flag from ZIP status polling (authoritative source)
+  // Fall back to cache flag only if ZIP status polling hasn't fetched yet
   // Backend sets isGenerating flag, so we trust it - no guessing!
+  // Important: prioritize polling data over cache to ensure UI updates correctly
   const isGenerating = generating ?? cacheZipGenerating;
 
   // Use ready flag from ZIP status polling (authoritative source)
-  // Fall back to cache ready flag if ZIP status poll hasn't run yet
+  // Fall back to cache ready flag only if ZIP status poll hasn't run yet
   // Backend sets ready=true when ZIP exists in S3, so we trust it - no guessing!
+  // Important: prioritize polling data over cache to ensure UI updates correctly
   const effectiveReady = ready ?? cacheZipReady;
 
   // Determine button state
@@ -115,37 +113,13 @@ export function ZipDownloadButton({
   // Show generating state when we have data indicating generation is happening
   if (isGenerating) {
     buttonText = `Generowanie ZIP`;
-
-    // Only show progress info if we have actual progress data (from polling or cache)
-    if (effectiveProgress) {
-      // Show progress percentage - prefer percent if available, otherwise calculate from processed/total
-      let progressPercent: number | undefined;
-      if (
-        effectiveProgress.percent !== undefined &&
-        typeof effectiveProgress.percent === "number"
-      ) {
-        progressPercent = effectiveProgress.percent;
-      } else if (
-        effectiveProgress.processed !== undefined &&
-        effectiveProgress.total !== undefined &&
-        effectiveProgress.total > 0
-      ) {
-        progressPercent = Math.round((effectiveProgress.processed / effectiveProgress.total) * 100);
-      }
-
-      if (progressPercent !== undefined && !isNaN(progressPercent)) {
-        statusInfo = `${progressPercent}%`;
-      }
-    }
-    // If generating but no progress data yet, just show button with loader (no status info)
+    // No progress percentage shown - generation time depends on number of photos
   } else if (downloadZipMutation.isPending || downloadFinalZipMutation.isPending) {
     buttonText = `Pobieranie ${zipTypeLabel}...`;
-  } else if ((zipStatus as ZipStatus | undefined)?.status === "error" || effectiveProgress?.error) {
-    // ZIP generation failed - show error (only if we have error data)
+  } else if ((zipStatus as ZipStatus | undefined)?.status === "error") {
+    // ZIP generation failed - show error
     buttonText = `Błąd generowania ${zipTypeLabel}`;
-    const errorProgress = effectiveProgress ?? (zipStatus as ZipStatus | undefined)?.progress;
-    statusInfo =
-      errorProgress?.error ?? errorProgress?.message ?? "Wystąpił błąd podczas generowania ZIP";
+    statusInfo = "Wystąpił błąd podczas generowania ZIP";
   } else if (effectiveReady) {
     // ZIP is ready
     buttonText = `Pobierz ${zipTypeLabel}`;
@@ -184,42 +158,6 @@ export function ZipDownloadButton({
               {statusInfo}
             </span>
           )}
-          {effectiveProgress &&
-            isGenerating &&
-            (() => {
-              // Calculate percent for progress bar
-              let progressPercent: number | undefined;
-              if (
-                effectiveProgress.percent !== undefined &&
-                typeof effectiveProgress.percent === "number"
-              ) {
-                progressPercent = effectiveProgress.percent;
-              } else if (
-                effectiveProgress.processed !== undefined &&
-                effectiveProgress.total !== undefined &&
-                effectiveProgress.total > 0
-              ) {
-                progressPercent = Math.round(
-                  (effectiveProgress.processed / effectiveProgress.total) * 100
-                );
-              }
-
-              if (progressPercent === undefined || isNaN(progressPercent)) return null;
-
-              return (
-                <div className="w-full mt-1 h-1.5 bg-photographer-muted rounded-full overflow-hidden dark:bg-gray-700">
-                  <div
-                    className="h-full bg-success-500 transition-all duration-300 dark:bg-success-600"
-                    style={{ width: `${progressPercent}%` }}
-                    role="progressbar"
-                    aria-valuenow={progressPercent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`Postęp generowania ZIP: ${progressPercent}%`}
-                  />
-                </div>
-              );
-            })()}
         </div>
       </Button>
     </div>

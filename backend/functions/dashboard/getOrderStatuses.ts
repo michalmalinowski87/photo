@@ -262,45 +262,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				updatedAt: order.updatedAt
 			};
 			
-			// Helper function to build progress object from separate fields or object
-			const buildProgressObject = (
-				progressValue: any,
-				progressTotal: number | undefined,
-				progressPercent: number | undefined
-			) => {
-				// If progressValue is an object (new format), use it directly
-				if (progressValue && typeof progressValue === 'object' && !Array.isArray(progressValue)) {
-					// Check if it has the expected structure
-					if (progressValue.processed !== undefined || progressValue.total !== undefined) {
-						return {
-							processed: progressValue.processed,
-							total: progressValue.total,
-							percent: progressValue.progressPercent || progressValue.percent,
-							status: progressValue.status,
-							message: progressValue.message,
-							error: progressValue.error
-						};
-					}
-				}
-				// If progressValue is a number and we have separate fields (old format), construct object
-				if (typeof progressValue === 'number' && progressTotal !== undefined && progressTotal > 0) {
-					return {
-						processed: progressValue,
-						total: progressTotal,
-						percent: progressPercent !== undefined ? progressPercent : Math.round((progressValue / progressTotal) * 100)
-					};
-				}
-				return undefined;
-			};
-			
 			// Include ZIP generation status for user-selected originals (if generating or completed)
 			if (order.zipGenerating || order.zipSelectedKeysHash) {
-				const userSelectedProgress = buildProgressObject(
-					order.zipProgress,
-					order.zipProgressTotal,
-					order.zipProgressPercent
-				);
-				
 				// Check if ZIP exists using the pre-computed map
 				const orderKey = `${order.galleryId}:${order.orderId}`;
 				const zipExists = regularZipExistsMap.get(orderKey) || false;
@@ -309,19 +272,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				orderData.zipStatusUserSelected = {
 					isGenerating,
 					type: 'original',
-					progress: userSelectedProgress,
 					ready: !isGenerating && zipExists // Ready if not generating and ZIP exists
 				};
 			}
 			
 			// Include ZIP generation status for finals (if generating or completed)
 			if (order.finalZipGenerating || order.finalZipFilesHash) {
-				const finalProgress = buildProgressObject(
-					order.finalZipProgress,
-					order.finalZipProgressTotal,
-					order.finalZipProgressPercent
-				);
-				
 				// Check if ZIP exists using the pre-computed map
 				const orderKey = `${order.galleryId}:${order.orderId}`;
 				const zipExists = finalZipExistsMap.get(orderKey) || false;
@@ -330,7 +286,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				orderData.zipStatusFinal = {
 					isGenerating,
 					type: 'final',
-					progress: finalProgress,
 					ready: !isGenerating && zipExists // Ready if not generating and ZIP exists
 				};
 			}

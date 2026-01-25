@@ -11,7 +11,7 @@ const s3 = new S3Client({});
  * Get final ZIP generation status and progress
  * Returns status, progress information, and ready state
  */
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
@@ -97,31 +97,12 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Determine status
 		let status: 'ready' | 'generating' | 'not_started' = 'not_started';
 		let generating = false;
-		let elapsedSeconds: number | undefined;
-		let progress: {
-			processed: number;
-			total: number;
-			percent: number;
-		} | undefined;
 
 		if (zipExists) {
 			status = 'ready';
 		} else if (order.finalZipGenerating) {
 			status = 'generating';
 			generating = true;
-			const zipGeneratingSince = order.finalZipGeneratingSince as number | undefined;
-			if (zipGeneratingSince) {
-				elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
-			}
-			
-			// Include progress if available
-			if (order.finalZipProgress !== undefined && order.finalZipProgressTotal !== undefined) {
-				progress = {
-					processed: order.finalZipProgress as number,
-					total: order.finalZipProgressTotal as number,
-					percent: order.finalZipProgressPercent as number || Math.round((order.finalZipProgress as number / order.finalZipProgressTotal as number) * 100)
-				};
-			}
 		}
 
 		return {
@@ -134,9 +115,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				generating,
 				ready: status === 'ready',
 				zipExists,
-				zipSize,
-				elapsedSeconds,
-				progress
+				zipSize
 			})
 		};
 	} catch (error: any) {

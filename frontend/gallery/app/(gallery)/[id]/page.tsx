@@ -27,11 +27,13 @@ const LightGalleryWrapper = lazy(() => import("@/components/gallery/LightGallery
 const DownloadOverlay = lazy(() => import("@/components/gallery/DownloadOverlay").then(m => ({ default: m.DownloadOverlay })));
 const ZipOverlay = lazy(() => import("@/components/gallery/ZipOverlay").then(m => ({ default: m.ZipOverlay })));
 const HelpOverlay = lazy(() => import("@/components/gallery/HelpOverlay").then(m => ({ default: m.HelpOverlay })));
-const DownloadButtonFeedback = lazy(() => import("@/components/gallery/DownloadButtonFeedback").then(m => ({ default: m.DownloadButtonFeedback })));
 const ChangesRequestedOverlay = lazy(() => import("@/components/gallery/ChangesRequestedOverlay").then(m => ({ default: m.ChangesRequestedOverlay })));
 const ChangeRequestCanceledOverlay = lazy(() => import("@/components/gallery/ChangeRequestCanceledOverlay").then(m => ({ default: m.ChangeRequestCanceledOverlay })));
 const ChangeRequestSubmittedOverlay = lazy(() => import("@/components/gallery/ChangeRequestSubmittedOverlay").then(m => ({ default: m.ChangeRequestSubmittedOverlay })));
 const GalleryNotFound = lazy(() => import("@/components/gallery/GalleryNotFound").then(m => ({ default: m.GalleryNotFound })));
+
+// Regular import for always-rendered components (no need for lazy loading)
+import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
 
 // Get API URL at module level to avoid useEffect delay
 const API_URL = typeof window !== "undefined" ? getPublicApiUrl() : "";
@@ -452,17 +454,6 @@ export default function GalleryPage() {
     // Selection state will allow selection again
   }, []);
 
-  // Auto-download when ZIP becomes ready
-  useEffect(() => {
-    if (showZipOverlay && zipStatus?.ready && !zipStatus?.generating) {
-      // Small delay to ensure overlay shows the ready state
-      const timeoutId = setTimeout(() => {
-        setShowZipOverlay(false);
-        handleDownloadZip();
-      }, 500);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [showZipOverlay, zipStatus?.ready, zipStatus?.generating, handleDownloadZip]);
 
   // Hash prefetching (same as before)
   useEffect(() => {
@@ -696,9 +687,7 @@ export default function GalleryPage() {
       {isActionLoading && <FullPageLoading text="Przetwarzanie..." />}
       <ContextMenuPrevention />
       <ScrollToTopButton />
-      <Suspense fallback={null}>
-        <DownloadButtonFeedback />
-      </Suspense>
+      <DownloadButtonFeedback />
       <Suspense fallback={null}>
         <DownloadOverlay
         isVisible={downloadState.showOverlay || zipDownloadState.showOverlay}
@@ -714,11 +703,10 @@ export default function GalleryPage() {
         isVisible={showZipOverlay}
         zipStatus={zipStatus}
         totalPhotos={finalImagesTotalCount}
-        totalBytes={finalImagesTotalBytes}
         onClose={() => {
           setShowZipOverlay(false);
         }}
-        />
+      />
       </Suspense>
       <Suspense fallback={null}>
         <HelpOverlay isVisible={showHelp} onClose={() => setShowHelp(false)} selectionState={selectionState} />

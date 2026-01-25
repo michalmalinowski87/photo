@@ -96,81 +96,18 @@ export const handler = lambdaLogger(async (event: any) => {
 		// Determine status
 		let status: 'ready' | 'generating' | 'not_started' | 'error' = 'not_started';
 		let generating = false;
-		let elapsedSeconds: number | undefined;
-		let progress: {
-			processed: number;
-			total: number;
-			percent: number;
-			status?: string;
-			message?: string;
-			error?: string;
-		} | undefined;
 
-		// Check for error state in zipProgress
+		// Check for error state in zipProgress (for error status only, no progress tracking)
 		const zipProgress = order.zipProgress as any;
-		
-		// Helper function to build progress object from separate fields or object
-		const buildProgressObject = (
-			progressValue: any,
-			progressTotal: number | undefined,
-			progressPercent: number | undefined
-		) => {
-			// If progressValue is an object (new format), use it directly
-			if (progressValue && typeof progressValue === 'object' && !Array.isArray(progressValue)) {
-				// Check if it has the expected structure
-				if (progressValue.processed !== undefined || progressValue.total !== undefined) {
-					return {
-						processed: progressValue.processed,
-						total: progressValue.total,
-						percent: progressValue.progressPercent || progressValue.percent,
-						status: progressValue.status,
-						message: progressValue.message,
-						error: progressValue.error
-					};
-				}
-			}
-			// If progressValue is a number and we have separate fields (old format), construct object
-			if (typeof progressValue === 'number' && progressTotal !== undefined && progressTotal > 0) {
-				return {
-					processed: progressValue,
-					total: progressTotal,
-					percent: progressPercent !== undefined ? progressPercent : Math.round((progressValue / progressTotal) * 100)
-				};
-			}
-			return undefined;
-		};
 		
 		// Check for error state (only if zipProgress is an object with error)
 		if (zipProgress && typeof zipProgress === 'object' && !Array.isArray(zipProgress) && (zipProgress.status === 'error' || zipProgress.error)) {
 			status = 'error';
-			progress = {
-				processed: zipProgress.processed || 0,
-				total: zipProgress.total || 0,
-				percent: zipProgress.progressPercent || 0,
-				status: 'error',
-				message: zipProgress.message || zipProgress.error,
-				error: zipProgress.error || zipProgress.message
-			};
-			elapsedSeconds = zipProgress.elapsedSeconds;
 		} else if (zipExists) {
 			status = 'ready';
 		} else if (order.zipGenerating) {
 			status = 'generating';
 			generating = true;
-			const zipGeneratingSince = order.zipGeneratingSince as number | undefined;
-			if (zipGeneratingSince) {
-				elapsedSeconds = Math.round((Date.now() - zipGeneratingSince) / 1000);
-			}
-			
-			// Include progress if available - check separate fields format first (current format)
-			const builtProgress = buildProgressObject(
-				order.zipProgress,
-				order.zipProgressTotal,
-				order.zipProgressPercent
-			);
-			if (builtProgress) {
-				progress = builtProgress;
-			}
 		}
 
 		return {
@@ -183,9 +120,7 @@ export const handler = lambdaLogger(async (event: any) => {
 				generating,
 				ready: status === 'ready',
 				zipExists,
-				zipSize,
-				elapsedSeconds,
-				progress
+				zipSize
 			})
 		};
 	} catch (error: any) {

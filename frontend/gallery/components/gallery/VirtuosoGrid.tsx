@@ -50,6 +50,11 @@ export function VirtuosoGridComponent({
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
+  // Store measured dimensions for images that didn't come with width/height from the API.
+  // This helps preserve original portrait/landscape ratios, especially for small sets.
+  const [imageDimensions, setImageDimensions] = useState<
+    Map<string, { width: number; height: number }>
+  >(new Map());
 
   // Update container width on resize and when images change - use full available width for edge-to-edge
   useEffect(() => {
@@ -90,7 +95,50 @@ export function VirtuosoGridComponent({
     // For marble (masonry), use column-based masonry layout
     if (layout === "marble") {
       // Calculate responsive number of columns
-      const numColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
+      const maxColumns = effectiveWidth < 640 ? 2 : effectiveWidth < 1024 ? 3 : 4;
+
+      // When there are too few photos to form multiple masonry rows, a single-row masonry layout
+      // tends to look "random" (varying heights across a single line). In that case, fall back
+      // to a single-row "fit to width" layout:
+      // - uses true aspect ratios (portrait/landscape)
+      // - fills the full available width without cropping
+      if (images.length <= maxColumns) {
+        const aspectRatios = images.map((image, index) => {
+          const extractedDims = imageDimensions.get(image.key);
+          const width = image.width ?? extractedDims?.width;
+          const height = image.height ?? extractedDims?.height;
+          if (width && height && width > 0 && height > 0) {
+            return width / height;
+          }
+          // Sensible fallback ratio if we don't know dimensions yet.
+          // (Most photos are closer to 4:3 / 3:2 than 1:1.)
+          return index % 3 === 0 ? 1.5 : 1.3333;
+        });
+
+        const rowWidthWithoutSpacing =
+          effectiveWidth - (images.length - 1) * boxSpacing;
+        const sumAspectRatios = aspectRatios.reduce((sum, ar) => sum + ar, 0);
+        const rowHeight =
+          sumAspectRatios > 0 ? rowWidthWithoutSpacing / sumAspectRatios : 200;
+
+        let left = 0;
+        const boxes: LayoutBox[] = aspectRatios.map((aspectRatio) => {
+          const width = aspectRatio * rowHeight;
+          const box: LayoutBox = {
+            aspectRatio,
+            top: 0,
+            left,
+            width,
+            height: rowHeight,
+          };
+          left += width + boxSpacing;
+          return box;
+        });
+
+        return boxes;
+      }
+
+      const numColumns = maxColumns;
       const columnWidth = Math.floor((effectiveWidth - (numColumns - 1) * boxSpacing) / numColumns);
       const columnHeights = new Array(numColumns).fill(0);
       const boxes: LayoutBox[] = [];
@@ -98,10 +146,14 @@ export function VirtuosoGridComponent({
       images.forEach((image, index) => {
         // Calculate item dimensions based on actual image dimensions or estimate
         let itemHeight: number;
-        
-        if (image.width && image.height && image.width > 0 && image.height > 0) {
+
+        const extractedDims = imageDimensions.get(image.key);
+        const width = image.width ?? extractedDims?.width;
+        const height = image.height ?? extractedDims?.height;
+
+        if (width && height && width > 0 && height > 0) {
           // Use actual aspect ratio to calculate height
-          const aspectRatio = image.width / image.height;
+          const aspectRatio = width / height;
           itemHeight = columnWidth / aspectRatio;
         } else {
           // Estimate based on index for variety (alternating between portrait and landscape)
@@ -169,15 +221,19 @@ export function VirtuosoGridComponent({
     });
 
     return justified.boxes as LayoutBox[];
-  }, [images, layout, containerWidth]);
+  }, [images, layout, containerWidth, imageDimensions]);
 
   // Calculate total height for the container
-  // Account for container padding (top: 8px, bottom: 8px) and extra space for ring borders
+  // Use max bottom to handle masonry columns reliably.
+  // Account for container padding (top: 8px, bottom: 8px) and extra space for ring borders.
   const containerHeight = useMemo(() => {
     if (layoutBoxes.length === 0) return 0;
-    const lastBox = layoutBoxes[layoutBoxes.length - 1];
-    // Container padding-top (8px) + last box position + last box height + bottom padding (8px) + ring space (4px)
-    return 8 + lastBox.top + lastBox.height + 8 + 4;
+    let maxBottom = 0;
+    for (const box of layoutBoxes) {
+      maxBottom = Math.max(maxBottom, box.top + box.height);
+    }
+    // Container padding-top (8px) + max content bottom + bottom padding (8px) + ring space (4px)
+    return 8 + maxBottom + 8 + 4;
   }, [layoutBoxes]);
 
   // Infinite scroll using Intersection Observer
@@ -242,10 +298,16 @@ export function VirtuosoGridComponent({
           const fullImageUrl = image.url;
           const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
 
+          const marbleMaxColumns =
+            containerWidth < 640 ? 2 : containerWidth < 1024 ? 3 : 4;
+          const isSingleRowMarble = layout === "marble" && images.length <= marbleMaxColumns;
+
           const imageClasses =
             layout === "square"
               ? "object-cover rounded-[2px]"
               : layout === "standard"
+              ? "object-contain rounded-[2px]"
+              : isSingleRowMarble
               ? "object-contain rounded-[2px]"
               : "object-cover rounded-[2px]";
 
@@ -290,6 +352,20 @@ export function VirtuosoGridComponent({
                   alt={image.alt || `Image ${index + 1}`}
                   fill
                   className={imageClasses}
+                  onLoadingComplete={(img) => {
+                    // Capture natural dimensions for better aspect ratio layout when API didn't provide them.
+                    if (layout !== "marble") return;
+                    const w = img.naturalWidth;
+                    const h = img.naturalHeight;
+                    if (!(w > 0 && h > 0)) return;
+                    const key = image.key;
+                    setImageDimensions((prev) => {
+                      if (prev.has(key)) return prev;
+                      const next = new Map(prev);
+                      next.set(key, { width: w, height: h });
+                      return next;
+                    });
+                  }}
                   priority={index < 3} // Prioritize first 3 images for LCP
                   loading={index < 3 ? undefined : "lazy"}
                   unoptimized={imageUrl.startsWith("http")}
