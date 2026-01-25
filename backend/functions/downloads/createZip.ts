@@ -38,7 +38,11 @@ const s3 = new S3Client({
 });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({
 	maxAttempts: 5 // Retry DynamoDB operations
-}));
+}), {
+	marshallOptions: {
+		removeUndefinedValues: true // Remove undefined values to avoid DynamoDB errors
+	}
+});
 
 // Multipart upload constants
 // Set to 15MB - optimized for best performance with 1024MB Lambda memory
@@ -748,97 +752,98 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					isFinal,
 					isLastAttempt
 				});
-		// For final ZIPs, fetch file list from DynamoDB
-		let finalKeys: string[] = [];
-		if (isFinal) {
-			const imagesTable = envProc?.env?.IMAGES_TABLE as string;
-			if (imagesTable) {
-				let allFinalImageRecords: any[] = [];
-				let lastEvaluatedKey: any = undefined;
 
-				do {
-					const queryParams: any = {
-						TableName: imagesTable,
-						IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
-						KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
-						FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
-						ExpressionAttributeNames: {
-							'#type': 'type'
-						},
-						ExpressionAttributeValues: {
-							':g': galleryId,
-							':orderId': orderId,
-							':type': 'final'
-						},
-						ProjectionExpression: 'filename',
-						Limit: 1000
-					};
+				// For final ZIPs, fetch file list from DynamoDB
+				let finalKeys: string[] = [];
+				if (isFinal) {
+					const imagesTable = envProc?.env?.IMAGES_TABLE as string;
+					if (imagesTable) {
+						let allFinalImageRecords: any[] = [];
+						let lastEvaluatedKey: any = undefined;
 
-					if (lastEvaluatedKey) {
-						queryParams.ExclusiveStartKey = lastEvaluatedKey;
+						do {
+							const queryParams: any = {
+								TableName: imagesTable,
+								IndexName: 'galleryId-orderId-index', // Use GSI for efficient querying by orderId
+								KeyConditionExpression: 'galleryId = :g AND orderId = :orderId',
+								FilterExpression: '#type = :type', // Filter by type (GSI is sparse, but filter for safety)
+								ExpressionAttributeNames: {
+									'#type': 'type'
+								},
+								ExpressionAttributeValues: {
+									':g': galleryId,
+									':orderId': orderId,
+									':type': 'final'
+								},
+								ProjectionExpression: 'filename',
+								Limit: 1000
+							};
+
+							if (lastEvaluatedKey) {
+								queryParams.ExclusiveStartKey = lastEvaluatedKey;
+							}
+
+							const queryResponse = await ddb.send(new QueryCommand(queryParams));
+							allFinalImageRecords.push(...(queryResponse.Items || []));
+							lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+						} while (lastEvaluatedKey);
+
+						finalKeys = allFinalImageRecords.map(record => record.filename);
+					} else {
+						throw new Error('IMAGES_TABLE environment variable not set');
 					}
 
-					const queryResponse = await ddb.send(new QueryCommand(queryParams));
-					allFinalImageRecords.push(...(queryResponse.Items || []));
-					lastEvaluatedKey = queryResponse.LastEvaluatedKey;
-				} while (lastEvaluatedKey);
+					if (finalKeys.length === 0) {
+						throw new Error(`No final images found for order ${orderId}`);
+					}
 
-				finalKeys = allFinalImageRecords.map(record => record.filename);
-			} else {
-				throw new Error('IMAGES_TABLE environment variable not set');
-			}
+					logger?.info('Fetched final files from S3', {
+						galleryId,
+						orderId,
+						finalKeysCount: finalKeys.length,
+						finalFilesHash
+					});
 
-			if (finalKeys.length === 0) {
-				throw new Error(`No final images found for order ${orderId}`);
-			}
+					if (finalKeys.length === 0) {
+						throw new Error(`No valid final images found (all filtered out)`);
+					}
+				}
 
-			logger?.info('Fetched final files from S3', {
-				galleryId,
-				orderId,
-				finalKeysCount: finalKeys.length,
-				finalFilesHash
-			});
+				// Use finalKeys for final ZIPs, keys for original ZIPs
+				const filesToZip = isFinal ? finalKeys : (keys || []);
 
-			if (finalKeys.length === 0) {
-				throw new Error(`No valid final images found (all filtered out)`);
-			}
-		}
+				// Prepare metadata for multipart upload (store hash for validation)
+				const metadata: Record<string, string> = {};
+				if (isFinal && finalFilesHash) {
+					metadata['finalfiles-hash'] = finalFilesHash;
+				} else if (!isFinal && currentHash) {
+					// Store hash for original ZIPs to detect content changes
+					metadata['selectedkeys-hash'] = currentHash;
+				}
 
-		// Use finalKeys for final ZIPs, keys for original ZIPs
-		const filesToZip = isFinal ? finalKeys : (keys || []);
+				// Create multipart upload at start
+				// Set expiration to match gallery expiration (if available)
+				const createMultipartParams: any = {
+					Bucket: bucket,
+					Key: zipKey,
+					ContentType: 'application/zip',
+					StorageClass: 'INTELLIGENT_TIERING', // Use Intelligent-Tiering for automatic cost optimization
+					Metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+				};
+				
+				// Add Expires header if gallery expiration is available
+				// This ensures ZIP is automatically deleted by S3 when gallery expires
+				if (zipExpiresAt) {
+					createMultipartParams.Expires = zipExpiresAt;
+				}
+				
+				const createMultipartResponse = await s3.send(new CreateMultipartUploadCommand(createMultipartParams));
 
-		// Prepare metadata for multipart upload (store hash for validation)
-		const metadata: Record<string, string> = {};
-		if (isFinal && finalFilesHash) {
-			metadata['finalfiles-hash'] = finalFilesHash;
-		} else if (!isFinal && currentHash) {
-			// Store hash for original ZIPs to detect content changes
-			metadata['selectedkeys-hash'] = currentHash;
-		}
+				if (!createMultipartResponse.UploadId) {
+					throw new Error('Failed to create multipart upload');
+				}
 
-		// Create multipart upload at start
-		// Set expiration to match gallery expiration (if available)
-		const createMultipartParams: any = {
-			Bucket: bucket,
-			Key: zipKey,
-			ContentType: 'application/zip',
-			StorageClass: 'INTELLIGENT_TIERING', // Use Intelligent-Tiering for automatic cost optimization
-			Metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-		};
-		
-		// Add Expires header if gallery expiration is available
-		// This ensures ZIP is automatically deleted by S3 when gallery expires
-		if (zipExpiresAt) {
-			createMultipartParams.Expires = zipExpiresAt;
-		}
-		
-		const createMultipartResponse = await s3.send(new CreateMultipartUploadCommand(createMultipartParams));
-
-		if (!createMultipartResponse.UploadId) {
-			throw new Error('Failed to create multipart upload');
-		}
-
-		multipartUploadId = createMultipartResponse.UploadId;
+				multipartUploadId = createMultipartResponse.UploadId;
 		logger?.info('Multipart upload created', {
 			requestId,
 			galleryId,

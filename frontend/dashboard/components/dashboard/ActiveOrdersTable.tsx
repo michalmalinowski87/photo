@@ -29,7 +29,7 @@ interface ActiveOrdersTableProps {
 const getDeliveryStatusBadge = (status: string, isNonSelectionGallery: boolean = false) => {
   const statusMap: Record<string, { color: BadgeColor; label: string }> = {
     CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
-    CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+    CLIENT_APPROVED: { color: "info", label: "Zatwierdzone" },
     AWAITING_FINAL_PHOTOS: {
       color: "warning",
       label: isNonSelectionGallery ? "Oczekuje na zdjęcia" : "Oczekuje na zdjęcia finalne",

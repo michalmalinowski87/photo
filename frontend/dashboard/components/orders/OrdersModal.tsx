@@ -98,7 +98,7 @@ export const OrdersModal = ({
   const getDeliveryStatusBadge = (status: string) => {
     const statusMap: Record<string, { color: BadgeColor; label: string }> = {
       CLIENT_SELECTING: { color: "info", label: "Wybór przez klienta" },
-      CLIENT_APPROVED: { color: "success", label: "Zatwierdzone" },
+      CLIENT_APPROVED: { color: "info", label: "Zatwierdzone" },
       AWAITING_FINAL_PHOTOS: { color: "warning", label: "Oczekuje na zdjęcia finalne" },
       CHANGES_REQUESTED: { color: "warning", label: "Prośba o zmiany" },
       PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },

@@ -138,12 +138,8 @@ export function ZipDownloadButton({
     buttonText = `Ponowne generowanie ZIP...`;
   } else if (hasError) {
     // ZIP generation failed - show error with retry option
-    const attempts = errorInfo?.attempts ?? 0;
-    const attemptsText = attempts > 1 ? ` (${attempts} próby)` : "";
-    buttonText = canRetry ? `Ponów generowanie ${zipTypeLabel}` : `Błąd generowania ${zipTypeLabel}`;
-    statusInfo = errorInfo?.message 
-      ? `${errorInfo.message}${attemptsText}`
-      : `Wystąpił błąd podczas generowania ZIP${attemptsText}`;
+    buttonText = canRetry ? `Ponów generowanie` : `Błąd generowania`;
+    statusInfo = null; // Don't show detailed error messages
   } else if (effectiveReady) {
     // ZIP is ready
     buttonText = `Pobierz ${zipTypeLabel}`;

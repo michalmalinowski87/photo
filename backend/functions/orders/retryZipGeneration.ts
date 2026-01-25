@@ -5,7 +5,11 @@ import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { requireOwnerOr403, getUserIdFromEvent } from '../../lib/src/auth';
 import { createHash } from 'crypto';
 
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+	marshallOptions: {
+		removeUndefinedValues: true // Remove undefined values to avoid DynamoDB errors
+	}
+});
 const lambda = new LambdaClient({});
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
@@ -13,13 +17,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-	const zipFnName = envProc?.env?.ZIP_GENERATION_FUNCTION_NAME as string;
+	const zipFnName = envProc?.env?.DOWNLOADS_ZIP_FN_NAME as string;
 	
 	if (!ordersTable || !galleriesTable || !zipFnName) {
+		const missing: string[] = [];
+		if (!ordersTable) missing.push('ORDERS_TABLE');
+		if (!galleriesTable) missing.push('GALLERIES_TABLE');
+		if (!zipFnName) missing.push('DOWNLOADS_ZIP_FN_NAME');
+		
 		return {
 			statusCode: 500,
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Missing required environment variables' })
+			body: JSON.stringify({ 
+				error: 'Missing required environment variables',
+				missing: missing
+			})
 		};
 	}
 
@@ -114,7 +126,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			// For final ZIPs, we need to compute the hash from DynamoDB
 			const imagesTable = envProc?.env?.IMAGES_TABLE as string;
 			if (!imagesTable) {
-				throw new Error('IMAGES_TABLE environment variable not set');
+				return {
+					statusCode: 500,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ 
+						error: 'Missing required environment variable',
+						missing: ['IMAGES_TABLE']
+					})
+				};
 			}
 
 			let allFinalImageRecords: any[] = [];

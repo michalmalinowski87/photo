@@ -53,48 +53,42 @@ export function ZipOverlay({
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-semibold text-white mb-4">
-              Brak pliku ZIP
-            </h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">Brak pliku ZIP</h2>
             <p className="text-white/80 mb-4">
-              Niestety, automatyczne generowanie pliku ZIP nie powiodło się. Wykonaliśmy nasze najlepsze wysiłki, aby wygenerować plik, ale wystąpił problem techniczny.
+              Niestety, automatyczne generowanie pliku ZIP nie powiodło się. Prosimy o kontakt z
+              fotografem, aby uzyskać pomoc w pobraniu zdjęć.
             </p>
-            <p className="text-white/90 font-semibold mb-4">
-              Prosimy o kontakt z fotografem, aby uzyskać pomoc w pobraniu zdjęć.
-            </p>
-            {errorInfo && errorInfo.attempts > 1 && (
-              <p className="text-white/70 text-sm mb-6">
-                System wykonał {errorInfo.attempts} próby wygenerowania pliku ZIP przed wystąpieniem błędu.
-              </p>
-            )}
-            <p className="text-white/70 text-sm mb-6">
-              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku karuzeli).
+            <p className="text-white/80 text-sm mb-6">
+              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania
+              w prawym górnym rogu każdego zdjęcia.
             </p>
           </>
         ) : isGenerating ? (
           <>
             <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-6" />
-            <h2 className="text-2xl font-semibold text-white mb-4">
-              Generowanie ZIP
-            </h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">Generowanie ZIP</h2>
             <p className="text-white/80 mb-4">
-              Przygotowujemy archiwum ZIP z Twoimi zdjęciami. To może chwilę potrwać, w zależności od liczby zdjęć w pakiecie.
+              Przygotowujemy ZIP z Twoimi zdjęciami. To może chwilę potrwać, w zależności od liczby
+              zdjęć w pakiecie.
             </p>
             <p className="text-white/70 text-sm mb-6">
-              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku karuzeli).
+              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku
+              znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku
+              karuzeli).
             </p>
           </>
         ) : (
           <>
             <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-6" />
-            <h2 className="text-2xl font-semibold text-white mb-4">
-              Przygotowywanie ZIP
-            </h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">Przygotowywanie ZIP</h2>
             <p className="text-white/80 mb-6">
-              Archiwum ZIP jest przygotowywane. Jeśli zostało właśnie dostarczone dużo zdjęć, wygenerowanie ZIP może chwilę potrwać, w zależności od liczby zdjęć w pakiecie.
+              Archiwum ZIP jest przygotowywane. Jeśli zostało właśnie dostarczone dużo zdjęć,
+              wygenerowanie ZIP może chwilę potrwać, w zależności od liczby zdjęć w pakiecie.
             </p>
             <p className="text-white/70 text-sm mb-6">
-              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku karuzeli).
+              W międzyczasie możesz pobrać swoje ulubione zdjęcia za pomocą przycisku pobierania
+              znajdującego się w prawym górnym rogu każdego zdjęcia (lub nad zdjęciem w widoku
+              karuzeli).
             </p>
           </>
         )}

@@ -460,12 +460,12 @@ export default function GalleryPage() {
     }
   }, [zipStatus?.status, isOwnerPreview]);
 
-  // Buy more photos
+  // Buy more photos - switch to unselected view to allow selecting additional photos
   const handleBuyMore = useCallback(() => {
     setShowDeliveredView(false);
-    setShowUnselectedView(false);
+    setShowUnselectedView(true);
     setViewMode("all");
-    // Selection state will allow selection again
+    // Selection will be enabled automatically when showUnselectedView is true
   }, []);
 
 

@@ -98,18 +98,31 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let status: 'ready' | 'generating' | 'not_started' | 'error' = 'not_started';
 		let generating = false;
 		let errorInfo: any = undefined;
+		const finalZipErrorAttempts = order.finalZipErrorAttempts as number | undefined;
+		const finalZipErrorDetails = order.finalZipErrorDetails as any[] | undefined;
+		const finalZipErrorFinal = order.finalZipErrorFinal as any;
+		const finalZipErrorFinalized = order.finalZipErrorFinalized;
 
-		// Check for error state (new error tracking system for final ZIPs)
-		if (order.finalZipErrorFinalized === true) {
+		// Check for error state - be very permissive: check finalized flag, attempts, error details, or error final object
+		const hasErrorAttempts = typeof finalZipErrorAttempts === 'number' && finalZipErrorAttempts > 0;
+		const hasErrorDetails = Array.isArray(finalZipErrorDetails) && finalZipErrorDetails.length > 0;
+		const hasErrorFinal = finalZipErrorFinal && typeof finalZipErrorFinal === 'object';
+		const isErrorFinalized = finalZipErrorFinalized === true || finalZipErrorFinalized === 'true';
+
+		if (isErrorFinalized || hasErrorAttempts || hasErrorDetails || hasErrorFinal) {
 			status = 'error';
-			const finalZipErrorFinal = order.finalZipErrorFinal as any;
-			const finalZipErrorAttempts = order.finalZipErrorAttempts as number | undefined;
-			const finalZipErrorDetails = order.finalZipErrorDetails as any[] | undefined;
+			
+			// Ensure attempts is always a number, defaulting to 0 if missing
+			const attempts = typeof finalZipErrorAttempts === 'number' 
+				? finalZipErrorAttempts 
+				: (finalZipErrorFinal?.attempts && typeof finalZipErrorFinal.attempts === 'number')
+					? finalZipErrorFinal.attempts
+					: (hasErrorDetails ? finalZipErrorDetails.length : 0);
 			
 			if (finalZipErrorFinal) {
 				errorInfo = {
 					message: finalZipErrorFinal.error?.message || 'Final ZIP generation failed after multiple attempts',
-					attempts: finalZipErrorAttempts || finalZipErrorFinal.attempts || 0,
+					attempts: attempts,
 					canRetry: access.isOwner, // Only owners can retry
 					timestamp: finalZipErrorFinal.timestamp
 				};
@@ -118,11 +131,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				if (access.isOwner && finalZipErrorDetails) {
 					errorInfo.details = finalZipErrorDetails;
 				}
-			} else {
-				// Fallback if finalZipErrorFinal is missing
+			} else if (hasErrorAttempts || hasErrorDetails) {
+				// Fallback if finalZipErrorFinal is missing but we have attempts/details
 				errorInfo = {
 					message: 'Final ZIP generation failed',
-					attempts: finalZipErrorAttempts || 0,
+					attempts: attempts,
+					canRetry: access.isOwner
+				};
+				
+				// Include detailed error information for owners only
+				if (access.isOwner && finalZipErrorDetails) {
+					errorInfo.details = finalZipErrorDetails;
+				}
+			} else {
+				// Last resort - we detected error state but no details
+				errorInfo = {
+					message: 'Final ZIP generation failed',
+					attempts: attempts,
 					canRetry: access.isOwner
 				};
 			}
@@ -131,6 +156,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		} else if (order.finalZipGenerating) {
 			status = 'generating';
 			generating = true;
+			// Include attempts count even during generation if there were previous failed attempts
+			if (typeof finalZipErrorAttempts === 'number' && finalZipErrorAttempts > 0) {
+				errorInfo = {
+					message: 'Retrying ZIP generation',
+					attempts: finalZipErrorAttempts,
+					canRetry: false // Can't retry while generating
+				};
+			}
 		}
 
 		return {

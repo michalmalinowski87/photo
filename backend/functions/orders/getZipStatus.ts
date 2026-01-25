@@ -11,7 +11,7 @@ const s3 = new S3Client({});
  * Get ZIP generation status and progress for selected originals
  * Returns status, progress information, and ready state
  */
-export const handler = lambdaLogger(async (event: any) => {
+export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
@@ -97,18 +97,42 @@ export const handler = lambdaLogger(async (event: any) => {
 		let status: 'ready' | 'generating' | 'not_started' | 'error' = 'not_started';
 		let generating = false;
 		let errorInfo: any = undefined;
+		const zipErrorAttempts = order.zipErrorAttempts as number | undefined;
+		const zipErrorDetails = order.zipErrorDetails as any[] | undefined;
+		const zipErrorFinal = order.zipErrorFinal as any;
+		const zipErrorFinalized = order.zipErrorFinalized;
 
-		// Check for error state (new error tracking system)
-		if (order.zipErrorFinalized === true) {
+		// Check for error state in zipProgress (legacy error status, for backward compatibility)
+		const zipProgress = order.zipProgress as any;
+		const hasLegacyError = zipProgress && typeof zipProgress === 'object' && !Array.isArray(zipProgress) && (zipProgress.status === 'error' || zipProgress.error);
+
+		// Check for error state - be very permissive: check finalized flag, attempts, error details, or error final object
+		const hasErrorAttempts = typeof zipErrorAttempts === 'number' && zipErrorAttempts > 0;
+		const hasErrorDetails = Array.isArray(zipErrorDetails) && zipErrorDetails.length > 0;
+		const hasErrorFinal = zipErrorFinal && typeof zipErrorFinal === 'object';
+		const isErrorFinalized = zipErrorFinalized === true || zipErrorFinalized === 'true';
+
+		if (hasLegacyError || isErrorFinalized || hasErrorAttempts || hasErrorDetails || hasErrorFinal) {
 			status = 'error';
-			const zipErrorFinal = order.zipErrorFinal as any;
-			const zipErrorAttempts = order.zipErrorAttempts as number | undefined;
-			const zipErrorDetails = order.zipErrorDetails as any[] | undefined;
 			
-			if (zipErrorFinal) {
+			// Ensure attempts is always a number, defaulting to 0 if missing
+			const attempts = typeof zipErrorAttempts === 'number' 
+				? zipErrorAttempts 
+				: (zipErrorFinal?.attempts && typeof zipErrorFinal.attempts === 'number')
+					? zipErrorFinal.attempts
+					: (hasErrorDetails ? zipErrorDetails.length : (hasLegacyError ? 1 : 0));
+			
+			if (hasLegacyError) {
+				// Legacy error format
+				errorInfo = {
+					message: zipProgress.error?.message || zipProgress.message || 'ZIP generation failed',
+					attempts: attempts,
+					canRetry: access.isOwner
+				};
+			} else if (zipErrorFinal) {
 				errorInfo = {
 					message: zipErrorFinal.error?.message || 'ZIP generation failed after multiple attempts',
-					attempts: zipErrorAttempts || zipErrorFinal.attempts || 0,
+					attempts: attempts,
 					canRetry: access.isOwner, // Only owners can retry
 					timestamp: zipErrorFinal.timestamp
 				};
@@ -117,29 +141,38 @@ export const handler = lambdaLogger(async (event: any) => {
 				if (access.isOwner && zipErrorDetails) {
 					errorInfo.details = zipErrorDetails;
 				}
-			} else {
-				// Fallback if zipErrorFinal is missing
+			} else if (hasErrorAttempts || hasErrorDetails) {
+				// Fallback if zipErrorFinal is missing but we have attempts/details
 				errorInfo = {
 					message: 'ZIP generation failed',
-					attempts: zipErrorAttempts || 0,
+					attempts: attempts,
+					canRetry: access.isOwner
+				};
+				
+				// Include detailed error information for owners only
+				if (access.isOwner && zipErrorDetails) {
+					errorInfo.details = zipErrorDetails;
+				}
+			} else {
+				// Last resort - we detected error state but no details
+				errorInfo = {
+					message: 'ZIP generation failed',
+					attempts: attempts,
 					canRetry: access.isOwner
 				};
 			}
-		} else {
-			// Check for error state in zipProgress (legacy error status, for backward compatibility)
-			const zipProgress = order.zipProgress as any;
-			if (zipProgress && typeof zipProgress === 'object' && !Array.isArray(zipProgress) && (zipProgress.status === 'error' || zipProgress.error)) {
-				status = 'error';
+		} else if (zipExists) {
+			status = 'ready';
+		} else if (order.zipGenerating) {
+			status = 'generating';
+			generating = true;
+			// Include attempts count even during generation if there were previous failed attempts
+			if (typeof zipErrorAttempts === 'number' && zipErrorAttempts > 0) {
 				errorInfo = {
-					message: zipProgress.error?.message || zipProgress.message || 'ZIP generation failed',
-					attempts: 1,
-					canRetry: access.isOwner
+					message: 'Retrying ZIP generation',
+					attempts: zipErrorAttempts,
+					canRetry: false // Can't retry while generating
 				};
-			} else if (zipExists) {
-				status = 'ready';
-			} else if (order.zipGenerating) {
-				status = 'generating';
-				generating = true;
 			}
 		}
 

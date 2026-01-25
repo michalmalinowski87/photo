@@ -171,7 +171,9 @@ export function SecondaryMenu({
   // and allow going over it (overageCount / overageCents).
   // If baseLimit is 0 and extra pricing exists, show "no limit" instead of "0".
   const limitDisplay = baseLimit > 0 ? baseLimit.toString() : extraPriceCents > 0 ? "no limit" : "0";
-  const canApprove = selectedCount >= baseLimit;
+  // In unselected view (buy more), can approve if at least one photo is selected
+  // In regular selecting state, can approve if selectedCount >= baseLimit
+  const canApprove = showUnselectedView ? selectedCount > 0 : selectedCount >= baseLimit;
 
   // Format price in PLN
   const formatPrice = (cents: number) => {
@@ -246,8 +248,8 @@ export function SecondaryMenu({
     }
   };
 
-  // Check if approve button should be active (always active in selecting state when enabled)
-  const isApproveActive = state === "selecting" && canApprove;
+  // Check if approve button should be active (always active in selecting state or unselected view when enabled)
+  const isApproveActive = (state === "selecting" || showUnselectedView) && canApprove;
 
   return (
     <nav
@@ -329,15 +331,21 @@ export function SecondaryMenu({
             )}
 
             {/* Niewybrane view status - show price calculation for all selected photos */}
-            {state === "delivered" && showUnselectedView && extraPriceCents > 0 && selectedCount > 0 && (
+            {showUnselectedView && extraPriceCents > 0 && selectedCount > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Dodatkowe ujęcia {selectedCount} × {formatPrice(extraPriceCents)} ={" "}
                 {formatPrice(selectedCount * extraPriceCents)}
               </span>
             )}
+            {showUnselectedView && (
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                Wybrane: {selectedCount}
+              </span>
+            )}
 
             {/* Action buttons based on state */}
-            {state === "selecting" && onApproveSelection && (
+            {/* Show approve button in selecting state OR when in unselected view (buy more flow) */}
+            {(state === "selecting" || showUnselectedView) && onApproveSelection && (
               <button
                 ref={(el) => {
                   buttonRefs.current["approve"] = el;
@@ -357,9 +365,9 @@ export function SecondaryMenu({
                   fontWeight: (isApproveActive || hoveredItem === "approve") ? "700" : "500",
                   letterSpacing: "0.05em",
                 }}
-                aria-label="Zatwierdź wybór"
+                aria-label={showUnselectedView ? "Kup więcej zdjęć" : "Zatwierdź wybór"}
               >
-                ZATWIERDŹ WYBÓR
+                {showUnselectedView ? "KUP WIĘCEJ ZDJĘĆ" : "ZATWIERDŹ WYBÓR"}
               </button>
             )}
 
@@ -478,36 +486,25 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {state === "delivered" && showBuyMore && onBuyMoreClick && !showDeliveredView && (
+            {state === "delivered" && showBuyMore && onBuyMoreClick && !showDeliveredView && !showUnselectedView && (
               <button
                 ref={(el) => {
                   buttonRefs.current["buyMore"] = el;
                 }}
                 onClick={() => {
-                  if (selectedCount > 0) {
-                    hapticFeedback('medium');
-                    onBuyMoreClick();
-                  }
+                  hapticFeedback('medium');
+                  onBuyMoreClick();
                 }}
-                disabled={selectedCount === 0}
-                onMouseEnter={() => {
-                  if (selectedCount > 0) {
-                    handleItemHover("buyMore");
-                  }
-                }}
+                onMouseEnter={() => handleItemHover("buyMore")}
                 onMouseLeave={() => handleItemHover(null)}
                 className={`relative py-2 uppercase text-sm transition-all touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center whitespace-nowrap ${
                   scroll ? "opacity-0 w-0 overflow-hidden pointer-events-none" : "opacity-100 w-auto"
-                } ${selectedCount === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                }`}
                 style={{
-                  color: selectedCount === 0 
-                    ? "#AAAAAA" 
-                    : hoveredItem === "buyMore" 
+                  color: hoveredItem === "buyMore" 
                     ? "#666666" 
                     : "#AAAAAA",
-                  fontWeight: selectedCount === 0 
-                    ? "500" 
-                    : hoveredItem === "buyMore" 
+                  fontWeight: hoveredItem === "buyMore" 
                     ? "700" 
                     : "500",
                   letterSpacing: "0.05em",
