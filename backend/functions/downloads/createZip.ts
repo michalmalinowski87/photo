@@ -297,9 +297,10 @@ async function sendFailureEmail(
 }
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
-	const logger = (context as any).logger;
-	const startTime = Date.now();
-	const requestId = context?.requestId || context?.awsRequestId || 'unknown';
+	try {
+		const logger = (context as any).logger;
+		const startTime = Date.now();
+		const requestId = context?.requestId || context?.awsRequestId || 'unknown';
 	
 	logger?.info('ZIP generation Lambda invoked', {
 		requestId,
@@ -690,7 +691,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
 		
 		// Get gallery info for email notification (fetch once, reuse)
-		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		// galleriesTable already declared at line 399, reuse it
 		let gallery: any = null;
 		let ownerEmail: string | undefined;
 		if (galleriesTable) {
