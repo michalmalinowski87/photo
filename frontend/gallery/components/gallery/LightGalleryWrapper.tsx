@@ -217,6 +217,16 @@ export function LightGalleryWrapper({
       flipHorizontal: false, // Disable flip horizontal button
       // Download plugin config - only enable when final photos are delivered
       download: enableDownload,
+      // Explicitly enable close button (should be default, but making it explicit)
+      close: true,
+      // Mobile settings - ensure close button is always visible even when download is enabled
+      // This fixes a known lightGallery issue where close button disappears when download is enabled
+      mobileSettings: {
+        controls: true,
+        showCloseIcon: true,
+        download: enableDownload,
+        rotate: true,
+      },
     };
   };
 
@@ -272,6 +282,26 @@ export function LightGalleryWrapper({
         // Track gallery open/close state
         const handleGalleryOpen = () => {
           isGalleryOpenRef.current = true;
+          
+          // Ensure close button exists - fix for lightGallery bug where close button disappears when download is enabled
+          setTimeout(() => {
+            const toolbar = document.querySelector('.lg-toolbar');
+            const closeBtn = toolbar?.querySelector('.lg-close');
+            
+            // If close button is missing, create it
+            if (toolbar && !closeBtn) {
+              const newCloseBtn = document.createElement('button');
+              newCloseBtn.className = 'lg-close lg-icon';
+              newCloseBtn.setAttribute('aria-label', 'Close');
+              newCloseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+              newCloseBtn.onclick = () => {
+                if (galleryInstanceRef.current) {
+                  galleryInstanceRef.current.closeGallery();
+                }
+              };
+              toolbar.appendChild(newCloseBtn);
+            }
+          }, 200);
         };
         
         const handleGalleryClose = () => {
@@ -673,6 +703,26 @@ export function LightGalleryWrapper({
           // Track gallery open/close state for recreated instance
           const handleGalleryOpen = () => {
             isGalleryOpenRef.current = true;
+            
+            // Ensure close button exists - fix for lightGallery bug where close button disappears when download is enabled
+            setTimeout(() => {
+              const toolbar = document.querySelector('.lg-toolbar');
+              const closeBtn = toolbar?.querySelector('.lg-close');
+              
+              // If close button is missing, create it
+              if (toolbar && !closeBtn) {
+                const newCloseBtn = document.createElement('button');
+                newCloseBtn.className = 'lg-close lg-icon';
+                newCloseBtn.setAttribute('aria-label', 'Close');
+                newCloseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+                newCloseBtn.onclick = () => {
+                  if (galleryInstance) {
+                    galleryInstance.closeGallery();
+                  }
+                };
+                toolbar.appendChild(newCloseBtn);
+              }
+            }, 200);
           };
           
           const handleGalleryClose = () => {
