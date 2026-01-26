@@ -209,6 +209,7 @@ export default function OrderDetail() {
     fetchNextPage: fetchNextOriginalPage,
     hasNextPage: hasNextOriginalPage,
     isFetchingNextPage: isFetchingNextOriginalPage,
+    refetch: refetchOriginalImages,
   } = useInfiniteGalleryImages({
     galleryId: galleryIdForQuery,
     type: "thumb",
@@ -405,7 +406,8 @@ export default function OrderDetail() {
   const { data: walletData } = useWalletBalance();
   const walletBalance = walletData?.balanceCents ?? 0;
 
-  // Simplified: Only refetch order if needed - images are automatically loaded via React Query hooks
+  // Refetch all order-related data when navigating to order details
+  // This ensures we always show the most up-to-date information, including user-selected photos
   const loadOrderData = useCallback(async (): Promise<void> => {
     if (!galleryId || !orderId) {
       logSkippedLoad("orderData", "Missing galleryId or orderId", { galleryId, orderId });
@@ -413,8 +415,16 @@ export default function OrderDetail() {
     }
 
     try {
-      // Refetch order if needed - images are automatically loaded via React Query hooks
-      await refetchOrder().catch((err: unknown) => {
+      // Force refetch all order-related queries to ensure fresh data
+      // Use cancelRefetch: false to ensure we always get fresh data even if within staleTime
+      await Promise.all([
+        // Refetch order details (includes selectedKeys which shows user-selected photos)
+        refetchOrder({ cancelRefetch: false }),
+        // Refetch final images for the order
+        refetchFinalImages({ cancelRefetch: false }),
+        // Refetch original images (needed to show selected photos in originals tab)
+        refetchOriginalImages({ cancelRefetch: false }),
+      ]).catch((err: unknown) => {
         const errorMsg = formatApiError(err);
         setError(errorMsg ?? "Nie udało się załadować danych zlecenia");
         showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
@@ -432,7 +442,15 @@ export default function OrderDetail() {
         showToast("error", "Błąd", errorMsg ?? "Nie udało się załadować danych zlecenia");
       }
     }
-  }, [galleryId, orderId, showToast, logSkippedLoad, refetchOrder]);
+  }, [
+    galleryId,
+    orderId,
+    showToast,
+    logSkippedLoad,
+    refetchOrder,
+    refetchFinalImages,
+    refetchOriginalImages,
+  ]);
 
   // Use hooks for order actions and amount editing (after state declarations)
   const {
@@ -662,14 +680,16 @@ export default function OrderDetail() {
     await refetchFinalImages();
   }, [galleryIdForQuery, orderIdForQuery, refetchFinalImages]);
 
-  // Load order data once when component mounts or orderId changes
-  // Images are automatically loaded via React Query hooks - no manual loading needed
+  // Load order data when component mounts or orderId changes
+  // This ensures we always refetch fresh data when navigating to order details
+  // Refetching all order-related queries ensures we see the most up-to-date information,
+  // including user-selected photos that may have been updated
   useEffect(() => {
-    if (galleryId && orderId) {
+    if (galleryId && orderId && router.isReady) {
       void loadOrderData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryId, orderId]);
+  }, [galleryId, orderId, router.isReady]);
 
   // Update optimistic finals bytes when gallery data changes
   useEffect(() => {

@@ -102,6 +102,7 @@ export function LightGalleryWrapper({
   const isGalleryOpenRef = useRef(false);
   const currentGalleryIndexRef = useRef<number>(0);
   const selectedKeysRef = useRef(selectedKeys);
+  const isGalleryReadyRef = useRef(false);
   const onImageSelectRef = useRef(onImageSelect);
   const canSelectRef = useRef(canSelect);
   const baseLimitRef = useRef(baseLimit);
@@ -249,12 +250,24 @@ export function LightGalleryWrapper({
             // Ignore errors during cleanup
           }
         }
+        
+        // Mark as not ready during initialization
+        isGalleryReadyRef.current = false;
+        if (containerRef.current) {
+          containerRef.current.removeAttribute('data-lg-ready');
+        }
 
         // Initialize lightgallery with selector to target anchor tags with data-src
         const galleryInstance = lightGallery(containerRef.current, getGalleryConfig(galleryId));
 
         galleryInstanceRef.current = galleryInstance;
         imagesLengthRef.current = imagesRef.current.length;
+        isGalleryReadyRef.current = true;
+        
+        // Mark container as ready so anchor clicks can proceed
+        if (containerRef.current) {
+          containerRef.current.setAttribute('data-lg-ready', 'true');
+        }
         
         // Track gallery open/close state
         const handleGalleryOpen = () => {
@@ -910,5 +923,5 @@ export function LightGalleryWrapper({
   // When images change (infinite scrolling), lightgallery will detect new anchor tags
   // No manual refresh needed - lightgallery handles it automatically
 
-  return <div ref={containerRef}>{children}</div>;
+  return <div ref={containerRef} data-lg-container>{children}</div>;
 }

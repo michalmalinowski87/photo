@@ -5,7 +5,8 @@ import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { getToken } from "@/lib/token";
 import { getPublicApiUrl } from "@/lib/public-env";
-import type { DeliveredOrder, DeliveredOrdersResponse, ImageData } from "@/types/gallery";
+import type { DeliveredOrder, DeliveredOrdersResponse, ClientApprovedOrder, ClientApprovedOrdersResponse, ImageData } from "@/types/gallery";
+import { useRef, useEffect } from "react";
 
 const API_URL = getPublicApiUrl();
 
@@ -29,6 +30,40 @@ export function useDeliveredOrders(galleryId: string | null) {
       });
 
       return response.data as DeliveredOrdersResponse;
+    },
+    enabled: !!galleryId && !!getToken(galleryId),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error: any) => {
+      if (error?.status === 401 || error?.status === 403) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+  });
+}
+
+export function useClientApprovedOrders(galleryId: string | null) {
+  return useQuery({
+    queryKey: ["orders", "client-approved", galleryId],
+    queryFn: async () => {
+      if (!galleryId) {
+        throw new Error("Missing galleryId");
+      }
+
+      const token = getToken(galleryId);
+      if (!token) {
+        throw new Error("Missing token");
+      }
+
+      const response = await apiFetch(`${API_URL}/galleries/${galleryId}/orders/client-approved`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      return response.data as ClientApprovedOrdersResponse;
     },
     enabled: !!galleryId && !!getToken(galleryId),
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -80,6 +115,16 @@ export function useFinalImages(
   limit: number = 50
 ) {
   const queryKey = ["orders", "final", "images", galleryId, orderId, limit];
+  const prevOrderIdRef = useRef<string | null>(orderId);
+  const placeholderDataOrderIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prevOrderIdRef.current !== orderId) {
+      prevOrderIdRef.current = orderId;
+      // Clear placeholder data orderId when orderId changes to prevent showing stale data
+      placeholderDataOrderIdRef.current = null;
+    }
+  }, [orderId]);
 
   return useInfiniteQuery<
     FinalImagesResponse,
@@ -132,13 +177,18 @@ export function useFinalImages(
         alt: img.key,
       }));
 
-      return {
+      const result = {
         images: mappedImages,
         hasMore: apiData.hasMore,
         nextCursor: apiData.nextCursor,
         totalCount: apiData.totalCount,
         totalBytes: apiData.totalBytes,
       } as FinalImagesResponse;
+      
+      // Track that we successfully fetched data for this orderId
+      placeholderDataOrderIdRef.current = orderId;
+      
+      return result;
     },
     getNextPageParam: (lastPage) => {
       if (lastPage.hasMore && lastPage.nextCursor) {
@@ -148,7 +198,17 @@ export function useFinalImages(
     },
     initialPageParam: null as string | null,
     enabled: !!galleryId && !!orderId && !!getToken(galleryId),
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData) => {
+      // Only use placeholder data if it's for the current orderId
+      // When orderId changes, placeholderDataOrderIdRef.current is cleared in useEffect,
+      // preventing stale data from a different order from being shown
+      if (previousData && placeholderDataOrderIdRef.current === orderId) {
+        return previousData;
+      }
+      
+      // Reject placeholder data if it's for a different orderId or if orderId just changed
+      return undefined;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
   });

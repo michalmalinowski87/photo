@@ -1174,6 +1174,12 @@ export class AppStack extends Stack {
 			// No authorizer - uses client JWT token verification
 		});
 		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/client-approved',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiOrdersClientApprovedIntegration', apiFn)
+			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
 			path: '/galleries/{id}/selections',
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiSelectionsGetIntegration', apiFn)

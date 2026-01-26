@@ -51,3 +51,15 @@ export interface DeliveredOrder {
 export interface DeliveredOrdersResponse {
   items: DeliveredOrder[];
 }
+
+export interface ClientApprovedOrder {
+  orderId: string;
+  orderNumber?: number;
+  selectedKeys: string[];
+  selectedCount: number;
+  createdAt: string;
+}
+
+export interface ClientApprovedOrdersResponse {
+  items: ClientApprovedOrder[];
+}

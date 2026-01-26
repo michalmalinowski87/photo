@@ -181,11 +181,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}));
 
 					const orders = ordersQuery.Items || [];
-					// Filter to delivered orders only
+					// Filter to orders that should be excluded from unselected view
+					// Exclude DELIVERED, PREPARING_DELIVERY, CLIENT_APPROVED, and CHANGES_REQUESTED orders
 					const deliveredOrders = orders.filter((o: any) => 
 						o.deliveryStatus === 'DELIVERED' || 
 						o.deliveryStatus === 'PREPARING_DELIVERY' || 
-						o.deliveryStatus === 'CLIENT_APPROVED'
+						o.deliveryStatus === 'CLIENT_APPROVED' ||
+						o.deliveryStatus === 'CHANGES_REQUESTED'
 					);
 
 					// Build set of all images in orders
@@ -486,11 +488,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}));
 
 				const orders = ordersQuery.Items || [];
-				// Filter to delivered orders only (DELIVERED, PREPARING_DELIVERY, CLIENT_APPROVED)
+				// Filter to orders that should be excluded from unselected view
+				// Exclude DELIVERED, PREPARING_DELIVERY, CLIENT_APPROVED, and CHANGES_REQUESTED orders
 				const deliveredOrders = orders.filter((o: any) => 
 					o.deliveryStatus === 'DELIVERED' || 
 					o.deliveryStatus === 'PREPARING_DELIVERY' || 
-					o.deliveryStatus === 'CLIENT_APPROVED'
+					o.deliveryStatus === 'CLIENT_APPROVED' ||
+					o.deliveryStatus === 'CHANGES_REQUESTED'
 				);
 
 				// Calculate counts per order and total images in orders

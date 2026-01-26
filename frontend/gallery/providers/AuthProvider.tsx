@@ -167,6 +167,11 @@ export function AuthProvider({
     // Clear token from sessionStorage (single source of truth)
     clearToken(currentGalleryId);
     
+    // Clear ZIP error flag on logout
+    if (currentGalleryId && typeof window !== "undefined") {
+      sessionStorage.removeItem(`zip_error_shown_${currentGalleryId}`);
+    }
+    
     setTokenState(null);
     setGalleryId(null);
     

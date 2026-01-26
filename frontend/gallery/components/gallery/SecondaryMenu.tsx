@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSelection } from "@/hooks/useSelection";
 import { useAuth } from "@/providers/AuthProvider";
 import { hapticFeedback } from "@/utils/hapticFeedback";
@@ -30,11 +30,18 @@ interface SecondaryMenuProps {
   onDeliveredViewClick?: () => void;
   showUnselectedView?: boolean;
   onUnselectedViewClick?: () => void;
+  isUnselectedViewActive?: boolean;
+  showBoughtView?: boolean;
+  onBoughtViewClick?: () => void;
+  hasDeliveredOrders?: boolean;
+  hasInitialApprovedSelection?: boolean;
+  isLocked?: boolean;
   showBuyMore?: boolean;
   onBuyMoreClick?: () => void;
   onDownloadZip?: () => void;
   zipStatus?: ZipStatus;
   showDownloadZip?: boolean;
+  hasMultipleOrders?: boolean;
 }
 
 export function SecondaryMenu({
@@ -46,13 +53,20 @@ export function SecondaryMenu({
   onViewModeChange,
   showDeliveredView = false,
   onDeliveredViewClick,
-  showUnselectedView = false,
+  showUnselectedView,
   onUnselectedViewClick,
+  isUnselectedViewActive = false,
+  showBoughtView,
+  onBoughtViewClick,
+  hasDeliveredOrders = false,
+  hasInitialApprovedSelection = false,
+  isLocked = false,
   showBuyMore = false,
   onBuyMoreClick,
   onDownloadZip,
   zipStatus,
   showDownloadZip = true,
+  hasMultipleOrders = false,
 }: SecondaryMenuProps) {
   const { galleryId } = useAuth();
   const { data: selectionState } = useSelection(galleryId);
@@ -64,17 +78,25 @@ export function SecondaryMenu({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScrollStateRef = useRef<boolean>(false);
 
-  // Determine current state
+  // Determine current state - simplified to match page.tsx logic
   const state = selectionState
-    ? selectionState.hasDeliveredOrder
-      ? "delivered"
-      : selectionState.changeRequestPending
+    ? selectionState.changeRequestPending
       ? "changesRequested"
-      : selectionState.approved || selectionState.hasClientApprovedOrder
+      : selectionState.hasClientApprovedOrder
+      ? "approved"
+      : selectionState.hasDeliveredOrder
+      ? "delivered"
+      : selectionState.approved
       ? "approved"
       : "selecting"
     : "selecting";
   const shouldBeSticky = state === "selecting";
+
+  // Determine if selection is enabled - locked when isLocked is true
+  const isSelectionEnabled = useMemo(() => {
+    if (isLocked) return false;
+    return state === "selecting" || (isUnselectedViewActive && state === "delivered");
+  }, [state, isUnselectedViewActive, isLocked]);
 
   const hasError = zipStatus?.status === "error";
   const zipCtaText = hasError
@@ -124,8 +146,23 @@ export function SecondaryMenu({
   }, []);
 
   // Update indicator position when active/hovered item changes or window resizes
+  // Priority: show hover indicator when hovering, otherwise show active indicator
   const updateIndicatorPosition = useCallback(() => {
-    const indicatorItemId = hoveredItem || activeItem;
+    // Determine which menu item is currently active based on view state
+    // This matches the logic used in the isActive check below
+    let computedActiveItem: string | null = null;
+    if (state === "selecting") {
+      computedActiveItem = "wybor";
+    } else if (showBoughtView) {
+      computedActiveItem = "bought";
+    } else if (isUnselectedViewActive) {
+      computedActiveItem = "unselected";
+    } else if (showDeliveredView && !showBoughtView && !isUnselectedViewActive) {
+      computedActiveItem = "delivered";
+    }
+    
+    // Always show indicator for active item when not hovering, or show hover indicator when hovering
+    const indicatorItemId = hoveredItem || computedActiveItem || activeItem;
     if (!indicatorItemId) {
       setIndicatorStyle(null);
       return;
@@ -143,7 +180,7 @@ export function SecondaryMenu({
         width: buttonRect.width,
       });
     }
-  }, [activeItem, hoveredItem]);
+  }, [activeItem, hoveredItem, state, showDeliveredView, showBoughtView, isUnselectedViewActive]);
 
   useEffect(() => {
     updateIndicatorPosition();
@@ -162,7 +199,7 @@ export function SecondaryMenu({
   const baseLimit = selectionState?.pricingPackage?.includedCount ?? 0;
   const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
   // In "Niewybrane" view (delivered state), all photos are additional - no base limit applies
-  const effectiveBaseLimit = showUnselectedView ? 0 : baseLimit;
+  const effectiveBaseLimit = isUnselectedViewActive ? 0 : baseLimit;
   // Compute overage locally for immediate UI correctness with optimistic selection updates.
   // Backend-provided overageCount/overageCents can lag behind selectedCount/selectedKeys changes.
   const computedOverageCount = extraPriceCents > 0 ? Math.max(0, selectedCount - effectiveBaseLimit) : 0;
@@ -173,34 +210,47 @@ export function SecondaryMenu({
   const limitDisplay = baseLimit > 0 ? baseLimit.toString() : extraPriceCents > 0 ? "no limit" : "0";
   // In unselected view (buy more), can approve if at least one photo is selected
   // In regular selecting state, can approve if selectedCount >= baseLimit
-  const canApprove = showUnselectedView ? selectedCount > 0 : selectedCount >= baseLimit;
+  const canApprove = isUnselectedViewActive ? selectedCount > 0 : selectedCount >= baseLimit;
 
   // Format price in PLN
   const formatPrice = (cents: number) => {
     return `${(cents / 100).toFixed(2)} zł`;
   };
 
-  // Menu items based on state
+  // Simplified menu items based on unified section visibility logic
+  // Sections: "wybor" (selecting), "wybrane" (initial approved), "dostarczone" (delivered),
+  // "dokupione" (buy-more approved), "niewybrane" (unselected)
   const getMenuItems = () => {
-    if (state === "delivered") {
-      const items = [
-        { id: "delivered", label: "DOSTARCZONE" },
-      ];
-      // Only show "Niewybrane" if there's a price per additional photo
-      if (extraPriceCents > 0) {
-        items.push({ id: "unselected", label: "NIEWYBRANE" });
-      }
+    const items: Array<{ id: string; label: string }> = [];
+
+    // Always show "WYBÓR ZDJĘĆ" when in selecting state
+    if (state === "selecting") {
+      items.push({ id: "wybor", label: "WYBÓR ZDJĘĆ" });
       return items;
-    } else if (state === "approved" || state === "changesRequested") {
-      return [
-        { id: "all", label: "WSZYSTKIE ZDJĘCIA" },
-        { id: "selected", label: "WYBRANE" },
-      ];
-    } else {
-      return [
-        { id: "wybor", label: "WYBÓR ZDJĘĆ" },
-      ];
     }
+
+    // Show "DOSTARCZONE" when delivered orders exist (always visible if exists)
+    if (hasDeliveredOrders) {
+      items.push({ id: "delivered", label: "DOSTARCZONE" });
+    }
+
+    // Show "WYBRANE" (initial approval) or "DOKUPIONE" (buy-more) based on context
+    // Unified logic: same section, different label
+    if (showBoughtView !== undefined) {
+      // Label depends on whether delivered orders exist
+      const label = hasDeliveredOrders ? "DOKUPIONE" : "WYBRANE";
+      items.push({ id: "bought", label });
+    } else if (hasInitialApprovedSelection && !hasDeliveredOrders) {
+      // Show "WYBRANE" for initial approval when no delivered orders
+      items.push({ id: "bought", label: "WYBRANE" });
+    }
+
+    // Show "NIEWYBRANE" if unselected photos exist and price per photo > 0
+    if (showUnselectedView === true && extraPriceCents > 0) {
+      items.push({ id: "unselected", label: "NIEWYBRANE" });
+    }
+
+    return items;
   };
 
   const menuItems = getMenuItems();
@@ -210,17 +260,20 @@ export function SecondaryMenu({
     if (state === "selecting") {
       setActiveItem("wybor");
     } else if ((state === "approved" || state === "changesRequested") && viewMode === "all") {
-      setActiveItem("all");
+      setActiveItem("delivered");
     } else if ((state === "approved" || state === "changesRequested") && viewMode === "selected") {
-      setActiveItem("selected");
-    } else if (state === "delivered") {
-      if (showUnselectedView) {
+      setActiveItem("bought");
+    } else if (state === "delivered" || state === "approved" || state === "changesRequested") {
+      if (showBoughtView) {
+        setActiveItem("bought");
+      } else if (isUnselectedViewActive) {
+        // Use the actual view state to determine active item
         setActiveItem("unselected");
       } else {
         setActiveItem("delivered");
       }
     }
-  }, [state, viewMode, showUnselectedView]);
+  }, [state, viewMode, isUnselectedViewActive, showBoughtView, showDeliveredView]);
 
   const handleItemClick = (itemId: string) => {
     hapticFeedback('light');
@@ -231,6 +284,8 @@ export function SecondaryMenu({
       onViewModeChange("selected");
     } else if (itemId === "delivered" && onDeliveredViewClick) {
       onDeliveredViewClick();
+    } else if (itemId === "bought" && onBoughtViewClick) {
+      onBoughtViewClick();
     } else if (itemId === "unselected" && onUnselectedViewClick) {
       onUnselectedViewClick();
     }
@@ -249,7 +304,7 @@ export function SecondaryMenu({
   };
 
   // Check if approve button should be active (always active in selecting state or unselected view when enabled)
-  const isApproveActive = (state === "selecting" || showUnselectedView) && canApprove;
+  const isApproveActive = (state === "selecting" || isUnselectedViewActive) && canApprove;
 
   return (
     <nav
@@ -287,8 +342,9 @@ export function SecondaryMenu({
                 (item.id === "all" && viewMode === "all") ||
                 (item.id === "selected" && viewMode === "selected") ||
                 (item.id === "wybor" && state === "selecting") ||
-                (item.id === "delivered" && showDeliveredView) ||
-                (item.id === "unselected" && showUnselectedView);
+                (item.id === "delivered" && showDeliveredView && !showBoughtView && !isUnselectedViewActive) ||
+                (item.id === "bought" && showBoughtView) ||
+                (item.id === "unselected" && isUnselectedViewActive);
               const isHovered = hoveredItem === item.id;
               
               return (
@@ -316,36 +372,36 @@ export function SecondaryMenu({
 
           {/* Right: Selection status + Actions */}
           <div className="flex items-center justify-end gap-6 sm:gap-8 ml-auto flex-shrink-0" style={{ alignSelf: 'center' }}>
-            {/* Selection status display (only in selecting state)
-                Keep each piece as a sibling so spacing matches the rest of the right-side controls. */}
-            {state === "selecting" && extraPriceCents > 0 && computedOverageCount > 0 && (
+            {/* Selection status display - HIDE when in DOSTARCZONE view (only show ZIP-related UI) */}
+            {!showDeliveredView && isSelectionEnabled && state === "selecting" && extraPriceCents > 0 && computedOverageCount > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Dodatkowe ujęcia {computedOverageCount} × {formatPrice(extraPriceCents)} ={" "}
                 {formatPrice(computedOverageCents)}
               </span>
             )}
-            {state === "selecting" && (
+            {!showDeliveredView && isSelectionEnabled && state === "selecting" && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Wybrane: {selectedCount} / {limitDisplay}
               </span>
             )}
 
             {/* Niewybrane view status - show price calculation for all selected photos */}
-            {showUnselectedView && extraPriceCents > 0 && selectedCount > 0 && (
+            {!showDeliveredView && isSelectionEnabled && isUnselectedViewActive && extraPriceCents > 0 && selectedCount > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Dodatkowe ujęcia {selectedCount} × {formatPrice(extraPriceCents)} ={" "}
                 {formatPrice(selectedCount * extraPriceCents)}
               </span>
             )}
-            {showUnselectedView && (
+            {!showDeliveredView && isSelectionEnabled && isUnselectedViewActive && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Wybrane: {selectedCount}
               </span>
             )}
 
-            {/* Action buttons based on state */}
-            {/* Show approve button in selecting state OR when in unselected view (buy more flow) */}
-            {(state === "selecting" || showUnselectedView) && onApproveSelection && (
+            {/* Action buttons - HIDE all when in DOSTARCZONE view (only show ZIP-related UI) */}
+            {/* Unified approve/buy button: "ZATWIERDŹ WYBÓR" or "KUP WIĘCEJ ZDJĘĆ" based on context */}
+            {/* Locked when isLocked is true (approved, changesRequested, or hasClientApprovedOrder) */}
+            {!showDeliveredView && !isLocked && (state === "selecting" || (isUnselectedViewActive && state === "delivered")) && onApproveSelection && (
               <button
                 ref={(el) => {
                   buttonRefs.current["approve"] = el;
@@ -365,13 +421,18 @@ export function SecondaryMenu({
                   fontWeight: (isApproveActive || hoveredItem === "approve") ? "700" : "500",
                   letterSpacing: "0.05em",
                 }}
-                aria-label={showUnselectedView ? "Kup więcej zdjęć" : "Zatwierdź wybór"}
+                aria-label={isUnselectedViewActive ? "Kup więcej zdjęć" : "Zatwierdź wybór"}
               >
-                {showUnselectedView ? "KUP WIĘCEJ ZDJĘĆ" : "ZATWIERDŹ WYBÓR"}
+                {isUnselectedViewActive ? "KUP WIĘCEJ ZDJĘĆ" : "ZATWIERDŹ WYBÓR"}
               </button>
             )}
 
-            {state === "approved" && onRequestChanges && (
+            {/* Show "Request Changes" button when locked (approved/changesRequested) and can request changes */}
+            {/* Available in locked states (view-only with ability to request changes) */}
+            {!showDeliveredView && isLocked && 
+              !selectionState?.changeRequestPending && 
+              !selectionState?.changeRequestsBlocked &&
+              onRequestChanges && (
               <button
                 ref={(el) => {
                   buttonRefs.current["requestChanges"] = el;
@@ -396,7 +457,7 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {state === "changesRequested" && onCancelChangeRequest && (
+            {!showDeliveredView && state === "changesRequested" && onCancelChangeRequest && (
               <button
                 ref={(el) => {
                   buttonRefs.current["cancelRequest"] = el;
@@ -421,7 +482,8 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {state === "delivered" && onDownloadZip && showDownloadZip && (
+            {/* ZIP download button - show when in DOSTARCZONE view (showDeliveredView) OR when state is delivered, but hide if multiple orders */}
+            {(showDeliveredView || state === "delivered") && onDownloadZip && showDownloadZip && !hasMultipleOrders && (
               <button
                 ref={(el) => {
                   buttonRefs.current["downloadZip"] = el;
@@ -486,7 +548,8 @@ export function SecondaryMenu({
               </button>
             )}
 
-            {state === "delivered" && showBuyMore && onBuyMoreClick && !showDeliveredView && !showUnselectedView && (
+            {/* Hide "Buy More" button when in DOSTARCZONE view - only show ZIP-related UI */}
+            {!showDeliveredView && state === "delivered" && showBuyMore && onBuyMoreClick && !isUnselectedViewActive && (
               <button
                 ref={(el) => {
                   buttonRefs.current["buyMore"] = el;

@@ -23,8 +23,18 @@ const router = Router();
 
 // Gallery-scoped orders (mounted at root, so paths are relative to root)
 // /galleries/:id/orders route is registered as public route in index.ts (no requireAuth) to support client JWT tokens
-// orders/delivered route is registered as public route in index.ts (no requireAuth)
-router.get('/galleries/:id/orders/:orderId', wrapHandler(ordersGet.handler));
+// orders/delivered and orders/client-approved routes are registered as public routes in index.ts (no requireAuth)
+// Exclude special route names from orderId pattern - these are handled by public routes above
+router.get('/galleries/:id/orders/:orderId', (req, res, next) => {
+	// Don't match special route names that are handled by public routes
+	// These routes use client JWT tokens, not Cognito tokens, so they're registered before requireAuth middleware
+	if (req.params.orderId === 'delivered' || req.params.orderId === 'client-approved') {
+		// Return 404 to let Express continue matching - the specific route should have matched first
+		// If we reach here, it means the specific route didn't match (shouldn't happen)
+		return res.status(404).json({ error: 'Not found' });
+	}
+	wrapHandler(ordersGet.handler)(req, res, next);
+});
 router.get('/galleries/:id/orders/:orderId/status', wrapHandler(ordersGetStatus.handler));
 // zip/status and final/zip/status routes are registered as public routes in index.ts (no requireAuth) to support client JWT tokens
 router.patch('/galleries/:id/orders/:orderId', wrapHandler(ordersUpdate.handler));

@@ -14,6 +14,7 @@ import * as galleriesGetStatus from '../galleries/getStatus';
 import { ordersRoutes } from './routes/orders';
 import * as ordersList from '../../functions/orders/list';
 import * as ordersListDelivered from '../../functions/orders/listDelivered';
+import * as ordersListClientApproved from '../../functions/orders/listClientApproved';
 import * as ordersDownloadZip from '../../functions/orders/downloadZip';
 import * as ordersGetZipStatus from '../../functions/orders/getZipStatus';
 import * as ordersGetFinalZipStatus from '../../functions/orders/getFinalZipStatus';
@@ -98,6 +99,7 @@ app.get('/galleries/:id/images/:imageKey/download', wrapHandler(galleriesDownloa
 app.get('/galleries/:id/status', wrapHandler(galleriesGetStatus.handler));
 app.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
 app.get('/galleries/:id/orders/delivered', wrapHandler(ordersListDelivered.handler));
+app.get('/galleries/:id/orders/client-approved', wrapHandler(ordersListClientApproved.handler));
 app.get('/galleries/:id/selections', wrapHandler(selectionsGet.handler));
 app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.handler));
 app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
@@ -126,6 +128,8 @@ app.use('/wallet', requireAuth, walletRoutes);
 app.use('/uploads', requireAuth, uploadsRoutes);
 app.use('/downloads', requireAuth, downloadsRoutes);
 // Orders routes handle their own paths (some under /galleries, some under /orders)
+// Note: /galleries/:id/orders/delivered and /galleries/:id/orders/client-approved are registered
+// as public routes above (lines 101-102) and should match before this router
 app.use('/', requireAuth, ordersRoutes);
 app.use('/galleries', requireAuth, selectionsRoutes);
 app.use('/dashboard', requireAuth, dashboardRoutes);

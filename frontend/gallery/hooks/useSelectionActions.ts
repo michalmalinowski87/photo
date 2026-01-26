@@ -93,6 +93,13 @@ export function useSelectionActions(galleryId: string | null) {
       if (galleryId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.gallery.selection(galleryId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.gallery.status(galleryId) });
+        // Refetch client-approved orders after approval
+        queryClient.invalidateQueries({ queryKey: ["orders", "client-approved", galleryId] });
+        // Refetch all image queries (including unselected) to refresh "Niewybrane" view
+        // This invalidates both filterUnselected=true and filterUnselected=false queries
+        queryClient.invalidateQueries({ 
+          queryKey: [...queryKeys.gallery.detail(galleryId), "images", "infinite"] 
+        });
       }
     },
   });

@@ -23,6 +23,7 @@ interface VirtuosoGridProps {
   showUnselectedIndicators?: boolean;
   enableDownload?: boolean;
   onDownload?: (imageKey: string) => void;
+  hideBorders?: boolean; // Hide borders for "Dokupione" view
 }
 
 interface LayoutBox {
@@ -46,6 +47,7 @@ export function VirtuosoGridComponent({
   showUnselectedIndicators = true,
   enableDownload = false,
   onDownload,
+  hideBorders = false,
 }: VirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -287,8 +289,8 @@ export function VirtuosoGridComponent({
   }
 
   return (
-    <div ref={containerRef} className="w-full bg-white overflow-hidden">
-      <div style={{ position: "relative", height: containerHeight, width: "100%", maxWidth: "100%", paddingTop: "8px", paddingBottom: "8px" }} className="bg-white overflow-hidden">
+    <div ref={containerRef} className={`w-full overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}>
+      <div style={{ position: "relative", height: containerHeight, width: "100%", maxWidth: "100%", paddingTop: "8px", paddingBottom: "8px" }} className={`overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}>
         {images.map((image, index) => {
           const box = layoutBoxes[index];
           if (!box) return null;
@@ -303,7 +305,15 @@ export function VirtuosoGridComponent({
           const isSingleRowMarble = layout === "marble" && images.length <= marbleMaxColumns;
 
           const imageClasses =
-            layout === "square"
+            hideBorders
+              ? layout === "square"
+                ? "object-cover"
+                : layout === "standard"
+                ? "object-contain"
+                : isSingleRowMarble
+                ? "object-contain"
+                : "object-cover"
+              : layout === "square"
               ? "object-cover rounded-[2px]"
               : layout === "standard"
               ? "object-contain rounded-[2px]"
@@ -328,8 +338,12 @@ export function VirtuosoGridComponent({
                 height: box.height,
                 boxSizing: "border-box", // Ensure ring border is included in dimensions
               }}
-              className={`overflow-hidden bg-white rounded-[2px] cursor-pointer transition-all duration-200 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
-                isSelected ? "ring-2 ring-black ring-opacity-70" : ""
+              className={`overflow-hidden cursor-pointer transition-all duration-200 ease-out ${
+                hideBorders
+                  ? "bg-transparent hover:scale-[1.0085] hover:-translate-y-[0.85px] active:scale-100 active:translate-y-0"
+                  : "bg-white rounded-[2px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+              } ${
+                isSelected && !hideBorders ? "ring-2 ring-black ring-opacity-70" : ""
               }`}
             >
               <a
@@ -340,6 +354,30 @@ export function VirtuosoGridComponent({
                 data-sub-html={image.key}
                 className="block w-full h-full relative"
                 onClick={(e) => {
+                  // Prevent default anchor behavior until lightGallery is ready (prevents race condition)
+                  // Check if lightGallery container exists and is ready by looking for the data attribute
+                  // Try multiple ways to find the container in case DOM structure varies
+                  let container: HTMLElement | null = (e.target as HTMLElement).closest('[data-lg-container]') as HTMLElement;
+                  if (!container) {
+                    // Fallback: find any parent with the attribute
+                    let element: HTMLElement | null = e.target as HTMLElement;
+                    while (element && element !== document.body) {
+                      if (element.hasAttribute('data-lg-container')) {
+                        container = element;
+                        break;
+                      }
+                      element = element.parentElement;
+                    }
+                  }
+                  const isGalleryReady = container?.getAttribute('data-lg-ready') === 'true';
+                  // Only prevent if we found the container and it's explicitly not ready
+                  // If container not found, assume gallery is ready (fallback for edge cases)
+                  if (container && !isGalleryReady) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  
                   // If selection is enabled and user clicks the selection indicator area, prevent lightGallery
                   if (canSelect && onImageSelect && (e.target as HTMLElement).closest('.selection-indicator')) {
                     e.preventDefault();

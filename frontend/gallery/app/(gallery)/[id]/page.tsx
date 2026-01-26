@@ -11,7 +11,7 @@ import { useGalleryImages } from "@/hooks/useGallery";
 import { useImageDownload } from "@/hooks/useImageDownload";
 import { useSelection } from "@/hooks/useSelection";
 import { useSelectionActions } from "@/hooks/useSelectionActions";
-import { useDeliveredOrders, useFinalImages } from "@/hooks/useOrders";
+import { useDeliveredOrders, useClientApprovedOrders, useFinalImages } from "@/hooks/useOrders";
 import { useZipStatus } from "@/hooks/useZipStatus";
 import { GalleryTopBar } from "@/components/gallery/GalleryTopBar";
 import { SecondaryMenu } from "@/components/gallery/SecondaryMenu";
@@ -21,6 +21,7 @@ import { ScrollToTopButton } from "@/components/gallery/ScrollToTopButton";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { ApiError } from "@/lib/api";
+import { DeliveredOrderCard } from "@/components/gallery/DeliveredOrderCard";
 
 // Lazy load heavy components that are conditionally rendered
 const LightGalleryWrapper = lazy(() => import("@/components/gallery/LightGalleryWrapper").then(m => ({ default: m.LightGalleryWrapper })));
@@ -58,12 +59,14 @@ export default function GalleryPage() {
   const [viewMode, setViewMode] = useState<"all" | "selected">("all");
   const [showHelp, setShowHelp] = useState(false);
   const [showDeliveredView, setShowDeliveredView] = useState(false);
+  const [showBoughtView, setShowBoughtView] = useState(false);
   const [showUnselectedView, setShowUnselectedView] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showChangesRequestedOverlay, setShowChangesRequestedOverlay] = useState(false);
   const [showChangeRequestCanceledOverlay, setShowChangeRequestCanceledOverlay] = useState(false);
   const [showChangeRequestSubmittedOverlay, setShowChangeRequestSubmittedOverlay] = useState(false);
   const [showZipOverlay, setShowZipOverlay] = useState(false);
+  const [zipOverlayOrderId, setZipOverlayOrderId] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
@@ -83,35 +86,26 @@ export default function GalleryPage() {
   const { data: selectionState, isLoading: selectionLoading } = useSelection(galleryId);
   const selectionActions = useSelectionActions(galleryId);
 
-  // Determine gallery state (matching SecondaryMenu logic)
+  // Determine gallery state - simplified logic
+  // Priority: changesRequested > approved (locked) > delivered (can buy more) > selecting
   const galleryState = useMemo(() => {
-    if (!selectionState) return "selecting"; // Default to selecting when state is not loaded
-    if (selectionState.hasDeliveredOrder) return "delivered";
+    if (!selectionState) return "selecting";
     if (selectionState.changeRequestPending) return "changesRequested";
-    if (selectionState.approved || selectionState.hasClientApprovedOrder) return "approved";
+    if (selectionState.hasClientApprovedOrder) return "approved";
+    if (selectionState.hasDeliveredOrder) return "delivered";
+    if (selectionState.approved) return "approved";
     return "selecting";
   }, [selectionState]);
 
-  // Determine which images to show (must be computed early)
-  const shouldShowDelivered = useMemo(() => {
-    return (showDeliveredView || galleryState === "delivered") && !showUnselectedView;
-  }, [showDeliveredView, galleryState, showUnselectedView]);
-  
-  // Only show unselected view if there's a price per additional photo
-  const canShowUnselected = useMemo(() => {
-    return (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
-  }, [selectionState?.pricingPackage?.extraPriceCents]);
-  
-  const shouldShowUnselected = useMemo(() => {
-    return showUnselectedView && galleryState === "delivered" && canShowUnselected;
-  }, [showUnselectedView, galleryState, canShowUnselected]);
-  
-  // Selection is enabled ONLY when in selecting state OR when viewing unselected photos in delivered state
-  // Disabled in approved, changesRequested, and delivered states (except unselected view)
-  const isSelectingState = useMemo(() => {
-    // Allow selection when explicitly in "selecting" state OR when viewing unselected photos
-    return galleryState === "selecting" || shouldShowUnselected;
-  }, [galleryState, shouldShowUnselected]);
+  // Determine if this is initial approval (first-time) vs buy-more approval
+  // Initial approval = approved AND no delivered orders AND no CLIENT_APPROVED orders
+  const isInitialApproval = useMemo(() => {
+    return (
+      selectionState?.approved === true &&
+      !selectionState?.hasDeliveredOrder &&
+      !selectionState?.hasClientApprovedOrder
+    );
+  }, [selectionState]);
 
   // Delivered orders
   const { data: deliveredOrdersData, isLoading: isLoadingDeliveredOrders } = useDeliveredOrders(galleryId);
@@ -119,6 +113,11 @@ export default function GalleryPage() {
   const hasMultipleOrders = deliveredOrders.length > 1;
   const singleOrder = deliveredOrders.length === 1 ? deliveredOrders[0] : null;
   const orderIdForFinals = selectedOrderId || singleOrder?.orderId || null;
+
+  // CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders (buy-more orders that are approved but not yet delivered)
+  const { data: clientApprovedOrdersData, isLoading: isLoadingClientApprovedOrders } = useClientApprovedOrders(galleryId);
+  const clientApprovedOrders = clientApprovedOrdersData?.items || [];
+  const hasClientApprovedOrders = clientApprovedOrders.length > 0;
 
   // Final images for selected order
   const {
@@ -132,6 +131,7 @@ export default function GalleryPage() {
     orderIdForFinals,
     50
   );
+  
   const finalImages = useMemo(() => {
     return finalImagesData?.pages.flatMap((page) => page.images || []) || [];
   }, [finalImagesData]);
@@ -205,24 +205,142 @@ export default function GalleryPage() {
     return data?.pages.flatMap((page) => page.images || []) || [];
   }, [data]);
 
-  // Get unselected images (only when in delivered state, as we might switch to unselected view)
-  const shouldFetchUnselected = galleryState === "delivered";
+  // Get unselected images (only when in delivered, approved, or changesRequested state, as we might switch to unselected view)
+  // Backend already excludes both DELIVERED and CLIENT_APPROVED photos
+  const shouldFetchUnselected = galleryState === "delivered" || galleryState === "approved" || galleryState === "changesRequested";
   const {
     data: unselectedData,
     fetchNextPage: fetchNextUnselectedPage,
     hasNextPage: hasNextUnselectedPage,
     isFetchingNextPage: isFetchingNextUnselectedPage,
     prefetchNextPage: prefetchNextUnselectedPage,
+    isLoading: isLoadingUnselected,
+    isFetched: isUnselectedFetched,
   } = useGalleryImages(queryGalleryId, "thumb", 50, true);
 
   const unselectedImages = useMemo(() => {
     return unselectedData?.pages.flatMap((page) => page.images || []) || [];
   }, [unselectedData]);
+  
+  // Check if there are actually unselected photos available
+  // Only show "Niewybrane" button if there are photos that aren't in any order
+  // Must wait for query to complete before determining if photos exist
+  const hasUnselectedPhotos = useMemo(() => {
+    // Early returns for invalid states
+    if (!shouldFetchUnselected) {
+      return false;
+    }
+    
+    // Don't show button until query has completed at least once
+    // This prevents showing the button when data is still loading
+    if (!isUnselectedFetched) {
+      return false;
+    }
+    
+    // Don't show if we don't have data yet
+    if (!unselectedData || !unselectedData.pages || unselectedData.pages.length === 0) {
+      return false;
+    }
+    
+    // Only show if we have actual images in the results
+    // The backend filters out images from DELIVERED, PREPARING_DELIVERY, CLIENT_APPROVED, and CHANGES_REQUESTED orders
+    // Check that at least one page has images
+    const hasImagesInPages = unselectedData.pages.some(page => 
+      page && page.images && Array.isArray(page.images) && page.images.length > 0
+    );
+    
+    // Also verify the flattened array has images
+    const hasImages = unselectedImages.length > 0;
+    
+    // Both checks must pass
+    return hasImages && hasImagesInPages;
+  }, [shouldFetchUnselected, isUnselectedFetched, unselectedData, unselectedImages.length]);
+
+  // Unified section visibility logic
+  // Sections: "wybor" (selecting), "wybrane" (initial approved), "dostarczone" (delivered), 
+  // "dokupione" (buy-more approved), "niewybrane" (unselected)
+  const sectionVisibility = useMemo(() => {
+    const hasDelivered = deliveredOrders.length > 0;
+    const hasClientApproved = hasClientApprovedOrders;
+    const hasUnselected = hasUnselectedPhotos && (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
+    
+    return {
+      showWybor: galleryState === "selecting",
+      showWybrane: isInitialApproval, // First-time approval, no delivered orders
+      showDostarczone: hasDelivered, // Always show if delivered orders exist
+      showBoughtView: hasClientApproved && hasDelivered, // Buy-more orders when delivered exists
+      showNiewybrane: hasUnselected && (hasDelivered || isInitialApproval), // Show if unselected photos exist
+    };
+  }, [galleryState, deliveredOrders.length, hasClientApprovedOrders, hasUnselectedPhotos, isInitialApproval, selectionState?.pricingPackage?.extraPriceCents]);
+
+  // Determine which view is currently active (simplified state machine)
+  const currentView = useMemo(() => {
+    if (showDeliveredView && sectionVisibility.showDostarczone) return "delivered";
+    if (showBoughtView && sectionVisibility.showBoughtView) return "dokupione";
+    if (showUnselectedView && sectionVisibility.showNiewybrane) return "unselected";
+    if (sectionVisibility.showWybrane && !showDeliveredView && !showBoughtView && !showUnselectedView) return "wybrane";
+    if (sectionVisibility.showWybor) return "selecting";
+    // Default: if delivered exists, show delivered
+    if (sectionVisibility.showDostarczone) return "delivered";
+    return "selecting";
+  }, [showDeliveredView, showBoughtView, showUnselectedView, sectionVisibility]);
+
+  // Simplified view flags based on currentView
+  const shouldShowDelivered = currentView === "delivered";
+  const shouldShowBought = currentView === "dokupione";
+  const shouldShowUnselected = currentView === "unselected";
+  
+  // Only show unselected view if there's a price per additional photo
+  const canShowUnselected = (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
+
+  // Lock states: Lock approve/buy when approved, changesRequested, or hasClientApprovedOrder
+  // Selection is enabled ONLY when in selecting state OR when viewing unselected photos in delivered state
+  // When CLIENT_APPROVED order exists, buying more is locked (but can request changes)
+  const isLocked = useMemo(() => {
+    return (
+      galleryState === "approved" ||
+      galleryState === "changesRequested" ||
+      selectionState?.hasClientApprovedOrder === true
+    );
+  }, [galleryState, selectionState?.hasClientApprovedOrder]);
+
+  const isSelectingState = useMemo(() => {
+    // Lock selection when locked state is active
+    if (isLocked) return false;
+    // Allow selection when in "selecting" state OR when viewing unselected photos in delivered state
+    return galleryState === "selecting" || (shouldShowUnselected && galleryState === "delivered");
+  }, [galleryState, shouldShowUnselected, isLocked]);
+
+  // Get all selectedKeys from CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders for "Dokupione" view
+  const boughtPhotoKeys = useMemo(() => {
+    const keys = new Set<string>();
+    clientApprovedOrders.forEach((order) => {
+      if (Array.isArray(order.selectedKeys)) {
+        order.selectedKeys.forEach((key) => keys.add(key));
+      }
+    });
+    return keys;
+  }, [clientApprovedOrders]);
+
+  // Get images for "Dokupione" view (photos from CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders)
+  // IMPORTANT: Only DELIVERED orders use final images. All other statuses use original images.
+  const boughtImages = useMemo(() => {
+    if (!shouldShowBought) {
+      return [];
+    }
+    
+    // Use original images from selectedKeys (CLIENT_APPROVED, PREPARING_DELIVERY, and CHANGES_REQUESTED orders use originals)
+    return allImages.filter((img) => boughtPhotoKeys.has(img.key));
+  }, [shouldShowBought, boughtPhotoKeys, allImages]);
 
   // Filter images based on view mode and state
   const displayImages = useMemo(() => {
     if (shouldShowDelivered) {
       return finalImages;
+    }
+    
+    if (shouldShowBought) {
+      return boughtImages;
     }
     
     if (shouldShowUnselected) {
@@ -238,7 +356,7 @@ export default function GalleryPage() {
     }
     
     return allImages;
-  }, [shouldShowDelivered, finalImages, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys]);
+  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys, orderIdForFinals]);
 
   // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
   // Get queryClient to access latest cache state and avoid stale closures
@@ -354,12 +472,21 @@ export default function GalleryPage() {
     }
   }, [selectionActions, selectionState?.selectedKeys, galleryId]);
 
-  // ZIP status for current order
+  // ZIP status for current order (when viewing a single order or when single order exists)
   const currentOrderId = selectedOrderId || singleOrder?.orderId || null;
+  const shouldFetchZipStatus = shouldShowDelivered && !!currentOrderId && (!hasMultipleOrders || !!selectedOrderId);
   const { data: zipStatus } = useZipStatus(
     galleryId,
     currentOrderId,
-    shouldShowDelivered && !!currentOrderId
+    shouldFetchZipStatus
+  );
+
+  // ZIP status for order in overlay (when multiple orders and overlay is shown)
+  const overlayOrderId = zipOverlayOrderId || currentOrderId;
+  const { data: zipStatusForOverlay } = useZipStatus(
+    galleryId,
+    overlayOrderId,
+    showZipOverlay && !!overlayOrderId && hasMultipleOrders
   );
 
   // Download ZIP
@@ -453,20 +580,65 @@ export default function GalleryPage() {
     }
   }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus, queryClient]);
 
-  // Show error overlay when ZIP status changes to error
+  // Show error overlay when ZIP status changes to error (only once per session)
   useEffect(() => {
-    if (zipStatus?.status === "error" && !isOwnerPreview) {
-      setShowZipOverlay(true);
+    if (zipStatus?.status === "error" && !isOwnerPreview && galleryId) {
+      const sessionKey = `zip_error_shown_${galleryId}`;
+      const hasShownError = sessionStorage.getItem(sessionKey) === "true";
+      
+      if (!hasShownError) {
+        setShowZipOverlay(true);
+        sessionStorage.setItem(sessionKey, "true");
+      }
     }
-  }, [zipStatus?.status, isOwnerPreview]);
+  }, [zipStatus?.status, isOwnerPreview, galleryId]);
+
+  // Reset ZIP error flag on logout (when authentication changes)
+  useEffect(() => {
+    if (!isAuthenticated && galleryId) {
+      const sessionKey = `zip_error_shown_${galleryId}`;
+      sessionStorage.removeItem(sessionKey);
+    }
+  }, [isAuthenticated, galleryId]);
+
+  // ALWAYS default to "Dostarczone" view when there are delivered orders (on mount/refresh)
+  // Use a ref to track initialization to avoid resetting user's choice within session
+  const defaultViewInitializedRef = useRef(false);
+  useEffect(() => {
+    if (deliveredOrders.length > 0 && !defaultViewInitializedRef.current) {
+      // Only set default if no view is explicitly active
+      if (!showDeliveredView && !showBoughtView && !showUnselectedView) {
+        setShowDeliveredView(true);
+      }
+      defaultViewInitializedRef.current = true;
+    } else if (deliveredOrders.length === 0) {
+      // Reset when delivered orders disappear
+      defaultViewInitializedRef.current = false;
+    }
+  }, [deliveredOrders.length, showDeliveredView, showBoughtView, showUnselectedView]);
+
+  // Reset unselected view if there are no unselected photos available
+  useEffect(() => {
+    if (showUnselectedView && !hasUnselectedPhotos && isUnselectedFetched) {
+      // If user is viewing unselected photos but there are none, switch back to delivered view
+      setShowUnselectedView(false);
+      setShowDeliveredView(true);
+    }
+  }, [showUnselectedView, hasUnselectedPhotos, isUnselectedFetched]);
 
   // Buy more photos - switch to unselected view to allow selecting additional photos
+  // Only allowed when in "delivered" state (no CLIENT_APPROVED orders)
   const handleBuyMore = useCallback(() => {
+    if (selectionState?.hasClientApprovedOrder) {
+      // Buying more is locked when CLIENT_APPROVED order exists
+      return;
+    }
     setShowDeliveredView(false);
+    setShowBoughtView(false);
     setShowUnselectedView(true);
     setViewMode("all");
-    // Selection will be enabled automatically when showUnselectedView is true
-  }, []);
+    // Selection will be enabled automatically when showUnselectedView is true and no CLIENT_APPROVED order
+  }, [selectionState?.hasClientApprovedOrder]);
 
 
   // Hash prefetching (same as before)
@@ -567,9 +739,11 @@ export default function GalleryPage() {
       }
 
       try {
-        // If in delivered view, download from finals storage
+        // Only delivered orders download from finals storage. Bought orders use original images.
         const isDeliveredView = shouldShowDelivered && (selectedOrderId || singleOrder?.orderId);
-        const orderIdForDownload = isDeliveredView ? (selectedOrderId || singleOrder?.orderId || null) : null;
+        const orderIdForDownload = isDeliveredView 
+          ? (selectedOrderId || singleOrder?.orderId || null)
+          : null;
         
         await downloadImage({
           galleryId,
@@ -589,22 +763,30 @@ export default function GalleryPage() {
   // Determine current selection count - React Query is single source of truth
   // Always prefer selectedKeys.length when available (even if 0), as it's the source of truth
   // Only fall back to selectedCount from server if selectedKeys is not available
+  // When in "approved" state and viewing "Niewybrane", selection is locked, so count should be 0
   const currentSelectedCount = useMemo(() => {
     const selectedKeysArray = selectionState?.selectedKeys;
+    // When in "approved" state and viewing "Niewybrane", selection is locked - show 0
+    // selectedKeys might contain keys from approved orders, but we shouldn't count them for new selection
+    if (galleryState === "approved" && shouldShowUnselected && !isSelectingState) {
+      return 0;
+    }
+    
     // If selectedKeys is an array (even if empty), use its length as the source of truth
     if (Array.isArray(selectedKeysArray)) {
       return selectedKeysArray.length;
     }
     // Fall back to server's selectedCount only if selectedKeys is not available
     return selectionState?.selectedCount ?? 0;
-  }, [selectionState?.selectedKeys, selectionState?.selectedCount, selectionState]);
+  }, [selectionState?.selectedKeys, selectionState?.selectedCount, selectionState, galleryState, shouldShowUnselected, isSelectingState]);
 
   // Show selection indicators when:
   // 1. In selecting state (can actually select) - show both checkmarks and + buttons
   // 2. OR when approved and viewing "all" photos (to show checkmarks ONLY on selected photos, no + buttons)
   // But NOT when viewing "selected" photos (no checkmarks needed there)
+  // And NOT in "Dokupione" view (bought orders - read-only)
   const showSelectionIndicatorsValue =
-    !isOwnerPreview && (isSelectingState || (galleryState === "approved" && viewMode === "all"));
+    !isOwnerPreview && !shouldShowBought && (isSelectingState || (galleryState === "approved" && viewMode === "all"));
   // Only show unselected indicators (+) when in selecting state
   // When there's no price per additional photo and we've reached the limit, hide all + signs
   // They will reappear when user unselects photos (bringing selection below limit)
@@ -620,10 +802,11 @@ export default function GalleryPage() {
     // Otherwise, show + signs for unselected photos
     return true;
   }, [isOwnerPreview, isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
-  const canSelectValue = !isOwnerPreview && isSelectingState;
+  const canSelectValue = !isOwnerPreview && isSelectingState && !shouldShowBought;
 
   // Combine all loading states to prevent blink between loading screens
   // For delivered view: wait for both selection state AND final images
+  // For bought view: wait for selection state, client-approved orders, AND regular images
   // For regular view: wait for both selection state AND regular images
   const isFullyLoading = useMemo(
     () =>
@@ -634,12 +817,16 @@ export default function GalleryPage() {
       // between "selection loaded" and "finals query enabled".
       (shouldShowDelivered &&
         (isLoadingDeliveredOrders || (orderIdForFinals ? isLoadingFinalImages : false))) ||
-      (!shouldShowDelivered && imagesLoading),
+      // Bought view: load client-approved orders (uses original images, no final images query needed)
+      (shouldShowBought && isLoadingClientApprovedOrders) ||
+      ((!shouldShowDelivered && !shouldShowBought) && imagesLoading),
     [
       isLoading,
       selectionLoading,
       shouldShowDelivered,
+      shouldShowBought,
       isLoadingDeliveredOrders,
+      isLoadingClientApprovedOrders,
       orderIdForFinals,
       isLoadingFinalImages,
       imagesLoading,
@@ -715,10 +902,11 @@ export default function GalleryPage() {
       <Suspense fallback={null}>
         <ZipOverlay
         isVisible={showZipOverlay}
-        zipStatus={zipStatus}
+        zipStatus={zipStatusForOverlay || zipStatus}
         totalPhotos={finalImagesTotalCount}
         onClose={() => {
           setShowZipOverlay(false);
+          setZipOverlayOrderId(null);
         }}
       />
       </Suspense>
@@ -777,23 +965,41 @@ export default function GalleryPage() {
         showDeliveredView={showDeliveredView}
         onDeliveredViewClick={() => {
           setShowDeliveredView(true);
+          setShowBoughtView(false);
+          setShowUnselectedView(false);
+          setSelectedOrderId(null); // Reset to show orders list
+        }}
+        showBoughtView={sectionVisibility.showBoughtView ? showBoughtView : undefined}
+        hasDeliveredOrders={deliveredOrders.length > 0}
+        hasInitialApprovedSelection={isInitialApproval}
+        isLocked={isLocked}
+        onBoughtViewClick={() => {
+          setShowBoughtView(true);
+          setShowDeliveredView(false);
           setShowUnselectedView(false);
         }}
-        showUnselectedView={showUnselectedView}
+        showUnselectedView={hasUnselectedPhotos ? true : undefined}
+        isUnselectedViewActive={shouldShowUnselected}
         onUnselectedViewClick={() => {
           setShowUnselectedView(true);
           setShowDeliveredView(false);
+          setShowBoughtView(false);
         }}
         showBuyMore={
           !isOwnerPreview &&
+          galleryState === "delivered" &&
           selectionState?.hasDeliveredOrder &&
+          !selectionState?.hasClientApprovedOrder &&
           (selectionState?.pricingPackage?.extraPriceCents || 0) > 0 &&
-          !shouldShowDelivered
+          !shouldShowDelivered &&
+          !shouldShowBought &&
+          !shouldShowUnselected
         }
         onBuyMoreClick={isOwnerPreview ? undefined : handleBuyMore}
         onDownloadZip={isOwnerPreview ? undefined : handleDownloadZip}
         zipStatus={zipStatus}
-        showDownloadZip={!isOwnerPreview && shouldShowDelivered && !shouldShowUnselected}
+        showDownloadZip={!isOwnerPreview && shouldShowDelivered && !shouldShowBought && !shouldShowUnselected && !hasMultipleOrders}
+        hasMultipleOrders={hasMultipleOrders}
       />
       
       {/* Delivered orders list (if multiple orders) */}
@@ -802,48 +1008,32 @@ export default function GalleryPage() {
           <h2 className="text-2xl font-bold mb-6">Dostarczone zdjęcia</h2>
           <div className="space-y-4" role="list">
             {deliveredOrders.map((order) => (
-              <div
+              <DeliveredOrderCard
                 key={order.orderId}
-                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-black focus-within:ring-offset-2"
-                onClick={() => setSelectedOrderId(order.orderId)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedOrderId(order.orderId);
-                  }
+                order={order}
+                galleryId={galleryId}
+                isOwnerPreview={isOwnerPreview}
+                onViewClick={setSelectedOrderId}
+                onZipError={(orderId) => {
+                  setZipOverlayOrderId(orderId);
+                  setShowZipOverlay(true);
                 }}
-                tabIndex={0}
-                role="button"
-                aria-label={`Zobacz zamówienie ${order.orderNumber || order.orderId.slice(0, 8)}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">
-                      Zamówienie #{order.orderNumber || order.orderId.slice(0, 8)}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {new Date(order.deliveredAt).toLocaleDateString("pl-PL")} • {order.selectedCount} zdjęć
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedOrderId(order.orderId);
-                    }}
-                    className="btn-primary touch-manipulation min-h-[44px]"
-                    aria-label={`Zobacz zamówienie ${order.orderNumber || order.orderId.slice(0, 8)}`}
-                  >
-                    Zobacz
-                  </button>
-                </div>
-              </div>
+                onZipGenerating={(orderId) => {
+                  setZipOverlayOrderId(orderId);
+                  setShowZipOverlay(true);
+                }}
+              />
             ))}
           </div>
         </div>
       )}
 
       {/* Images grid */}
-      {(!shouldShowDelivered || selectedOrderId || singleOrder || shouldShowUnselected) && (
+      {(() => {
+        // Only show single order view if we're not loading (to avoid flash when multiple orders load)
+        const shouldShowSingleOrder = singleOrder && !isLoadingDeliveredOrders;
+        return !shouldShowDelivered || selectedOrderId || shouldShowSingleOrder || shouldShowBought || shouldShowUnselected;
+      })() && (
         <div className="w-full px-2 md:px-2 lg:px-2 py-4 md:py-4 overflow-hidden">
           <Suspense fallback={<FullPageLoading text="Ładowanie galerii..." />}>
             <LightGalleryWrapper
@@ -884,7 +1074,7 @@ export default function GalleryPage() {
             currentSelectedCount={currentSelectedCount}
           >
             <VirtuosoGridComponent
-              key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
+              key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowBought ? 'bought' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
               images={displayImages}
               layout={gridLayout === "carousel" ? layoutBeforeCarouselRef.current : gridLayout}
               hasNextPage={
@@ -918,6 +1108,7 @@ export default function GalleryPage() {
               showUnselectedIndicators={showUnselectedIndicators}
               enableDownload={shouldShowDelivered}
               onDownload={handleDownload}
+              hideBorders={shouldShowBought}
             />
           </LightGalleryWrapper>
           </Suspense>
