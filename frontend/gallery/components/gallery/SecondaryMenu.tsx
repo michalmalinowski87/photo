@@ -250,7 +250,7 @@ export function SecondaryMenu({
     }
 
     // Show "NIEWYBRANE" if unselected photos exist and price per photo > 0
-    if (showUnselectedView === true && extraPriceCents > 0) {
+    if (showUnselectedView === true) {
       items.push({ id: "unselected", label: "NIEWYBRANE" });
     }
 

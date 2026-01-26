@@ -234,7 +234,8 @@ export default function GalleryPage() {
   const sectionVisibility = useMemo(() => {
     const hasDelivered = deliveredOrders.length > 0;
     const hasClientApproved = hasClientApprovedOrders;
-    const hasUnselected = hasUnselectedPhotos && (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
+    // Allow showing Niewybrane even when extraPriceCents is 0 (user re-enabled this)
+    const hasUnselected = hasUnselectedPhotos;
     
     return {
       showWybor: galleryState === "selecting",
@@ -243,18 +244,19 @@ export default function GalleryPage() {
       showBoughtView: hasClientApproved && hasDelivered, // Buy-more orders when delivered exists
       showNiewybrane: hasUnselected && (hasDelivered || isInitialApproval), // Show if unselected photos exist
     };
-  }, [galleryState, deliveredOrders.length, hasClientApprovedOrders, hasUnselectedPhotos, isInitialApproval, selectionState?.pricingPackage?.extraPriceCents]);
+  }, [galleryState, deliveredOrders.length, hasClientApprovedOrders, hasUnselectedPhotos, isInitialApproval]);
 
   // Determine which view is currently active (simplified state machine)
   const currentView = useMemo(() => {
-    if (showDeliveredView && sectionVisibility.showDostarczone) return "delivered";
-    if (showBoughtView && sectionVisibility.showBoughtView) return "dokupione";
-    if (showUnselectedView && sectionVisibility.showNiewybrane) return "unselected";
-    if (sectionVisibility.showWybrane && !showDeliveredView && !showBoughtView && !showUnselectedView) return "wybrane";
-    if (sectionVisibility.showWybor) return "selecting";
-    // Default: if delivered exists, show delivered
-    if (sectionVisibility.showDostarczone) return "delivered";
-    return "selecting";
+    let result: string;
+    if (showDeliveredView && sectionVisibility.showDostarczone) result = "delivered";
+    else if (showBoughtView && sectionVisibility.showBoughtView) result = "dokupione";
+    else if (showUnselectedView && sectionVisibility.showNiewybrane) result = "unselected";
+    else if (sectionVisibility.showWybrane && !showDeliveredView && !showBoughtView && !showUnselectedView) result = "wybrane";
+    else if (sectionVisibility.showWybor) result = "selecting";
+    else if (sectionVisibility.showDostarczone) result = "delivered";
+    else result = "selecting";
+    return result;
   }, [showDeliveredView, showBoughtView, showUnselectedView, sectionVisibility]);
 
   // Simplified view flags based on currentView
@@ -307,6 +309,7 @@ export default function GalleryPage() {
   }, [shouldShowBought, boughtPhotoKeys, allImages]);
 
   // Filter images based on view mode and state
+  // Priority order: delivered > bought > wybrane > unselected > selected view mode > all
   const displayImages = useMemo(() => {
     if (shouldShowDelivered) {
       return finalImages;
@@ -316,17 +319,36 @@ export default function GalleryPage() {
       return boughtImages;
     }
     
-    if (shouldShowUnselected) {
-      return unselectedImages;
-    }
-    
     // In "wybrane" view, show only selected photos (approved photos)
+    // Check this BEFORE unselected to ensure wybrane takes precedence
     if (shouldShowWybrane) {
       if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys) && selectionState.selectedKeys.length > 0) {
         const selectedSet = new Set(selectionState.selectedKeys);
         return allImages.filter((img) => selectedSet.has(img.key));
       }
       return [];
+    }
+    
+    if (shouldShowUnselected) {
+      // Filter out any selected/approved photos to ensure we only show truly unselected photos
+      // Exclude:
+      // 1. Photos in selectedKeys (from current selection or approved orders)
+      // 2. Photos in CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders (boughtPhotoKeys)
+      // This is a safety net in case backend filtering isn't perfect
+      const excludedKeys = new Set<string>();
+      
+      // Add selectedKeys from selectionState
+      if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
+        selectionState.selectedKeys.forEach((key) => excludedKeys.add(key));
+      }
+      
+      // Add photos from CLIENT_APPROVED orders
+      boughtPhotoKeys.forEach((key) => excludedKeys.add(key));
+      
+      if (excludedKeys.size > 0) {
+        return unselectedImages.filter((img) => !excludedKeys.has(img.key));
+      }
+      return unselectedImages;
     }
     
     if (viewMode === "selected") {
@@ -338,7 +360,7 @@ export default function GalleryPage() {
     }
     
     return allImages;
-  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowUnselected, unselectedImages, shouldShowWybrane, viewMode, allImages, selectionState?.selectedKeys, orderIdForFinals]);
+  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowWybrane, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys, boughtPhotoKeys, orderIdForFinals]);
 
   // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
   // Get queryClient to access latest cache state and avoid stale closures
@@ -958,8 +980,8 @@ export default function GalleryPage() {
         isLocked={isLocked}
         isWybraneViewActive={shouldShowWybrane}
         onBoughtViewClick={() => {
-          // If in wybrane context (initial approval), ensure we stay in wybrane view
-          if (isInitialApproval && !hasClientApprovedOrders) {
+          // If in wybrane context (initial approval), switch to wybrane view
+          if (sectionVisibility.showWybrane) {
             setShowBoughtView(false);
             setShowDeliveredView(false);
             setShowUnselectedView(false);
