@@ -100,10 +100,7 @@ export function useImageSelection(options: UseImageSelectionOptions = {}): UseIm
                 isSelectionMode?: boolean;
               };
               // If selection is empty and we're exiting selection mode, remove the entry
-              if (
-                (!parsed.selectedKeys || parsed.selectedKeys.length === 0) &&
-                !newMode
-              ) {
+              if ((!parsed.selectedKeys || parsed.selectedKeys.length === 0) && !newMode) {
                 sessionStorage.removeItem(storageKey);
               }
             }

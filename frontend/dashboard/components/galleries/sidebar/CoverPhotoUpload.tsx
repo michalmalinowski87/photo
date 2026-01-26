@@ -13,6 +13,8 @@ import { formatApiError } from "../../../lib/api-service";
 import { queryKeys } from "../../../lib/react-query";
 import { RetryableImage } from "../../ui/RetryableImage";
 
+import { LoginPersonalizationOverlay } from "./LoginPersonalizationOverlay";
+
 export const CoverPhotoUpload = () => {
   const router = useRouter();
   const galleryIdParam = Array.isArray(router.query.id) ? router.query.id[0] : router.query.id;
@@ -58,6 +60,10 @@ export const CoverPhotoUpload = () => {
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showPersonalizationOverlay, setShowPersonalizationOverlay] = useState(false);
+  const [uploadedCoverPhotoUrl, setUploadedCoverPhotoUrl] = useState<string | null>(null);
+  const justUploadedRef = useRef(false);
+  const handledSuccessRef = useRef<string | null>(null);
 
   // Determine upload/processing states based on mutation and phase
   // If phase is not set yet but mutation is pending, default to uploading
@@ -65,9 +71,16 @@ export const CoverPhotoUpload = () => {
     uploadCoverPhotoMutation.isPending && (uploadPhase === "uploading" || uploadPhase === null);
   const isProcessing = uploadCoverPhotoMutation.isPending && uploadPhase === "processing";
 
-  // Handle mutation success/error with toasts
+  // Handle mutation success/error with toasts and show overlay
   useEffect(() => {
     if (uploadCoverPhotoMutation.isSuccess && uploadCoverPhotoMutation.data) {
+      const coverUrl = uploadCoverPhotoMutation.data.coverPhotoUrl;
+
+      // Skip if we've already handled this success (prevent duplicate handling)
+      if (handledSuccessRef.current === coverUrl) {
+        return;
+      }
+
       if (uploadCoverPhotoMutation.data.warning) {
         showToast(
           "warning",
@@ -77,14 +90,90 @@ export const CoverPhotoUpload = () => {
       } else {
         showToast("success", "Sukces", "Okładka galerii została przesłana");
       }
-      // The blob will be cleared automatically by the useEffect when real data arrives
-      uploadCoverPhotoMutation.reset();
+
+      // Mark as handled immediately to prevent duplicate processing
+      handledSuccessRef.current = coverUrl || null;
+
+      // Show overlay if we have a cover photo URL from the mutation response
+      if (coverUrl && typeof coverUrl === "string" && !showPersonalizationOverlay) {
+        // Small delay to ensure the toast is shown first
+        const timer = setTimeout(() => {
+          setUploadedCoverPhotoUrl(coverUrl);
+          setShowPersonalizationOverlay(true);
+          // Reset mutation after showing overlay to allow future uploads
+          uploadCoverPhotoMutation.reset();
+          handledSuccessRef.current = null;
+        }, 500);
+
+        return () => clearTimeout(timer);
+      } else {
+        // Mark that we just uploaded - this will trigger overlay when gallery data updates
+        justUploadedRef.current = true;
+        uploadCoverPhotoMutation.reset();
+        handledSuccessRef.current = null;
+      }
     }
   }, [
     uploadCoverPhotoMutation.isSuccess,
     uploadCoverPhotoMutation.data,
-    uploadCoverPhotoMutation,
     showToast,
+    showPersonalizationOverlay,
+  ]);
+
+  // Fallback: Show overlay when gallery data updates after upload (if mutation didn't have URL)
+  useEffect(() => {
+    if (
+      justUploadedRef.current &&
+      !showPersonalizationOverlay &&
+      !uploadCoverPhotoMutation.isPending &&
+      hasCloudFrontUrl &&
+      gallery?.coverPhotoUrl
+    ) {
+      // #region agent log
+      fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: "CoverPhotoUpload.tsx:120",
+          message: "Fallback condition met - showing overlay",
+          data: { galleryCoverUrl: gallery.coverPhotoUrl },
+          timestamp: Date.now(),
+          sessionId: "debug-session",
+          runId: "run1",
+          hypothesisId: "D",
+        }),
+      }).catch(() => {});
+      // #endregion
+      // Reset the flag
+      justUploadedRef.current = false;
+
+      // Small delay to ensure the toast is shown first
+      const timer = setTimeout(() => {
+        // #region agent log
+        fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "CoverPhotoUpload.tsx:127",
+            message: "Fallback timer fired - showing overlay",
+            data: { galleryCoverUrl: gallery.coverPhotoUrl },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            runId: "run1",
+            hypothesisId: "D",
+          }),
+        }).catch(() => {});
+        // #endregion
+        setUploadedCoverPhotoUrl(gallery.coverPhotoUrl as string);
+        setShowPersonalizationOverlay(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    hasCloudFrontUrl,
+    gallery?.coverPhotoUrl,
+    showPersonalizationOverlay,
+    uploadCoverPhotoMutation.isPending,
   ]);
 
   useEffect(() => {
@@ -280,16 +369,30 @@ export const CoverPhotoUpload = () => {
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium">
                   Kliknij na obraz aby zmienić
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleRemoveCoverPhoto(e);
-                  }}
-                  disabled={updateGalleryMutation.isPending}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Usuń okładkę
-                </button>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string") {
+                        setUploadedCoverPhotoUrl(gallery.coverPhotoUrl);
+                        setShowPersonalizationOverlay(true);
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-photographer-accent hover:bg-photographer-accentDark text-white text-xs font-medium rounded-md transition-colors"
+                  >
+                    Personalizuj
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleRemoveCoverPhoto(e);
+                    }}
+                    disabled={updateGalleryMutation.isPending}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Usuń
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -336,6 +439,21 @@ export const CoverPhotoUpload = () => {
           className="hidden"
         />
       </div>
+
+      {/* Login Personalization Overlay */}
+      {galleryId &&
+        (uploadedCoverPhotoUrl || (showPersonalizationOverlay && gallery?.coverPhotoUrl)) && (
+          <LoginPersonalizationOverlay
+            isOpen={showPersonalizationOverlay}
+            onClose={() => {
+              setShowPersonalizationOverlay(false);
+              setUploadedCoverPhotoUrl(null);
+              justUploadedRef.current = false;
+            }}
+            galleryId={galleryId}
+            coverPhotoUrl={uploadedCoverPhotoUrl || (gallery?.coverPhotoUrl as string) || ""}
+          />
+        )}
     </div>
   );
 };

@@ -91,12 +91,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setUser(userIdentity);
             setIsAuthenticated(true);
             setIsLoading(false);
-            
+
             // Fetch config after successful authentication (non-blocking)
             getConfig().catch((error) => {
-              console.warn('Failed to fetch config after login:', error);
+              console.warn("Failed to fetch config after login:", error);
             });
-            
+
             return;
           }
         } catch {
@@ -154,10 +154,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (userIdentity) {
               setUser(userIdentity);
               setIsAuthenticated(true);
-              
+
               // Fetch config after token refresh (non-blocking)
               getConfig().catch((error) => {
-                console.warn('Failed to fetch config after refresh:', error);
+                console.warn("Failed to fetch config after refresh:", error);
               });
             }
           }
@@ -190,10 +190,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (userIdentity) {
               setUser(userIdentity);
               setIsAuthenticated(true);
-              
+
               // Fetch config after successful authentication (non-blocking)
               getConfig().catch((error) => {
-                console.warn('Failed to fetch config after initialization:', error);
+                console.warn("Failed to fetch config after initialization:", error);
               });
             } else {
               setIsAuthenticated(false);

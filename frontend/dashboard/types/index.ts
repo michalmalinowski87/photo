@@ -39,6 +39,13 @@ export interface Gallery {
   clientFirstName?: string;
   clientLastName?: string;
   ownerSubdomain?: string | null;
+  loginPageLayout?: string;
+  coverPhotoPosition?: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    objectPosition?: string;
+  };
   [key: string]: unknown;
 }
 

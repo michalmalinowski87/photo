@@ -60,6 +60,13 @@ export interface GalleryItem extends DynamoDBItem {
 		packagePriceCents?: number;
 	};
 	coverPhotoUrl?: string;
+	loginPageLayout?: string;
+	coverPhotoPosition?: {
+		x?: number;
+		y?: number;
+		scale?: number;
+		objectPosition?: string;
+	};
 	expiresAt?: string;
 	expiryScheduleName?: string;
 	createdAt?: string;

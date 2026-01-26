@@ -377,7 +377,8 @@ export function GallerySettingsForm({
               packagePriceCents?: number;
             }
           | undefined;
-        const extraPriceChanged = settingsForm.extraPriceCents !== (currentPkg?.extraPriceCents ?? 0);
+        const extraPriceChanged =
+          settingsForm.extraPriceCents !== (currentPkg?.extraPriceCents ?? 0);
 
         // Update gallery name if changed
         if (galleryNameChanged) {
@@ -582,11 +583,7 @@ export function GallerySettingsForm({
 
           <div className="flex justify-end gap-3 mt-4">
             {showCancelButton && (
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                disabled={saving}
-              >
+              <Button variant="outline" onClick={handleCancel} disabled={saving}>
                 {cancelLabel}
               </Button>
             )}

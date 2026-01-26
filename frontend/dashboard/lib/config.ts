@@ -3,8 +3,8 @@
  * Aggressively caches config in localStorage and memory
  */
 
-const CONFIG_CACHE_KEY = 'photocloud_config';
-const CONFIG_CACHE_TIMESTAMP_KEY = 'photocloud_config_timestamp';
+const CONFIG_CACHE_KEY = "photocloud_config";
+const CONFIG_CACHE_TIMESTAMP_KEY = "photocloud_config_timestamp";
 const CONFIG_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 interface AppConfig {
@@ -21,13 +21,13 @@ let configCacheTimestamp: number = 0;
  */
 function getCachedConfig(): AppConfig | null {
   try {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       return null;
     }
 
     const cached = localStorage.getItem(CONFIG_CACHE_KEY);
     const timestampStr = localStorage.getItem(CONFIG_CACHE_TIMESTAMP_KEY);
-    
+
     if (!cached || !timestampStr) {
       return null;
     }
@@ -44,15 +44,15 @@ function getCachedConfig(): AppConfig | null {
     }
 
     const config = JSON.parse(cached) as AppConfig;
-    
+
     // Update in-memory cache
     configCache = config;
     configCacheTimestamp = timestamp;
-    
+
     return config;
   } catch {
     // Invalid cache, clear it
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       localStorage.removeItem(CONFIG_CACHE_KEY);
       localStorage.removeItem(CONFIG_CACHE_TIMESTAMP_KEY);
     }
@@ -64,7 +64,7 @@ function getCachedConfig(): AppConfig | null {
  * Store config in cache (localStorage and memory)
  */
 function setCachedConfig(config: AppConfig): void {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -72,13 +72,13 @@ function setCachedConfig(config: AppConfig): void {
     const timestamp = Date.now();
     localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
     localStorage.setItem(CONFIG_CACHE_TIMESTAMP_KEY, timestamp.toString());
-    
+
     // Update in-memory cache
     configCache = config;
     configCacheTimestamp = timestamp;
   } catch (error) {
     // localStorage might be full or disabled, continue without caching
-    console.warn('Failed to cache config:', error);
+    console.warn("Failed to cache config:", error);
   }
 }
 
@@ -88,13 +88,13 @@ function setCachedConfig(config: AppConfig): void {
 async function fetchConfig(): Promise<AppConfig> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!apiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL is not configured');
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
   }
 
   const response = await fetch(`${apiUrl}/config`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
 
@@ -102,7 +102,7 @@ async function fetchConfig(): Promise<AppConfig> {
     throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`);
   }
 
-  const config = await response.json() as AppConfig;
+  const config = (await response.json()) as AppConfig;
   return config;
 }
 
@@ -113,7 +113,7 @@ async function fetchConfig(): Promise<AppConfig> {
  */
 export async function getConfig(forceRefresh: boolean = false): Promise<AppConfig> {
   // Check in-memory cache first (fastest)
-  if (!forceRefresh && configCache && (Date.now() - configCacheTimestamp) < CONFIG_CACHE_TTL) {
+  if (!forceRefresh && configCache && Date.now() - configCacheTimestamp < CONFIG_CACHE_TTL) {
     return configCache;
   }
 
@@ -134,10 +134,10 @@ export async function getConfig(forceRefresh: boolean = false): Promise<AppConfi
     // If fetch fails, try to return stale cache as fallback
     const staleCache = getCachedConfig();
     if (staleCache) {
-      console.warn('Failed to fetch config, using stale cache:', error);
+      console.warn("Failed to fetch config, using stale cache:", error);
       return staleCache;
     }
-    
+
     // No cache available, throw error
     throw error;
   }
@@ -149,7 +149,7 @@ export async function getConfig(forceRefresh: boolean = false): Promise<AppConfi
  */
 export function getCachedConfigSync(): AppConfig | null {
   // Check in-memory cache first
-  if (configCache && (Date.now() - configCacheTimestamp) < CONFIG_CACHE_TTL) {
+  if (configCache && Date.now() - configCacheTimestamp < CONFIG_CACHE_TTL) {
     return configCache;
   }
 
@@ -162,7 +162,7 @@ export function getCachedConfigSync(): AppConfig | null {
  * Clears both localStorage and in-memory cache
  */
 export function invalidateConfigCache(): void {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     localStorage.removeItem(CONFIG_CACHE_KEY);
     localStorage.removeItem(CONFIG_CACHE_TIMESTAMP_KEY);
   }

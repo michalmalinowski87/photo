@@ -168,6 +168,38 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 	
+	if (body.loginPageLayout !== undefined && typeof body.loginPageLayout === 'string') {
+		setExpressions.push('loginPageLayout = :loginPageLayout');
+		expressionAttributeValues[':loginPageLayout'] = body.loginPageLayout.trim();
+	}
+	
+	if (body.coverPhotoPosition !== undefined) {
+		if (body.coverPhotoPosition === null) {
+			removeExpressions.push('coverPhotoPosition');
+		} else if (typeof body.coverPhotoPosition === 'object' && body.coverPhotoPosition !== null) {
+			// Validate the object structure
+			const position = body.coverPhotoPosition as {
+				x?: number;
+				y?: number;
+				scale?: number;
+				objectPosition?: string;
+			};
+			// Only update if it's a valid object
+			if (
+				position.x === undefined && 
+				position.y === undefined && 
+				position.scale === undefined && 
+				position.objectPosition === undefined
+			) {
+				// Empty object, remove the field
+				removeExpressions.push('coverPhotoPosition');
+			} else {
+				setExpressions.push('coverPhotoPosition = :coverPhotoPosition');
+				expressionAttributeValues[':coverPhotoPosition'] = position;
+			}
+		}
+	}
+	
 	setExpressions.push('updatedAt = :u');
 		expressionAttributeValues[':u'] = new Date().toISOString();
 	

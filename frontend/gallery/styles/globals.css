@@ -377,6 +377,38 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Override LoginFormPane width and alignment for angled-split layout to match preview */
+.angled-split-form-wrapper > section {
+  width: 100% !important;
+  min-height: auto !important;
+  height: auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.angled-split-form-wrapper > section > div {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+@media (min-width: 768px) {
+  .angled-split-form-wrapper > section {
+    width: 100% !important;
+    min-width: 24rem !important;
+    margin-left: auto !important;
+    margin-right: -5rem !important;
+    min-height: auto !important;
+    height: auto !important;
+    padding-top: 2.5rem !important;
+    padding-bottom: 2.5rem !important;
+  }
+  
+  .angled-split-form-wrapper > section > div {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 /* Long-press feedback for download buttons */
 .download-button-longpress {
   animation: heartbeat 0.6s ease-in-out;

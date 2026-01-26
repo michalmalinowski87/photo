@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
-import { LoginCoverPane } from "@/components/login/LoginCoverPane";
+import { LoginCoverPane, type GalleryPublicInfo } from "@/components/login/LoginCoverPane";
 import { LoginFormPane } from "@/components/login/LoginFormPane";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { defaultLoginPageConfig } from "@/config/login-page";
@@ -22,6 +22,7 @@ function LoginScreen() {
   // Use module-level API URL or get it on mount (fallback for SSR)
   const [apiUrl] = useState(() => API_URL || (typeof window !== "undefined" ? getPublicApiUrl() : ""));
   const [galleryName, setGalleryName] = useState<string | null>(null);
+  const [loginPageLayout, setLoginPageLayout] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isPublicInfoLoading, setIsPublicInfoLoading] = useState(true);
 
@@ -30,8 +31,9 @@ function LoginScreen() {
     setIsPublicInfoLoading(loading);
   }, []);
 
-  const handlePublicInfoLoaded = useCallback((info: { galleryName: string | null }) => {
+  const handlePublicInfoLoaded = useCallback((info: GalleryPublicInfo) => {
     setGalleryName(info.galleryName);
+    setLoginPageLayout(info.loginPageLayout || null);
     // Update document title for better SEO
     if (info.galleryName && typeof document !== "undefined") {
       document.title = `${info.galleryName} - PhotoCloud`;
@@ -81,6 +83,45 @@ function LoginScreen() {
     [isPublicInfoLoading, isLoggingIn]
   );
 
+  // Determine layout classes based on loginPageLayout setting
+  const layoutClasses = useMemo(() => {
+    const layout = loginPageLayout || "split";
+    
+    switch (layout) {
+      case "angled-split":
+        return {
+          container: "min-h-screen relative",
+          coverPane: "absolute inset-0 w-full h-full min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50 z-0",
+          formPane: "absolute right-0 top-0 bottom-0 w-full md:w-[45%] min-h-[320px] md:min-h-screen bg-white flex items-center justify-center z-10",
+          formPaneStyle: {
+            clipPath: "polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%)",
+          } as React.CSSProperties,
+        };
+      case "centered":
+        return {
+          container: "min-h-screen relative overflow-hidden",
+          coverPane: "absolute inset-0 w-full h-full",
+          formPane: "absolute inset-0 z-10 w-full h-full flex items-center justify-center bg-white/80 backdrop-blur-sm px-6 py-10",
+          formPaneStyle: {},
+        };
+      case "full-cover":
+        return {
+          container: "min-h-screen relative overflow-hidden",
+          coverPane: "absolute inset-0 w-full h-full",
+          formPane: "absolute inset-0 z-10 w-full h-full flex items-center justify-center bg-black/40 backdrop-blur-sm px-6 py-10",
+          formPaneStyle: {},
+        };
+      case "split":
+      default:
+        return {
+          container: "min-h-screen flex flex-col md:flex-row",
+          coverPane: "relative w-full md:w-[64%] min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50",
+          formPane: "relative w-full md:w-[36%] min-h-[320px] md:min-h-screen bg-white flex items-center justify-center",
+          formPaneStyle: {},
+        };
+    }
+  }, [loginPageLayout]);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Loading overlay at page level - show until public-info loads, then during login */}
@@ -89,20 +130,38 @@ function LoginScreen() {
         text={isLoggingIn ? defaultLoginPageConfig.submitLoadingLabel : "Ładowanie..."}
       />
       {/* Always render components so they can make API calls, but overlay will hide content */}
-      <div className="min-h-screen flex flex-col md:flex-row" style={{ visibility: isPublicInfoLoading ? 'hidden' : 'visible' }}>
-        <LoginCoverPane
-          galleryId={galleryId}
-          apiUrl={apiUrl}
-          onPublicInfoLoadingChange={handlePublicInfoLoadingChange}
-          onPublicInfoLoaded={handlePublicInfoLoaded}
-        />
-        <LoginFormPane 
-          galleryId={galleryId} 
-          apiUrl={apiUrl} 
-          galleryName={galleryName}
-          onLoginStart={handleLoginStart}
-          onLoginComplete={handleLoginComplete}
-        />
+      <div className={layoutClasses.container} style={{ visibility: isPublicInfoLoading ? 'hidden' : 'visible' }}>
+        <div className={layoutClasses.coverPane}>
+          <LoginCoverPane
+            galleryId={galleryId}
+            apiUrl={apiUrl}
+            onPublicInfoLoadingChange={handlePublicInfoLoadingChange}
+            onPublicInfoLoaded={handlePublicInfoLoaded}
+          />
+        </div>
+        <div className={layoutClasses.formPane} style={layoutClasses.formPaneStyle}>
+          {loginPageLayout === "angled-split" && (
+            <div
+              className="absolute left-0 top-0 bottom-0 w-px bg-gray-200"
+              style={{
+                transform: "skewX(-8deg)",
+                transformOrigin: "top left",
+              }}
+            />
+          )}
+          <div 
+            className={loginPageLayout === "angled-split" ? "angled-split-form-wrapper" : "w-full"}
+          >
+            <LoginFormPane 
+              galleryId={galleryId} 
+              apiUrl={apiUrl} 
+              galleryName={galleryName}
+              onLoginStart={handleLoginStart}
+              onLoginComplete={handleLoginComplete}
+              loginPageLayout={loginPageLayout}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

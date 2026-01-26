@@ -183,6 +183,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		body: JSON.stringify({
 			galleryName: gallery.galleryName || null,
 			coverPhotoUrl,
+			loginPageLayout: gallery.loginPageLayout || null,
+			coverPhotoPosition: gallery.coverPhotoPosition || null,
 			ownerSubdomain: ownerSubdomain || null,
 		}),
 	};

@@ -10,6 +10,13 @@ import { getQuoteForGallery, getRotatingQuoteForGallery } from "@/lib/quotes";
 export interface GalleryPublicInfo {
   galleryName: string | null;
   coverPhotoUrl: string | null;
+  loginPageLayout?: string | null;
+  coverPhotoPosition?: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    objectPosition?: string;
+  } | null;
 }
 
 export const LoginCoverPane = memo(function LoginCoverPane({
@@ -72,7 +79,12 @@ export const LoginCoverPane = memo(function LoginCoverPane({
         onPublicInfoLoaded?.(info);
       } catch {
         // Non-blocking: if we can't load public info, assume no cover and show PhotoCloud fallback.
-        setPublicInfo({ galleryName: null, coverPhotoUrl: null });
+        setPublicInfo({ 
+          galleryName: null, 
+          coverPhotoUrl: null,
+          loginPageLayout: null,
+          coverPhotoPosition: null,
+        });
       } finally {
         // Only update state if this request wasn't aborted
         if (!controller.signal.aborted) {
@@ -90,9 +102,36 @@ export const LoginCoverPane = memo(function LoginCoverPane({
   }, [galleryId, apiUrl, onPublicInfoLoaded, onPublicInfoLoadingChange]);
 
   const coverPhotoUrl = publicInfo?.coverPhotoUrl || null;
+  const coverPhotoPosition = publicInfo?.coverPhotoPosition;
   const isResolved = publicInfo !== null;
   // Important: initial render must be deterministic to avoid hydration mismatch.
   const [quote, setQuote] = React.useState(() => getQuoteForGallery(galleryId));
+  
+  // Calculate image styles based on position settings
+  const imageStyle = React.useMemo(() => {
+    const style: React.CSSProperties = {};
+    
+    // Apply object-position if specified (ALWAYS honor if exists)
+    if (coverPhotoPosition?.objectPosition) {
+      style.objectPosition = coverPhotoPosition.objectPosition;
+    } else {
+      // Default to center if no position specified
+      style.objectPosition = '50% 50%';
+    }
+    
+    return style;
+  }, [coverPhotoPosition]);
+  
+  // Calculate wrapper transform for scale (applied to wrapper div, not Image)
+  const wrapperStyle = React.useMemo(() => {
+    if (coverPhotoPosition?.scale !== undefined && coverPhotoPosition.scale !== 1) {
+      return {
+        transform: `scale(${coverPhotoPosition.scale})`,
+        transformOrigin: 'center center',
+      } as React.CSSProperties;
+    }
+    return undefined;
+  }, [coverPhotoPosition]);
 
   React.useEffect(() => {
     // Rotate after mount (client-only). This avoids server/client text mismatch on hydration.
@@ -100,19 +139,25 @@ export const LoginCoverPane = memo(function LoginCoverPane({
   }, [galleryId]);
 
   return (
-    <section className="relative w-full md:w-[55%] min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50">
+    <section className="relative w-full h-full min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50">
       {/* Workflow: start with loader → then render cover OR fallback once resolved */}
       {isResolved ? (
         coverPhotoUrl ? (
-          <Image
-            src={coverPhotoUrl}
-            alt=""
-            fill
-            className="object-cover object-center"
-            priority
-            unoptimized={coverPhotoUrl.startsWith("http")}
-            sizes="(max-width: 768px) 100vw, 55vw"
-          />
+          <div 
+            className="absolute inset-0"
+            style={wrapperStyle}
+          >
+            <Image
+              src={coverPhotoUrl}
+              alt=""
+              fill
+              className="object-cover"
+              style={imageStyle}
+              priority
+              unoptimized={coverPhotoUrl.startsWith("http")}
+              sizes="(max-width: 768px) 100vw, 60vw"
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-full max-w-xl px-10 text-center">

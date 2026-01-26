@@ -152,9 +152,12 @@ function AppContent({ Component, pageProps }: AppProps) {
     if (typeof window !== "undefined" && !is404Page) {
       // Run cleanup once on mount, then periodically (every 5 minutes)
       cleanupStaleSessionStorage();
-      const interval = setInterval(() => {
-        cleanupStaleSessionStorage();
-      }, 5 * 60 * 1000); // 5 minutes
+      const interval = setInterval(
+        () => {
+          cleanupStaleSessionStorage();
+        },
+        5 * 60 * 1000
+      ); // 5 minutes
 
       return () => clearInterval(interval);
     }

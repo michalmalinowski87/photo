@@ -16,12 +16,14 @@ export const LoginFormPane = memo(function LoginFormPane({
   galleryName,
   onLoginStart,
   onLoginComplete,
+  loginPageLayout,
 }: {
   galleryId: string;
   apiUrl: string;
   galleryName: string | null;
   onLoginStart?: () => void;
   onLoginComplete?: () => void;
+  loginPageLayout?: string | null;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -119,26 +121,43 @@ export const LoginFormPane = memo(function LoginFormPane({
     }
   }
 
-  return (
-    <section className="w-full md:w-[45%] min-h-[calc(100vh-320px)] md:min-h-screen bg-white flex items-center justify-center px-6 py-10">
+  // Form container should always be w-full - parent container sets layout-specific width
+  // Form content width varies by layout to match preview
+  const formContentClass = loginPageLayout === "angled-split"
+    ? "w-full" // CSS override will constrain it to max-w-[20rem] with margins
+    : "w-full max-w-md"; // Default max-width for other layouts
 
-      <div className="w-full max-w-md">
+  // Adjust background and padding based on layout
+  const sectionBg = loginPageLayout === "centered" || loginPageLayout === "full-cover"
+    ? "bg-transparent" // No background for centered/full-cover - parent has the overlay
+    : "bg-white";
+  
+  const sectionPadding = loginPageLayout === "angled-split" 
+    ? "px-6 py-10" 
+    : "px-6 py-10";
+
+  return (
+    <section className={`w-full min-h-[calc(100vh-320px)] md:min-h-screen ${sectionBg} flex items-center justify-center ${sectionPadding}`}>
+
+      <div className={formContentClass}>
         <div className="mb-8">
           <h1
-            className="mt-5 text-5xl md:text-6xl text-gray-900 truncate gallery-name-button"
+            className={`${loginPageLayout === "angled-split" ? "mt-5 text-4xl md:text-5xl" : loginPageLayout === "full-cover" ? "mt-5 text-5xl md:text-6xl text-white" : "mt-5 text-5xl md:text-6xl"} ${loginPageLayout === "full-cover" ? "text-white" : "text-gray-900"} ${loginPageLayout === "centered" || loginPageLayout === "full-cover" ? "text-center" : ""} truncate gallery-name-button`}
             style={{ fontFamily: "'The Wedding Signature', cursive" }}
             title={displayName}
           >
             {displayName}
           </h1>
-          <p className="mt-4 text-base text-gray-600">
-            {defaultLoginPageConfig.welcomeMessage}
-          </p>
+          {loginPageLayout !== "angled-split" && (
+            <p className={`mt-4 text-base ${loginPageLayout === "full-cover" ? "text-white/90" : "text-gray-600"} ${loginPageLayout === "centered" || loginPageLayout === "full-cover" ? "text-center" : ""}`}>
+              {defaultLoginPageConfig.welcomeMessage}
+            </p>
+          )}
         </div>
 
         <form
           onSubmit={handleLogin}
-          className="space-y-5"
+          className={loginPageLayout === "angled-split" ? "space-y-5" : "space-y-5"}
           autoComplete="off"
           data-1p-ignore="true"
           data-lpignore="true"
@@ -147,17 +166,19 @@ export const LoginFormPane = memo(function LoginFormPane({
           data-form-type="other"
         >
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {defaultLoginPageConfig.passwordLabel}
-            </label>
+            {loginPageLayout !== "angled-split" && (
+              <label className={`block text-sm font-medium mb-2 ${loginPageLayout === "full-cover" ? "text-white" : "text-gray-700"}`}>
+                {defaultLoginPageConfig.passwordLabel}
+              </label>
+            )}
             <input
               type="password"
               name="gallery-access-code"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={defaultLoginPageConfig.passwordPlaceholder}
+              placeholder={loginPageLayout === "angled-split" ? defaultLoginPageConfig.passwordPlaceholder : defaultLoginPageConfig.passwordPlaceholder}
               disabled={loading}
-              className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg box-border transition-colors outline-none focus:border-black focus:ring-1 focus:ring-black"
+              className={`w-full px-4 py-3 text-base ${loginPageLayout === "full-cover" ? "border border-white/30 bg-white/90 text-gray-900 placeholder:text-gray-500 focus:border-white focus:ring-1 focus:ring-white" : "border border-gray-300 rounded-lg bg-white text-gray-900 focus:border-black focus:ring-1 focus:ring-black"} box-border transition-colors outline-none`}
               autoFocus
               // Prevent browsers/extensions from treating this as a saved-login password field.
               autoComplete="off"

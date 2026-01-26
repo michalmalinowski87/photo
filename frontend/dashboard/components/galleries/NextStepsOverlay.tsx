@@ -129,11 +129,7 @@ export const NextStepsOverlay = () => {
     // Only hide if actual URL has publish param (don't trust router.query which can be stale)
     // Since store says wizard is closed, we should ignore URL params, but check actual URL for safety
     return Boolean(actualUrlHasPublish);
-  }, [
-    router.pathname,
-    gallery?.galleryId,
-    publishFlowIsOpen,
-  ]);
+  }, [router.pathname, gallery?.galleryId, publishFlowIsOpen]);
 
   // Load tutorial preference - deferred until overlay is expanded or user interacts
   const loadTutorialPreference = useCallback(() => {
