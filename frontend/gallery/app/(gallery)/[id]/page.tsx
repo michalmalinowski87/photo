@@ -335,9 +335,6 @@ export default function GalleryPage() {
     }
     
     if (shouldShowUnselected) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:332',message:'Niewybrane filtering - entry',data:{galleryState,isSelectingState,isLocked,selectedKeysCount:selectionState?.selectedKeys?.length||0,boughtPhotoKeysCount:boughtPhotoKeys.size,unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       // Filter out any selected/approved photos to ensure we only show truly unselected photos
       // Exclude:
       // 1. Photos in selectedKeys (from current selection or approved orders) - ONLY when selection is disabled
@@ -345,38 +342,18 @@ export default function GalleryPage() {
       // This is a safety net in case backend filtering isn't perfect
       const excludedKeys = new Set<string>();
       
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:342',message:'Before excluding selectedKeys',data:{isSelectingState,willExcludeSelectedKeys:!isSelectingState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       // Add selectedKeys from selectionState ONLY when selection is disabled (approved/changesRequested/preparingDelivery)
       // When selection is enabled, photos should remain visible in Niewybrane even after being selected
       if (!isSelectingState && selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:347',message:'Excluding selectedKeys (selection disabled)',data:{selectedKeysCount:selectionState.selectedKeys.length,selectedKeys:selectionState.selectedKeys.slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         selectionState.selectedKeys.forEach((key) => excludedKeys.add(key));
-      } else if (isSelectingState && selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:352',message:'NOT excluding selectedKeys (selection enabled)',data:{selectedKeysCount:selectionState.selectedKeys.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
       }
       
       // Add photos from CLIENT_APPROVED orders
       boughtPhotoKeys.forEach((key) => excludedKeys.add(key));
       
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:360',message:'After building excludedKeys',data:{excludedKeysCount:excludedKeys.size,unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       if (excludedKeys.size > 0) {
-        const filtered = unselectedImages.filter((img) => !excludedKeys.has(img.key));
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:365',message:'Niewybrane filtering - result',data:{filteredCount:filtered.length,excludedCount:unselectedImages.length-filtered.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        return filtered;
+        return unselectedImages.filter((img) => !excludedKeys.has(img.key));
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:371',message:'Niewybrane filtering - no exclusions',data:{unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return unselectedImages;
     }
     
