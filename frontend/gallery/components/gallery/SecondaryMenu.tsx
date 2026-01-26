@@ -95,10 +95,16 @@ export function SecondaryMenu({
   const shouldBeSticky = state === "selecting";
 
   // Determine if selection is enabled - locked when isLocked is true
+  // Also disable selection in unselected view when extraPriceCents is 0 or not set
   const isSelectionEnabled = useMemo(() => {
     if (isLocked) return false;
-    return state === "selecting" || (isUnselectedViewActive && state === "delivered");
-  }, [state, isUnselectedViewActive, isLocked]);
+    if (isUnselectedViewActive && state === "delivered") {
+      // Only enable selection if there's a price per additional photo
+      const pricePerPhoto = selectionState?.pricingPackage?.extraPriceCents ?? 0;
+      return pricePerPhoto > 0;
+    }
+    return state === "selecting";
+  }, [state, isUnselectedViewActive, isLocked, selectionState?.pricingPackage?.extraPriceCents]);
 
   const hasError = zipStatus?.status === "error";
   const zipCtaText = hasError
@@ -393,13 +399,14 @@ export function SecondaryMenu({
             )}
 
             {/* Niewybrane view status - show price calculation for all selected photos */}
+            {/* Only show when extraPriceCents > 0 (selection is enabled) */}
             {!showDeliveredView && isSelectionEnabled && isUnselectedViewActive && extraPriceCents > 0 && selectedCount > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Dodatkowe ujęcia {selectedCount} × {formatPrice(extraPriceCents)} ={" "}
                 {formatPrice(selectedCount * extraPriceCents)}
               </span>
             )}
-            {!showDeliveredView && isSelectionEnabled && isUnselectedViewActive && (
+            {!showDeliveredView && isSelectionEnabled && isUnselectedViewActive && extraPriceCents > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Wybrane: {selectedCount}
               </span>
@@ -408,7 +415,8 @@ export function SecondaryMenu({
             {/* Action buttons - HIDE all when in DOSTARCZONE view (only show ZIP-related UI) */}
             {/* Unified approve/buy button: "ZATWIERDŹ WYBÓR" or "KUP WIĘCEJ ZDJĘĆ" based on context */}
             {/* Locked when isLocked is true (approved, changesRequested, or hasClientApprovedOrder) */}
-            {!showDeliveredView && !isLocked && (state === "selecting" || (isUnselectedViewActive && state === "delivered")) && onApproveSelection && (
+            {/* In unselected view with delivered state, only show button if extraPriceCents > 0 */}
+            {!showDeliveredView && !isLocked && (state === "selecting" || (isUnselectedViewActive && state === "delivered" && extraPriceCents > 0)) && onApproveSelection && (
               <button
                 ref={(el) => {
                   buttonRefs.current["approve"] = el;

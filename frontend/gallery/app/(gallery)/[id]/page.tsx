@@ -283,8 +283,13 @@ export default function GalleryPage() {
     // Lock selection when locked state is active
     if (isLocked) return false;
     // Allow selection when in "selecting" state OR when viewing unselected photos in delivered state
-    return galleryState === "selecting" || (shouldShowUnselected && galleryState === "delivered");
-  }, [galleryState, shouldShowUnselected, isLocked]);
+    // But only if there's a price per additional photo (extraPriceCents > 0)
+    if (shouldShowUnselected && galleryState === "delivered") {
+      const extraPriceCents = selectionState?.pricingPackage?.extraPriceCents ?? 0;
+      return extraPriceCents > 0;
+    }
+    return galleryState === "selecting";
+  }, [galleryState, shouldShowUnselected, isLocked, selectionState?.pricingPackage?.extraPriceCents]);
 
   // Get all selectedKeys from CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders for "Dokupione" view
   const boughtPhotoKeys = useMemo(() => {
@@ -330,24 +335,48 @@ export default function GalleryPage() {
     }
     
     if (shouldShowUnselected) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:332',message:'Niewybrane filtering - entry',data:{galleryState,isSelectingState,isLocked,selectedKeysCount:selectionState?.selectedKeys?.length||0,boughtPhotoKeysCount:boughtPhotoKeys.size,unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       // Filter out any selected/approved photos to ensure we only show truly unselected photos
       // Exclude:
-      // 1. Photos in selectedKeys (from current selection or approved orders)
+      // 1. Photos in selectedKeys (from current selection or approved orders) - ONLY when selection is disabled
       // 2. Photos in CLIENT_APPROVED/PREPARING_DELIVERY/CHANGES_REQUESTED orders (boughtPhotoKeys)
       // This is a safety net in case backend filtering isn't perfect
       const excludedKeys = new Set<string>();
       
-      // Add selectedKeys from selectionState
-      if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:342',message:'Before excluding selectedKeys',data:{isSelectingState,willExcludeSelectedKeys:!isSelectingState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      // Add selectedKeys from selectionState ONLY when selection is disabled (approved/changesRequested/preparingDelivery)
+      // When selection is enabled, photos should remain visible in Niewybrane even after being selected
+      if (!isSelectingState && selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:347',message:'Excluding selectedKeys (selection disabled)',data:{selectedKeysCount:selectionState.selectedKeys.length,selectedKeys:selectionState.selectedKeys.slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         selectionState.selectedKeys.forEach((key) => excludedKeys.add(key));
+      } else if (isSelectingState && selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:352',message:'NOT excluding selectedKeys (selection enabled)',data:{selectedKeysCount:selectionState.selectedKeys.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
       }
       
       // Add photos from CLIENT_APPROVED orders
       boughtPhotoKeys.forEach((key) => excludedKeys.add(key));
       
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:360',message:'After building excludedKeys',data:{excludedKeysCount:excludedKeys.size,unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       if (excludedKeys.size > 0) {
-        return unselectedImages.filter((img) => !excludedKeys.has(img.key));
+        const filtered = unselectedImages.filter((img) => !excludedKeys.has(img.key));
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:365',message:'Niewybrane filtering - result',data:{filteredCount:filtered.length,excludedCount:unselectedImages.length-filtered.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        return filtered;
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:371',message:'Niewybrane filtering - no exclusions',data:{unselectedImagesCount:unselectedImages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       return unselectedImages;
     }
     
@@ -360,7 +389,7 @@ export default function GalleryPage() {
     }
     
     return allImages;
-  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowWybrane, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys, boughtPhotoKeys, orderIdForFinals]);
+  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowWybrane, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys, boughtPhotoKeys, orderIdForFinals, isSelectingState]);
 
   // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
   // Get queryClient to access latest cache state and avoid stale closures

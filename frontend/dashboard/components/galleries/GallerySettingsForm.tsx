@@ -337,9 +337,9 @@ export function GallerySettingsForm({
     );
   }
 
-  // Show locked form if gallery is delivered - but allow gallery name editing
+  // Show locked form if gallery is delivered - but allow gallery name and extra price editing
   if (hasDeliveredOrders) {
-    const handleUpdateGalleryNameOnly = async (): Promise<void> => {
+    const handleUpdateLockedSettings = async (): Promise<void> => {
       if (!galleryId) {
         return;
       }
@@ -357,26 +357,70 @@ export function GallerySettingsForm({
         return;
       }
 
+      // Validate extra price
+      if (settingsForm.extraPriceCents < 0) {
+        setErrors({ extraPriceCents: "Cena za dodatkowe zdjęcie nie może być ujemna" });
+        showToast("error", "Błąd", "Cena za dodatkowe zdjęcie nie może być ujemna");
+        return;
+      }
+
       try {
         const currentGalleryName =
           typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
         const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
+
+        const currentPkg = gallery?.pricingPackage as
+          | {
+              packageName?: string;
+              includedCount?: number;
+              extraPriceCents?: number;
+              packagePriceCents?: number;
+            }
+          | undefined;
+        const extraPriceChanged = settingsForm.extraPriceCents !== (currentPkg?.extraPriceCents ?? 0);
+
+        // Update gallery name if changed
         if (galleryNameChanged) {
           await updateGalleryNameMutation.mutateAsync({
             galleryId,
             galleryName: trimmedName,
           });
-          showToast("success", "Sukces", "Nazwa galerii została zaktualizowana");
+        }
+
+        // Update pricing package if extra price changed
+        if (extraPriceChanged) {
+          const trimmedPackageName = currentPkg?.packageName?.trim();
+          const packageName =
+            trimmedPackageName && trimmedPackageName.length > 0 ? trimmedPackageName : undefined;
+          const includedCount = currentPkg?.includedCount ?? 0;
+          const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
+          const packagePriceCents = currentPkg?.packagePriceCents ?? 0;
+
+          await updatePricingPackageMutation.mutateAsync({
+            galleryId,
+            pricingPackage: {
+              packageName,
+              includedCount,
+              extraPriceCents,
+              packagePriceCents,
+            },
+          });
+        }
+
+        // Show success if at least one change was made
+        if (galleryNameChanged || extraPriceChanged) {
+          showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
         }
       } catch (err) {
         showToast("error", "Błąd", formatApiError(err));
       }
     };
 
-    const canSaveGalleryName = (() => {
+    const canSaveLockedSettings = (() => {
       const trimmedName = settingsForm.galleryName.trim();
-      const isValid = trimmedName.length > 0 && trimmedName.length <= 100;
-      return isValid;
+      const nameValid = trimmedName.length > 0 && trimmedName.length <= 100;
+      const extraPriceValid = settingsForm.extraPriceCents >= 0;
+      return nameValid && extraPriceValid;
     })();
 
     return (
@@ -397,7 +441,7 @@ export function GallerySettingsForm({
             </div>
             <p className="text-base text-gray-500 dark:text-gray-400">
               Galeria ma dostarczone zlecenia, dlatego większość ustawień jest zablokowana. Możesz
-              jednak zmienić nazwę galerii w dowolnym momencie.
+              jednak zmienić nazwę galerii oraz cenę za dodatkowe zdjęcie w dowolnym momencie.
             </p>
           </div>
 
@@ -490,18 +534,6 @@ export function GallerySettingsForm({
 
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Cena za dodatkowe zdjęcie (PLN)
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="0.00"
-                      value={centsToPlnString(settingsForm.extraPriceCents)}
-                      disabled={true}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Cena pakietu (PLN)
                     </label>
                     <Input
@@ -514,6 +546,38 @@ export function GallerySettingsForm({
                 </div>
               </div>
             </div>
+
+            <div>
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Cena za dodatkowe zdjęcie (PLN)
+              </label>
+              <Input
+                type="text"
+                placeholder="0.00"
+                value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
+                onChange={(e) => {
+                  const formatted = formatCurrencyInput(e.target.value);
+                  setExtraPriceInput(formatted);
+                  const cents = plnToCents(formatted);
+                  setSettingsForm({
+                    ...settingsForm,
+                    extraPriceCents: cents,
+                  });
+                  // Clear error when user starts typing
+                  if (errors.extraPriceCents) {
+                    setErrors({ ...errors, extraPriceCents: undefined });
+                  }
+                }}
+                onBlur={() => {
+                  // Clear input state on blur if empty, let it use cents value
+                  if (!extraPriceInput || extraPriceInput === "") {
+                    setExtraPriceInput(null);
+                  }
+                }}
+                error={!!errors.extraPriceCents}
+                errorMessage={errors.extraPriceCents}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-4">
@@ -521,18 +585,18 @@ export function GallerySettingsForm({
               <Button
                 variant="outline"
                 onClick={handleCancel}
-                disabled={updateGalleryNameMutation.isPending}
+                disabled={saving}
               >
                 {cancelLabel}
               </Button>
             )}
             <Button
               variant="primary"
-              onClick={handleUpdateGalleryNameOnly}
-              disabled={!canSaveGalleryName || updateGalleryNameMutation.isPending}
+              onClick={handleUpdateLockedSettings}
+              disabled={!canSaveLockedSettings || saving}
               startIcon={<Save size={20} />}
             >
-              {updateGalleryNameMutation.isPending ? "Zapisywanie..." : "Zapisz nazwę"}
+              {saving ? "Zapisywanie..." : "Zapisz"}
             </Button>
           </div>
         </div>
