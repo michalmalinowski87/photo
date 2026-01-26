@@ -751,7 +751,12 @@ export function useRetryZipGeneration() {
     onSuccess: (_, variables) => {
       // Invalidate ZIP status queries to start polling again
       void queryClient.invalidateQueries({
-        queryKey: ["zipStatus", variables.galleryId, variables.orderId, variables.type === "final" ? "final" : "original"],
+        queryKey: [
+          "zipStatus",
+          variables.galleryId,
+          variables.orderId,
+          variables.type === "final" ? "final" : "original",
+        ],
       });
       // Invalidate order detail to refresh error state
       void queryClient.invalidateQueries({

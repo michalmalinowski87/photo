@@ -2,7 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import React from "react";
 
-import { useDownloadZip, useDownloadFinalZip, useRetryZipGeneration } from "../../hooks/mutations/useOrderMutations";
+import {
+  useDownloadZip,
+  useDownloadFinalZip,
+  useRetryZipGeneration,
+} from "../../hooks/mutations/useOrderMutations";
 import { useZipStatusPolling } from "../../hooks/useZipStatusPolling";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
@@ -120,7 +124,10 @@ export function ZipDownloadButton({
   );
   // Show loader when generating (even without progress data) or downloading or retrying
   const isLoading =
-    isGenerating || downloadZipMutation.isPending || downloadFinalZipMutation.isPending || retryZipMutation.isPending;
+    isGenerating ||
+    downloadZipMutation.isPending ||
+    downloadFinalZipMutation.isPending ||
+    retryZipMutation.isPending;
 
   // Polish text based on ZIP type and state
   const zipTypeLabel = type === "final" ? "Zdjęcia finalne (ZIP)" : "Wybrane przez klienta (ZIP)";
@@ -183,11 +190,11 @@ export function ZipDownloadButton({
         <div className="flex flex-col items-start gap-0.5">
           <span>{buttonText}</span>
           {statusInfo && (
-            <span className={`text-xs font-normal ${
-              hasError 
-                ? "text-red-600 dark:text-red-400" 
-                : "text-gray-500 dark:text-gray-400"
-            }`}>
+            <span
+              className={`text-xs font-normal ${
+                hasError ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
               {statusInfo}
             </span>
           )}

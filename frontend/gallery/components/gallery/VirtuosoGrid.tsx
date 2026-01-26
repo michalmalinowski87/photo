@@ -137,6 +137,35 @@ export function VirtuosoGridComponent({
           return box;
         });
 
+        // Apply 400px max constraint on longer edge for 1-3 photos
+        if (images.length <= 3) {
+          const maxLongerEdge = 400;
+          let maxDimension = 0;
+          boxes.forEach((box) => {
+            const longerEdge = Math.max(box.width, box.height);
+            maxDimension = Math.max(maxDimension, longerEdge);
+          });
+
+          // If any box exceeds the max, scale down proportionally
+          if (maxDimension > maxLongerEdge) {
+            const scaleFactor = maxLongerEdge / maxDimension;
+            let scaledLeft = 0;
+            return boxes.map((box) => {
+              const scaledWidth = box.width * scaleFactor;
+              const scaledHeight = box.height * scaleFactor;
+              const scaledBox: LayoutBox = {
+                aspectRatio: box.aspectRatio,
+                top: box.top,
+                left: scaledLeft,
+                width: scaledWidth,
+                height: scaledHeight,
+              };
+              scaledLeft += scaledWidth + boxSpacing;
+              return scaledBox;
+            });
+          }
+        }
+
         return boxes;
       }
 

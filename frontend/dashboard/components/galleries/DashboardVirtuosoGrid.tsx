@@ -216,7 +216,8 @@ export function DashboardVirtuosoGrid({
           const imageKey = image.key ?? image.filename ?? `image-${index}`;
           const extractedDims = imageDimensions.get(imageKey);
           const imageWidth = typeof image.width === "number" ? image.width : extractedDims?.width;
-          const imageHeight = typeof image.height === "number" ? image.height : extractedDims?.height;
+          const imageHeight =
+            typeof image.height === "number" ? image.height : extractedDims?.height;
 
           if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
             return imageWidth / imageHeight;
@@ -224,11 +225,9 @@ export function DashboardVirtuosoGrid({
           return index % 3 === 0 ? 1.5 : 1.3333;
         });
 
-        const rowWidthWithoutSpacing =
-          effectiveWidth - (images.length - 1) * boxSpacing;
+        const rowWidthWithoutSpacing = effectiveWidth - (images.length - 1) * boxSpacing;
         const sumAspectRatios = aspectRatios.reduce((sum, ar) => sum + ar, 0);
-        const rowHeight =
-          sumAspectRatios > 0 ? rowWidthWithoutSpacing / sumAspectRatios : 200;
+        const rowHeight = sumAspectRatios > 0 ? rowWidthWithoutSpacing / sumAspectRatios : 200;
 
         let left = 0;
         const boxes: LayoutBox[] = aspectRatios.map((aspectRatio) => {
@@ -243,6 +242,35 @@ export function DashboardVirtuosoGrid({
           left += width + boxSpacing;
           return box;
         });
+
+        // Apply 400px max constraint on longer edge for 1-3 photos
+        if (images.length <= 3) {
+          const maxLongerEdge = 400;
+          let maxDimension = 0;
+          boxes.forEach((box) => {
+            const longerEdge = Math.max(box.width, box.height);
+            maxDimension = Math.max(maxDimension, longerEdge);
+          });
+
+          // If any box exceeds the max, scale down proportionally
+          if (maxDimension > maxLongerEdge) {
+            const scaleFactor = maxLongerEdge / maxDimension;
+            let scaledLeft = 0;
+            return boxes.map((box) => {
+              const scaledWidth = box.width * scaleFactor;
+              const scaledHeight = box.height * scaleFactor;
+              const scaledBox: LayoutBox = {
+                aspectRatio: box.aspectRatio,
+                top: box.top,
+                left: scaledLeft,
+                width: scaledWidth,
+                height: scaledHeight,
+              };
+              scaledLeft += scaledWidth + boxSpacing;
+              return scaledBox;
+            });
+          }
+        }
 
         return boxes;
       }
