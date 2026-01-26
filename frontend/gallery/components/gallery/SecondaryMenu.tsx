@@ -36,6 +36,7 @@ interface SecondaryMenuProps {
   hasDeliveredOrders?: boolean;
   hasInitialApprovedSelection?: boolean;
   isLocked?: boolean;
+  isWybraneViewActive?: boolean;
   showBuyMore?: boolean;
   onBuyMoreClick?: () => void;
   onDownloadZip?: () => void;
@@ -61,6 +62,7 @@ export function SecondaryMenu({
   hasDeliveredOrders = false,
   hasInitialApprovedSelection = false,
   isLocked = false,
+  isWybraneViewActive = false,
   showBuyMore = false,
   onBuyMoreClick,
   onDownloadZip,
@@ -153,6 +155,8 @@ export function SecondaryMenu({
     let computedActiveItem: string | null = null;
     if (state === "selecting") {
       computedActiveItem = "wybor";
+    } else if (isWybraneViewActive) {
+      computedActiveItem = "bought";
     } else if (showBoughtView) {
       computedActiveItem = "bought";
     } else if (isUnselectedViewActive) {
@@ -180,7 +184,7 @@ export function SecondaryMenu({
         width: buttonRect.width,
       });
     }
-  }, [activeItem, hoveredItem, state, showDeliveredView, showBoughtView, isUnselectedViewActive]);
+  }, [activeItem, hoveredItem, state, showDeliveredView, showBoughtView, isUnselectedViewActive, isWybraneViewActive]);
 
   useEffect(() => {
     updateIndicatorPosition();
@@ -242,7 +246,7 @@ export function SecondaryMenu({
       items.push({ id: "bought", label });
     } else if (hasInitialApprovedSelection && !hasDeliveredOrders) {
       // Show "WYBRANE" for initial approval when no delivered orders
-      items.push({ id: "bought", label: "WYBRANE" });
+      items.push({ id: "bought", label: "WYBRANE ZDJĘCIA" });
     }
 
     // Show "NIEWYBRANE" if unselected photos exist and price per photo > 0
@@ -259,6 +263,9 @@ export function SecondaryMenu({
   useEffect(() => {
     if (state === "selecting") {
       setActiveItem("wybor");
+    } else if (isWybraneViewActive) {
+      // When in "wybrane" view (initial approval), make "WYBRANE ZDJĘCIA" button active
+      setActiveItem("bought");
     } else if ((state === "approved" || state === "changesRequested") && viewMode === "all") {
       setActiveItem("delivered");
     } else if ((state === "approved" || state === "changesRequested") && viewMode === "selected") {
@@ -273,7 +280,7 @@ export function SecondaryMenu({
         setActiveItem("delivered");
       }
     }
-  }, [state, viewMode, isUnselectedViewActive, showBoughtView, showDeliveredView]);
+  }, [state, viewMode, isUnselectedViewActive, showBoughtView, showDeliveredView, isWybraneViewActive]);
 
   const handleItemClick = (itemId: string) => {
     hapticFeedback('light');
@@ -342,8 +349,8 @@ export function SecondaryMenu({
                 (item.id === "all" && viewMode === "all") ||
                 (item.id === "selected" && viewMode === "selected") ||
                 (item.id === "wybor" && state === "selecting") ||
-                (item.id === "delivered" && showDeliveredView && !showBoughtView && !isUnselectedViewActive) ||
-                (item.id === "bought" && showBoughtView) ||
+                (item.id === "delivered" && showDeliveredView && !showBoughtView && !isUnselectedViewActive && !isWybraneViewActive) ||
+                (item.id === "bought" && (showBoughtView || isWybraneViewActive)) ||
                 (item.id === "unselected" && isUnselectedViewActive);
               const isHovered = hoveredItem === item.id;
               

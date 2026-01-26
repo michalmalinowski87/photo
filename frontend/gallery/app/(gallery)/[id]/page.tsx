@@ -102,8 +102,7 @@ export default function GalleryPage() {
   const isInitialApproval = useMemo(() => {
     return (
       selectionState?.approved === true &&
-      !selectionState?.hasDeliveredOrder &&
-      !selectionState?.hasClientApprovedOrder
+      !selectionState?.hasDeliveredOrder
     );
   }, [selectionState]);
 
@@ -262,6 +261,7 @@ export default function GalleryPage() {
   const shouldShowDelivered = currentView === "delivered";
   const shouldShowBought = currentView === "dokupione";
   const shouldShowUnselected = currentView === "unselected";
+  const shouldShowWybrane = currentView === "wybrane";
   
   // Only show unselected view if there's a price per additional photo
   const canShowUnselected = (selectionState?.pricingPackage?.extraPriceCents || 0) > 0;
@@ -320,6 +320,15 @@ export default function GalleryPage() {
       return unselectedImages;
     }
     
+    // In "wybrane" view, show only selected photos (approved photos)
+    if (shouldShowWybrane) {
+      if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys) && selectionState.selectedKeys.length > 0) {
+        const selectedSet = new Set(selectionState.selectedKeys);
+        return allImages.filter((img) => selectedSet.has(img.key));
+      }
+      return [];
+    }
+    
     if (viewMode === "selected") {
       if (selectionState?.selectedKeys && Array.isArray(selectionState.selectedKeys) && selectionState.selectedKeys.length > 0) {
         const selectedSet = new Set(selectionState.selectedKeys);
@@ -329,7 +338,7 @@ export default function GalleryPage() {
     }
     
     return allImages;
-  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowUnselected, unselectedImages, viewMode, allImages, selectionState?.selectedKeys, orderIdForFinals]);
+  }, [shouldShowDelivered, finalImages, shouldShowBought, boughtImages, shouldShowUnselected, unselectedImages, shouldShowWybrane, viewMode, allImages, selectionState?.selectedKeys, orderIdForFinals]);
 
   // Selection toggle handler - uses React Query optimistic updates (Flux pattern)
   // Get queryClient to access latest cache state and avoid stale closures
@@ -758,8 +767,9 @@ export default function GalleryPage() {
   // 2. OR when approved and viewing "all" photos (to show checkmarks ONLY on selected photos, no + buttons)
   // But NOT when viewing "selected" photos (no checkmarks needed there)
   // And NOT in "Dokupione" view (bought orders - read-only)
+  // And NOT in "Wybrane" view (initial approval - read-only, showing only selected photos)
   const showSelectionIndicatorsValue =
-    !isOwnerPreview && !shouldShowBought && (isSelectingState || (galleryState === "approved" && viewMode === "all"));
+    !isOwnerPreview && !shouldShowBought && !shouldShowWybrane && (isSelectingState || (galleryState === "approved" && viewMode === "all"));
   // Only show unselected indicators (+) when in selecting state
   // When there's no price per additional photo and we've reached the limit, hide all + signs
   // They will reappear when user unselects photos (bringing selection below limit)
@@ -775,7 +785,7 @@ export default function GalleryPage() {
     // Otherwise, show + signs for unselected photos
     return true;
   }, [isOwnerPreview, isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
-  const canSelectValue = !isOwnerPreview && isSelectingState && !shouldShowBought;
+  const canSelectValue = !isOwnerPreview && isSelectingState && !shouldShowBought && !shouldShowWybrane;
 
   // Combine all loading states to prevent blink between loading screens
   // For delivered view: wait for both selection state AND final images
@@ -946,10 +956,19 @@ export default function GalleryPage() {
         hasDeliveredOrders={deliveredOrders.length > 0}
         hasInitialApprovedSelection={isInitialApproval}
         isLocked={isLocked}
+        isWybraneViewActive={shouldShowWybrane}
         onBoughtViewClick={() => {
-          setShowBoughtView(true);
-          setShowDeliveredView(false);
-          setShowUnselectedView(false);
+          // If in wybrane context (initial approval), ensure we stay in wybrane view
+          if (isInitialApproval && !hasClientApprovedOrders) {
+            setShowBoughtView(false);
+            setShowDeliveredView(false);
+            setShowUnselectedView(false);
+          } else {
+            // Otherwise, show bought view (for dokupione)
+            setShowBoughtView(true);
+            setShowDeliveredView(false);
+            setShowUnselectedView(false);
+          }
         }}
         showUnselectedView={hasUnselectedPhotos ? true : undefined}
         isUnselectedViewActive={shouldShowUnselected}
