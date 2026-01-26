@@ -195,7 +195,7 @@ export function GalleryTopBar({
             <button
               onClick={handleLogout}
               disabled={disableLogout}
-              className={`btn-primary hidden sm:inline-flex touch-manipulation ${
+              className={`btn-primary !hidden sm:!inline-flex touch-manipulation ${
                 disableLogout ? "opacity-50 cursor-not-allowed" : ""
               }`}
               aria-label="Wyloguj"
@@ -210,7 +210,7 @@ export function GalleryTopBar({
             <button
               onClick={handleLogout}
               disabled={disableLogout}
-              className={`h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:hidden ${
+              className={`h-11 w-11 md:h-9 md:w-9 rounded-full transition-colors flex items-center justify-center border-0 bg-black text-white hover:bg-gray-800 active:bg-gray-700 touch-manipulation sm:!hidden ${
                 disableLogout ? "opacity-50 cursor-not-allowed" : ""
               }`}
               title={
