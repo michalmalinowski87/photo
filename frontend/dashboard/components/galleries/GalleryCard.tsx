@@ -140,7 +140,7 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
   const expiryInfo = getExpiryInfo();
 
   return (
-    <div className="bg-photographer-surface dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-photographer-border dark:border-gray-700 h-full flex flex-col">
+    <div className="bg-photographer-surface dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-photographer-border dark:border-gray-700 h-full flex flex-col relative">
       {/* Cover Photo Section */}
       <Link
         href={`/galleries/${gallery.galleryId}`}
@@ -179,83 +179,84 @@ export const GalleryCard = ({ gallery, onPublish, onDelete, onPrefetch }: Galler
 
         {/* Status Badge - Top Left */}
         <div className="absolute top-3 left-3">{getStatusBadge()}</div>
+      </Link>
 
-        {/* More Options Menu - Top Right */}
-        <div className="absolute top-3 right-3">
-          <button
-            ref={buttonRef}
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpenActionMenu(!openActionMenu);
-            }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-photographer-surface/90 dark:bg-gray-800/90 hover:bg-photographer-surface dark:hover:bg-gray-800 backdrop-blur-sm transition-colors"
-            aria-label="More options"
-          >
-            <MoreVertical size={16} className="text-photographer-text dark:text-gray-300" />
-          </button>
-          <Dropdown
-            isOpen={openActionMenu}
-            onClose={() => setOpenActionMenu(false)}
-            triggerRef={buttonRef.current ? { current: buttonRef.current } : undefined}
-            className="w-48 bg-photographer-surface dark:bg-gray-900 shadow-xl"
-          >
-            {!gallery.isPaid && (
-              <Tooltip
-                content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
-                side="left"
-                align="center"
-              >
-                <div>
-                  <DropdownItem
-                    onClick={() => {
-                      if (hasPhotos && onPublish) {
-                        onPublish(gallery.galleryId);
-                        setOpenActionMenu(false);
-                      }
-                    }}
-                    disabled={!hasPhotos}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                  >
-                    <Rocket size={16} />
-                    Opublikuj
-                  </DropdownItem>
-                </div>
-              </Tooltip>
-            )}
-            <div onMouseEnter={() => onPrefetch?.(gallery.galleryId)}>
-              <DropdownItem
-                tag="a"
-                href={`/galleries/${gallery.galleryId}`}
-                onItemClick={() => {
-                  setOpenActionMenu(false);
-                  if (typeof window !== "undefined") {
-                    const referrerKey = `gallery_referrer_${gallery.galleryId}`;
-                    sessionStorage.setItem(referrerKey, window.location.pathname);
-                  }
-                }}
-                className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 ${
-                  gallery.isPaid ? "first:rounded-t-xl" : ""
-                }`}
-              >
-                <Eye size={16} />
-                Szczegóły
-              </DropdownItem>
-            </div>
+      {/* More Options Menu - Top Right (outside Link to prevent navigation) */}
+      <div className="absolute top-3 right-3 z-20">
+        <button
+          ref={buttonRef}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpenActionMenu(!openActionMenu);
+          }}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-photographer-surface/90 dark:bg-gray-800/90 hover:bg-photographer-surface dark:hover:bg-gray-800 backdrop-blur-sm transition-colors"
+          aria-label="More options"
+        >
+          <MoreVertical size={16} className="text-photographer-text dark:text-gray-300" />
+        </button>
+        <Dropdown
+          isOpen={openActionMenu}
+          onClose={() => setOpenActionMenu(false)}
+          triggerRef={buttonRef.current ? { current: buttonRef.current } : undefined}
+          className="w-48 bg-photographer-surface dark:bg-gray-900 shadow-xl"
+        >
+          {!gallery.isPaid && (
+            <Tooltip
+              content={!hasPhotos ? "Najpierw prześlij zdjęcia" : ""}
+              side="left"
+              align="center"
+            >
+              <div>
+                <DropdownItem
+                  onClick={() => {
+                    if (hasPhotos && onPublish) {
+                      onPublish(gallery.galleryId);
+                      setOpenActionMenu(false);
+                    }
+                  }}
+                  disabled={!hasPhotos}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 first:rounded-t-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <Rocket size={16} />
+                  Opublikuj
+                </DropdownItem>
+              </div>
+            </Tooltip>
+          )}
+          <div onMouseEnter={() => onPrefetch?.(gallery.galleryId)}>
             <DropdownItem
-              onClick={() => {
-                if (onDelete) {
-                  onDelete(gallery);
-                  setOpenActionMenu(false);
+              tag="a"
+              href={`/galleries/${gallery.galleryId}`}
+              onItemClick={() => {
+                setOpenActionMenu(false);
+                if (typeof window !== "undefined") {
+                  const referrerKey = `gallery_referrer_${gallery.galleryId}`;
+                  sessionStorage.setItem(referrerKey, window.location.pathname);
                 }
               }}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl"
+              className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-photographer-elevated dark:text-gray-300 dark:hover:bg-gray-800 ${
+                gallery.isPaid ? "first:rounded-t-xl" : ""
+              }`}
             >
-              <Trash2 size={16} />
-              Usuń
+              <Eye size={16} />
+              Szczegóły
             </DropdownItem>
-          </Dropdown>
-        </div>
-      </Link>
+          </div>
+          <DropdownItem
+            onClick={() => {
+              if (onDelete) {
+                onDelete(gallery);
+                setOpenActionMenu(false);
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/10 last:rounded-b-xl"
+          >
+            <Trash2 size={16} />
+            Usuń
+          </DropdownItem>
+        </Dropdown>
+      </div>
 
       {/* Content Section */}
       <div className="p-4 flex flex-col flex-1 min-h-0">
