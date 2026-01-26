@@ -90,10 +90,31 @@ export function useImageSelection(options: UseImageSelectionOptions = {}): UseIm
         // Clear selection when exiting selection mode
         setSelectedKeys(new Set());
         setLastClickedIndex(null);
+        // Clean up empty selection from sessionStorage
+        if (typeof window !== "undefined") {
+          try {
+            const stored = sessionStorage.getItem(storageKey);
+            if (stored) {
+              const parsed = JSON.parse(stored) as {
+                selectedKeys?: string[];
+                isSelectionMode?: boolean;
+              };
+              // If selection is empty and we're exiting selection mode, remove the entry
+              if (
+                (!parsed.selectedKeys || parsed.selectedKeys.length === 0) &&
+                !newMode
+              ) {
+                sessionStorage.removeItem(storageKey);
+              }
+            }
+          } catch {
+            // Ignore errors
+          }
+        }
       }
       return newMode;
     });
-  }, []);
+  }, [storageKey]);
 
   const getImageKey = useCallback((image: { key?: string; filename?: string }): string | null => {
     return image.key ?? image.filename ?? null;

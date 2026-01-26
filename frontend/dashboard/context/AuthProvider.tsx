@@ -5,6 +5,7 @@ import { initAuth, getIdToken } from "../lib/auth";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "../lib/token-sharing";
 import { useAuthStore } from "../store";
+import { getConfig } from "../lib/config";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -90,6 +91,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setUser(userIdentity);
             setIsAuthenticated(true);
             setIsLoading(false);
+            
+            // Fetch config after successful authentication (non-blocking)
+            getConfig().catch((error) => {
+              console.warn('Failed to fetch config after login:', error);
+            });
+            
             return;
           }
         } catch {
@@ -147,6 +154,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (userIdentity) {
               setUser(userIdentity);
               setIsAuthenticated(true);
+              
+              // Fetch config after token refresh (non-blocking)
+              getConfig().catch((error) => {
+                console.warn('Failed to fetch config after refresh:', error);
+              });
             }
           }
         } catch {
@@ -178,6 +190,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             if (userIdentity) {
               setUser(userIdentity);
               setIsAuthenticated(true);
+              
+              // Fetch config after successful authentication (non-blocking)
+              getConfig().catch((error) => {
+                console.warn('Failed to fetch config after initialization:', error);
+              });
             } else {
               setIsAuthenticated(false);
             }

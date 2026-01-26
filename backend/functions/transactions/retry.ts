@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
-import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getStripeSecretKey, createStripeCheckoutSession } from '../../lib/src/stripe-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
@@ -183,12 +183,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			});
 		}
 
-		const session = await stripe.checkout.sessions.create({
-			payment_method_types: ['card'],
-			mode: 'payment',
-			line_items: lineItems,
-			success_url: successUrl,
-			cancel_url: cancelUrl,
+		const session = await createStripeCheckoutSession(stripe, {
+			lineItems,
+			successUrl,
+			cancelUrl,
 			metadata: {
 				userId: requester,
 				type: transaction.type === 'GALLERY_PLAN' ? 'gallery_payment' : 'transaction_payment',
@@ -197,7 +195,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				walletAmountCents: walletAmountCents.toString(),
 				stripeAmountCents: stripeAmountCents.toString(),
 				redirectUrl: redirectUrl
-			}
+			},
+			mode: 'payment'
 		});
 
 		// Update transaction with new Stripe session ID

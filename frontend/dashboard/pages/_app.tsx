@@ -30,6 +30,7 @@ import {
   setNavigationLoadingState,
 } from "../lib/dynamicWithLoading";
 import { makeQueryClient } from "../lib/react-query";
+import { cleanupStaleSessionStorage } from "../lib/sessionStorageCleanup";
 import { useAuthStore, useThemeStore } from "../store";
 import { useUnifiedStore } from "../store/unifiedStore";
 
@@ -145,6 +146,19 @@ function AppContent({ Component, pageProps }: AppProps) {
 
   // Enable global order status polling when authenticated (skip for 404)
   useOrderStatusPolling({ enablePolling: isAuthenticated && !is404Page });
+
+  // Clean up stale session storage entries on app initialization
+  useEffect(() => {
+    if (typeof window !== "undefined" && !is404Page) {
+      // Run cleanup once on mount, then periodically (every 5 minutes)
+      cleanupStaleSessionStorage();
+      const interval = setInterval(() => {
+        cleanupStaleSessionStorage();
+      }, 5 * 60 * 1000); // 5 minutes
+
+      return () => clearInterval(interval);
+    }
+  }, [is404Page]);
 
   // Check if current route is an auth route
   const isAuthRoute = router.pathname

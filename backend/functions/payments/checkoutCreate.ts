@@ -1,7 +1,7 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { createTransaction, updateTransactionStatus } from '../../lib/src/transactions';
-import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getStripeSecretKey, createStripeCheckoutSession } from '../../lib/src/stripe-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
@@ -121,10 +121,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
 		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`;
 
-		const session = await stripe.checkout.sessions.create({
-			payment_method_types: ['card'],
-			mode: 'payment',
-			line_items: [
+		const session = await createStripeCheckoutSession(stripe, {
+			lineItems: [
 				{
 					price_data: {
 						currency: 'pln',
@@ -139,8 +137,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					quantity: 1
 				}
 			],
-			success_url: successUrl,
-			cancel_url: cancelUrl,
+			successUrl,
+			cancelUrl,
 			metadata: {
 				userId: requester,
 				type,
@@ -148,7 +146,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				transactionId: transactionId || '',
 				redirectUrl: finalRedirectUrl // Store redirect URL in metadata
 			},
-			client_reference_id: `${requester}-${Date.now()}`
+			clientReferenceId: `${requester}-${Date.now()}`,
+			mode: 'payment'
 		});
 
 		// Update transaction with Stripe session ID if transaction was created

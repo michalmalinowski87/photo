@@ -598,6 +598,16 @@ export class AppStack extends Stack {
 			description: 'Stripe webhook secret for webhook verification'
 		});
 
+		// Stripe payment methods configuration
+		// Default payment methods: card, blik, p24, apple_pay, google_pay, paypal
+		// Can be customized per environment via SSM Parameter Store
+		const defaultPaymentMethods = JSON.stringify(['card', 'blik', 'p24', 'apple_pay', 'google_pay', 'paypal']);
+		const stripePaymentMethodsParam = new StringParameter(this, 'StripePaymentMethodsParam', {
+			parameterName: `${ssmParameterPrefix}/StripePaymentMethods`,
+			stringValue: defaultPaymentMethods,
+			description: 'JSON array of enabled Stripe payment methods (e.g., ["card","blik","p24","apple_pay","google_pay","paypal"])'
+		});
+
 		// Email configuration
 		const senderEmailParam = new StringParameter(this, 'SenderEmailParam', {
 			parameterName: `${ssmParameterPrefix}/SenderEmail`,
@@ -1360,6 +1370,12 @@ export class AppStack extends Stack {
 			path: '/health',
 			methods: [HttpMethod.GET],
 			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
+		});
+		httpApi.addRoutes({
+			path: '/config',
+			methods: [HttpMethod.GET],
+			integration: new HttpLambdaIntegration('ApiConfigIntegration', apiFn)
+			// No authorizer - public endpoint for app configuration
 		});
 
 		// Grant API Lambda permission to invoke zipFn
@@ -2151,6 +2167,10 @@ export class AppStack extends Stack {
 			value: postAuthenticationFn.functionArn,
 			description: 'ARN of PostAuthentication Lambda - configure this as Post Authentication trigger in Cognito User Pool'
 		});
+
+		// Explicitly reference StripePaymentMethodsParam to ensure it's created
+		// This prevents CDK from optimizing it away if it's not referenced elsewhere
+		stripePaymentMethodsParam.parameterName;
 
 		// Note: HttpLambdaIntegration automatically creates individual permissions for each route
 		// We have a wildcard permission above that covers all routes, but individual permissions

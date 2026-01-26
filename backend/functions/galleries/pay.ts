@@ -6,7 +6,7 @@ import { getPaidTransactionForGallery, getUnpaidTransactionForGallery, listTrans
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { recalculateStorageInternal } from './recalculateBytesUsed';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
-import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getStripeSecretKey, createStripeCheckoutSession } from '../../lib/src/stripe-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
@@ -1488,12 +1488,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		// For upgrades, store plan info in session metadata (don't update gallery until payment succeeds)
 		// This prevents free upgrades if user closes browser without completing payment
-		const session = await stripe.checkout.sessions.create({
-			payment_method_types: ['card'],
-			mode: 'payment',
-			line_items: lineItems,
-			success_url: successUrl,
-			cancel_url: cancelUrl,
+		const session = await createStripeCheckoutSession(stripe, {
+			lineItems,
+			successUrl,
+			cancelUrl,
 			metadata: {
 				userId: ownerId,
 				type: isUpgrade ? 'gallery_plan_upgrade' : 'gallery_payment',
@@ -1507,7 +1505,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					previousPlan: currentPlanKey,
 					newPriceCents: galleryPriceCents.toString()
 				} : {})
-			}
+			},
+			mode: 'payment'
 		});
 
 		// Update existing transaction with Stripe session ID and payment method if it exists

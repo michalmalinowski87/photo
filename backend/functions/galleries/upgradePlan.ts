@@ -6,7 +6,7 @@ import { getPaidTransactionForGallery, createTransaction, updateTransactionStatu
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { PRICING_PLANS, calculatePriceWithDiscount, type PlanKey } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
-import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getStripeSecretKey, createStripeCheckoutSession } from '../../lib/src/stripe-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -414,12 +414,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
 		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}`;
 
-		const session = await stripe.checkout.sessions.create({
-			payment_method_types: ['card'],
-			line_items: lineItems,
-			mode: 'payment',
-			success_url: successUrl,
-			cancel_url: cancelUrl,
+		const session = await createStripeCheckoutSession(stripe, {
+			lineItems,
+			successUrl,
+			cancelUrl,
 			metadata: {
 				userId: requester,
 				galleryId,
@@ -434,6 +432,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Fallback to default only if redirectUrl is not provided
 				redirectUrl: redirectUrl || `${dashboardUrl}/galleries/${galleryId}?upgrade=success`,
 			},
+			mode: 'payment'
 		});
 
 		checkoutUrl = session.url;

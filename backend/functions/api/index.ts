@@ -34,6 +34,7 @@ import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip
 import { dashboardRoutes } from './routes/dashboard';
 import { userDeletionRoutes, undoDeletionPublicRoutes } from './routes/userDeletion';
 import { authRoutes } from './routes/auth';
+import { configRoutes } from './routes/config';
 
 const app = express();
 
@@ -85,6 +86,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req: Request, res: Response) => {
 	res.json({ ok: true });
 });
+
+// Config endpoint (public, no auth required)
+app.use('/', configRoutes);
 
 // Public gallery routes (no auth required)
 // Client login endpoint - clients authenticate with gallery password, not Cognito
