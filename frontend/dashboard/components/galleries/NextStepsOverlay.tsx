@@ -82,14 +82,7 @@ export const NextStepsOverlay = () => {
   );
   const finalImagesCount = finalImages.length;
 
-  // Check if publish wizard should be open based on URL params
-  const publishWizardOpen = useMemo(() => {
-    if (!gallery?.galleryId) {
-      return false;
-    }
-    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    return params.get("publish") === "true" && params.get("galleryId") === gallery.galleryId;
-  }, [gallery?.galleryId]);
+  // Removed publishWizardOpen - we now use publishFlowIsOpen from store which is the source of truth
 
   const [tutorialDisabled, setTutorialDisabled] = useState<boolean | null>(null);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
@@ -104,21 +97,28 @@ export const NextStepsOverlay = () => {
     galleryRef.current = gallery;
   }, [gallery]);
 
+  // Get publish flow state from store (actual source of truth)
+  const { isOpen: publishFlowIsOpen, startPublishFlow } = usePublishFlow();
+
   // Check if we should hide the overlay (settings or publish view)
-  // Priority: Store state > URL params (store state is the source of truth)
+  // Priority: Store state > Actual URL > router.query (store state is the source of truth, actual URL is most up-to-date)
   const shouldHide = useMemo(() => {
     const isSettingsPage = router.pathname?.includes("/settings");
 
-    // Store state is the primary source of truth - if wizard is closed in store, ignore URL params
-    if (isSettingsPage || publishWizardOpen) {
-      return Boolean(isSettingsPage || publishWizardOpen);
+    // Store state is the primary source of truth - if wizard is closed in store, ignore URL params completely
+    // This prevents stale router.query from hiding the overlay after wizard closes
+    if (isSettingsPage) {
+      return true;
     }
 
-    // Only check URL params if wizard is not open in store (fallback for initial page load)
-    const routerHasPublish =
-      router.query.publish === "true" && router.query.galleryId === gallery?.galleryId;
+    if (publishFlowIsOpen) {
+      return true;
+    }
 
-    // Also check actual URL for immediate updates
+    // If wizard is closed in store (publishFlowIsOpen === false), trust the store and ignore URL params
+    // This prevents stale router.query from hiding overlay after wizard closes
+    // Only check actual URL (not router.query which can be stale) as a safety check
+    // If actual URL has publish param but store says closed, trust the store (wizard was just closed)
     let actualUrlHasPublish = false;
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -126,14 +126,13 @@ export const NextStepsOverlay = () => {
         params.get("publish") === "true" && params.get("galleryId") === gallery?.galleryId;
     }
 
-    const hasPublishParamInUrl = routerHasPublish || actualUrlHasPublish;
-    return Boolean(isSettingsPage || hasPublishParamInUrl);
+    // Only hide if actual URL has publish param (don't trust router.query which can be stale)
+    // Since store says wizard is closed, we should ignore URL params, but check actual URL for safety
+    return Boolean(actualUrlHasPublish);
   }, [
     router.pathname,
-    router.query.publish,
-    router.query.galleryId,
     gallery?.galleryId,
-    publishWizardOpen,
+    publishFlowIsOpen,
   ]);
 
   // Load tutorial preference - deferred until overlay is expanded or user interacts
@@ -674,7 +673,6 @@ export const NextStepsOverlay = () => {
     ? gallery.paymentStatus === "PAID" || gallery.state === "PAID_ACTIVE"
     : false;
 
-  const { startPublishFlow } = usePublishFlow();
   const openModal = useModalStore((state) => state.openModal);
 
   const handlePublishClick = () => {
@@ -756,15 +754,16 @@ export const NextStepsOverlay = () => {
     }
   }, [gallery?.galleryId, isPaid, sendGalleryLinkToClientMutation, showToast]);
 
+  // Calculate visibility values before early returns (needed for logging)
+  const overlayDismissed = gallery?.nextStepsOverlayDismissed === true;
+  const calculatedVisible = calculatedVisibility.visible;
+  const shouldShow = !overlayDismissed && !isCompleted && !tutorialDisabled && calculatedVisible;
+
   // Dead simple visibility logic
   // Don't show overlay if gallery is loading/fetching or not available yet (prevents flicker from stale cache)
   if (galleryLoading || galleryFetching || !gallery) {
     return null;
   }
-
-  const overlayDismissed = gallery.nextStepsOverlayDismissed === true;
-  const calculatedVisible = calculatedVisibility.visible;
-  const shouldShow = !overlayDismissed && !isCompleted && !tutorialDisabled && calculatedVisible;
 
   // Don't render if dismissed, completed, or tutorial disabled
   if (overlayDismissed || isCompleted || tutorialDisabled === true) {
