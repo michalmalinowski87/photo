@@ -145,33 +145,6 @@ export default function GalleryPage() {
     return sumLoaded > 0 ? sumLoaded : undefined;
   }, [finalImagesData, finalImages]);
 
-  // No local state needed - React Query is the single source of truth
-
-  // Show "changes requested" overlay ONLY right after login.
-  // This must NOT pop up due to in-session state changes (e.g. user clicking "Poproś o zmiany").
-  useEffect(() => {
-    if (!selectionState?.changeRequestPending || showChangesRequestedOverlay) {
-      return;
-    }
-
-    if (typeof window === "undefined" || !galleryId) {
-      return;
-    }
-
-    const justLoggedInKey = `just_logged_in_${galleryId}`;
-
-    const justLoggedIn = sessionStorage.getItem(justLoggedInKey) === "true";
-
-    // Consume the "just logged in" flag regardless, so this overlay can only be triggered once.
-    if (justLoggedIn) {
-      sessionStorage.removeItem(justLoggedInKey);
-    }
-
-    if (justLoggedIn) {
-      setShowChangesRequestedOverlay(true);
-    }
-  }, [selectionState?.changeRequestPending, showChangesRequestedOverlay, galleryId]);
-
   // Redirect to login if not authenticated
   // But don't redirect during owner preview loading (token is fetched asynchronously via postMessage)
   useEffect(() => {
