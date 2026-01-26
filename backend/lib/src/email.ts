@@ -411,7 +411,7 @@ export function createGalleryPasswordEmail(galleryId: string, galleryName: strin
 	`;
 	
 	return {
-		subject: `Hasło do galerii: ${galleryDisplayName}`,
+		subject: `Zaproszenie do wyboru zdjęć: ${galleryDisplayName}`,
 		text: `Witaj,\n\nHasło do galerii ${galleryDisplayName}:\n\nHasło: ${password}\n\nDostęp do galerii: ${link}\n\nProsimy zachować to hasło w bezpiecznym miejscu. Jeśli nie spodziewałeś się tej wiadomości, skontaktuj się ze swoim fotografem.`,
 		html: createEmailWrapper(content)
 	};

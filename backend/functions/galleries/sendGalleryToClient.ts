@@ -4,7 +4,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, PutCommand, UpdateCom
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
-import { createGalleryInvitationEmail, createGalleryPasswordEmail, createGalleryReminderEmail } from '../../lib/src/email';
+import { createGalleryPasswordEmail } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 import {
@@ -190,150 +190,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}
 	}
 
-	// Send invitation or reminder email based on whether orders exist
-	const emailType = hasExistingOrders ? 'Gallery Reminder' : 'Gallery Invitation';
-	const emailTemplate = hasExistingOrders 
-		? createGalleryReminderEmail(galleryId, galleryName, clientEmail, galleryLink)
-		: createGalleryInvitationEmail(galleryId, galleryName, clientEmail, galleryLink);
-	
-	try {
-		logger.info(`Sending SES email - ${emailType}`, {
-			from: sender,
-			to: clientEmail,
-			subject: emailTemplate.subject,
-			galleryId,
-			galleryName,
-			isReminder: hasExistingOrders
-		});
-
-		const emailResult = await ses.send(new SendEmailCommand({
-			Source: sender,
-			Destination: { ToAddresses: [clientEmail] },
-			Message: {
-				Subject: { Data: emailTemplate.subject },
-				Body: {
-					Text: { Data: emailTemplate.text },
-					Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
-				}
-			}
-		}));
-
-		logger.info(`SES email sent successfully - ${emailType}`, {
-			messageId: emailResult.MessageId,
-			requestId: emailResult.$metadata?.requestId,
-			from: sender,
-			to: clientEmail,
-			isReminder: hasExistingOrders
-		});
-	} catch (err: any) {
-		const errorCode = err.code || err.name;
-		const errorMessage = err.message || 'Unknown error';
-		// Distinguish between throttling (send rate limit) and daily quota
-		const isThrottlingError = errorCode === 'Throttling';
-		const isDailyQuotaError = errorCode === 'MessageRejected' ||
-			errorMessage.toLowerCase().includes('daily message quota') ||
-			errorMessage.toLowerCase().includes('daily sending quota');
-		
-		logger.error(`SES send failed - ${emailType} Email`, {
-			error: {
-				name: err.name,
-				message: errorMessage,
-				code: errorCode,
-				statusCode: err.$metadata?.httpStatusCode,
-				requestId: err.$metadata?.requestId,
-				isThrottlingError,
-				isDailyQuotaError,
-				stack: err.stack
-			},
-			galleryId,
-			clientEmail
-		});
-		
-		// For daily quota errors, return 429 with helpful message
-		if (isDailyQuotaError) {
-			return {
-				statusCode: 429, // Too Many Requests
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ 
-					error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`,
-					message: 'Daily email sending limit reached. The email will be sent automatically once the limit resets (usually within 24 hours). You can still share the gallery link manually.',
-					quotaExceeded: true,
-					originalError: errorMessage
-				})
-			};
-		}
-		
-		// For throttling errors (send rate limit), retry with exponential backoff
-		if (isThrottlingError) {
-			// Retry up to 3 times with exponential backoff: 1s, 2s, 4s
-			for (let attempt = 0; attempt < 3; attempt++) {
-				const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
-				logger.info(`Retrying ${emailType} email send after throttling`, {
-					attempt: attempt + 1,
-					delayMs,
-					galleryId
-				});
-				
-				await new Promise(resolve => setTimeout(resolve, delayMs));
-				
-				try {
-					const retryResult = await ses.send(new SendEmailCommand({
-						Source: sender,
-						Destination: { ToAddresses: [clientEmail] },
-						Message: {
-							Subject: { Data: emailTemplate.subject },
-							Body: {
-								Text: { Data: emailTemplate.text },
-								Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
-							}
-						}
-					}));
-					
-					logger.info(`SES email sent successfully after retry - ${emailType}`, {
-						messageId: retryResult.MessageId,
-						requestId: retryResult.$metadata?.requestId,
-						attempt: attempt + 1,
-						galleryId
-					});
-					
-					// Success - break out of retry loop
-					break;
-				} catch (retryErr: any) {
-					if (attempt === 2) {
-						// Final attempt failed - return error
-						return {
-							statusCode: 429,
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ 
-								error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`,
-								message: 'Email sending rate limit exceeded. Please try again in a few seconds.',
-								rateLimited: true,
-								originalError: retryErr.message || errorMessage
-							})
-						};
-					}
-					// Continue to next retry attempt
-				}
-			}
-		} else {
-			// Other errors - return 500
-			return {
-				statusCode: 500,
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ 
-					error: `Failed to send ${hasExistingOrders ? 'reminder' : 'invitation'} email`, 
-					message: errorMessage 
-				})
-			};
-		}
-	}
-
-	// Add delay between emails to avoid SES send rate throttling
-	// SES sandbox typically allows 1 email per second, so wait 1.5 seconds to be safe
-	await new Promise(resolve => setTimeout(resolve, 1500));
-
-	// Send password email (separate function call for future flexibility - e.g., SMS)
-	// Always send password email regardless of whether it's invitation or reminder
+	// Send password email (now includes link and password in one email)
 	const passwordTemplate = createGalleryPasswordEmail(galleryId, galleryName, clientEmail, password, galleryLink);
 	try {
 		logger.info('Sending SES email - Gallery Password', {
@@ -566,10 +423,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			galleryId, 
 			sent: true, 
 			clientEmail,
-			invitationSent: !hasExistingOrders,
-			reminderSent: hasExistingOrders,
-			passwordSent: true,
-			isReminder: hasExistingOrders
+			passwordSent: true
 		})
 	};
 });
