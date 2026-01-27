@@ -614,6 +614,55 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
   const imagePos = getImagePosition();
 
+  // Handle mousedown on form pane - check if click is within image bounds and initiate drag
+  const handleFormPaneMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!coverAreaRef.current || !imageRef.current || isDragging || isResizing) return;
+
+      const coverArea = coverAreaRef.current;
+      const coverAreaRect = coverArea.getBoundingClientRect();
+      
+      // Get click position relative to cover area
+      const clickX = e.clientX - coverAreaRect.left;
+      const clickY = e.clientY - coverAreaRect.top;
+
+      // Calculate image bounds
+      const baseImageWidth = coverAreaDims.width;
+      const baseImageHeight = coverAreaDims.height;
+      const scaledWidth = baseImageWidth * scale;
+      const scaledHeight = baseImageHeight * scale;
+
+      const imageLeft = imagePos.x;
+      const imageTop = imagePos.y;
+      const imageRight = imageLeft + scaledWidth;
+      const imageBottom = imageTop + scaledHeight;
+
+      // Check if click is within image bounds
+      if (
+        clickX >= imageLeft &&
+        clickX <= imageRight &&
+        clickY >= imageTop &&
+        clickY <= imageBottom
+      ) {
+        // Click is on the image (even though form is on top) - show transform box and start dragging
+        e.preventDefault();
+        e.stopPropagation();
+        
+        setShowTransformBox(true);
+        setIsDragging(true);
+        
+        const currentPos = getImagePosition();
+        dragStartRef.current = {
+          x: clickX,
+          y: clickY,
+          startX: currentPos.x,
+          startY: currentPos.y,
+        };
+      }
+    },
+    [imagePos, scale, coverAreaDims, isDragging, isResizing, getImagePosition]
+  );
+
   // Render form pane based on layout
   const renderFormPane = () => {
     const displayName = galleryName || "Galeria";
@@ -621,7 +670,10 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     switch (layout) {
       case "split":
         return (
-          <div className="absolute right-0 top-0 bottom-0 w-[36%] bg-white flex items-center justify-center px-6 py-10">
+          <div 
+            className="absolute right-0 top-0 bottom-0 w-[36%] bg-white flex items-center justify-center px-6 py-10 form-pane-overlay"
+            onMouseDown={handleFormPaneMouseDown}
+          >
             <div className="w-full max-w-md">
               <div className="mb-8">
                 <h1
@@ -654,6 +706,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
             style={{
               clipPath: "polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%)",
             }}
+            onMouseDown={handleFormPaneMouseDown}
           >
             <div className="w-full max-w-[20rem] ml-auto mr-8 relative z-10">
               <div className="mb-8">
@@ -679,8 +732,11 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
       case "centered":
         return (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center px-6 py-10 z-10 pointer-events-none">
-            <div className="w-full max-w-md pointer-events-auto">
+          <div 
+            className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center px-6 py-10 form-pane-overlay z-10"
+            onMouseDown={handleFormPaneMouseDown}
+          >
+            <div className="w-full max-w-md">
               <div className="mb-8">
                 <h1
                   className="mt-5 text-5xl md:text-6xl text-gray-900 truncate text-center"
@@ -707,8 +763,11 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
       case "full-cover":
         return (
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center px-6 py-10 z-10 pointer-events-none">
-            <div className="w-full max-w-md pointer-events-auto">
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center px-6 py-10 form-pane-overlay z-10"
+            onMouseDown={handleFormPaneMouseDown}
+          >
+            <div className="w-full max-w-md">
               <div className="mb-8">
                 <h1
                   className="mt-5 text-5xl md:text-6xl text-white truncate text-center"
