@@ -137,6 +137,7 @@ function LoginScreen() {
             apiUrl={apiUrl}
             onPublicInfoLoadingChange={handlePublicInfoLoadingChange}
             onPublicInfoLoaded={handlePublicInfoLoaded}
+            loginPageLayout={loginPageLayout}
           />
         </div>
         <div className={layoutClasses.formPane} style={layoutClasses.formPaneStyle}>
