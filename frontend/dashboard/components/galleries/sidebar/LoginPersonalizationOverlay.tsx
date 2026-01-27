@@ -35,16 +35,30 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
     (gallery?.loginPageLayout as LoginPageLayout) || "split"
   );
   const [coverPosition, setCoverPosition] = useState<{
-    objectPosition: string;
+    x?: number;
+    y?: number;
     scale?: number;
+    objectPosition?: string; // Legacy support
   }>(() => {
+    // Use x, y directly if available (new format)
+    if (
+      gallery?.coverPhotoPosition?.x !== undefined &&
+      gallery?.coverPhotoPosition?.y !== undefined
+    ) {
+      return {
+        x: gallery.coverPhotoPosition.x,
+        y: gallery.coverPhotoPosition.y,
+        scale: gallery.coverPhotoPosition.scale,
+      };
+    }
+    // Legacy support: use objectPosition
     if (gallery?.coverPhotoPosition?.objectPosition) {
       return {
         objectPosition: gallery.coverPhotoPosition.objectPosition,
         scale: gallery.coverPhotoPosition.scale,
       };
     }
-    return { objectPosition: "50% 50%" };
+    return { x: 0, y: 0, scale: 1 };
   });
 
   // Update state when gallery data changes
@@ -52,7 +66,18 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
     if (gallery?.loginPageLayout) {
       setSelectedLayout(gallery.loginPageLayout as LoginPageLayout);
     }
-    if (gallery?.coverPhotoPosition?.objectPosition) {
+    // Use x, y directly if available (new format)
+    if (
+      gallery?.coverPhotoPosition?.x !== undefined &&
+      gallery?.coverPhotoPosition?.y !== undefined
+    ) {
+      setCoverPosition({
+        x: gallery.coverPhotoPosition.x,
+        y: gallery.coverPhotoPosition.y,
+        scale: gallery.coverPhotoPosition.scale,
+      });
+    } else if (gallery?.coverPhotoPosition?.objectPosition) {
+      // Legacy support
       setCoverPosition({
         objectPosition: gallery.coverPhotoPosition.objectPosition,
         scale: gallery.coverPhotoPosition.scale,
@@ -105,7 +130,7 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
   }, []);
 
   const handlePositionChange = useCallback(
-    (position: { objectPosition: string; scale?: number }) => {
+    (position: { x?: number; y?: number; scale?: number; objectPosition?: string }) => {
       setCoverPosition(position);
     },
     []
@@ -120,8 +145,13 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
         data: {
           loginPageLayout: selectedLayout,
           coverPhotoPosition: {
-            objectPosition: coverPosition.objectPosition,
+            x: coverPosition.x,
+            y: coverPosition.y,
             scale: coverPosition.scale,
+            // Include objectPosition for backward compatibility if x/y not available
+            ...(coverPosition.objectPosition && !coverPosition.x && !coverPosition.y
+              ? { objectPosition: coverPosition.objectPosition }
+              : {}),
           },
         },
       });
@@ -147,8 +177,13 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
         data: {
           loginPageLayout: selectedLayout,
           coverPhotoPosition: {
-            objectPosition: coverPosition.objectPosition,
+            x: coverPosition.x,
+            y: coverPosition.y,
             scale: coverPosition.scale,
+            // Include objectPosition for backward compatibility if x/y not available
+            ...(coverPosition.objectPosition && !coverPosition.x && !coverPosition.y
+              ? { objectPosition: coverPosition.objectPosition }
+              : {}),
           },
         },
       });

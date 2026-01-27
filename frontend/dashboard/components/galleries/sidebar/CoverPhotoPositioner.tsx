@@ -7,10 +7,17 @@ interface CoverPhotoPositionerProps {
   layout: LoginPageLayout;
   galleryName?: string | null;
   initialPosition?: {
-    objectPosition?: string;
+    x?: number; // Percentage of container width (0-100, can be outside for extended positioning)
+    y?: number; // Percentage of container height (0-100, can be outside for extended positioning)
     scale?: number;
+    objectPosition?: string; // Legacy support - will be converted to x, y
   };
-  onPositionChange: (position: { objectPosition: string; scale?: number }) => void;
+  onPositionChange: (position: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    objectPosition?: string;
+  }) => void;
   containerWidth: number;
   containerHeight: number;
 }
@@ -41,20 +48,26 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   // When container moves right (X increases), we see left side (objectPosition X decreases)
   // When container moves down (Y increases), we see top side (objectPosition Y decreases)
   const [imageState, setImageState] = useState(() => {
-    // Parse initial position, default to center (50%, 50%)
-    let x = 50;
-    let y = 50;
+    // Parse initial position, default to top-left (0%, 0%)
+    // Use x, y directly if available (new format), otherwise convert from objectPosition (legacy)
+    if (initialPosition?.x !== undefined && initialPosition?.y !== undefined) {
+      return { x: initialPosition.x, y: initialPosition.y };
+    }
+
+    // Legacy support: convert from objectPosition
+    let x = 0;
+    let y = 0;
     if (initialPosition?.objectPosition) {
       const match = initialPosition.objectPosition.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
       if (match) {
         const objectX = parseFloat(match[1]);
         const objectY = parseFloat(match[2]);
-        // Invert both X and Y: container movement shows opposite side
+        // Invert both X and Y: objectPosition was inverted
         x = 100 - objectX;
         y = 100 - objectY;
       }
     }
-    return { x, y }; // Store as container percentages
+    return { x, y }; // Store as container percentages (0% = top-left corner)
   });
 
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(
@@ -90,28 +103,21 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   // Convert percentage position to pixels for display
   // Position represents the top-left corner of the image container (entrypoint is white area top-left)
   // left and top CSS properties directly represent the top-left corner position
-  // 0% → top-left corner at (0, 0)
-  // 100% → top-left corner at (width, height) - allows image to move fully within cover area
-  // Since the container is scaled, we need to account for the scale when calculating max position
+  // To ensure same position accuracy across all layouts, use full container dimensions as reference
+  // BUT: The image is positioned within the cover area, so we need to ensure coordinates are relative to cover area
+  // Since cover area starts at (0,0) for all layouts, container coordinates = cover area coordinates
+  // 0% → top-left corner at (0, 0) relative to cover area
+  // 100% → top-left corner at (containerWidth, containerHeight) - normalized across layouts
+  // Values < 0% or > 100% allow positioning outside the cover area for flexibility
   const getImagePosition = useCallback(() => {
-    // Map imageState 0% to 100% directly to top-left corner positions
-    // 0% → (0, 0) - image top-left at cover area top-left
-    // 100% → (width, height) - allows full range of movement
-    // When scaled, the effective container size is larger, so we can move it to show different parts
-    const scaledWidth = coverAreaDims.width * scale;
-    const scaledHeight = coverAreaDims.height * scale;
+    // Use full container dimensions as reference for consistent positioning across layouts
+    // This ensures the same percentage value produces the same relative position regardless of layout
+    // The result is in container coordinates, which equals cover area coordinates since cover area starts at (0,0)
+    const baseX = (imageState.x / 100) * containerWidth;
+    const baseY = (imageState.y / 100) * containerHeight;
 
-    // Maximum position: when container bottom-right should be at cover area bottom-right
-    // top-left = (coverWidth - scaledWidth, coverHeight - scaledHeight)
-    const maxX = coverAreaDims.width - scaledWidth;
-    const maxY = coverAreaDims.height - scaledHeight;
-
-    // Map 0% to 100% to range from (0, 0) to (maxX, maxY)
-    const x = (imageState.x / 100) * Math.max(0, maxX);
-    const y = (imageState.y / 100) * Math.max(0, maxY);
-
-    return { x, y };
-  }, [imageState, coverAreaDims, scale]);
+    return { x: baseX, y: baseY };
+  }, [imageState, containerWidth, containerHeight]);
 
   // Handle click outside to hide transform box
   useEffect(() => {
@@ -154,13 +160,20 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         const coverAreaRect = coverArea.getBoundingClientRect();
         const currentPos = getImagePosition();
 
+        // Get mouse position relative to cover area
+        const mouseX = e.clientX - coverAreaRect.left;
+        const mouseY = e.clientY - coverAreaRect.top;
+
+        // currentPos is in container coordinates, but we need to track it in cover area coordinates
+        // Since cover area starts at (0,0) of container, they're the same for positioning
+        // But we need to ensure we're working in the same coordinate system
         setShowTransformBox(true);
         setIsDragging(true);
         dragStartRef.current = {
-          x: e.clientX - coverAreaRect.left,
-          y: e.clientY - coverAreaRect.top,
-          startX: currentPos.x,
-          startY: currentPos.y,
+          x: mouseX,
+          y: mouseY,
+          startX: currentPos.x, // This is in container coordinates (pixels)
+          startY: currentPos.y, // This is in container coordinates (pixels)
         };
       }
     },
@@ -252,27 +265,23 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         const deltaX = currentX - dragStartRef.current.x;
         const deltaY = currentY - dragStartRef.current.y;
 
-        // Calculate new top-left position
+        // startX and startY are in container coordinates (from getImagePosition)
+        // deltaX and deltaY are in cover area coordinates (mouse movement relative to cover area)
+        // Since cover area starts at (0,0) of container for all layouts, cover area coordinates = container coordinates
+        // So we can add them directly
         const newX = dragStartRef.current.startX + deltaX;
         const newY = dragStartRef.current.startY + deltaY;
 
         // Convert top-left position back to percentages (reverse of getImagePosition)
-        // Account for scale when calculating max position
-        const scaledWidth = coverAreaDims.width * scale;
-        const scaledHeight = coverAreaDims.height * scale;
-        const maxX = coverAreaDims.width - scaledWidth;
-        const maxY = coverAreaDims.height - scaledHeight;
+        // Use full container dimensions as reference for consistent positioning across layouts
+        // x = (percent / 100) * containerWidth
+        // Solving for percent: percent = (x / containerWidth) * 100
+        // Allow values outside 0-100% for extended positioning
+        const xPercent = (newX / containerWidth) * 100;
+        const yPercent = (newY / containerHeight) * 100;
 
-        // x = (percent / 100) * maxX
-        // Solving for percent: percent = (x / maxX) * 100
-        const xPercent = maxX > 0 ? (newX / maxX) * 100 : 0;
-        const yPercent = maxY > 0 ? (newY / maxY) * 100 : 0;
-
-        // Clamp to 0-100% to keep within bounds
-        const clampedX = Math.max(0, Math.min(100, xPercent));
-        const clampedY = Math.max(0, Math.min(100, yPercent));
-
-        setImageState({ x: clampedX, y: clampedY });
+        // Don't clamp - allow free movement outside bounds
+        setImageState({ x: xPercent, y: yPercent });
       } else if (
         isResizing &&
         resizeStartRef.current &&
@@ -355,20 +364,15 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         setScale(newScale);
 
         // Convert top-left position to percentages (same formula as drag)
-        // Account for scale when calculating max position
-        const maxX = coverAreaDims.width - scaledWidth;
-        const maxY = coverAreaDims.height - scaledHeight;
+        // Use full container dimensions as reference for consistent positioning across layouts
+        // x = (percent / 100) * containerWidth
+        // percent = (x / containerWidth) * 100
+        // Allow values outside 0-100% for extended positioning
+        const xPercent = (newTopLeftX / containerWidth) * 100;
+        const yPercent = (newTopLeftY / containerHeight) * 100;
 
-        // x = (percent / 100) * maxX
-        // percent = (x / maxX) * 100
-        const xPercent = maxX > 0 ? (newTopLeftX / maxX) * 100 : 0;
-        const yPercent = maxY > 0 ? (newTopLeftY / maxY) * 100 : 0;
-
-        // Clamp to 0-100%
-        const clampedX = Math.max(0, Math.min(100, xPercent));
-        const clampedY = Math.max(0, Math.min(100, yPercent));
-
-        setImageState({ x: clampedX, y: clampedY });
+        // Don't clamp - allow free movement outside bounds
+        setImageState({ x: xPercent, y: yPercent });
       }
     },
     [isDragging, isResizing, activeHandle, coverAreaDims]
@@ -378,18 +382,11 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   const handleMouseUp = useCallback(() => {
     if (isDragging || isResizing) {
       // Save final position
-      // Container uses top-left corner positioning
-      // When container moves right (X increases) → shows left side of image → objectPosition X decreases
-      // When container moves down (Y increases) → shows top of image → objectPosition Y decreases
-      const xPercent = Math.max(0, Math.min(100, imageState.x));
-      const yPercent = Math.max(0, Math.min(100, imageState.y));
-      // Invert both X and Y: container movement shows opposite side of image
-      const invertedXPercent = 100 - xPercent;
-      const invertedYPercent = 100 - yPercent;
-      const objectPosition = `${invertedXPercent}% ${invertedYPercent}%`;
-
+      // Use x, y percentages directly (same coordinate system as Personalizacja)
+      // No inversion needed - these are the actual container coordinates
       onPositionChange({
-        objectPosition,
+        x: imageState.x,
+        y: imageState.y,
         scale,
       });
     }
@@ -454,43 +451,33 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       const deltaX = currentX - dragStartRef.current.x;
       const deltaY = currentY - dragStartRef.current.y;
 
-      // Calculate new top-left position
+      // startX and startY are in container coordinates (from getImagePosition)
+      // deltaX and deltaY are in cover area coordinates (touch movement relative to cover area)
+      // Since cover area starts at (0,0) of container for all layouts, cover area coordinates = container coordinates
+      // So we can add them directly
       const newX = dragStartRef.current.startX + deltaX;
       const newY = dragStartRef.current.startY + deltaY;
 
       // Convert top-left position back to percentages (reverse of getImagePosition)
-      // Account for scale when calculating max position
-      const scaledWidth = coverAreaDims.width * scale;
-      const scaledHeight = coverAreaDims.height * scale;
-      const maxX = coverAreaDims.width - scaledWidth;
-      const maxY = coverAreaDims.height - scaledHeight;
+      // Use full container dimensions as reference for consistent positioning across layouts
+      // x = (percent / 100) * containerWidth
+      // Solving for percent: percent = (x / containerWidth) * 100
+      // Allow values outside 0-100% for extended positioning
+      const xPercent = (newX / containerWidth) * 100;
+      const yPercent = (newY / containerHeight) * 100;
 
-      // x = (percent / 100) * maxX
-      // Solving for percent: percent = (x / maxX) * 100
-      const xPercent = maxX > 0 ? (newX / maxX) * 100 : 0;
-      const yPercent = maxY > 0 ? (newY / maxY) * 100 : 0;
-
-      // Clamp to 0-100% to keep within bounds
-      const clampedX = Math.max(0, Math.min(100, xPercent));
-      const clampedY = Math.max(0, Math.min(100, yPercent));
-
-      setImageState({ x: clampedX, y: clampedY });
+      // Don't clamp - allow free movement outside bounds
+      setImageState({ x: xPercent, y: yPercent });
     },
     [isDragging, coverAreaDims]
   );
 
   const handleTouchEnd = useCallback(() => {
     if (isDragging) {
-      // Container uses top-left corner positioning, so invert both X and Y
-      const xPercent = Math.max(0, Math.min(100, imageState.x));
-      const yPercent = Math.max(0, Math.min(100, imageState.y));
-      // Invert both X and Y: container movement shows opposite side of image
-      const invertedXPercent = 100 - xPercent;
-      const invertedYPercent = 100 - yPercent;
-      const objectPosition = `${invertedXPercent}% ${invertedYPercent}%`;
-
+      // Use x, y percentages directly (same coordinate system as Personalizacja)
       onPositionChange({
-        objectPosition,
+        x: imageState.x,
+        y: imageState.y,
         scale,
       });
     }
@@ -518,33 +505,48 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     }
   }, [initialPosition?.scale]);
 
-  // Reset image position to center and scale to 1 when layout changes
+  // Reset image position to default (top-left at 0,0) and scale to 1 when layout changes
   useEffect(() => {
-    setImageState({ x: 50, y: 50 });
+    // With top-left positioning, 0% means top-left corner at (0, 0)
+    // For a centered default, we need to calculate based on scale
+    // When scale = 1, to center: top-left should be at (coverWidth - scaledWidth) / 2
+    // As percentage: ((coverWidth - scaledWidth) / 2) / coverWidth * 100
+    // When scale = 1: ((coverWidth - coverWidth) / 2) / coverWidth * 100 = 0%
+    // So for scale = 1, 0% actually centers it (since container = cover area)
+    // But to have it fill the area nicely, we'll use 0% which positions at top-left
+    // For a more centered look, we could use a small offset, but 0% is the simplest default
+    setImageState({ x: 0, y: 0 });
     setScale(1);
     setShowTransformBox(true);
-    // Notify parent of the reset position
+    // Notify parent of the reset position (0% = top-left)
     onPositionChange({
-      objectPosition: "50% 50%",
+      x: 0,
+      y: 0,
       scale: 1,
     });
   }, [layout, onPositionChange]);
 
   // Update position when initialPosition changes (but only if layout hasn't changed)
   useEffect(() => {
+    // Use x, y directly if available (new format)
+    if (initialPosition?.x !== undefined && initialPosition?.y !== undefined) {
+      setImageState({ x: initialPosition.x, y: initialPosition.y });
+      return;
+    }
+
+    // Legacy support: convert from objectPosition
     if (initialPosition?.objectPosition) {
       const match = initialPosition.objectPosition.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
       if (match) {
-        // Invert both X and Y: objectPosition maps back to container coordinates
+        // Invert both X and Y: objectPosition was inverted
         const objectX = parseFloat(match[1]);
         const objectY = parseFloat(match[2]);
-        // Invert both: container movement shows opposite side
         const xPercent = 100 - objectX;
         const yPercent = 100 - objectY;
         setImageState({ x: xPercent, y: yPercent });
       }
     }
-  }, [initialPosition?.objectPosition]);
+  }, [initialPosition?.x, initialPosition?.y, initialPosition?.objectPosition]);
 
   const imagePos = getImagePosition();
 

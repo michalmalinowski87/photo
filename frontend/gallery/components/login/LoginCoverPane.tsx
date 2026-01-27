@@ -115,16 +115,42 @@ export const LoginCoverPane = memo(function LoginCoverPane({
   const [quote, setQuote] = React.useState(() => getQuoteForGallery(galleryId));
   
   // Get container ref to measure dimensions
+  // For consistent positioning, we need to measure the full page container, not just the cover pane
+  // In layout 1 (split), the cover pane is only 64% width, but we want to use full page dimensions
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = React.useState({ width: 0, height: 0 });
 
-  // Measure container dimensions
+  // Measure full page container dimensions (not just cover pane)
+  // This ensures same position accuracy across all layouts
+  // For layout 1 (split), we need to measure the parent flex container, not just the cover pane
   React.useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
+        const section = containerRef.current;
+        
+        // For layout 1 (split), the cover pane is inside a flex container
+        // We need to measure the parent container that has both cover and form panes
+        if (layout === "split") {
+          // Find the parent container (the one with flex and min-h-screen classes)
+          let parent = section.parentElement; // coverPane div
+          if (parent) {
+            parent = parent.parentElement; // container div with flex
+            if (parent) {
+              const rect = parent.getBoundingClientRect();
+              setContainerDimensions({
+                width: rect.width,
+                height: rect.height,
+              });
+              return;
+            }
+          }
+        }
+        
+        // For other layouts, the section itself represents the full container
+        // (it's positioned absolute inset-0, so it's the full page)
         setContainerDimensions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
+          width: section.clientWidth,
+          height: section.clientHeight,
         });
       }
     };
@@ -160,42 +186,54 @@ export const LoginCoverPane = memo(function LoginCoverPane({
 
   const coverAreaDims = getCoverAreaDimensions();
 
-  // Convert objectPosition to container coordinates (invert both X and Y)
+  // Convert position to container top-left corner coordinates
+  // Use x, y percentages directly (same coordinate system as Personalizacja)
   const containerPosition = React.useMemo(() => {
-    if (!coverPhotoPosition?.objectPosition || coverAreaDims.width === 0 || coverAreaDims.height === 0) {
-      // Default to center
+    const scale = coverPhotoPosition?.scale || 1;
+    
+    if (containerDimensions.width === 0 || containerDimensions.height === 0) {
+      // Default to top-left (0, 0)
       return {
-        x: coverAreaDims.width / 2,
-        y: coverAreaDims.height / 2,
-        scale: coverPhotoPosition?.scale || 1,
+        x: 0,
+        y: 0,
+        scale,
       };
     }
 
-    const match = coverPhotoPosition.objectPosition.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
-    if (!match) {
-      return {
-        x: coverAreaDims.width / 2,
-        y: coverAreaDims.height / 2,
-        scale: coverPhotoPosition?.scale || 1,
-      };
+    // Use x, y directly if available (new format - same as Personalizacja)
+    if (coverPhotoPosition?.x !== undefined && coverPhotoPosition?.y !== undefined) {
+      // Convert percentages to pixels (top-left corner position)
+      // Position is always relative to the full container dimensions (same as Personalizacja)
+      // In Personalizacja: position is calculated from full container width, applied within cover area
+      // In live preview: position should also be calculated from full page width, applied within section
+      // The cover area/section is just a clipping viewport - the position coordinate system is the same
+      const x = (coverPhotoPosition.x / 100) * containerDimensions.width;
+      const y = (coverPhotoPosition.y / 100) * containerDimensions.height;
+      return { x, y, scale };
     }
 
-    // Invert both X and Y: objectPosition maps to container coordinates
-    const objectX = parseFloat(match[1]);
-    const objectY = parseFloat(match[2]);
-    const containerXPercent = 100 - objectX;
-    const containerYPercent = 100 - objectY;
+    // Legacy support: convert from objectPosition
+    if (coverPhotoPosition?.objectPosition) {
+      const match = coverPhotoPosition.objectPosition.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
+      if (match) {
+        // Invert both X and Y: objectPosition was inverted
+        const objectX = parseFloat(match[1]);
+        const objectY = parseFloat(match[2]);
+        const containerXPercent = 100 - objectX;
+        const containerYPercent = 100 - objectY;
+        const x = (containerXPercent / 100) * containerDimensions.width;
+        const y = (containerYPercent / 100) * containerDimensions.height;
+        return { x, y, scale };
+      }
+    }
 
-    // Convert percentages to pixels
-    const x = (containerXPercent / 100) * coverAreaDims.width;
-    const y = (containerYPercent / 100) * coverAreaDims.height;
-
+    // Default to top-left (0, 0)
     return {
-      x,
-      y,
-      scale: coverPhotoPosition?.scale || 1,
+      x: 0,
+      y: 0,
+      scale,
     };
-  }, [coverPhotoPosition, coverAreaDims]);
+  }, [coverPhotoPosition, containerDimensions, layout]);
 
   React.useEffect(() => {
     // Rotate after mount (client-only). This avoids server/client text mismatch on hydration.
@@ -204,7 +242,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
 
   return (
     <section className="relative w-full h-full min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50">
-      {/* Hidden div to measure container dimensions */}
+      {/* Hidden div to measure full page container dimensions (for consistent positioning) */}
       <div ref={containerRef} className="absolute inset-0 pointer-events-none opacity-0" aria-hidden="true" />
       {/* Workflow: start with loader → then render cover OR fallback once resolved */}
       {isResolved ? (
@@ -215,20 +253,26 @@ export const LoginCoverPane = memo(function LoginCoverPane({
               <div
                 className="absolute inset-0 z-0"
                 style={{
-                  width: coverAreaDims.width,
+                  // For layout 1 (split), the section is already 64% of page, so cover area should fill it
+                  // For other layouts, use explicit dimensions calculated from full page container
+                  // Position is calculated from full page width, but cover area fills the section
+                  width: layout === "split" ? "100%" : coverAreaDims.width,
                   height: coverAreaDims.height,
                 }}
               >
-                {/* Image container - positioned like preview */}
+                {/* Image container - positioned like preview (top-left corner) */}
                 <div
                   className="absolute"
                   style={{
                     left: containerPosition.x,
                     top: containerPosition.y,
-                    transform: `translate(-50%, -50%) scale(${containerPosition.scale})`,
-                    width: coverAreaDims.width,
+                    transform: `scale(${containerPosition.scale})`,
+                    // For layout 1, image container width should match the cover area (100% of section)
+                    // Position is calculated from full page width, but width is relative to section
+                    // This matches Personalizacja where position is from full container but applied within cover area
+                    width: layout === "split" ? "100%" : coverAreaDims.width,
                     height: coverAreaDims.height,
-                    transformOrigin: 'center center',
+                    transformOrigin: 'top left',
                     zIndex: layout === "angled-split" ? 0 : layout === "full-cover" || layout === "centered" ? 5 : 10,
                   }}
                   key={`cover-container-${coverPhotoPosition?.objectPosition || 'default'}-${containerPosition.scale}`}
