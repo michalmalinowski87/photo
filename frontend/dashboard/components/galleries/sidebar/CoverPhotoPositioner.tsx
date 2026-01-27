@@ -124,19 +124,37 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   // Handle click outside to hide transform box
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (!containerRef.current || !coverAreaRef.current || isDragging || isResizing) return;
+      if (isDragging || isResizing) return;
 
       const target = e.target as HTMLElement;
+      
+      // If container or coverArea refs are not available, hide transform box
+      if (!containerRef.current || !coverAreaRef.current) {
+        setShowTransformBox(false);
+        setIsDragging(false);
+        setIsResizing(false);
+        setActiveHandle(null);
+        return;
+      }
+
       const container = containerRef.current;
       const coverArea = coverAreaRef.current;
+      const imageContainer = imageRef.current;
 
-      // Check if click is on the form pane or outside the container
+      // Check if click is on the form pane
       const isFormPane = target.closest(".form-pane-overlay");
-      const isCoverArea = coverArea.contains(target);
-      const isImage = target.closest("[data-image-container]");
+      // Check if click is on the image container or its children (handles, transform box)
+      const isImage = imageContainer?.contains(target) || target.closest("[data-image-container]");
+      // Check if click is on resize handles or transform box
+      const isHandleOrBox = target.closest("[data-resize-handle]") || target.closest("[data-transform-box]");
+      // Check if click is inside the container
+      const isInsideContainer = container.contains(target);
 
-      // Hide transform box if clicking on form pane, outside container, or outside cover area (but inside container)
-      if (isFormPane || (!isCoverArea && !isImage && container.contains(target))) {
+      // Hide transform box if:
+      // 1. Click is on form pane
+      // 2. Click is outside the container entirely (e.g., modal background, anywhere in the modal)
+      // 3. Click is inside container but not on the image, handles, or transform box
+      if (isFormPane || !isInsideContainer || (isInsideContainer && !isImage && !isHandleOrBox)) {
         setShowTransformBox(false);
         setIsDragging(false);
         setIsResizing(false);
@@ -520,6 +538,9 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     setImageState({ x: 0, y: 0 });
     setScale(1);
     setShowTransformBox(true);
+    // Reset initialization flag when layout changes
+    hasInitializedRef.current = false;
+    lastInitialPositionRef.current = undefined;
     // Notify parent of the reset position (0% = top-left)
     onPositionChange({
       x: 0,
@@ -528,16 +549,51 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     });
   }, [layout, onPositionChange]);
 
-  // Update position when initialPosition changes (but only if layout hasn't changed)
+  // Track if we've initialized from initialPosition to avoid resetting during user interaction
+  const hasInitializedRef = useRef(false);
+  const lastInitialPositionRef = useRef<{ x?: number; y?: number; scale?: number; objectPosition?: string } | undefined>(undefined);
+  
+  // Update position when initialPosition changes (only on mount or when modal reopens)
+  // Don't update during user interaction (dragging/resizing)
   useEffect(() => {
+    // Skip if user is currently interacting
+    if (isDragging || isResizing) {
+      return;
+    }
+    
+    // Check if initialPosition actually changed (not just a reference change)
+    const currentPos = initialPosition ? { 
+      x: initialPosition.x, 
+      y: initialPosition.y, 
+      scale: initialPosition.scale,
+      objectPosition: initialPosition.objectPosition 
+    } : undefined;
+    
+    const lastPos = lastInitialPositionRef.current;
+    const positionChanged = !lastPos || 
+      lastPos.x !== currentPos?.x || 
+      lastPos.y !== currentPos?.y || 
+      lastPos.scale !== currentPos?.scale ||
+      lastPos.objectPosition !== currentPos?.objectPosition;
+    
+    if (!positionChanged && hasInitializedRef.current) {
+      return; // Position hasn't changed, skip update
+    }
+    
     // Use x, y directly if available (new format)
     if (initialPosition?.x !== undefined && initialPosition?.y !== undefined) {
       setImageState({ x: initialPosition.x, y: initialPosition.y });
+      // Also update scale if provided
+      if (initialPosition.scale !== undefined) {
+        setScale(initialPosition.scale);
+      }
+      hasInitializedRef.current = true;
+      lastInitialPositionRef.current = currentPos;
       return;
     }
 
     // Legacy support: convert from objectPosition
-    if (initialPosition?.objectPosition) {
+    if (initialPosition?.objectPosition && !hasInitializedRef.current) {
       const match = initialPosition.objectPosition.match(/(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%/);
       if (match) {
         // Invert both X and Y: objectPosition was inverted
@@ -546,9 +602,15 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         const xPercent = 100 - objectX;
         const yPercent = 100 - objectY;
         setImageState({ x: xPercent, y: yPercent });
+        // Also update scale if provided
+        if (initialPosition.scale !== undefined) {
+          setScale(initialPosition.scale);
+        }
+        hasInitializedRef.current = true;
+        lastInitialPositionRef.current = currentPos;
       }
     }
-  }, [initialPosition?.x, initialPosition?.y, initialPosition?.objectPosition]);
+  }, [initialPosition?.x, initialPosition?.y, initialPosition?.scale, initialPosition?.objectPosition, isDragging, isResizing]);
 
   const imagePos = getImagePosition();
 
@@ -703,21 +765,25 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         {/* Corner handles */}
         <div
           className={`${handleStyle} cursor-nwse-resize`}
+          data-resize-handle
           style={{ left: left - handleSize / 2, top: top - handleSize / 2, zIndex: 9999 }}
           onMouseDown={(e) => handleResizeStart(e, "nw")}
         />
         <div
           className={`${handleStyle} cursor-nesw-resize`}
+          data-resize-handle
           style={{ left: right - handleSize / 2, top: top - handleSize / 2, zIndex: 9999 }}
           onMouseDown={(e) => handleResizeStart(e, "ne")}
         />
         <div
           className={`${handleStyle} cursor-nesw-resize`}
+          data-resize-handle
           style={{ left: left - handleSize / 2, top: bottom - handleSize / 2, zIndex: 9999 }}
           onMouseDown={(e) => handleResizeStart(e, "sw")}
         />
         <div
           className={`${handleStyle} cursor-nwse-resize`}
+          data-resize-handle
           style={{ left: right - handleSize / 2, top: bottom - handleSize / 2, zIndex: 9999 }}
           onMouseDown={(e) => handleResizeStart(e, "se")}
         />
@@ -725,6 +791,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         {/* Edge handles */}
         <div
           className={`${edgeHandleStyle} cursor-ns-resize`}
+          data-resize-handle
           style={{
             left: (left + right) / 2 - handleSize / 2,
             top: top - handleSize / 2,
@@ -736,6 +803,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         />
         <div
           className={`${edgeHandleStyle} cursor-ns-resize`}
+          data-resize-handle
           style={{
             left: (left + right) / 2 - handleSize / 2,
             top: bottom - handleSize / 2,
@@ -747,6 +815,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         />
         <div
           className={`${edgeHandleStyle} cursor-ew-resize`}
+          data-resize-handle
           style={{
             left: left - handleSize / 2,
             top: (top + bottom) / 2 - handleSize / 2,
@@ -758,6 +827,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         />
         <div
           className={`${edgeHandleStyle} cursor-ew-resize`}
+          data-resize-handle
           style={{
             left: right - handleSize / 2,
             top: (top + bottom) / 2 - handleSize / 2,
@@ -771,6 +841,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         {/* Transform box outline */}
         <div
           className="absolute border-2 border-photographer-accent border-dashed pointer-events-none"
+          data-transform-box
           style={{
             left,
             top,

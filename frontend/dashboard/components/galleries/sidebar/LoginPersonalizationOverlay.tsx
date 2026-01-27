@@ -74,14 +74,17 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
       setCoverPosition({
         x: gallery.coverPhotoPosition.x,
         y: gallery.coverPhotoPosition.y,
-        scale: gallery.coverPhotoPosition.scale,
+        scale: gallery.coverPhotoPosition.scale || 1,
       });
     } else if (gallery?.coverPhotoPosition?.objectPosition) {
       // Legacy support
       setCoverPosition({
         objectPosition: gallery.coverPhotoPosition.objectPosition,
-        scale: gallery.coverPhotoPosition.scale,
+        scale: gallery.coverPhotoPosition.scale || 1,
       });
+    } else {
+      // Reset to default if no position data
+      setCoverPosition({ x: 0, y: 0, scale: 1 });
     }
   }, [gallery]);
 
@@ -248,7 +251,7 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
                   style={{ width: previewWidth, height: previewHeight }}
                 >
                   <CoverPhotoPositioner
-                    key={selectedLayout}
+                    key={`${selectedLayout}-${isOpen ? 'open' : 'closed'}`}
                     coverPhotoUrl={coverPhotoUrl}
                     layout={selectedLayout}
                     galleryName={
