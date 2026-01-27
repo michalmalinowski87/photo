@@ -83,10 +83,12 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   } | null>(null);
 
   // Calculate cover area dimensions based on layout
+  // Make layout 1 (split) work like layout 2 (angled-split) - full width cover area
   const getCoverAreaDimensions = useCallback(() => {
     switch (layout) {
       case "split":
-        return { width: containerWidth * 0.64, height: containerHeight };
+        // Make layout 1 work like layout 2 - full width cover area
+        return { width: containerWidth, height: containerHeight };
       case "angled-split":
         // For angled-split, image should extend full width behind the form pane
         return { width: containerWidth, height: containerHeight };

@@ -113,10 +113,11 @@ function LoginScreen() {
         };
       case "split":
       default:
+        // Make layout 1 work like layout 2 - coverPane is full width, formPane overlays on top
         return {
-          container: "min-h-screen flex flex-col md:flex-row",
-          coverPane: "relative w-full md:w-[64%] min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50",
-          formPane: "relative w-full md:w-[36%] min-h-[320px] md:min-h-screen bg-white flex items-center justify-center",
+          container: "min-h-screen relative",
+          coverPane: "absolute inset-0 w-full h-full min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50 z-0",
+          formPane: "absolute right-0 top-0 bottom-0 w-full md:w-[36%] min-h-[320px] md:min-h-screen bg-white flex items-center justify-center z-10",
           formPaneStyle: {},
         };
     }

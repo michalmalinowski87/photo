@@ -165,6 +165,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
   }, [isResolved, layout]);
 
   // Calculate cover area dimensions based on layout (same as preview)
+  // For layout 1 (split), make it work like layout 2 (angled-split) - full width
   const getCoverAreaDimensions = React.useCallback(() => {
     const { width, height } = containerDimensions;
     if (width === 0 || height === 0) {
@@ -173,7 +174,8 @@ export const LoginCoverPane = memo(function LoginCoverPane({
     
     switch (layout) {
       case "split":
-        return { width: width * 0.64, height: height };
+        // Make layout 1 work like layout 2 - full width cover area
+        return { width: width, height: height };
       case "angled-split":
         return { width: width, height: height };
       case "centered":
@@ -253,10 +255,9 @@ export const LoginCoverPane = memo(function LoginCoverPane({
               <div
                 className="absolute inset-0 z-0"
                 style={{
-                  // For layout 1 (split), the section is already 64% of page, so cover area should fill it
-                  // For other layouts, use explicit dimensions calculated from full page container
-                  // Position is calculated from full page width, but cover area fills the section
-                  width: layout === "split" ? "100%" : coverAreaDims.width,
+                  // For all layouts, use explicit dimensions calculated from full page container
+                  // Position is calculated from full page width, cover area matches that
+                  width: coverAreaDims.width,
                   height: coverAreaDims.height,
                 }}
               >
@@ -267,10 +268,9 @@ export const LoginCoverPane = memo(function LoginCoverPane({
                     left: containerPosition.x,
                     top: containerPosition.y,
                     transform: `scale(${containerPosition.scale})`,
-                    // For layout 1, image container width should match the cover area (100% of section)
-                    // Position is calculated from full page width, but width is relative to section
-                    // This matches Personalizacja where position is from full container but applied within cover area
-                    width: layout === "split" ? "100%" : coverAreaDims.width,
+                    // Image container width matches cover area dimensions (same as Personalizacja)
+                    // Position is calculated from full container, width matches cover area
+                    width: coverAreaDims.width,
                     height: coverAreaDims.height,
                     transformOrigin: 'top left',
                     zIndex: layout === "angled-split" ? 0 : layout === "full-cover" || layout === "centered" ? 5 : 10,
