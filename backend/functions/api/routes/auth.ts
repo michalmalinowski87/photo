@@ -85,6 +85,34 @@ router.get('/business-info', async (req: Request, res: Response) => {
 		}));
 
 		const userData = result.Item || {};
+		
+		// Convert defaultWatermarkUrl from S3 to CloudFront if needed
+		let defaultWatermarkUrl = userData.defaultWatermarkUrl || undefined;
+		if (defaultWatermarkUrl && typeof defaultWatermarkUrl === 'string') {
+			const envProc = (globalThis as any).process;
+			const stage = envProc?.env?.STAGE || 'dev';
+			// Dynamic import to avoid circular dependencies
+			const ssmConfig = await import('../../../lib/src/ssm-config');
+			const cloudfrontDomain = await ssmConfig.getConfigValueFromSsm(stage, 'CloudFrontDomain') || undefined;
+			
+			if (cloudfrontDomain && defaultWatermarkUrl) {
+				const isS3Url = defaultWatermarkUrl.includes('.s3.') || defaultWatermarkUrl.includes('s3.amazonaws.com');
+				const isCloudFrontUrl = defaultWatermarkUrl.includes(cloudfrontDomain);
+				
+				if (isS3Url && !isCloudFrontUrl) {
+					try {
+						const urlObj = new URL(defaultWatermarkUrl);
+						const s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+						if (s3Key) {
+							defaultWatermarkUrl = `https://${cloudfrontDomain}/${s3Key.split('/').map(encodeURIComponent).join('/')}`;
+						}
+					} catch {
+						// URL parsing failed, keep original
+					}
+				}
+			}
+		}
+		
 		const businessInfo = {
 			businessName: userData.businessName || '',
 			email: userData.contactEmail || '',
@@ -93,7 +121,9 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			nip: userData.nip || '',
 			welcomePopupShown: userData.welcomePopupShown === true,
 			tutorialNextStepsDisabled: userData.tutorialNextStepsDisabled === true,
-			tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true
+			tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true,
+			defaultWatermarkUrl,
+			defaultWatermarkPosition: userData.defaultWatermarkPosition || undefined
 		};
 
 		return res.json(businessInfo);
@@ -121,7 +151,7 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled } = req.body;
+	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled, defaultWatermarkUrl, defaultWatermarkPosition } = req.body;
 
 	if (email !== undefined && email !== '' && email !== null) {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -199,6 +229,67 @@ router.put('/business-info', async (req: Request, res: Response) => {
 	if (tutorialClientSendDisabled !== undefined) {
 		updateExpressions.push('tutorialClientSendDisabled = :tutorialClientSendDisabled');
 		expressionAttributeValues[':tutorialClientSendDisabled'] = Boolean(tutorialClientSendDisabled);
+	}
+
+	if (defaultWatermarkUrl !== undefined) {
+		if (defaultWatermarkUrl === null || defaultWatermarkUrl === '') {
+			updateExpressions.push('defaultWatermarkUrl = :emptyString');
+			expressionAttributeValues[':emptyString'] = '';
+		} else if (typeof defaultWatermarkUrl === 'string') {
+			updateExpressions.push('defaultWatermarkUrl = :defaultWatermarkUrl');
+			expressionAttributeValues[':defaultWatermarkUrl'] = defaultWatermarkUrl.trim();
+		}
+	}
+
+	if (defaultWatermarkPosition !== undefined) {
+		if (defaultWatermarkPosition === null) {
+			updateExpressions.push('defaultWatermarkPosition = :emptyString');
+			expressionAttributeValues[':emptyString'] = '';
+		} else if (typeof defaultWatermarkPosition === 'object' && defaultWatermarkPosition !== null) {
+			// Validate the object structure - support both new format (x, y) and legacy format (position string)
+			const position = defaultWatermarkPosition as {
+				x?: number;
+				y?: number;
+				scale?: number;
+				opacity?: number;
+				// Legacy support
+				position?: string;
+			};
+			
+			// Validate position enum (legacy format)
+			const validPositions = [
+				'top-left', 'top-center', 'top-right',
+				'middle-left', 'center', 'middle-right',
+				'bottom-left', 'bottom-center', 'bottom-right'
+			];
+			
+			if (position.position && !validPositions.includes(position.position)) {
+				return res.status(400).json({ error: 'Invalid watermark position' });
+			}
+			
+			// Validate x, y percentages (0-100)
+			if (position.x !== undefined && (position.x < 0 || position.x > 100)) {
+				return res.status(400).json({ error: 'Watermark x position must be between 0 and 100' });
+			}
+			
+			if (position.y !== undefined && (position.y < 0 || position.y > 100)) {
+				return res.status(400).json({ error: 'Watermark y position must be between 0 and 100' });
+			}
+			
+			// Validate scale range (0.1 to 3.0)
+			if (position.scale !== undefined && (position.scale < 0.1 || position.scale > 3.0)) {
+				return res.status(400).json({ error: 'Watermark scale must be between 0.1 and 3.0' });
+			}
+			
+			
+			// Validate opacity range (0.1 to 1.0)
+			if (position.opacity !== undefined && (position.opacity < 0.1 || position.opacity > 1.0)) {
+				return res.status(400).json({ error: 'Watermark opacity must be between 0.1 and 1.0' });
+			}
+			
+			updateExpressions.push('defaultWatermarkPosition = :defaultWatermarkPosition');
+			expressionAttributeValues[':defaultWatermarkPosition'] = position;
+		}
 	}
 
 	const updateExpression = `SET ${updateExpressions.join(', ')}`;

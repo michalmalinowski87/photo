@@ -67,6 +67,20 @@ export interface GalleryItem extends DynamoDBItem {
 		scale?: number;
 		objectPosition?: string;
 	};
+	watermarkUrl?: string;
+	watermarkPosition?: {
+		// Corner-relative positioning (preferred)
+		corner?: string;
+		offsetX?: number;
+		offsetY?: number;
+		// Legacy: absolute positioning
+		x?: number; // Percentage from left (0-100) - center position
+		y?: number; // Percentage from top (0-100) - center position
+		scale?: number;
+		opacity?: number;
+		// Legacy support
+		position?: string;
+	};
 	expiresAt?: string;
 	expiryScheduleName?: string;
 	createdAt?: string;

@@ -13,7 +13,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Rule, Schedule, EventBus } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior } from 'aws-cdk-lib/aws-cloudfront';
+import { Distribution, AllowedMethods, ViewerProtocolPolicy, CachePolicy, PriceClass, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior, ResponseHeadersPolicy, HeadersFrameOption, HeadersReferrerPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Alarm, ComparisonOperator, Metric, Statistic, TreatMissingData } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -1991,6 +1991,27 @@ export class AppStack extends Stack {
 			cookieBehavior: CacheCookieBehavior.none()
 		});
 		
+		// Create response headers policy with CORS headers for images
+		// This allows canvas operations to work with images from CloudFront
+		const corsResponseHeadersPolicy = new ResponseHeadersPolicy(this, 'ImageCorsResponseHeadersPolicy', {
+			responseHeadersPolicyName: `PhotoCloud-${props.stage}-ImageCORS`,
+			comment: 'CORS headers for images to enable canvas operations',
+			corsBehavior: {
+				accessControlAllowCredentials: false,
+				accessControlAllowHeaders: ['*'],
+				accessControlAllowMethods: ['GET', 'HEAD', 'OPTIONS'],
+				accessControlAllowOrigins: ['*'], // Allow all origins for images
+				accessControlExposeHeaders: ['ETag', 'Content-Length', 'Content-Type'],
+				accessControlMaxAge: Duration.seconds(86400), // 24 hours
+				originOverride: false
+			},
+			securityHeadersBehavior: {
+				contentTypeOptions: { override: true },
+				frameOptions: { frameOption: HeadersFrameOption.DENY, override: true },
+				referrerPolicy: { referrerPolicy: HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true }
+			}
+		});
+
 		// Create CloudFront distribution with OAC
 		// S3BucketOrigin.withOriginAccessControl() automatically creates OAC and sets up bucket policy
 		const dist = new Distribution(this, 'PreviewsDistribution', {
@@ -2000,6 +2021,7 @@ export class AppStack extends Stack {
 					description: `Origin Access Control for PhotoCloud ${props.stage} galleries bucket`
 				}),
 				cachePolicy: imageCachePolicy,
+				responseHeadersPolicy: corsResponseHeadersPolicy,
 				allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
 				viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
 			},

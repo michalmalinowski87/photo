@@ -46,6 +46,20 @@ export interface Gallery {
     scale?: number;
     objectPosition?: string;
   };
+  watermarkUrl?: string; // Only used for custom watermarks
+  watermarkPosition?: {
+    // New pattern-based system
+    pattern?: string; // Watermark pattern ID: "none", "sample", "podglad", "tile-ph", "custom"
+    opacity?: number; // Opacity 0.1-1.0
+    // Legacy: old positioning system (for backward compatibility)
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top" | "bottom" | "left" | "right" | "center";
+    offsetX?: number;
+    offsetY?: number;
+    x?: number;
+    y?: number;
+    scale?: number;
+    position?: string;
+  };
   [key: string]: unknown;
 }
 

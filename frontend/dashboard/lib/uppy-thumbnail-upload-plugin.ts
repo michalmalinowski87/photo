@@ -1,5 +1,8 @@
 import Uppy, { BasePlugin } from "@uppy/core";
 import imageCompression from "browser-image-compression";
+import { applyDefaultWatermark, applyWatermark } from "./watermark-utils";
+import { getWatermarkConfig } from "./watermark-resolver";
+import api from "./api-service";
 
 /**
  * Custom Uppy plugin to upload three-tier optimized images to S3
@@ -150,6 +153,24 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
           ? fileWithMeta.data.size / (1024 * 1024)
           : 5; // Default to medium if size unknown
 
+      // Get gallery ID from file metadata
+      const galleryId = fileWithMeta.meta?.galleryId as string | undefined;
+      
+      // Fetch gallery and business info for watermark resolution
+      let watermarkConfig: { url?: string; opacity?: number; isDefault: boolean } | null = null;
+      if (galleryId) {
+        try {
+          const [gallery, businessInfo] = await Promise.all([
+            api.galleries.get(galleryId).catch(() => null),
+            api.auth.getBusinessInfo().catch(() => null),
+          ]);
+          watermarkConfig = getWatermarkConfig(gallery, businessInfo);
+        } catch {
+          // If watermark config fetch fails, continue without watermark
+          watermarkConfig = null;
+        }
+      }
+
       // Generate all three versions in parallel for efficiency
       const [preview, bigThumb, thumbnailBlob] = await Promise.all([
         // Preview (2800px) - for full-screen quality viewing (adaptive quality, 2x quality)
@@ -164,11 +185,41 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         return;
       }
 
+      // Apply watermarks if configured
+      let finalPreview = preview;
+      let finalBigThumb = bigThumb;
+      let finalThumbnail = thumbnailBlob;
+
+      if (watermarkConfig) {
+        try {
+          if (watermarkConfig.isDefault) {
+            // Apply default "PREVIEW" watermark with multiply blend mode
+            [finalPreview, finalBigThumb, finalThumbnail] = await Promise.all([
+              applyDefaultWatermark(preview),
+              applyDefaultWatermark(bigThumb),
+              applyDefaultWatermark(thumbnailBlob),
+            ]);
+          } else if (watermarkConfig.url) {
+            // Apply uploaded watermark (tiled pattern)
+            const opacity = watermarkConfig.opacity ?? 0.7;
+            
+            [finalPreview, finalBigThumb, finalThumbnail] = await Promise.all([
+              applyWatermark(preview, watermarkConfig.url, opacity),
+              applyWatermark(bigThumb, watermarkConfig.url, opacity),
+              applyWatermark(thumbnailBlob, watermarkConfig.url, opacity),
+            ]);
+          }
+        } catch (error) {
+          // If watermark application fails, use original images
+          console.error("Failed to apply watermark:", error);
+        }
+      }
+
       // Upload all three versions to S3 in parallel
       await Promise.all([
-        this.uploadToS3(presignedData.previewUrl, preview, "image/webp"),
-        this.uploadToS3(presignedData.bigThumbUrl, bigThumb, "image/webp"),
-        this.uploadToS3(presignedData.thumbnailUrl, thumbnailBlob, "image/webp"),
+        this.uploadToS3(presignedData.previewUrl, finalPreview, "image/webp"),
+        this.uploadToS3(presignedData.bigThumbUrl, finalBigThumb, "image/webp"),
+        this.uploadToS3(presignedData.thumbnailUrl, finalThumbnail, "image/webp"),
       ]);
     } catch (_error) {
       // Don't fail the upload if thumbnail upload fails

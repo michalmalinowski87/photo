@@ -12,6 +12,11 @@ interface BusinessInfo {
   welcomePopupShown?: boolean;
   tutorialNextStepsDisabled?: boolean;
   tutorialClientSendDisabled?: boolean;
+  defaultWatermarkUrl?: string;
+  defaultWatermarkPosition?: {
+    position: string;
+    scale: number;
+  };
 }
 
 export function useBusinessInfo(

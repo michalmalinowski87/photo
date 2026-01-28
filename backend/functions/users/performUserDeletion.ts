@@ -1,7 +1,8 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { CognitoIdentityProviderClient, AdminDeleteUserCommand, AdminGetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { cancelUserDeletionSchedule } from '../../lib/src/user-deletion-scheduler';
@@ -11,6 +12,7 @@ import { getSenderEmail } from '../../lib/src/email-config';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
+const cloudfront = new CloudFrontClient({});
 const cognito = new CognitoIdentityProviderClient({});
 const ses = new SESClient({});
 
@@ -106,6 +108,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Use GALLERIES_BUCKET to match infrastructure (BUCKET_NAME is legacy)
 	const bucket = envProc?.env?.GALLERIES_BUCKET || envProc?.env?.BUCKET_NAME as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
+	const cloudfrontDistributionId = envProc?.env?.CLOUDFRONT_DISTRIBUTION_ID as string;
 	const sender = await getSenderEmail();
 
 	if (!usersTable || !bucket) {
@@ -566,7 +569,96 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 6. Create forcedPayoutUponDeletion transaction
+		// 6. Delete user watermarks (from S3, CloudFront cache, and DB)
+		let watermarksDeleted = 0;
+		try {
+			// Get user's watermarks from users table
+			const userResult = await ddb.send(new GetCommand({
+				TableName: usersTable,
+				Key: { userId },
+				ProjectionExpression: 'watermarks'
+			}));
+
+			const watermarks = userResult.Item?.watermarks || [];
+			
+			if (watermarks.length > 0) {
+				logger.info('Deleting user watermarks', { userId, count: watermarks.length });
+				
+				// Delete each watermark from S3
+				for (const watermark of watermarks) {
+					try {
+						const watermarkUrl = watermark.url;
+						if (!watermarkUrl) continue;
+						
+						// Extract S3 key from URL (handle both CloudFront and S3 URLs)
+						let s3Key: string | null = null;
+						try {
+							const urlObj = new URL(watermarkUrl);
+							// Remove leading slash if present
+							s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+							// Decode URL encoding
+							s3Key = decodeURIComponent(s3Key);
+						} catch {
+							// If URL parsing fails, try to extract from pathname directly
+							if (watermarkUrl.includes('/watermarks/')) {
+								const parts = watermarkUrl.split('/watermarks/');
+								if (parts.length > 1) {
+									s3Key = `users/${userId}/watermarks/${parts[1].split('?')[0]}`;
+								}
+							}
+						}
+						
+						if (s3Key) {
+							await s3.send(new DeleteObjectCommand({
+								Bucket: bucket,
+								Key: s3Key
+							}));
+							watermarksDeleted++;
+							
+							// Invalidate CloudFront cache for this watermark
+							if (cloudfrontDistributionId) {
+								try {
+									await cloudfront.send(new CreateInvalidationCommand({
+										DistributionId: cloudfrontDistributionId,
+										InvalidationBatch: {
+											Paths: {
+												Quantity: 1,
+												Items: [`/${s3Key}`]
+											},
+											CallerReference: `watermark-deletion-${userId}-${Date.now()}-${watermark.url}`
+										}
+									}));
+								} catch (cfErr: any) {
+									logger.warn('Failed to invalidate CloudFront cache for watermark', {
+										error: cfErr.message,
+										s3Key,
+										userId
+									});
+									// Continue even if CloudFront invalidation fails
+								}
+							}
+						}
+					} catch (wmErr: any) {
+						logger.warn('Failed to delete watermark from S3', {
+							error: wmErr.message,
+							watermarkUrl: watermark.url,
+							userId
+						});
+					}
+				}
+				
+				// Clear watermarks array from user record (will be done in soft delete step)
+				logger.info('Deleted user watermarks', { userId, watermarksDeleted, total: watermarks.length });
+			}
+		} catch (watermarksErr: any) {
+			logger.error('Failed to delete watermarks', {
+				error: watermarksErr.message,
+				userId
+			});
+			// Continue with deletion even if watermark deletion fails
+		}
+
+		// 7. Create forcedPayoutUponDeletion transaction
 		if (walletsTable && ledgerTable && transactionsTable) {
 			try {
 				// Get wallet balance
@@ -642,7 +734,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 7. Soft delete user - nullify PII, preserve userId and transactional data
+		// 8. Soft delete user - nullify PII, preserve userId and transactional data
 		const deletedEmail = `deleted_user_${userId}@deleted.example.com`;
 		const now = new Date().toISOString();
 		
@@ -655,6 +747,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			phone: null,
 			address: null,
 			nip: null,
+			watermarks: [], // Clear watermarks array
+			defaultWatermarkUrl: null, // Clear default watermark
+			defaultWatermarkPosition: null, // Clear watermark position
 			deletedAt: now,
 			updatedAt: now
 		};
@@ -671,7 +766,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		logger.info('Soft deleted user', { userId });
 
-		// 8. Delete Cognito user
+		// 9. Delete Cognito user
 		if (userPoolId) {
 			try {
 				await cognito.send(new AdminDeleteUserCommand({
@@ -688,7 +783,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
-		// 9. Cancel EventBridge schedule (user deletion schedule, not gallery schedules)
+		// 10. Cancel EventBridge schedule (user deletion schedule, not gallery schedules)
 		try {
 			await cancelUserDeletionSchedule(userId);
 			logger.info('Canceled user deletion EventBridge schedule', { userId });
@@ -700,7 +795,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			// Continue even if schedule cancellation fails
 		}
 
-		// 10. Send final confirmation email (to preserved email)
+		// 11. Send final confirmation email (to preserved email)
 		if (sender && userEmail && userEmail !== deletedEmail) {
 			try {
 				const deletionReason = user.deletionReason || 'manual';

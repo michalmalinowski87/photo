@@ -35,6 +35,7 @@ import { dashboardRoutes } from './routes/dashboard';
 import { userDeletionRoutes, undoDeletionPublicRoutes } from './routes/userDeletion';
 import { authRoutes } from './routes/auth';
 import { configRoutes } from './routes/config';
+import { watermarksRoutes } from './routes/watermarks';
 
 const app = express();
 
@@ -137,6 +138,7 @@ app.use('/downloads', requireAuth, downloadsRoutes);
 app.use('/', requireAuth, ordersRoutes);
 app.use('/galleries', requireAuth, selectionsRoutes);
 app.use('/dashboard', requireAuth, dashboardRoutes);
+app.use('/watermarks', requireAuth, watermarksRoutes);
 
 app.use((req: Request, res: Response) => {
 	res.status(404).json({ error: 'Not found', path: req.path });

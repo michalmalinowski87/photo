@@ -1769,6 +1769,27 @@ class ApiService {
     },
 
     /**
+     * Get presigned URL for user-level watermark upload (global watermark)
+     */
+    getPresignedUserWatermarkUrl: async (data: {
+      key: string;
+      contentType: string;
+      fileSize: number;
+    }): Promise<{ url: string; key: string }> => {
+      if (!data) {
+        throw new Error("Upload data is required");
+      }
+      if (!data.key) {
+        throw new Error("File key is required");
+      }
+      return await this._request("/uploads/presign-user-watermark", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+
+    /**
      * Get presigned URL for final image upload
      */
     getFinalImagePresignedUrl: async (
@@ -2023,6 +2044,42 @@ class ApiService {
     },
   };
 
+  // ==================== WATERMARKS ====================
+
+  watermarks = {
+    /**
+     * List all user watermarks
+     */
+    list: async (): Promise<{ watermarks: Array<{ url: string; name: string; createdAt: string }> }> => {
+      return await this._request("/watermarks/list");
+    },
+
+    /**
+     * Add a watermark to user's collection
+     */
+    add: async (data: { url: string; name?: string }): Promise<{ message: string; watermark: { url: string; name: string; createdAt: string } }> => {
+      if (!data || !data.url) {
+        throw new Error("Watermark URL is required");
+      }
+      return await this._request("/watermarks/add", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+
+    /**
+     * Delete a watermark from user's collection and S3
+     */
+    delete: async (url: string): Promise<{ message: string }> => {
+      if (!url) {
+        throw new Error("Watermark URL is required");
+      }
+      return await this._request(`/watermarks/delete?url=${encodeURIComponent(url)}`, {
+        method: "DELETE",
+      });
+    },
+  };
+
   // ==================== AUTH ====================
 
   auth = {
@@ -2038,6 +2095,11 @@ class ApiService {
       welcomePopupShown?: boolean;
       tutorialNextStepsDisabled?: boolean;
       tutorialClientSendDisabled?: boolean;
+      defaultWatermarkUrl?: string;
+      defaultWatermarkPosition?: {
+        position: string;
+        scale: number;
+      };
     }> => {
       return await this._request("/auth/business-info");
     },
@@ -2054,6 +2116,11 @@ class ApiService {
       welcomePopupShown?: boolean;
       tutorialNextStepsDisabled?: boolean;
       tutorialClientSendDisabled?: boolean;
+      defaultWatermarkUrl?: string;
+      defaultWatermarkPosition?: {
+        position: string;
+        scale: number;
+      };
     }): Promise<void> => {
       if (!data) {
         throw new Error("Business info data is required");

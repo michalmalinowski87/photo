@@ -10,6 +10,7 @@ import { useRequestDeletion, useCancelDeletion } from "../hooks/mutations/useUse
 import { useBusinessInfo, useDeletionStatus } from "../hooks/queries/useAuth";
 import { useToast } from "../hooks/useToast";
 import { formatApiError } from "../lib/api-service";
+import { GallerySettingsTab } from "../components/settings/GallerySettingsTab";
 
 // Prevent static generation - this page uses client hooks
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export default function Settings() {
   const cancelDeletionMutation = useCancelDeletion();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<"account" | "security" | "gallery">("account");
 
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({
@@ -156,6 +158,40 @@ export default function Settings() {
     <div className="space-y-4 pb-8">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ustawienia</h1>
 
+      {/* Sub-settings tabs */}
+      <div className="flex gap-2 border-b border-gray-300 dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab("account")}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === "account"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Konto
+        </button>
+        <button
+          onClick={() => setActiveTab("security")}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === "security"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Bezpieczeństwo
+        </button>
+        <button
+          onClick={() => setActiveTab("gallery")}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === "gallery"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Galeria
+        </button>
+      </div>
+
       {loading ? (
         <>
           {/* Email logowania Skeleton */}
@@ -177,91 +213,25 @@ export default function Settings() {
         />
       ) : (
         <>
-          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <div className="space-y-1" style={{ minHeight: "60px" }}>
-              <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
-                Email logowania
-              </label>
-              <p className="text-base text-gray-900 dark:text-white">
-                {loginEmail ?? "Ładowanie danych..."}
-              </p>
-            </div>
-          </div>
-
-          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
-              Zmiana hasła
-            </h2>
-
-            <form onSubmit={handlePasswordChange}>
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Obecne hasło *
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Wprowadź obecne hasło"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      currentPassword: e.target.value,
-                    })
-                  }
-                  required
-                />
+          {activeTab === "account" && (
+            <>
+              <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <div className="space-y-1" style={{ minHeight: "60px" }}>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
+                    Email logowania
+                  </label>
+                  <p className="text-base text-gray-900 dark:text-white">
+                    {loginEmail ?? "Ładowanie danych..."}
+                  </p>
+                </div>
               </div>
 
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nowe hasło *
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Wprowadź nowe hasło (min. 8 znaków)"
-                  value={passwordForm.newPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      newPassword: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </div>
+              <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
+                  Informacje kontaktowe
+                </h2>
 
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Potwierdź nowe hasło *
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Potwierdź nowe hasło"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) =>
-                    setPasswordForm({
-                      ...passwordForm,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" variant="primary" disabled={changePasswordMutation.isPending}>
-                  {changePasswordMutation.isPending ? "Zapisywanie..." : "Zmień hasło"}
-                </Button>
-              </div>
-            </form>
-          </div>
-
-          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
-              Informacje kontaktowe
-            </h2>
-
-            <form onSubmit={handleBusinessInfoUpdate}>
+                <form onSubmit={handleBusinessInfoUpdate}>
               <div className="mb-1.5">
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Email kontaktowy
@@ -371,6 +341,93 @@ export default function Settings() {
               Usuń konto
             </Button>
           </div>
+            </>
+          )}
+
+          {activeTab === "security" && (
+            <>
+              <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <div className="space-y-1" style={{ minHeight: "60px" }}>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
+                    Email logowania
+                  </label>
+                  <p className="text-base text-gray-900 dark:text-white">
+                    {loginEmail ?? "Ładowanie danych..."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
+                  Zmiana hasła
+                </h2>
+
+                <form onSubmit={handlePasswordChange}>
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Obecne hasło *
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Wprowadź obecne hasło"
+                      value={passwordForm.currentPassword}
+                      onChange={(e) =>
+                        setPasswordForm({
+                          ...passwordForm,
+                          currentPassword: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Nowe hasło *
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Wprowadź nowe hasło (min. 8 znaków)"
+                      value={passwordForm.newPassword}
+                      onChange={(e) =>
+                        setPasswordForm({
+                          ...passwordForm,
+                          newPassword: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Potwierdź nowe hasło *
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Potwierdź nowe hasło"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) =>
+                        setPasswordForm({
+                          ...passwordForm,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button type="submit" variant="primary" disabled={changePasswordMutation.isPending}>
+                      {changePasswordMutation.isPending ? "Zapisywanie..." : "Zmień hasło"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </>
+          )}
+
+          {activeTab === "gallery" && <GallerySettingsTab />}
         </>
       )}
 

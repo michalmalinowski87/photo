@@ -1,4 +1,4 @@
-import { Info, Save } from "lucide-react";
+import { Info, Save, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
 
@@ -15,6 +15,8 @@ import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/cur
 import { generatePassword } from "../../lib/password";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
+import { WatermarkPersonalizationOverlay } from "./sidebar/WatermarkPersonalizationOverlay";
+import { LoginPersonalizationOverlay } from "./sidebar/LoginPersonalizationOverlay";
 
 interface SettingsForm {
   galleryName: string;
@@ -73,6 +75,9 @@ export function GallerySettingsForm({
   });
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"general" | "package" | "personalize">("general");
+  const [showWatermarkPersonalizationOverlay, setShowWatermarkPersonalizationOverlay] = useState(false);
+  const [showLoginPersonalizationOverlay, setShowLoginPersonalizationOverlay] = useState(false);
   const [errors, setErrors] = useState<{
     galleryName?: string;
     clientEmail?: string;
@@ -601,16 +606,57 @@ export function GallerySettingsForm({
     );
   }
 
+  // Check if watermark is set
+  const hasWatermark = Boolean(gallery?.watermarkUrl);
+
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
+      {/* Sub-settings tabs */}
+      <div className="flex gap-2 border-b border-gray-300 dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab("general")}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === "general"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Ogólne
+        </button>
+        <button
+          onClick={() => setActiveTab("package")}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === "package"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Pakiet
+        </button>
+        <button
+          onClick={() => setActiveTab("personalize")}
+          className={`px-4 py-2 font-medium transition-colors flex items-center gap-2 ${
+            activeTab === "personalize"
+              ? "border-b-2 border-photographer-accent text-photographer-accent"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Personalizacja
+          {!hasWatermark && (
+            <AlertTriangle size={18} className="text-orange-500 dark:text-orange-400" />
+          )}
+        </button>
+      </div>
+
       <div className="p-8 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <div className="space-y-2">
-          <div>
-            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Nazwa galerii <span className="text-red-500">*</span>
-            </label>
+        {activeTab === "general" && (
+          <div className="space-y-2">
+            <div>
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Nazwa galerii <span className="text-red-500">*</span>
+              </label>
             <Input
               type="text"
               placeholder="Nazwa galerii"
@@ -682,11 +728,14 @@ export function GallerySettingsForm({
               </Button>
             </div>
           </div>
+        )}
 
-          <div className="border-t border-gray-400 dark:border-gray-700 pt-3">
-            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
-              Pakiet cenowy
-            </h3>
+        {activeTab === "package" && (
+          <div className="space-y-2">
+            <div className="border-b border-gray-400 dark:border-gray-700 pb-3 mb-3">
+              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
+                Pakiet cenowy
+              </h3>
 
             <div className="space-y-2">
               <div>
@@ -803,9 +852,49 @@ export function GallerySettingsForm({
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="flex justify-end gap-3 mt-4">
+        {activeTab === "personalize" && (
+          <div className="space-y-6">
+            <p className="text-base text-gray-600 dark:text-gray-400">
+              Dostosuj wygląd galerii i zabezpiecz zdjęcia znakiem wodnym.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <button
+                onClick={() => setShowLoginPersonalizationOverlay(true)}
+                className="p-6 border-2 border-gray-400 dark:border-gray-700 rounded-lg hover:border-photographer-accent dark:hover:border-photographer-accent transition-colors text-left"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Szablon logowania
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Wybierz układ strony logowania i dostosuj pozycję zdjęcia okładkowego
+                </p>
+              </button>
+              <button
+                onClick={() => setShowWatermarkPersonalizationOverlay(true)}
+                className="p-6 border-2 border-gray-400 dark:border-gray-700 rounded-lg hover:border-photographer-accent dark:hover:border-photographer-accent transition-colors text-left relative"
+              >
+                {!hasWatermark && (
+                  <div className="absolute top-2 right-2">
+                    <AlertTriangle size={20} className="text-orange-500 dark:text-orange-400" />
+                  </div>
+                )}
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Znak wodny
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {hasWatermark
+                    ? "Zarządzaj znakiem wodnym na zdjęciach"
+                    : "Dodaj znak wodny, aby zabezpieczyć zdjęcia"}
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(activeTab === "general" || activeTab === "package") && (
+          <div className="flex justify-end gap-3 mt-4">
           {showCancelButton && (
             <Button variant="outline" onClick={handleCancel} disabled={saving}>
               {cancelLabel}
@@ -820,7 +909,33 @@ export function GallerySettingsForm({
             {saving ? "Zapisywanie..." : "Zapisz"}
           </Button>
         </div>
+        )}
       </div>
+
+      {/* Watermark Personalization Overlay */}
+      {gallery && (
+        <WatermarkPersonalizationOverlay
+          isOpen={showWatermarkPersonalizationOverlay}
+          onClose={() => setShowWatermarkPersonalizationOverlay(false)}
+          galleryId={galleryId}
+          gallery={gallery}
+          coverPhotoUrl={
+            gallery.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
+              ? gallery.coverPhotoUrl
+              : undefined
+          }
+        />
+      )}
+
+      {/* Login Personalization Overlay */}
+      {gallery && gallery.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string" && (
+        <LoginPersonalizationOverlay
+          isOpen={showLoginPersonalizationOverlay}
+          onClose={() => setShowLoginPersonalizationOverlay(false)}
+          galleryId={galleryId}
+          coverPhotoUrl={gallery.coverPhotoUrl}
+        />
+      )}
     </div>
   );
 }

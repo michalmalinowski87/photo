@@ -138,6 +138,11 @@ export const queryKeys = {
     multipartParts: (galleryId: string, uploadId: string, key: string) =>
       [...queryKeys.uploads.all, "multipart-parts", galleryId, uploadId, key] as const,
   },
+  watermarks: {
+    all: ["watermarks"] as const,
+    lists: () => [...queryKeys.watermarks.all, "list"] as const,
+    list: () => [...queryKeys.watermarks.lists()] as const,
+  },
 };
 
 // QueryClient factory function - creates a new client instance

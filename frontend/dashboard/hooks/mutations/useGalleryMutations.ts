@@ -1065,3 +1065,93 @@ export function useUploadCoverPhoto() {
     },
   });
 }
+
+/**
+ * Upload watermark mutation
+ * Handles the complete upload flow: presigned URL → S3 upload → gallery update → polling for CloudFront URL
+ * Similar to cover photo upload flow
+ */
+export function useUploadWatermark() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ galleryId, file }: { galleryId: string; file: File }) => {
+      // Step 1: Get presigned URL
+      const timestamp = Date.now();
+      const fileExtension = file.name.split(".").pop() ?? "png";
+      const key = `watermark_${timestamp}.${fileExtension}`;
+
+      const presignResponse = await api.uploads.getPresignedUrl({
+        galleryId,
+        key,
+        contentType: file.type ?? "image/png",
+        fileSize: file.size,
+      });
+
+      // Step 2: Upload file to S3
+      await fetch(presignResponse.url, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type ?? "image/png",
+        },
+      });
+
+      // Step 3: Get S3 URL and add to watermark collection (don't set as default)
+      const s3Url = presignResponse.url.split("?")[0]; // Remove query params
+      
+      // Add watermark to collection with S3 URL (backend will convert to CloudFront in list endpoint)
+      try {
+        await api.watermarks.add({ url: s3Url, name: file.name });
+      } catch (err) {
+        // May already exist, that's okay
+        console.warn("Failed to add watermark to collection:", err);
+      }
+
+      // Step 4: Poll watermarks list to get CloudFront URL (backend converts S3 to CloudFront)
+      const maxAttempts = 30;
+      const pollInterval = 1000;
+      const s3Key = s3Url.split("/").pop() || key;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+        try {
+          const watermarksList = await api.watermarks.list();
+          const uploadedWatermark = watermarksList.watermarks?.find(
+            (wm) => wm.url && (wm.url.includes(s3Key) || wm.url.includes(key))
+          );
+
+          if (uploadedWatermark?.url) {
+            const fetchedUrl = uploadedWatermark.url;
+            // Check if we have a CloudFront URL (not S3)
+            if (
+              fetchedUrl &&
+              typeof fetchedUrl === "string" &&
+              !fetchedUrl.includes(".s3.") &&
+              !fetchedUrl.includes("s3.amazonaws.com")
+            ) {
+              return { success: true, watermarkUrl: fetchedUrl };
+            }
+          }
+        } catch {
+          // Continue polling on error
+        }
+      }
+
+      // Max attempts reached - return S3 URL (will be converted by backend when listing)
+      return {
+        success: true,
+        watermarkUrl: s3Url,
+        warning: "Processing taking longer than usual",
+      };
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate queries to refresh UI
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.galleries.detail(variables.galleryId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.galleries.lists() });
+    },
+  });
+}

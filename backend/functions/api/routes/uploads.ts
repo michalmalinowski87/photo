@@ -7,6 +7,7 @@ import * as uploadsCompleteMultipart from '../../../functions/uploads/completeMu
 import * as uploadsCompleteUpload from '../../../functions/uploads/completeUpload';
 import * as uploadsListMultipartParts from '../../../functions/uploads/listMultipartParts';
 import * as uploadsAbortMultipart from '../../../functions/uploads/abortMultipart';
+import * as uploadsPresignUserWatermark from '../../../functions/uploads/presignUserWatermark';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.post('/complete-multipart', wrapHandler(uploadsCompleteMultipart.handler)
 router.post('/complete-upload', wrapHandler(uploadsCompleteUpload.handler));
 router.post('/list-multipart-parts', wrapHandler(uploadsListMultipartParts.handler));
 router.post('/abort-multipart', wrapHandler(uploadsAbortMultipart.handler));
+router.post('/presign-user-watermark', wrapHandler(uploadsPresignUserWatermark.handler));
 
 export { router as uploadsRoutes };
 

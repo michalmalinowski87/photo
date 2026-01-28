@@ -200,6 +200,90 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 	}
 	
+	if (body.watermarkUrl !== undefined) {
+		if (body.watermarkUrl === null || body.watermarkUrl === '') {
+			removeExpressions.push('watermarkUrl');
+		} else if (typeof body.watermarkUrl === 'string') {
+			setExpressions.push('watermarkUrl = :watermarkUrl');
+			expressionAttributeValues[':watermarkUrl'] = body.watermarkUrl.trim();
+		}
+	}
+	
+	if (body.watermarkPosition !== undefined) {
+		if (body.watermarkPosition === null) {
+			removeExpressions.push('watermarkPosition');
+		} else if (typeof body.watermarkPosition === 'object' && body.watermarkPosition !== null) {
+			// Validate the object structure - support both new format (x, y) and legacy format (position string)
+			const position = body.watermarkPosition as {
+				x?: number;
+				y?: number;
+				scale?: number;
+				opacity?: number;
+				// Legacy support
+				position?: string;
+			};
+			
+			// Validate position enum (legacy format)
+			const validPositions = [
+				'top-left', 'top-center', 'top-right',
+				'middle-left', 'center', 'middle-right',
+				'bottom-left', 'bottom-center', 'bottom-right'
+			];
+			
+			if (position.position && !validPositions.includes(position.position)) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Invalid watermark position' })
+				};
+			}
+			
+			// Validate x, y percentages (0-100)
+			if (position.x !== undefined && (position.x < 0 || position.x > 100)) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Watermark x position must be between 0 and 100' })
+				};
+			}
+			
+			if (position.y !== undefined && (position.y < 0 || position.y > 100)) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Watermark y position must be between 0 and 100' })
+				};
+			}
+			
+			// Validate scale range (0.1 to 3.0)
+			if (position.scale !== undefined && (position.scale < 0.1 || position.scale > 3.0)) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Watermark scale must be between 0.1 and 3.0' })
+				};
+			}
+			
+			// Validate opacity range (0.1 to 1.0)
+			if (position.opacity !== undefined && (position.opacity < 0.1 || position.opacity > 1.0)) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Watermark opacity must be between 0.1 and 1.0' })
+				};
+			}
+			
+			// Only update if it's a valid object
+			if (position.x === undefined && position.y === undefined && position.position === undefined && position.scale === undefined && position.opacity === undefined) {
+				// Empty object, remove the field
+				removeExpressions.push('watermarkPosition');
+			} else {
+				setExpressions.push('watermarkPosition = :watermarkPosition');
+				expressionAttributeValues[':watermarkPosition'] = position;
+			}
+		}
+	}
+	
 	setExpressions.push('updatedAt = :u');
 		expressionAttributeValues[':u'] = new Date().toISOString();
 	
