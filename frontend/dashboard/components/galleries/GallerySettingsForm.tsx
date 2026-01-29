@@ -373,6 +373,15 @@ export function GallerySettingsForm({
   }
 
   if (hasDeliveredOrders) {
+    const currentPkg = gallery?.pricingPackage as
+      | { packageName?: string; includedCount?: number; extraPriceCents?: number; packagePriceCents?: number }
+      | undefined;
+    const pkgChanged =
+      settingsForm.packageName !== currentPkg?.packageName ||
+      settingsForm.includedCount !== currentPkg?.includedCount ||
+      settingsForm.extraPriceCents !== currentPkg?.extraPriceCents ||
+      settingsForm.packagePriceCents !== currentPkg?.packagePriceCents;
+
     const handleUpdateLockedSettings = async (): Promise<void> => {
       if (!galleryId) {
         return;
@@ -391,6 +400,13 @@ export function GallerySettingsForm({
         return;
       }
 
+      // Validate package (extra price) when saving package changes
+      if (pkgChanged && settingsForm.extraPriceCents < 0) {
+        setErrors({ extraPriceCents: "Cena za dodatkowe zdjęcie nie może być ujemna" });
+        showToast("error", "Błąd", "Cena za dodatkowe zdjęcie nie może być ujemna");
+        return;
+      }
+
       try {
         const currentGalleryName =
           typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
@@ -404,7 +420,26 @@ export function GallerySettingsForm({
           });
         }
 
-        if (galleryNameChanged) {
+        // Update pricing package if changed (e.g. price per additional photo)
+        if (pkgChanged) {
+          const trimmedPackageName = settingsForm.packageName?.trim();
+          const packageName =
+            trimmedPackageName && trimmedPackageName.length > 0 ? trimmedPackageName : undefined;
+          const includedCount = Number(settingsForm.includedCount) || 0;
+          const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
+          const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;
+          await updatePricingPackageMutation.mutateAsync({
+            galleryId,
+            pricingPackage: {
+              packageName,
+              includedCount,
+              extraPriceCents,
+              packagePriceCents,
+            },
+          });
+        }
+
+        if (galleryNameChanged || pkgChanged) {
           showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
         }
       } catch (err) {
@@ -414,7 +449,14 @@ export function GallerySettingsForm({
 
     const canSaveLockedSettings = (() => {
       const trimmedName = settingsForm.galleryName.trim();
-      return trimmedName.length > 0 && trimmedName.length <= 100;
+      const nameValid = trimmedName.length > 0 && trimmedName.length <= 100;
+      const hasChanges = (() => {
+        const currentGalleryName =
+          typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
+        const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
+        return galleryNameChanged || pkgChanged;
+      })();
+      return nameValid && hasChanges;
     })();
 
     return (
@@ -536,6 +578,35 @@ export function GallerySettingsForm({
                       placeholder="0.00"
                       value={centsToPlnString(settingsForm.packagePriceCents)}
                       disabled={true}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Cena za dodatkowe zdjęcie (PLN)
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="0.00"
+                      value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
+                      onChange={(e) => {
+                        const formatted = formatCurrencyInput(e.target.value);
+                        setExtraPriceInput(formatted);
+                        const cents = plnToCents(formatted);
+                        setSettingsForm({
+                          ...settingsForm,
+                          extraPriceCents: cents,
+                        });
+                        if (errors.extraPriceCents) {
+                          setErrors({ ...errors, extraPriceCents: undefined });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!extraPriceInput || extraPriceInput === "") {
+                          setExtraPriceInput(null);
+                        }
+                      }}
+                      error={!!errors.extraPriceCents}
+                      errorMessage={errors.extraPriceCents}
                     />
                   </div>
                 </div>

@@ -5,9 +5,14 @@ import { useGallery } from "../../../hooks/queries/useGalleries";
 
 interface GalleryMetadataProps {
   shouldHideSecondaryElements: boolean;
+  /** When true (e.g. on order view), the Created/Valid-until block is hidden */
+  hideDatesWhenOrderView?: boolean;
 }
 
-export const GalleryMetadata = ({ shouldHideSecondaryElements }: GalleryMetadataProps) => {
+export const GalleryMetadata = ({
+  shouldHideSecondaryElements,
+  hideDatesWhenOrderView = false,
+}: GalleryMetadataProps) => {
   // Use React Query hook for gallery data
   const router = useRouter();
   const { id: galleryId } = router.query;
@@ -17,8 +22,8 @@ export const GalleryMetadata = ({ shouldHideSecondaryElements }: GalleryMetadata
 
   const { data: gallery, isLoading } = useGallery(galleryIdForQuery);
 
-  // Don't render until gallery data is loaded
-  if (isLoading || !gallery || shouldHideSecondaryElements) {
+  // Don't render until gallery data is loaded; hide on order view or when secondary elements are hidden
+  if (isLoading || !gallery || shouldHideSecondaryElements || hideDatesWhenOrderView) {
     return null;
   }
 

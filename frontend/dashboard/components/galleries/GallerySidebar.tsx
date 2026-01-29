@@ -137,7 +137,10 @@ export default function GallerySidebar() {
 
       <GalleryUrlSection shouldHideSecondaryElements={shouldHideSecondaryElements} />
 
-      <GalleryMetadata shouldHideSecondaryElements={shouldHideSecondaryElements} />
+      <GalleryMetadata
+        shouldHideSecondaryElements={shouldHideSecondaryElements}
+        hideDatesWhenOrderView={!!orderId}
+      />
 
       <GalleryNavigation />
 
