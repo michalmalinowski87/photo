@@ -130,13 +130,11 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
     "pattern" in effectiveGallery.watermarkPosition
       ? (effectiveGallery.watermarkPosition as { pattern?: string }).pattern
       : undefined;
-  const galleryHasNoOverride =
-    !effectiveGallery?.watermarkUrl && galleryPatternFromPos !== "none";
-  const sourceThumbnails =
-    isGlobalWatermark
-      ? businessInfo?.defaultWatermarkThumbnails
-      : effectiveGallery?.watermarkThumbnails ??
-        (galleryHasNoOverride ? businessInfo?.defaultWatermarkThumbnails : undefined);
+  const galleryHasNoOverride = !effectiveGallery?.watermarkUrl && galleryPatternFromPos !== "none";
+  const sourceThumbnails = isGlobalWatermark
+    ? businessInfo?.defaultWatermarkThumbnails
+    : (effectiveGallery?.watermarkThumbnails ??
+      (galleryHasNoOverride ? businessInfo?.defaultWatermarkThumbnails : undefined));
   useEffect(() => {
     if (!isOpen || userChangedThumbnailsRef.current) return;
     // Only sync when we have a defined value from the server (true or false)

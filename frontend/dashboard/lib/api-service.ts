@@ -383,6 +383,14 @@ class ApiService {
           ) {
             return "System płatności nie jest skonfigurowany. Skontaktuj się z administratorem systemu.";
           }
+          // Gallery not published (403) – user-facing message, no raw JSON
+          if (
+            apiError.status === 403 &&
+            (lowerBodyError.includes("gallery not published") ||
+              lowerBodyError.includes("not yet published"))
+          ) {
+            return "Ta galeria nie jest jeszcze opublikowana. Skontaktuj się z fotografem.";
+          }
         }
       } catch (_e) {
         // If parsing fails, continue with default handling
@@ -390,11 +398,39 @@ class ApiService {
     }
 
     if (apiError.status) {
-      const bodyStr =
-        typeof apiError.body === "string" ? apiError.body : JSON.stringify(apiError.body);
-      return apiError.message || `Error ${apiError.status}${bodyStr ? ` - ${bodyStr}` : ""}`;
+      const status = apiError.status;
+      // 5xx – generic message only, never raw body
+      if (status >= 500) {
+        return "Coś poszło nie tak. Spróbuj ponownie później.";
+      }
+      // 4xx – use safe message only, never raw body/JSON
+      const bodyObj =
+        typeof apiError.body === "string"
+          ? (() => {
+              try {
+                return JSON.parse(apiError.body) as { message?: string; error?: string };
+              } catch {
+                return null;
+              }
+            })()
+          : (apiError.body as { message?: string; error?: string } | undefined);
+      const safeMsg =
+        (typeof bodyObj?.message === "string" ? bodyObj.message : null) ??
+        (typeof bodyObj?.error === "string" ? bodyObj.error : null) ??
+        null;
+      // Use first non-empty message so empty string falls through to generic (|| intentional)
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string → generic message
+      return (
+        safeMsg ||
+        apiError.message ||
+        (status === 403
+          ? "Brak dostępu."
+          : status === 404
+            ? "Nie znaleziono."
+            : "Wystąpił błąd. Spróbuj ponownie.")
+      );
     }
-    return error.message || "An unexpected error occurred";
+    return error.message || "Coś poszło nie tak. Spróbuj ponownie później.";
   }
 
   // ==================== GALLERIES ====================

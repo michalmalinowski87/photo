@@ -21,6 +21,7 @@ import { ScrollToTopButton } from "@/components/gallery/ScrollToTopButton";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { ApiError } from "@/lib/api";
+import { formatApiError } from "@/lib/api";
 import { DeliveredOrderCard } from "@/components/gallery/DeliveredOrderCard";
 
 // Lazy load heavy components that are conditionally rendered
@@ -32,6 +33,8 @@ const ChangesRequestedOverlay = lazy(() => import("@/components/gallery/ChangesR
 const ChangeRequestCanceledOverlay = lazy(() => import("@/components/gallery/ChangeRequestCanceledOverlay").then(m => ({ default: m.ChangeRequestCanceledOverlay })));
 const ChangeRequestSubmittedOverlay = lazy(() => import("@/components/gallery/ChangeRequestSubmittedOverlay").then(m => ({ default: m.ChangeRequestSubmittedOverlay })));
 const GalleryNotFound = lazy(() => import("@/components/gallery/GalleryNotFound").then(m => ({ default: m.GalleryNotFound })));
+const GalleryLoadError = lazy(() => import("@/components/gallery/GalleryLoadError").then(m => ({ default: m.GalleryLoadError })));
+const ErrorAlertOverlay = lazy(() => import("@/components/gallery/ErrorAlertOverlay").then(m => ({ default: m.ErrorAlertOverlay })));
 
 // Regular import for always-rendered components (no need for lazy loading)
 import { DownloadButtonFeedback } from "@/components/gallery/DownloadButtonFeedback";
@@ -68,6 +71,8 @@ export default function GalleryPage() {
   const [showZipOverlay, setShowZipOverlay] = useState(false);
   const [zipOverlayOrderId, setZipOverlayOrderId] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [showCancelChangeErrorModal, setShowCancelChangeErrorModal] = useState(false);
+  const [cancelChangeErrorMessage, setCancelChangeErrorMessage] = useState("");
   
   const { download: downloadImage, downloadState, closeOverlay } = useImageDownload();
   const [zipDownloadState, setZipDownloadState] = useState<{ showOverlay: boolean; isError: boolean }>({
@@ -170,6 +175,7 @@ export default function GalleryPage() {
     isFetchingNextPage,
     isLoading: imagesLoading,
     error,
+    refetch: refetchGalleryImages,
     prefetchNextPage,
   } = useGalleryImages(queryGalleryId, "thumb", 50, false);
 
@@ -476,8 +482,8 @@ export default function GalleryPage() {
       setIsActionLoading(false);
     } catch (error) {
       console.error("Failed to cancel change request:", error);
-      // Show error to user
-      alert(`Nie udało się anulować prośby o zmiany: ${error instanceof Error ? error.message : String(error)}`);
+      setCancelChangeErrorMessage(formatApiError(error));
+      setShowCancelChangeErrorModal(true);
       setIsActionLoading(false);
     }
   }, [selectionActions, selectionState?.selectedKeys, galleryId]);
@@ -885,11 +891,11 @@ export default function GalleryPage() {
       );
     }
 
-    // For other errors, show a generic error message (fallback)
+    // For other errors, show full-page Oops (no raw error in UI)
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-600">Błąd ładowania galerii: {String(error)}</div>
-      </div>
+      <Suspense fallback={<FullPageLoading text="Ładowanie..." />}>
+        <GalleryLoadError onRetry={() => void refetchGalleryImages()} />
+      </Suspense>
     );
   }
 
@@ -948,6 +954,17 @@ export default function GalleryPage() {
             setShowChangeRequestSubmittedOverlay(false);
           }}
           onCancelRequest={handleCancelChangeRequest}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ErrorAlertOverlay
+          isVisible={showCancelChangeErrorModal}
+          title="Nie udało się anulować prośby o zmiany"
+          message={cancelChangeErrorMessage}
+          onClose={() => {
+            setShowCancelChangeErrorModal(false);
+            setCancelChangeErrorMessage("");
+          }}
         />
       </Suspense>
       <GalleryTopBar

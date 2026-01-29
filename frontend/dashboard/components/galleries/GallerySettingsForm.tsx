@@ -70,8 +70,7 @@ export function GallerySettingsForm({
 
   const { data: orders = [] } = useOrders(galleryId);
   const hasDeliveredOrPreparingDelivery = orders.some(
-    (o) =>
-      o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+    (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
   );
 
   // Use React Query mutations for data operations

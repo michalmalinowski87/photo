@@ -31,8 +31,7 @@ export const WatermarkPersonalizationOverlay: React.FC<WatermarkPersonalizationO
   const { data: orders = [] } = useOrders(galleryId);
   const effectiveGallery = currentGallery ?? gallery;
   const hasDeliveredOrPreparingDelivery = orders.some(
-    (o) =>
-      o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+    (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
   );
   const showWatermarkWarning =
     effectiveGallery !== undefined &&

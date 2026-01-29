@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Upload, X } from "lucide-react";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 
+import { useToast } from "../../../hooks/useToast";
 import { useWatermarks } from "../../../hooks/queries/useWatermarks";
 import api from "../../../lib/api-service";
 import { queryKeys } from "../../../lib/react-query";
@@ -54,6 +55,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
   showThumbPreview = false,
 }) => {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const {
     data: watermarksData,
     isLoading: isLoadingWatermarks,
@@ -563,7 +565,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
       img.onload = () => {
         URL.revokeObjectURL(url);
         if (img.width > 600 || img.height > 600) {
-          alert("Plik nie może być większy niż 600x600 px");
+          showToast("error", "Błąd", "Plik nie może być większy niż 600x600 px");
           // Remove temp watermark on validation error
           setCustomWatermarks((prev) => prev.filter((w) => w.id !== tempId));
           setUploadingWatermarkId(null);
@@ -589,7 +591,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
 
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        alert("Nieprawidłowy plik obrazu");
+        showToast("error", "Błąd", "Nieprawidłowy plik obrazu");
         // Remove temp watermark on error
         setCustomWatermarks((prev) => prev.filter((w) => w.id !== tempId));
         setUploadingWatermarkId(null);
@@ -597,7 +599,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
 
       img.src = url;
     },
-    [onCustomWatermarkUpload, customWatermarks, queryClient]
+    [onCustomWatermarkUpload, customWatermarks, queryClient, showToast]
   );
 
   const handleFileInputChange = useCallback(
