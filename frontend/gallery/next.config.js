@@ -4,6 +4,13 @@ const path = require('path');
 const nextConfig = {
 	reactStrictMode: true,
 	transpilePackages: ['@photocloud/gallery-components'],
+	// Allow dev requests when accessed via Traefik/local HTTPS (e.g. gallery.lvh.me, *.lvh.me)
+	allowedDevOrigins: [
+		'dashboard.lvh.me',
+		'photocloud.lvh.me',
+		'gallery.lvh.me',
+		'*.lvh.me',
+	],
 	// Optimize images
 	images: {
 		remotePatterns: [

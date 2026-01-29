@@ -3,7 +3,15 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
+
+  // Allow dev requests when accessed via Traefik/local HTTPS (e.g. photocloud.lvh.me)
+  allowedDevOrigins: [
+    'dashboard.lvh.me',
+    'photocloud.lvh.me',
+    'gallery.lvh.me',
+    '*.lvh.me',
+  ],
+
   // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
