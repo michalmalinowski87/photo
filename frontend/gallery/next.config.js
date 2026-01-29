@@ -1,5 +1,10 @@
 const path = require('path');
 
+// Paths used by both webpack and turbopack (monorepo resolution)
+const rootNodeModules = path.resolve(__dirname, '../../node_modules');
+const localNodeModules = path.resolve(__dirname, 'node_modules');
+const galleryRoot = path.resolve(__dirname, '.');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	reactStrictMode: true,
@@ -27,17 +32,19 @@ const nextConfig = {
 	},
 	// Enable compression
 	compress: true,
-	// Optimize production builds
-	swcMinify: true,
 	// Enable experimental features for better performance
 	experimental: {
 		optimizePackageImports: ['@tanstack/react-query', 'lightgallery'],
 	},
+	// Mirror webpack resolve aliases for Turbopack (client-only React via browser condition)
+	turbopack: {
+		resolveAlias: {
+			react: { browser: path.resolve(rootNodeModules, 'react') },
+			'react-dom': { browser: path.resolve(rootNodeModules, 'react-dom') },
+			'@': galleryRoot,
+		},
+	},
 	webpack: (config, { isServer }) => {
-		// Resolve modules from root node_modules in yarn workspace
-		const rootNodeModules = path.resolve(__dirname, '../../node_modules');
-		const localNodeModules = path.resolve(__dirname, 'node_modules');
-		
 		// Add both local and root node_modules to resolve paths
 		config.resolve.modules = [localNodeModules, rootNodeModules, 'node_modules'];
 
@@ -47,12 +54,12 @@ const nextConfig = {
 				...config.resolve.alias,
 				react: path.resolve(rootNodeModules, 'react'),
 				'react-dom': path.resolve(rootNodeModules, 'react-dom'),
-				'@': path.resolve(__dirname, '.'),
+				'@': galleryRoot,
 			};
 		} else {
 			config.resolve.alias = {
 				...config.resolve.alias,
-				'@': path.resolve(__dirname, '.'),
+				'@': galleryRoot,
 			};
 		}
 

@@ -45,15 +45,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Mirror webpack resolve aliases for Turbopack (avoids "Webpack is configured while Turbopack is not" warning)
-  turbopack: {
-    resolveAlias: {
-      react: nextReactPath,
-      "react-dom": nextReactDomPath,
-      "react/jsx-runtime": path.resolve(nextReactPath, "jsx-runtime"),
-      "react/jsx-dev-runtime": path.resolve(nextReactPath, "jsx-dev-runtime"),
-    },
-  },
+  // Note: We do not add turbopack.resolveAlias for React here. Doing so led to two React
+  // copies (alias vs default resolution) and "Invalid hook call". Turbopack dev uses default
+  // resolution; webpack (build) below enforces a single React from Next's bundle.
   webpack: (config, { isServer }) => {
     // Resolve modules from root node_modules in yarn workspace
     // This ensures Next.js can find dependencies even when they're hoisted to the root
